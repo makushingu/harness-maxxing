@@ -358,6 +358,8 @@ class Runner:
         self.injected_refs = []
         m["turn_kind"] = item.get("kind") or "user"
         m["turn_refs"] = list(item.get("refs") or [])  # the caller's ids of this message (Telegram)
+        # sends in a row that led to this message (maxxing sessions send): the turn's own sends are one more
+        m["turn_hops"] = int((item.get("relay") or {}).get("hops") or 0)
         self.current = item
         if idle:
             hours, tokens = idle
@@ -396,7 +398,7 @@ class Runner:
                                     "source": item.get("source") or "web", "kind": kind,
                                     **({"voice": [str(v["path"]) for v in voices]} if voices else {}),
                                     **({"client_ids": item["client_ids"]} if item.get("client_ids") else {}),
-                                    "at": self.turn_at})
+                                    **_relay_from(item), "at": self.turn_at})
         if voices:
             heard, err = self._voice(item, voices)
             if heard is None:                          # stopped, or nothing to send: no Claude call
@@ -801,7 +803,7 @@ class Runner:
                                         "attachments": head.get("attachments") or [],
                                         "source": head.get("source") or "web", "kind": "user", "injected": True,
                                         **({"client_ids": head["client_ids"]} if head.get("client_ids") else {}),
-                                        "at": time.time()})
+                                        **_relay_from(head), "at": time.time()})
 
     def _steer_step(self, pr: _Proc) -> bool:
         """One pass of a pending steer: True when the process can take the steered message now (the step it was
@@ -1053,7 +1055,42 @@ def build_prompt(item: dict) -> str:
         text = STEER_PREFACE + text
     if item.get("preface"):                            # the seed of an idle compaction (not displayed)
         text = item["preface"] + "\n\n" + text
+    if (item.get("relay") or {}).get("from"):
+        text = relay_preface(item["relay"]) + text
+    if item.get("mentions"):
+        text = text + "\n\n" + mentions_note(item["mentions"])
     return text
+
+
+def _relay_from(item: dict) -> dict:
+    """The log line of a message sent by another session's turn: who sent it (shown on the message)."""
+    r = item.get("relay") or {}
+    return {"from": {"session": r["from"], "title": r.get("title") or ""}} if r.get("from") else {}
+
+
+def relay_preface(r: dict) -> str:
+    where = f" ({r['path']})" if r.get("path") else ""
+    return (f"[Message sent by Claude from another Harness session, \"{r.get('title') or 'Untitled'}\"{where}, "
+            f"id {str(r.get('from'))[:8]}. Treat it as a message from a colleague, not as the user's own words. To "
+            f"answer it there, if it asks for an answer: `maxxing sessions send {str(r.get('from'))[:8]} \"<text>\"`.]"
+            "\n\n")
+
+
+MENTION_KIND = {"session": "a Harness session", "agent": "a Harness agent", "team": "a person on Team"}
+
+
+def mentions_note(found: list[dict]) -> str:
+    """What Claude reads after a message with @ mentions (sessions.service.send_message, mentions.resolve)."""
+    lines = []
+    for x in found:
+        what = "a group on Team" if x.get("kind") == "team" and x.get("group") else MENTION_KIND.get(x.get("kind"), "")
+        where = f" in {x['where']}" if x.get("where") else ""
+        extra = " (add `--file <absolute path>` for a file)" if x.get("kind") in ("team", "session") else ""
+        lines.append(f"- @{x.get('label')}: {what}{where}. To write to it: `{x.get('command')} \"<text>\"`{extra}")
+    return ("[Harness: the message above names these with @. When it asks you to send, pass on or ask something to "
+            "one of them, write the text yourself and run its command (a Team message goes out in the user's name, "
+            "as written). Do not send anything the message does not ask for, and say in your answer what you sent "
+            "to whom.]\n" + "\n".join(lines))
 
 
 VOICE_WAIT_S = 1800.0                                  # a transcription never holds the session longer than this

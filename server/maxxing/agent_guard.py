@@ -584,6 +584,10 @@ def agent_turn() -> dict:
         depth = max(0, int(env.get("MAXXING_AGENT_DEPTH") or 0))
     except ValueError:
         depth = 0
+    try:                                    # a session's turn started by a send (maxxing sessions send): its hops
+        depth = max(depth, int((meta or {}).get("turn_hops") or 0))
+    except (TypeError, ValueError):
+        pass
     from . import agents
     manager = bool(path) and agents.manager_turn(meta if meta is not None else {"env": dict(os.environ)})
     tampered = bool(meta is not None and path and (

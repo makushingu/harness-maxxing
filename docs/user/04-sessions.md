@@ -137,6 +137,13 @@ on its first message. A title you typed, a Telegram thread you named, or a renam
   mode on or off, `/compact` and `/handoff` as in the session menu, `/new` opens a new session in the topic,
   `/rename New title` renames the session. These never reach Claude. A skill (`/post`, `/seo-audit https://…`) is
   sent as typed: Claude starts that skill with what follows its name.
+- **Name someone (`@`)**: type `@` anywhere in the message: a menu lists your other sessions (the running ones
+  first), your agents and, when Team is on, your Team contacts and groups; type to filter, **Enter** or **Tab**
+  writes `@Name`. Nothing goes out by itself: Claude is told how to write to each one named, and does it when your
+  message asks for it - "summarize this and send it to @Shop opening", "ask @Lea if the site works for her",
+  "hand this to @Writer". A session receives it as a message (marked **↩ the sending session**, a click opens it),
+  an agent as work handed over, a Team contact as a message in your name. Claude says in its answer what it sent.
+  Sessions that keep answering each other stop after 3 sends in a row.
 - **Attachments**: drag and drop files, paste an image, or use the paperclip. Files are saved in
   `<topic>/attachments/YYYY-MM/` and their paths are given to Claude. With many files, they sit in a small
   strip of two rows that scrolls (the newest in view), so the conversation keeps its room.

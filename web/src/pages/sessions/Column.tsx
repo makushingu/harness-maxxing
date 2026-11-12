@@ -61,7 +61,7 @@ import {
   sessionsQuery,
 } from '@/lib/queries'
 import { errorMessage, isApiError } from '@/lib/api'
-import type { Effort, Session } from '@/lib/types'
+import type { Effort, Mention, Session } from '@/lib/types'
 import {
   Button,
   confirm,
@@ -485,14 +485,14 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
     if (session) trimQueued(sid, session.queue)
   }, [session?.queue, sid, trimQueued]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const onSend = async (text: string, attachments: string[], clientId?: string) => {
+  const onSend = async (text: string, attachments: string[], clientId?: string, mentions?: Mention[]) => {
     const add = usePending.getState().add
     const remove = usePending.getState().remove
     const lid = add(sid, { text, attachments, queued: running })
     thread.current?.scrollToBottom()
     notifySent(sid)
     try {
-      const r = await send.mutateAsync({ id: sid, text, attachments, client_id: clientId })
+      const r = await send.mutateAsync({ id: sid, text, attachments, client_id: clientId, mentions })
       if (r.queued !== running) {
         remove(sid, lid)
         add(sid, { text, attachments, queued: r.queued })
@@ -850,6 +850,7 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
             maxRows={place && place.row !== 'full' ? 4 : 12}
             draftKey={sid}
             commands={commands}
+            mentionsFor={sid}
             placeholder={session?.plan_mode ? t(session.plan_ready ? 'plan.placeholderAdjust' : 'plan.placeholder') : undefined}
             notice={session?.plan_ready && !running ? <PlanNotice session={session} onAdjust={() => composer.current?.focus()} /> : null}
             topicPath={path}

@@ -401,10 +401,13 @@ def _enqueue_voice(sid: str, item: dict, audio: str, *, reset_cron: bool = False
 
 def send_message(sid: str, text: str, attachments: list[str] | None = None, source: str = "web",
                  hud: bool = False, voice_path: str | None = None, ref: str | None = None,
-                 client_id: str | None = None, silent_ok: bool = False) -> dict:
+                 client_id: str | None = None, silent_ok: bool = False, mentions: list[dict] | None = None,
+                 relay: dict | None = None) -> dict:
     """`ref`: an id the caller (Telegram) finds again in the meta of the turn that ran this message
     (`turn_refs` while it runs, `last_turn.refs` once it ended; see live_refs). `client_id`: the web page's own id
-    for it, kept in its queue item and its log line (`client_ids`)."""
+    for it, kept in its queue item and its log line (`client_ids`). `mentions`: the @ of the composer ({kind, ref},
+    see mentions.resolve): Claude reads with the message how to write to each. `relay`: sent by another session's
+    turn (relay_message)."""
     _require(sid)
     files = _check_attachments(attachments)
     audio = _check_voice(voice_path)
@@ -416,6 +419,12 @@ def send_message(sid: str, text: str, attachments: list[str] | None = None, sour
     extra.update(_client_ids(client_id))
     if silent_ok:
         extra["silent_ok"] = True
+    if mentions:
+        from .. import mentions as mentions_mod
+        if found := mentions_mod.resolve(mentions, sender=sid):
+            extra["mentions"] = found
+    if relay:
+        extra["relay"] = relay
     if text.strip():
         titles.first_message(sid, text.strip())
     item = _item(text.strip(), files, source, **extra)
@@ -424,6 +433,57 @@ def send_message(sid: str, text: str, attachments: list[str] | None = None, sour
     else:
         queued = _enqueue(sid, item, reset_cron=source != "cron")
     return {"queued": queued, "session": get_session(sid)}
+
+
+MAX_HOPS = 3                                           # session -> session -> ... (agents count too)
+
+
+def relay_message(to: str, text: str, attachments: list[str] | None = None, sender: dict | None = None,
+                  hops: int = 0) -> dict:
+    """`maxxing sessions send`: a turn (or the owner's shell) writes to another session, as a message typed in it.
+    `to`: a session id (or its first 6+ characters) or its title (case and accents ignored, a unique beginning is
+    enough). `sender`: the session of the turn ({id, title, path}) or None. `hops`: how many sends led to this one
+    (the sender turn's, + 1): refused above MAX_HOPS, so two sessions never answer each other forever.
+    -> {queued, session}"""
+    target = find_session(to)
+    if sender and target["id"] == sender.get("id"):
+        raise SessionError(400, "self", "A session cannot send a message to itself")
+    if hops > MAX_HOPS:
+        raise SessionError(429, "too_many_hops", f"Not sent: this message comes from {hops - 1} sends in a row "
+                           f"between sessions or agents (at most {MAX_HOPS}). Ask the user instead.")
+    relay = {"hops": hops}
+    if sender:
+        relay.update({"from": sender.get("id") or "", "title": sender.get("title") or "",
+                      "path": sender.get("path") or ""})
+    return send_message(target["id"], text, attachments, "session" if sender else "cli", relay=relay)
+
+
+def find_session(to: str) -> dict:
+    """A session (not archived first) by its id, the beginning of its id (6+ characters) or its title."""
+    import unicodedata
+
+    def fold(s: str) -> str:
+        return "".join(c for c in unicodedata.normalize("NFKD", s or "") if not unicodedata.combining(c)).casefold().strip()
+    want = (to or "").strip()
+    if not want:
+        raise SessionError(400, "no_session", "Say which session the message is for")
+    if store.is_valid_id(want) and (s := get_session(want)):
+        return s
+    rows = list_sessions()
+    rows.sort(key=lambda s: bool(s.get("archived")))
+    if len(want) >= 6 and (hit := [s for s in rows if s["id"].startswith(want.lower())]):
+        if len(hit) == 1:
+            return hit[0]
+    f = fold(want)
+    found = [s for s in rows if fold(s["title"]) == f] or [s for s in rows if fold(s["title"]).startswith(f)]
+    live = [s for s in found if not s.get("archived")]
+    found = live or found
+    if len(found) == 1:
+        return found[0]
+    if not found:
+        raise SessionError(404, "no_such_session", f"No session {to!r} (give its id or its title)")
+    names = "; ".join(f"{s['id'][:8]} {s['title']}" for s in found[:8])
+    raise SessionError(409, "ambiguous", f"Several sessions match {to!r}: {names} - give its id")
 
 
 def clear_queue(sid: str) -> dict:
@@ -546,6 +606,8 @@ def _merged(mine: list[dict], **extra: Any) -> dict:
                  **({"hud": True} if all(x.get("hud") for x in mine) else {}),
                  **({"client_ids": ids} if (ids := [c for x in mine for c in x.get("client_ids") or []]) else {}),
                  **({"plan_approved": True} if any(x.get("plan_approved") for x in mine) else {}),
+                 **({"mentions": ms} if (ms := [mm for x in mine for mm in x.get("mentions") or []]) else {}),
+                 **({"relay": rl} if (rl := next((x["relay"] for x in mine if x.get("relay")), None)) else {}),
                  **({"refs": refs} if (refs := [r for x in mine for r in x.get("refs") or []]) else {}))
 
 

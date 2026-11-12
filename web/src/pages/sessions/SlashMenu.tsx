@@ -18,9 +18,11 @@ export type SlashCommand = {
   run?: (arg: string) => void
 }
 
-export type SlashItem = { key: string; label: string; hint: string; badge?: string; current?: boolean; cmd: SlashCommand; arg?: string }
+/** A row of the composer's menus ("/" commands, "@" mentions). */
+export type MenuRow = { key: string; label: string; hint: string; badge?: string; current?: boolean; icon?: React.ReactNode }
+export type SlashItem = MenuRow & { cmd: SlashCommand; arg?: string }
 
-const fold = (s: string) => s.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+export const fold = (s: string) => s.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
 
 /** What the menu shows for the text typed so far (null: no menu). */
 export function slashItems(text: string, commands: SlashCommand[]): { stage: 'name' | 'arg'; items: SlashItem[] } | null {
@@ -52,7 +54,7 @@ export function slashAction(text: string, commands: SlashCommand[]): { cmd: Slas
   return cmd?.run ? { cmd, arg: (m[2] || '').trim() } : null
 }
 
-export function SlashMenu({ items, active, onPick, onHover, stage }: { items: SlashItem[]; active: number; onPick: (i: number) => void; onHover: (i: number) => void; stage: 'name' | 'arg' }) {
+export function SlashMenu({ items, active, onPick, onHover, stage, label, keys }: { items: MenuRow[]; active: number; onPick: (i: number) => void; onHover: (i: number) => void; stage: 'name' | 'arg'; label?: string; keys?: string }) {
   const t = useT()
   const list = React.useRef<HTMLDivElement>(null)
   React.useEffect(() => {
@@ -61,7 +63,7 @@ export function SlashMenu({ items, active, onPick, onHover, stage }: { items: Sl
   return (
     <div
       role="listbox"
-      aria-label={t('sessions.slash.label')}
+      aria-label={label || t('sessions.slash.label')}
       data-testid="slash-menu"
       className="absolute inset-x-0 bottom-full z-30 mb-1.5 overflow-hidden rounded-xl border bg-popover text-popover-foreground shadow-lg"
     >
@@ -77,18 +79,19 @@ export function SlashMenu({ items, active, onPick, onHover, stage }: { items: Sl
               onPick(i)
             }}
             onMouseMove={() => i !== active && onHover(i)}
-            className={cn('flex cursor-pointer items-baseline gap-3 rounded-md px-2.5 py-1.5 text-sm', i === active && 'bg-accent text-accent-foreground')}
+            className={cn('flex cursor-pointer items-baseline gap-3 rounded-md px-2.5 py-1.5 text-sm', it.icon && 'items-center', i === active && 'bg-accent text-accent-foreground')}
           >
+            {it.icon}
             <span className={cn('shrink-0', stage === 'name' && 'font-mono text-[13px]', it.current && 'font-semibold')}>
               {it.label}
               {it.current && <span className="ml-1.5 text-[10px] font-normal text-muted-foreground">✓</span>}
             </span>
             <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{it.hint}</span>
-            {it.badge && <span className="shrink-0 rounded bg-muted px-1 text-[10px] text-muted-foreground">{t('sessions.slash.skill')}</span>}
+            {it.badge && <span className="shrink-0 rounded bg-muted px-1 text-[10px] text-muted-foreground">{it.badge === 'skill' ? t('sessions.slash.skill') : it.badge}</span>}
           </div>
         ))}
       </div>
-      <div className="border-t px-2.5 py-1 text-[10px] text-muted-foreground max-md:hidden">{t('sessions.slash.keys')}</div>
+      <div className="border-t px-2.5 py-1 text-[10px] text-muted-foreground max-md:hidden">{keys || t('sessions.slash.keys')}</div>
     </div>
   )
 }

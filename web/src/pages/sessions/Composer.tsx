@@ -5,17 +5,18 @@ import { ArrowUp, Clock, CornerDownRight, FileText, ListPlus, MessageCircleQuest
 import { cn } from '@/lib/utils'
 import { loadGroups, useT } from '@/i18n'
 import { Button, Sensitive, Spinner, Textarea, Tooltip, toast } from '@/components/ui'
-import { uploadAttachment } from '@/lib/queries'
+import { uploadAttachment, useMentionTargets } from '@/lib/queries'
 import { errorMessage } from '@/lib/api'
 import { DRAFT_EVENT, leftOutbox, loadAtts, loadDraft, loadQuotes, onSeed, outboxAdd, outboxDone, outboxMove, registerComposer, saveAtts, saveDraft, saveQuotes, takeSeed, type DraftAtt, type OutboxEntry, type Pending, type Seed } from './store'
 import { busyEnd, busyStart } from '@/lib/busy'
 import { fmtBytes } from '@/lib/format'
-import type { QueueItem } from '@/lib/types'
+import type { Mention, MentionTarget, QueueItem } from '@/lib/types'
 import { baseName, isImage, quotedFile, quotesMarkdown, thumbUrl } from './util'
 import { QuotedFile } from './QuotedFile'
 import { pastedFile, pastedName } from './pasteAsFile'
 import { VoiceButton } from '@/features/voice/VoiceButton'
-import { SlashMenu, slashAction, slashItems, type SlashCommand } from './SlashMenu'
+import { SlashMenu, slashAction, slashItems, type MenuRow, type SlashCommand } from './SlashMenu'
+import { mentionAt, mentionRows, usedMentions } from './mentions'
 
 const NO_ITEMS: QueueItem[] = []
 
@@ -52,7 +53,7 @@ export const Composer = React.forwardRef<ComposerHandle, {
   asking?: boolean
   clearingQueue?: boolean
   /** `clientId`: the outbox id, sent with the message so that a reload mid-send can tell whether it arrived. */
-  onSend: (text: string, attachments: string[], clientId?: string) => Promise<boolean>
+  onSend: (text: string, attachments: string[], clientId?: string, mentions?: Mention[]) => Promise<boolean>
   /** Messages a previous page load was sending when it went away: resolves to those the server never got. */
   checkSent?: (left: OutboxEntry[]) => Promise<OutboxEntry[] | null>
   /** Voice message sent directly (setting on by default): the recording is sent as it is, the server transcribes it. */
@@ -68,6 +69,8 @@ export const Composer = React.forwardRef<ComposerHandle, {
   maxRows?: number
   /** The "/" menu: the session's commands and the topic's skills (none: "/" is plain text). */
   commands?: SlashCommand[]
+  /** The "@" menu (mentions.tsx): the id of the session it writes to (none: "@" is plain text). */
+  mentionsFor?: string
 }>(function Composer(props, ref) {
   const { colKey, draftKey, topicPath, running, disabledReason, queueCount = 0, queued = [], queueItems = NO_ITEMS, onClearQueue, clearingQueue, onSteer, steering, steerPending, onInject, injecting, onTakeQueue, onAsk, asking, onSend, onStop, stopping, toolbar, notice, placeholder, autoFocus, maxRows = 12 } = props
   const t = useT()
@@ -336,6 +339,9 @@ export const Composer = React.forwardRef<ComposerHandle, {
     if (blocked || (!body && ready.length === 0 && quotes.length === 0)) return
     const paths = ready.map((a) => a.path!) as string[]
     const sent = [quotesMarkdown(quotes), body].filter(Boolean).join('\n\n')
+    const named = usedMentions(body, picked)
+    const keptPicked = picked
+    setPicked([])
     setText('')
     const keep = atts
     setAtts([])
@@ -348,7 +354,7 @@ export const Composer = React.forwardRef<ComposerHandle, {
     const outId = outboxAdd(k0, { text: sent, body, quotes: kept, attachments: paths })
     busyStart()
     chain.current = chain.current.then(async () => {
-      const ok = await onSend(sent, paths, outId).catch(() => false)
+      const ok = await onSend(sent, paths, outId, named.length ? named : undefined).catch(() => false)
       if (--inflight.current === 0 && mounted.current) setSending(false)
       // Refused: it comes back in the box below. A failure can also be the page going away (its request is cut):
       // the entry is removed only if the page is still here a moment later, else the next load brings it back.
@@ -366,6 +372,7 @@ export const Composer = React.forwardRef<ComposerHandle, {
         const back = (cur: string[]) => [...kept, ...cur.filter((q) => !kept.includes(q))]
         if (mounted.current) {
           setText(restore)
+          setPicked((cur) => [...keptPicked, ...cur])
           setAtts((cur) => [...keep, ...cur])
           setQuotes(back)
         } else {
@@ -421,10 +428,31 @@ export const Composer = React.forwardRef<ComposerHandle, {
   // until the text changes.
   const [slashOff, setSlashOff] = React.useState<string | null>(null)
   const menu = props.commands && slashOff !== text ? slashItems(text, props.commands) : null
+  // The "@" menu (when no "/" menu): open while an "@name" is typed just before the caret.
+  const [caret, setCaret] = React.useState(0)
+  const [picked, setPicked] = React.useState<MentionTarget[]>([])
+  const at = !menu && props.mentionsFor && slashOff !== text ? mentionAt(text, caret) : null
+  const { data: targets } = useMentionTargets(props.mentionsFor || '', !!props.mentionsFor && text.includes('@'))
+  const atRows = at && targets ? mentionRows(at.q, targets, t) : []
+  const rows: MenuRow[] = menu ? menu.items : atRows
   const [slashAt, setSlashAt] = React.useState(0)
-  const menuKey = menu ? `${menu.stage}:${menu.items.map((i) => i.key).join('|')}` : ''
+  const menuKey = menu ? `${menu.stage}:${menu.items.map((i) => i.key).join('|')}` : atRows.length ? `@${atRows.map((i) => i.key).join('|')}` : ''
   React.useEffect(() => setSlashAt(0), [menuKey])
-  const active = menu ? Math.min(slashAt, menu.items.length - 1) : 0
+  const active = rows.length ? Math.min(slashAt, rows.length - 1) : 0
+  const pickMention = (i: number) => {
+    const row = atRows[i]
+    if (!row || !at) return
+    const name = `@${row.target.label} `
+    const next = text.slice(0, at.start) + name + text.slice(caret).replace(/^\S*\s?/, '')
+    const pos = at.start + name.length
+    setText(next)
+    setCaret(pos)
+    setPicked((cur) => [...cur.filter((x) => x.kind !== row.target.kind || x.ref !== row.target.ref), row.target])
+    requestAnimationFrame(() => {
+      ta.current?.focus({ preventScroll: true })
+      ta.current?.setSelectionRange(pos, pos)
+    })
+  }
   const pickSlash = (i: number, complete = false) => {
     const it = menu?.items[i]
     if (!it) return
@@ -440,6 +468,24 @@ export const Composer = React.forwardRef<ComposerHandle, {
   }
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.nativeEvent.isComposing) return
+    if (atRows.length) {
+      const n = atRows.length
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault()
+        setSlashAt((active + (e.key === 'ArrowDown' ? 1 : n - 1)) % n)
+        return
+      }
+      if ((e.key === 'Tab' && !e.shiftKey) || (e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey)) {
+        e.preventDefault()
+        pickMention(active)
+        return
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        setSlashOff(text)
+        return
+      }
+    }
     if (menu) {
       const n = menu.items.length
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
@@ -731,6 +777,9 @@ export const Composer = React.forwardRef<ComposerHandle, {
           )}
         >
           {menu && <SlashMenu items={menu.items} active={active} stage={menu.stage} onPick={(i) => pickSlash(i)} onHover={setSlashAt} />}
+          {!menu && atRows.length > 0 && (
+            <SlashMenu items={atRows} active={active} stage="arg" label={t('sessions.mention.label')} keys={t('sessions.mention.keys')} onPick={pickMention} onHover={setSlashAt} />
+          )}
           {atts.length > 0 && (
             // Many files: a small scrolling strip (two rows) instead of a composer that eats the conversation.
             <div ref={attBox} data-testid="composer-attachments" className="flex max-h-[6.75rem] flex-wrap gap-1.5 overflow-y-auto overscroll-contain px-2.5 pt-2.5 [scrollbar-width:thin]">
@@ -742,7 +791,11 @@ export const Composer = React.forwardRef<ComposerHandle, {
           <Textarea
             ref={setRef}
             value={text}
-            onChange={(e) => setText(e.target.value)}
+            onChange={(e) => {
+              setText(e.target.value)
+              setCaret(e.target.selectionStart)
+            }}
+            onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
             onKeyDown={onKeyDown}
             onPaste={onPaste}
             minRows={1}

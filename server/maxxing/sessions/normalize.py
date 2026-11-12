@@ -99,6 +99,9 @@ def normalize(ev: dict) -> list[dict]:
             out["client_ids"] = [str(c) for c in ev["client_ids"]]
         if ev.get("injected"):                # added to a running turn (POST /inject): not the start of a turn
             out["injected"] = True
+        f = ev.get("from")
+        if isinstance(f, dict) and f.get("session"):   # sent by another session's turn (maxxing sessions send)
+            out["from"] = {"session": str(f["session"]), "title": str(f.get("title") or "")}
         return [out]
     if t == "mx_voice":
         return [{"type": "voice_text", "text": ev.get("text") or "", "error": ev.get("error") or None,

@@ -3,6 +3,7 @@ import { api, networkError, seg } from '../api'
 import { forgetDraft } from '../drafts'
 import type {
   CreateSessionBody,
+  MentionTarget,
   Ok,
   PatchSessionBody,
   SendMessageBody,
@@ -142,6 +143,15 @@ export function useSendMessage() {
       const cur = qc.getQueryData<Session>(qk.sessions.one(r.session.id))
       if (!cur || !(cur.updated > r.session.updated)) set(r.session)
     },
+  })
+}
+/** Who the composer's @ can name: the other sessions, the agents, the Team contacts (asked once an @ is typed). */
+export function useMentionTargets(sid: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ['mentions', sid],
+    queryFn: () => api.get<{ items: MentionTarget[] }>(`/api/sessions/${seg(sid)}/mentions`).then((r) => r.items),
+    enabled: enabled && !!sid,
+    staleTime: 30_000,
   })
 }
 export function useClearQueue() {

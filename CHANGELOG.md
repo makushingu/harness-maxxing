@@ -14,6 +14,11 @@ New:
 - **Team from a session.** Ask Claude "send Léa the summary above on Team" or "tell the Side project group the
   site is online": it runs `maxxing team send <name> "<message>"` (with `--file` for a file), and the message goes
   out in your name as if typed in Team. `maxxing team list` shows who you can write to. Nothing reads your chats.
+- **Name someone with `@` in the composer.** Type `@` and pick one of your other sessions, an agent or a Team
+  contact or group; then ask Claude: "summarize this and send it to @Shop opening", "ask @Lea if the site works
+  for her". Claude writes to them (nothing goes out unless your message asks for it) and says what it sent. A
+  session receives it as a message marked with the session that sent it. New command `maxxing sessions send
+  <session> "<message>"` (and `sessions list`), usable from a script too.
 - **Voice: choose the microphone.** Settings -> Voice has a **Microphone** line: pick the microphone that records
   on this device (headset, USB microphone, the built-in one) instead of the one the browser picks. The choice stays
   in this browser; if that microphone is unplugged, the default one records and the choice comes back with it.

@@ -17,6 +17,22 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   topic's skills from `GET /api/skills?path=` = `skills.for_topic()`). Composer prop `commands`: a session command
   typed in full runs instead of being sent (only without attachments or quotes); a skill is sent as typed (Claude Code
   expands `/name args` in `-p` mode, checked with 2.1.285). New-session form: `model|effort|plan` only.
+- Composer `@` mentions: `pages/sessions/mentions.tsx` (`mentionAt(text, caret)`, `mentionRows`, `usedMentions`), the
+  same list component as `/` (`SlashMenu` now takes `MenuRow[]`, `label`, `keys`, rows with an `icon`); Composer prop
+  `mentionsFor` (session id), `onSend(..., mentions)`. `GET /api/sessions/{id}/mentions` = `mentions.candidates()`
+  (sessions not archived and not an agent's, running first, 60 max; agents if `agents_page`; `team.recipients()` if
+  `team_page`). `POST .../messages` takes `mentions: [{kind, ref}]`: `mentions.resolve()` keeps known ones only (not
+  the session itself, 8 max) with the label and command computed server-side, stored on the queue item (`_merged`
+  keeps them); `runner.build_prompt` appends `mentions_note()` to the prompt (not to the logged/displayed text).
+  `maxxing sessions send TO TEXT... [--file] [--json]` / `sessions list` (`cmd_sessions.py`):
+  `service.relay_message()` + `find_session()` (id, 6+ char prefix, folded title exact then unique prefix, archived
+  last); item `relay: {hops, from, title, path}`, source `session` (from a turn) or `cli`; `build_prompt` prefixes
+  `relay_preface()`; the `mx_user` line carries `from: {session, title}` (normalize -> user event `from`, shown as a
+  link). Loop guard: the runner writes `turn_hops` (the item's hops) in the meta; `agent_guard.agent_turn()` depth =
+  max(agent depth, turn_hops), so sessions and agents share one count: `sessions send` refuses hops > `MAX_HOPS` (3,
+  429 `too_many_hops`), `agents send` keeps `agents.MAX_DEPTH`. Not in `CLI_ALLOWED`: refused in a sandboxed turn.
+  Workspace template `CLAUDE.md`: a `maxxing sessions send` row (**upgrade note: add it to existing workspaces**).
+  Tests: `test_mentions.py`.
 - Team: `maxxing team send TO TEXT... [--file P] [--json]` / `team list` (`cmd_team.py`). `team.recipients()`
   (contacts -> dm, groups not left), `team.find_recipient(to)` (folded name `_fold`: NFKD without accents +
   casefold, exact name / person id / chat id / address / netloc / hostname, else a unique prefix; 404 lists the

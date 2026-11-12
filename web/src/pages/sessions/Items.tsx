@@ -1,6 +1,7 @@
 // Rendering of one thread item. Every row is memoised on the item object (items keep their identity
 // when the log grows, see log.ts), so appending events only renders the new rows.
 import * as React from 'react'
+import { Link } from 'react-router'
 import { AlertTriangle, Brain, Check, ChevronRight, CircleAlert, Copy, FileText, GripVertical, Info, MessageSquarePlus, Mic, Paperclip, Pause, Pencil, Play, ScrollText, Trash2, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useT, useLang } from '@/i18n'
@@ -70,6 +71,7 @@ export const ItemRow = React.memo(function ItemRow({
           heard={item.heard}
           at={at}
           source={item.ev.source}
+          from={item.ev.from}
           injected={item.ev.injected}
           onFork={onFork && (() => onFork(seed()))}
           onEdit={onHide && onEdit && (() => onEdit(item.key, at, seed()))}
@@ -250,6 +252,7 @@ export function UserMessage({
   attachments,
   at,
   source,
+  from,
   injected,
   pending,
   queued,
@@ -263,6 +266,8 @@ export function UserMessage({
   attachments: string[]
   at?: number
   source?: string
+  /** Sent by another session's turn (maxxing sessions send): a link to it. */
+  from?: { session: string; title: string }
   /** Added to a running turn (Add now). */
   injected?: boolean
   pending?: boolean
@@ -308,7 +313,15 @@ export function UserMessage({
         ) : (
           <>
             {(text || heard?.text) && <MessageGrip text={[text, heard?.text].filter(Boolean).join('\n\n')} />}
-            {source && source !== 'web' && <span className="rounded bg-muted px-1">{sourceLabel(source, t)}</span>}
+            {from ? (
+              <Tooltip content={t('sessions.msg.from', { title: from.title || from.session.slice(0, 8) })}>
+                <Link to={`/sessions?session=${encodeURIComponent(from.session)}`} className="max-w-48 truncate rounded bg-muted px-1 hover:text-foreground">
+                  ↩ {from.title || from.session.slice(0, 8)}
+                </Link>
+              </Tooltip>
+            ) : (
+              source && source !== 'web' && <span className="rounded bg-muted px-1">{sourceLabel(source, t)}</span>
+            )}
             {injected && <span className="rounded bg-muted px-1">{t('sessions.msg.injected')}</span>}
             {at ? <time className="opacity-0 transition-opacity group-hover/msg:opacity-100 max-md:opacity-100 pointer-coarse:opacity-100">{fmtDate(at, lang, tz, { dateStyle: undefined, timeStyle: 'short' })}</time> : null}
             {onEdit && (
@@ -415,6 +428,7 @@ function VoiceNote({ paths, heard, pending }: { paths: string[]; heard?: { text:
 function sourceLabel(source: string, t: ReturnType<typeof useT>): string {
   if (source === 'telegram') return 'Telegram'
   if (source === 'cron') return t('sessions.source.cron')
+  if (source === 'cli') return t('sessions.source.cli')
   return source
 }
 

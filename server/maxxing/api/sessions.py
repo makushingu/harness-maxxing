@@ -86,6 +86,11 @@ class HideIn(BaseModel):
     hidden: bool = True
 
 
+class MentionIn(BaseModel):
+    kind: str = Field(max_length=16)
+    ref: str = Field(max_length=300)
+
+
 class MessageIn(_Text):
     text: str = ""
     attachments: list[str] = Field(default_factory=list)
@@ -94,6 +99,8 @@ class MessageIn(_Text):
     # The sender's own id for this message, found again in its queue item and its log line (`client_ids`): a page
     # reloaded mid-send tells whether the server got it.
     client_id: str | None = Field(None, pattern=CLIENT_ID_RE)
+    # @ of the composer: who the message names (mentions.resolve); Claude is told how to write to each
+    mentions: list[MentionIn] = Field(default_factory=list, max_length=20)
 
 
 async def _call(fn: Callable[..., Any], *args: Any, **kw: Any) -> Any:
@@ -191,7 +198,15 @@ async def delete_session(sid: str):
 @router.post("/sessions/{sid}/messages")
 async def send_message(sid: str, body: MessageIn):
     return await _call(service.send_message, sid, body.text, body.attachments, "web", hud=body.hud,
-                       voice_path=body.voice, client_id=body.client_id)
+                       voice_path=body.voice, client_id=body.client_id,
+                       mentions=[m.model_dump() for m in body.mentions])
+
+
+@router.get("/sessions/{sid}/mentions")
+async def mentions(sid: str):
+    """Who the composer's @ can name: the other sessions, the agents, the Team contacts and groups."""
+    from .. import mentions as mentions_mod
+    return {"items": await _call(mentions_mod.candidates, sid)}
 
 
 @router.post("/sessions/{sid}/queue/take")
