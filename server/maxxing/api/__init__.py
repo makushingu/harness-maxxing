@@ -15,6 +15,7 @@ ROUTERS = [
     "importer",
     "files",
     "code",
+    "term",
     "filesite",
     "tasks",
     "crons",

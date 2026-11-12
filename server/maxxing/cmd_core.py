@@ -1032,6 +1032,47 @@ def check_memory() -> Check | None:
               "echo '/swapfile none swap sw 0 0' >> /etc/fstab")
 
 
+STALE_UNIT_DAYS = 7
+
+
+def stale_units(show: str, now: float, days: int = STALE_UNIT_DAYS) -> list[tuple[str, int]]:
+    """Programs started by hand (`systemd-run`: transient services) still running after `days` days, from the
+    output of `systemctl show --timestamp=unix -p Id -p Transient -p ActiveEnterTimestamp <units>`. Turns
+    (`maxxing-<id>`) and the services of the product are not listed: they end by themselves."""
+    out = []
+    for block in show.strip().split("\n\n"):
+        f = dict(l.split("=", 1) for l in block.splitlines() if "=" in l)
+        unit, ts = f.get("Id", ""), f.get("ActiveEnterTimestamp", "").lstrip("@")
+        if f.get("Transient") != "yes" or not ts.isdigit() or re.match(r"maxxing-[0-9a-f]{8}\.service$", unit):
+            continue
+        age = int((now - int(ts)) // 86400)
+        if age >= days:
+            out.append((unit, age))
+    return sorted(out, key=lambda x: -x[1])
+
+
+def check_stale_units() -> Check | None:
+    """Terminals, previews, test servers started by hand and forgotten: they keep memory and ports."""
+    if not shutil.which("systemctl"):
+        return None
+    try:
+        units = subprocess.run(["systemctl", "list-units", "--type=service", "--state=running", "--no-legend",
+                                "--plain"], capture_output=True, text=True, timeout=10).stdout.split()
+        units = [u for u in units if u.endswith(".service")]
+        if not units:
+            return None
+        show = subprocess.run(["systemctl", "show", "--timestamp=unix", "-p", "Id", "-p", "Transient", "-p",
+                               "ActiveEnterTimestamp", *units], capture_output=True, text=True, timeout=10).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+    old = stale_units(show, time.time())
+    if not old:
+        return _c("stale_units", OK, "no program started by hand left running for a week")
+    names = ", ".join(f"{u} ({d} d)" for u, d in old[:6])
+    return _c("stale_units", WARN, f"{len(old)} program(s) started by hand running for more than "
+              f"{STALE_UNIT_DAYS} days", names, f"if not needed any more: systemctl stop {old[0][0]}")
+
+
 def check_bind(cfg: dict) -> Check:
     bind, port = str(cfg.get("bind")), int(cfg.get("port") or 8787)
     if _is_public_bind(bind) and not _is_hostname(bind):
@@ -1504,7 +1545,7 @@ def collect_checks(live: bool = False, fetch: bool = True, deps: bool = False) -
         check_python, check_uv, check_claude_cli, lambda: check_claude_version(fetch), lambda: check_claude_auth(live),
         lambda: check_skill_listing(cfg), check_setup,
         check_service, check_hardening, lambda: check_caddy_site(cfg), check_infra_paths, lambda: check_bind(cfg), lambda: check_http(cfg), lambda: check_public_url(cfg),
-        lambda: check_caddy(cfg), check_crontab, lambda: check_timezone(cfg), lambda: check_telegram(cfg), lambda: check_backup(cfg), check_voice, check_tools, check_agent_sandbox, check_managed_deps, check_security, check_state_files,
+        lambda: check_caddy(cfg), check_crontab, lambda: check_timezone(cfg), lambda: check_telegram(cfg), lambda: check_backup(cfg), check_voice, check_tools, check_stale_units, check_agent_sandbox, check_managed_deps, check_security, check_state_files,
         lambda: check_disk(cfg), check_memory, lambda: check_workspace(cfg), check_skills, check_web,
         check_license, lambda: check_git(fetch), check_update_signature,
     ] + ([check_deps] if deps else [])

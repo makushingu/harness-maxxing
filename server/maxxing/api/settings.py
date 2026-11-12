@@ -57,6 +57,7 @@ def current() -> dict:
             "usage_widget": bool(cfg.get("usage_widget", False)),
             "tasks_page": bool(cfg.get("tasks_page", False)),
             "git_page": bool(cfg.get("git_page", False)),
+            "terminal_feature": bool(cfg.get("terminal_feature", False)),   # read-only here: /api/term/enable|disable
             "infra_page": bool(cfg.get("infra_page", False)),
             "team_page": bool(cfg.get("team_page", False)),
             "agents_page": bool(cfg.get("agents_page", False)),
