@@ -658,3 +658,12 @@ def test_the_restore_skips_files_larger_than_the_backup_limit(gh, ws, mx_state, 
     monkeypatch.setattr(backup, "MAX_RESTORE", 5)
     r = backup.restore()
     assert r["ok"] is False and r["code"] == "too_large"
+
+
+async def test_a_lone_surrogate_in_the_backup_include_is_refused(gh, ws):
+    """Valid JSON that config.json cannot store: invalid_include, not a 500."""
+    app = bare_app(backup_api.router)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://t") as c:
+        r = await c.put("/api/backup/settings", content=b'{"include": ["\\ud800"]}',
+                        headers={"content-type": "application/json"})
+        assert r.status_code == 400 and r.json()["error"] == "invalid_include", r.text

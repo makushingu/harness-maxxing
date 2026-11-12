@@ -162,3 +162,11 @@ def test_a_description_that_is_not_utf8_is_refused_before_anything_is_created(cl
     r = client.patch("/api/workspace/projects/acme", content=json.dumps({"name": "acme2", "description": "\ud800"}),
                      headers={"content-type": "application/json"})
     assert r.status_code == 400 and (mx["ws"] / "projects/acme").is_dir()
+
+
+def test_a_lone_surrogate_emoji_is_refused(client, mx):
+    """Valid JSON (`\\ud800`) that no UTF-8 file can hold: bad_emoji, not a 500 from the metadata write."""
+    client.post("/api/workspace/projects", json={"name": "shop"})
+    r = client.patch("/api/workspace/projects/shop", content=b'{"emoji": "\\ud800"}',
+                     headers={"content-type": "application/json"})
+    assert r.status_code == 400 and r.json()["error"] == "bad_emoji", r.text

@@ -18,6 +18,7 @@ from pydantic import BaseModel
 
 from .. import bus, config, extensions, widgets
 from ..security import require_auth
+from .settings import _utf8
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"], dependencies=[Depends(require_auth)])
 log = logging.getLogger("maxxing.dashboard")
@@ -133,7 +134,8 @@ class LayoutIn(BaseModel):
 @router.put("/layout")
 def layout(body: LayoutIn):
     def dedupe(xs: list[str]) -> list[str]:
-        return list(dict.fromkeys(x for x in xs if isinstance(x, str) and 0 < len(x) <= 64))[:200]
+        # a lone surrogate (valid JSON) cannot be written to the UTF-8 config.json: dropped like any bad id
+        return list(dict.fromkeys(x for x in xs if isinstance(x, str) and 0 < len(x) <= 64 and _utf8(x)))[:200]
     config.update_config(dashboard={"order": dedupe(body.order), "hidden": dedupe(body.hidden)})
     bus.invalidate("extensions")
     return {"ok": True}

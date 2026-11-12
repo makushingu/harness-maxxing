@@ -159,3 +159,10 @@ def test_a_files_root_too_long_is_invalid_not_a_500(client, org, root):
     # is_dir() lets ENAMETOOLONG through on Python 3.12
     r = client.put("/api/settings", json={"files_root": root})
     assert r.status_code == 400 and r.json()["error"] == "invalid_files_root"
+
+
+def test_a_lone_surrogate_in_the_public_url_is_refused(client, org):
+    """Valid JSON that config.json cannot store: invalid_url, not a 500."""
+    r = client.put("/api/settings", content=b'{"public_url": "https://ui.example.com/\\ud800"}',
+                   headers={"content-type": "application/json"})
+    assert r.status_code == 400 and r.json()["error"] == "invalid_url", r.text

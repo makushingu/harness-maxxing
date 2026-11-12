@@ -375,6 +375,8 @@ def clean_include(include: Any) -> list[str]:
         if not isinstance(g, str):
             raise BackupError(f"Invalid pattern: {g!r}", "invalid_include")
         g = g.strip()
+        if not _utf8(g):                                    # a lone surrogate: valid JSON, not storable
+            raise BackupError("Invalid pattern (not valid text)", "invalid_include")
         while g.startswith("./"):
             g = g[2:]
         if not g or g.startswith(("/", "~")) or ".." in Path(g).parts:

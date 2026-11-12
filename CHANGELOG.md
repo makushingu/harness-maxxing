@@ -102,6 +102,9 @@ Fixed:
   `cron run --detach` runs the job here when systemd refuses to start it.
 - **Confirmations in Mail and Team use the app's own dialog**, in the app's theme, instead of the browser's. The
   session tab arrows no longer blur what is behind them.
+- **An invalid character no longer breaks saving.** A dashboard layout, a project emoji, the backup patterns or the
+  public address holding an invalid character (such as half of an emoji) now gets a clear error, or is ignored in a
+  dashboard layout, instead of a server error.
 
 ## 2.0.0-alpha.140 - 2026-11-11
 

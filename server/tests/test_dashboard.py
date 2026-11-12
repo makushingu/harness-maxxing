@@ -385,3 +385,12 @@ def test_hand_edited_dashboard_order_falls_back_to_default(client, org, fakes):
         else:
             assert [w["id"] for w in ws] == default
             assert {w["id"] for w in ws if w["hidden"]} == widgets.default_hidden() & set(default)
+
+
+def test_a_lone_surrogate_widget_id_is_dropped_from_the_layout(client, org, fakes):
+    """Valid JSON that config.json cannot store: the id is dropped like any bad id, no 500."""
+    r = client.put("/api/dashboard/layout", content=b'{"order": ["\\ud800", "x"], "hidden": ["\\udfff"]}',
+                   headers={"content-type": "application/json"})
+    assert r.status_code == 200, r.text
+    assert client.get("/api/dashboard").status_code == 200
+    assert config.load_config()["dashboard"] == {"order": ["x"], "hidden": []}

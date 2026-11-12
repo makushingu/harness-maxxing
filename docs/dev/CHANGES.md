@@ -151,6 +151,11 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   `confirm()` of `ui/alert-dialog` (Compose's `useBlocker` effect proceeds/resets from the promise; `run`, `tryClose`,
   `remove` are async); `pages/sessions/Tabs` arrows lose `backdrop-blur`. Test: `tests/test_web_design_rules.py`
   (browser dialogs and backdrop blur in `web/src`; only `features/agents/OfficeFuture.tsx` is exempt from the blur).
+- A lone surrogate (valid JSON, not encodable to the UTF-8 state files) is refused where it is validated instead of
+  raising `UnicodeEncodeError` in `config._atomic_write` (500): `api/dashboard.layout` drops such ids (reuses
+  `api.settings._utf8`), `workspace.check_emoji` -> 400 `bad_emoji`, `backup.clean_include` -> 400 `invalid_include`
+  (reuses `backup._utf8`), `api/settings` `public_url` -> 400 `invalid_url` (`_utf8`; other non-ASCII still accepted).
+  Tests: `test_dashboard`, `test_workspace`, `test_backup`, `test_settings`.
 
 ## 2.0.0-alpha.140 - 2026-11-11
 
