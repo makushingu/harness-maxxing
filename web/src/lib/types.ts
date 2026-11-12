@@ -531,6 +531,18 @@ export type EnterpriseOverview = {
 export type EnterpriseReport = { name: string; date: string; kind: 'daily' | 'weekly' | 'monthly' }
 export type EnterpriseRequest = { id: string; category: string; position: string; text: string; amount: number | null; status: string; decider: string; at: number; outside: boolean }
 export type EnterpriseEscalation = { id: string; position: string; text: string; task: string; level: number; deadline: number; status: string; at: number; outside: boolean }
+export type EnterpriseAbout = { text: string; max: number; note_max: number }
+export type EnterpriseProfileProduct = { name?: string; price?: string; url?: string; [k: string]: unknown }
+export type EnterpriseProfile = {
+  products?: EnterpriseProfileProduct[]
+  hours?: string
+  terms?: Record<string, string | number | boolean>
+  contact?: Record<string, string | number | boolean> | string
+  faq?: { q: string; a: string }[]
+  [k: string]: unknown
+}
+export type EnterpriseBuilt = { built: boolean; report: EnterpriseReport | null }
+export type EnterpriseReportDoc = EnterpriseReport & { text: string }
 export type EnterpriseInsights = { week: string; questions: unknown[]; topics: unknown[]; pains: unknown[]; unanswered: unknown[] }
 
 
@@ -650,6 +662,8 @@ export type Task = {
   updated: number
   done_at: number | null
   order: number
+  /** set on tasks delegated inside an enterprise */
+  enterprise?: { id: string; owner?: string; requester?: string; parent?: string; deliverable?: string; stage?: string; hops?: number; outside?: boolean }
 }
 /** `workspace` = the workspace project it follows (created, renamed with it); `hidden` = left out of the sidebar. */
 export type TaskProject = { id: string; name: string; color: string; workspace?: string | null; hidden?: boolean }

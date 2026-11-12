@@ -67,3 +67,43 @@ def test_the_chart_is_a_list_on_a_phone_and_drags_with_the_mouse_only():
     assert "useCompact()" in chart and "ListNode" in chart
     assert "pointerType !== 'mouse'" in chart  # no drag on a touch screen: the panel's Change lead does it
     assert "aria-expanded" in chart
+
+
+def test_the_tabs_overview_decisions_reports_profile_follow_the_chart():
+    tabs = (WEB / "features" / "enterprises" / "tabs.tsx").read_text(encoding="utf-8")
+    ids = re.findall(r"\{ id: '([a-z]+)', label:", tabs)
+    assert ids[:2] == ["chart", "overview"]
+    assert {"decisions", "reports", "profile", "settings"} <= set(ids)
+
+
+def test_the_queries_cover_the_flow_routes_of_the_contract():
+    q = (WEB / "lib" / "queries" / "enterprises.ts").read_text(encoding="utf-8")
+    for route in ("/overview", "/reports", "/requests", "/escalations", "/about", "/profile", "/insights"):
+        assert f"'{route}" in q or f"`{route}" in q or f"`/reports/" in q, route
+    for hook in ("useEnterpriseOverview", "useBuildReport", "useDecideRequest", "useAnswerEscalation", "usePutEnterpriseAbout", "usePutEnterpriseProfile", "useEnterpriseInsights"):
+        assert f"export function {hook}" in q, hook
+
+
+def test_the_enterprises_showcase_exists_in_both_languages():
+    src = (WEB / "features" / "whatsnew" / "showcases.ts").read_text(encoding="utf-8")
+    assert re.search(r"enterprises: \[\{ id: 'enterprises',[^\n]*show\.enterprises\.title[^\n]*show\.enterprises\.body", src)
+    target = re.search(r"enterprises: \[\{ id: 'enterprises', targets: \['([a-z-]+)'\]", src)
+    assert target and f'data-tour="{target[1]}"' in (WEB / "features" / "enterprises" / "EnterprisesList.tsx").read_text(encoding="utf-8")
+    for lang in ("en", "fr"):
+        text = (WEB / "i18n" / f"{lang}.ts").read_text(encoding="utf-8")
+        for k in ("show.enterprises.title", "show.enterprises.body", "agents.office.org", "agents.office.orgLead", "agents.office.orgOthers", "agents.office.orgNoDept"):
+            assert re.search(rf"""['"]{re.escape(k)}['"]\s*:""", text), f"{k} missing in {lang}.ts"
+
+
+def test_the_office_org_view_is_sober_and_does_not_replace_classic_or_space():
+    org = (WEB / "features" / "agents" / "OfficeOrg.tsx").read_text(encoding="utf-8")
+    assert not re.search(r"#[0-9a-fA-F]{3,8}\b|\b(rgb|hsl|oklch)a?\(|gradient", org)
+    page = (WEB / "features" / "agents" / "AgentsPage.tsx").read_text(encoding="utf-8")
+    assert "id: 'classic'" in page and "id: 'future'" in page and "id: 'org'" in page
+    custom = (WEB / "features" / "agents" / "OfficeCustom.tsx").read_text(encoding="utf-8")
+    assert "reports_to:" in custom and "enterprise:" in custom
+
+
+def test_a_position_with_reports_is_removed_by_moving_them_to_its_lead():
+    sheet = (WEB / "features" / "enterprises" / "PositionSheet.tsx").read_text(encoding="utf-8")
+    assert "reparent_to: lead" in sheet and "'has_reports'" in sheet and "value=\"work\"" in sheet

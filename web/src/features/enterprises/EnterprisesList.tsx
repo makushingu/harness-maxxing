@@ -14,7 +14,7 @@ export function EnterprisesList() {
   const { data, isLoading, error, refetch } = useEnterprises()
   const [creating, setCreating] = React.useState(false)
   const add = (
-    <Button onClick={() => setCreating(true)} data-testid="enterprise-new-open">
+    <Button onClick={() => setCreating(true)} data-testid="enterprise-new-open" data-tour="enterprises-new">
       <Plus /> {t('ent.new.action')}
     </Button>
   )

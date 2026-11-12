@@ -130,7 +130,7 @@ export function busKeysOf(topic: string): readonly (readonly unknown[])[] {
   /** `enterprises:<slug>` = that enterprise's chart, inboxes or decisions changed. */
   if (topic.startsWith('enterprises:')) {
     const slug = topic.slice(12)
-    return [['enterprises', 'list'], ['enterprises', 'one', slug], ['enterprises', 'inbox', slug], ['enterprises', 'decisions', slug]]
+    return [['enterprises', 'list'], ['enterprises', 'one', slug], ['enterprises', 'inbox', slug], ['enterprises', 'decisions', slug], ['enterprises', 'overview', slug], ['enterprises', 'reports', slug], ['enterprises', 'requests', slug], ['enterprises', 'escalations', slug]]
   }
   return BUS_KEYS[topic as BusTopic] || []
 }

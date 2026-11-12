@@ -1985,6 +1985,9 @@ function entSeed() {
       { id: 'seo', title: 'Search and rankings', reports_to: 'marketing-lead', department: 'marketing', agent: ag('seo', 'rank-watch'), job: '' },
       { id: 'support-lead', title: 'Customer care', reports_to: null, department: 'support', agent: null, job: 'Answers customers within a day.' },
     ] })
+  const t = now()
+  S.tasks.tasks.push({ id: 't_9f3c2a', title: 'Three articles on the spring kit', notes: '', status: 'doing', priority: 1, due: new Date(Date.now() + 3 * DAY * 1000).toISOString().slice(0, 10), project_id: null, topic_path: null, labels: ['acme-group'], created: t, updated: t, done_at: null,
+    order: 9000, enterprise: { id: 'acme-group', owner: 'writer', requester: 'marketing-lead', parent: '', deliverable: 'Three articles', stage: '', hops: 1, outside: false } })
 }
 const entAgent = (path) => path ? mockAgents().find((a) => a.path === path) || null : null
 function entView(id) {
@@ -2059,7 +2062,8 @@ R('PATCH', '/api/enterprises/:e/positions/:pos', ({ params, body }) => {
 R('DELETE', '/api/enterprises/:e/positions/:pos', ({ params, q }) => {
   const e = entGet(params.e)
   const p = entPos(e, params.pos)
-  const to = q.get('reparent_to') || p.reports_to || null
+  if (!q.get('reparent_to') && e.positions.some((x) => x.reports_to === p.id)) fail(409, 'has_reports', 'This position has reports: say where they go')
+  const to = q.get('reparent_to') === 'owner' ? null : q.get('reparent_to') || p.reports_to || null
   for (const x of e.positions) if (x.reports_to === p.id) x.reports_to = to
   e.positions = e.positions.filter((x) => x.id !== p.id)
   entTouch(e, params.e)
@@ -2074,7 +2078,85 @@ R('POST', '/api/enterprises/:e/positions/:pos/hire', ({ params, body }) => {
   return { agent: path }
 })
 R('GET', '/api/enterprises/:e/positions/:pos/inbox', ({ params }) => ({ items: params.pos === 'writer' ? [{ id: 'i1', kind: 'assignment', from: 'marketing-lead', text: 'Three articles on the spring kit', task: 't_9f3c2a', at: now() - 3600, outside: false }] : [] }))
-R('GET', '/api/enterprises/:e/decisions', () => ({ items: [], next: null }))
+const entState = (e) => (e.live ||= {
+  about: 'Acme sells starter kits for home gardens. We write in plain language and never promise delivery dates.',
+  profile: { products: [{ name: 'Starter kit', price: '29 USD', url: 'https://shop.example.com/starter', notes: '' }], hours: 'Mon-Fri 9:00-18:00 CET', terms: { refund_days: 30, shipping: '2-4 days in the EU' }, contact: '', faq: [{ q: 'Does the kit work with model Y?', a: 'Yes, since version 2.' }] },
+  requests: [
+    { id: 'r1', category: 'spend', position: 'marketing-lead', text: 'Buy a stock photo pack for the spring campaign (about 40 USD).', amount: 40, status: 'pending', decider: 'owner', at: now() - 1800, outside: false },
+    { id: 'r0', category: 'publish', position: 'writer', text: 'Publish the weekly article.', amount: null, status: 'allowed', decider: 'lead', at: now() - 86400, outside: false },
+  ],
+  escalations: [{ id: 'e1', position: 'writer', text: 'Two sources disagree on the shipping time: which one do we print?', task: 't_9f3c2a', level: 2, deadline: now() + 7200, status: 'open', at: now() - 3000, outside: false }],
+  reports: [{ name: '2026-11-11-daily', date: '2026-11-11', kind: 'daily', text: '# Daily digest\n\n- Marketing shipped the **spring kit** article.\n- One escalation waits for you.\n- Cost of the day: 3.20 USD.' }, { name: '2026-11-09-weekly', date: '2026-11-09', kind: 'weekly', text: '# Weekly review\n\nThree articles published; traffic is up.' }],
+}, e.live)
+const entAsk = (id) => entState(entGet(id))
+R('GET', '/api/enterprises/:e/overview', ({ params }) => {
+  const e = entGet(params.e)
+  const st = entState(e)
+  const v = entView(params.e)
+  const depts = [...new Set(e.positions.map((p) => p.department))]
+  const digest = st.reports.find((r) => r.kind === 'daily')
+  return {
+    departments: depts.map((d) => ({ id: d, name: e.departments[d]?.name || d, cost_today: +v.positions.filter((p) => p.department === d).reduce((n, p) => n + p.cost_today, 0).toFixed(2), ceiling: e.departments[d]?.envelope?.usd_per_day ?? null, open_tasks: d === 'marketing' ? 3 : 0, late_tasks: d === 'marketing' ? 1 : 0, blocked: d === 'marketing' ? 1 : 0 })),
+    requests_waiting: st.requests.filter((r) => r.status === 'pending').length,
+    escalations_open: st.escalations.filter((x) => x.status === 'open').length,
+    objectives: [{ id: 'o1', text: '12 articles a month', target: 12, unit: 'articles', value: 7, owner: 'marketing-lead', parent: '' }, { id: 'o2', text: '3 articles a week', target: 3, unit: 'articles', value: 2, owner: 'writer', parent: 'o1' }],
+    digest: digest ? { date: digest.date, text: digest.text } : null, cost_today: v.cost_today, digest_cost: 0.04,
+  }
+})
+R('GET', '/api/enterprises/:e/reports', ({ params }) => ({ items: entAsk(params.e).reports.map(({ name, date, kind }) => ({ name, date, kind })) }))
+R('GET', '/api/enterprises/:e/reports/:name', ({ params }) => entAsk(params.e).reports.find((r) => r.name === params.name) || fail(404, 'not_found', 'Report not found'))
+R('POST', '/api/enterprises/:e/reports', ({ params, body }) => {
+  const st = entAsk(params.e)
+  const kind = ['daily', 'weekly', 'monthly'].includes(body.kind) ? body.kind : 'daily'
+  const date = new Date().toISOString().slice(0, 10)
+  const r = { name: `${date}-${kind}`, date, kind, text: `# ${kind[0].toUpperCase()}${kind.slice(1)} report\n\nBuilt now: nothing unusual to report.` }
+  st.reports = [r, ...st.reports.filter((x) => x.name !== r.name)]
+  bus('enterprises', `enterprises:${params.e}`)
+  return { built: true, report: { name: r.name, date, kind } }
+})
+R('GET', '/api/enterprises/:e/requests', ({ params }) => ({ items: entAsk(params.e).requests }))
+R('POST', '/api/enterprises/:e/requests/:id', ({ params, body }) => {
+  const r = entAsk(params.e).requests.find((x) => x.id === params.id) || fail(404, 'not_found', 'Request not found')
+  if (r.status !== 'pending') fail(409, 'decided', 'Already decided')
+  r.status = body.decision === 'allow' ? 'allowed' : 'denied'
+  bus('enterprises', `enterprises:${params.e}`)
+  return r
+})
+R('GET', '/api/enterprises/:e/escalations', ({ params }) => ({ items: entAsk(params.e).escalations }))
+R('POST', '/api/enterprises/:e/escalations/:id/answer', ({ params, body }) => {
+  const x = entAsk(params.e).escalations.find((i) => i.id === params.id) || fail(404, 'not_found', 'Escalation not found')
+  if (x.status !== 'open') fail(409, 'answered', 'Already answered')
+  x.status = 'answered'
+  x.answer = body.text
+  bus('enterprises', `enterprises:${params.e}`)
+  return x
+})
+R('GET', '/api/enterprises/:e/about', ({ params }) => ({ text: entAsk(params.e).about, max: 20000, note_max: 3000 }))
+R('PUT', '/api/enterprises/:e/about', ({ params, body }) => {
+  const st = entAsk(params.e)
+  st.about = String(body.text || '').slice(0, 20000)
+  return { text: st.about, max: 20000, note_max: 3000 }
+})
+R('GET', '/api/enterprises/:e/profile', ({ params }) => entAsk(params.e).profile)
+R('PUT', '/api/enterprises/:e/profile', ({ params, body }) => {
+  const st = entAsk(params.e)
+  st.profile = { products: [], hours: '', terms: {}, contact: '', faq: [], ...body }
+  return { profile: st.profile }
+})
+R('GET', '/api/enterprises/:e/insights', ({ params }) => { entGet(params.e); return { week: '2026-W45', questions: [], topics: [], pains: [], unanswered: ['Does the kit ship to Norway?'] } })
+R('GET', '/api/enterprises/:e/decisions', ({ params, q }) => {
+  entGet(params.e)
+  const all = [
+    ['assign', 'marketing-lead', 'writer', 'Three articles on the spring kit, due Friday.', 3600],
+    ['escalation', 'writer', 'marketing-lead', 'Two sources disagree on the shipping time.', 3000],
+    ['request', 'marketing-lead', 'marketing-lead', 'Asked to spend 40 USD on a photo pack.', 1800],
+    ['structure', 'owner', '', 'Position Customer care added.', 90000],
+    ['profile', 'owner', '', 'Company profile edited', 120000],
+  ].map(([kind, by, position, text, ago]) => ({ at: Math.floor(now() - ago), kind, by, position, text, task: '', session: '' }))
+  const before = Number(q.get('before') || 0)
+  const page = before ? all.slice(3) : all.slice(0, 3)
+  return { items: page, next: before ? null : 3 }
+})
 R('GET', '/api/agents/layout', () => ({ projects: [], colors: {}, agents: {} }))
 // MOCK_FEATURES=all: three chats (a DM with unread messages, a quiet DM, a group) for the Team bubbles.
 const TEAM = (() => {
