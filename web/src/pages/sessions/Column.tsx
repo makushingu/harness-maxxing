@@ -386,6 +386,12 @@ function useSlimHeader(head: React.RefObject<HTMLElement | null>, stacked: boole
 /** `agentRun`: a run of an agent shown on the Agents page - it stays where it is (no move, archive or delete: the
  *  agent manages its runs, archiving them by itself), and the archived banner is not shown. */
 export function SessionColumn({ col, sid, variant, index, count, place, agentRun }: { col: Col; sid: string; variant: ColumnVariant; index: number; count: number; place?: Place; agentRun?: boolean }) {
+  // Opened behind the session in front (another device of the user opened it, a link opened beside): the keyboard
+  // stays where the user is typing.
+  const [background] = React.useState(() => {
+    const st = useSessionsUI.getState()
+    return !!st.focused && st.focused !== col.key && st.cols.some((c) => c.key === col.key)
+  })
   const t = useT()
   const navigate = useNavigate()
   const { data: session, isError, error } = useSessionSeeded(sid)
@@ -868,7 +874,7 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
             onSendVoice={onSendVoice}
             onStop={onStop}
             stopping={stop.isPending}
-            autoFocus={variant !== 'mobile'}
+            autoFocus={variant !== 'mobile' && !background}
             toolbar={
               session ? (
                 <>

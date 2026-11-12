@@ -12,6 +12,7 @@ import { useT } from '@/i18n'
 import { cn } from '@/lib/utils'
 import { animateIn, animateOut, EASE_OUT, reducedMotion, usePresence } from '@/lib/presence'
 import { useTabSwitchMotion } from './tabMotion'
+import { useOpenSync } from './openSync'
 import { useRegisterCommands } from '@/commands/registry'
 import { useHotkey } from '@/commands/shortcuts'
 import { agentRunRoute, isAgentSession, useSessions, useSessionSeeded, useSettings, useWorkspace } from '@/lib/queries'
@@ -79,6 +80,9 @@ function Workspace() {
   const { data: sessions, isError: sessionsFailed, refetch: refetchSessions } = useSessions(undefined, false)
   const [helpOpen, setHelpOpen] = React.useState(false)
 
+  // the open sessions are the same on the user's other devices
+  useOpenSync(mobile)
+
   const focusedCol = cols.find((c) => c.key === focused) || null
   const focusedId = focusedCol?.kind === 'session' ? focusedCol.id : null
   const { data: focusedSession } = useSessionSeeded(focusedId)
@@ -113,7 +117,16 @@ function Workspace() {
     const path = params.get('path')
     if (sid && parseAgentPath(path)) return // redirected above
     for (const id of (params.get('open') || '').split(',').filter(Boolean)) st.openSession(id, { focus: false })
-    if (sid) st.openSession(sid)
+    if (sid) {
+      const was = st.focused
+      const key = st.openSession(sid)
+      // asked from elsewhere (the search, a link): a computer brings its column into view, as a click in the list does
+      if (!mobile && key !== was)
+        requestAnimationFrame(() => {
+          document.querySelector(`[data-col="${key}"]`)?.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'smooth' })
+          focusComposer(key)
+        })
+    }
     // A badge was clicked: the tree shows those sessions (and comes back if it was folded away).
     const show = params.get('show')
     if (show === 'running' || show === 'unread') {
@@ -285,8 +298,7 @@ function Workspace() {
   })
   useHotkey('/', () => focusComposer(useSessionsUI.getState().focused || useSessionsUI.getState().cols[0]?.key || null))
 
-  // ⌘K palette: search, new session here, recent sessions.
-  const recent = (sessions || []).slice(0, 8)
+  // ⌘K palette: new session here, the shortcuts (a computer). The recent sessions are the palette's own, on every page.
   useRegisterCommands(
     'sessions',
     [
@@ -295,7 +307,7 @@ function Workspace() {
             {
               id: 'sessions:new-here',
               title: `${t('palette.newSessionIn')} ${topicLabel(defaultTopic, t('sessions.root'))}`,
-              group: t('nav.sessions'),
+              group: t('palette.actions'),
               icon: MessageSquarePlus,
               sensitive: true,
               shortcut: ['Alt', 'N'],
@@ -303,18 +315,9 @@ function Workspace() {
             },
           ]
         : []),
-      ...recent.map((s) => ({
-        id: `sessions:recent:${s.id}`,
-        title: s.title,
-        hint: topicLabel(s.path, t('sessions.root')),
-        group: t('sessions.recent'),
-        icon: MessagesSquare,
-        sensitive: true,
-        perform: () => openSession(s),
-      })),
-      { id: 'sessions:shortcuts', title: t('sessions.shortcuts.title'), group: t('nav.sessions'), icon: Keyboard, perform: () => setHelpOpen(true) },
+      ...(mobile ? [] : [{ id: 'sessions:shortcuts', title: t('sessions.shortcuts.title'), group: t('palette.actions'), icon: Keyboard, perform: () => setHelpOpen(true) }]),
     ],
-    [t, defaultTopic, recent.map((s) => s.id + s.title).join('|'), mobile],
+    [t, defaultTopic, mobile],
   )
 
   // Columns open (grow from the right), close (shrink while the others slide over) and move (slide) smoothly.

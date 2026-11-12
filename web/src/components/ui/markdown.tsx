@@ -188,6 +188,15 @@ export const Markdown = React.memo(function Markdown({ children, className, onLi
         const local = localImage ? localImage(s) : s
         return local === null ? <RemoteImage src={s} alt={alt || ''} /> : <img src={local} alt={alt || ''} loading="lazy" />
       },
+      // A cell that holds a sentence keeps a readable width: on a narrow screen the table scrolls sideways (globals.css)
+      // instead of squeezing the sentence to one word a line.
+      td({ node, children: c, style }) {
+        return (
+          <td style={style} data-long={node && hText(node as unknown as HNode).length > 40 ? '' : undefined}>
+            {c}
+          </td>
+        )
+      },
       ...components,
     }),
     [onLink, components, localImage],

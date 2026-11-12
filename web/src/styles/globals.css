@@ -532,6 +532,9 @@ html[data-compact] .mx-sheet[data-state='closed'] { animation: mx-sheet-down 180
 .prose-mx table { display: block; overflow-x: auto; border-collapse: collapse; font-size: 13px; }
 .prose-mx th, .prose-mx td { border: 1px solid var(--color-border); padding: 0.4rem 0.7rem; text-align: left; }
 .prose-mx th { background: var(--color-muted); font-weight: 600; white-space: nowrap; }
+/* A table too wide for its place scrolls sideways: its words stay whole, a cell with a sentence stays readable. */
+.prose-mx td { overflow-wrap: break-word; }
+.prose-mx td[data-long] { min-width: 13rem; }
 .prose-mx img { max-width: 100%; border-radius: var(--radius-md); }
 .prose-mx input[type='checkbox'] { margin-right: 0.4rem; vertical-align: middle; }
 

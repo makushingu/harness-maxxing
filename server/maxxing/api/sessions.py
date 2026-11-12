@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field, field_validator
 from .. import media, security, streamcap
 from .. import uploads as upload_limits
 from ..security import require_auth
-from ..sessions import costfix, maintenance, service, wake
+from ..sessions import costfix, maintenance, opened, service, wake
 from ..sessions.service import SessionError
 
 router = APIRouter(prefix="/api", tags=["sessions"], dependencies=[Depends(require_auth)])
@@ -136,6 +136,23 @@ async def create_session(body: CreateIn):
 @router.get("/sessions/search")
 async def search(q: str = ""):
     return await _call(service.search, q)
+
+
+class OpenIn(BaseModel):
+    open: list[str] = Field(default_factory=list, max_length=200)
+    close: list[str] = Field(default_factory=list, max_length=200)
+    order: list[str] = Field(default_factory=list, max_length=200)
+
+
+@router.get("/sessions/open")
+async def open_sessions():
+    """The sessions open on screen, shared by the user's browsers (sessions/opened.py); `ids: null` = none shared yet."""
+    return await asyncio.to_thread(opened.load)
+
+
+@router.post("/sessions/open")
+async def set_open_sessions(body: OpenIn):
+    return await asyncio.to_thread(opened.update, body.open, body.close, body.order)
 
 
 # ---- one session ---------------------------------------------------------------------------

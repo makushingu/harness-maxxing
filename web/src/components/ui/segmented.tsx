@@ -1,7 +1,8 @@
 import * as React from 'react'
 import { cn } from '@/lib/utils'
 
-/** Segmented control (radio group look-alike) for 2-5 exclusive options. Keyboard: arrows. */
+/** Segmented control (radio group look-alike) for 2-5 exclusive options. Keyboard: arrows. Too wide for its place
+ *  (a narrow phone, long labels): the options go on a second line, none is cut. */
 export function Segmented<T extends string>({
   value,
   onChange,
@@ -19,7 +20,7 @@ export function Segmented<T extends string>({
 }) {
   const refs = React.useRef<(HTMLButtonElement | null)[]>([])
   return (
-    <div role="radiogroup" aria-label={ariaLabel} className={cn('inline-flex w-fit max-w-full items-center gap-0.5 overflow-x-auto rounded-lg bg-muted p-1', className)}>
+    <div role="radiogroup" aria-label={ariaLabel} className={cn('inline-flex w-fit max-w-full flex-wrap items-center gap-0.5 rounded-lg bg-muted p-1', className)}>
       {options.map((o, i) => {
         const active = o.value === value
         return (

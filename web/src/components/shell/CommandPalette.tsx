@@ -4,9 +4,10 @@ import { Command as Cmdk, defaultFilter } from 'cmdk'
 import * as DialogPrimitive from '@radix-ui/react-dialog'
 import { Blocks, Bot, Brain, BookOpen, Compass, CornerDownLeft, Download, Eye, File, FileText, Folder, GraduationCap, Hash, Keyboard, ListChecks, LogOut, MessageSquarePlus, MessagesSquare, Moon, Search, Sun, UsersRound } from 'lucide-react'
 import { api } from '@/lib/api'
-import { AGENT_PATH_RE, GROUP_PATH_RE, agentRoute, agentRunRoute, groupRoute, useAgentGroups, useAgents, useDocs, useLogout, useSettings, useWorkspace } from '@/lib/queries'
+import { AGENT_PATH_RE, GROUP_PATH_RE, agentRoute, agentRunRoute, groupRoute, useAgentGroups, useAgents, useDocs, useLogout, useSessions, useSettings, useWorkspace } from '@/lib/queries'
 import type { FileSearchHit, SearchHit, SearchResult } from '@/lib/types'
 import { useUI, resolveTheme } from '@/stores/ui'
+import { useCompact } from '@/stores/media'
 import { cn, fold } from '@/lib/utils'
 import { tDyn, useT, type TKey } from '@/i18n'
 import { useCommandStore, type Command } from '@/commands/registry'
@@ -53,6 +54,27 @@ export function CommandPalette() {
   const agentsOn = !!st?.agents_page
   const { data: agentList } = useAgents(open && agentsOn)
   const { data: groupList } = useAgentGroups(open && agentsOn)
+  const touch = useCompact()
+  // Sessions come first, on every page: the last ones used while nothing is typed, then the ones whose title holds
+  // the typed words (known at once: the list is in memory), most recent first. The full-text search adds the ones
+  // it finds by their content, under them.
+  const { data: sessionList } = useSessions(undefined, false, open)
+  const sessionsG = t('palette.sessions')
+  const byTitle = React.useMemo<Command[]>(() => {
+    const words = fold(q).trim().split(/\s+/).filter(Boolean)
+    const list = [...(sessionList || [])].sort((a, b) => b.updated - a.updated)
+    const hits = words.length ? list.filter((x) => words.every((w) => fold(x.title).includes(w))) : list.slice(0, RECENT)
+    return hits.map<Command>((x) => ({
+      id: `session:${x.id}`,
+      title: x.title,
+      hint: placeLabel(x.path),
+      group: sessionsG,
+      icon: MessagesSquare,
+      sensitive: true,
+      perform: ({ navigate }) => navigate(`/sessions?path=${encodeURIComponent(x.path)}&session=${x.id}`),
+    }))
+  }, [sessionList, q, sessionsG])
+  const titleIds = React.useMemo(() => new Set(byTitle.map((c) => c.id)), [byTitle])
 
   React.useEffect(() => {
     if (!open) {
@@ -134,7 +156,7 @@ export function CommandPalette() {
   React.useEffect(() => {
     if (!open || dq.length < 2) {
       setAsync({ q: '', cmds: [] })
-      setCounts({ q: '', n: {} })
+      setCounts({ q: '', n: {}, sess: [] })
       return
     }
     const ctrl = new AbortController()
@@ -190,7 +212,8 @@ export function CommandPalette() {
         keywords: ['presentation', 'stream', 'mask', 'privacy'],
         perform: () => setPresentation(!presentation),
       },
-      { id: 'act:shortcuts', title: t('shortcuts.title'), group: actions, icon: Keyboard, shortcut: ['?'], perform: () => openShortcuts(true) },
+      // keyboard shortcuts need a keyboard: not on a phone (same rule as the Help menu)
+      ...(window.matchMedia('(any-pointer: fine)').matches ? [{ id: 'act:shortcuts', title: t('shortcuts.title'), group: actions, icon: Keyboard, shortcut: ['?'], perform: () => openShortcuts(true) }] : []),
       { id: 'help:tour', title: t('help.tour'), group: t('help.title'), icon: Compass, keywords: ['tour', 'help', 'guide', 'onboarding', 'visite', 'aide'], perform: () => startTour() },
       ...(tutorialPath
         ? [{ id: 'help:tutorial', title: t('help.tutorial'), group: t('help.title'), icon: GraduationCap, keywords: ['tutorial', 'learn', 'tutoriel'], perform: ({ navigate }) => navigate(tutorialHref(tutorialPath)) } satisfies Command]
@@ -263,9 +286,9 @@ export function CommandPalette() {
   // Results per chip: the commands the typed text matches (cmdk's own test) + what the search found. A chip's count
   // stays the one of the search over every type while that chip shows its own longer list.
   const matched = q.trim() ? all.filter((c) => paletteFilter(c.id + ' ' + c.title, q, c.keywords?.filter(Boolean) as string[] | undefined) > 0) : []
-  const [counts, setCounts] = React.useState<{ q: string; n: Partial<Record<Chip, number>> }>({ q: '', n: {} })
+  const [counts, setCounts] = React.useState<{ q: string; n: Partial<Record<Chip, number>>; sess: string[] }>({ q: '', n: {}, sess: [] })
   React.useEffect(() => {
-    if (asyncResults.q === dq && (asyncResults.chip ?? 'all') === 'all') setCounts({ q: dq, n: countChips(asyncResults.cmds) })
+    if (asyncResults.q === dq && (asyncResults.chip ?? 'all') === 'all') setCounts({ q: dq, n: countChips(asyncResults.cmds), sess: sessionIds(asyncResults.cmds) })
   }, [asyncResults, dq])
   // Text refined with a chip picked: the counts of the other chips come from a search over every type too.
   const countsQ = counts.q
@@ -273,23 +296,28 @@ export function CommandPalette() {
     if (!open || dq.length < 2 || chip === 'all' || countsQ === dq) return
     const ctrl = new AbortController()
     search(dq, 'all', ctrl.signal).then((cmds) => {
-      if (!ctrl.signal.aborted) setCounts({ q: dq, n: countChips(cmds) })
+      if (!ctrl.signal.aborted) setCounts({ q: dq, n: countChips(cmds), sess: sessionIds(cmds) })
     })
     return () => ctrl.abort()
   }, [dq, open, chip, countsQ, search])
   const staticN = countChips(matched)
-  const asyncN = counts.q === dq ? counts.n : chip === 'all' ? {} : countChips(found)
+  // a session found by its title and by its content counts (and shows) once
+  const byContent = (ids: string[]) => ids.filter((id) => !titleIds.has(id)).length
+  const asyncN: Partial<Record<Chip, number>> = counts.q === dq ? { ...counts.n, sessions: byContent(counts.sess) } : chip === 'all' ? {} : { ...countChips(found), sessions: byContent(sessionIds(found)) }
   // the chip shown: its own longer list once it came
-  const ownN = asyncResults.q === dq && asyncResults.chip === chip && chip !== 'all' ? countChips(found)[chip] : undefined
-  const chipN = (k: Chip) => (staticN[k] ?? 0) + ((k === chip ? ownN : undefined) ?? asyncN[k] ?? 0)
+  const ownN = asyncResults.q === dq && asyncResults.chip === chip && chip !== 'all' ? (chip === 'sessions' ? byContent(sessionIds(found)) : countChips(found)[chip]) : undefined
+  const chipN = (k: Chip) => (staticN[k] ?? 0) + (k === 'sessions' && q.trim() ? byTitle.length : 0) + ((k === chip ? ownN : undefined) ?? asyncN[k] ?? 0)
   const chips = q.trim() ? CHIPS.filter((c) => c.key === 'all' || c.key === chip || chipN(c.key) > 0) : []
   const keep = (c: Command) => chip === 'all' || chipOf(c) === chip
   // cmdk sorts the items of a group by score but not the groups themselves (its group sort looks them up by a value
   // they do not carry): the group holding the best match goes first, the others keep their order
   const groups = byBestMatch(groupBy(all.filter(keep)), q)
-  const asyncGroups = groupBy(found.filter(keep))
+  const isSession = (c: Command) => c.id.startsWith('session:')
+  const asyncGroups = groupBy(found.filter((c) => keep(c) && !isSession(c)))
   // Every type at once: a few lines of each, then "See the N…" opens its chip
   const SHOWN = 6
+  const sessions = chip === 'all' || chip === 'sessions' ? [...byTitle, ...found.filter((c) => isSession(c) && !titleIds.has(c.id))] : []
+  const moreSessions = !!q.trim() && chip === 'all' && sessions.length > SHOWN + 1
   const onInputKey = (e: React.KeyboardEvent) => {
     if (e.key !== 'Tab' || chips.length < 2) return
     e.preventDefault()
@@ -317,7 +345,7 @@ export function CommandPalette() {
                 value={q}
                 onValueChange={setQ}
                 onKeyDown={onInputKey}
-                placeholder={t('palette.placeholder')}
+                placeholder={touch ? t('palette.search') : t('palette.placeholder')}
                 className="h-13 min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted-foreground max-md:h-14 max-md:text-base"
               />
               {loading && <Spinner className="text-muted-foreground" />}
@@ -355,6 +383,19 @@ export function CommandPalette() {
             )}
             <Cmdk.List className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2 md:max-h-[440px]">
               <Cmdk.Empty className="py-10 text-center text-sm text-muted-foreground">{loading ? t('palette.searching') : t('palette.empty')}</Cmdk.Empty>
+              {sessions.length > 0 && (
+                <Cmdk.Group heading={q.trim() ? sessionsG : t('sessions.recent')} className={groupCls} forceMount data-testid="palette-sessions">
+                  {(moreSessions ? sessions.slice(0, SHOWN) : sessions.slice(0, SESSIONS_MAX)).map((c) => (
+                    <Item key={c.id} c={c} onRun={run} masked={presentation && c.sensitive} force />
+                  ))}
+                  {moreSessions && (
+                    <Cmdk.Item value="more:sessions" forceMount onSelect={() => setChip('sessions')} className={moreCls}>
+                      <span className="size-4 shrink-0" />
+                      {t('palette.seeAll', { n: chipN('sessions'), what: sessionsG.toLowerCase() })}
+                    </Cmdk.Item>
+                  )}
+                </Cmdk.Group>
+              )}
               {groups.map(([g, cmds]) => (
                 <Cmdk.Group key={g} heading={g} className={groupCls}>
                   {cmds.map((c) => (
@@ -371,7 +412,7 @@ export function CommandPalette() {
                       <Item key={c.id} c={c} onRun={run} masked={presentation && c.sensitive} force />
                     ))}
                     {more && (
-                      <Cmdk.Item value={`more:${g}`} forceMount onSelect={() => setChip(more)} className="flex h-9 cursor-default items-center gap-3 rounded-md px-2 text-xs text-muted-foreground outline-none select-none data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground max-md:h-11">
+                      <Cmdk.Item value={`more:${g}`} forceMount onSelect={() => setChip(more)} className={moreCls}>
                         <span className="size-4 shrink-0" />
                         {t('palette.seeAll', { n: chipN(more), what: t(CHIPS.find((c) => c.key === more)!.label).toLowerCase() })}
                       </Cmdk.Item>
@@ -431,6 +472,16 @@ const CHIP_OF: Record<string, Chip> = {
 function chipOf(c: Command): Chip | null {
   return CHIP_OF[c.id.slice(0, c.id.indexOf(':'))] ?? null
 }
+/** Sessions before everything else: the last ones used shown while nothing is typed, and the most a chip lists. */
+const RECENT = 8
+const SESSIONS_MAX = 60
+const sessionIds = (cmds: Command[]) => cmds.filter((c) => c.id.startsWith('session:')).map((c) => c.id)
+/** "acme / blog" for `projects/acme/topics/blog` (the workspace root: nothing). */
+function placeLabel(path: string) {
+  const m = /^projects\/([^/]+)(?:\/topics\/([^/]+))?/.exec(path)
+  return m ? (m[2] ? `${m[1]} / ${m[2]}` : m[1]) : path || undefined
+}
+
 function countChips(cmds: Command[]) {
   const n: Partial<Record<Chip, number>> = {}
   for (const c of cmds) {
@@ -450,6 +501,8 @@ function paletteFilter(value: string, search: string, keywords?: string[]): numb
   return defaultFilter(fold(value), s, keywords?.map(fold))
 }
 
+const moreCls =
+  'flex h-9 cursor-default items-center gap-3 rounded-md px-2 text-xs text-muted-foreground outline-none select-none data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground max-md:h-11'
 const groupCls =
   '[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:pt-2 [&_[cmdk-group-heading]]:pb-1 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground'
 

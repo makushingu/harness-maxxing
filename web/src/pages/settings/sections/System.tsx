@@ -75,9 +75,9 @@ function ServicesCard() {
           {data.map((s) => (
             <li key={s.name} className="flex flex-wrap items-center gap-3 px-4 py-3">
               <StatusDot tone={s.active ? 'ok' : s.enabled ? 'error' : 'idle'} pulse={!s.active && s.enabled} />
-              <div className="grid min-w-0 flex-1 gap-0.5">
-                <span className="text-sm font-medium">{s.label || s.name}</span>
-                <span className="font-mono text-xs text-muted-foreground">
+              <div className="grid min-w-40 flex-1 grid-cols-1 gap-0.5">
+                <span className="truncate text-sm font-medium">{s.label || s.name}</span>
+                <span className="truncate font-mono text-xs text-muted-foreground">
                   {s.name} · {s.state || (s.active ? 'active' : 'inactive')}
                   {s.since ? ` · ${fmtRelative(s.since, lang)}` : ''}
                 </span>
