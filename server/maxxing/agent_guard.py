@@ -224,7 +224,20 @@ def private_paths(path: str) -> list[str]:
     except OSError:
         groups = []
     out += [str(g) for g in groups if g.is_dir() and not _member(g, path)]
+    try:                                            # the enterprises it holds no position in
+        out += [str(e) for e in sorted((root / "enterprises").iterdir()) if e.is_dir() and not _seated(e, path)]
+    except OSError:
+        pass
     return out + [f"{topic}/{g}" for g in ENV_GLOBS]
+
+
+def _seated(ent: Path, path: str) -> bool:
+    """`path` holds a position of the enterprise folder (its enterprise.json, read here: not imported by the runner)."""
+    try:
+        d = json.loads((ent / "enterprise.json").read_text(encoding="utf-8"))
+        return any(isinstance(p, dict) and p.get("agent") == path for p in d.get("positions") or [])
+    except (OSError, ValueError, AttributeError):
+        return False
 
 
 def _member(group: Path, path: str) -> bool:

@@ -261,6 +261,14 @@ def _free(dest: Path) -> Path:
         n += 1
 
 
+def _is_enterprise(p: Path) -> bool:
+    """`<workspace>/enterprises/<slug>`: its name must stay a slug."""
+    try:
+        return len(Path(_ws_rel(p)).parts) == 2 and Path(_ws_rel(p)).parts[0] == "enterprises"
+    except ValueError:
+        return False
+
+
 def _free_dir_name(dest: Path) -> Path:
     """Topics and projects need slug names (at most 48 characters): "<name>-restored", "<name>-restored-2"...,
     the name cut to make room for the tag."""
@@ -350,7 +358,8 @@ def restore(item_id: str) -> dict[str, Any]:
             raise TrashError(409, "project_in_trash", "Its project is in the trash: restore the project first")
         if kind == "agent" and not topic_dir.is_dir() and _in_trash(topic_dir, "topic"):
             raise TrashError(409, "topic_in_trash", "Its topic is in the trash: restore the topic first")
-    dest = _free_dir_name(original) if kind in ("project", "topic", "agent") else _free(original)
+    named = kind in ("project", "topic", "agent") or _is_enterprise(original)
+    dest = _free_dir_name(original) if named else _free(original)
     dest.parent.mkdir(parents=True, exist_ok=True)
     shutil.move(str(p), str(dest))
     n = 0
@@ -375,6 +384,14 @@ def restore(item_id: str) -> dict[str, Any]:
             agent_rooms.restored(_ws_rel(original), _ws_rel(dest))
         except (ValueError, OSError):
             log.exception("agent group rooms not restored (%s)", dest)
+    try:                                                    # the org chart gets its state / links back
+        from . import enterprises
+        if kind in ("project", "topic"):
+            enterprises.restored(dest, _ws_rel(original), _ws_rel(dest))
+        elif _is_enterprise(dest):
+            enterprises.restored(dest)
+    except (ValueError, OSError):
+        log.exception("enterprises not restored (%s)", dest)
     if kind in ("project", "topic"):
         try:
             workspace._changed("restored", kind, _ws_rel(dest))  # noqa: SLF001

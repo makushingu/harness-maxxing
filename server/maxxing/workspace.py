@@ -643,6 +643,9 @@ def _delete(prefix: str, kind: str) -> None:
             agent_rooms.deleted_with(prefix.split("/")[1], dest)
         except OSError:
             log.exception("agent group rooms not moved (%s)", prefix)
+    if kind in ("project", "topic"):                # the org chart lets go of them (kept in the Trash item)
+        from . import enterprises
+        enterprises.deleted_with(prefix, dest)
     _changed("deleted", kind, prefix)
 
 
