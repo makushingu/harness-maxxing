@@ -24,6 +24,7 @@ import sys
 import time
 from pathlib import Path
 from typing import Any, Callable
+from zoneinfo import ZoneInfo
 
 from . import __version__, cli, config
 
@@ -522,11 +523,19 @@ def do_init(a: argparse.Namespace) -> dict:
              "system_clock": a.system_clock, "claude_dir": getattr(a, "claude_dir", None)}
     if a.bind is not None and _is_public_bind(a.bind) and not _is_hostname(a.bind):
         raise SystemExit(f"Refusing to bind {a.bind!r}: use 127.0.0.1 (behind Caddy) or the Tailscale IP.")
+    if a.timezone is not None:                    # same zone check as PUT /api/settings, before anything is written
+        try:
+            ZoneInfo(a.timezone)
+        except Exception:
+            raise SystemExit(f"Unknown time zone {a.timezone!r}: use an IANA name such as Europe/Paris.") from None
+    url = a.public_url.strip().rstrip("/") if a.public_url is not None else None   # normalised once, as PUT /api/settings
+    if url and not config.PUBLIC_URL_RE.match(url):
+        raise SystemExit(f"Invalid --public-url {a.public_url!r}: it must look like https://ui.example.com")
     for k, v in flags.items():
         if v is not None:
             raw[k] = str(Path(v).expanduser().resolve()) if k in ("workspace", "files_root", "claude_dir") and v else v
-    if a.public_url is not None:
-        raw["public_url"] = a.public_url.rstrip("/")
+    if url is not None:
+        raw["public_url"] = url
     raw.setdefault("workspace", config.DEFAULT_CONFIG["workspace"])
     if "files_root" not in raw:
         ws = Path(raw["workspace"])

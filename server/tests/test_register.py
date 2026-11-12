@@ -225,3 +225,4 @@ def test_a_token_the_cloud_sends_is_checked_before_it_is_stored(mx, monkeypatch,
     monkeypatch.setattr(register, "_call", lambda method, path, body: {"ok": True, "token": tok})
     st = register.save(email="a@b.co")
     assert not config.get_secret(register.TOKEN) and st["error"] == "bad_token_answer" and not st["registered"]
+

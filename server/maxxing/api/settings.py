@@ -20,7 +20,7 @@ KEYS = ("timezone", "language", "public_url", "files_root", "presentation_defaul
         "maxxing_mode", "memory_max_lines", "result_line_hidden", "donation_hidden", "sidebar_order")
 RESULT_FIELDS = ("model", "duration", "cost", "tokens", "cache")   # parts of the line under each answer
 _ROUTE = re.compile(r"^/(x/[a-z0-9][a-z0-9-]{0,47}|[a-z0-9-]{0,40})\Z")   # a page (/sessions) or a pinned extension page (/x/<id>)
-_URL = re.compile(r"^https?://[A-Za-z0-9.\-]+(:\d{1,5})?(/[^\s]*)?$")
+_URL = config.PUBLIC_URL_RE
 
 
 class SettingsIn(BaseModel):

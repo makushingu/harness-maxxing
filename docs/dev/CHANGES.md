@@ -68,6 +68,11 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   `dragleave` / `drop`; a cancelled drag fires neither. It is now `dropStack` in the sessions store (`setDropStack`),
   cleared with `dropBeside` by `setDragging(null)` (grip `dragend`, document `dragend` / `drop`), and one session at
   most shows it.
+- `cmd_core.do_init` checks `--timezone` (`ZoneInfo`) and `--public-url` (`config.PUBLIC_URL_RE`, now shared with
+  `api/settings.py`) before any write, as `PUT /api/settings` does: the URL is stripped once and that value is stored
+  (whitespace-only clears), `SystemExit` with a message, `config.json` untouched. A host without tz database now fails
+  early on `init --timezone UTC` (`install.sh` installs tzdata). Tests: `test_cmd_core.py::test_init_refuses_an_unknown_zone_or_a_malformed_url`,
+  `test_init_normalises_the_public_url_it_stores`.
 
 ## 2.0.0-alpha.140 - 2026-11-11
 

@@ -63,6 +63,7 @@ Fixed:
   happen), the dashed frame stayed over the conversation until the next drag.
 - **Screen readers in French**: the close button of every window and side panel, the handles between session
   columns and the masks of the presentation mode are read in your language, no longer always in English.
+- **`maxxing init`** refuses an unknown time zone or a malformed public URL instead of saving it.
 
 ## 2.0.0-alpha.140 - 2026-11-11
 
