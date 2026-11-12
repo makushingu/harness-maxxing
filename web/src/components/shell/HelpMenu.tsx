@@ -6,7 +6,7 @@ import { useT } from '@/i18n'
 import { cn } from '@/lib/utils'
 import { startTour } from '@/tour/store'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Tooltip } from '@/components/ui'
-import { navRow } from './nav'
+import { iconBtn, navRow } from './nav'
 import { useShortcutsDialog } from './shortcuts-store'
 import { useFeedbackDialog } from './feedback-store'
 
@@ -26,15 +26,20 @@ export function useHelpActions(): HelpAction[] {
 }
 
 /** Help row of the sidebar: a small menu of the Help entries (folded: the icon). */
-export function HelpMenu({ collapsed }: { collapsed: boolean }) {
+/** `compact`: the icon alone, on the sidebar's last line (unfolded bar). */
+export function HelpMenu({ collapsed, compact }: { collapsed: boolean; compact?: boolean }) {
   const t = useT()
   const actions = useHelpActions()
   return (
     <DropdownMenu>
-      <Tooltip content={collapsed ? t('shell.help') : null} side="right">
-        <DropdownMenuTrigger className={cn(navRow(collapsed), 'data-[state=open]:bg-accent data-[state=open]:text-foreground')} aria-label={t('shell.help')} data-testid="help-menu">
+      <Tooltip content={collapsed || compact ? t('shell.help') : null} side={compact ? 'top' : 'right'}>
+        <DropdownMenuTrigger
+          className={compact ? iconBtn() : cn(navRow(collapsed), 'data-[state=open]:bg-accent data-[state=open]:text-foreground')}
+          aria-label={t('shell.help')}
+          data-testid="help-menu"
+        >
           <CircleHelp className="size-[18px] shrink-0" strokeWidth={1.9} />
-          {!collapsed && <span className="flex-1 truncate text-left">{t('shell.help')}</span>}
+          {!collapsed && !compact && <span className="flex-1 truncate text-left">{t('shell.help')}</span>}
         </DropdownMenuTrigger>
       </Tooltip>
       <DropdownMenuContent side="right" align="end" className="min-w-52" data-testid="help-menu-content">

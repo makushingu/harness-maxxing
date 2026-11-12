@@ -7,10 +7,11 @@ import { fmtBytes, fmtDuration } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useLang, useT } from '@/i18n'
 import type { Health } from '@/lib/types'
-import { useUI, type Theme } from '@/stores/ui'
+import { resolveTheme, useUI, type Theme } from '@/stores/ui'
 import { Popover, PopoverContent, PopoverTrigger, ProgressBar, Segmented, Sensitive, Skeleton, Switch, Tooltip } from '@/components/ui'
 import { useTween } from '@/lib/useTween'
 import { CloseOnNav } from './CloseOnNav'
+import { iconBtn } from './nav'
 import { MeterBar, MeterIcon, MeterValue, MiniMeter, type MeterTone } from './Meter'
 import { ClaudeStatus, usePlanPct, UsageLines } from './UsageIndicator'
 
@@ -187,7 +188,7 @@ const alertHover = {
  *  Each part keeps the same height folded or not, so nothing above it moves when the bar unfolds. The meters open the
  *  status panel (issues, CPU / RAM / disk); the Claude entry leads to Settings -> Stats. Under it, the theme and
  *  presentation mode (`SidebarLook`). Same elements folded or not, so the keyboard focus survives folding. */
-export function StatusBlock({ collapsed }: { collapsed?: boolean }) {
+export function StatusBlock({ collapsed, tail }: { collapsed?: boolean; /** unfolded: Help and Settings, at the end of the last line */ tail?: React.ReactNode }) {
   const s = useStatusLine()
   const rows = useHealthRows()
   const alert = s.tone === 'error' || s.tone === 'warn' ? s.tone : null
@@ -272,85 +273,56 @@ export function StatusBlock({ collapsed }: { collapsed?: boolean }) {
         </PopoverContent>
       </Popover>
       <ClaudeStatus collapsed={collapsed} />
-      <SidebarLook collapsed={collapsed} />
+      <SidebarLook collapsed={collapsed} tail={tail} />
     </div>
   )
 }
 
-const THEMES: Theme[] = ['light', 'dark', 'system']
-const themeIcon = { light: Sun, dark: Moon, system: Monitor } as const
-
-/** The very bottom of the sidebar, under the Claude quota: the theme and presentation mode, icons only (names in
- *  tooltips). Unfolded: one pill, the three theme icons and the eye. Folded: one button per row (the theme's icon,
- *  a click goes to the next theme; the eye). The eye is crossed out and tinted while presentation mode is on. */
-function SidebarLook({ collapsed }: { collapsed?: boolean }) {
+/** The very bottom of the sidebar, under the Claude quota, icons only (names in tooltips): a sun / moon that switches
+ *  between light and dark (it shows the theme on screen; "System" stays in Settings -> Appearance), the eye of
+ *  presentation mode (crossed out and tinted while on), then Help and Settings (`tail`). Unfolded: one line. Folded:
+ *  the sun / moon and the eye one under the other (Help and Settings keep their rows above). */
+function SidebarLook({ collapsed, tail }: { collapsed?: boolean; tail?: React.ReactNode }) {
   const t = useT()
   const theme = useUI((s) => s.theme)
   const setTheme = useUI((s) => s.setTheme)
   const presentation = useUI((s) => s.presentation)
   const setPresentation = useUI((s) => s.setPresentation)
-  const ThemeIcon = themeIcon[theme]
-  const PresIcon = presentation ? EyeOff : Eye
+  const dark = resolveTheme(theme) === 'dark'
+  const themeLabel = `${t('shell.theme')} · ${t(dark ? 'theme.dark' : 'theme.light')}`
   const presLabel = presentation ? t('presentation.off') : t('presentation.on')
-  const iconBtn =
-    'flex size-9 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring [&_svg]:size-4'
+  const side = collapsed ? 'right' : 'top'
+  const buttons = (
+    <>
+      <Tooltip content={themeLabel} side={side}>
+        <button type="button" className={iconBtn()} aria-label={themeLabel} onClick={() => setTheme(dark ? 'light' : 'dark')}>
+          {dark ? <Moon /> : <Sun />}
+        </button>
+      </Tooltip>
+      <Tooltip content={presLabel} side={side}>
+        <button
+          type="button"
+          className={cn(iconBtn(), presentation && 'bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary')}
+          aria-label={presLabel}
+          aria-pressed={presentation}
+          onClick={() => setPresentation(!presentation)}
+        >
+          {presentation ? <EyeOff /> : <Eye />}
+        </button>
+      </Tooltip>
+    </>
+  )
   if (collapsed)
     return (
       <div className="grid justify-items-center gap-0.5" data-testid="sidebar-look">
-        <Tooltip content={`${t('shell.theme')} · ${t(`theme.${theme}`)}`} side="right">
-          <button
-            type="button"
-            className={iconBtn}
-            aria-label={`${t('shell.theme')} · ${t(`theme.${theme}`)}`}
-            onClick={() => setTheme(THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length])}
-          >
-            <ThemeIcon />
-          </button>
-        </Tooltip>
-        <Tooltip content={presLabel} side="right">
-          <button
-            type="button"
-            className={cn(iconBtn, presentation && 'bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary')}
-            aria-label={presLabel}
-            aria-pressed={presentation}
-            onClick={() => setPresentation(!presentation)}
-          >
-            <PresIcon />
-          </button>
-        </Tooltip>
+        {buttons}
       </div>
     )
-  // one pill: the three theme icons, a thin bar, the eye
   return (
-    <div className="mx-side-reveal flex h-9 min-w-0 items-center px-0.5" data-testid="sidebar-look">
-      <div className="flex items-center gap-0.5 rounded-lg bg-muted p-0.5">
-        <Segmented<Theme>
-          size="sm"
-          value={theme}
-          onChange={setTheme}
-          aria-label={t('shell.theme')}
-          className="flex-nowrap bg-transparent p-0 [&_button]:h-7 [&_button]:px-2"
-          options={THEMES.map((v) => {
-            const I = themeIcon[v]
-            return { value: v, label: <Tooltip content={t(`theme.${v}`)}><span className="flex"><I /><span className="sr-only">{t(`theme.${v}`)}</span></span></Tooltip> }
-          })}
-        />
-        <span className="mx-0.5 h-4 w-px bg-border" aria-hidden />
-        <Tooltip content={presLabel}>
-          <button
-            type="button"
-            className={cn(
-              'flex h-7 items-center justify-center rounded-md px-2 text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring [&_svg]:size-4',
-              presentation && 'bg-background text-primary shadow-xs hover:text-primary dark:bg-secondary',
-            )}
-            aria-label={presLabel}
-            aria-pressed={presentation}
-            onClick={() => setPresentation(!presentation)}
-          >
-            <PresIcon />
-          </button>
-        </Tooltip>
-      </div>
+    <div className="mx-side-reveal flex h-9 min-w-0 items-center gap-0.5" data-testid="sidebar-look">
+      {buttons}
+      <span className="flex-1" />
+      {tail}
     </div>
   )
 }
