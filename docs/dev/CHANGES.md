@@ -58,6 +58,12 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   (new key, "double-click: equal heights", as `resetRowSplit` sets 0.5) as their `aria-label` (was "Resize").
 - `presentation.hidden` (core group): the `aria-label` of the presentation-mode masks (`Sensitive`, the file viewers'
   placeholders, `MaskedLines` of the sessions), "Hidden (presentation mode)" in English in 8 places before.
+- `web/src/pwa/index.ts`: a worker that reaches `installed` while a page is open is asked its `VERSION`; when every
+  hashed file of the page's `index.html` (entry script, styles, read at `initPWA`) is in its `mx-assets-<version>`
+  precache, the page is that build already (navigations are network-first): `SKIP_WAITING` with `silentSwap`, no
+  reload. Before, only a worker already waiting at `load` was swapped silently; one still installing (precache on a
+  slow link) went through `announceUpdate` and reloaded the freshly loaded page. No answer in 3 s or a file missing:
+  the usual `announceUpdate` (a tab left open on an older build reloads as before).
 
 ## 2.0.0-alpha.140 - 2026-11-11
 

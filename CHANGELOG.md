@@ -54,6 +54,10 @@ Fixed:
 - **Odd requests get a clean answer instead of a server error**: a trash item whose name is longer than a file name
   can be, "mark as read" for a notification source with a broken character, or a repository path on the
   Git page with a folder name longer than a file name can be.
+- **Slow connection: the interface no longer loads twice after an update.** Opening or reloading Harness Maxxing
+  after an update loaded the new version, then reloaded the page by itself a few seconds later (up to 20 s on a
+  phone network), once its offline copy was ready. The page you just loaded is kept; a tab left open over an update
+  still switches to the new version by itself.
 - **Screen readers in French**: the close button of every window and side panel, the handles between session
   columns and the masks of the presentation mode are read in your language, no longer always in English.
 
