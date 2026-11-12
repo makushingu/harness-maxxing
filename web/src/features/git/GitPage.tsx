@@ -207,86 +207,38 @@ function GithubRow({ r, onOpen }: { r: GitHubRepo; onOpen: () => void }) {
   )
 }
 
-// ---- the list (second-level sidebar): the two sources, then the repositories of the one picked ---------------------
+// ---- the list (second-level sidebar): the sources only - this server, then one entry per GitHub account ------------
 
 type Source = 'local' | 'github'
 
-const nameOf = (r: GitLocalRepo) => (r.github ? r.github.split('/')[1] : r.name)
-
-function GitNav({ repo, source, query, onSource, onOpen }: { repo: string | null; source: Source; query: string; onSource: (s: Source) => void; onOpen: (r: string) => void }) {
+function GitNav({ repo, source, account, onPick }: { repo: string | null; source: Source; account: string | null; onPick: (s: Source, account?: string) => void }) {
   const t = useT()
-  const touch = useCompact()
-  const { data, isLoading } = useGitRepos()
-  const needle = query.trim().toLowerCase()
+  const { data } = useGitRepos()
   const gh = data?.github
-  type Row = { id: string; gh: string | null; label: string; sub?: string; local?: GitLocalRepo; remote?: GitHubRepo }
-  const rows: Row[] =
-    source === 'local'
-      ? [...(data?.local || [])]
-          .sort((x, y) => (y.last_commit || 0) - (x.last_commit || 0))
-          .map((r) => ({ id: r.path, gh: r.github ? `github:${r.github}` : null, label: nameOf(r), local: r }))
-      : [...(gh?.connected ? gh.repos : [])]
-          .sort((x, y) => (y.pushed_at ? Date.parse(y.pushed_at) : 0) - (x.pushed_at ? Date.parse(x.pushed_at) : 0))
-          .map((r) => ({ id: `github:${r.full_name}`, gh: `github:${r.full_name}`, label: r.name, remote: r }))
-  // two clones with the same name: the folder holding each tells them apart
-  const seen = new Map<string, number>()
-  for (const e of rows) seen.set(e.label, (seen.get(e.label) || 0) + 1)
-  for (const e of rows) if ((seen.get(e.label) || 0) > 1) e.sub = e.local ? e.local.path.split('/').slice(-2, -1)[0] : e.remote?.owner
-  const shown = rows.filter((e) => !needle || `${e.label} ${e.id} ${e.remote?.description || ''}`.toLowerCase().includes(needle))
-  const active = (e: Row) => !!repo && (repo === e.id || (source === 'local' && !!e.gh && repo.toLowerCase() === e.gh.toLowerCase()))
-  const ghLabel = gh?.accounts.length === 1 ? `GitHub @${gh.accounts[0].login}` : 'GitHub'
+  const accounts = gh?.connected ? gh.accounts : []
+  // a repository open: its source stays lit (its account when only one sees it)
+  const ghRepo = repo?.startsWith('github:') ? gh?.repos.find((g) => `github:${g.full_name}`.toLowerCase() === repo.toLowerCase()) : null
+  const onAccount = (login: string) =>
+    source === 'github' && (account ? account === login : ghRepo ? ghRepo.accounts.length === 1 && ghRepo.accounts[0] === login : accounts.length === 1)
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="grid gap-0.5 p-2 pb-1">
-        <ListEntry active={!repo && source === 'local'} onClick={() => onSource('local')} icon={Server} label={t('git.tabLocal')} count={data?.local.length} testid="git-src-local" />
-        <ListEntry active={!repo && source === 'github'} onClick={() => onSource('github')} icon={Github} label={ghLabel} count={gh?.connected ? gh.repos.length : undefined} testid="git-src-github" />
-      </div>
-      <nav aria-label={t('git.title')} className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] content-start overflow-y-auto border-t px-2 pt-2 pb-3" data-testid="git-nav">
-        {isLoading && [0, 1, 2, 3].map((i) => <Skeleton key={i} className="mx-2.5 my-1.5 h-5" />)}
-        {!isLoading && !shown.length && <p className="px-2.5 py-2 text-[13px] text-muted-foreground">{t('git.noMatch')}</p>}
-        {shown.map((e) => {
-          const on = active(e)
-          const r = e.local
-          return (
-            <button
-              key={e.id}
-              type="button"
-              onClick={() => onOpen(e.id)}
-              aria-current={on ? 'page' : undefined}
-              title={r ? r.path : e.remote?.full_name}
-              className={cn(
-                'flex w-full min-w-0 items-center gap-2 rounded-md px-2.5 text-left text-[13px] text-muted-foreground outline-none transition-colors hover:bg-accent/50 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
-                touch ? 'h-11' : 'h-8',
-                on && 'bg-accent font-medium text-foreground hover:bg-accent',
-              )}
-              data-testid="git-entry"
-            >
-              <span className="min-w-0 flex-1 truncate">
-                {e.label}
-                {e.sub && <span className="ml-1.5 text-xs font-normal text-muted-foreground">{e.sub}</span>}
-              </span>
-              {r && !!r.ahead && (
-                <span className="inline-flex items-center text-[11px] text-warning tabular-nums" title={t('git.aheadTip', { count: r.ahead })}>
-                  <ArrowUp className="size-3" />
-                  {r.ahead}
-                </span>
-              )}
-              {r && r.changed + r.untracked > 0 && <PencilLine className="size-3 shrink-0 text-muted-foreground" aria-label={t('git.uncommitted', { count: r.changed + r.untracked })} />}
-              {e.remote?.private && <Lock className="size-3 shrink-0 text-muted-foreground" />}
-            </button>
-          )
-        })}
-      </nav>
-    </div>
+    <nav aria-label={t('git.title')} className="grid content-start gap-0.5 p-2" data-testid="git-nav">
+      <ListEntry active={source === 'local'} onClick={() => onPick('local')} icon={Server} label={t('git.tabLocal')} count={data?.local.length} testid="git-src-local" />
+      {accounts.length ? (
+        accounts.map((a) => (
+          <ListEntry key={a.login} active={onAccount(a.login)} onClick={() => onPick('github', accounts.length > 1 ? a.login : undefined)} icon={Github} label={`GitHub @${a.login}`} count={a.repos} testid="git-src-github" />
+        ))
+      ) : (
+        <ListEntry active={source === 'github'} onClick={() => onPick('github')} icon={Github} label="GitHub" testid="git-src-github" />
+      )}
+    </nav>
   )
 }
 
 // ---- the page of a source: the simple cards of before, filtered by the list's search -------------------------------
 
-function SourceCards({ source, query, onOpen }: { source: Source; query: string; onOpen: (repo: string) => void }) {
+function SourceCards({ source, account, query, onOpen }: { source: Source; account: string | null; query: string; onOpen: (repo: string) => void }) {
   const t = useT()
   const { data, isLoading, error } = useGitRepos()
-  const [account, setAccount] = React.useState<string | null>(null)
   if (isLoading)
     return (
       <div className="grid gap-2">
@@ -325,24 +277,6 @@ function SourceCards({ source, query, onOpen }: { source: Source; query: string;
   )
   return (
     <div className="grid gap-3">
-      {accounts.length > 1 && (
-        <div className="flex flex-wrap items-center gap-2" data-testid="git-accounts">
-          {accounts.map((a) => (
-            <button
-              key={a.login}
-              type="button"
-              onClick={() => setAccount((cur) => (cur === a.login ? null : a.login))}
-              title={`${t('git.viaKeys')} ${a.keys.join(', ')}`}
-              aria-pressed={account === a.login}
-              className={cn('inline-flex items-center gap-1.5 rounded-full border py-0.5 pr-2.5 pl-0.5 text-xs transition-colors hover:bg-accent', account === a.login && 'border-primary bg-primary/10')}
-            >
-              {a.avatar ? <img src={a.avatar} alt="" className="size-5 rounded-full" /> : <Github className="m-0.5 size-4" />}
-              <span className="font-medium">@{a.login}</span>
-              <span className="text-muted-foreground">{a.repos}</span>
-            </button>
-          ))}
-        </div>
-      )}
       <TokenErrors errors={gh.errors} />
       <ul className="grid grid-cols-[minmax(0,1fr)] gap-2 lg:grid-cols-2">
         {remote.map((r) => (
@@ -509,11 +443,12 @@ export default function GitPage() {
   const repo = params.get('repo')
   // the source shown: ?source=github, else the side of the repository open, else the server
   const source: Source = params.get('source') === 'github' || (!params.get('source') && repo?.startsWith('github:')) ? 'github' : 'local'
+  const account = params.get('account')
   const [query, setQuery] = React.useState('')
   const [refreshing, setRefreshing] = React.useState(false)
   const { data } = useGitRepos()
-  const open = (r: string) => setParams({ repo: r, ...(source === 'github' && !r.startsWith('github:') ? { source: 'github' } : {}) })
-  const pick = (s: Source) => setParams(s === 'github' ? { source: 'github' } : {})
+  const open = (r: string) => setParams({ repo: r, ...(source === 'github' && !r.startsWith('github:') ? { source: 'github' } : {}), ...(account ? { account } : {}) })
+  const pick = (s: Source, login?: string) => setParams(s === 'github' ? { source: 'github', ...(login ? { account: login } : {}) } : {})
   const doRefresh = async () => {
     setRefreshing(true)
     try {
@@ -532,13 +467,13 @@ export default function GitPage() {
   return (
     <>
       <PageList id="git" label={t('git.title')} search={{ value: query, onChange: setQuery, placeholder: t('git.searchList') }}>
-        <GitNav repo={repo} source={source} query={query} onSource={pick} onOpen={open} />
+        <GitNav repo={repo} source={source} account={account} onPick={pick} />
       </PageList>
       {repo ? (
         <RepoView key={repo} repo={repo} onSwitch={(r) => setParams({ repo: r })} refresh={refresh} />
       ) : (
         <Page
-          title={source === 'github' ? (gh?.accounts.length === 1 ? `GitHub @${gh.accounts[0].login}` : 'GitHub') : t('git.tabLocal')}
+          title={source === 'github' ? (account ? `GitHub @${account}` : gh?.accounts.length === 1 ? `GitHub @${gh.accounts[0].login}` : 'GitHub') : t('git.tabLocal')}
           description={source === 'github' ? t('git.ghHint') : data ? t('git.localHint', { root: data.root }) : undefined}
           actions={
             <>
@@ -551,7 +486,7 @@ export default function GitPage() {
             </>
           }
         >
-          <SourceCards source={source} query={query} onOpen={open} />
+          <SourceCards source={source} account={account} query={query} onOpen={open} />
         </Page>
       )}
     </>
