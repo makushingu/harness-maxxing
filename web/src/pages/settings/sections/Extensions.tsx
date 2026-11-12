@@ -41,7 +41,7 @@ export function CommunityLink({ text }: { text: string }) {
       <Users className="size-3.5 shrink-0" />
       <span>
         {text}{' '}
-        <a href={COMMUNITY_URL} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-medium text-primary hover:underline">
+        <a href={COMMUNITY_URL} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-medium text-primary hover:underline pointer-coarse:min-h-10">
           harness-maxxing.com/community <ExternalLink className="size-3" />
         </a>
       </span>
