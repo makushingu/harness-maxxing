@@ -463,3 +463,13 @@ def test_pinned_pages_keep_the_order_they_are_dragged_in(client, org):
     assert [lst[i]["pin_order"] for i in "abc"] == [2, 0, 1]             # never pins an unknown id
     client.patch("/api/extensions/c", json={"pinned": False})
     assert {e["id"]: e for e in client.get("/api/extensions").json()}["c"]["pin_order"] is None
+
+
+def test_hand_edited_extension_lists_of_the_wrong_type_fall_back_to_empty(client, org):
+    for bad in (5, "x", {"a": 1}):
+        config.save_config({**config.load_config(), "extensions": {"disabled": bad, "pinned": bad}})
+        assert extensions.disabled_ids() == set() and extensions.pinned_ids() == set()
+        assert client.get("/api/extensions").status_code == 200
+        assert client.get("/api/dashboard").status_code == 200
+    config.save_config({**config.load_config(), "extensions": 5})
+    assert extensions.disabled_ids() == set()
