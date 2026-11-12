@@ -40,8 +40,11 @@ def test_a_block_scalar_description_loses_its_header(header):
     assert skills._front(text)["description"] == "Line one line two"
 
 
-def test_folders_with_a_name_that_is_not_utf8_are_left_out(client, mx):
+def test_folders_with_a_name_that_is_not_utf8_are_left_out(client, mx, monkeypatch):
     import os
+    cdir = mx["tmp"] / "claude"                          # never the skills of the machine running the tests
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(cdir))
+    config.save_config({**config.load_config(), "claude_dir": str(cdir)})
     ws = mx["ws"]
     _skill(ws / ".claude/skills", "fine", "---\nname: fine\n---")
     _skill(ws / ".claude/skills", os.fsdecode(b"s\xff"), "---\nname: bad\n---")

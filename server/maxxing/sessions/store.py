@@ -196,18 +196,31 @@ def empty_tokens() -> dict:
     return {k: 0 for k, _ in TOKEN_KEYS}
 
 
-def turn_cost(total: float, prev: float) -> float:
+def turn_cost(total: float, prev: float, estimated: float = 0.0) -> float:
     """Cost of one turn from Claude's `total_cost_usd`, which adds up over the whole Claude thread (every
     `--resume` reports the thread's running total): the increase since the previous turn of the same thread, or the
-    total itself when it went down (a new thread, a thread Claude no longer knew)."""
+    total itself when it went down (a new thread, a thread Claude no longer knew). `estimated`: what the lost turns
+    since then were already charged (agent_cost): Claude saves a turn stopped by SIGTERM in the thread's total, so
+    the increase holds them again - taken off, never below 0."""
     total, prev = float(total or 0), float(prev or 0)
-    return round(total - prev, 6) if total >= prev else round(total, 6)
+    cost = total - prev if total >= prev else total
+    return round(max(0.0, cost - max(0.0, float(estimated or 0))), 6)
 
 
 def thread_prev_cost(m: dict, csid: str | None) -> float:
     """Running total last reported for Claude thread `csid` (0 for a thread not seen yet)."""
     tc = m.get("thread_cost") if isinstance(m.get("thread_cost"), dict) else {}
     return float(tc.get("total") or 0) if csid and tc.get("csid") == csid else 0.0
+
+
+def thread_estimated(m: dict, csid: str | None) -> float:
+    """Cost of the turns of Claude thread `csid` lost since its last reported total and charged from their log
+    (agent_cost.charge_unbilled): the next reported total holds them again (turn_cost)."""
+    tc = m.get("thread_cost") if isinstance(m.get("thread_cost"), dict) else {}
+    try:
+        return float(tc.get("estimated") or 0) if csid and tc.get("csid") == csid else 0.0
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def day_of(when: float) -> str:

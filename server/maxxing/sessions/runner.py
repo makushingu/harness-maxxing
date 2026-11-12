@@ -99,6 +99,7 @@ class Attempt:
     thread_total: float | None = None
     csid: str = ""
     prev_total: float = 0.0
+    prev_est: float = 0.0                     # cost of lost turns of the thread already estimated (agent_cost)
     stopped: bool = False
     timed_out: bool = False
     held: list[str] = field(default_factory=list)   # lines held back while a resume may fail
@@ -477,12 +478,14 @@ class Runner:
         if live is not None and (item.get("steer") or handed) and live.stream and not live.stdin.closed \
                 and live.alive() and not fresh:        # the steered (or next) message joins the running process
             a = self._attempt_in(live, prompt, timeout_s, csid, store.thread_prev_cost(meta, csid))
+            a.prev_est = store.thread_estimated(meta, csid)
         else:
             self._end_proc()
             self.proc_launch = launch
             a = self.attempt(base + (["--session-id", csid] if fresh else ["--resume", csid]),
                              prompt, cwd, env, timeout_s, hold=not fresh, csid=csid,
-                             prev_total=0.0 if fresh else store.thread_prev_cost(meta, csid))
+                             prev_total=0.0 if fresh else store.thread_prev_cost(meta, csid),
+                             prev_est=0.0 if fresh else store.thread_estimated(meta, csid))
         a.fresh = fresh
         if a.handover:
             self.keep_proc = True
@@ -629,16 +632,17 @@ class Runner:
         return str(cwd) if cwd.is_dir() else None
 
     def attempt(self, args: list[str], prompt: str, cwd: str, env: dict, timeout_s: object,
-                hold: bool, csid: str = "", prev_total: float = 0.0) -> Attempt:
+                hold: bool, csid: str = "", prev_total: float = 0.0, prev_est: float = 0.0) -> Attempt:
         """Run one claude process, streaming its stdout into the raw log. `prev_total`: the running cost Claude
         last reported for thread `csid` (to tell this turn's own cost). Holds the Claude Code update lock (shared)
         while the process runs: an automatic update never replaces the files of a running Claude, and waits for it."""
         fd = _claude_in_use(self.note)                 # released with the process (_release), even after a steer
-        return self._attempt(args, prompt, cwd, env, timeout_s, hold, csid, prev_total, fd)
+        return self._attempt(args, prompt, cwd, env, timeout_s, hold, csid, prev_total, fd, prev_est)
 
     def _attempt(self, args: list[str], prompt: str, cwd: str, env: dict, timeout_s: object,
-                 hold: bool, csid: str = "", prev_total: float = 0.0, lock_fd: int | None = None) -> Attempt:
-        a = Attempt(csid=csid, prev_total=prev_total, t0=time.time())
+                 hold: bool, csid: str = "", prev_total: float = 0.0, lock_fd: int | None = None,
+                 prev_est: float = 0.0) -> Attempt:
+        a = Attempt(csid=csid, prev_total=prev_total, prev_est=prev_est, t0=time.time())
         oom_before = _oom_kills()
         try:
             p = subprocess.Popen(args, cwd=cwd, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
@@ -698,6 +702,11 @@ class Runner:
                         self._observe(ev, a)
                         pr.track(ev)
                         if ev.get("type") == "result" and a.thread_total is not None:
+                            # a lost turn's estimate may be written after this turn started (on_turn_end): read now
+                            est = store.thread_estimated(store.read(self.sid) or {}, a.csid)
+                            if est > a.prev_est:
+                                a.prev_est = est
+                                a.turn_cost = store.turn_cost(a.thread_total, a.prev_total, est)
                             ev["mx_turn_cost"] = a.turn_cost   # shown per turn in the thread (normalize.py)
                         if clip.keep_event(ev):            # not progress-only lines (thinking_tokens)
                             clip.clip_event(ev)            # huge tool outputs / the init lists never reach the log
@@ -881,7 +890,7 @@ class Runner:
             a.result = ev
             if ev.get("total_cost_usd") is not None:
                 a.thread_total = float(ev.get("total_cost_usd") or 0)
-                a.turn_cost = store.turn_cost(a.thread_total, a.prev_total)
+                a.turn_cost = store.turn_cost(a.thread_total, a.prev_total, a.prev_est)
             if isinstance(ev.get("result"), str) and ev["result"].strip():
                 a.final_text = ev["result"]
             mu = ev.get("modelUsage")

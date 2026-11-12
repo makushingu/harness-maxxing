@@ -47,6 +47,7 @@ from __future__ import annotations
 import json
 import os
 import queue
+import re
 import sys
 import threading
 import time
@@ -467,6 +468,15 @@ def turn(o: dict, sid: str, model: str, prompt: str, t0: float) -> int | None:
         return 0
     if "HALFTURN" in prompt:                           # killed mid-turn after some work: tokens spent, no result
         emit(msg(sid, model, [{"type": "text", "text": "Working..."}]))
+        half = re.search(r"HALFCOST=([0-9.]+)", prompt)  # like the real CLI on SIGTERM: its cost stays in the thread
+        if half:
+            f = STORE / f"{sid}.cost"
+            try:
+                before = float(f.read_text())
+            except (OSError, ValueError):
+                before = 0.0
+            STORE.mkdir(parents=True, exist_ok=True)
+            f.write_text(str(round(before + float(half.group(1)), 6)))
         return 0
     emit({"type": "system", "subtype": "thinking_tokens", "estimated_tokens": 40, "session_id": sid})
     emit(msg(sid, model, [{"type": "thinking", "thinking": "", "signature": "c2lnbmF0dXJl"}]))

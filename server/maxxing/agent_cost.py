@@ -9,7 +9,9 @@ and its 100 $ budget never stopped it.
 `charge_unbilled(sid)` reads the assistant messages of the ended turn in the raw log (sub-agents included, each
 message once), prices their usage (`PRICES`, list prices per million tokens) and adds it to the session meta like a
 `result` would (cost_usd, tokens, days): the budget, the agent page and Stats then count it. `estimated_usd` in
-the meta keeps what was estimated. Done once per turn (the `mx_done` line is remembered). STDLIB ONLY.
+the meta keeps what was estimated. Done once per turn (the `mx_done` line is remembered). Claude Code still saves
+the cost of a turn stopped by SIGTERM in its thread: the next `--resume` reports it in its total, so the estimate
+is kept in `thread_cost.estimated` and taken off that next turn (store.turn_cost). STDLIB ONLY.
 """
 from __future__ import annotations
 
@@ -51,16 +53,29 @@ def _injected(raw: str) -> bool:
         return False
 
 
-def last_turn(lines) -> tuple[dict | None, dict, float]:
-    """The ended turn of a raw log (its lines after the last `mx_user`) -> (its `mx_done` line, None unless the turn
-    ended without a `result` - its timeout, a crash - and was not stopped by the owner; its usage summed over every assistant message; its estimated cost)."""
+def _at(raw: str) -> float:
+    try:
+        v = json.loads(raw).get("at")
+        return float(v) if isinstance(v, (int, float)) else 0.0
+    except (ValueError, RecursionError, AttributeError):
+        return 0.0
+
+
+def last_turn(lines, at: float | None = None) -> tuple[dict | None, dict, float]:
+    """The ended turn of a raw log (its lines after the last `mx_user`, or after the one sent at `at` - meta
+    last_turn.at - when a message queued meanwhile already started) -> (its `mx_done` line, None unless the turn
+    ended without a `result` - its timeout, a crash - and was not stopped by the owner; its usage summed over every
+    assistant message; its estimated cost)."""
     msgs: dict[str, tuple[dict, str]] = {}
-    done, result, n = None, False, 0
+    done, result, n, mine = None, False, 0, False
     for raw in lines:
         if '"mx_user"' in raw[:40]:
             if '"injected"' in raw and _injected(raw):
                 continue                                # added to the running turn (Add now): the same turn goes on
+            if mine:
+                break                                   # the next message's turn: the one at `at` is over
             msgs, done, result = {}, None, False
+            mine = bool(at) and abs(_at(raw) - float(at)) < 1e-3
             continue
         if '"type": "result"' not in raw and '"type": "assistant"' not in raw and '"mx_done"' not in raw[:40]:
             continue
@@ -90,13 +105,13 @@ def last_turn(lines) -> tuple[dict | None, dict, float]:
     return done, usage, round(usd, 6)
 
 
-def charge_unbilled(sid: str) -> float:
-    """Adds the estimated cost of the session's ended turn when Claude never reported it -> the $ added (0: nothing
-    to add, already added, or the turn reported its cost)."""
+def charge_unbilled(sid: str, at: float | None = None) -> float:
+    """Adds the estimated cost of the session's ended turn (the one sent at `at` when given) when Claude never
+    reported it -> the $ added (0: nothing to add, already added, or the turn reported its cost)."""
     from .sessions import store
     try:
         with open(store.log_path(sid), errors="replace") as f:
-            done, usage, usd = last_turn(f)
+            done, usage, usd = last_turn(f, at)
     except OSError:
         return 0.0
     if done is None or not any(usage.values()):
@@ -109,5 +124,9 @@ def charge_unbilled(sid: str) -> float:
         m["estimated_usd"] = round(float(m.get("estimated_usd") or 0) + usd, 6)
         m["cost_usd"] = round(float(m.get("cost_usd") or 0) + usd, 6)
         store.add_usage(m, usage, usd, at or time.time())
+        csid = str(m.get("csid") or sid)                # Claude keeps a SIGTERM-ed turn in the thread's total: the
+        tc = {"csid": csid, "total": store.thread_prev_cost(m, csid)}  # next turn takes this estimate off (turn_cost)
+        tc["estimated"] = round(store.thread_estimated(m, csid) + usd, 6)
+        m["thread_cost"] = tc
     log.info("session %s: turn ended without a reported cost, %.2f $ estimated from its log", sid, usd)
     return usd

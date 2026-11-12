@@ -60,6 +60,27 @@ def test_last_turn_keeps_the_tokens_before_a_message_added_to_the_turn():
     assert agent_cost.last_turn(turn[:2] + fake + turn[3:])[1]["output_tokens"] == 1_000_000
 
 
+def test_last_turn_is_the_one_sent_at_its_time_even_when_the_next_already_started():
+    """The runner may start a queued message before on_turn_end reads the log: the lost turn is found by its time."""
+    lost = [json.dumps({"type": "mx_user", "text": "work", "at": 10.0}), _asst("m1", "claude-opus-5-5", 0, out=1_000_000),
+            json.dumps({"type": "mx_done", "code": 143, "stopped": False, "timed_out": True, "at": 50})]
+    nxt = [json.dumps({"type": "mx_user", "text": "queued", "at": 60.0}), _asst("m2", "claude-opus-5-5", 0, out=5)]
+    assert agent_cost.last_turn(lost + nxt)[0] is None                       # the last message's turn: still running
+    done, usage, usd = agent_cost.last_turn(lost + nxt, 10.0)
+    assert done["timed_out"] and usage["output_tokens"] == 1_000_000 and usd == 20.0
+    assert agent_cost.last_turn(lost + nxt, 999.0)[0] is None                 # unknown time: as before
+
+
+def test_the_next_turn_does_not_count_an_estimated_turn_again():
+    """Claude keeps a SIGTERM-ed turn in the thread's total: the next --resume reports it again."""
+    from maxxing.sessions import store
+    assert store.turn_cost(5.0, 2.0, 1.0) == 2.0 and store.turn_cost(5.0, 2.0) == 3.0
+    assert store.turn_cost(2.5, 2.0, 1.0) == 0.0                              # Claude had not saved it: never below 0
+    m = {"csid": "c1", "thread_cost": {"csid": "c1", "total": 2.0, "estimated": 1.5}}
+    assert store.thread_estimated(m, "c1") == 1.5 and store.thread_estimated(m, "c2") == 0.0
+    assert store.thread_estimated({"thread_cost": {"csid": "c1", "estimated": "x"}}, "c1") == 0.0
+
+
 def test_a_turn_killed_before_its_result_counts_in_the_budget(client, topic, mx):
     _on(client)
     _create(client)
@@ -74,10 +95,28 @@ def test_a_turn_killed_before_its_result_counts_in_the_budget(client, topic, mx)
     assert agents.day_cost(A) == round(m["estimated_usd"], 4) and res[0]["cost"] == round(m["estimated_usd"], 4)
     assert agent_cost.charge_unbilled(sid) == 0.0          # once per turn
     assert store.read(sid)["cost_usd"] == m["cost_usd"]
+    tc = m["thread_cost"]                                  # taken off the next reported total of the same thread
+    assert tc["csid"] == (m.get("csid") or sid) and tc["estimated"] == m["estimated_usd"]
     # a normal turn reports its cost itself: nothing estimated
     r = agents.fire(A, trigger="manual", prompt="NOTOOL ok", source="command line")
     wait_idle(client, r["session"]["id"])
     assert "estimated_usd" not in store.read(r["session"]["id"])
+
+
+def test_the_turn_after_a_killed_one_does_not_count_it_twice(client, topic, mx):
+    _on(client)
+    _create(client)
+    r = agents.fire(A, trigger="manual", prompt="HALFTURN HALFCOST=0.25 work", source="command line")
+    sid = r["session"]["id"]
+    wait_idle(client, sid)
+    from maxxing.sessions import store
+    wait_for(lambda: store.read(sid).get("estimated_usd"))
+    est = store.read(sid)["estimated_usd"]
+    assert client.post(f"/api/sessions/{sid}/messages", json={"text": "NOTOOL go on"}).status_code == 200
+    wait_idle(client, sid)
+    m = wait_for(lambda: (x := store.read(sid)) and int(x.get("turns") or 0) >= 2 and x)
+    # Claude reported 0.25 (the killed turn) + 0.0123 (this one): the estimate is not counted a second time
+    assert m["cost_usd"] == round(est + 0.25 + 0.0123 - est, 6) and "estimated" not in m["thread_cost"]
 
 
 def test_a_cron_timeout_never_goes_past_the_agents_own(client, topic, mx):

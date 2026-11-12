@@ -92,7 +92,8 @@ def _run(m: dict, csid: str, cwd: str, cfg: dict, question: str) -> dict:
         total = float(res.get("total_cost_usd") or 0)
     except (TypeError, ValueError):
         total = 0.0
-    cost = store.turn_cost(total if math.isfinite(total) else 0.0, store.thread_prev_cost(m, csid))
+    cost = store.turn_cost(total if math.isfinite(total) else 0.0, store.thread_prev_cost(m, csid),
+                           store.thread_estimated(m, csid))
     ms = res.get("duration_ms")
     if not (isinstance(ms, (int, float)) and math.isfinite(ms) and ms):
         ms = (time.time() - t0) * 1000
