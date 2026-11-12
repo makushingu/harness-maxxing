@@ -800,7 +800,7 @@ export const Composer = React.forwardRef<ComposerHandle, {
         >
           {menu && <SlashMenu items={menu.items} active={active} stage={menu.stage} onPick={(i) => pickSlash(i)} onHover={setSlashAt} />}
           {!menu && atRows.length > 0 && (
-            <SlashMenu items={atRows} active={active} stage="arg" label={t('sessions.mention.label')} keys={t('sessions.mention.keys')} onPick={pickMention} onHover={setSlashAt} />
+            <SlashMenu items={atRows} active={active} stage="arg" label={t('mention.label')} keys={t('mention.keys')} onPick={pickMention} onHover={setSlashAt} />
           )}
           {atts.length > 0 && (
             // Many files: a small scrolling strip (two rows) instead of a composer that eats the conversation.

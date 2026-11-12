@@ -1,17 +1,17 @@
 import * as React from 'react'
 import { Link } from 'react-router'
-import { AlertTriangle, Check, CheckCircle2, ChevronRight, CircleAlert, Cpu, Download, Eye, EyeOff, HardDrive, Info, MemoryStick, Monitor, Moon, Sun, Undo2 } from 'lucide-react'
+import { AlertTriangle, Check, CheckCircle2, ChevronRight, CircleAlert, Cpu, Eye, EyeOff, HardDrive, Info, MemoryStick, Moon, Sun, Undo2 } from 'lucide-react'
 import { useFeedSettings, useHealth, useMarkHealthSeen } from '@/lib/queries'
 import { fmtBytes, fmtDuration } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useLang, useT } from '@/i18n'
 import type { Health, HealthIssue } from '@/lib/types'
-import { resolveTheme, useUI, type Theme } from '@/stores/ui'
-import { Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, ProgressBar, Segmented, Sensitive, Skeleton, Switch, Tooltip } from '@/components/ui'
+import { resolveTheme, useUI } from '@/stores/ui'
+import { Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, ProgressBar, Sensitive, Skeleton, Tooltip } from '@/components/ui'
 import { useTween } from '@/lib/useTween'
 import { iconBtn } from './nav'
 import { MeterBar, MeterIcon, MeterValue, MiniMeter, type MeterTone } from './Meter'
-import { ClaudeStatus, usePlanPct, UsageLines } from './UsageIndicator'
+import { ClaudeStatus, usePlanPct } from './UsageIndicator'
 
 /** Issues not marked as seen: the ones the dot and the count are about. */
 export function openIssues(h: Health): Health['issues'] {
@@ -97,40 +97,6 @@ function IssueList({ issues }: { issues: Health['issues'] }) {
 }
 
 const meterTone = (pct: number): MeterTone => (pct >= 90 ? 'error' : pct >= 75 ? 'warn' : undefined)
-
-/** CPU, RAM and disk side by side (the status panel): icon and name, the figure counting to its new value, a thin
- *  bar; the bars with every detail are in Settings -> System. 75 % warning, 90 % critical: the colour fades over and
- *  the icon pops once when a line changes level. */
-function HealthMeters() {
-  const t = useT()
-  const { data: h } = useHealth()
-  if (!h) return <Skeleton className="h-10" />
-  const mem = h.mem.total ? ((h.mem.total - h.mem.avail) / h.mem.total) * 100 : 0
-  const rows = [
-    { key: 'cpu', label: t('health.cpu'), pct: h.cpu_pct, icon: Cpu },
-    { key: 'mem', label: t('health.ram'), pct: mem, icon: MemoryStick },
-    { key: 'disk', label: t('health.disk'), pct: h.disk.pct, icon: HardDrive },
-  ]
-  return (
-    <span className="grid grid-cols-3 gap-3" data-testid="sidebar-meters">
-      {rows.map((r) => {
-        const tone = meterTone(r.pct)
-        return (
-          <span key={r.key} className="grid min-w-0 gap-1">
-            <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-              <MeterIcon icon={r.icon} tone={tone} />
-              <span className="truncate">{r.label}</span>
-            </span>
-            <Sensitive length={3}>
-              <MeterValue pct={r.pct} tone={tone} className="text-sm" />
-            </Sensitive>
-            <MeterBar pct={r.pct} tone={tone} label={r.label} className="h-1" />
-          </span>
-        )
-      })}
-    </span>
-  )
-}
 
 function Metric({ label, value, pct }: { label: string; value: string; pct: number }) {
   const tone = meterTone(pct)
@@ -349,78 +315,6 @@ function LiveDot({ tone }: { tone: keyof typeof dotTone }) {
       <span className={cn('absolute inline-flex size-full rounded-full opacity-0', dotTone[tone], tone === 'error' && 'mx-soft-ping')} />
       <span className={cn('relative inline-flex size-full rounded-full transition-colors duration-500 ease-out motion-reduce:transition-none', dotTone[tone])} />
     </span>
-  )
-}
-
-const panelRow =
-  'flex min-h-9 min-w-0 items-center gap-3 rounded-md px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:min-h-11'
-
-/** What the status line opens (the touch menu shows it inline): the health issues or "all good", the Claude plan
- *  (-> Settings -> Stats), CPU / RAM / disk (-> Settings -> System); in the touch menu also the theme, presentation
- *  mode and Install app (on a computer they sit at the bottom of the sidebar, `SidebarLook`). */
-export function StatusPanel({ touch, onInstall }: { touch?: boolean; /** touch menu: Install app */ onInstall?: () => void }) {
-  const t = useT()
-  const theme = useUI((s) => s.theme)
-  const setTheme = useUI((s) => s.setTheme)
-  const presentation = useUI((s) => s.presentation)
-  const setPresentation = useUI((s) => s.setPresentation)
-  return (
-    <div className="grid min-w-0 gap-1">
-      <div className="px-2 pt-0.5 pb-1.5">
-        <HealthIssues />
-      </div>
-      <UsageLines visible={touch} className={cn(panelRow, 'grid')} />
-      <Link to="/settings/system" className={cn(panelRow, 'grid gap-1.5')} aria-label={t('health.details')} data-testid="status-system">
-        <span className="flex items-center justify-between gap-2 text-xs font-medium text-muted-foreground">
-          {t('health.details')} <ChevronRight className="size-3.5 shrink-0" />
-        </span>
-        <HealthMeters />
-      </Link>
-      {touch && <div className="mt-1 grid gap-1 border-t pt-2">
-        <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1.5 px-2 py-1">
-          <span className="text-sm">{t('shell.theme')}</span>
-          <Segmented<Theme>
-            size="sm"
-            value={theme}
-            onChange={setTheme}
-            aria-label={t('shell.theme')}
-            options={[
-              { value: 'light', label: <><Sun /><span className="sr-only">{t('theme.light')}</span></> },
-              { value: 'dark', label: <><Moon /><span className="sr-only">{t('theme.dark')}</span></> },
-              { value: 'system', label: <><Monitor /><span className="sr-only">{t('theme.system')}</span></> },
-            ]}
-          />
-        </div>
-        <label className={cn(panelRow, 'cursor-pointer justify-between hover:bg-transparent')}>
-          <span className="min-w-0">{t('presentation.label')}</span>
-          <Switch checked={presentation} onCheckedChange={setPresentation} />
-        </label>
-        {onInstall && (
-          <button type="button" className={cn(panelRow, 'w-full text-left')} onClick={onInstall}>
-            <Download className="size-4 shrink-0 text-muted-foreground" />
-            <span className="min-w-0 flex-1">{t('pwa.install')}</span>
-          </button>
-        )}
-      </div>}
-    </div>
-  )
-}
-
-/** The panel's first lines: "All systems normal", or the issue count and the issues (each with its Seen toggle). */
-function HealthIssues() {
-  const t = useT()
-  const { data: h, isError } = useHealth()
-  if (isError) return <p className="text-sm text-destructive">{t('health.unavailable')}</p>
-  if (!h) return <Skeleton className="h-4 w-32" />
-  const tone = healthTone(h)
-  return (
-    <div className="grid gap-2">
-      <p className="flex items-center gap-2 text-sm font-medium">
-        {tone === 'ok' ? <CheckCircle2 className="size-4 shrink-0 text-success" /> : <AlertTriangle className={cn('size-4 shrink-0', tone === 'error' ? 'text-destructive' : 'text-warning')} />}
-        {tone === 'ok' ? t('health.allGood') : t('health.issues', { count: openIssues(h).length })}
-      </p>
-      {h.issues.length > 0 && <IssueList issues={h.issues} />}
-    </div>
   )
 }
 

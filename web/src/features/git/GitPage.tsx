@@ -278,6 +278,7 @@ function SourceCards({ source, account, query, onOpen }: { source: Source; accou
   return (
     <div className="grid gap-3">
       <TokenErrors errors={gh.errors} />
+      {!remote.length && <EmptyState icon={FolderGit2} title={t('git.noMatch')} />}
       <ul className="grid grid-cols-[minmax(0,1fr)] gap-2 lg:grid-cols-2">
         {remote.map((r) => (
           <GithubRow key={r.full_name} r={r} onOpen={() => onOpen(`github:${r.full_name}`)} />
@@ -296,7 +297,7 @@ function RepoView({ repo, onSwitch, refresh }: { repo: string; onSwitch: (repo: 
   const pulls = useGitPulls(repo)
   const [selected, setSelected] = React.useState<string | null>(null)
   React.useEffect(() => setSelected(null), [repo])
-  // below lg the side column falls under a long graph: the picked commit opens in a bottom sheet instead
+  // below 1700 px the side column would squeeze the graph: the picked commit opens in a bottom sheet instead
   const wide = useMediaQuery('(min-width: 1700px)')
   const r = data?.repo
   const isGh = repo.startsWith('github:')

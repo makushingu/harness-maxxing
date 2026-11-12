@@ -6,7 +6,7 @@ import { ArrowUpRight, BellRing, BookOpen, Eye, KeyRound, MessageSquarePlus, Plu
 import type { InfraResource, InfraSource, InfraView } from '@/lib/types'
 import { tDyn, useT } from '@/i18n'
 import { Badge, Button, Sensitive, StatusDot } from '@/components/ui'
-import { cn, store } from '@/lib/utils'
+import { cn } from '@/lib/utils'
 import { KIND_ICON, PLATFORMS, locationLabel } from './shared'
 
 function DocLink({ className }: { className?: string }) {
@@ -18,16 +18,6 @@ function DocLink({ className }: { className?: string }) {
   )
 }
 
-const HOW_KEY = 'mx.infra.howHidden'
-
-export function useHowItWorks() {
-  const [hidden, setHidden] = React.useState(() => store.get(HOW_KEY) === '1')
-  const set = (h: boolean) => {
-    store.set(HOW_KEY, h ? '1' : '0')
-    setHidden(h)
-  }
-  return { hidden, hide: () => set(true), show: () => set(false) }
-}
 
 /** How the page works. In the page's help window (`extra`: the note of the tab open); `onHide`: a closable card. */
 export function HowItWorks({ onHide, extra }: { onHide?: () => void; extra?: React.ReactNode }) {

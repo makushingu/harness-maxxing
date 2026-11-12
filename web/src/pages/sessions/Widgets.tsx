@@ -23,12 +23,12 @@ function EffortRow({ effort, onEffort }: { effort: Effort | ''; onEffort: (effor
     <>
       <DropdownMenuSeparator />
       <DropdownMenuLabel className="flex items-center justify-between text-xs font-normal text-muted-foreground">
-        <span>{t('sessions.effort.label')}</span>
-        <span>{t(`sessions.effort.long.${effort || 'auto'}`)}</span>
+        <span>{t('effort.label')}</span>
+        <span>{t(`effort.long.${effort || 'auto'}`)}</span>
       </DropdownMenuLabel>
-      <div role="radiogroup" aria-label={t('sessions.effort.label')} className="mx-1 mb-1 grid grid-cols-6 gap-0.5 rounded-md bg-muted p-0.5">
+      <div role="radiogroup" aria-label={t('effort.label')} className="mx-1 mb-1 grid grid-cols-6 gap-0.5 rounded-md bg-muted p-0.5">
         {(['', ...EFFORTS] as const).map((e) => (
-          <Tooltip key={e || 'auto'} content={t(`sessions.effort.hint.${e || 'auto'}`)}>
+          <Tooltip key={e || 'auto'} content={t(`effort.hint.${e || 'auto'}`)}>
             <button
               type="button"
               role="radio"
@@ -39,7 +39,7 @@ function EffortRow({ effort, onEffort }: { effort: Effort | ''; onEffort: (effor
                 effort === e && 'bg-background text-foreground shadow-sm',
               )}
             >
-              {t(`sessions.effort.${e || 'auto'}`)}
+              {t(`effort.${e || 'auto'}`)}
             </button>
           </Tooltip>
         ))}
@@ -113,7 +113,7 @@ export function ModelPicker({
             <Cpu className="size-3.5 shrink-0" />
             {/* narrow composer + a pending switch: only "-> next model" (the tooltip says which one answered) */}
             <span className={cn('truncate', differs && '@max-sm:hidden')}>{label}</span>
-            {onEffort && effort && <span className="shrink-0 text-[10px] text-muted-foreground/80">· {t(`sessions.effort.${effort}`)}</span>}
+            {onEffort && effort && <span className="shrink-0 text-[10px] text-muted-foreground/80">· {t(`effort.${effort}`)}</span>}
             {differs && (
               <span className="shrink-0 rounded bg-warning/15 px-1 text-[10px] whitespace-nowrap text-warning">
                 → {modelLabel(next, models)}

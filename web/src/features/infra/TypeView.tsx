@@ -34,32 +34,6 @@ export function PlaceIcon({ p, className }: { p: Place; className?: string }) {
   )
 }
 
-/** Thin bar split by place, in the place colours. */
-export function MixBar({ parts, className, onPick, current }: { parts: { p: Place; n: number }[]; className?: string; onPick?: (key: string) => void; current?: string | null }) {
-  const total = parts.reduce((a, x) => a + x.n, 0) || 1
-  const mask = useMask()
-  const name = (p: Place) => (p.sensitive ? mask(p.label) : p.label)
-  return (
-    <span className={cn('flex gap-px overflow-hidden rounded-full', className)} aria-hidden={!onPick}>
-      {parts.map(({ p, n }) =>
-        onPick ? (
-          <button
-            key={p.key}
-            type="button"
-            title={`${name(p)}: ${n}`}
-            aria-label={`${name(p)}: ${n}`}
-            onClick={() => onPick(p.key)}
-            className={cn('h-full transition-opacity hover:opacity-100', current && current !== p.key ? 'opacity-35' : 'opacity-85')}
-            style={{ flex: n / total, background: p.color }}
-          />
-        ) : (
-          <i key={p.key} className="block h-full" style={{ flex: n / total, background: p.color }} />
-        ),
-      )}
-    </span>
-  )
-}
-
 export function ResourceRow({ r, byId, v, onOpen }: { r: InfraResource; byId: Map<string, InfraResource>; v: InfraView; onOpen: () => void }) {
   const t = useT()
   const Icon = KIND_ICON[r.kind]

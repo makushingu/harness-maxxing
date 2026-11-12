@@ -48,7 +48,7 @@ export function mentionRows(q: string, targets: MentionTarget[], t: ReturnType<t
         key: `${x.kind}:${x.ref}`,
         label: `@${x.label}`,
         hint: x.hint,
-        badge: x.kind === 'team' && x.group ? t('sessions.mention.kind.group') : undefined,
+        badge: x.kind === 'team' && x.group ? t('mention.kind.group') : undefined,
         icon: <span className="flex size-4 items-center justify-center">{icon(x)}</span>,
         group: g,
         target: x,

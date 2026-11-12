@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { api, ApiError, isApiError, networkError, withQuery } from '../api'
-import type { FileContent, FileList, FileSearchHit, FileWriteBody, FileWriteResult, Ok, UploadResult } from '../types'
+import type { FileContent, FileList, FileWriteBody, FileWriteResult, Ok, UploadResult } from '../types'
 import { qk } from './keys'
 import { useMut } from './util'
 
@@ -68,14 +68,6 @@ export const fileKindQuery = (qc: QueryClient, path: string) => ({
   refetchInterval: (q: { state: { data?: string } }) => (q.state.data === 'missing' ? 4000 : false),
   retry: false,
 })
-export function useFileSearch(q: string) {
-  return useQuery({
-    queryKey: qk.files.search(q),
-    queryFn: ({ signal }) => api.get<FileSearchHit[]>('/api/files/search', { q }, { signal }),
-    enabled: q.trim().length >= 2,
-    staleTime: 15_000,
-  })
-}
 /** `version` = the file's mtime when known (listing): a versioned URL is cached by the browser for good. */
 const ver = (v?: number | null) => (v ? String(Math.round(v * 1000)) : undefined)
 /** `within` (raw, thumb, preview, stamps): a folder the file must really be in (links followed), else 403 - the

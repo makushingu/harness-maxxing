@@ -624,7 +624,7 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
 
   // The composer's "/" menu: the commands of this session, then the skills of its topic.
   const idleWithTurns = () => {
-    if (running || !session?.turns) toast.info(t(running ? 'sessions.slash.busy' : 'sessions.slash.empty'))
+    if (running || !session?.turns) toast.info(t(running ? 'slash.busy' : 'slash.empty'))
     return !running && !!session?.turns
   }
   const commands = useSlashCommands(path, {

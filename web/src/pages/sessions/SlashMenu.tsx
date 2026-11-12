@@ -74,12 +74,12 @@ export function slashAction(text: string, commands: SlashCommand[]): { cmd: Slas
 
 function groupTitle(g: string, t: ReturnType<typeof useT>): string {
   const titles: Record<string, string> = {
-    session: t('sessions.slash.group.session'),
-    here: t('sessions.slash.group.here'),
-    other: t('sessions.slash.group.other'),
-    '@session': t('sessions.mention.group.session'),
-    '@agent': t('sessions.mention.group.agent'),
-    '@team': t('sessions.mention.group.team'),
+    session: t('slash.group.session'),
+    here: t('slash.group.here'),
+    other: t('slash.group.other'),
+    '@session': t('mention.group.session'),
+    '@agent': t('mention.group.agent'),
+    '@team': t('mention.group.team'),
   }
   return titles[g] || g
 }
@@ -93,7 +93,7 @@ export function SlashMenu({ items, active, onPick, onHover, stage, label, keys }
   return (
     <div
       role="listbox"
-      aria-label={label || t('sessions.slash.label')}
+      aria-label={label || t('slash.label')}
       data-testid="slash-menu"
       className="absolute inset-x-0 bottom-full z-30 mb-1.5 overflow-hidden rounded-xl border bg-popover text-popover-foreground shadow-lg"
     >
@@ -120,7 +120,7 @@ export function SlashMenu({ items, active, onPick, onHover, stage, label, keys }
             {it.more ? (
               // "+ N more"
 
-              <span className="text-xs text-muted-foreground">{t('sessions.slash.more', { count: it.more })}</span>
+              <span className="text-xs text-muted-foreground">{t('slash.more', { count: it.more })}</span>
             ) : (
               <span className={cn('shrink-0', stage === 'name' && 'font-mono text-[13px]', it.current && 'font-semibold')}>
                 {it.label}
@@ -133,7 +133,7 @@ export function SlashMenu({ items, active, onPick, onHover, stage, label, keys }
           </React.Fragment>
         ))}
       </div>
-      <div className="border-t px-2.5 py-1 text-[10px] text-muted-foreground max-md:hidden">{keys || t('sessions.slash.keys')}</div>
+      <div className="border-t px-2.5 py-1 text-[10px] text-muted-foreground max-md:hidden">{keys || t('slash.keys')}</div>
     </div>
   )
 }

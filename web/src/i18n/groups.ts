@@ -33,6 +33,8 @@ export const GROUPS = {
   skw: ['skw'],
   // the guided tour: loaded with its chunk (tour/Tour.tsx); its entry points (menu, palette) use help.*
   tour: ['tour'],
+  // the composer's / and @ menus and the intelligence (effort) level: loaded on their first text asked
+  composer: ['slash', 'mention', 'effort'],
 } as const satisfies Record<string, readonly string[]>
 
 export type Group = keyof typeof GROUPS

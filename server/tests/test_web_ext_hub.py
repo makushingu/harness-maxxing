@@ -25,6 +25,7 @@ def test_the_docs_say_where_the_extensions_page_is():
 def test_the_nav_shows_extensions_while_a_page_is_not_pinned():
     nav = (WEB / "components" / "shell" / "nav.ts").read_text()
     assert re.search(r"useUnpinnedPages\(\).*?!e\.pinned", nav, re.S)
-    for f in ("Sidebar.tsx", "TouchNav.tsx"):
-        src = (WEB / "components" / "shell" / f).read_text()
-        assert "unpinned > 0 &&" in src and 'to="/x"' in src, f"{f} has no Extensions entry for unpinned pages"
+    src = (WEB / "components" / "shell" / "Sidebar.tsx").read_text()
+    assert "unpinned > 0 &&" in src and 'to="/x"' in src, "Sidebar.tsx has no Extensions entry for unpinned pages"
+    # the touch drawer's menu is the same sidebar (the entry comes with it)
+    assert "<Sidebar drawer" in (WEB / "components" / "shell" / "TouchNav.tsx").read_text()

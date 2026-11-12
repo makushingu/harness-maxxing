@@ -32,7 +32,7 @@ export function useSlashCommands(path: string, a: SlashActions): SlashCommand[] 
       {
         name: 'model',
         kind: 'action',
-        description: t('sessions.slash.model'),
+        description: t('slash.model'),
         args: [
           { value: '', label: t('sessions.model.default'), hint: def ? modelLabel(def, models) : '', current: !a.model },
           ...(models || []).map((m) => ({ value: m.id, label: m.label || modelLabel(m.id), hint: m.id, current: a.model === m.id })),
@@ -47,11 +47,11 @@ export function useSlashCommands(path: string, a: SlashActions): SlashCommand[] 
       {
         name: 'effort',
         kind: 'action',
-        description: t('sessions.slash.effort'),
+        description: t('slash.effort'),
         args: (['', ...EFFORTS] as const).map((e) => ({
           value: e || 'auto',
-          label: t(`sessions.effort.long.${e || 'auto'}`),
-          hint: t(`sessions.effort.hint.${e || 'auto'}`),
+          label: t(`effort.long.${e || 'auto'}`),
+          hint: t(`effort.hint.${e || 'auto'}`),
           current: a.effort === e,
         })),
         run: (arg) => {
@@ -62,12 +62,12 @@ export function useSlashCommands(path: string, a: SlashActions): SlashCommand[] 
       },
     ]
     if (a.onPlan)
-      out.push({ name: 'plan', kind: 'action', description: t(a.plan ? 'sessions.slash.planOff' : 'sessions.slash.planOn'), run: () => live.current.onPlan?.() })
-    if (a.onCompact) out.push({ name: 'compact', kind: 'action', description: t('sessions.slash.compact'), run: () => live.current.onCompact?.() })
-    if (a.onHandoff) out.push({ name: 'handoff', kind: 'action', description: t('sessions.slash.handoff'), run: () => live.current.onHandoff?.() })
-    if (a.onNew) out.push({ name: 'new', kind: 'action', description: t('sessions.slash.new'), run: () => live.current.onNew?.() })
+      out.push({ name: 'plan', kind: 'action', description: t(a.plan ? 'slash.planOff' : 'slash.planOn'), run: () => live.current.onPlan?.() })
+    if (a.onCompact) out.push({ name: 'compact', kind: 'action', description: t('slash.compact'), run: () => live.current.onCompact?.() })
+    if (a.onHandoff) out.push({ name: 'handoff', kind: 'action', description: t('slash.handoff'), run: () => live.current.onHandoff?.() })
+    if (a.onNew) out.push({ name: 'new', kind: 'action', description: t('slash.new'), run: () => live.current.onNew?.() })
     if (a.onRename)
-      out.push({ name: 'rename', kind: 'action', freeArg: true, description: t('sessions.slash.rename'), run: (arg) => arg && live.current.onRename?.(arg) })
+      out.push({ name: 'rename', kind: 'action', freeArg: true, description: t('slash.rename'), run: (arg) => arg && live.current.onRename?.(arg) })
     // Skills: this topic's and project's first, then the others - the product's last (Claude picks them by itself
     // when the message is about crons, agents, the server...)
     const taken = new Set(out.map((c) => c.name))
