@@ -1979,15 +1979,23 @@ def spawn_run(cid: str, trigger: str = "manual", attempt: int = 1) -> None:
     if trigger != "manual":
         cmd += ["--trigger", trigger] + (["--attempt", str(attempt)] if attempt > 1 else [])
     if not units_available():
-        subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                         stderr=subprocess.DEVNULL, start_new_session=True, close_fds=True)
+        try:
+            subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL, start_new_session=True, close_fds=True)
+        except OSError as e:
+            raise CronError(f"cannot start the job: {e}", "spawn_failed") from e
         return
     env_args = [f"--setenv={k}={v}" for k, v in os.environ.items()
                 if k.startswith("MAXXING_") and k != DETACH_ENV]          # the unit runs it inline, not again detached
-    r = subprocess.run(["systemd-run", "--collect", "--quiet", "--unit", unit_name(cid),
-                        "--description", f"Harness Maxxing job {cid}", *unit_properties(_raw_job(cid)),
-                        *env_args, "--", *cmd],
-                       capture_output=True, text=True, timeout=15)
+    try:
+        r = subprocess.run(["systemd-run", "--collect", "--quiet", "--unit", unit_name(cid),
+                            "--description", f"Harness Maxxing job {cid}", *unit_properties(_raw_job(cid)),
+                            *env_args, "--", *cmd],
+                           capture_output=True, text=True, timeout=15)
+    except subprocess.TimeoutExpired as e:        # the unit may still start later: the caller must not run the job again
+        raise CronError("systemd-run did not answer within 15 s", "spawn_timeout") from e
+    except OSError as e:
+        raise CronError(f"systemd-run failed: {e}", "spawn_failed") from e
     if r.returncode != 0:
         if "already" in r.stderr.lower() or "exists" in r.stderr.lower():
             raise CronError("this job is already running", "already_running")
