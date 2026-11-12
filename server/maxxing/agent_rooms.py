@@ -674,8 +674,11 @@ def _message(path: str, me: str, item: dict, st: dict, fresh: bool) -> str:
     msgs = [m for m in msgs if (m.get("at") or 0) > floor]
     origin = next((m for m in reversed(msgs) if m.get("id") == st.get("origin")), None) or \
         next((m for m in reversed(msgs) if m.get("author") == "me" and m.get("kind") == "message"), None)
-    delta = [m for m in msgs if m.get("kind") == "message" and (m.get("at") or 0) > since
-             and m.get("author") != me and m is not origin]
+    if fresh and item.get("renewed"):                # a new session after a pause: the recent talk, its own too
+        delta = [m for m in msgs if m.get("kind") == "message" and m is not origin][-40:]
+    else:
+        delta = [m for m in msgs if m.get("kind") == "message" and (m.get("at") or 0) > since
+                 and m.get("author") != me and m is not origin]
     if fresh and not since:
         delta = delta[-40:]
     parts = [header(path, me)] if fresh else []
@@ -769,6 +772,9 @@ def _start(path: str, me: str, item: dict, st: dict, g: dict) -> str | None:
         sessions = st.setdefault("sessions", {})
         sid = sessions.get(me)
         fresh = not (sid and service.session_exists(sid))
+        if not fresh and _idle(sid, a):
+            fresh = True                                 # a new session reads the recent messages, not the whole past
+            item = {**item, "renewed": True}
         outside = item.get("reason") == "handover" and not g["trust_members"]
         files = _origin_files(path, me, st)
         st.setdefault("turns", {})
@@ -799,6 +805,18 @@ def _start(path: str, me: str, item: dict, st: dict, g: dict) -> str | None:
         agents.post(me, "run", f"Speaks in the group {g['name'] or parse(path)[1]}", trigger=f"group:{path}",
                     source="group", session=sid, group=path)
         return sid
+
+
+def _idle(sid: str, a: dict) -> bool:
+    """The member's session in the group has been silent longer than its `chat_idle_h` (as its owner's
+    conversation): going on would re-read its whole history, uncached by then, at every turn. 0 = never renewed."""
+    from .sessions import store
+    idle = float(a["limits"].get("chat_idle_h") or 0)
+    m = store.read_cached(sid) or {}
+    if not idle or m.get("state") == "running" or m.get("queue"):
+        return False
+    last = float(m.get("finished_at") or m.get("updated") or 0)
+    return bool(last) and time.time() - last > idle * 3600
 
 
 def turn_outside(path: str, sid: str) -> bool:

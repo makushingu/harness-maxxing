@@ -38,7 +38,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from . import config
+from . import agent_cost, config
 
 log = logging.getLogger("maxxing.agents")
 
@@ -568,10 +568,16 @@ def names(project: str, topic: str) -> list[str]:
 
 
 # ---- run settings read by the session runner -----------------------------------------------------
+# A run that waits (sleep, polling loops, waiting for its background jobs or a reply) re-reads its whole context at
+# every check until its timeout: measured on a real hourly agent, ~40 % of what it spent went into such waits.
+RUN_NOTE = ("Each run is one pass: do the work that can be done now, then end the run. Never wait inside a run for "
+            "something to happen (sleep, polling loops, waiting for background jobs, sub-agents, replies or mails): "
+            "start long work in the background if it must go on, write in your memory.md what to check, and end; "
+            "your next run checks it. A run stopped by its time limit loses its answer but still costs its tokens.")
 OWNER_NOTE = ("You run as a Harness Maxxing agent. Your memory.md is yours: keep there what will matter next time. "
               "Your role (CLAUDE.md), your settings and triggers (agent.json) and the `maxxing agents` commands that "
               "change agents belong to the owner: never change them. When they should change, say so in your answer "
-              "(what and why); the owner applies it.")
+              "(what and why); the owner applies it. " + RUN_NOTE)
 
 
 # The owner's conversation is the agent's manager: it changes its own role, memory, triggers and
@@ -1992,6 +1998,18 @@ def _context(path: str, own: bool = False) -> tuple[str, bool]:
             + "\n---\n".join(parts) + f"\n{mark}>>"), any(m.get("outside") for m in res)
 
 
+def run_timeout(a: dict, asked: int | None = None) -> int:
+    """A run's time limit: the trigger's own (a cron job's timeout) never goes past the agent's (Limits -> timeout),
+    which the owner set for its runs. A cron job's default hour used to win over an agent's 30 min: a run that waited
+    for its background jobs (sleep, polling) then burned tokens for the whole hour, every hour."""
+    limit = int(a["limits"]["timeout_s"])
+    try:
+        asked = int(asked or 0)
+    except (TypeError, ValueError, OverflowError):
+        asked = 0
+    return min(asked, limit) if asked > 0 else limit
+
+
 def fire(path: str, *, trigger: str, text: str = "", prompt: str = "", source: str = "manual",
          attachments: list[str] | None = None, depth: int = 0, cron_env: dict | None = None,
          timeout_s: int | None = None, reply_to: str | None = None, wait: bool = False, model: str | None = None) -> dict:
@@ -2090,7 +2108,7 @@ def _fire(path: str, *, trigger: str, text: str, prompt: str, source: str, attac
     s = service.create_session(path, message=message, title=title,
                                model=((model or a["chat_model"]) if chat else None) or a["model"] or None,
                                attachments=attachments, source="agent", notify=False, cron=True, env=env,
-                               timeout_s=timeout_s or a["limits"]["timeout_s"],
+                               timeout_s=run_timeout(a, timeout_s),
                                permission_mode=a["permission_mode"], ref=ref)
     _hold_left(path, a, s["id"])
     _snapshot(path, s["id"])
@@ -2382,6 +2400,14 @@ def on_turn_end(session: dict, result: dict | None) -> None:
             if isinstance(result.get(k), (int, float)):
                 cost = round(float(result[k]), 4)
                 break
+    if cost is None:                    # no `result`: stopped by its timeout (or crashed) before Claude said the cost
+        try:
+            est = agent_cost.charge_unbilled(session["id"])
+        except Exception:  # noqa: BLE001 - an estimate never stops the end of a turn
+            log.exception("agent %s: cost of a turn without result", path)
+            est = 0.0
+        if est:
+            cost = round(est, 4)
     from .sessions import store
     meta = store.read(session["id"]) or {}
     ended = meta.get("finished_at")

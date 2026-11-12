@@ -465,6 +465,9 @@ def turn(o: dict, sid: str, model: str, prompt: str, t0: float) -> int | None:
           "apiKeySource": "none", "claude_code_version": VERSION.split()[0], "uuid": str(uuid.uuid4())})
     if "NORESULT" in prompt:                           # crashes mid-turn: no result line
         return 0
+    if "HALFTURN" in prompt:                           # killed mid-turn after some work: tokens spent, no result
+        emit(msg(sid, model, [{"type": "text", "text": "Working..."}]))
+        return 0
     emit({"type": "system", "subtype": "thinking_tokens", "estimated_tokens": 40, "session_id": sid})
     emit(msg(sid, model, [{"type": "thinking", "thinking": "", "signature": "c2lnbmF0dXJl"}]))
     if "FAIL" in prompt and "RESUME_FAIL" not in prompt:
