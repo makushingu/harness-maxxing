@@ -1,6 +1,7 @@
 // Team -> Friends: the people you are connected with (open a chat in one click), requests to answer, and the
 // "Add a friend" dialog (one-time invitation, server to server).
 import * as React from 'react'
+import { ListEntry } from '@/components/shell/PageList'
 import { Check, Copy, Fingerprint, Link2, LogIn, MessageCircle, MoreHorizontal, ShieldAlert, Trash2, UserPlus, X } from 'lucide-react'
 import { errorMessage } from '@/lib/api'
 import {
@@ -27,12 +28,14 @@ export function useOpenDm(onOpen: (chatId: string) => void) {
 }
 
 /* ------------------------------------------------------------------------------------------------ friends tab */
-export function FriendsView({ team, onOpenChat, compact }: { team: TeamState | undefined; onOpenChat: (id: string) => void; compact?: boolean }) {
+export function FriendsView({ team, onOpenChat, compact, query }: { team: TeamState | undefined; onOpenChat: (id: string) => void; compact?: boolean; /** the Team page: the search is the 🔍 of the list's head */ query?: string }) {
   const t = useT()
   const presence = usePresence()
   const { data: cx } = useTeamConnections()
   const [add, setAdd] = React.useState(false)
-  const [q, setQ] = React.useState('')
+  const [own, setQ] = React.useState('')
+  const page = query !== undefined
+  const q = page ? query : own
   const dm = useOpenDm(onOpenChat)
   const requests = cx?.contacts.filter((x) => x.status === 'request') || []
   const waiting = cx?.contacts.filter((x) => x.status === 'waiting') || []
@@ -43,12 +46,18 @@ export function FriendsView({ team, onOpenChat, compact }: { team: TeamState | u
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className={cn('flex items-center gap-2 border-b', compact ? 'p-2' : 'p-3')}>
-        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('team.friends.search')} className="h-8 flex-1 text-[13px]" />
-        <Button size="sm" onClick={() => setAdd(true)} className="shrink-0">
-          <UserPlus /> {t('team.friends.add')}
-        </Button>
-      </div>
+      {page ? (
+        <div className="px-2 pt-1">
+          <ListEntry icon={UserPlus} label={t('team.friends.add')} onClick={() => setAdd(true)} testid="team-add-friend" />
+        </div>
+      ) : (
+        <div className={cn('flex items-center gap-2 border-b', compact ? 'p-2' : 'p-3')}>
+          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('team.friends.search')} className="h-8 flex-1 text-[13px]" />
+          <Button size="sm" onClick={() => setAdd(true)} className="shrink-0">
+            <UserPlus /> {t('team.friends.add')}
+          </Button>
+        </div>
+      )}
       <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-2">
         {!team || !cx ? (
           [0, 1, 2].map((i) => <Skeleton key={i} className="m-1 h-12" />)

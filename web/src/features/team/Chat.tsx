@@ -50,18 +50,22 @@ function dayLabel(at: number, lang: string, t: ReturnType<typeof useT>) {
 
 /* ------------------------------------------------------------------------------------------------ list */
 export function ChatList({
-  team, active, onOpen, onFriends, compact,
+  team, active, onOpen, onFriends, compact, query,
 }: {
   team: TeamState | undefined
   active: string | null
   onOpen: (id: string) => void
   onFriends: () => void
   compact?: boolean
+  /** the Team page: the search is the 🔍 of the list's head and New chat the page's button (no field, no friends row) */
+  query?: string
 }) {
   const t = useT()
   const lang = useLang()
   const typingLabel = useTypingLabel()
-  const [q, setQ] = React.useState('')
+  const page = query !== undefined
+  const [own, setQ] = React.useState('')
+  const q = page ? query : own
   const [newOpen, setNewOpen] = React.useState(false)
   const [addOpen, setAddOpen] = React.useState(false)
   const [managing, setManaging] = React.useState<string | null>(null)
@@ -73,7 +77,7 @@ export function ChatList({
   const managed = managing ? team?.chats.find((c) => c.id === managing) : undefined
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className={cn('flex items-center gap-2', compact ? 'p-2' : 'p-3')}>
+      {!page && <div className={cn('flex items-center gap-2', compact ? 'p-2' : 'p-3')}>
         <div className="relative min-w-0 flex-1">
           <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('team.search')} className="h-8 pl-8 text-[13px]" />
@@ -83,7 +87,7 @@ export function ChatList({
             <SquarePen />
           </Button>
         </Tooltip>
-      </div>
+      </div>}
       {requests > 0 && (
         <button
           type="button"
@@ -94,7 +98,7 @@ export function ChatList({
           {t('team.cx.pending', { count: requests })}
         </button>
       )}
-      {friends.length > 0 && !q && (
+      {friends.length > 0 && !q && !page && (
         <div className="flex gap-1 overflow-x-auto px-2 pb-2 [scrollbar-width:none]" aria-label={t('team.friends.title')}>
           {friends.slice(0, 20).map(([id, p]) => (
             <button
@@ -116,7 +120,7 @@ export function ChatList({
           </button>
         </div>
       )}
-      <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto border-t p-1.5">
+      <div className={cn('min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-1.5', !page && 'border-t')}>
         {!team && [0, 1, 2].map((i) => <Skeleton key={i} className="m-1 h-14" />)}
         {chats.map((c) => {
           const last = c.last
@@ -201,7 +205,7 @@ export function ChatList({
 type Forward = { message: TeamMessage; text: string }
 type Preset = 'hour' | 'two' | 'day' | 'last' | 'all'
 
-export function ChatView({ team, chatId, onBack, compact, headerExtra }: { team: TeamState | undefined; chatId: string; onBack?: () => void; compact?: boolean; headerExtra?: React.ReactNode }) {
+export function ChatView({ team, chatId, onBack, compact, headerExtra, leading }: { team: TeamState | undefined; chatId: string; onBack?: () => void; compact?: boolean; headerExtra?: React.ReactNode; /** the Team page: its header is the page's (☰ on touch before the chat's name) */ leading?: React.ReactNode }) {
   const t = useT()
   const { data, isLoading, isError, isFetching, refetch } = useTeamChat(chatId)
   const failed = isError && !data
@@ -327,7 +331,8 @@ export function ChatView({ team, chatId, onBack, compact, headerExtra }: { team:
         if (files.length) composer.current?.add(files)
       }}
     >
-      <header className={cn('flex min-h-[var(--header-h)] shrink-0 items-center gap-2.5 border-b', compact ? 'px-2 py-1.5' : 'px-4 py-2')}>
+      <header className={cn('flex shrink-0 items-center gap-2.5 border-b', compact ? 'min-h-[var(--header-h)] px-2 py-1.5' : 'min-h-[calc(var(--header-h)+var(--safe-top))] px-4 pt-[var(--safe-top)] max-md:gap-2 max-md:px-3 md:px-6')}>
+        {leading}
         {onBack && (
           <Button size="icon-sm" variant="ghost" onClick={onBack} aria-label={t('common.back')}>
             <ArrowLeft />

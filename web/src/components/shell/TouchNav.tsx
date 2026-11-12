@@ -29,8 +29,8 @@ const topButton =
   'relative flex size-11 shrink-0 items-center justify-center rounded-xl text-foreground outline-none transition-colors hover:bg-accent active:bg-accent focus-visible:ring-2 focus-visible:ring-ring [&_svg]:size-[22px]'
 
 const onSessions = (path: string) => path === '/sessions' || path.startsWith('/sessions/')
-/** Pages whose list opens in the drawer (their PageList); Team shows its list in the page itself on a phone. */
-const LISTS = ['/agents', '/infra', '/mail', '/files', '/tasks']
+/** Pages whose list opens in the drawer (their PageList). */
+const LISTS = ['/agents', '/team', '/infra', '/mail', '/files', '/tasks', '/feed']
 const hasList = (path: string) => LISTS.some((p) => path === p || path.startsWith(p + '/'))
 
 /** The level the ☰ opens: the list of the page open when it has one, else the menu. */
