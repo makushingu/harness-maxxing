@@ -5,6 +5,27 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## 2.0.0-alpha.146 - 2026-11-13
+
+- Code changes (`maxxing/codediff.py`, `maxxing/gitsafe.py`, `api/code.py`, docs/dev/API.md#code): the runner photographs
+  the session's repositories before / after each turn (throwaway index -> `commit-tree`, refs
+  `refs/maxxing/<sid8>/<n>/{pre,post}`, never pushed; `Attempt.touched` = files of Edit / Write / MultiEdit /
+  NotebookEdit), log entry `mx_changes` -> event `changes`; meta `code_turn`, `code_repos` (≤ 8, also in `Session`),
+  `code_base`. `gitsafe.py` holds the stdlib-only git primitives shared with `gitview` (the runner stays stdlib-only).
+  Reads with `SAFE_GIT`; commit / push keep the repository's hooks. `maintenance.run` prunes photos > 30 days or of
+  deleted sessions. `gitview.open_pull` / `branch_status`. Revert = `POST /api/sessions/{id}/revert` (409 while running).
+- Web: `features/code/` (`ChangesPane` inside `Viewer.tsx` through `mx-changes:` paths, `useRevert`), `ChangesChip` on
+  the result line (`log.ts` hangs `changes` on the turn's result and marks the user message `changed`), `sid` in
+  `ItemCtx`, `QUOTE_EVENT` to the column's composer; undo bar inside the viewer (a toast's button cannot be clicked
+  under a modal dialog). i18n groups `code`, `term`; `toast.action` takes a duration. Showcase `code`.
+- Terminal (`maxxing/terminal.py`, `api/term.py`): config `code_mode` (read-only in `/api/settings`; `POST
+  /api/term/enable {password}` via `auth._check_current`, `/disable` closes all). Shell = `setsid -c $SHELL -l` on a pty,
+  child of the server (ends with the service; no tmux), 256 KB replay buffer, 4 max, 30 min idle reaper (`startup`).
+  WS `/api/term/{id}/ws`: cookie + same origin + one-time token (30 s); binary output, JSON `{i}` / `{r}`. Web:
+  `features/terminal/` (xterm.js 6 + addon-fit, lazy), drawer in `Column.tsx` (Ctrl+J, `/terminal`, `SessionOptions`
+  `onTerminal`), per-browser store `mx-terminals`, not for `agentRun` / paths under `agents/`.
+- Doctor: `check_stale_units` / `stale_units()` (transient services other than turns running > 7 days).
+
 ## 2.0.0-alpha.145 - 2026-11-12
 
 - Sidebar: the pinned extension pages leave the page list for `ExtFolder` (`Sidebar.tsx`), after the pages; unfolded

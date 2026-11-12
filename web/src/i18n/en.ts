@@ -4133,4 +4133,6 @@ export const en = {
   'term.topicFolder': "Topic folder",
   'slash.terminal': "Open the terminal",
   'sessions.options.terminal': "Open a terminal",
+  'show.code.title': "Code in a session",
+  'show.code.body': "When Claude changes a git repository, a button under its answer shows the changes: review the diff, undo a file, commit, push or open a pull request. Right click your message to go back to before it. Here, under Sessions, Code mode adds a terminal under the conversation (Ctrl+J).",
 }

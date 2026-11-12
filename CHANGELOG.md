@@ -3,6 +3,24 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.146 - 2026-11-13
+
+New:
+- **Code in a session.** When Claude changes files of a git repository, a button under its answer sums it up
+  (**app · 3 files · +12 −4**). Click it: the changes open in the file viewer, one block per repository with its
+  branch, its pull request and the checks. Pick **This turn**, **Whole session**, **Not committed** or **Whole
+  branch**; click a file for its diff (← / → between files). **Undo this file** or **Undo all** without a
+  confirmation (**Restore** for 10 seconds). **Commit** (leave the message empty and Claude proposes one), **Push**,
+  **Open a pull request**, **New branch**. Click line numbers in a diff, then **Ask Claude**: the lines go into your
+  next message. [Show me](#show:code)
+- **Revert to before a message.** Right click (long press) one of your messages whose answer changed a repository:
+  the files go back as they were just before it, with **Restore** for 10 seconds.
+- **Code mode: a terminal under the conversation.** Settings -> Features -> Sessions -> **Code mode** (off by
+  default, your password is asked to turn it on). Then **Ctrl+J**, **/terminal** or the session's options open a
+  terminal in the session's repository, one tab per terminal, **Send the selection to Claude**; it survives a page
+  reload, closes after 30 minutes without activity. Keys for a phone. Never for agents.
+- `maxxing doctor` lists the programs started by hand that have been running for more than a week.
+
 ## 2.0.0-alpha.145 - 2026-11-12
 
 New:

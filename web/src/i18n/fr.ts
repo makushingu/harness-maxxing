@@ -4115,4 +4115,6 @@ export const fr: Record<keyof typeof en, string> = {
   'term.topicFolder': "Dossier du topic",
   'slash.terminal': "Ouvrir le terminal",
   'sessions.options.terminal': "Ouvrir un terminal",
+  'show.code.title': "Le code dans la session",
+  'show.code.body': "Quand Claude modifie un dépôt git, un bouton sous sa réponse montre les changements : relire le diff, annuler un fichier, commit, push ou ouvrir une PR. Clic droit sur votre message pour revenir avant lui. Ici, sous Sessions, le mode code ajoute un terminal sous la conversation (Ctrl+J).",
 }
