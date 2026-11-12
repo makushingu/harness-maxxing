@@ -14,6 +14,7 @@ import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { SECOND_W, useUI } from '@/stores/ui'
 import { useCompact } from '@/stores/media'
 import { ResizeEdge } from './ResizeEdge'
+import { TouchSearchField } from './TouchNav'
 import { useT } from '@/i18n'
 import { cn } from '@/lib/utils'
 import { Button, Tooltip } from '@/components/ui'
@@ -227,11 +228,16 @@ export function PageList({ id, entry, label, icon: Icon, children }: {
 /** The head of a list (its page's name): the second-level sidebar's, and the touch drawers' (the sessions drawer has
  *  its own body but the same head). */
 export function ListHead({ label, icon: Icon, children }: { label: string; icon?: React.ComponentType<{ className?: string }>; children?: React.ReactNode }) {
+  const touch = useCompact()
   return (
+    <>
     <div className="flex min-h-[var(--header-h)] shrink-0 items-center gap-2 border-b border-sidebar-border pr-2 pl-4">
       {Icon && <Icon className="size-4 shrink-0 text-muted-foreground" />}
       <h2 className="min-w-0 flex-1 truncate text-base font-semibold tracking-tight">{label}</h2>
       {children}
     </div>
+    {/* touch: the drawers' search field (a computer has the sidebar's) */}
+    {touch && <TouchSearchField />}
+    </>
   )
 }

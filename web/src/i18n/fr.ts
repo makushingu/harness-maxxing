@@ -88,6 +88,7 @@ export const fr: Record<keyof typeof en, string> = {
   'shell.openApp': "Menu",
   'shell.goTo': "Aller à",
   'shell.searchAll': "Rechercher partout",
+  'shell.search': 'Rechercher',
   'shell.feedback': "Feedback",
   'shell.feedbackHint': "Signaler un bug, proposer une idée",
   'feedback.title': "Envoyer un retour",

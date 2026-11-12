@@ -72,7 +72,30 @@ export const keepPageListOpen = () => {
 /** Opens the page's list (touch: its drawer), from a button of the page (an empty state's "Open the list"). */
 export const openPageList = () => useTouchNav.getState().setPanel('list')
 
-/** ⊞ - opens the rest of the app. A dot: an update is waiting or the server needs attention. */
+/** Closes the drawers and opens the search (the palette): the magnifier of the top bar, the field atop the drawers. */
+const searchNow = () => {
+  useTouchNav.getState().setPanel(null)
+  openPalette()
+}
+
+/** The search field atop a left drawer (the page's list, the sessions): one tap opens the search. */
+export function TouchSearchField() {
+  const t = useT()
+  return (
+    <div className="shrink-0 px-3 pt-2 pb-1">
+      <button
+        type="button"
+        onClick={searchNow}
+        data-testid="touch-search-field"
+        className="flex h-10 w-full items-center gap-2.5 rounded-xl bg-muted px-3 text-[15px] text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <Search className="size-[18px] shrink-0" /> <span className="truncate">{t('shell.search')}</span>
+      </button>
+    </div>
+  )
+}
+
+/** 🔍 then ⊞ - the search, and the rest of the app. A dot: an update is waiting or the server needs attention. */
 export function TouchAppButton({ className }: { className?: string }) {
   const t = useT()
   const pending = usePendingUpdate()
@@ -80,10 +103,16 @@ export function TouchAppButton({ className }: { className?: string }) {
   const tone = healthTone(h)
   const dot = pending || tone === 'error' || tone === 'warn'
   return (
+    <>
+    {/* the search in one tap (on a computer: the sidebar's field, Ctrl K) */}
+    <button type="button" className={topButton} aria-label={t('palette.open')} onClick={searchNow} data-testid="touch-search">
+      <Search />
+    </button>
     <button type="button" className={cn(topButton, '-mr-1', className)} aria-label={t('shell.openApp')} onClick={() => useTouchNav.getState().setPanel('app')} data-tour="nav">
       <LayoutGrid />
       {dot && <span aria-hidden className={cn('absolute top-2 right-2 size-2 rounded-full ring-2 ring-background', pending ? 'bg-primary' : tone === 'error' ? 'bg-destructive' : 'bg-warning')} />}
     </button>
+    </>
   )
 }
 

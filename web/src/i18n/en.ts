@@ -90,6 +90,7 @@ export const en = {
   'shell.openApp': "Menu",
   'shell.goTo': "Go to",
   'shell.searchAll': "Search everything",
+  'shell.search': 'Search',
   'shell.feedback': "Feedback",
   'shell.feedbackHint': "Report a bug, suggest an idea",
   'feedback.title': "Send feedback",
