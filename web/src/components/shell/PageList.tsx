@@ -10,11 +10,11 @@
 import * as React from 'react'
 import { createPortal } from 'react-dom'
 import { create } from 'zustand'
-import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
+import { ChevronLeft, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { SECOND_W, useUI } from '@/stores/ui'
 import { useCompact } from '@/stores/media'
 import { ResizeEdge } from './ResizeEdge'
-import { TouchSearchField } from './TouchNav'
+import { TouchSearchField, useTouchNav } from './TouchNav'
 import { useT } from '@/i18n'
 import { cn } from '@/lib/utils'
 import { Button, Tooltip } from '@/components/ui'
@@ -233,10 +233,23 @@ export function PageList({ id, entry, label, icon: Icon, inline, children }: {
 /** The head of a list (its page's name): the second-level sidebar's, and the touch drawers' (the sessions drawer has
  *  its own body but the same head). */
 export function ListHead({ label, icon: Icon, children }: { label: string; icon?: React.ComponentType<{ className?: string }>; children?: React.ReactNode }) {
+  const t = useT()
   const touch = useCompact()
   return (
     <>
-    <div className="flex min-h-[var(--header-h)] shrink-0 items-center gap-2 border-b border-sidebar-border pr-2 pl-4">
+    <div className={cn('flex min-h-[var(--header-h)] shrink-0 items-center gap-2 border-b border-sidebar-border pr-2', touch ? 'pl-1.5' : 'pl-4')}>
+      {/* touch: the list is the drawer's second level - ‹ goes back to the menu */}
+      {touch && (
+        <button
+          type="button"
+          onClick={() => useTouchNav.getState().setPanel('app')}
+          aria-label={t('shell.menu')}
+          data-testid="touch-back"
+          className="-mr-1 flex size-10 shrink-0 items-center justify-center rounded-lg text-muted-foreground outline-none active:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <ChevronLeft className="size-[22px]" />
+        </button>
+      )}
       {Icon && <Icon className="size-4 shrink-0 text-muted-foreground" />}
       <h2 className="min-w-0 flex-1 truncate text-base font-semibold tracking-tight">{label}</h2>
       {children}

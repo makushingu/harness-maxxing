@@ -1,13 +1,13 @@
 // Touch layout (phones, tablets - html[data-compact], stores/media.ts): no sidebar and no tab bar. The ☰ at the top left
 // of every screen opens one drawer on the left, in two levels, the same two bars as on a computer: the menu (the
 // desktop sidebar itself, Sidebar.tsx `drawer`) and the list of a page (what its second-level sidebar holds,
-// PageList.tsx; the sessions on the Sessions page) with ‹ Menu at its top. A tap in the menu on a page with a list
+// PageList.tsx; the sessions on the Sessions page) with ‹ before its title (back to the menu). A tap in the menu on a page with a list
 // opens that page and slides to its list; any other page closes the drawer. The ☰ opens the list of the page open
 // when it has one, else the menu. The magnifier at the top right opens the search.
 import * as React from 'react'
 import { create } from 'zustand'
 import { useLocation, useNavigationType } from 'react-router'
-import { ChevronLeft, Download, Menu, Search } from 'lucide-react'
+import { Download, Menu, Search } from 'lucide-react'
 import { useHealth, useWorkspace } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 import { useT, withGroups } from '@/i18n'
@@ -195,14 +195,6 @@ export function TouchDrawers() {
           </div>
         ) : (
           <div key="list" className={cn(forth && 'mx-level-in', 'flex min-h-0 flex-1 flex-col')} data-testid={panel === 'sessions' ? 'touch-sessions' : 'touch-list'}>
-            <button
-              type="button"
-              onClick={() => setPanel('app')}
-              data-testid="touch-back"
-              className="flex h-11 shrink-0 items-center gap-1 self-start rounded-lg px-2.5 text-[15px] font-medium text-primary outline-none active:bg-accent focus-visible:ring-2 focus-visible:ring-ring [&_svg]:size-5"
-            >
-              <ChevronLeft /> {t('shell.menu')}
-            </button>
             {panel === 'sessions' ? (
               <React.Suspense fallback={null}>
                 <SessionsPanel />
