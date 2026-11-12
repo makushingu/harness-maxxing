@@ -14,6 +14,15 @@ Fixed:
 - **Sessions: a message no longer shows twice.** On a slow connection, the message you just sent could appear a
   second time under Claude's first steps, greyed with "Sending…", until the turn ended. It was sent only once.
 
+Security:
+- **Agents: the ready-made jobs that read the web start Protected.** Sales of the day, Orders to handle, Watch, Blog
+  writer and Site monitor (`maxxing agents create --template`) fetch pages without asking; a page can carry orders,
+  as a webhook or a mail does. They now start in their sandbox, like the webhook and mail templates: their commands
+  reach only their sites and no secret. Give Site monitor the host names it checks (its page -> Protection). Agents
+  already made from these templates are not changed: switch them to **Protected** on their page.
+- **Updated dependencies with known advisories**: certifi 2026.10.23 (a distrusted root certificate removed),
+  filelock 4.2.10 (voice transcription), zod 4.6.7 (in the Remotion tools; they are reinstalled at the next update).
+
 ## 2.0.0-alpha.142 - 2026-11-12
 
 Fixed:

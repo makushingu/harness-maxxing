@@ -120,8 +120,8 @@ the box, with the part to fill in (`[…]`) selected, to change and send.
 | **Site monitor** | every hour | checks the sites listed in its role, speaks only when one is down |
 | **Feedback analyst** | webhook | groups user feedback and proposes improvements |
 
-From the command line, the same jobs come ready-made with their safe settings (read-only tools, the sites they reach,
-the keys they suggest if your vault holds them): `maxxing agents templates`, then
+From the command line, the same jobs come ready-made with their safe settings (Protected, read-only tools, the sites
+they reach, the keys they suggest if your vault holds them): `maxxing agents templates`, then
 `maxxing agents create acme/shop/sales --template sales`. You can also ask for an agent in any session ("I want an
 agent that..."): Claude fills in the same brief from your request, asks only what is missing, creates the agent with
 the same rules and gives you the link to its conversation.
@@ -296,9 +296,10 @@ first, and starts anew instead of going on with an earlier one.
 A new agent is **Free**, like a session: its commands reach the whole server, it works without asking. That suits an
 agent that only reads what you give it. An agent that reads **text from outside** - a mailbox, a webhook, the feed,
 web pages - can be told what to do by that text: **Protected** is advised (settings -> **Protection**), and the
-agent proposes it itself when it sets up. One made with a mailbox or a feed trigger, or from a webhook or mail
-template, starts Protected. A Free agent that gets its **first** mailbox, webhook or feed trigger later (from its
-page, its conversation or the command line) turns Protected at the same moment, and says so; asked by its
+agent proposes it itself when it sets up. One made with a mailbox or a feed trigger, or from a template that reads
+outside text (a webhook, a mailbox, web pages), starts Protected. A Free agent that gets its **first** mailbox,
+webhook or feed trigger later (from its page, its conversation or the command line) turns Protected at the same
+moment, and says so; asked by its
 conversation, a mailbox and that switch are one request on the card. If you set it back to **Free** yourself, it
 stays Free: more sources or later changes never switch it again. Agents made before keep their setting.
 

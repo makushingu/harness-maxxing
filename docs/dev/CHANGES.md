@@ -7,6 +7,17 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Agents: `agent_templates.fields()` sets `sandbox: True` for every template that reads outside text: a webhook, a
+  mailbox (as before) or a web tool pre-allowed in `allowed_tools` (`reads_web()`: `Bash(curl…)`, `WebFetch`,
+  `WebSearch`), i.e. `sales`, `orders`, `watch`, `writer`, `uptime` too. Without it `Bash(curl:*)` ran unsandboxed
+  with `approvals: False` and the template's `domains` had no effect (`agent_guard.settings()` uses them only in the
+  sandbox). `--no-sandbox` / `sandbox: false` in the request still wins; existing agents are not migrated. Test:
+  `test_agent_guard.py::test_templates_that_read_the_web_are_protected`.
+- Dependencies: `server/uv.lock` certifi 2026.7.22 -> 2026.10.23 (GHSA-6q48-6c7w-9gw2), filelock 4.1.0 -> 4.2.10
+  (`voice` extra, via huggingface-hub); `templates/remotion`: `overrides.zod` 4.6.7 (GHSA-mrhx-c7xc-m3w5; Remotion
+  4.0.534 pins 4.5.4 exactly, 4.0.543 pins 4.6.7: drop the override at the next Remotion bump). The lock change makes
+  `deps._up_remotion` reinstall the shared Remotion. `THIRD_PARTY_NOTICES.md`: these two lines only (the file has
+  other drift on the JavaScript side, not regenerated here).
 - Voice: `web/src/features/voice/mic.ts` holds the microphone of the device (`localStorage` `mx-voice-mic`, never
   sent to the server). `openMic()` (used by `useRecorder`, so by the mic button and the record test) asks for
   `deviceId: {exact}` and, on `OverconstrainedError` / `NotFoundError`, for the default microphone, keeping the

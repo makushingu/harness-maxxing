@@ -270,6 +270,20 @@ def test_templates_bring_their_domains():
     assert agent_templates.fields(agent_templates.get("writer", "en"))["domains"] == []
 
 
+def test_templates_that_read_the_web_are_protected():
+    """A page read on a schedule may carry orders, as a webhook or a mail does: every template that fetches without
+    asking (curl, WebFetch, WebSearch) starts in its sandbox, not only those with a webhook or a mailbox."""
+    from maxxing import agent_templates
+    for tid in ("sales", "orders", "watch", "writer", "uptime"):
+        t = agent_templates.get(tid, "en")
+        assert not t["approvals"] and agent_templates.reads_web(t["allowed_tools"]), tid
+        assert agent_templates.fields(t)["sandbox"] is True, tid
+    assert not agent_templates.reads_web(agent_templates.READ + ["Bash(maxxing mail:*)", "Edit(./drafts/**)"])
+    for t in agent_templates.listing("en"):             # no template pre-allows curl outside the sandbox
+        if any(x.startswith("Bash(") and "maxxing" not in x for x in t["allowed_tools"]):
+            assert agent_templates.fields(t).get("sandbox") is True, t["id"]
+
+
 def test_an_agent_never_changes_its_own_settings(client, topic, mx, monkeypatch):
     from maxxing import agent_guard, agents
     _on(client)

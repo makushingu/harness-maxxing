@@ -75,7 +75,8 @@ def _configure(p) -> None:
     s.add_argument("--mail", default="", metavar="MAILBOX", help="a mailbox of the E-mail page it may use (id or "
                    "address): read + drafts, or what a mail template says (`maxxing mail accounts`)")
     s.add_argument("--sandbox", action="store_true", help="protected: its commands run in a sandbox (its --domains, "
-                   "no secrets); the default for an agent with a mailbox, a feed trigger or a webhook template")
+                   "no secrets); the default for an agent with a mailbox, a feed trigger or a template that reads "
+                   "outside text (webhook, mail, web pages)")
     s.add_argument("--no-sandbox", action="store_true", help="free (the default): its commands reach the whole server")
     s.add_argument("--trust-outside", action="store_true",
                    help="runs started by outside events (webhooks, feed, other agents) do not ask first: risky")

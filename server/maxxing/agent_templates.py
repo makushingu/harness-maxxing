@@ -324,9 +324,15 @@ def fields(t: dict, keys_present: list[str] | None = None, mail_account: str = "
         out["writable"] = list(t["writable"])
     if t.get("mail") and mail_account:
         out["mail"] = [{"account": mail_account, **t["mail"]}]
-    if t.get("webhook") or t.get("mail"):
+    if t.get("webhook") or t.get("mail") or reads_web(t["allowed_tools"]):
         out["sandbox"] = True               # it will read outside text: protected (its webhook is added after create())
     return out
+
+
+def reads_web(tools: list[str]) -> bool:
+    """It fetches pages without asking (curl, WebFetch, WebSearch pre-allowed): a page may carry orders, as a webhook
+    or a mail does, so the template is protected (its commands reach its domains only, no secrets)."""
+    return any(x.startswith(("Bash(curl", "WebFetch", "WebSearch")) for x in tools)
 
 
 # ---- the brief of each template: the message an idea of a new agent's conversation puts in the box ----
