@@ -54,8 +54,10 @@ new invitation: an invitation never replaces an existing contact.
   (Up arrow in an empty message box edits your last one).
 - **Seen** under your last message, **writing…** while someone types, and each friend's presence (online, or seen
   5 min ago): it shows while their Harness is open in a browser.
-- **Notifications** for new messages of the chats you are not looking at: Settings -> Notifications -> Team
-  messages. **Mute** a chat (its menu) to silence it.
+- **New messages** of the chats you are not looking at pop up as messages: who wrote, what they wrote, and a box to
+  answer on the spot (tap the message to open its chat); several chats share one popup, and it leaves by itself
+  unless you are writing. With Harness in the background, a system notification instead. Settings -> Notifications
+  -> Team messages turns it off. **Mute** a chat (its menu) to silence it.
 - **Groups**: their creator renames them, adds friends and removes members; anyone can **leave** (final). The
   thread says who joined, was removed or left.
 - A small clock on a message: not delivered yet to someone (their server is off); Harness retries for 7 days.

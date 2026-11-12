@@ -5,6 +5,7 @@
 //   MOCK_PORT=8899 MOCK_SCENARIO=setup node mock/server.mjs
 //   curl -X POST localhost:8809/__mock/scenario -d '{"name":"login"}'   # reset state at runtime
 //   curl -X POST localhost:8809/__mock/bus -d '{"topics":["sessions","workspace"]}'   # emit a bus event
+//   curl -X POST localhost:8809/__mock/team -d '{"chat":"d-romain","text":"Hello"}'   # a Team message arrives (MOCK_FEATURES=all)
 //
 // Implements every endpoint of docs/dev/API.md with in-memory state and fake, product-neutral data.
 // Serves the built SPA from ../dist (web/dist). Scenarios: setup | login | onboarding | ready | maxxing.
@@ -2225,6 +2226,17 @@ const server = http.createServer(async (req, res) => {
       if (!Array.isArray(topics) || !topics.length) return sendJson(res, 422, { error: 'invalid', message: 'topics must be a non-empty list' })
       bus(...topics)
       return sendJson(res, 200, { ok: true })
+    }
+    if (url.pathname === '/__mock/team' && req.method === 'POST') { // a message arrives, e.g. {"chat":"d-romain","author":"romain","text":"Hello"}
+      let b
+      try { b = JSON.parse((await readBody(req)).toString() || '{}') } catch { b = {} }
+      const c = TEAM.chats.find((x) => x.chat.id === b.chat)
+      if (!c) return sendJson(res, 404, { error: 'not_found', message: 'No such chat' })
+      const m = { id: `${c.chat.id}-${c.messages.length}`, author: String(b.author || c.chat.members[0]), at: Math.max(Math.floor(Date.now() / 1000), (c.chat.last?.at || 0) + 1), text: String(b.text || ''), kind: 'text' }
+      c.messages.push(m)
+      Object.assign(c.chat, { last: { author: m.author, at: m.at, kind: 'text', text: m.text, files: 0 }, unread: c.chat.unread + 1, updated: m.at })
+      bus('team')
+      return sendJson(res, 200, m)
     }
     if (url.pathname.startsWith('/api/') || url.pathname === '/api') return await handleApi(req, res, url)
     if (url.pathname.startsWith('/ext/')) return serveExt(req, res, url)
