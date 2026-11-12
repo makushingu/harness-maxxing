@@ -562,17 +562,19 @@ export default function InfraPage() {
       </Page>
     )
 
+  // the page's title is the entry picked in the list (its name is in the list's head), like every page with a list
+  const heading = tab === 'servers' ? t('infra.nav.places') : tab === 'problems' ? t('infra.problems') : tab === 'mail' ? t('infra.mail.tab') : t(`infra.tab.${tab}`)
   return (
     <Page
-      title={t('infra.title')}
-      description={t('infra.desc')}
+      title={kindTab && v ? `${heading} · ${tabItems.length}` : heading}
+      description={v?.generated_at ? <span title={v.took_ms ? `${(v.took_ms / 1000).toFixed(1)} s` : ''}>{t('infra.updated', { when: fmtRelative(v.generated_at, lang) })} · {t('infra.every', { count: v.refresh_min || 15 })}</span> : t('infra.desc')}
       width="wide"
       actions={
         <>
-          <AddServer />
           <Button variant="outline" size="sm" loading={refresh.isPending || !!v?.refreshing} onClick={() => refresh.mutate()} data-testid="infra-refresh">
             <RefreshCw /> <span className="max-[429px]:sr-only">{v?.refreshing ? t('infra.refreshing') : t('infra.refresh')}</span>
           </Button>
+          <AddServer />
         </>
       }
     >
@@ -590,22 +592,6 @@ export default function InfraPage() {
         <div className="flex min-w-0 flex-col gap-3">
           <InfraNav tab={tab} onTab={(x) => set({ tab: x, id: null, at: null })} v={v} items={visible} byId={byId} />
           <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)] content-start gap-4">
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-              <h2 className="text-lg font-semibold tracking-tight">
-                {tab === 'servers' ? t('infra.nav.places') : tab === 'problems' ? t('infra.problems') : tab === 'mail' ? t('infra.mail.tab') : t(`infra.tab.${tab}`)}
-                {kindTab && <span className="ml-1.5 font-normal text-muted-foreground tabular-nums">· {tabItems.length}</span>}
-              </h2>
-              <span className="ml-auto flex items-center gap-3 text-xs text-muted-foreground">
-                {how.hidden && tab === 'overview' && (
-                  <button type="button" onClick={how.show} className="inline-flex items-center gap-1 hover:text-foreground">
-                    <HelpCircle className="size-3.5" /> {t('infra.how.title')}
-                  </button>
-                )}
-                <span className="max-md:hidden" title={v.took_ms ? `${(v.took_ms / 1000).toFixed(1)} s` : ''}>
-                  {t('infra.updated', { when: fmtRelative(v.generated_at!, lang) })} · {t('infra.every', { count: v.refresh_min || 15 })}
-                </span>
-              </span>
-            </div>
             {v.error && (
               <p className="flex items-center gap-2 text-[13px] text-destructive">
                 <AlertTriangle className="size-4" /> <Sensitive length={20}>{v.error}</Sensitive>
@@ -628,6 +614,11 @@ export default function InfraPage() {
                   {showHidden ? <Eye /> : <EyeOff />}
                 </Button>
                 {tab === 'domains' && <AddDomain />}
+                {how.hidden && tab === 'overview' && (
+                  <button type="button" onClick={how.show} className="ml-auto inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+                    <HelpCircle className="size-3.5" /> {t('infra.how.title')}
+                  </button>
+                )}
               </div>
             )}
             {tab === 'overview' ? (
