@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import io
+import json
 import zipfile
 
 from maxxing import importer
@@ -189,3 +190,15 @@ def test_video_project_and_tools_status(mx, tmp_path, capsys):
         raise AssertionError("an existing project must be refused")
     except SystemExit as e:
         assert "not empty" in str(e)
+
+
+def test_cli_json_errors_stay_json(mx, tmp_path, capsys):
+    from maxxing import cli, commands  # noqa: F401 - registers the commands
+    assert cli.main(["import", str(tmp_path / "missing.zip"), "--json"]) == 2
+    r = json.loads(capsys.readouterr().out)
+    assert r["error"] == "not_found" and "No such file" in r["message"]
+    bad = tmp_path / "bad.zip"
+    bad.write_bytes(b"not a zip")
+    assert cli.main(["import", str(bad), "--json"]) == 1
+    r = json.loads(capsys.readouterr().out)
+    assert r["error"] == "bad_zip" and r["message"]
