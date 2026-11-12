@@ -2,8 +2,9 @@
 // sidebar. The page renders its list with <PageList> (a portal into the slot the sidebar keeps right of itself,
 // SecondBar), so the list keeps the page's own state and handlers. One setting for every page (`ui.secondBarOpen`):
 // open, it takes its room and the page follows; closed, nothing is left of it, and resting on the page's own entry in
-// the main sidebar shows it over the page until the pointer leaves (a click elsewhere, Esc or a pick in it too). Its
-// head has the button that opens / closes it. A page without a list has no second sidebar.
+// the main sidebar shows it over the page until the pointer leaves (a click elsewhere, Esc or a pick in it too); a click
+// on that entry opens it for good (and a click that opens the page shows it at once). Its head has the button that
+// opens / closes it. A page without a list has no second sidebar.
 // Touch layout: no sidebar; the same list opens in the left drawer (TouchNav.tsx: the ☰ of the page's header, shown only
 // when the page has a list), whose body is the slot (ListSlot).
 import * as React from 'react'
@@ -26,16 +27,24 @@ const CLOSE_MS = 220
  *  the page. */
 const useLists = create<{ slot: HTMLElement | null; list: string | null; entry: string | null; peek: boolean }>(() => ({ slot: null, list: null, entry: null, peek: false }))
 let timer: number | undefined
+/** A peek is on its way (the hover intent delay runs). */
+let opening = false
 
 /** A menu or dialog opened from the list (a row's ⋯, a context menu) keeps it until it closes. */
 const busy = () => !!document.querySelector('[role="menu"][data-state="open"], [role="dialog"][data-state="open"]')
 
 const peekList = () => {
   window.clearTimeout(timer)
-  if (!useLists.getState().peek) timer = window.setTimeout(() => useLists.setState({ peek: true }), OPEN_MS)
+  opening = !useLists.getState().peek
+  if (opening)
+    timer = window.setTimeout(() => {
+      opening = false
+      useLists.setState({ peek: true })
+    }, OPEN_MS)
 }
 const leaveList = () => {
   window.clearTimeout(timer)
+  opening = false
   const close = () => {
     if (busy()) timer = window.setTimeout(close, CLOSE_MS)
     else useLists.setState({ peek: false })
@@ -44,6 +53,7 @@ const leaveList = () => {
 }
 const closeList = () => {
   window.clearTimeout(timer)
+  opening = false
   useLists.setState({ peek: false })
 }
 
@@ -55,6 +65,14 @@ export function useClosedList() {
   return open ? null : entry
 }
 
+/** A click on a main sidebar entry that opens another page: if that page has a list and the second-level sidebar is
+ *  closed, the list shows over the page while the pointer stays on the entry (it was already on it, so no new hover
+ *  would show it). */
+let armed: { entry: string; el: Element; at: number } | null = null
+export const armEntryPeek = (entry: string, e: React.MouseEvent) => {
+  armed = e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey ? { entry, el: e.currentTarget, at: Date.now() } : null
+}
+
 /** The id of the list of the page open (null: the page has none). */
 export const usePageListId = () => useLists((s) => s.list)
 export const pageListId = () => useLists.getState().list
@@ -64,10 +82,18 @@ export function ListSlot({ className }: { className?: string }) {
   const set = React.useCallback((el: HTMLDivElement | null) => useLists.setState({ slot: el }), [])
   return <div ref={set} className={className} data-testid="list-slot" />
 }
-/** Hover handlers of that entry. */
+/** Handlers of that entry. Hover shows the list over the page; `pointermove` too, so the list of a page just opened
+ *  from this entry shows without leaving and entering it again (the pointer was already on it). A plain click (the
+ *  page is already open) docks the list: the second-level sidebar opens and stays. */
 export const entryPeek = {
   onPointerEnter: (e: React.PointerEvent) => e.pointerType === 'mouse' && peekList(),
+  onPointerMove: (e: React.PointerEvent) => e.pointerType === 'mouse' && !opening && !useLists.getState().peek && peekList(),
   onPointerLeave: (e: React.PointerEvent) => e.pointerType === 'mouse' && leaveList(),
+  onClick: (e: React.MouseEvent) => {
+    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
+    closeList()
+    useUI.getState().setSecondBarOpen(true)
+  },
 }
 
 /** The slot of the second-level sidebar, right of the main sidebar (Sidebar.tsx): in the flow when open, over the page
@@ -162,6 +188,12 @@ export function PageList({ id, entry, label, icon: Icon, children }: {
   const touch = useCompact()
   React.useLayoutEffect(() => {
     useLists.setState({ list: id, entry: entry ?? id })
+    const a = armed
+    armed = null
+    if (a && a.entry === (entry ?? id) && Date.now() - a.at < 5000 && !useUI.getState().secondBarOpen && a.el.isConnected && a.el.matches(':hover')) {
+      opening = false
+      useLists.setState({ peek: true })
+    }
     return () => useLists.setState((s) => (s.list === id ? { list: null, entry: null, peek: false } : s))
   }, [id, entry])
   if (!slot) return null

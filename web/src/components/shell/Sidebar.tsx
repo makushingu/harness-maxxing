@@ -10,7 +10,7 @@ import { useT } from '@/i18n'
 import { openPalette } from '@/commands/registry'
 import { Button, CountBadge, CountDot, KeepTooltipShape, Kbd, MOD, NamedIcon, Tooltip } from '@/components/ui'
 import { navRow, navTourId, useNavEntries, useUnpinnedPages, type NavEntry, type NavItem } from './nav'
-import { entryPeek, SecondBar, useClosedList } from './PageList'
+import { armEntryPeek, entryPeek, SecondBar, useClosedList } from './PageList'
 import { Logo } from './Logo'
 import { ResizeEdge } from './ResizeEdge'
 import { ActiveMark } from './ActiveMark'
@@ -163,7 +163,7 @@ export const Sidebar = React.memo(function Sidebar() {
           {...drag}
           end={item.end}
           data-tour={navTourId(item)}
-          {...(peek ? entryPeek : undefined)}
+          {...(peek ? entryPeek : { onClick: (e: React.MouseEvent) => armEntryPeek(list, e) })}
           data-list-entry={peek || undefined}
           aria-label={collapsed ? label : undefined}
           style={{ '--i': idx } as React.CSSProperties}
