@@ -44,6 +44,13 @@ def cost_of(usage: dict, model: str) -> float:
     return sum(int(usage.get(k) or 0) * p[i] for i, k in enumerate(USAGE_KEYS)) / 1e6
 
 
+def _injected(raw: str) -> bool:
+    try:
+        return json.loads(raw).get("injected") is True
+    except (ValueError, RecursionError, AttributeError):
+        return False
+
+
 def last_turn(lines) -> tuple[dict | None, dict, float]:
     """The ended turn of a raw log (its lines after the last `mx_user`) -> (its `mx_done` line, None unless the turn
     ended without a `result` - its timeout, a crash - and was not stopped by the owner; its usage summed over every assistant message; its estimated cost)."""
@@ -51,6 +58,8 @@ def last_turn(lines) -> tuple[dict | None, dict, float]:
     done, result, n = None, False, 0
     for raw in lines:
         if '"mx_user"' in raw[:40]:
+            if '"injected"' in raw and _injected(raw):
+                continue                                # added to the running turn (Add now): the same turn goes on
             msgs, done, result = {}, None, False
             continue
         if '"type": "result"' not in raw and '"type": "assistant"' not in raw and '"mx_done"' not in raw[:40]:

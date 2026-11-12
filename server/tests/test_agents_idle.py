@@ -49,6 +49,17 @@ def test_last_turn_prices_a_turn_without_result():
     assert agent_cost.price("claude-unknown-9") == agent_cost.PRICES[-1][1]
 
 
+def test_last_turn_keeps_the_tokens_before_a_message_added_to_the_turn():
+    """Add now writes an `mx_user` marked injected in the middle of the turn: it does not start a new turn."""
+    turn = [json.dumps({"type": "mx_user", "text": "go"}), _asst("m1", "claude-opus-5-5", 0, out=1_000_000),
+            json.dumps({"type": "mx_user", "text": "more", "kind": "user", "injected": True}),
+            _asst("m2", "claude-opus-5-5", 0, out=1_000_000),
+            json.dumps({"type": "mx_done", "code": 143, "stopped": False, "timed_out": True, "at": 50})]
+    assert agent_cost.last_turn(turn)[1]["output_tokens"] == 2_000_000
+    fake = [json.dumps({"type": "mx_user", "text": '"injected": true'})]          # only the field counts
+    assert agent_cost.last_turn(turn[:2] + fake + turn[3:])[1]["output_tokens"] == 1_000_000
+
+
 def test_a_turn_killed_before_its_result_counts_in_the_budget(client, topic, mx):
     _on(client)
     _create(client)
