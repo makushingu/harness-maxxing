@@ -30,8 +30,16 @@ export default function SessionsPanel() {
   const onNew = (path: string) => go(`path=${encodeURIComponent(path)}&new=1`)
   return (
     <>
-      <ListHead label={t('nav.sessions')} />
-      <SessionTree touch className="min-h-0 flex-1" onOpenSession={onOpen} onNewSession={onNew} activePath={activePath} openIds={openIds} focusedId={focusedId} />
+      <SessionTree
+        touch
+        head={(actions) => <ListHead label={t('nav.sessions')}>{actions}</ListHead>}
+        className="min-h-0 flex-1"
+        onOpenSession={onOpen}
+        onNewSession={onNew}
+        activePath={activePath}
+        openIds={openIds}
+        focusedId={focusedId}
+      />
     </>
   )
 }

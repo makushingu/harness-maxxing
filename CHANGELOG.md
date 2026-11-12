@@ -10,7 +10,23 @@ New:
   on this device (headset, USB microphone, the built-in one) instead of the one the browser picks. The choice stays
   in this browser; if that microphone is unplugged, the default one records and the choice comes back with it.
 
+- **The same sessions on your computer and your phone.** The sessions open on the computer are the tabs of the
+  phone (tabs view on), and the other way round: open one on either, it appears on the other; close it anywhere, it
+  closes everywhere. Each device keeps its own layout (columns or tabs, widths, the session in front). The first
+  time, the phone takes the computer's sessions and keeps only the one on its screen. A session opened from another
+  device no longer takes the keyboard from the one you are typing in.
+- **Search: sessions first.** Search (Ctrl/⌘+K, the search icon on a phone) opens on your last sessions, and what
+  you type finds sessions by their title first, at once, before pages, settings and commands.
+- **Phone: a simpler sessions drawer.** All / Running / Unread sit on one line, full width; the view options and
+  the New session button moved up beside the title.
+
 Fixed:
+- **Phone: closing a tab no longer sweeps the tabs sideways.** In tabs view, closing or changing a tab restarted
+  the row of tabs from its start and slid it across the screen.
+- **Narrow phones (320-360 px)**: option groups too wide for the screen (theme, priority, Telegram) go on a second
+  line instead of being cut; Settings -> Claude, MCP and System no longer spill out of their cards; a table in the
+  docs or in an answer keeps readable columns and scrolls sideways; a page title with no room left is hidden
+  rather than cut to two letters; Keyboard shortcuts is no longer offered in the search of a phone.
 - **Sessions: a message no longer shows twice.** On a slow connection, the message you just sent could appear a
   second time under Claude's first steps, greyed with "Sending…", until the turn ended. It was sent only once.
 

@@ -300,7 +300,7 @@ export function McpSection() {
         title={t('mcp.servers')}
         description={data?.checked_at ? t('mcp.checkedAt', { when: fmtRelative(data.checked_at, lang) }) : t('mcp.serversDesc')}
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button size="sm" variant="outline" onClick={() => check.mutate()} disabled={checking || !servers.length}>
               <RefreshCw className={checking ? 'animate-spin' : undefined} /> {checking ? t('mcp.checking') : t('mcp.check')}
             </Button>

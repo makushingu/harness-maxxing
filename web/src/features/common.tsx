@@ -18,7 +18,7 @@ export function Callout({ tone = 'info', title, children, className, action, ico
   return (
     <div role={tone === 'error' ? 'alert' : undefined} className={cn('flex flex-wrap gap-3 rounded-lg border p-3.5 text-sm', toneCls[tone], className)}>
       <Icon className="mt-0.5 size-4 shrink-0" />
-      <div className="grid min-w-0 flex-[1_1_12rem] gap-1">
+      <div className="grid min-w-0 flex-[1_1_10rem] gap-1">
         {title && <div className="font-medium">{title}</div>}
         {children && <div className="text-[13px] text-muted-foreground [&_strong]:text-foreground">{children}</div>}
       </div>

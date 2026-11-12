@@ -124,12 +124,15 @@ type Props = {
   /** Session ids open in columns. */
   openIds: Set<string>
   focusedId: string | null
-  /** Touch layout drawer: bigger header with New session next to the filter; the row menus open with a long press. */
+  /** Touch layout drawer: bigger header; the row menus open with a long press. */
   touch?: boolean
+  /** Touch layout drawer: its title row, given New session and the view menu to show on its right - the filter
+   *  below keeps the whole width (All / Running / Unread on one line, on the narrowest phone too). */
+  head?: (actions: React.ReactNode) => React.ReactNode
   className?: string
 }
 
-export function SessionTree({ onOpenSession, onNewSession, activePath, openIds, focusedId, touch, className }: Props) {
+export function SessionTree({ onOpenSession, onNewSession, activePath, openIds, focusedId, touch, head, className }: Props) {
   const t = useT()
   const ws = useWorkspace()
   const reorderProjects = useReorderProjects()
@@ -216,6 +219,7 @@ export function SessionTree({ onOpenSession, onNewSession, activePath, openIds, 
   const header = (
     <ListHeader
       touch={touch}
+      head={head}
       show={show}
       onShow={setShow}
       sessions={live.data || []}
@@ -352,10 +356,12 @@ export function SessionTree({ onOpenSession, onNewSession, activePath, openIds, 
   )
 }
 
-/** Top of the list, the same on a computer and on a phone: the All / Running / Unread chips, then New session (touch)
- *  and the view menu. No filter field: Ctrl K (the search of the sidebar) finds sessions by title and content. */
+/** Top of the list: the All / Running / Unread filter, then the view menu. A phone (`head`): New session and the
+ *  view menu go up in the drawer's title row and the filter is one line of three equal parts.
+ *  No filter field: Ctrl K (the search of the sidebar) finds sessions by title and content. */
 function ListHeader({
   touch,
+  head,
   show,
   onShow,
   sessions,
@@ -363,6 +369,7 @@ function ListHeader({
   menu,
 }: {
   touch?: boolean
+  head?: (actions: React.ReactNode) => React.ReactNode
   show: 'running' | 'unread' | null
   onShow: (s: 'running' | 'unread' | null) => void
   sessions: Session[]
@@ -374,34 +381,51 @@ function ListHeader({
   const unread = sessions.filter((s) => s.unread).length
   const chip = (on: boolean) =>
     cn(
-      'flex shrink-0 items-center gap-1.5 rounded-full font-medium whitespace-nowrap outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
-      touch ? 'h-10 px-3 text-[13px]' : 'h-6 px-2.5 text-xs',
-      on ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground hover:text-foreground active:bg-accent',
+      'flex items-center font-medium whitespace-nowrap outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
+      touch ? 'h-9 min-w-0 justify-center gap-1 rounded-lg px-1 text-[13px]' : 'h-6 shrink-0 gap-1.5 rounded-full px-2 text-xs',
+      on ? 'bg-foreground text-background' : cn('text-muted-foreground hover:text-foreground', touch ? 'active:bg-accent' : 'bg-muted active:bg-accent'),
     )
+  const newButton = touch && (
+    <Button size="icon" className="size-10 shrink-0 rounded-xl [&_svg]:size-5" aria-label={t('sessions.newSession')} disabled={!onNew} onClick={onNew} data-tour="new-session">
+      <SquarePen />
+    </Button>
+  )
+  const lifted = !!(touch && head)
   return (
-    <div className={cn('grid shrink-0', touch ? 'gap-2.5 px-3 pt-3 pb-2' : 'gap-2 px-2 pt-2 pb-1.5')} data-testid="tree-header">
-      <div className={cn('flex min-w-0 items-center', touch ? 'gap-2' : 'gap-1.5')}>
-        <div className="-my-1 flex min-w-0 flex-1 gap-1.5 overflow-x-auto py-1" role="group" aria-label={t('sessions.filter.label')} data-hscroll-ok>
-          <button type="button" className={chip(!show)} aria-pressed={!show} onClick={() => onShow(null)}>
-            {t('sessions.filter.all')}
-          </button>
-          <button type="button" className={chip(show === 'running')} aria-pressed={show === 'running'} onClick={() => onShow(show === 'running' ? null : 'running')} data-testid="chip-running">
-            <StatusDot tone="running" pulse={running > 0} className="size-1.5" /> {t('sessions.filter.running')}
-            {running > 0 && <span className="tabular-nums opacity-70">{running}</span>}
-          </button>
-          <button type="button" className={chip(show === 'unread')} aria-pressed={show === 'unread'} onClick={() => onShow(show === 'unread' ? null : 'unread')} data-testid="chip-unread">
-            <StatusDot tone="unread" className="size-1.5" /> {t('sessions.filter.unread')}
-            {unread > 0 && <span className="tabular-nums opacity-70">{unread}</span>}
-          </button>
-        </div>
-        <div className="ml-auto shrink-0">{menu}</div>
-        {touch && (
-          <Button size="icon" className="size-11 shrink-0 rounded-xl [&_svg]:size-5" aria-label={t('sessions.newSession')} disabled={!onNew} onClick={onNew} data-tour="new-session">
-            <SquarePen />
-          </Button>
+    <>
+      {lifted &&
+        head!(
+          <>
+            {menu}
+            {newButton}
+          </>,
         )}
+      <div className={cn('grid shrink-0', touch ? 'gap-2.5 px-3 pt-1 pb-2' : 'gap-2 px-2 pt-2 pb-1.5')} data-testid="tree-header">
+        <div className={cn('flex min-w-0 items-center', touch ? 'gap-2' : 'gap-1.5')}>
+          <div
+            className={cn('min-w-0 flex-1', touch ? 'grid grid-cols-[auto_1fr_1fr] gap-1 rounded-xl bg-muted p-1' : '-my-1 flex gap-1.5 overflow-x-auto py-1')}
+            role="group"
+            aria-label={t('sessions.filter.label')}
+            data-testid="tree-filter"
+            data-hscroll-ok={touch ? undefined : true}
+          >
+            <button type="button" className={cn(chip(!show), touch && 'px-3')} aria-pressed={!show} onClick={() => onShow(null)}>
+              {t('sessions.filter.all')}
+            </button>
+            <button type="button" className={chip(show === 'running')} aria-pressed={show === 'running'} onClick={() => onShow(show === 'running' ? null : 'running')} data-testid="chip-running">
+              <StatusDot tone="running" pulse={running > 0} className="size-1.5 shrink-0" /> <span className="truncate">{t('sessions.filter.running')}</span>
+              {running > 0 && <span className="tabular-nums opacity-70">{running}</span>}
+            </button>
+            <button type="button" className={chip(show === 'unread')} aria-pressed={show === 'unread'} onClick={() => onShow(show === 'unread' ? null : 'unread')} data-testid="chip-unread">
+              <StatusDot tone="unread" className="size-1.5 shrink-0" /> <span className="truncate">{t('sessions.filter.unread')}</span>
+              {unread > 0 && <span className="tabular-nums opacity-70">{unread}</span>}
+            </button>
+          </div>
+          {!lifted && <div className="ml-auto shrink-0">{menu}</div>}
+          {!lifted && newButton}
+        </div>
       </div>
-    </div>
+    </>
   )
 }
 

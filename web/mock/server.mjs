@@ -1325,6 +1325,24 @@ R('GET', '/api/search', ({ q }) => {
   for (const tk of S.tasks.tasks) if ((tk.title + ' ' + tk.notes).toLowerCase().includes(term)) results.push({ kind: 'task', id: tk.id, path: '', title: tk.title, snippet: mark(tk.title + ' ' + tk.notes), at: tk.updated, score: 1 })
   return { results: results.slice(0, 30), took_ms: 1.2 }
 })
+// The sessions open on screen, shared by the user's browsers (server: sessions/opened.py).
+const openShared = { ids: null, rev: 0 }
+R('GET', '/api/sessions/open', () => openShared)
+R('POST', '/api/sessions/open', ({ body }) => {
+  const list = (v) => (Array.isArray(v) ? v.filter((x) => typeof x === 'string') : [])
+  const closed = new Set(list(body.close))
+  let ids = (openShared.ids || []).filter((x) => !closed.has(x))
+  for (const x of list(body.open)) if (!ids.includes(x) && !closed.has(x)) ids.push(x)
+  const order = list(body.order)
+  if (order.length) {
+    const rank = (x) => (order.includes(x) ? order.indexOf(x) : order.length)
+    ids = ids.map((x, i) => [x, i]).sort((a, b) => rank(a[0]) - rank(b[0]) || a[1] - b[1]).map((x) => x[0])
+  }
+  if (openShared.ids && ids.join() === openShared.ids.join()) return openShared
+  Object.assign(openShared, { ids, rev: openShared.rev + 1 })
+  bus('open_sessions')
+  return openShared
+})
 R('GET', '/api/sessions/search', ({ q }) => {
   const term = (q.get('q') || '').trim().toLowerCase()
   if (!term) return []

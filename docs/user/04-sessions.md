@@ -42,6 +42,11 @@ stopped.
   waits for your answer. Click the **Tabs** button again: your columns come back exactly as they were. On a phone, the same
   button sits in the session's header; the chips show under the top bar, and a sideways swipe on the session
   shows the previous or next one.
+- **The same sessions on every device**: the sessions open on your computer are the tabs of your phone (tabs view
+  on), and the other way round. Open one on either, it appears on the other; close it anywhere, it closes
+  everywhere. Each device keeps its own layout (columns or tabs, widths, stacks, the session in front), and a new
+  session not sent yet stays on the device where you type it. The first time, the phone takes the sessions of the
+  computer and keeps only the one on its screen.
 - **Fold the sidebar** with the button at its top, next to the logo (`Ctrl+\`): only its icons stay. A new browser
   starts with it unfolded.
 - **The second bar**: on a computer, the pages with a list (Sessions, Agents, Team, Tasks, Infra, Files, E-mail,
@@ -367,7 +372,9 @@ browser's own menu (and the **Quote** button), a file keeps its own menu (Open, 
 
 ## Search
 
-**Ctrl/⌘+K** (or the search bar at the top of the sidebar, a search icon when it is folded) is the one search of the app. It finds:
+**Ctrl/⌘+K** (or the search bar at the top of the sidebar, a search icon when it is folded) is the one search of the app.
+Sessions come first: your last sessions before you type, then the sessions whose title holds what you type, then
+the pages, settings and commands. It finds:
 
 - **sessions**, by their title and by what you and Claude wrote;
 - with Agents on, every **agent** and **agent group** by its name (and its project, topic or members), and what

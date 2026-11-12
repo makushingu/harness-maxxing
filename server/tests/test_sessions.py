@@ -910,3 +910,20 @@ def test_the_web_page_finds_its_message_ids_in_the_queue_and_the_log(client, top
     users = [e for e in all_events(client, sid) if e["type"] == "user"]
     assert [u.get("client_ids") for u in users] == [["c-first"], ["c1", "c2"]]
     assert client.post(f"/api/sessions/{sid}/messages", json={"text": "x", "client_id": "bad id!"}).status_code == 422
+
+
+def test_the_open_sessions_are_shared_between_the_browsers(client, topic):
+    # nothing shared yet: a phone must not take that for "everything was closed"
+    assert client.get("/api/sessions/open").json() == {"ids": None, "rev": 0}
+    assert client.post("/api/sessions/open", json={"open": ["a", "b", "c"]}).json() == {"ids": ["a", "b", "c"], "rev": 1}
+    # the same list again changes nothing (no event, no new rev): two browsers cannot answer each other for ever
+    assert client.post("/api/sessions/open", json={"open": ["b"]}).json()["rev"] == 1
+    assert client.post("/api/sessions/open", json={"open": ["d", "bad id!"], "close": ["a"]}).json() == {"ids": ["b", "c", "d"], "rev": 2}
+    # an order names what it knows; the rest keeps its place, after
+    assert client.post("/api/sessions/open", json={"order": ["d", "b"]}).json()["ids"] == ["d", "b", "c"]
+    # a deleted session is open nowhere
+    s = client.post("/api/sessions", json={"path": topic, "message": "Hello NOTOOL"}).json()
+    wait_idle(client, s["id"], 20)
+    assert client.post("/api/sessions/open", json={"open": [s["id"]]}).json()["ids"][-1] == s["id"]
+    assert client.delete(f"/api/sessions/{s['id']}").status_code == 200
+    assert client.get("/api/sessions/open").json()["ids"] == ["d", "b", "c"]

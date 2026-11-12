@@ -45,6 +45,9 @@ export function stepCol(dir: -1 | 1): Col | null {
   return st.cols[(i + dir + st.cols.length) % st.cols.length]
 }
 
+/** Where the chips are scrolled to: kept from one bar to the next (a phone mounts a bar per session). */
+let barScroll = 0
+
 /** Chips of the open sessions. `onPick` shows a col (desktop: focus; phone: its URL). */
 export function TabsBar({ sessions, onPick, className }: { sessions: Session[] | undefined; onPick: (c: Col) => void; className?: string }) {
   const t = useT()
@@ -54,10 +57,24 @@ export function TabsBar({ sessions, onPick, className }: { sessions: Session[] |
   const bar = React.useRef<HTMLDivElement>(null)
   const line = React.useRef<HTMLSpanElement>(null)
   useTabIndicator(bar, line, [focused, cols.map((c) => c.key).join(' ')])
-  // the chip on screen stays visible in the bar
-  React.useEffect(() => {
-    bar.current?.querySelector<HTMLElement>('[aria-selected="true"]')?.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'smooth' })
-  }, [focused])
+  // The chip on screen stays visible in the bar. Only the bar scrolls (scrollIntoView also moves every ancestor that
+  // can scroll). A phone gives each session its own bar (it sits in the session's header): a new bar starts where the
+  // last one was, without an animation - closing or changing a tab no longer sweeps the chips across the screen.
+  const mounted = React.useRef(false)
+  React.useLayoutEffect(() => {
+    const el = bar.current
+    if (!el) return
+    const first = !mounted.current
+    mounted.current = true
+    if (first) el.scrollLeft = barScroll
+    const chip = el.querySelector<HTMLElement>('[aria-selected="true"]')
+    if (!chip) return
+    const a = el.getBoundingClientRect()
+    const c = chip.getBoundingClientRect()
+    const left = c.left < a.left ? el.scrollLeft + c.left - a.left : c.right > a.right ? el.scrollLeft + c.right - a.right : null
+    if (left !== null) el.scrollTo({ left, behavior: first ? 'instant' : 'smooth' })
+    barScroll = left ?? el.scrollLeft
+  }, [focused, cols.length])
 
   const close = (c: Col) => {
     const st = useSessionsUI.getState()
@@ -71,7 +88,7 @@ export function TabsBar({ sessions, onPick, className }: { sessions: Session[] |
   if (!cols.length) return null
   return (
     <div className={cn('flex min-w-0 shrink-0 items-center gap-1 border-b bg-sidebar/40 px-2 py-1.5', className)} data-testid="tabs-bar">
-      <div ref={bar} role="tablist" className="relative flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none]">
+      <div ref={bar} role="tablist" onScroll={(e) => (barScroll = e.currentTarget.scrollLeft)} className="relative flex min-w-0 flex-1 items-center gap-1 overflow-x-auto overscroll-x-contain [scrollbar-width:none]">
         <span
           ref={line}
           aria-hidden
@@ -87,7 +104,7 @@ export function TabsBar({ sessions, onPick, className }: { sessions: Session[] |
               role="tab"
               aria-selected={on}
               className={cn(
-                'group flex h-8 max-w-56 shrink-0 items-center gap-1.5 rounded-full border pr-1 pl-2.5 pointer-coarse:h-10 pointer-coarse:pr-0 text-[13px] transition-colors',
+                'group flex h-8 max-w-56 max-md:max-w-44 shrink-0 items-center gap-1.5 rounded-full border pr-1 pl-2.5 pointer-coarse:h-10 pointer-coarse:pr-0 text-[13px] transition-colors',
                 on ? 'border-primary/50 bg-primary/10 text-foreground' : 'border-transparent bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground',
               )}
               data-tab={c.key}

@@ -7,6 +7,8 @@ export const qk = {
   onboarding: ['onboarding'] as const,
   claude: ['claude', 'status'] as const,
   workspace: ['workspace', 'tree'] as const,
+  /** the sessions open on screen, shared by the user's browsers (not under `sessions`: every turn invalidates those) */
+  openSessions: ['open-sessions'] as const,
   sessions: {
     all: ['sessions'] as const,
     list: (path?: string | null, archived?: boolean) => ['sessions', 'list', path ?? null, archived ?? false] as const,
@@ -107,6 +109,8 @@ export const BUS_KEYS: Record<BusTopic, readonly (readonly unknown[])[]> = {
   team_live: [['team', 'state']],
   mcp: [['mcp']],
   approvals: [['approvals']],
+  // the sessions open on screen, shared by the user's browsers (pages/sessions/openSync.ts)
+  open_sessions: [qk.openSessions],
 }
 
 /** Query keys of one bus topic: `agents:<path>` = that agent's thread or unread changed (a message, a feed event
@@ -127,7 +131,7 @@ export function busKeysOf(topic: string): readonly (readonly unknown[])[] {
 /** Data the bus keeps fresh on its own (file watchers + every write path): no refetch when the tab is shown
  *  again (useGlobalBus refreshes them once after a long absence instead). The dashboard is not in it (its
  *  widgets read crons, health, external services...). */
-export const LIVE_KEYS: readonly (readonly unknown[])[] = [qk.sessions.all, qk.workspace, qk.tasks, qk.crons.all, qk.trash, qk.extensions, qk.health, qk.telegram.all, qk.backup.all]
+export const LIVE_KEYS: readonly (readonly unknown[])[] = [qk.sessions.all, qk.openSessions, qk.workspace, qk.tasks, qk.crons.all, qk.trash, qk.extensions, qk.health, qk.telegram.all, qk.backup.all]
 export const isLiveKey = (key: readonly unknown[]) => LIVE_KEYS.some((p) => p.every((x, i) => key[i] === x))
 
 /** Extra keys when one batch carries both `sessions` and `workspace`: the server pairs them when a session starts

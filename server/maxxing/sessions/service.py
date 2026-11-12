@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .. import bus, claude_models, config, voice, workspace
-from . import clip, normalize, spawn, store, titles, voicejobs, wake
+from . import clip, normalize, opened, spawn, store, titles, voicejobs, wake
 from .runner import SUMMARY_PROMPT  # noqa: F401  (also used by the runner's automatic compaction)
 
 log = logging.getLogger("maxxing.sessions")
@@ -667,6 +667,7 @@ def delete_session(sid: str) -> None:
     from .. import trash
     trash.trash_session(sid)
     _models_seen.pop(sid, None)
+    opened.forget(sid)
     bus.invalidate("sessions", "workspace")
 
 
