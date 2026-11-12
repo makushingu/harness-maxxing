@@ -5,6 +5,16 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## 2.0.0-alpha.144 - 2026-11-12
+
+- Sessions: the column menu (`DropdownMenu` of `Column.tsx`) is replaced by `pages/sessions/SessionOptions.tsx`
+  (`Dialog`, bottom sheet on touch), opened by the "..." and by the header's right click / long press:
+  `useContextMenu` takes `onOpen` (called instead of the menu at the pointer). `ColumnHeader` loses `onPlan`,
+  `onNotify`, `onHud`, `tgLinked`; `SessionMarks` shows plan / notify while on. Removed: move left / right, copy
+  ID (and their i18n keys, with `plan.toggleOn/Off`, `sessions.notify.label/off/unavailable`,
+  `sessions.grid.(un)stack`, `sessions.layout.menu`, `sessions.menu.detach`). The layout picker still gets the
+  focus (`keepFocus` = `onCloseAutoFocus` prevented while `layoutPicker === col.key`).
+
 ## 2.0.0-alpha.143 - 2026-11-12
 
 - Web, list pages (`components/shell/PageList.tsx`): `PageList`/`ListHead` `search` ({value, onChange, placeholder}:

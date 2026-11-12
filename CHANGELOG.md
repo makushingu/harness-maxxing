@@ -3,6 +3,15 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.144 - 2026-11-12
+
+New:
+- **A tidier session header.** The plan, bell and HUD buttons left the header: the **…** of a session (or a
+  right-click on its header, a long press on a phone) opens a window with the *Plan mode* and *Notify me on
+  Telegram* switches, then Compact, Summarise & restart, Open the folder, the HUD, the column actions (Detach,
+  Stack, Layout) and Archive / Delete. A small checklist or bell next to the topic shows what is on. *Move left /
+  right* (drag the grip) and *Copy ID* are gone. Plan mode is also `/plan` in the message box.
+
 ## 2.0.0-alpha.143 - 2026-11-12
 
 New:
