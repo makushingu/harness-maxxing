@@ -1,6 +1,6 @@
 ---
 name: maxxing-extension
-description: Build a Harness Maxxing extension - a dashboard widget (a Card with stats, lists, charts, or a free-form HTML widget such as a game or canvas), a full page with its own API, or a custom view of the Office of the Agents page - in <workspace>/extensions/<id>/. Use when the user asks for a new widget, a dashboard card, a mini-game, a custom page, an integration shown in the UI, or to fix an existing extension. Always the first choice before touching the product code.
+description: Build a Harness Maxxing extension - a dashboard widget (a Card with stats, lists, charts, or a free-form HTML widget such as a game or canvas), a full page with its own API, or a custom view of the Overview of the Agents page - in <workspace>/extensions/<id>/. Use when the user asks for a new widget, a dashboard card, a mini-game, a custom page, an integration shown in the UI, or to fix an existing extension. Always the first choice before touching the product code.
 ---
 
 # Extensions (widgets & pages)
@@ -16,8 +16,8 @@ Extensions live in `<workspace>/extensions/<id>/` (workspace from `maxxing statu
 - **page**: `manifest.json` + `page.js` (ES module, `mount(el, ctx)`) + optional `api.py` with
   `handle(ctx, method, path, query, body)` served at `/api/ext/<id>/<path>`. Listed under
   "Extensions" in the sidebar; the user can pin it to get its own entry.
-- **Office view** (Agents page): `manifest.json` (`"type": "view"`, `"agents_view": {...}`) + `agents-view.html`. Listed
-  in the view menu of the Office; draws the agents its own way. See "Office view" below.
+- **Overview view** (Agents page): `manifest.json` (`"type": "view"`, `"agents_view": {...}`) + `agents-view.html`. Listed
+  in the view menu of the Overview; draws the agents its own way. See "Overview view" below.
 
 ## Built-in Shopify widget
 "Connect my Shopify store" needs no extension: guide the user to create a custom app in Shopify admin
@@ -32,7 +32,7 @@ build extra widgets: they sit next to it on the dashboard.
 | numbers, lists, charts, status from some data source | widget with `card(ctx)` |
 | a mini-game, a canvas, an interactive or custom-drawn card | HTML widget |
 | a whole screen (form, board, editor, report) | page |
-| another look for the Office of the Agents page ("Create my custom view") | Office view |
+| another look for the Overview of the Agents page ("Create my custom view") | Overview view |
 | to change how the product itself behaves (a server rule, a CLI command…) and no extension can do it | a **core customization**: skill `maxxing-customize` - never edit the code directory without it |
 
 Extensions survive every update untouched. Say so to the user: they never need to wait for the
@@ -215,8 +215,8 @@ Copy `<code dir>/examples/extensions/snake-widget/` (a working game) and adapt i
 - Keyboard games: make the canvas focusable (`tabindex="0"`) and start on click; add touch/swipe
   for phones.
 
-## Office view - `extensions/mission-control/`
-A view of the Office (the overview of the Agents page), listed in its view menu after Classic and Space.
+## Overview view - `extensions/mission-control/`
+A view of the Overview of the Agents page (every agent at its desk), listed in its view menu after Classic and Space.
 `manifest.json`
 ```json
 {"id": "mission-control", "name": "Mission control", "type": "view", "icon": "radar", "version": "1.0.0", "api": 1,
@@ -242,7 +242,7 @@ Rules: render from `onData` every time (it is called again on each change, rebui
 after each render, light and dark (`maxxing.theme` + theme variables), a phone width (~360 px), and
 `@media (prefers-reduced-motion: reduce)` stops animations. Ask the user the style they want (a mission control, a
 farm, a train station, a plain table…) before building it. Then: **Settings -> Widgets** (or **Pages**) **-> Rescan**, Agents ->
-Office -> the view menu -> its name.
+Overview -> the view menu -> its name.
 
 ## Steps
 1. Ask what to show, where the data comes from, refresh rate, which secrets are needed.

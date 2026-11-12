@@ -19,16 +19,15 @@ skipped when you turn it back on (each agent says how many in its thread).
 **Sessions and agents stay apart.** Sessions is where you work; the **Agents** page is where the work that runs by
 itself lives. Agents' runs never show in Sessions: the Agents page has its own list of every agent (its face, its
 topic, a dot for running / waiting for you / to read / failed / off), grouped by project, in the second bar next to
-the sidebar on a computer (see [Sessions](04-sessions.md#layout)). From top to bottom: the **Office**, then chips that filter by state (**All**, *Waiting for you*, *To read*,
-*Running*, *Active*, *Off*, each with its count; a state no agent is in is hidden). **New group** and **New agent**
-sit at the top right of the Office, and a **+** beside the Office link in the list opens New agent from any page of
-Agents; to find an agent or a group, use
-**Ctrl/⌘+K**. In the Sessions list, a topic's agents show **under its row**: their
+the sidebar on a computer (see [Sessions](04-sessions.md#layout)). From top to bottom: the **Overview**, then chips on one line that filter by state (**All**, *Waiting for you*, *To read*,
+*Running*, *Active*, *Off*, each with its count; a state no agent is in is hidden). **New agent** sits at the top
+right of the page (its **▾** holds **New group**); the **🔍** facing the list's title filters the agents by name, and
+**Ctrl/⌘+K** finds an agent or a group from anywhere. In the Sessions list, a topic's agents show **under its row**: their
 face, their name and a dot when one works, waits for you, has something to read or failed (the ones that need you
 first, two at most, then **+N**). Click one to open its page; **+N** opens the Agents page for that topic, and so does
 **Agents of this topic** in the topic's menu.
 
-With no agent open, the page shows the **Office**: every agent **at its desk**. Pick its view in the menu at the top
+With no agent open, the page shows the **Overview**: every agent **at its desk**. Pick its view in the menu at the top
 right (your browser remembers the choice):
 
 - **Classic**: one section per project (the dot is the project's color), one card per agent. Under each one, its name and one line that says where it is: *Working…*, *2 new results*, *Waiting for your
@@ -44,16 +43,16 @@ Click a card to open the agent; point at it for its on/off switch and **Run** (a
 - **Create my custom view** (last in the menu) opens a new session in `general/inbox` (or your first topic) with the
   request already typed: say what you would like (a mission control, a farm, a train station, a plain table…), Claude
   asks about the style and builds it as an extension. Once it is done, pick it in the same menu; if it is turned off
-  or deleted, the Office shows Classic. How it works: [Page extensions](page-extensions), "Office views".
+  or deleted, the Overview shows Classic. How it works: [Page extensions](page-extensions), "Overview views".
 
-**Talk from the Office**: click an agent at its desk and its conversation opens on the right, the Office still in view
+**Talk from the Overview**: click an agent at its desk and its conversation opens on the right, the Overview still in view
 (on a phone or a narrow window, in a sheet): the same flow and box as its page, its answers as they are written. Click
 another desk to talk to that agent, the same one again (or **×**) to close; the **⤢** button opens its page (profile,
-settings). Office views made by an extension can open it too.
+settings). Overview views made by an extension can open it too.
 
 **Preview on hover** (computer, off by default): switch it on in **Settings -> Features**, under Agents (kept in this
 browser). Resting the mouse on an agent in a list (the Agents list, the agents of a topic in the sessions list) then
-shows a card with what it is doing now, else its last run, and its next start. With the Office in **Space**, the card
+shows a card with what it is doing now, else its last run, and its next start. With the Overview in **Space**, the card
 also draws the agent's room.
 
 **Your order, your colors.** Drag a project (its name in the list or in Classic, the wall of its bay in
@@ -63,7 +62,7 @@ The **...** next to a project's name (on its sign in Space) moves it up or down 
 outfit of its new agents; use it on a touch screen, where dragging is not available. The order and colors are saved
 on the server: every browser and phone shows the same.
 
-On a phone, the Agents page shows the Office; **☰** at the top left opens the list of agents.
+On a phone, the Agents page shows the Overview; **☰** at the top left opens the list of agents.
 
 **Several agents in one conversation**: a [group](agent-groups) puts 2 to 6 agents of a project in one chat where you
 write and they answer in turn, handing work to each other with `@name` (a writer, a reviewer, a publisher...).
@@ -255,7 +254,7 @@ Agents never start on notifications of the source *Agents*.
 
 ### Silent agents
 
-An agent that should just work in the background: **right-click** it in the list or on the Office (a long press on a
+An agent that should just work in the background: **right-click** it in the list or on the Overview (a long press on a
 phone) and tick **Silent**, or turn on **Silent** at the top of its settings. It runs as usual, but never calls you:
 no Telegram message for its results, its notifications land already read (no Telegram, no badge), and its results do
 not count as unread. It still answers, without a sound, what you ask it on Telegram. A small 🔕 shows next to its name. What waits for your answer still shows (an approval, an e-mail
@@ -388,8 +387,8 @@ or not (a Claude Code hook).
 With **Ask before risky actions** on, **every** run asks, not only the outside ones: when it wants to run a command,
 edit a file or use a tool you did not allow in advance, it waits and the request shows with **Allow** and **Deny**:
 in the agent's thread (the card then says how it ended: allowed, denied, no answer in time), in its run, in the
-**Notifications**, and in the **Office**, where the yellow **!** over its desk opens the request (the **Waiting for you** chip of the list keeps only the
-agents that wait). Office views made by an extension only show that it waits; they never answer for you. If Telegram is linked, the request also arrives there with the same two buttons (in the agent's thread
+**Notifications**, and in the **Overview**, where the yellow **!** over its desk opens the request (the **Waiting for you** chip of the list keeps only the
+agents that wait). Overview views made by an extension only show that it waits; they never answer for you. If Telegram is linked, the request also arrives there with the same two buttons (in the agent's thread
 when its Telegram option is on, otherwise in **Alerts**): one tap answers it from your phone, and the message then
 says how it ended, wherever you answered. Nobody answers within 30 minutes: the action is denied. Tools you trust
 (for example `Read`) can be allowed in advance in its settings. A request too long to be shown whole (a huge

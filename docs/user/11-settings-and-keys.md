@@ -26,7 +26,7 @@ two blocks):
 | | **Telegram** | bot wizard, linking, mode (simple chat, threads, web mirror), notification options, two-step sign-in (also in Security) – see [Telegram](telegram) |
 | | **Voice** | how voice messages and dictation are transcribed (on the server, Groq, OpenAI, or off) |
 | **Extensions** | **Widgets** | the widget extensions of `<workspace>/extensions`: switch on/off, **Rescan**, **Customize the dashboard** (opens the dashboard in edit mode) – see [Dashboard widgets](dashboard-widgets) |
-| | **Pages** | the page extensions and the Office views of the Agents page: **All pages** (the Extensions page, every page pinned or not), switch on/off, **Open page**, **In the sidebar** (pin), **Rescan** – see [Page extensions](page-extensions) |
+| | **Pages** | the page extensions and the Overview views of the Agents page: **All pages** (the Extensions page, every page pinned or not), switch on/off, **Open page**, **In the sidebar** (pin), **Rescan** – see [Page extensions](page-extensions) |
 | **Workspace** | **Templates** | add a ready-made project (**starter pack**) for your kind of work; an existing project is never overwritten - see [Starter projects](starter-projects) |
 | | **Import** | the memory of another agent (Hermes, OpenClaw, Claude Code, a zip) - see [Import](import); and the way to the other imports: a memory backup (**Backup**), an agent file (Agents page) |
 | | **Backup** | repository, schedule, whitelist, history, restore – see [Backup](backup) |

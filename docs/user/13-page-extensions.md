@@ -176,9 +176,9 @@ get the same kit. Inputs of the kit are 16 px on phones (no zoom on iPhone).
   extension's row.
 
 
-## Office views of the Agents page
+## Overview views of the Agents page
 
-An extension can also bring a **view of the Office** (the overview of the Agents page): it is listed in the Office's
+An extension can also bring a **view of the Overview** (the page of the Agents page with every agent at its desk): it is listed in the Overview's
 view menu after Classic and Space. **Create my custom view**, at the end of that menu, opens a session
 that builds one with you.
 
@@ -200,7 +200,7 @@ that builds one with you.
 
 | In the frame | |
 |---|---|
-| `maxxing.onData(fn)` / `maxxing.data` | the Office, given at once and again at every change: `{lang, new_agent_route, projects: [{name, emoji, color, agents: [...]}]}`, projects and agents in the user's order, `color` = the project's color (hex). Each agent: `path`, `project`, `topic`, `name`, `display_name`, `description`, `enabled`, `model`, `status` (`running`, `waiting`, `unread`, `failed`, `off`, `idle`), `status_text` (in the UI language), `running`, `waiting`, `unread`, `cost_today`, `last_run` (`{at, kind, ok, text}`, text cut at 300 characters), `avatar` (its 6 parts), `avatar_svg` (its pixel character as SVG markup: `img.src = "data:image/svg+xml," + encodeURIComponent(a.avatar_svg)`), `route` (its page), `chat_route` (its conversation, opened next to the Office) |
+| `maxxing.onData(fn)` / `maxxing.data` | the Overview, given at once and again at every change: `{lang, new_agent_route, projects: [{name, emoji, color, agents: [...]}]}`, projects and agents in the user's order, `color` = the project's color (hex). Each agent: `path`, `project`, `topic`, `name`, `display_name`, `description`, `enabled`, `model`, `status` (`running`, `waiting`, `unread`, `failed`, `off`, `idle`), `status_text` (in the UI language), `running`, `waiting`, `unread`, `cost_today`, `last_run` (`{at, kind, ok, text}`, text cut at 300 characters), `avatar` (its 6 parts), `avatar_svg` (its pixel character as SVG markup: `img.src = "data:image/svg+xml," + encodeURIComponent(a.avatar_svg)`), `route` (its page), `chat_route` (its conversation, opened next to the Overview) |
 | `maxxing.navigate(route)` | opens a route of the Agents page: an agent's `route` or `chat_route`, or `new_agent_route` (New agent); other routes are ignored |
 | `maxxing.app(path)` | a read-only GET of `/api/agents/layout` (the raw order and colors); any other path is refused |
 
@@ -208,7 +208,7 @@ that builds one with you.
   a phone.
 - What the view sees: your agents' names, roles, states and the start of their last results. As for any extension,
   it is code you trust: do not load scripts from sites you do not trust.
-- If the extension is turned off, deleted or in error, the Office shows Classic (the choice comes back with it).
+- If the extension is turned off, deleted or in error, the Overview shows Classic (the choice comes back with it).
 
 ## 5. Community extensions
 
