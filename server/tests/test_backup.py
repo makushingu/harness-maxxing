@@ -658,3 +658,12 @@ def test_the_restore_skips_files_larger_than_the_backup_limit(gh, ws, mx_state, 
     monkeypatch.setattr(backup, "MAX_RESTORE", 5)
     r = backup.restore()
     assert r["ok"] is False and r["code"] == "too_large"
+
+
+def test_hand_edited_history_lines_that_are_not_objects_are_skipped(mx_state):
+    p = backup._history_path()
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text('{"at": 1, "ok": true}\nnull\n5\n[]\nnot json\n', encoding="utf-8")
+    assert backup.status()["last"]["ok"] is True
+    assert backup.last_success_age_h() is not None
+    assert backup.history() == [{"at": 1, "ok": True}]

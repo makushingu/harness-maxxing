@@ -151,6 +151,17 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   `confirm()` of `ui/alert-dialog` (Compose's `useBlocker` effect proceeds/resets from the promise; `run`, `tryClose`,
   `remove` are async); `pages/sessions/Tabs` arrows lose `backdrop-blur`. Test: `tests/test_web_design_rules.py`
   (browser dialogs and backdrop blur in `web/src`; only `features/agents/OfficeFuture.tsx` is exempt from the blur).
+- Hand-edited state of the wrong type falls back to the default: `api/settings.current` (`result_line_hidden` must be a
+  list), `extensions._ext_list` (`extensions.disabled` / `pinned` must be lists, used by `disabled_ids`, `pinned_ids`,
+  `_pinned_list`), `config._path_setting` (`workspace`, `files_root`, `claude_dir` must be non-empty strings),
+  `backup.history` skips history lines that are valid JSON but not objects, `gitview._root` uses
+  `config.files_root()`. Tests:
+  `test_a_hand_edited_result_line_hidden_of_the_wrong_type_never_breaks_the_settings`,
+  `test_hand_edited_extension_lists_of_the_wrong_type_fall_back_to_empty`,
+  `test_hand_edited_path_settings_of_the_wrong_type_use_the_defaults`,
+  `test_hand_edited_history_lines_that_are_not_objects_are_skipped`.
+  Not covered: the other raw readers of these settings (`sessions/runner.py`, `cmd_core.py`, `cmd_mcp.py`,
+  `spawn.py`, `api/settings.py` returning the raw value).
 
 ## 2.0.0-alpha.140 - 2026-11-11
 

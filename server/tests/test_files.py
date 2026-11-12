@@ -4,10 +4,11 @@ import json
 import os
 import shutil
 import subprocess
+from pathlib import Path
 
 import pytest
 
-from maxxing import videos
+from maxxing import config, gitview, videos
 
 
 @pytest.fixture
@@ -367,3 +368,17 @@ def test_thumb_of_an_avif_with_a_percent_in_its_name(client, mx):
     for name in ("plain.avif", "p%d.avif"):
         r = client.get("/api/files/thumb", params={"path": str(mx["files"] / name), "w": 320})
         assert r.status_code == 200 and r.headers["content-type"] == "image/webp", name
+
+
+def test_hand_edited_path_settings_of_the_wrong_type_use_the_defaults(client, tree, mx, monkeypatch):
+    claude = mx["tmp"] / "claude"
+    monkeypatch.setitem(config.DEFAULT_CONFIG, "files_root", str(tree))
+    monkeypatch.setitem(config.DEFAULT_CONFIG, "workspace", str(mx["tmp"]))
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(claude))
+    for key in ("files_root", "workspace", "claude_dir"):
+        config.save_config({**config.load_config(), key: 5})
+    assert config.files_root() == tree
+    assert config.workspace() == mx["tmp"]
+    assert config.claude_dir() == claude
+    assert gitview._root() == tree
+    assert client.get("/api/files/list").json()["root"] == str(tree)

@@ -49,6 +49,8 @@ def _err(code: str, msg: str) -> HTTPException:
 
 def current() -> dict:
     cfg = config.load_config()
+    hidden = cfg.get("result_line_hidden")
+    hidden = hidden if isinstance(hidden, list) else []       # a hand-edited value of another type: nothing hidden
     return {"timezone": cfg.get("timezone") or "UTC", "language": cfg.get("language") or "en",
             "public_url": cfg.get("public_url") or "", "files_root": cfg.get("files_root") or "/root",
             "presentation_default": bool(cfg.get("presentation_default", False)),
@@ -61,7 +63,7 @@ def current() -> dict:
             "mail_page": bool(cfg.get("mail_page", False)),
             "maxxing_mode": bool(cfg.get("maxxing_mode", False)),
             "memory_max_lines": memory.max_lines(),
-            "result_line_hidden": [f for f in RESULT_FIELDS if f in (cfg.get("result_line_hidden") or [])],
+            "result_line_hidden": [f for f in RESULT_FIELDS if f in hidden],
             "donation_hidden": bool(cfg.get("donation_hidden", False)),
             "sidebar_order": sidebar_order(cfg.get("sidebar_order"))}
 

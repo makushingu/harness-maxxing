@@ -474,17 +474,23 @@ def set_secrets(values: dict[str, Any]) -> None:
 
 
 # ---- derived paths -------------------------------------------------------------------------
+def _path_setting(name: str) -> str | None:
+    """A path setting, or None when it is missing or hand-edited to something that is not a string."""
+    v = _setting(name)
+    return v if isinstance(v, str) and v else None
+
+
 def workspace() -> Path:
-    return Path(_setting("workspace") or DEFAULT_CONFIG["workspace"])
+    return Path(_path_setting("workspace") or DEFAULT_CONFIG["workspace"])
 
 
 def files_root() -> Path:
-    return Path(_setting("files_root") or DEFAULT_CONFIG["files_root"])
+    return Path(_path_setting("files_root") or DEFAULT_CONFIG["files_root"])
 
 
 def claude_dir() -> Path:
     """Claude Code's folder: config.claude_dir, else CLAUDE_CONFIG_DIR, else ~/.claude."""
-    d = _setting("claude_dir") or os.environ.get("CLAUDE_CONFIG_DIR")
+    d = _path_setting("claude_dir") or os.environ.get("CLAUDE_CONFIG_DIR")
     if d:
         return Path(d)
     return Path(os.environ.get("HOME") or pwd.getpwuid(os.getuid()).pw_dir) / ".claude"

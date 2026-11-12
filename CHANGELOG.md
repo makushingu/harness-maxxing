@@ -120,6 +120,8 @@ Fixed:
   `cron run --detach` runs the job here when systemd refuses to start it.
 - **Confirmations in Mail and Team use the app's own dialog**, in the app's theme, instead of the browser's. The
   session tab arrows no longer blur what is behind them.
+- **A hand-edited setting of the wrong type no longer breaks the Settings, Extensions, Dashboard, Files, Git or Backup
+  page**: the wrong value is ignored instead of a server error.
 
 ## 2.0.0-alpha.140 - 2026-11-11
 

@@ -159,3 +159,10 @@ def test_a_files_root_too_long_is_invalid_not_a_500(client, org, root):
     # is_dir() lets ENAMETOOLONG through on Python 3.12
     r = client.put("/api/settings", json={"files_root": root})
     assert r.status_code == 400 and r.json()["error"] == "invalid_files_root"
+
+
+def test_a_hand_edited_result_line_hidden_of_the_wrong_type_never_breaks_the_settings(client, org):
+    for bad in (5, "cost", {"cost": 1}):
+        config.update_config(result_line_hidden=bad)
+        r = client.get("/api/settings")
+        assert r.status_code == 200 and r.json()["result_line_hidden"] == []

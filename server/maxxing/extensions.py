@@ -199,19 +199,26 @@ def root() -> Path:
     return config.workspace() / "extensions"
 
 
+def _ext_list(key: str) -> list:
+    """config extensions.<key> as a list: a hand-edited value of another type counts as empty."""
+    ext = config.load_config().get("extensions")
+    d = ext.get(key) if isinstance(ext, dict) else None
+    return d if isinstance(d, list) else []
+
+
 def disabled_ids() -> set[str]:
-    d = (config.load_config().get("extensions") or {}).get("disabled") or []
+    d = _ext_list("disabled")
     return {x for x in d if isinstance(x, str)}
 
 
 def pinned_ids() -> set[str]:
     """Page extensions shown directly in the sidebar (the others are listed under "Extensions")."""
-    d = (config.load_config().get("extensions") or {}).get("pinned") or []
+    d = _ext_list("pinned")
     return {x for x in d if isinstance(x, str)}
 
 
 def _pinned_list() -> list[str]:
-    d = (config.load_config().get("extensions") or {}).get("pinned") or []
+    d = _ext_list("pinned")
     return list(dict.fromkeys(x for x in d if isinstance(x, str)))
 
 
