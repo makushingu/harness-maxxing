@@ -102,6 +102,8 @@ Fixed:
   `cron run --detach` runs the job here when systemd refuses to start it.
 - **Confirmations in Mail and Team use the app's own dialog**, in the app's theme, instead of the browser's. The
   session tab arrows no longer blur what is behind them.
+- **Renaming a project or topic to a name that is refused no longer saves the other changes sent with it** (its
+  emoji, permission mode or allowed tools).
 
 ## 2.0.0-alpha.140 - 2026-11-11
 

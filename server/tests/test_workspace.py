@@ -162,3 +162,50 @@ def test_a_description_that_is_not_utf8_is_refused_before_anything_is_created(cl
     r = client.patch("/api/workspace/projects/acme", content=json.dumps({"name": "acme2", "description": "\ud800"}),
                      headers={"content-type": "application/json"})
     assert r.status_code == 400 and (mx["ws"] / "projects/acme").is_dir()
+
+
+def _tree_node(client, project, topic=None):
+    p = next(p for p in client.get("/api/workspace/tree").json()["projects"] if p["name"] == project)
+    return p if topic is None else next(t for t in p["topics"] if t["name"] == topic)
+
+
+def test_a_refused_topic_rename_saves_nothing_else(client):
+    client.post("/api/workspace/projects", json={"name": "acme"})
+    for t in ("blog", "news"):
+        client.post("/api/workspace/projects/acme/topics", json={"name": t})
+    url = "/api/workspace/projects/acme/topics/blog"
+    before = _tree_node(client, "acme", "blog")
+    r = client.patch(url, json={"name": "Bad Name!", "permission_mode": "ask"})
+    assert r.status_code == 400 and r.json()["error"] == "invalid_name"
+    assert _tree_node(client, "acme", "blog") == before
+    r = client.patch(url, json={"name": "news", "permission_mode": "ask"})
+    assert r.status_code == 409 and r.json()["error"] == "exists"
+    assert _tree_node(client, "acme", "blog") == before
+    r = client.patch(url, json={"permission_mode": "ask", "allowed_tools": ["a\nb"]})
+    assert r.status_code == 400 and _tree_node(client, "acme", "blog") == before
+
+
+def test_a_refused_topic_rename_of_a_busy_topic_saves_nothing_else(client, topic):
+    s = client.post("/api/sessions", json={"path": topic, "message": "SLOW"}).json()
+    client.post("/api/workspace/projects/acme/topics", json={"name": "news"})
+    before = _tree_node(client, "acme", "blog")
+    r = client.patch("/api/workspace/projects/acme/topics/blog", json={"name": "news", "permission_mode": "ask"})
+    assert r.status_code == 409 and r.json()["error"] == "has_running_sessions"
+    assert _tree_node(client, "acme", "blog") == before
+    client.post(f"/api/sessions/{s['id']}/stop")
+
+
+def test_a_refused_project_rename_saves_nothing_else(client, topic):
+    client.post("/api/workspace/projects", json={"name": "shop"})
+    before = _tree_node(client, "acme")["emoji"]
+    r = client.patch("/api/workspace/projects/acme", json={"name": "Bad Name!", "emoji": "🛒"})
+    assert r.status_code == 400 and r.json()["error"] == "invalid_name"
+    assert _tree_node(client, "acme")["emoji"] == before
+    r = client.patch("/api/workspace/projects/acme", json={"name": "shop", "emoji": "🛒"})
+    assert r.status_code == 409 and r.json()["error"] == "exists"
+    assert _tree_node(client, "acme")["emoji"] == before
+    s = client.post("/api/sessions", json={"path": topic, "message": "SLOW"}).json()
+    r = client.patch("/api/workspace/projects/acme", json={"name": "shop2", "emoji": "🛒"})
+    assert r.status_code == 409 and r.json()["error"] == "has_running_sessions"
+    assert _tree_node(client, "acme")["emoji"] == before
+    client.post(f"/api/sessions/{s['id']}/stop")
