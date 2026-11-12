@@ -547,6 +547,21 @@ def _crons_sig() -> tuple:
     return (_stat_sig(cr.jobs_path()), _stat_sig(cr.runs_path()), _stat_sig(config.config_path()), tuple(locks))
 
 
+def _enterprises_sig() -> tuple:
+    """What the enterprises card is computed from: each enterprise's files, tasks.json and config.json."""
+    from .api import tasks as tasks_api
+    from . import enterprises
+    files = []
+    for root in (enterprises._root(), config.state_dir("enterprises")):
+        try:
+            for d in sorted(root.iterdir()):
+                if d.is_dir():
+                    files += [(str(root), d.name, f.name, _stat_sig(f)) for f in sorted(d.iterdir()) if f.is_file()]
+        except OSError:
+            pass
+    return (tuple(files), _stat_sig(tasks_api.tasks_path()), _stat_sig(config.config_path()))
+
+
 @dataclass(frozen=True)
 class Builtin:
     id: str
@@ -570,7 +585,7 @@ BUILTINS: list[Builtin] = [
     Builtin("server", "Server", "server", 1, server),
     Builtin("day", "Today's schedule", "calendar-clock", 2, day, sig=_crons_sig),
     Builtin("tasks", "Tasks", "list-checks", 1, tasks, available=lambda: bool(config.load_config().get("tasks_page"))),
-    Builtin("enterprises", "Enterprises", "building", 1, enterprises_card, available=lambda: _ent_on()),
+    Builtin("enterprises", "Enterprises", "building", 1, enterprises_card, available=lambda: _ent_on(), sig=_enterprises_sig),
     Builtin("usage", "Claude usage", "gauge", 1, usage,
             lambda: bool(config.load_config().get("usage_widget"))),
     Builtin("crons", "Scheduled jobs", "clock", 1, crons, sig=_crons_sig),

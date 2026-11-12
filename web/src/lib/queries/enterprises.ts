@@ -221,3 +221,12 @@ export function useEnterpriseWorkers(id: string | null) {
 export function useStopWorker() {
   return useMut(({ id, wid }: { id: string; wid: string }) => api.del<Ok>(base(id, `/workers/${seg(wid)}`)), { invalidate: [['enterprises', 'workers'], ['agents']] })
 }
+
+/** The enterprise as a zip (a download). */
+export const enterpriseExportUrl = (id: string) => base(id, '/export')
+
+/** Import an exported zip as a new enterprise (the raw bytes of the file); `skipped` lists what was left out. */
+export function useImportEnterprise() {
+  const put = usePutEnterprise()
+  return useMut((file: File) => api.post<Enterprise & { skipped?: { file: string; reason: string }[] }>('/api/enterprises/import', file), { onSuccess: put, invalidate: inv })
+}

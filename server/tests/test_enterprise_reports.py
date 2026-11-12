@@ -185,21 +185,27 @@ def test_tick_schedule_is_once_per_period_and_survives_a_restart(client, topic, 
     mon = _ts(2026, 11, 9, 7)                          # a Monday, 07:00
     reports.tick(mon)
     assert built == []                                  # before 08:00 and before 18:00
-    reports.tick(mon + 3600 * 2)                        # Monday 09:00: the weekly review
-    assert built == [("weekly", True)]
+    reports.tick(mon + 3600 * 2)                        # Monday 09:00: the weekly review and the month's report
+    assert built == [("weekly", True), ("monthly", True)]
     reports.tick(mon + 3600 * 3)
-    assert built == [("weekly", True)]                  # once per week
+    assert len(built) == 2                              # once per period
     reports.tick(mon + 3600 * 11)                       # 18:00: the daily digest
-    assert built == [("weekly", True), ("daily", True)]
+    assert built[-1] == ("daily", True) and len(built) == 3
     reports.tick(mon + 3600 * 12)
-    assert len(built) == 2
-    reports.tick(_ts(2026, 11, 10, 9))                  # Tuesday morning: nothing before 18:00
-    assert len(built) == 2
-    assert reports._index(S)["done"] == {"weekly": "2026-W46", "daily": "2026-11-09"}   # what a restart reads
-    reports.tick(_ts(2026, 12, 1, 9))                   # the 1st (a Tuesday): the monthly report
-    assert built[-1] == ("monthly", True) and len(built) == 3
-    reports.tick(_ts(2026, 12, 1, 10))
     assert len(built) == 3
+    reports.tick(_ts(2026, 11, 10, 9))                  # Tuesday morning: nothing before 18:00
+    assert len(built) == 3
+    assert reports._index(S)["done"] == {"weekly": "2026-W46", "monthly": "2026-11", "daily": "2026-11-09"}
+    reports.tick(_ts(2026, 12, 1, 9))                   # the 1st (a Tuesday): the next month
+    assert built[-1] == ("monthly", True) and len(built) == 5     # and the new week's review
+
+
+def test_a_missed_week_and_month_are_caught_up_on_the_next_tick(client, topic, mx, monkeypatch):
+    _setup(client, topic, settings={"digest": {"enabled": False}, "weekly": True, "monthly": True})
+    built = []
+    monkeypatch.setattr(reports, "build", lambda slug, kind="daily", now=None, send=False: built.append(kind))
+    reports.tick(_ts(2026, 11, 12, 9))                  # a Thursday: the server was down on Monday and on the 1st
+    assert sorted(built) == ["monthly", "weekly"]
 
 
 def test_tick_does_nothing_while_the_feature_is_off(client, topic, monkeypatch):
@@ -215,18 +221,35 @@ def test_tick_does_nothing_while_the_feature_is_off(client, topic, monkeypatch):
 def test_overview_numbers(client, topic, mx, monkeypatch):
     _setup(client, topic, departments={"content": {"name": "Content", "envelope": {"usd_per_day": 3}}},
            objectives=[{"id": "o1", "text": "Ship", "target": 4, "unit": "", "value": 1}])
-    esc = [{"id": "e1", "position": "writer", "text": "x", "at": 1}]
-    _quiet(monkeypatch, esc=esc, req=[{"id": "r1"}, {"id": "r2"}])
+    esc = [{"id": "e1", "position": "writer", "text": "x", "at": 1, "to": "owner"},
+           {"id": "e2", "position": "writer", "text": "y", "at": 1, "to": "lead"}]
+    _quiet(monkeypatch, esc=esc, req=[{"id": "r1", "decider": "owner"}, {"id": "r2", "decider": "owner"},
+                                      {"id": "r3", "decider": "lead"}])
     monkeypatch.setattr(agents, "day_cost", lambda path, when=None, metas=None, cold=False: {W: 1.25, R: 0.5}.get(path, 0))
     _tasks(mx, {"title": "a", "owner": "writer"}, {"title": "b", "owner": "writer", "due": "2020-01-01"},
            {"title": "c", "owner": "lead", "stage": "blocked"}, {"title": "d", "owner": "lead", "status": "done"})
     o = client.get(f"{E}/{S}/overview").json()
     assert o["cost_today"] == 1.75 and o["digest"] is None and o["digest_cost"] == 0
-    assert o["requests_waiting"] == 2 and o["escalations_open"] == 1
+    assert o["requests_waiting"] == 2 and o["escalations_open"] == 1 and o["in_progress"] == 2
     dept = next(x for x in o["departments"] if x["id"] == "content")
     assert dept == {"id": "content", "name": "Content", "cost_today": 1.75, "ceiling": 3.0, "open_tasks": 3,
                     "late_tasks": 1, "blocked": 1}
     assert o["objectives"][0]["progress"] == 25
+
+
+def test_widget_counts_what_waits_for_the_owner_and_is_cached(client, topic, mx, monkeypatch):
+    from maxxing import widgets
+    _setup(client, topic)
+    _quiet(monkeypatch, esc=[{"id": "e1", "to": "lead"}], req=[{"id": "r1", "decider": "lead"}])
+    card = widgets.enterprises_card()
+    assert card["status"] == "ok"
+    assert [x["value"] for x in card["blocks"][0]["items"]] == [0, 0, 0]
+    calls = []
+    real = reports.overview
+    monkeypatch.setattr(reports, "overview", lambda slug: calls.append(slug) or real(slug))
+    widgets.card("enterprises")
+    widgets.card("enterprises")
+    assert len(calls) == 1                              # the second read is served by the signature
 
 
 def test_routes(client, topic, mx, monkeypatch):
@@ -329,6 +352,23 @@ async def test_notify_owner_feed_and_the_thread(api, tg):
     (config.workspace() / "enterprises" / S / "enterprise.json").write_text(json.dumps({"version": 1, "name": "Acme Inc"}))
     await asyncio.to_thread(reports.notify_owner, S, "Again", "x")
     assert tg.topics[tid] == "🏢 Acme Inc"
+
+
+async def test_notify_owner_follows_the_feed_rule_for_events_without_buttons(api, tg):
+    await _link(api, tg)
+    cfg = config.load_config()
+    cfg["feed"] = {"rules": {"enterprises": "off"}}
+    config.save_config(cfg)
+    n = len(tg.sent())
+    await asyncio.to_thread(reports.notify_owner, S, "Daily digest", "x", dedupe="r1")
+    assert len(tg.sent()) == n and len(_events()) == 1  # in the feed, not on Telegram
+    await asyncio.to_thread(reports.notify_owner, S, "Escalation", "Which?", level="warning", ref=f"enterprise:esc:{S}:e9",
+                            actions=[{"id": "seen", "label": "Seen"}])
+    assert len(tg.sent()) > n                            # a card waiting for an answer stays loud
+    cfg["feed"] = {"rules": {"enterprises": "silent"}}
+    config.save_config(cfg)
+    await asyncio.to_thread(reports.notify_owner, S, "Weekly", "y", level="warning", dedupe="r2")
+    assert tg.sent()[-1].get("disable_notification") is True
 
 
 async def test_a_reply_in_the_thread_answers_the_escalation(api, tg, monkeypatch):

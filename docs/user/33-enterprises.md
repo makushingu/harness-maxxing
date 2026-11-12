@@ -41,14 +41,15 @@ five short questions (what the company does, which projects, goals for the next 
 autonomous it may be), proposes a chart as a short tree and **waits for your OK** and your edits. Only then does it
 create the enterprise and its positions, all vacant. It never creates an agent without your explicit yes.
 
-Limits: 20 enterprises, 200 positions each, 6 levels deep (4 by default, the setting **Levels in the chart**) and 12
+Position ids `owner`, `server`, `policy`, `visitor`, `free`, `esc` and `none` are reserved. Limits: 20 enterprises, 200 positions each, 6 levels deep (4 by default, the setting **Levels in the chart**) and 12
 reports per lead (8 by default).
 
 ## The org chart
 
 The **Org chart** tab is the home of an enterprise: a tree of cards, one per position, with the occupant's face, the
 title, a state and the cost of the day. States: **Working**, **Waiting for you**, **To read**, **Failed**, **Off**,
-**Ready**, **Vacant** and **Blocked** (a task stopped, or a daily budget reached).
+**Ready**, **Vacant** and **Blocked** (its deliveries are waiting because a daily budget is reached, an envelope is
+full or its agent is off; the card says which).
 
 - **Open a position**: click its card. Its occupant's conversation opens on the right (the same conversation as on its
   agent page); a second tab shows its job description, **Inbox & tasks** and what it asked you.
@@ -61,7 +62,8 @@ title, a state and the cost of the day. States: **Working**, **Waiting for you**
   the Trash does not re-seat it by itself.
 - **Change lead**, or **drag** a card onto another one (computer). The chart refuses a cycle, too many levels or too
   many reports under one lead. If the chart changed in the meantime it reloads and you try again.
-- **Remove position**: its reports move to its lead (or where you choose); its agent is not touched.
+- **Remove position**: its reports move to its lead (or where you choose), and its open tasks get the new lead as
+  requester; its agent is not touched.
 - **Top**: in the settings you choose who stands at the top, **You** or one position (a Director) that reports to you.
 
 The **Org** view of the **Office** (the view menu of the Agents page) draws the desks grouped by enterprise and
@@ -148,20 +150,23 @@ decide. See [the command line](#from-the-command-line).
 
 The **envelope** of the enterprise (settings) and of each **department** caps what its agents may use together:
 
-- **Budget per day (USD)**: the sum of what its agents spend in a day, digests included. A position has no budget of
-  its own: it is its occupant's daily budget.
+- **Budget per day (USD)**: the sum of what its agents spend in a day, workers included. A position has no budget of
+  its own: it is its occupant's daily budget. The digests and reports are not counted in the agents' budgets: they are
+  held back by the same ceiling check (budget reached means the raw list is sent).
 - **Keys** and **Domains**: a list of key names / sites. Empty means no narrowing.
 
 An envelope **only narrows**: it never gives an agent anything it did not have. A run is limited to the smallest of
 what is left for the agent, its department and the enterprise. When the budget of a department or of the enterprise is
-**reached**, new runs do not start (the delivery waits, the task shows *Blocked* with the reason) and you get **one**
-notification for that envelope that day, not one per agent. While runs share the last of an envelope, one may find it
-fully held: it waits and starts when room is back. A key or a domain that an agent holds beyond a narrowed list is
+**reached**, new runs do not start (the delivery waits, the position shows *Blocked* with the reason) and you get **one**
+notification for that envelope that day, not one per agent. An agent with no budget of its own holds only a modest share of
+what is left (a default per run, or its department's ceiling split among its reports), so siblings run side by side;
+when the last of an envelope is fully held, a run waits and starts when room is back. A key or a domain that an agent holds beyond a narrowed list is
 flagged in the chart; the server never edits an agent itself, you remove it. Widening an agent beyond its envelope is
 refused.
 
 **Departments** (settings): a branch of the chart with its own envelope and notes, and overrides of some settings
-(shown as *Same as the enterprise* when not overridden).
+(shown as *Same as the enterprise* when not overridden): communication, who may be written to, workers, autonomy,
+escalation timeout and spending threshold. Trust along the chain is enterprise-wide.
 
 ## Who may talk to whom
 
@@ -190,14 +195,16 @@ Leave it off if you do not need it: it relaxes a safety default.
   enterprise. Nothing new means no call and no message; budget reached means the raw list is sent. Options: **One per
   lead** (each lead also gets its team's digest) and **Titles only** (one line per item).
 - **Weekly report** (Monday morning) and **Monthly report** (the 1st): objectives, blocked work, cost per department.
-  Switch them on in the settings.
+  Switch them on in the settings. A period missed because the server was down is built at the next opportunity.
 - **Reports** tab: all of them, newest first, **Build now** to make one at once.
-- **Overview** tab: what waits for you (requests to allow or deny, escalations to answer), the **cost of the day** per
-  department against its ceiling, tasks open, late and blocked, objectives and the latest digest.
+- **Overview** tab: what waits **for you** (requests to allow or deny, escalations to answer: only those whose decider
+  is you), a line for what is still in progress with the leads, the **cost of the day** per department against its
+  ceiling, tasks open, late and blocked, objectives and the latest digest. The dashboard card counts the same.
 
 With [Telegram](telegram) linked, each enterprise gets **its own thread** (named after it, with a building emoji): the
 digest, the cards that need you, and the answers you give there. Without topics, they arrive in the main chat with the
-enterprise's emoji in front.
+enterprise's emoji in front. The **Notifications** settings apply: set the source *Enterprises* to off or silent and the
+digests and notes stay in the app (or arrive silently); a card that waits for your answer stays loud, like an approval.
 
 ## Workers
 
@@ -206,7 +213,10 @@ A position may need short-lived helpers ("resize these 12 visuals"). The **Worke
 - **Discreet** (default): helpers live inside the agent's turn (Claude Code sub-agents). Nothing to manage.
 - **Visible**: **temporary agents** you can see in the chart. You approve once a **worker template** per position
   (role, model, daily budget). A worker is always protected (sandbox, no key, no domain, no trigger), at most 5 live at
-  a time, and goes to the Trash when its task is done or after 24 hours. You can stop one at any time.
+  a time, and goes to the Trash when its task is done or after 24 hours. You can stop one at any time. It never has more than its
+  creator: it takes the occupant's rules, forbidden tools, approvals and permission mode, and counts in the department
+  and enterprise budgets. A task it gets is outside text unless the whole chain is trusted. Deleting the enterprise or
+  switching the feature off stops its workers.
 - **Off**: no helpers.
 
 ## Front desk
@@ -215,15 +225,18 @@ The **front desk** is a position that answers people **outside** the company on 
 
 - It is always labelled **"AI assistant of <name>"**; you can add a label of your own, never remove the AI mention.
 - It has no key, no domain, no folder and no tool but two: read the profile, and **route** a request to the right
-  department. It routes, it does not solve: a refund request becomes a task for customer care, **marked as coming from
+  department. The server checks it each time a visitor writes: with a key, a domain, a writable folder, trust in outside
+  events, or no daily budget or hourly run limit on its occupant, the desk answers *unavailable*. It routes, it does not solve: a refund request becomes a task for customer care, **marked as coming from
   outside**, so everything it triggers asks you first.
 - **Going live is your decision**, and **needs every occupant of the chart to be protected** (sandboxed, so they cannot
   read what they should not): the chart lists those who are not. The public link is an entry point without a session,
-  so it ships **off**, with its own **rate limit** per visitor (20 messages an hour by default), a size limit per
-  message (1,000 characters) and the agent's own limits. Regenerate the link to cancel the old one.
+  so it ships **off**, with its own **rate limit** per visitor (20 messages an hour by default), a limit for all
+  visitors together, a size limit per message (1,000 characters) and the agent's own limits. The **link to share** is
+  `<your address>/desk/<token>`: a plain chat page (no account, no cookie, no outside script) that says it is an AI
+  assistant. Regenerate the link to cancel the old one.
 - **Retention**: conversations are kept 30 days by default (1 to 365) and you can delete any of them. They are never
-  exported. Other positions receive summaries and themes only; **full conversations** can be given to chosen positions
-  (customer care).
+  exported, and deleting one (or its retention running out) removes the visitor's words everywhere, sessions included.
+  Other positions receive summaries and themes only, never the visitors' words.
 
 **Weekly insights**: once a week, one short call over the desk's conversations produces the questions most asked,
 rising topics, pain points and what the profile could not answer. Unanswered questions come as **suggested FAQ
@@ -238,10 +251,13 @@ report shows progress. Nothing is measured automatically.
 
 ## Export and import
 
-**Export** downloads the enterprise as a zip: chart, job descriptions, departments, settings, mission, profile and
-shared files. It holds **no** grant, **no** agent path, **no** key or domain list and no front desk conversation.
-**Import** creates a **new** enterprise from a zip (a free name is chosen if needed), with **vacant** positions and no
-linked project: link your projects, then hire or seat the agents. Files that could not be kept are listed. Agent
+In the enterprise's **Settings** tab (**Export and import**), **Download** exports the enterprise as a zip: chart, job
+descriptions, departments, settings, mission, profile and shared files. It holds **no** grant, **no** agent path, **no**
+key or domain list, no front desk conversation and no live public link: the desk comes back **off** with no link,
+**trust along the chain** comes back off and approved worker templates are left out (listed as skipped).
+**Import** (the same tab, or the **Enterprises** page) creates a **new** enterprise from a zip (a free name is chosen if
+needed), with **vacant** positions and no linked project: link your projects, then hire or seat the agents. Files
+that could not be kept are listed. Agent
 definitions found in the zip are kept in `files/imported-agents/` to hire from.
 
 ## Unlink or delete

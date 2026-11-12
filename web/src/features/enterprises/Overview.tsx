@@ -51,11 +51,16 @@ function NeedsYou({ enterprise: e, overview }: { enterprise: Enterprise; overvie
   const t = useT()
   const requests = useEnterpriseRequests(e.id)
   const escalations = useEnterpriseEscalations(e.id)
-  const reqs = (requests.data || []).filter((r) => r.status === 'pending')
-  const escs = (escalations.data || []).filter((x) => x.status === 'open')
+  const reqs = (requests.data || []).filter((r) => r.status === 'pending' && r.decider === 'owner')
+  const escs = (escalations.data || []).filter((x) => x.status === 'open' && x.to === 'owner')
   const waiting = overview.requests_waiting + overview.escalations_open
   return (
     <SettingsCard title={t('ent.overview.needs')} description={t('ent.overview.needsDesc')} actions={waiting > 0 ? <Badge variant="warning">{waiting}</Badge> : undefined}>
+      {overview.in_progress > 0 && (
+        <p className="mb-3 text-[13px] text-muted-foreground" data-testid="needs-in-chart">
+          {t('ent.overview.inChart', { n: overview.in_progress })}
+        </p>
+      )}
       {reqs.length + escs.length === 0 ? (
         <p className="text-[13px] text-muted-foreground" data-testid="needs-empty">
           {t('ent.overview.needsNone')}

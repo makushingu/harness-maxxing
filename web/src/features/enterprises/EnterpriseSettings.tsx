@@ -3,15 +3,16 @@
 // for the Save bar (one PATCH); the linked projects apply at once (PUT, a refusal asks before vacating positions).
 import * as React from 'react'
 import { useNavigate } from 'react-router'
-import { Plus, Trash2 } from 'lucide-react'
+import { Download, Plus, Trash2 } from 'lucide-react'
 import { useT, type TKey } from '@/i18n'
 import { errorMessage, isApiError } from '@/lib/api'
-import { useDeleteEnterprise, usePatchEnterprise, usePutEnterpriseProjects, useWorkspace } from '@/lib/queries'
+import { enterpriseExportUrl, useDeleteEnterprise, usePatchEnterprise, usePutEnterpriseProjects, useWorkspace } from '@/lib/queries'
 import type { Enterprise, EnterpriseAutonomy, EnterpriseCommunication, EnterpriseSettings as Settings, EnterpriseWorkers } from '@/lib/types'
 import { cn, slugify } from '@/lib/utils'
 import { Button, Checkbox, confirm, FormField, Input, Select, Sensitive, Switch, Textarea, toast } from '@/components/ui'
 import { SettingRow } from '@/features/common'
 import { DeskSettings } from './DeskSettings'
+import { ImportButton } from './ImportButton'
 import { SectionStack, SettingsCard } from '@/pages/settings/sections/ui'
 
 const OWNER = 'owner'
@@ -316,6 +317,21 @@ export function EnterpriseSettings({ enterprise: e }: { enterprise: Enterprise }
         </SettingsCard>
 
         <DeskSettings enterprise={e} />
+
+        <SettingsCard title={t('ent.transfer.title')} description={t('ent.transfer.desc')}>
+          <div className="divide-y">
+            <SettingRow label={t('ent.export.action')} description={t('ent.export.desc')}>
+              <Button asChild variant="outline" size="sm">
+                <a href={enterpriseExportUrl(e.id)} download={`${e.id}.zip`} data-testid="enterprise-export">
+                  <Download /> {t('ent.export.download')}
+                </a>
+              </Button>
+            </SettingRow>
+            <SettingRow label={t('ent.import.action')} description={t('ent.import.desc')}>
+              <ImportButton size="sm" />
+            </SettingRow>
+          </div>
+        </SettingsCard>
 
         <SettingsCard title={t('ent.settings.danger')} danger>
           <SettingRow label={t('ent.delete.action')} description={t('ent.delete.desc')}>

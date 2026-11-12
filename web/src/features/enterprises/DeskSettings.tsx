@@ -1,5 +1,5 @@
 // The "Front desk" section of an enterprise's settings: whether the desk is live, its label, how long conversations are
-// kept, who reads them in full, and the public link (anyone holding it can write to the desk). One Save for the fields;
+// kept, and the public link (anyone holding it can write to the desk). One Save for the fields;
 // the link is made or replaced at once.
 import * as React from 'react'
 import { Link } from 'react-router'
@@ -8,11 +8,11 @@ import { useT } from '@/i18n'
 import { errorMessage } from '@/lib/api'
 import { agentRoute, useDeskLink, useSaveDeskSettings } from '@/lib/queries'
 import type { DeskSettingsPatch, Enterprise } from '@/lib/types'
-import { Button, Checkbox, confirm, CopyButton, FormField, Input, Sensitive, Switch, toast } from '@/components/ui'
+import { Button, confirm, CopyButton, FormField, Input, Sensitive, Switch, toast } from '@/components/ui'
 import { SettingRow } from '@/features/common'
 import { SettingsCard } from '@/pages/settings/sections/ui'
 
-type Draft = { enabled: boolean; label: string; retention: string; fullFor: string[]; publicOn: boolean; rate: string; max: string }
+type Draft = { enabled: boolean; label: string; retention: string; publicOn: boolean; rate: string; max: string }
 
 function draftOf(e: Enterprise): Draft {
   const d = e.settings.desk
@@ -20,7 +20,6 @@ function draftOf(e: Enterprise): Draft {
     enabled: !!d?.enabled,
     label: d?.label || '',
     retention: String(d?.retention_days ?? 30),
-    fullFor: d?.full_for || [],
     publicOn: !!d?.public?.enabled,
     rate: String(d?.public?.rate_per_hour ?? 20),
     max: String(d?.public?.max_chars ?? 1000),
@@ -49,7 +48,7 @@ export function DeskSettings({ enterprise: e }: { enterprise: Enterprise }) {
   }, [initial])
   const set = (v: Partial<Draft>) => setD((x) => ({ ...x, ...v }))
   const token = e.settings.desk?.public?.token || ''
-  const url = token ? `${window.location.origin}/api/public/desk/${token}` : ''
+  const url = token ? `${window.location.origin}/desk/${token}` : ''
   // the occupants that are not Protected (sandboxed): the desk cannot be live while one exists
   const unprotected = e.positions.filter((p) => p.occupant && !p.occupant.sandbox)
 
@@ -57,7 +56,6 @@ export function DeskSettings({ enterprise: e }: { enterprise: Enterprise }) {
     enabled: d.enabled,
     label: d.label.trim(),
     retention_days: int(d.retention, 1, 365, 30),
-    full_for: d.fullFor,
     public: { enabled: d.publicOn, rate_per_hour: int(d.rate, 1, 600, 20), max_chars: int(d.max, 50, 4000, 1000) },
   }
   const submit = () => save.mutate({ id: e.id, desk: patch }, { onSuccess: () => toast.success(t('ent.settings.saved')) })
@@ -114,19 +112,6 @@ export function DeskSettings({ enterprise: e }: { enterprise: Enterprise }) {
         <FormField label={t('ent.deskSettings.retention')} hint={t('ent.deskSettings.retentionHint')}>
           <Input inputMode="numeric" value={d.retention} onChange={(ev) => set({ retention: ev.target.value })} className="w-28" />
         </FormField>
-        <div className="grid gap-1">
-          <h4 className="text-sm font-medium">{t('ent.deskSettings.fullFor')}</h4>
-          <p className="text-[13px] text-muted-foreground">{t('ent.deskSettings.fullForHint')}</p>
-          <div className="grid gap-1 pt-1" data-testid="desk-full-for">
-            {e.positions.length === 0 && <p className="text-[13px] text-muted-foreground">{t('ent.deskSettings.noPositions')}</p>}
-            {e.positions.map((p) => (
-              <label key={p.id} className="flex min-h-9 items-center gap-2.5 rounded-md px-2 text-sm hover:bg-accent">
-                <Checkbox checked={d.fullFor.includes(p.id)} onCheckedChange={(v) => set({ fullFor: v ? [...d.fullFor, p.id] : d.fullFor.filter((x) => x !== p.id) })} />
-                <Sensitive length={10}>{p.title}</Sensitive>
-              </label>
-            ))}
-          </div>
-        </div>
 
         <div className="grid gap-3 border-t pt-4">
           <SettingRow label={t('ent.deskSettings.public')} description={t('ent.deskSettings.publicDesc')} htmlFor="ent-desk-public" className="py-0">

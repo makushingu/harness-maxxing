@@ -468,7 +468,7 @@ export type EnterpriseSettings = {
   digest: { enabled: boolean; hour: number; per_lead: boolean; titles_only: boolean }
   weekly: boolean
   monthly: boolean
-  desk?: { enabled: boolean; label: string; retention_days: number; full_for: string[]; public?: { enabled: boolean; token: string; rate_per_hour: number; max_chars: number } }
+  desk?: { enabled: boolean; label: string; retention_days: number; public?: { enabled: boolean; token: string; rate_per_hour: number; max_chars: number } }
   limits: { depth: number; reports: number; workers_live: number; hops_per_task: number }
 }
 export type EnterpriseEnvelope = { usd_per_day: number | null; keys: string[] | null; domains: string[] | null }
@@ -525,6 +525,7 @@ export type EnterpriseOverview = {
   departments: { id: string; name: string; cost_today: number; ceiling: number | null; open_tasks: number; late_tasks: number; blocked: number }[]
   requests_waiting: number
   escalations_open: number
+  in_progress: number
   objectives: EnterpriseObjective[]
   digest: { date: string; text: string } | null
   cost_today: number
@@ -532,7 +533,7 @@ export type EnterpriseOverview = {
 }
 export type EnterpriseReport = { name: string; date: string; kind: 'daily' | 'weekly' | 'monthly' }
 export type EnterpriseRequest = { id: string; category: string; position: string; text: string; amount: number | null; status: string; decider: string; at: number; outside: boolean }
-export type EnterpriseEscalation = { id: string; position: string; text: string; task: string; level: number; deadline: number; status: string; at: number; outside: boolean }
+export type EnterpriseEscalation = { id: string; position: string; text: string; task: string; level: number; deadline: number; status: string; at: number; outside: boolean; to: string }
 export type EnterpriseAbout = { text: string; max: number; note_max: number }
 export type EnterpriseProfileProduct = { name?: string; price?: string; url?: string; [k: string]: unknown }
 export type EnterpriseProfile = {
@@ -553,13 +554,12 @@ export type EnterpriseDesk = {
   enabled: boolean
   label: string
   retention_days: number
-  full_for: string[]
   position: string | null
   public: { enabled: boolean; token: string; rate_per_hour: number; max_chars: number; path: string }
   unprotected: string[]
   conversations: DeskConversationSummary[]
 }
-export type DeskSettingsPatch = { enabled?: boolean; label?: string; retention_days?: number; full_for?: string[]; public?: { enabled?: boolean; rate_per_hour?: number; max_chars?: number } }
+export type DeskSettingsPatch = { enabled?: boolean; label?: string; retention_days?: number; public?: { enabled?: boolean; rate_per_hour?: number; max_chars?: number } }
 export type DeskSuggestion = { id: string; q: string; count: number; week: string; status: 'pending' | 'accepted' | 'dismissed'; at: number }
 export type EnterpriseWorker = { id: string; agent: string; position: string; text: string; task: string; status: string; created: number; expires: number; ended?: number | null; session: string; result: string }
 

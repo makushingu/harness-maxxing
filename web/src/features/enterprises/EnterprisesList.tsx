@@ -8,6 +8,7 @@ import { enterpriseRoute, useEnterprises } from '@/lib/queries'
 import { Badge, Button, Card, EmptyState, Sensitive, Skeleton } from '@/components/ui'
 import { Page } from '@/components/shell/Page'
 import { NewEnterpriseDialog } from './dialogs'
+import { ImportButton } from './ImportButton'
 
 export function EnterprisesList() {
   const t = useT()
@@ -18,8 +19,14 @@ export function EnterprisesList() {
       <Plus /> {t('ent.new.action')}
     </Button>
   )
+  const both = (
+    <div className="flex flex-wrap gap-2">
+      <ImportButton />
+      {add}
+    </div>
+  )
   return (
-    <Page title={t('ent.title')} description={t('ent.desc')} actions={data && data.length > 0 ? add : undefined}>
+    <Page title={t('ent.title')} description={t('ent.desc')} actions={data && data.length > 0 ? both : <ImportButton />}>
       {isLoading ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {[0, 1, 2].map((i) => (

@@ -59,6 +59,8 @@ New:
   - **Front desk**: a labelled AI assistant on a public chat link answers customers and passes requests to the right
     team.
   - **Reports**: daily digest, weekly and monthly reports, and an Overview of cost, late work and what waits for you.
+  - **Export and import**: download an enterprise as a zip from its Settings tab and import it as a new one, from
+    there or from the Enterprises page.
 - **Right click everywhere**: a right click (a long press on a phone) on a row or a card opens its menu where you
   clicked - settings lists, crons, notifications, mail, tasks, Team, an agent's triggers, a session's header. The
   browser's menu stays on selected text, fields and links.
