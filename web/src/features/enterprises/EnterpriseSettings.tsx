@@ -11,6 +11,7 @@ import type { Enterprise, EnterpriseAutonomy, EnterpriseCommunication, Enterpris
 import { cn, slugify } from '@/lib/utils'
 import { Button, Checkbox, confirm, FormField, Input, Select, Sensitive, Switch, Textarea, toast } from '@/components/ui'
 import { SettingRow } from '@/features/common'
+import { DeskSettings } from './DeskSettings'
 import { SectionStack, SettingsCard } from '@/pages/settings/sections/ui'
 
 const OWNER = 'owner'
@@ -313,6 +314,8 @@ export function EnterpriseSettings({ enterprise: e }: { enterprise: Enterprise }
             </div>
           </div>
         </SettingsCard>
+
+        <DeskSettings enterprise={e} />
 
         <SettingsCard title={t('ent.settings.danger')} danger>
           <SettingRow label={t('ent.delete.action')} description={t('ent.delete.desc')}>

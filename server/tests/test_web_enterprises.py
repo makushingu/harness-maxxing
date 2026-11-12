@@ -107,3 +107,34 @@ def test_the_office_org_view_is_sober_and_does_not_replace_classic_or_space():
 def test_a_position_with_reports_is_removed_by_moving_them_to_its_lead():
     sheet = (WEB / "features" / "enterprises" / "PositionSheet.tsx").read_text(encoding="utf-8")
     assert "reparent_to: lead" in sheet and "'has_reports'" in sheet and "value=\"work\"" in sheet
+
+
+def test_the_front_desk_and_workers_are_wired():
+    q = (WEB / "lib" / "queries" / "enterprises.ts").read_text(encoding="utf-8")
+    for route in ("/desk", "/desk/link", "/profile/suggestions", "/workers", "/insights"):
+        assert f"'{route}" in q or f"`{route}" in q, route
+    for hook in ("useEnterpriseDesk", "useDeskConversation", "useDeleteDeskConversation", "useSaveDeskSettings", "useDeskLink",
+                 "useRunInsights", "useDeskSuggestions", "useDecideSuggestion", "useEnterpriseWorkers", "useStopWorker"):
+        assert f"export function {hook}" in q, hook
+    tabs = (WEB / "features" / "enterprises" / "tabs.tsx").read_text(encoding="utf-8")
+    assert re.search(r"id: 'desk',[^\n]*show: \(e\) => [^\n]*desk[^\n]*positions\.some\(\(p\) => p\.desk\)", tabs)
+    settings = (WEB / "features" / "enterprises" / "EnterpriseSettings.tsx").read_text(encoding="utf-8")
+    assert "<DeskSettings" in settings
+    desk = (WEB / "features" / "enterprises" / "DeskSettings.tsx").read_text(encoding="utf-8")
+    assert "/api/public/desk/" in desk and "ent.deskSettings.warning" in desk and "CopyButton" in desk
+    sheet = (WEB / "features" / "enterprises" / "PositionSheet.tsx").read_text(encoding="utf-8")
+    assert all(x in sheet for x in ("<DeskSwitch", "<WorkerTemplateEditor", "<PositionWorkers"))
+    dialogs = (WEB / "features" / "enterprises" / "dialogs.tsx").read_text(encoding="utf-8")
+    assert "useAgentTemplates" in dialogs and "suggested_template" in dialogs
+
+
+def test_the_envelope_skip_reason_has_its_web_text_and_the_mock_has_the_new_routes():
+    parts = (WEB / "features" / "agents" / "parts.tsx").read_text(encoding="utf-8")
+    assert "reason === 'envelope'" in parts
+    for lang in ("en", "fr"):
+        assert re.search(r"""['"]agents\.reason\.envelope['"]\s*:""", (WEB / "i18n" / f"{lang}.ts").read_text(encoding="utf-8"))
+    mock = (WEB.parent / "mock" / "server.mjs").read_text(encoding="utf-8")
+    for route in ("/api/enterprises/:e/desk'", "/api/enterprises/:e/desk/link'", "/api/enterprises/:e/desk/:conv'", "/api/enterprises/:e/insights'",
+                  "/api/enterprises/:e/profile/suggestions'", "/api/enterprises/:e/profile/suggestions/:sid'", "/api/enterprises/:e/workers'",
+                  "/api/enterprises/:e/workers/:wid'"):
+        assert route in mock, route

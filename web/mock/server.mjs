@@ -754,6 +754,7 @@ function widgetDefs() {
     { id: 'claude-usage', title: 'Claude usage', icon: 'gauge', span: 1, source: 'builtin', card: cardUsage },
     { id: 'uptime', title: 'Website uptime', icon: 'radar', span: 2, source: 'builtin', card: cardUptime },
   ]
+  if (S.settings.enterprises_page && S.settings.agents_page) defs.push({ id: 'enterprises', title: 'Enterprises', icon: 'building', span: 1, source: 'builtin', card: cardEnterprises })
   if (ext && ext.enabled) defs.push({ id: 'shop-sales', title: 'Shop sales', icon: 'shopping-cart', span: 1, source: 'extension', card: cardShop })
   return defs
 }
@@ -799,6 +800,11 @@ function cardTasks() {
     .map((x) => ({ title: x.title, subtitle: x.due && x.due < today ? `Overdue · ${x.due}` : x.status === 'doing' ? 'In progress' : 'Due today',
       value: ['', 'P1', 'P2', 'P3'][x.priority] || undefined, href: '/tasks', status: x.due && x.due < today ? 'error' : x.priority >= 2 ? 'warn' : 'ok' }))
   return { title: 'Today', link: '/tasks', blocks: [{ type: 'list', items, empty: 'Nothing due today' }] }
+}
+function cardEnterprises() {
+  return { title: 'Enterprises', link: '/enterprises', status: 'warn', blocks: [
+    { type: 'stats', items: [{ type: 'stat', label: 'Waiting', value: 1, tone: 'warn' }, { type: 'stat', label: 'Escalations', value: 1, tone: 'warn' }, { type: 'stat', label: 'Late', value: 0 }] },
+    { type: 'list', items: [{ title: '🏢 Acme Group', subtitle: '1 waiting - 1 escalated', value: '$3.20 / $10.00', href: '/enterprises/acme-group', status: 'warn' }] }] }
 }
 function cardCrons() {
   const items = S.crons.map((c) => ({ title: c.name, subtitle: cronHuman(c.schedule) + (c.enabled ? '' : ' · disabled'),
@@ -1972,7 +1978,8 @@ const ENT_TEMPLATES = [
   { id: 'support', name: 'Customer care', description: 'A support lead and two agents.', positions: [{ id: 'lead', title: 'Support lead', reports_to: null, department: 'support' }, { id: 'agent-a', title: 'First line', reports_to: 'lead', department: 'support' }, { id: 'agent-b', title: 'Second line', reports_to: 'lead', department: 'support' }] },
 ]
 const ENT_SETTINGS = () => ({ communication: 'leads', allow: [], workers: 'discreet', autonomy: 'balanced', trust_chain: false, escalation_timeout_h: 4,
-  digest: { enabled: true, hour: 8, per_lead: false, titles_only: false }, weekly: false, monthly: false, limits: { depth: 4, reports: 8, workers_live: 5, hops_per_task: 6 } })
+  digest: { enabled: true, hour: 8, per_lead: false, titles_only: false }, weekly: false, monthly: false, desk: { enabled: false, label: '', retention_days: 30, full_for: [], public: { enabled: false, token: '', rate_per_hour: 20, max_chars: 1000 } },
+  limits: { depth: 4, reports: 8, workers_live: 5, hops_per_task: 6 } })
 function entSeed() {
   const ag = (topic, name) => `${topicPath('acme', topic)}/agents/${name}`
   ENT.set('acme-group', { version: 1, rev: 3, name: 'Acme Group', emoji: '🏢', projects: ['acme'], top: 'owner', settings: ENT_SETTINGS(),
@@ -1981,9 +1988,9 @@ function entSeed() {
     objectives: [], grants: [],
     positions: [
       { id: 'marketing-lead', title: 'Head of marketing', reports_to: null, department: 'marketing', agent: ag('blog', 'writer'), job: 'Owns traffic and brand reach. Breaks goals down for the team and reviews every public piece.' },
-      { id: 'writer', title: 'Articles, newsletters', reports_to: 'marketing-lead', department: 'marketing', agent: ag('blog', 'proofreader'), job: 'Writes the weekly article.' },
+      { id: 'writer', title: 'Articles, newsletters', reports_to: 'marketing-lead', department: 'marketing', agent: ag('blog', 'proofreader'), job: 'Writes the weekly article.', worker_template: { role: 'Research one source and report in five lines.', model: '', usd_per_day: 1 } },
       { id: 'seo', title: 'Search and rankings', reports_to: 'marketing-lead', department: 'marketing', agent: ag('seo', 'rank-watch'), job: '' },
-      { id: 'support-lead', title: 'Customer care', reports_to: null, department: 'support', agent: null, job: 'Answers customers within a day.' },
+      { id: 'support-lead', title: 'Customer care', reports_to: null, department: 'support', agent: null, job: 'Answers customers within a day.', suggested_template: 'writer' },
     ] })
   const t = now()
   S.tasks.tasks.push({ id: 't_9f3c2a', title: 'Three articles on the spring kit', notes: '', status: 'doing', priority: 1, due: new Date(Date.now() + 3 * DAY * 1000).toISOString().slice(0, 10), project_id: null, topic_path: null, labels: ['acme-group'], created: t, updated: t, done_at: null,
@@ -2001,6 +2008,7 @@ function entView(id) {
   return { id, name: e.name, emoji: e.emoji, rev: e.rev, projects: e.projects, top: e.top, settings: e.settings, envelope: e.envelope, departments: e.departments,
     objectives: e.objectives, grants: e.grants, broken: false, positions, cost_today: +positions.reduce((n, p) => n + p.cost_today, 0).toFixed(2), ceiling_hit: false }
 }
+const entMerge = (a, b) => (b && typeof b === 'object' && !Array.isArray(b) ? Object.fromEntries([...new Set([...Object.keys(a || {}), ...Object.keys(b)])].map((k) => [k, k in b ? entMerge((a || {})[k], b[k]) : a[k]])) : b)
 const entTouch = (e, id) => { e.rev += 1; bus('enterprises', `enterprises:${id}`) }
 const entGet = (id) => { if (!ENT.size) entSeed(); return ENT.get(id) || fail(404, 'not_found', 'Enterprise not found') }
 const entPos = (e, pos) => e.positions.find((p) => p.id === pos) || fail(404, 'not_found', 'Position not found')
@@ -2025,7 +2033,11 @@ R('POST', '/api/enterprises', ({ body }) => {
 R('GET', '/api/enterprises/:e', ({ params }) => { entGet(params.e); return entView(params.e) })
 R('PATCH', '/api/enterprises/:e', ({ params, body }) => {
   const e = entGet(params.e)
-  for (const k of ['name', 'emoji', 'top', 'settings', 'envelope', 'departments', 'objectives', 'grants']) if (body[k] !== undefined) e[k] = body[k]
+  if (body.settings?.desk?.enabled && !e.settings.desk.enabled) {
+    const bad = e.positions.filter((p) => entAgent(p.agent) && !entAgent(p.agent).sandbox).map((p) => p.id)
+    if (bad.length) fail(400, 'unprotected_occupants', `The front desk can only go live when every occupant of the enterprise is Protected (sandbox): ${bad.join(', ')}`)
+  }
+  for (const k of ['name', 'emoji', 'top', 'settings', 'envelope', 'departments', 'objectives', 'grants']) if (body[k] !== undefined) e[k] = k === 'settings' ? entMerge(e[k], body[k]) : body[k]
   entTouch(e, params.e)
   return entView(params.e)
 })
@@ -2073,6 +2085,7 @@ R('POST', '/api/enterprises/:e/positions/:pos/hire', ({ params, body }) => {
   const e = entGet(params.e)
   const p = entPos(e, params.pos)
   const path = `${body.topic}/agents/${p.id}`
+  if (body.template) p.hired_with = body.template
   p.agent = path
   entTouch(e, params.e)
   return { agent: path }
@@ -2143,7 +2156,78 @@ R('PUT', '/api/enterprises/:e/profile', ({ params, body }) => {
   st.profile = { products: [], hours: '', terms: {}, contact: '', faq: [], ...body }
   return { profile: st.profile }
 })
-R('GET', '/api/enterprises/:e/insights', ({ params }) => { entGet(params.e); return { week: '2026-W45', questions: [], topics: [], pains: [], unanswered: ['Does the kit ship to Norway?'] } })
+const entDesk = (e) => (e.desk ||= {
+  conversations: [
+    { id: 'a1b2c3d4e5f60718', started: now() - 7200, last: now() - 7100, summary: 'Does the starter kit ship to Norway?', pending: false, messages: [{ role: 'visitor', text: 'Does the starter kit ship to Norway?', at: now() - 7200 }, { role: 'assistant', label: 'AI assistant of Acme Group', text: 'I could not find shipping rules for Norway. A colleague will get back to you.', at: now() - 7100 }] },
+    { id: '0f1e2d3c4b5a6978', started: now() - 90000, last: now() - 89000, summary: 'Hello, what are your opening hours?', pending: false, messages: [{ role: 'visitor', text: 'Hello, what are your opening hours?', at: now() - 90000 }, { role: 'assistant', label: 'AI assistant of Acme Group', text: 'We are open Monday to Friday, 9:00 to 18:00 CET.', at: now() - 89000 }] },
+  ],
+  insights: { week: '2026-W45', at: now() - 86400, conversations: 2, cost: 0.04,
+    questions: [{ text: 'Opening hours', count: 4 }, { text: 'Shipping to non-EU countries', count: 2, department: 'support' }], topics: [{ text: 'Delivery', count: 5 }], pains: [{ text: 'No delivery date promised', count: 1 }],
+    unanswered: [{ text: 'Does the kit ship to Norway?', count: 2 }] },
+  suggestions: [{ id: 's1a2b3c4', q: 'Does the kit ship to Norway?', count: 2, week: '2026-W45', status: 'pending', at: now() - 86400 }],
+  workers: [{ id: 'w1', agent: 'projects/acme/topics/blog/agents/writer-w1', position: 'writer', text: 'Check the shipping times quoted on the competitor pages.', task: '', status: 'live', created: now() - 600, expires: now() + 80000, ended: null, session: '', result: '' },
+    { id: 'w0', agent: 'projects/acme/topics/blog/agents/writer-w0', position: 'writer', text: 'Summarize last month traffic.', task: '', status: 'done', created: now() - 90000, expires: now() - 3600, ended: now() - 86000, session: '', result: 'Traffic +12 %.' }],
+})
+const entDeskAsk = (id) => entDesk(entGet(id))
+R('GET', '/api/enterprises/:e/desk', ({ params }) => {
+  const e = entGet(params.e)
+  const d = entDesk(e)
+  const s = e.settings.desk
+  const unprotected = e.positions.filter((p) => entAgent(p.agent) && !entAgent(p.agent).sandbox).map((p) => p.id)
+  return { enabled: s.enabled, label: s.label || `AI assistant of ${e.name}`, retention_days: s.retention_days, full_for: s.full_for, position: e.positions.find((p) => p.desk && p.agent)?.id || null,
+    public: { ...s.public, path: s.public.token ? `/api/public/desk/${s.public.token}` : '' }, unprotected,
+    conversations: d.conversations.map(({ messages, ...c }) => ({ ...c, messages: messages.filter((m) => m.role === 'visitor').length })).sort((a, b) => b.last - a.last) }
+})
+R('POST', '/api/enterprises/:e/desk/link', ({ params, body }) => {
+  const e = entGet(params.e)
+  const pub = e.settings.desk.public
+  if (!pub.token || body.regenerate) pub.token = crypto.randomBytes(18).toString('base64url')
+  entTouch(e, params.e)
+  return { token: pub.token, path: `/api/public/desk/${pub.token}` }
+})
+R('GET', '/api/enterprises/:e/desk/:conv', ({ params }) => {
+  const c = entDeskAsk(params.e).conversations.find((x) => x.id === params.conv) || fail(404, 'not_found', 'Conversation not found')
+  return { id: c.id, messages: c.messages }
+})
+R('DELETE', '/api/enterprises/:e/desk/:conv', ({ params }) => {
+  const d = entDeskAsk(params.e)
+  if (!d.conversations.some((x) => x.id === params.conv)) fail(404, 'not_found', 'Conversation not found')
+  d.conversations = d.conversations.filter((x) => x.id !== params.conv)
+  bus('enterprises', `enterprises:${params.e}`)
+  return { ok: true }
+})
+R('GET', '/api/enterprises/:e/insights', ({ params }) => ({ ...entDeskAsk(params.e).insights }))
+R('POST', '/api/enterprises/:e/insights', ({ params }) => {
+  const d = entDeskAsk(params.e)
+  d.insights.at = now()
+  return { built: true, insights: d.insights }
+})
+R('GET', '/api/enterprises/:e/profile/suggestions', ({ params }) => ({ items: entDeskAsk(params.e).suggestions }))
+R('POST', '/api/enterprises/:e/profile/suggestions/:sid', ({ params, body }) => {
+  const st = entAsk(params.e)
+  const s = entDeskAsk(params.e).suggestions.find((x) => x.id === params.sid) || fail(404, 'not_found', 'Suggestion not found')
+  if (s.status !== 'pending') fail(409, 'decided', 'This suggestion is already decided')
+  if (body.action === 'accept') {
+    if (!String(body.a || '').trim()) fail(400, 'answer_needed', 'Write the answer to publish')
+    st.profile.faq = [...(st.profile.faq || []), { q: body.q || s.q, a: body.a }]
+  }
+  s.status = body.action === 'accept' ? 'accepted' : 'dismissed'
+  bus('enterprises', `enterprises:${params.e}`)
+  return s
+})
+R('GET', '/api/enterprises/:e/workers', ({ params }) => ({ items: entDeskAsk(params.e).workers }))
+R('DELETE', '/api/enterprises/:e/workers/:wid', ({ params }) => {
+  const w = entDeskAsk(params.e).workers.find((x) => x.id === params.wid) || fail(404, 'not_found', 'Worker not found')
+  if (w.status !== 'live') fail(409, 'not_live', 'This worker is already gone')
+  w.status = 'stopped'
+  w.ended = now()
+  bus('enterprises', `enterprises:${params.e}`)
+  return w
+})
+R('GET', '/api/agents/templates', () => ({ templates: [
+  { id: 'writer', name: 'Writer', summary: 'Drafts articles from a brief.', role: 'You write articles.', needs: '', brief: '', first: true, avatar: { color: 'clay', skin: 'light', hair: 'short', hair_color: 'black', face: 'happy', accessory: 'none' }, permission_mode: 'default', approvals: true, allowed_tools: [], keys: [], keys_present: [], limits: {}, domains: [] },
+  { id: 'researcher', name: 'Researcher', summary: 'Reads sources and reports.', role: 'You research.', needs: '', brief: '', first: true, avatar: { color: 'blue', skin: 'tan', hair: 'bun', hair_color: 'brown', face: 'focused', accessory: 'glasses' }, permission_mode: 'default', approvals: true, allowed_tools: [], keys: [], keys_present: [], limits: {}, domains: [] },
+] }))
 R('GET', '/api/enterprises/:e/decisions', ({ params, q }) => {
   entGet(params.e)
   const all = [

@@ -4,6 +4,7 @@ import type * as React from 'react'
 import type { TKey } from '@/i18n'
 import type { Enterprise } from '@/lib/types'
 import { Decisions } from './Decisions'
+import { DeskTab } from './Desk'
 import { EnterpriseSettings } from './EnterpriseSettings'
 import { OrgChart } from './OrgChart'
 import { Overview } from './Overview'
@@ -14,6 +15,8 @@ export type EnterpriseTab = {
   /** the tab's address segment; the home tab's id is not shown in the address */
   id: string
   label: TKey
+  /** the tab only shows while this is true (default: always) */
+  show?: (e: Enterprise) => boolean
   render: (e: Enterprise) => React.ReactNode
 }
 
@@ -21,6 +24,7 @@ export const ENTERPRISE_TABS: EnterpriseTab[] = [
   { id: 'chart', label: 'ent.tab.chart', render: (e) => <OrgChart enterprise={e} /> },
   { id: 'overview', label: 'ent.tab.overview', render: (e) => <Overview enterprise={e} /> },
   { id: 'decisions', label: 'ent.tab.decisions', render: (e) => <Decisions enterprise={e} /> },
+  { id: 'desk', label: 'ent.tab.desk', show: (e) => !!e.settings.desk?.enabled || e.positions.some((p) => p.desk), render: (e) => <DeskTab enterprise={e} /> },
   { id: 'reports', label: 'ent.tab.reports', render: (e) => <Reports enterprise={e} /> },
   { id: 'profile', label: 'ent.tab.profile', render: (e) => <ProfileTab enterprise={e} /> },
   { id: 'settings', label: 'ent.tab.settings', render: (e) => <EnterpriseSettings enterprise={e} /> },

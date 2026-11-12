@@ -1,9 +1,9 @@
 // The dialogs of Enterprises: New enterprise, Add position, Hire (a vacant position gets a new agent).
 import * as React from 'react'
 import { useNavigate } from 'react-router'
-import { useT } from '@/i18n'
+import { useLang, useT } from '@/i18n'
 import { errorMessage, isApiError } from '@/lib/api'
-import { enterpriseRoute, useAddPosition, useCreateEnterprise, useEnterpriseTemplates, useEnterprises, useHirePosition, useWorkspace } from '@/lib/queries'
+import { enterpriseRoute, useAddPosition, useAgentTemplates, useCreateEnterprise, useEnterpriseTemplates, useEnterprises, useHirePosition, useWorkspace } from '@/lib/queries'
 import type { Enterprise, Position } from '@/lib/types'
 import { SLUG_RE, cn, slugify } from '@/lib/utils'
 import { Button, Checkbox, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, FormField, Input, Select, Sensitive, Textarea, toast } from '@/components/ui'
@@ -212,9 +212,15 @@ export function HireDialog({ enterprise: e, position, open, onOpenChange, onHire
     () => (ws?.projects || []).filter((p) => e.projects.includes(p.name)).flatMap((p) => p.topics.map((x) => ({ value: `projects/${p.name}/topics/${x.name}`, label: `${p.name} / ${x.name}` }))),
     [ws, e.projects],
   )
+  const lang = useLang()
+  const { data: agentTemplates } = useAgentTemplates(lang, open)
+  const templates = React.useMemo(() => [{ value: NONE, label: t('ent.hire.noTemplate') }, ...(agentTemplates || []).map((x) => ({ value: x.id, label: x.name }))], [agentTemplates, t])
+  const suggested = position.suggested_template && (agentTemplates || []).some((x) => x.id === position.suggested_template) ? position.suggested_template : NONE
   const [topic, setTopic] = React.useState('')
+  const [template, setTemplate] = React.useState<string | null>(null)
   React.useEffect(() => {
     if (open) {
+      setTemplate(null)
       setTopic((cur) => (topics.some((x) => x.value === cur) ? cur : topics[0]?.value || ''))
       hire.reset()
     }
@@ -224,7 +230,7 @@ export function HireDialog({ enterprise: e, position, open, onOpenChange, onHire
     ev.preventDefault()
     if (!topic) return
     hire.mutate(
-      { id: e.id, pos: position.id, topic },
+      { id: e.id, pos: position.id, topic, template: agentTemplates || template !== null ? (template ?? suggested) === NONE ? '' : (template ?? suggested) : undefined },
       {
         onSuccess: (r) => {
           toast.success(t('ent.hire.done'))
@@ -249,6 +255,9 @@ export function HireDialog({ enterprise: e, position, open, onOpenChange, onHire
               <Select value={topic} onValueChange={setTopic} options={topics} />
             </FormField>
           )}
+          <FormField label={t('ent.hire.template')} hint={t('ent.hire.templateHint')}>
+            <Select value={template ?? suggested} onValueChange={setTemplate} options={templates} />
+          </FormField>
           {hire.error && (
             <p role="alert" className="text-[13px] text-destructive">
               {errorMessage(hire.error)}

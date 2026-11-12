@@ -13,7 +13,7 @@ export default function EnterprisePage() {
   const t = useT()
   const { id = '', tab } = useParams()
   const { data: e, isLoading, error, refetch } = useEnterprise(id)
-  const tabs = ENTERPRISE_TABS
+  const tabs = e ? ENTERPRISE_TABS.filter((x) => !x.show || x.show(e)) : ENTERPRISE_TABS
   const current = tabs.find((x) => x.id === (tab || tabs[0].id))
   if (tab && !current) return <Navigate to={enterpriseRoute(id)} replace />
   const back = (

@@ -4,10 +4,10 @@ import * as React from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import { useT } from '@/i18n'
 import { errorMessage } from '@/lib/api'
-import { useEnterpriseAbout, useEnterpriseInsights, useEnterpriseProfile, usePutEnterpriseAbout, usePutEnterpriseProfile } from '@/lib/queries'
+import { useDecideSuggestion, useDeskSuggestions, useEnterpriseAbout, useEnterpriseProfile, usePutEnterpriseAbout, usePutEnterpriseProfile } from '@/lib/queries'
 import type { Enterprise, EnterpriseProfile } from '@/lib/types'
 import { cn } from '@/lib/utils'
-import { Button, EmptyState, FormField, Input, Skeleton, Textarea, toast } from '@/components/ui'
+import { Badge, Button, EmptyState, FormField, Input, Skeleton, Textarea, toast } from '@/components/ui'
 import { SectionStack, SettingsCard } from '@/pages/settings/sections/ui'
 
 export function ProfileTab({ enterprise: e }: { enterprise: Enterprise }) {
@@ -258,21 +258,58 @@ function RowsEditor({ title, hint, rows, onChange, testid }: { title: string; hi
   )
 }
 
-/** What customers could not get answered this week (the insights loop, when the server has one); nothing when it has not. */
+/** The questions customers asked the front desk that the profile could not answer: accept one as a FAQ entry (the owner writes the answer) or dismiss it. */
 function Suggestions({ id }: { id: string }) {
   const t = useT()
-  const { data } = useEnterpriseInsights(id)
-  const list = (data?.unanswered || []).map((x) => (typeof x === 'string' ? x : typeof x === 'object' && x && 'q' in x ? str((x as { q: unknown }).q) : typeof x === 'object' && x && 'text' in x ? str((x as { text: unknown }).text) : '')).filter(Boolean)
-  if (list.length === 0) return null
+  const { data } = useDeskSuggestions(id)
+  const pending = (data || []).filter((x) => x.status === 'pending')
+  if (pending.length === 0) return null
   return (
-    <section className="grid gap-2" aria-label={t('ent.profile.unanswered')} data-testid="profile-unanswered">
-      <h4 className="text-sm font-medium">{t('ent.profile.unanswered')}</h4>
-      <p className="text-[13px] text-muted-foreground">{t('ent.profile.unansweredDesc')}</p>
-      <ul className="list-disc pl-5 text-[13px]">
-        {list.map((q, i) => (
-          <li key={i}>{q}</li>
-        ))}
-      </ul>
+    <section className="grid gap-3" aria-label={t('ent.profile.suggestions')} data-testid="profile-suggestions">
+      <div className="grid gap-1">
+        <h4 className="text-sm font-medium">{t('ent.profile.suggestions')}</h4>
+        <p className="text-[13px] text-muted-foreground">{t('ent.profile.suggestionsDesc')}</p>
+      </div>
+      {pending.map((s) => (
+        <SuggestionCard key={s.id} id={id} sid={s.id} q={s.q} count={s.count} />
+      ))}
     </section>
+  )
+}
+
+function SuggestionCard({ id, sid, q, count }: { id: string; sid: string; q: string; count: number }) {
+  const t = useT()
+  const decide = useDecideSuggestion()
+  const [question, setQuestion] = React.useState(q)
+  const [answer, setAnswer] = React.useState('')
+  const [err, setErr] = React.useState('')
+  const act = (action: 'accept' | 'dismiss') => {
+    setErr('')
+    decide.mutate(
+      { id, sid, action, q: question.trim(), a: answer.trim() },
+      { onSuccess: () => toast.success(t(action === 'accept' ? 'ent.profile.suggestionAccepted' : 'ent.profile.suggestionDismissed')), onError: (e) => setErr(errorMessage(e)) },
+    )
+  }
+  return (
+    <div className="grid gap-2 rounded-lg border p-3" data-testid="profile-suggestion">
+      <div className="flex items-start gap-2">
+        <Input value={question} onChange={(ev) => setQuestion(ev.target.value)} aria-label={t('ent.profile.question')} maxLength={300} autoComplete="off" />
+        {count > 0 && <Badge variant="muted">{t('ent.profile.askedTimes', { count })}</Badge>}
+      </div>
+      <Textarea value={answer} onChange={(ev) => setAnswer(ev.target.value)} placeholder={t('ent.profile.answerToPublish')} aria-label={t('ent.profile.answer')} minRows={2} maxRows={8} maxLength={2000} />
+      {err && (
+        <p role="alert" className="text-[13px] text-destructive">
+          {err}
+        </p>
+      )}
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" size="sm" onClick={() => act('accept')} disabled={!question.trim() || !answer.trim() || decide.isPending} data-testid="suggestion-accept">
+          {t('ent.profile.accept')}
+        </Button>
+        <Button type="button" size="sm" variant="ghost" onClick={() => act('dismiss')} disabled={decide.isPending} data-testid="suggestion-dismiss">
+          {t('ent.profile.dismiss')}
+        </Button>
+      </div>
+    </div>
   )
 }

@@ -13,6 +13,7 @@ import { AgentChatPanel } from '@/features/agents/AgentPage'
 import { HireDialog, NONE, leadOptions } from './dialogs'
 import { EscalationCard, RequestCard } from './Overview'
 import { STATE_TONE, inProjects, subtreeIds, useSavePosition } from './parts'
+import { DeskSwitch, PositionWorkers, WorkerTemplateEditor } from './Workers'
 
 export function PositionSheet({ enterprise: e, positionId, onClose }: { enterprise: Enterprise; positionId: string | null; onClose: () => void }) {
   const t = useT()
@@ -171,6 +172,12 @@ function PositionForm({ enterprise: e, position: p, onClose, onHired }: { enterp
           )}
         </div>
         {!p.agent && occupantOptions.length === 0 && <p className="text-[13px] text-muted-foreground">{t('ent.position.noAgents')}</p>}
+      </div>
+
+      <div className="grid gap-5 border-t pt-4">
+        <DeskSwitch enterprise={e} position={p} />
+        <WorkerTemplateEditor enterprise={e} position={p} />
+        <PositionWorkers enterprise={e} position={p} />
       </div>
 
       <div className="border-t pt-4">

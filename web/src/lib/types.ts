@@ -468,7 +468,7 @@ export type EnterpriseSettings = {
   digest: { enabled: boolean; hour: number; per_lead: boolean; titles_only: boolean }
   weekly: boolean
   monthly: boolean
-  desk?: { enabled: boolean; label: string; retention_days: number; full_for: string[] }
+  desk?: { enabled: boolean; label: string; retention_days: number; full_for: string[]; public?: { enabled: boolean; token: string; rate_per_hour: number; max_chars: number } }
   limits: { depth: number; reports: number; workers_live: number; hops_per_task: number }
 }
 export type EnterpriseEnvelope = { usd_per_day: number | null; keys: string[] | null; domains: string[] | null }
@@ -486,6 +486,8 @@ export type Position = {
   job: string
   desk?: boolean
   worker_template?: { role: string; model: string; usd_per_day: number }
+  /** an agent template id that fits the role (the Hire dialog preselects it) */
+  suggested_template?: string
   state: PositionState
   occupant: PositionOccupant | null
   cost_today: number
@@ -543,7 +545,23 @@ export type EnterpriseProfile = {
 }
 export type EnterpriseBuilt = { built: boolean; report: EnterpriseReport | null }
 export type EnterpriseReportDoc = EnterpriseReport & { text: string }
-export type EnterpriseInsights = { week: string; questions: unknown[]; topics: unknown[]; pains: unknown[]; unanswered: unknown[] }
+export type EnterpriseInsightItem = { text: string; count: number; department?: string }
+export type EnterpriseInsights = { week: string; at?: number | null; conversations?: number; questions: EnterpriseInsightItem[]; topics: EnterpriseInsightItem[]; pains: EnterpriseInsightItem[]; unanswered: EnterpriseInsightItem[]; cost?: number }
+export type DeskConversationSummary = { id: string; started: number; last: number; messages: number; summary: string; pending: boolean }
+export type DeskMessage = { role: 'visitor' | 'assistant' | 'system'; text: string; at: number; label?: string }
+export type EnterpriseDesk = {
+  enabled: boolean
+  label: string
+  retention_days: number
+  full_for: string[]
+  position: string | null
+  public: { enabled: boolean; token: string; rate_per_hour: number; max_chars: number; path: string }
+  unprotected: string[]
+  conversations: DeskConversationSummary[]
+}
+export type DeskSettingsPatch = { enabled?: boolean; label?: string; retention_days?: number; full_for?: string[]; public?: { enabled?: boolean; rate_per_hour?: number; max_chars?: number } }
+export type DeskSuggestion = { id: string; q: string; count: number; week: string; status: 'pending' | 'accepted' | 'dismissed'; at: number }
+export type EnterpriseWorker = { id: string; agent: string; position: string; text: string; task: string; status: string; created: number; expires: number; ended?: number | null; session: string; result: string }
 
 
 /* ---------------------------------------------------------------- MCP servers (Settings -> MCP) */

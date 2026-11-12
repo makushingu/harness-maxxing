@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, seg } from '../api'
-import type { DecisionItem, Enterprise, EnterpriseAbout, EnterpriseBuilt, EnterpriseEscalation, EnterpriseInput, EnterpriseInsights, EnterpriseOverview, EnterprisePatch, EnterpriseProfile, EnterpriseReport, EnterpriseReportDoc, EnterpriseRequest, EnterpriseSummary, EnterpriseTemplate, InboxItem, Ok, PositionInput, PositionPatch } from '../types'
+import type { DecisionItem, Enterprise, EnterpriseAbout, EnterpriseBuilt, EnterpriseEscalation, EnterpriseInput, DeskMessage, DeskSettingsPatch, DeskSuggestion, EnterpriseDesk, EnterpriseInsights, EnterpriseOverview, EnterpriseWorker, EnterprisePatch, EnterpriseProfile, EnterpriseReport, EnterpriseReportDoc, EnterpriseRequest, EnterpriseSummary, EnterpriseTemplate, InboxItem, Ok, PositionInput, PositionPatch } from '../types'
 import { qk } from './keys'
 import { useMut } from './util'
 
@@ -21,6 +21,10 @@ export const entKeys = {
   about: (id: string) => ['enterprises', 'about', id] as const,
   profile: (id: string) => ['enterprises', 'profile', id] as const,
   insights: (id: string) => ['enterprises', 'insights', id] as const,
+  desk: (id: string) => ['enterprises', 'desk', id] as const,
+  conversation: (id: string, conv: string) => ['enterprises', 'desk', id, conv] as const,
+  suggestions: (id: string) => ['enterprises', 'suggestions', id] as const,
+  workers: (id: string) => ['enterprises', 'workers', id] as const,
 }
 
 const base = (id: string, sub = '') => `/api/enterprises/${seg(id)}${sub}`
@@ -103,7 +107,7 @@ export function useDeletePosition() {
 }
 /** Creates the agent in `topic` (a topic path, projects/<p>/topics/<t>) and seats it; the agent sets itself up in its conversation. */
 export function useHirePosition() {
-  return useMut(({ id, pos, topic }: { id: string; pos: string; topic: string }) => api.post<{ agent: string }>(posUrl(id, pos, '/hire'), { topic }), {
+  return useMut(({ id, pos, topic, template }: { id: string; pos: string; topic: string; template?: string }) => api.post<{ agent: string }>(posUrl(id, pos, '/hire'), { topic, template }), {
     invalidate: [entKeys.all, ['agents'], qk.workspace],
     errorToast: false,
   })
@@ -169,4 +173,51 @@ export function usePutEnterpriseProfile() {
 }
 export function useEnterpriseInsights(id: string | null) {
   return useQuery({ queryKey: entKeys.insights(id || ''), queryFn: () => api.get<EnterpriseInsights>(base(id!, '/insights')), enabled: !!id, retry: false })
+}
+
+// ---- Front desk (settings, conversations, insights, suggested FAQ entries) and workers
+
+/** The desk's status: settings, the public link, the occupants that are not Protected, the conversations (newest first). */
+export function useEnterpriseDesk(id: string | null) {
+  return useQuery({ queryKey: entKeys.desk(id || ''), queryFn: () => api.get<EnterpriseDesk>(base(id!, '/desk')), enabled: !!id })
+}
+export function useDeskConversation(id: string | null, conv: string | null) {
+  return useQuery({ queryKey: entKeys.conversation(id || '', conv || ''), queryFn: () => api.get<{ id: string; messages: DeskMessage[] }>(base(id!, `/desk/${seg(conv!)}`)).then((r) => r.messages), enabled: !!id && !!conv })
+}
+export function useDeleteDeskConversation() {
+  return useMut(({ id, conv }: { id: string; conv: string }) => api.del<Ok>(base(id, `/desk/${seg(conv)}`)), { invalidate: [['enterprises', 'desk']] })
+}
+/** Only the desk's settings go (the server merges partial settings). `400 unprotected_occupants` when going live: the form shows it. */
+export function useSaveDeskSettings() {
+  const put = usePutEnterprise()
+  return useMut(({ id, desk }: { id: string; desk: DeskSettingsPatch }) => api.patch<Enterprise>(base(id), { settings: { desk } }), { onSuccess: put, invalidate: [['enterprises', 'desk'], entKeys.list], errorToast: false })
+}
+/** Makes the public link (or replaces it: the old one stops working). */
+export function useDeskLink() {
+  return useMut(({ id, regenerate }: { id: string; regenerate?: boolean }) => api.post<{ token: string; path: string }>(base(id, '/desk/link'), { regenerate: !!regenerate }), { invalidate: [['enterprises', 'desk'], entKeys.all], errorToast: false })
+}
+/** Builds this week's table now. */
+export function useRunInsights() {
+  const qc = useQueryClient()
+  return useMut(({ id }: { id: string }) => api.post<{ built: boolean; insights: EnterpriseInsights }>(base(id, '/insights')), {
+    onSuccess: (r, { id }) => qc.setQueryData(entKeys.insights(id), r.insights),
+    invalidate: [['enterprises', 'suggestions']],
+  })
+}
+export function useDeskSuggestions(id: string | null) {
+  return useQuery({ queryKey: entKeys.suggestions(id || ''), queryFn: () => api.get<{ items: DeskSuggestion[] }>(base(id!, '/profile/suggestions')).then((r) => r.items), enabled: !!id })
+}
+/** Accept (with the answer to publish; the question may be reworded) adds a FAQ entry to the profile; dismiss drops it. */
+export function useDecideSuggestion() {
+  return useMut(({ id, sid, action, q, a }: { id: string; sid: string; action: 'accept' | 'dismiss'; q?: string; a?: string }) => api.post<DeskSuggestion>(base(id, `/profile/suggestions/${seg(sid)}`), { action, q, a }), {
+    invalidate: [['enterprises', 'suggestions'], ['enterprises', 'profile'], ['enterprises', 'decisions']],
+    errorToast: false,
+  })
+}
+/** The workers of a position (live first as the server sends them, newest first). */
+export function useEnterpriseWorkers(id: string | null) {
+  return useQuery({ queryKey: entKeys.workers(id || ''), queryFn: () => api.get<{ items: EnterpriseWorker[] }>(base(id!, '/workers')).then((r) => r.items), enabled: !!id })
+}
+export function useStopWorker() {
+  return useMut(({ id, wid }: { id: string; wid: string }) => api.del<Ok>(base(id, `/workers/${seg(wid)}`)), { invalidate: [['enterprises', 'workers'], ['agents']] })
 }
