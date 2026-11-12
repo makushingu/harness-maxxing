@@ -2,11 +2,12 @@
 maxxing/enterprises.py. Only the owner (the signed-in user) edits the chart."""
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 
 from .. import agents, enterprises
@@ -88,6 +89,33 @@ def create_enterprise(body: EnterpriseIn):
 def templates():
     _on()
     return {"templates": enterprises.list_templates()}
+
+
+@router.post("/import")
+async def import_enterprise(request: Request):
+    """The body is the zip itself (no multipart); a new enterprise is created from it."""
+    _on()
+    from .. import enterprise_io
+    buf = bytearray()
+    async for chunk in request.stream():
+        buf += chunk
+        if len(buf) > enterprise_io.MAX_ZIP:
+            raise HTTPException(413, detail={"error": "too_big", "message": "The zip is larger than 50 MB"})
+    try:
+        return await asyncio.to_thread(enterprise_io.import_zip, bytes(buf))
+    except enterprises.EnterpriseError as x:
+        raise _bad(x) from None
+
+
+@router.get("/{e}/export")
+async def export_enterprise(e: str):
+    _on()
+    from .. import enterprise_io
+    try:
+        data = await asyncio.to_thread(enterprise_io.export_zip, e)
+    except enterprises.EnterpriseError as x:
+        raise _bad(x) from None
+    return Response(data, media_type="application/zip", headers={"Content-Disposition": f'attachment; filename="{e}.zip"'})
 
 
 @router.get("/{e}")

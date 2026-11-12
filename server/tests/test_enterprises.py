@@ -68,7 +68,7 @@ def test_feature_off_when_either_flag_is_off(client, topic):
     _on(client)
     assert enterprises.feature_on() is True
     assert client.get(E).json() == {"enterprises": []}
-    assert client.get(E + "/templates").json() == {"templates": []}
+    assert len(client.get(E + "/templates").json()["templates"]) == 4
 
 
 def test_settings_flag_default_and_roundtrip(client):

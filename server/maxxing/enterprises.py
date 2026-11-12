@@ -137,12 +137,20 @@ def _group(spec: dict[str, Callable[[Any], Any]], default: dict) -> Callable[[An
     return check
 
 
+def _token(v: Any) -> str:
+    """The public chat link's token: empty or 20-64 URL-safe characters (the server makes it)."""
+    if v == "" or (isinstance(v, str) and re.fullmatch(r"[A-Za-z0-9_-]{20,64}", v)):
+        return v
+    raise ValueError("token")
+
+
 DEFAULT_SETTINGS: dict[str, Any] = {
     "communication": "leads", "allow": [], "workers": "discreet", "autonomy": "balanced", "trust_chain": False,
     "escalation_timeout_h": 4,
     "digest": {"enabled": False, "hour": 8, "per_lead": False, "titles_only": False},
     "weekly": False, "monthly": False,
-    "desk": {"enabled": False, "label": "", "retention_days": 30, "full_for": []},
+    "desk": {"enabled": False, "label": "", "retention_days": 30, "full_for": [],
+             "public": {"enabled": False, "token": "", "rate_per_hour": 20, "max_chars": 1000}},
     "limits": {"depth": 4, "reports": 8, "workers_live": 5, "hops_per_task": 6},
 }
 _CHECKS: dict[str, Callable[[Any], Any]] = {
@@ -153,7 +161,10 @@ _CHECKS: dict[str, Callable[[Any], Any]] = {
                      DEFAULT_SETTINGS["digest"]),
     "weekly": _bool, "monthly": _bool,
     "desk": _group({"enabled": _bool, "label": lambda v: _text(v, 60), "retention_days": lambda v: _int(v, 1, 365),
-                    "full_for": _slugs}, DEFAULT_SETTINGS["desk"]),
+                    "full_for": _slugs,
+                    "public": _group({"enabled": _bool, "token": _token, "rate_per_hour": lambda v: _int(v, 1, 600),
+                                      "max_chars": lambda v: _int(v, 50, 4000)},
+                                     DEFAULT_SETTINGS["desk"]["public"])}, DEFAULT_SETTINGS["desk"]),
     "limits": _group({"depth": lambda v: _int(v, 1, DEPTH_MAX), "reports": lambda v: _int(v, 1, REPORTS_MAX),
                       "workers_live": lambda v: _int(v, 0, 50), "hops_per_task": lambda v: _int(v, 1, 20)},
                      DEFAULT_SETTINGS["limits"]),
@@ -182,10 +193,10 @@ def _settings(src: Any, strict: bool = False, partial: bool = False) -> dict:
 
 
 def _merge(base: dict, patch: dict) -> dict:
-    """patch over base, one level of nested objects merged."""
+    """patch over base, nested objects merged all the way down (desk.public.enabled keeps the token)."""
     out = copy.deepcopy(base)
     for k, v in patch.items():
-        out[k] = {**out[k], **v} if isinstance(v, dict) and isinstance(out.get(k), dict) else v
+        out[k] = _merge(out[k], v) if isinstance(v, dict) and isinstance(out.get(k), dict) else v
     return out
 
 
@@ -580,7 +591,8 @@ def _apply(slug: str, fn: Callable[[dict], Any], note: Callable[[dict, Any], str
 
 # ---- create / update / delete ----------------------------------------------------------------------------
 def list_templates() -> list[dict]:
-    return []
+    from . import enterprise_templates
+    return enterprise_templates.listing()
 
 
 def _check_projects(projects: Any, slug: str) -> list[str]:
@@ -601,22 +613,28 @@ def create(slug: str, fields: dict | None = None) -> dict:
     if not _slug_ok(slug) or slug in RESERVED:
         raise EnterpriseError(400, "invalid_name",
                               "Use 1-48 lowercase letters, digits or dashes (starting with a letter or digit)")
+    tpl = None
     if f.get("template"):
-        raise EnterpriseError(400, "bad_template", f"Unknown template {f['template']!r}")
-    name = _text(f.get("name"), NAME_MAX) or slug
+        from . import enterprise_templates
+        tpl = enterprise_templates.get(str(f["template"]))
+        if not tpl:
+            raise EnterpriseError(400, "bad_template", f"Unknown template {f['template']!r}")
+    name = _text(f.get("name"), NAME_MAX) or (tpl["name"] if tpl else slug)
     with _lock:
         if folder(slug).exists():
             raise EnterpriseError(409, "exists", f"Enterprise {slug!r} already exists")
         if len(names()) >= MAX_ENTERPRISES:
             raise EnterpriseError(400, "too_many", f"At most {MAX_ENTERPRISES} enterprises")
         projects = _check_projects(f.get("projects") or [], slug)
-        data = clean({"name": name, "emoji": f.get("emoji") or "", "projects": projects, "rev": 1})
+        data = clean({"name": name, "emoji": f.get("emoji") or "", "projects": projects, "rev": 1,
+                      **({k: tpl[k] for k in ("positions", "departments", "settings")} if tpl else {})})
         try:
             folder(slug).mkdir(parents=True)
         except FileExistsError:
             raise EnterpriseError(409, "exists", f"Enterprise {slug!r} already exists") from None
         try:
-            (folder(slug) / "CLAUDE.md").write_text(f"# Enterprise {name}\n\n", encoding="utf-8")
+            mission = f"{tpl['mission']}\n\n" if tpl else ""    # a template's positions stay vacant
+            (folder(slug) / "CLAUDE.md").write_text(f"# Enterprise {name}\n\n{mission}", encoding="utf-8")
             (folder(slug) / "files").mkdir(exist_ok=True)
             shutil.rmtree(_peek(slug), ignore_errors=True)  # left by an older enterprise of that name
             config.write_json(folder(slug) / FILE, data)
@@ -645,7 +663,11 @@ def update(slug: str, fields: dict) -> dict:
         if "settings" in f:
             if not isinstance(f["settings"], dict):
                 raise EnterpriseError(400, "invalid", "settings: an object")
+            was_live = bool(d["settings"]["desk"].get("enabled"))
             d["settings"] = _settings(_merge(d["settings"], f["settings"]), strict=True)
+            if d["settings"]["desk"]["enabled"] and not was_live:      # the front desk goes live: every occupant protected
+                from . import enterprise_desk
+                enterprise_desk.check_live(slug, d)
         if "envelope" in f:
             if not isinstance(f["envelope"], dict):
                 raise EnterpriseError(400, "invalid", "envelope: an object")
@@ -667,6 +689,12 @@ def update(slug: str, fields: dict) -> dict:
     return get(slug)
 
 
+def objectives_progress(slug: str) -> list[dict]:
+    """The objectives with `progress` (percent of the target, None without a target or a value)."""
+    return [{**o, "progress": round(100 * o["value"] / o["target"]) if o.get("target") and o.get("value") is not None
+             else None} for o in load(slug)["objectives"]]
+
+
 def delete(slug: str) -> None:
     """The folder goes to the Trash with the enterprise's state (put back by `restored`); agents, topics and
     sessions are untouched."""
@@ -681,6 +709,11 @@ def delete(slug: str) -> None:
                 shutil.move(str(st), str(dest / SAVED_STATE))
             except OSError:
                 logger.exception("state of %s not saved in the Trash", slug)
+    try:                                             # its Telegram thread goes too (re-created on the next message)
+        from .telegram import gateway
+        gateway.drop_enterprise_thread(slug, delete=True)
+    except Exception:  # noqa: BLE001 - Telegram is optional; the enterprise is already in the Trash
+        logger.exception("Telegram thread of %s not dropped", slug)
     invalidate(slug)
     invalidate()
 

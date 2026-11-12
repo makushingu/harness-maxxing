@@ -53,3 +53,29 @@ position gets "holds no position": ask the owner to seat it.
 
 The owner can run the same commands with `--as POSITION` (and `--enterprise SLUG` when several exist), for instance to test a
 flow: `maxxing enterprise assign writer "Test" --as lead`. Exit codes: 0 done, 1 nothing done, 2 error or refusal (stderr).
+
+## Build me a company
+When the owner asks for "a company of agents" without a chart, ask these five questions (all at once, short), then wait:
+1. **Activity**: what does the company do? 2. **Projects**: which existing projects does it cover (`maxxing projects` / the workspace)?
+3. **Goals**: what should it achieve in the next months? 4. **Budget**: how many USD a day at most? 5. **Autonomy**: `careful`
+(ask before most things), `balanced` or `autonomous`.
+
+Then propose a chart as a short tree (position, lead, department, one-line job; 3 to 8 positions, at most 3 levels), for example:
+```
+Head of marketing (marketing)
+  Writer: articles for the blog
+  Social media: weekly posts
+```
+The New enterprise dialog also offers ready-made charts (Marketing agency, E-commerce, Content studio, Research and watch);
+the commands below build any chart. **Wait for the
+owner's OK and apply their edits.** Only then run, one per line:
+```
+maxxing enterprise create acme-group --name "Acme Group" --project acme
+maxxing enterprise position add acme-group lead --title "Head of marketing" --department marketing --job "..."
+maxxing enterprise position add acme-group writer --title "Writer" --reports-to lead --job "..."
+maxxing enterprise settings acme-group autonomy=balanced envelope.usd_per_day=10 digest.enabled=true
+```
+Positions start **vacant**. Offer to hire each one (the Hire button of the chart, or the skill `maxxing-agents` to create the
+agent, then `position seat`), and **never create an agent without the owner's explicit yes**. To start from a file,
+`maxxing enterprise import FILE.zip` creates a new enterprise with vacant positions; its agent files are in
+`files/imported-agents/` to hire from. Never put keys or secrets in a job description.
