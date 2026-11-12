@@ -280,9 +280,9 @@ export function StatusBlock({ collapsed }: { collapsed?: boolean }) {
 const THEMES: Theme[] = ['light', 'dark', 'system']
 const themeIcon = { light: Sun, dark: Moon, system: Monitor } as const
 
-/** The very bottom of the sidebar, under the Claude quota: the theme and presentation mode, two rows of the same
- *  height folded or not. Unfolded: "Theme" with its three icons, "Presentation mode" with its switch. Folded: one
- *  button per row (the theme's icon, a click goes to the next theme; the eye, crossed out and tinted while on). */
+/** The very bottom of the sidebar, under the Claude quota: the theme and presentation mode, icons only (names in
+ *  tooltips). Unfolded: one line, the three theme icons and the eye. Folded: one button per row (the theme's icon,
+ *  a click goes to the next theme; the eye). The eye is crossed out and tinted while presentation mode is on. */
 function SidebarLook({ collapsed }: { collapsed?: boolean }) {
   const t = useT()
   const theme = useUI((s) => s.theme)
@@ -321,25 +321,32 @@ function SidebarLook({ collapsed }: { collapsed?: boolean }) {
       </div>
     )
   return (
-    <div className="mx-side-reveal grid gap-0.5" data-testid="sidebar-look">
-      <div className="flex h-9 min-w-0 items-center justify-between gap-2 px-1.5">
-        <span className="truncate text-xs text-muted-foreground">{t('shell.theme')}</span>
-        <Segmented<Theme>
-          size="sm"
-          value={theme}
-          onChange={setTheme}
-          aria-label={t('shell.theme')}
-          className="flex-nowrap p-0.5 [&_button]:h-7 [&_button]:px-2"
-          options={THEMES.map((v) => {
-            const I = themeIcon[v]
-            return { value: v, label: <><I /><span className="sr-only">{t(`theme.${v}`)}</span></> }
-          })}
-        />
-      </div>
-      <label className="flex h-9 min-w-0 cursor-pointer items-center justify-between gap-2 rounded-md px-1.5 transition-colors hover:bg-accent">
-        <span className="truncate text-xs text-muted-foreground">{t('presentation.label')}</span>
-        <Switch checked={presentation} onCheckedChange={setPresentation} />
-      </label>
+    <div className="mx-side-reveal flex h-9 min-w-0 items-center justify-between gap-2 px-0.5" data-testid="sidebar-look">
+      <Segmented<Theme>
+        size="sm"
+        value={theme}
+        onChange={setTheme}
+        aria-label={t('shell.theme')}
+        className="flex-nowrap p-0.5 [&_button]:h-7 [&_button]:px-2"
+        options={THEMES.map((v) => {
+          const I = themeIcon[v]
+          return { value: v, label: <Tooltip content={t(`theme.${v}`)}><span className="flex"><I /><span className="sr-only">{t(`theme.${v}`)}</span></span></Tooltip> }
+        })}
+      />
+      <Tooltip content={presLabel}>
+        <button
+          type="button"
+          className={cn(
+            'flex h-8 w-9 items-center justify-center rounded-lg bg-muted text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring [&_svg]:size-4',
+            presentation && 'bg-primary/15 text-primary hover:text-primary',
+          )}
+          aria-label={presLabel}
+          aria-pressed={presentation}
+          onClick={() => setPresentation(!presentation)}
+        >
+          <PresIcon />
+        </button>
+      </Tooltip>
     </div>
   )
 }
