@@ -528,6 +528,14 @@ def test_the_parent_defaults_to_the_task_delivered_in_the_session(ent, mx):
     assert other["enterprise"]["parent"] == "" and other["enterprise"]["hops"] == 1
 
 
+def test_the_parent_also_defaults_from_a_handin_or_an_answer(ent, mx):
+    top = flow.assign(S, "ceo", "writer", "Part")                        # ceo asked, writer hands in, ceo's next run
+    path = flow._inbox_dir(S) / "ceo.seen.jsonl"
+    flow._write(path, [{"id": "i_1", "kind": "handin", "task": top["id"], "from": "writer", "text": "x", "run": "sess-9"}])
+    nxt = flow.assign(S, "ceo", "editor", "Next", session="sess-9")
+    assert nxt["enterprise"]["parent"] == top["id"] and nxt["enterprise"]["hops"] == 2
+
+
 def test_a_full_inbox_logs_what_it_drops(ent, monkeypatch):
     monkeypatch.setattr(flow, "INBOX_MAX", 2)
     for i in range(3):

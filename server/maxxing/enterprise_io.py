@@ -49,6 +49,34 @@ def _safe_settings(d: dict) -> None:
     desk["public"] = {**(desk.get("public") if isinstance(desk.get("public"), dict) else {}), "enabled": False, "token": ""}
 
 
+def _reset_choices(d: dict, skipped: list[dict]) -> None:
+    """An import brings no owner choice that widens power or spends money: back to the defaults, each reset listed."""
+    dflt = copy.deepcopy(enterprises.DEFAULT_SETTINGS)
+    s = d["settings"]
+
+    def reset(where: dict, key: str, label: str) -> None:
+        want = dflt["digest"]["enabled"] if key == "digest.enabled" else dflt.get(key)
+        cur = where.get("digest", {}).get("enabled") if key == "digest.enabled" else where.get(key)
+        if key != "digest.enabled" and key in where and where[key] != want:
+            skipped.append({"file": label, "reason": f"{key} reset to its default: set it again if you want it"})
+        if key == "digest.enabled" and cur != want:
+            skipped.append({"file": label, "reason": "digest reset to its default: set it again if you want it"})
+        if key == "digest.enabled":
+            where["digest"] = {**where.get("digest", {}), "enabled": want}
+        elif key in where:
+            where[key] = copy.deepcopy(want)
+
+    for key in ("autonomy", "workers", "communication", "allow", "weekly", "monthly", "digest.enabled"):
+        reset(s, key, "settings")
+    for dept, row in (d.get("departments") or {}).items():
+        st = row.get("settings") if isinstance(row, dict) else None
+        if isinstance(st, dict):
+            for key in ("autonomy", "workers", "communication", "allow"):
+                if key in st:
+                    skipped.append({"file": f"department {dept}", "reason": f"{key} reset to its default: set it again if you want it"})
+                    st.pop(key)
+
+
 def _portable(d: dict, slug: str) -> dict:
     """The chart without anything local or sensitive: grants, agent paths, envelope key / domain lists."""
     out = copy.deepcopy(d)
@@ -241,6 +269,7 @@ def import_zip(data: bytes) -> dict:
         d.update(rev=1, projects=[], grants=[])
         _safe_settings(d)
         skipped: list[dict] = []
+        _reset_choices(d, skipped)
         for p in d["positions"]:
             p["agent"] = None
             if p.pop("worker_template", None):

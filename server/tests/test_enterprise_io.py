@@ -124,7 +124,7 @@ def test_round_trip(cl):
     r = cl.post(f"{E}/import", content=data, headers={"content-type": "application/zip"})
     assert r.status_code == 200, r.text
     e = r.json()
-    assert e["id"] == "agency-2" and e["projects"] == [] and e["skipped"] == []
+    assert e["id"] == "agency-2" and e["projects"] == [] and [s for s in e["skipped"] if s["file"] != "settings"] == []
     assert len(e["positions"]) == 5 and all(p["state"] == "vacant" for p in e["positions"])
     assert set(e["departments"]) == {"catalogue", "care", "logistics"}
     assert (enterprises.folder("agency-2") / "files" / "sub" / "a.md").read_text(encoding="utf-8") == "hello"
@@ -265,3 +265,21 @@ def test_a_zip_over_1_mb_goes_through_the_app(cl):
     assert (enterprises.folder("shop") / "files" / "logo.bin").stat().st_size == 1_500_000
     too_big = cl.post(f"{E}/import", content=b"\0" * (bodylimit.IMPORT_MAX + 1))
     assert too_big.status_code == 413
+
+
+def test_import_resets_the_owner_choices_that_widen_power_or_spend(cl):
+    chart = json.dumps({"id": "wide", "name": "Wide", "positions": [{"id": "boss", "title": "Boss"}],
+                        "departments": {"ops": {"name": "Ops", "settings": {"autonomy": "autonomous"}}},
+                        "settings": {"autonomy": "autonomous", "workers": "visible", "communication": "open",
+                                     "allow": [["boss", "boss"]], "weekly": True, "monthly": True,
+                                     "digest": {"enabled": True, "hour": 7}}})
+    r = cl.post(f"{E}/import", content=_zip({"enterprise.json": chart}))
+    assert r.status_code == 200, r.text
+    st = enterprises.load("wide")["settings"]
+    dflt = enterprises.DEFAULT_SETTINGS
+    assert (st["autonomy"], st["workers"], st["communication"], st["allow"]) ==         (dflt["autonomy"], dflt["workers"], dflt["communication"], dflt["allow"])
+    assert st["weekly"] == dflt["weekly"] and st["monthly"] == dflt["monthly"]
+    assert st["digest"]["enabled"] == dflt["digest"]["enabled"] and st["digest"]["hour"] == 7
+    assert "autonomy" not in enterprises.load("wide")["departments"]["ops"]["settings"]
+    reasons = " ".join(s["reason"] for s in r.json()["skipped"])
+    assert sum(1 for s in r.json()["skipped"] if s["file"] in ("settings", "department ops")) >= 7 and "autonomy" in reasons

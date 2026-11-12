@@ -24,7 +24,7 @@ from .enterprises import EnterpriseError
 log = logging.getLogger("maxxing.enterprise_policy")
 
 PROFILES = ("careful", "balanced", "autonomous")
-RUN_USD = 0.5                                       # what a run of an agent without a budget holds under a ceiling, at most
+UNBUDGETED_RUN_USD = 0.5                           # the most one run of an agent without a budget may spend (and hold) under a ceiling
 GRANT_MAX_S = 30 * 86400 + 3600                     # a grant lasts 30 days at most (an hour of slack)
 KEEP = 500                                          # requests kept per enterprise (the oldest answered go first)
 
@@ -650,7 +650,7 @@ def cap(path: str, left: float, session: str | None = None) -> float:
             spent, held = _usage(members, session, workers)
             room = max(usd - spent - held, 0.01)
             if left == float("inf"):
-                room = min(room, RUN_USD, usd / max(len(set(members)), 1))
+                room = min(room, UNBUDGETED_RUN_USD, usd / max(len(set(members)), 1))
             left = min(left, max(room, 0.01))
     except Exception:  # noqa: BLE001
         log.exception("envelope cap failed (%s)", path)

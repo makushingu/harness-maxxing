@@ -561,25 +561,27 @@ def _load_task(slug: str, task_id: str) -> tuple[dict | None, dict | None]:
 
 
 def _default_parents(slug: str, pos: str, session: str) -> list[dict]:
-    """The enterprise objects (with `_id`) of the open tasks delivered to this session's run of `pos`."""
+    """The enterprise objects (with `_id`) of the open tasks delivered (assigned, handed in, answered) to this session's run of `pos`."""
     if not session:
         return []
     out: list[dict] = []
     for it in seen(slug, pos):
-        if it.get("run") != session or it.get("kind") != "assign" or not it.get("task"):
+        if it.get("run") != session or it.get("kind") not in ("assign", "handin", "answer") or not it.get("task"):
             continue
         t, e = _load_task(slug, it["task"])
-        if t and e and t.get("status") != "done" and e.get("owner") == pos and all(x["_id"] != t["id"] for x in out):
+        if t and e and t.get("status") != "done" and pos in (e.get("owner"), e.get("requester"))                 and all(x["_id"] != t["id"] for x in out):
             out.append({**e, "_id": t["id"]})
     return out
 
 
 def assign(slug: str, from_pos: str, to_pos: str, deliverable: str, *, due: str | None = None,
            parent: str | None = None, task: str | None = None, session: str = "", outside: bool = False,
-           approved: bool = False) -> dict:
+           approved: bool = False, sender: str = "") -> dict:
     """A lead (or the owner: from_pos "") gives work to a direct report -> the task (or, across departments when the
-    matrix says so, the request that was opened instead). `task`: send the work back with notes (one more hop)."""
+    matrix says so, the request that was opened instead). `task`: send the work back with notes (one more hop).
+    sender: the front desk position passing a visitor's request on (from_pos "": no hierarchy check): the requester."""
     from_pos = _who(from_pos)
+    sender = _who(sender) if not from_pos else ""
     _chart(slug)
     deliverable = (deliverable or "").strip()
     if not deliverable:
@@ -632,7 +634,7 @@ def assign(slug: str, from_pos: str, to_pos: str, deliverable: str, *, due: str 
         _new_esc(slug, from_pos or to_pos, f"Too many hands on one task (limit {limit}): {deliverable}",
                  task or parent or "", outside, session, _now(), to_owner=True)
         raise EnterpriseError(409, "too_many_hops", f"A task changes hands at most {limit} times: the owner was asked")
-    sub = {"id": slug, "owner": to_pos, "requester": e0.get("requester", "") if e0 else from_pos, "parent": (parent or "") if not e0 else e0.get("parent", ""),
+    sub = {"id": slug, "owner": to_pos, "requester": e0.get("requester", "") if e0 else (from_pos or sender), "parent": (parent or "") if not e0 else e0.get("parent", ""),
            "deliverable": (e0 or {}).get("deliverable") or deliverable[:2000], "stage": "", "hops": hops,
            "outside": bool(outside), "chain": chain}
     t = _tasks()
@@ -652,9 +654,10 @@ def assign(slug: str, from_pos: str, to_pos: str, deliverable: str, *, due: str 
         row = _task_call(t.add_task, fields)
     due_note = f" (due {due})" if due else ""
     _put(slug, to_pos, "assign", f"{deliverable}{due_note}\nTask {row['id']}: hand it in with "
-         f"`maxxing enterprise done {row['id']} \"summary\"`, or `block` it with the reason.", from_pos, row["id"],
+         f"`maxxing enterprise done {row['id']} \"summary\"`, or `block` it with the reason.", from_pos or sender, row["id"],
          outside, session)
-    enterprises.log(slug, "assign", f"{_label(slug, from_pos)} assigns to {to_pos}: {deliverable}", by=from_pos or "owner",
+    said = "a visitor's request" if sender else deliverable      # the log keeps no stranger's words
+    enterprises.log(slug, "assign", f"{_label(slug, from_pos or sender)} assigns to {to_pos}: {said}", by=from_pos or sender or "owner",
                     position=to_pos, task=row["id"], session=session)
     enterprises.invalidate(slug)
     return row
@@ -676,7 +679,8 @@ def _get_for(slug: str, pos: str, task_id: str) -> tuple[dict, dict] | None:
 
 def _tell_requester(slug: str, e: dict, kind: str, text: str, pos: str, task_id: str, title: str, outside: bool) -> None:
     req = e.get("requester") or ""
-    if req and enterprises.position(slug, req):
+    rp = enterprises.position(slug, req) if req else None
+    if rp and not rp.get("desk"):                       # the front desk position never runs on a hand-in: the owner hears it
         _put(slug, req, kind, text, pos, task_id, outside, "")
     else:
         _notify(slug, f"{_name(slug)}: {title}", text, url=f"/enterprises/{slug}/overview",

@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import html
+import json
 
 STYLE = """
 :root{color-scheme:light dark;--bg:#fff;--fg:#1c1c1e;--mut:#6b7280;--line:#d4d4d8;--me:#e8f0fe;--ai:#f4f4f5;--acc:#2563eb}
@@ -28,14 +30,24 @@ button{font:inherit;border:0;border-radius:8px;padding:0 16px;background:var(--a
 button:disabled{opacity:.5;cursor:default}
 """
 
-BODY = """<header><div id="label"></div><div id="note">You are chatting with an AI assistant.</div></header>
-<div id="log" role="log" aria-live="polite"></div>
-<form id="f"><textarea id="t" rows="2" aria-label="Your message" placeholder="Write your message" disabled></textarea>
-<button id="b" type="submit" disabled>Send</button></form>"""
+TEXTS = {
+    "en": {"note": "You are chatting with an AI assistant.", "aria": "Your message", "ph": "Write your message", "send": "Send",
+           "title": "Chat", "unavail": "The assistant is not available right now.", "lost": "Connection lost. Reload the page to continue.",
+           "name": "Assistant", "ai": "AI assistant"},
+    "fr": {"note": "Vous discutez avec un assistant IA.", "aria": "Votre message", "ph": "Écrivez votre message", "send": "Envoyer",
+           "title": "Discussion", "unavail": "L'assistant n'est pas disponible pour le moment.",
+           "lost": "Connexion perdue. Rechargez la page pour continuer.", "name": "Assistant", "ai": "Assistant IA"},
+}
 
-SCRIPT = """
+BODY = """<header><div id="label"></div><div id="note">@note@</div></header>
+<div id="log" role="log" aria-live="polite"></div>
+<form id="f"><textarea id="t" rows="2" aria-label="@aria@" placeholder="@ph@" disabled></textarea>
+<button id="b" type="submit" disabled>@send@</button></form>"""
+
+SCRIPT_TPL = """
 (function () {
   'use strict';
+  var T = @texts@;
   var parts = location.pathname.split('/').filter(Boolean);
   var api = '/api/public/desk/' + encodeURIComponent(parts[parts.length - 1] || '');
   var key = 'desk-conv:' + parts[parts.length - 1];
@@ -63,11 +75,11 @@ SCRIPT = """
   function poll() {
     clearTimeout(timer);
     call('GET', api + '?conv=' + encodeURIComponent(conv)).then(function (r) {
-      if (!r.ok) { if (r.status === 404) store(''); say(r.j.message || 'The assistant is not available right now.'); lock(false); return; }
+      if (!r.ok) { if (r.status === 404) store(''); say(r.j.message || T.unavail); lock(false); return; }
       show(r.j.messages || []);
       if (r.j.pending && ++tries < 400) { timer = setTimeout(poll, 2500); return; }
       lock(false); t.focus();
-    }).catch(function () { say('Connection lost. Reload the page to continue.'); lock(false); });
+    }).catch(function () { say(T.lost); lock(false); });
   }
   document.getElementById('f').addEventListener('submit', function (ev) {
     ev.preventDefault();
@@ -77,23 +89,23 @@ SCRIPT = """
     call('POST', api, { message: text, conv: conv || null }).then(function (r) {
       if (!r.ok) {
         if (r.status === 404) store('');
-        var d = document.createElement('div'); d.className = 'm system'; d.textContent = r.j.message || 'The assistant is not available right now.';
+        var d = document.createElement('div'); d.className = 'm system'; d.textContent = r.j.message || T.unavail;
         log.appendChild(d); log.scrollTop = log.scrollHeight; lock(false); return;
       }
       t.value = ''; store(r.j.conv); tries = 0; poll();
-    }).catch(function () { say('Connection lost. Reload the page to continue.'); lock(false); });
+    }).catch(function () { say(T.lost); lock(false); });
   });
   call('GET', api + (conv ? '?conv=' + encodeURIComponent(conv) : '')).then(function (r) {
     if (!r.ok && conv) { store(''); return call('GET', api); }
     return r;
   }).then(function (r) {
-    if (!r.ok) { document.getElementById('label').textContent = 'Assistant'; say(r.j.message || 'The assistant is not available right now.'); return; }
-    document.getElementById('label').textContent = r.j.label || 'AI assistant';
+    if (!r.ok) { document.getElementById('label').textContent = T.name; say(r.j.message || T.unavail); return; }
+    document.getElementById('label').textContent = r.j.label || T.ai;
     t.maxLength = r.j.max_chars || 1000;
     if (r.j.messages) show(r.j.messages);
     lock(false);
     if (r.j.pending) { lock(true); tries = 0; poll(); }
-  }).catch(function () { say('The assistant is not available right now.'); });
+  }).catch(function () { say(T.unavail); });
 })();
 """
 
@@ -102,13 +114,30 @@ def _h(s: str) -> str:
     return "'sha256-" + base64.b64encode(hashlib.sha256(s.encode("utf-8")).digest()).decode() + "'"
 
 
-HTML = ('<!doctype html>\n<html lang="en"><head><meta charset="utf-8">'
-        '<meta name="viewport" content="width=device-width,initial-scale=1">'
-        '<meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer">'
-        f"<title>Chat</title><style>{STYLE}</style></head><body>\n{BODY}\n<script>{SCRIPT}</script></body></html>\n")
+def _build(lang: str) -> tuple[str, dict, str, str]:
+    """(html, headers, script, csp) of the page in one language; the CSP hashes are those of the exact strings sent."""
+    t = TEXTS[lang]
+    body = BODY
+    for k in ("note", "aria", "ph", "send"):
+        body = body.replace(f"@{k}@", html.escape(t[k]))
+    script = SCRIPT_TPL.replace("@texts@", json.dumps(t, ensure_ascii=True))   # ASCII only: stable bytes, stable hash
+    page = ('<!doctype html>\n<html lang="' + lang + '"><head><meta charset="utf-8">'
+            '<meta name="viewport" content="width=device-width,initial-scale=1">'
+            '<meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer">'
+            f"<title>{html.escape(t['title'])}</title><style>{STYLE}</style></head><body>\n{body}\n<script>{script}</script></body></html>\n")
+    csp = ("default-src 'none'; script-src " + _h(script) + "; style-src " + _h(STYLE) + "; img-src data:; connect-src 'self'; "
+           "base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
+    headers = {"Content-Security-Policy": csp, "Referrer-Policy": "no-referrer", "Cache-Control": "no-store",
+               "X-Robots-Tag": "noindex, nofollow", "X-Content-Type-Options": "nosniff"}
+    return page, headers, script, csp
 
-CSP = ("default-src 'none'; script-src " + _h(SCRIPT) + "; style-src " + _h(STYLE) + "; connect-src 'self'; "
-       "base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
 
-HEADERS = {"Content-Security-Policy": CSP, "Referrer-Policy": "no-referrer", "Cache-Control": "no-store",
-           "X-Robots-Tag": "noindex, nofollow", "X-Content-Type-Options": "nosniff"}
+PAGES = {lang: _build(lang) for lang in TEXTS}
+
+
+def page(lang: str) -> tuple[str, dict]:
+    """(html, headers) for the server language (en or fr; anything else is English)."""
+    return PAGES.get(lang, PAGES["en"])[:2]
+
+
+HTML, HEADERS, SCRIPT, CSP = PAGES["en"]

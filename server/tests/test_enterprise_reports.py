@@ -237,6 +237,19 @@ def test_overview_numbers(client, topic, mx, monkeypatch):
     assert o["objectives"][0]["progress"] == 25
 
 
+def test_the_numbers_count_the_workers_like_the_gate(client, topic, mx, monkeypatch):
+    from maxxing import enterprise_workers as ew
+    _setup(client, topic, departments={"content": {"name": "Content", "envelope": {"usd_per_day": 3}}})
+    _quiet(monkeypatch)
+    monkeypatch.setattr(agents, "day_cost", lambda path, when=None, metas=None, cold=False: {W: 1.25, R: 0.5}.get(path, 0))
+    monkeypatch.setattr(ew, "cost_today", lambda slug, pos=None: 2.0 if pos == "writer" else 0.0)
+    o = client.get(f"{E}/{S}/overview").json()
+    assert o["cost_today"] == 3.75
+    assert next(x for x in o["departments"] if x["id"] == "content")["cost_today"] == 3.75
+    chart = client.get(f"{E}/{S}").json()
+    assert chart["cost_today"] == 3.75 and next(p for p in chart["positions"] if p["id"] == "writer")["cost_today"] == 3.25
+
+
 def test_widget_counts_what_waits_for_the_owner_and_is_cached(client, topic, mx, monkeypatch):
     from maxxing import widgets
     _setup(client, topic)

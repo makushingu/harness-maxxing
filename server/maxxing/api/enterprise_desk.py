@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
-from .. import agents, desk_page, enterprise_desk, enterprises, security
+from .. import agents, config, desk_page, enterprise_desk, enterprises, security
 from ..security import require_auth
 
 router = APIRouter(tags=["enterprises"])
@@ -54,7 +54,8 @@ def visit_page(token: str, request: Request):
         enterprise_desk.public_info(token, client=security.client_key(request))
     except enterprises.EnterpriseError as x:
         raise _bad(x) from None
-    return HTMLResponse(desk_page.HTML, headers=desk_page.HEADERS)
+    body, headers = desk_page.page(str(config.load_config().get("language") or "en"))
+    return HTMLResponse(body, headers=headers)
 
 
 @router.get("/api/public/desk/{token}")

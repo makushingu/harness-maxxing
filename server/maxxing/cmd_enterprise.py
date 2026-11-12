@@ -239,6 +239,8 @@ def _actor(a) -> tuple[str, str, dict]:
         if asked:
             raise _Refused("`--as` is for the owner: an agent acts as its own position.")
         seat = enterprises.seat_of(turn["path"])
+        if seat is None:
+            raise _Refused("This agent no longer holds a position.")
         return seat[0], seat[1], turn
     if asked and not enterprises.position(slug, asked):
         raise _Refused(f"Position {asked!r} not found in {slug!r} (see `maxxing enterprise show {slug}`).")
@@ -534,7 +536,7 @@ def _show(a) -> int:
     own = agent_guard.sandboxed_turn()
     shown = None
     if turn["path"] and own:                         # a sandboxed turn: its own position, its lead, its reports
-        _, pid = enterprises.seat_of(turn["path"])
+        pid = (enterprises.seat_of(turn["path"]) or ("", ""))[1]
         shown = {pid, *enterprises.reports_of(slug, pid)} | ({enterprises.lead_of(slug, pid)} - {None})
     e = enterprises.get(slug)
     if shown is not None:

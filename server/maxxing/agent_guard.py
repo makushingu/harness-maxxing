@@ -568,6 +568,65 @@ def hook(path: str) -> int:
     return 0
 
 
+# ---- front desk turns: a deny-by-default hook -------------------------------------------------------
+DESK_COMMANDS = ("profile", "route")                    # the only `maxxing enterprise <sub>` a desk turn may run
+_SHELL_BARE = set(";&|<>`$(){}*?!~#" + chr(92) + chr(10) + chr(13))   # unquoted: a second command, expansion or redirection
+_SHELL_DQ = set("`$" + chr(92) + chr(10) + chr(13))                    # inside double quotes these still act
+
+
+def _plain_command(cmd: str) -> bool:
+    """True when cmd is one simple command: quotes balanced, no expansion or chaining outside literal text."""
+    q = ""
+    for ch in cmd:
+        if q == "'":
+            q = "" if ch == "'" else q
+        elif q == '"':
+            if ch in _SHELL_DQ:
+                return False
+            q = "" if ch == '"' else q
+        elif ch in "'\"":
+            q = ch
+        elif ch in _SHELL_BARE:
+            return False
+    return q == ""
+
+
+def desk_decision(tool: str, tool_input: object) -> str | None:
+    """The reason a front desk tool call is refused, else None: only `maxxing enterprise profile|route ...` alone."""
+    if tool != "Bash" or not isinstance(tool_input, dict):
+        return "The front desk may only run `maxxing enterprise profile` and `maxxing enterprise route`."
+    cmd = tool_input.get("command")
+    if not isinstance(cmd, str) or not _plain_command(cmd):
+        return "That command is not allowed at the front desk."
+    try:
+        words = shlex.split(cmd)
+    except ValueError:
+        return "That command is not allowed at the front desk."
+    if len(words) < 3 or words[:2] != ["maxxing", "enterprise"] or words[2] not in DESK_COMMANDS             or not cmd.startswith(f"maxxing enterprise {words[2]}"):
+        return "The front desk may only run `maxxing enterprise profile` and `maxxing enterprise route`."
+    return None
+
+
+def desk_hook() -> int:
+    """PreToolUse hook of a front desk turn: stdlib only, no network, denies on any doubt or error."""
+    try:
+        ev = json.load(sys.stdin)
+        why = desk_decision(str(ev.get("tool_name") or ""), ev.get("tool_input"))
+    except Exception:                                   # fail closed
+        why = "The front desk hook could not read the call."
+    if why:
+        print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",
+                                                 "permissionDecisionReason": why}}))
+    return 0
+
+
+def desk_hook_command() -> str:
+    """Same bootstrap as hook_command: `-I` keeps the agent folder off sys.path."""
+    boot = (f"import sys; sys.path.insert(0, {str(Path(__file__).resolve().parent.parent)!r}); "
+            "from maxxing.agent_guard import main; sys.exit(main(sys.argv))")
+    return f"{shlex.quote(sys.executable)} -I -c {shlex.quote(boot)} desk-hook"
+
+
 # ---- the maxxing CLI inside a sandboxed turn ---------------------------------------------------------
 UNIT_RE = re.compile(r"/maxxing-([0-9a-f]{8})(?:-\d+)?\.service(?:/|$)")
 
@@ -714,6 +773,8 @@ def check_cli(argv: list[str]) -> str | None:
 def main(argv: list[str]) -> int:
     if len(argv) == 3 and argv[1] == "hook":
         return hook(argv[2])
+    if len(argv) == 2 and argv[1] == "desk-hook":
+        return desk_hook()
     print("usage: python -m maxxing.agent_guard hook <agent path>", file=sys.stderr)
     return 2
 

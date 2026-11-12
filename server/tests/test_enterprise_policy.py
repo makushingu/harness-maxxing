@@ -519,7 +519,7 @@ def test_budgetless_agent_holds_a_bounded_share(ent, monkeypatch):
     _set(ent, departments={"mkt": {"name": "Marketing", "envelope": {"usd_per_day": 5}}, "ops": {"name": "Operations"}})
     _costs(monkeypatch, {})
     agents.update(WRITER, {"limits": {"usd_per_day": 0}})
-    assert pol.cap(WRITER, float("inf")) == pol.RUN_USD
+    assert pol.cap(WRITER, float("inf")) == pol.UNBUDGETED_RUN_USD
     args = agents.run_settings(WRITER)["args"]
     assert args[args.index("--max-budget-usd") + 1] == "0.50"
     _set(ent, departments={"mkt": {"name": "Marketing"}, "ops": {"name": "Operations"}})

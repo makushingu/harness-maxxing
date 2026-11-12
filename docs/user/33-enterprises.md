@@ -237,7 +237,7 @@ The **front desk** is a position that answers people **outside** the company on 
   outside**, so everything it triggers asks you first.
 - **Going live is your decision**, and **needs every occupant of the chart to be protected** (sandboxed, so they cannot
   read what they should not) and **the desk's agent to be restricted** (no key, no domain, no writable folder, no trust
-  in outside events, a daily budget and an hourly run limit). The Front desk settings list each position that is not
+  in outside events, no Telegram, a daily budget and an hourly run limit). The Front desk settings list each position that is not
   ready, with what to fix and a link to open the agent; saving is refused until it is. The public link is an entry point without a session,
   so it ships **off**, with its own **rate limit** per visitor (20 messages an hour by default), a limit of 300
   messages an hour for all visitors together (and of 30 routed requests an hour), a limit on how often one visitor can
@@ -247,7 +247,7 @@ The **front desk** is a position that answers people **outside** the company on 
   A request the desk routes comes to the department's lead as coming from the front desk, never from you. It cannot be embedded in an iframe on another site: share the link itself. Regenerate the link to cancel
   the old one.
 - **Retention**: conversations are kept 30 days by default (1 to 365) and you can delete any of them. They are never
-  exported, and deleting one (or its retention running out) removes the visitor's text from the desk agent's sessions, its thread and its Claude Code transcripts. What stays: a request the desk routed lives on as a task for the lead and in the lead's inbox (the request text only, not the conversation around it); the log keeps no visitor text.
+  exported, and deleting one (or its retention running out; retention only runs while Enterprises is on) removes the visitor's text from the desk agent's sessions, its thread and its Claude Code transcripts. What stays: a request the desk routed lives on as a task for the lead and in the lead's inbox (the request text only, not the conversation around it); the log keeps no visitor text.
   Other positions receive summaries and themes only, never the visitors' words.
 
 **Weekly insights**: once a week, one short call over the desk's conversations produces the questions most asked,

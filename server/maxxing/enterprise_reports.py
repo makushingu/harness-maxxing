@@ -202,8 +202,9 @@ def _decisions_since(slug: str, since: float) -> dict[str, int]:
 
 
 # ---- costs ---------------------------------------------------------------------------------------------------
-def _costs(d: dict, when: float | None = None, by: dict | None = None) -> dict[str, float]:
-    """Position id -> what its occupant cost on the day of `when` (today), one pass over the sessions' metas."""
+def _costs(d: dict, when: float | None = None, by: dict | None = None, slug: str = "") -> dict[str, float]:
+    """Position id -> what its occupant cost on the day of `when` (today), one pass over the sessions' metas; with
+    `slug` (today only) the position's workers are counted too, like the gate does."""
     by = agents._agent_metas() if by is None else by
     out: dict[str, float] = {}
     for p in d["positions"]:
@@ -212,6 +213,13 @@ def _costs(d: dict, when: float | None = None, by: dict | None = None) -> dict[s
                 out[p["id"]] = agents.day_cost(p["agent"], when=when, metas=by.get(p["agent"], []))
             except Exception:  # noqa: BLE001 - one unreadable agent must not hide the numbers
                 out[p["id"]] = 0.0
+    if slug:
+        from . import enterprise_workers
+        for p in d["positions"]:
+            try:
+                out[p["id"]] = out.get(p["id"], 0.0) + enterprise_workers.cost_today(slug, p["id"])
+            except Exception:  # noqa: BLE001 - a worker cost that cannot be read counts as nothing
+                pass
     return out
 
 
@@ -223,9 +231,9 @@ def _ceiling(d: dict) -> float:
     return float(d["envelope"].get("usd_per_day") or 0)
 
 
-def _spent_today(d: dict, idx: dict, now: float, costs: dict[str, float] | None = None) -> float:
-    """What the enterprise spent today: its occupants and the digests."""
-    paid = sum((costs if costs is not None else _costs(d, now)).values())
+def _spent_today(d: dict, idx: dict, now: float, costs: dict[str, float] | None = None, slug: str = "") -> float:
+    """What the enterprise spent today: its occupants, their workers and the digests."""
+    paid = sum((costs if costs is not None else _costs(d, now, slug=slug)).values())
     return paid + float(idx["cost"].get(_day(now)) or 0)
 
 
@@ -242,7 +250,7 @@ def _collect(slug: str, d: dict, since: float, now: float, titles_only: bool = F
     """Per position since `since`: results (first lines), runs failed / skipped, tasks done / opened / late, cost of
     the day; plus the escalations open and the requests waiting. `new` = something happened since."""
     by = agents._agent_metas()
-    costs = _costs(d, now, by)
+    costs = _costs(d, now, by, slug)
     today = _day(now)
     tasks = _tasks(slug)
     rows: list[dict] = []
@@ -434,7 +442,7 @@ def build(slug: str, kind: str = "daily", now: float | None = None, *, send: boo
             title = f"{'Weekly review' if kind == 'weekly' else 'Monthly report'} - {title_name} - {_day(now)}"
         cost, raw, text, extra, why = 0.0, False, raw_text, "", ""
         cap = _ceiling(d)
-        if cap and _spent_today(d, idx, now) >= cap:
+        if cap and _spent_today(d, idx, now, slug=slug) >= cap:
             raw, why = True, "the daily budget is reached"
         else:
             try:
@@ -466,7 +474,7 @@ def _lead_syntheses(slug: str, d: dict, c: dict, idx: dict, now: float, spent: f
         team = set(enterprises.subtree(slug, p["id"])) or {p["id"]}
         lines = _lines(c, d, team)
         cap = _ceiling(d)
-        if not lines or (cap and _spent_today(d, idx, now) + spent + total >= cap):
+        if not lines or (cap and _spent_today(d, idx, now, slug=slug) + spent + total >= cap):
             continue
         try:
             text, cost = _ask(SYSTEM["lead"], lines)
@@ -498,7 +506,7 @@ def overview(slug: str) -> dict:
     if d.get("broken"):
         return {"departments": [], "requests_waiting": 0, "escalations_open": 0, "objectives": [], "digest": None,
                 "cost_today": 0.0, "ceiling": None, "digest_cost": 0.0, "in_progress": 0}
-    costs = _costs(d, now)
+    costs = _costs(d, now, slug=slug)
     for p in d["positions"]:
         r = row(p["department"])
         r["cost_today"] = round(r["cost_today"] + costs.get(p["id"], 0.0), 4)

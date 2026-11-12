@@ -45,10 +45,29 @@ INPUT_MAX = 12000                                   # characters of conversation
 ITEMS_MAX = 12
 TASKS_MAX = 5                                       # insight tasks per week
 UNAVAILABLE = {"error": "unavailable", "message": "The assistant is not available right now. Try again later."}
+MESSAGES_FR = {                                     # what a visitor reads, in the server language (config `language`)
+    UNAVAILABLE["message"]: "L'assistant n'est pas disponible pour le moment. Réessayez plus tard.",
+    "Too many requests: try again later": "Trop de requêtes : réessayez plus tard.",
+    "Too many messages: try again later": "Trop de messages : réessayez plus tard.",
+    "Not found": "Introuvable",
+    "Conversation not found": "Conversation introuvable",
+    "Write a message": "Écrivez un message",
+    "Wait for the answer to your last message": "Attendez la réponse à votre dernier message.",
+    "This conversation is long enough: start a new one": "Cette conversation est assez longue : commencez-en une nouvelle.",
+    "At most {n} characters": "{n} caractères au maximum",
+}
+
+
+def _m(text: str, **kw: Any) -> str:
+    """A visitor-facing sentence in the server language (English or French)."""
+    if str(config.load_config().get("language") or "en") == "fr":
+        text = MESSAGES_FR.get(text, text)
+    return text.format(**kw) if kw else text
 
 _lock = threading.Lock()
 _hits: dict[tuple[str, str], collections.deque] = {}
 _HITS_KEYS = 5000
+_global_hits: dict[str, collections.deque] = {}      # the all-visitors cap of each enterprise: never evicted by client keys
 
 
 def _now(now: float | None = None) -> float:
@@ -96,6 +115,8 @@ def desk_issues(path: str) -> list[str]:
                                   ("writable", "has writable folders")) if a.get(field)]
     if a.get("trust_outside"):
         out.append("trusts outside events")
+    if a.get("telegram"):
+        out.append("telegram")                          # each visitor message would be posted where deletion cannot reach
     if not (lim.get("usd_per_day") or 0) > 0:
         out.append("has no daily budget")
     if not (lim.get("runs_per_hour") or 0) > 0:
@@ -125,7 +146,7 @@ def check_live(slug: str, d: dict) -> None:
     if unfit:
         raise EnterpriseError(400, "desk_not_restricted",
                               "The front desk occupant must have no key, no domain, no writable folder, no trust in "
-                              "outside events, and a daily budget and hourly run limit: "
+                              "outside events, no Telegram, and a daily budget and hourly run limit: "
                               + "; ".join(f"{k} {', '.join(v)}" for k, v in unfit.items()), positions=list(unfit))
 
 
@@ -164,13 +185,13 @@ def limited(slug: str, key: str, per_hour: int, now: float | None = None) -> boo
     """One more message of this visitor (client key): True when over `per_hour` in the last hour (in memory)."""
     t = _now(now)
     with _lock:
-        q = _hits.setdefault((slug, key), collections.deque())
+        q = _global_hits.setdefault(slug, collections.deque()) if key == "*"             else _hits.setdefault((slug, key), collections.deque())
         while q and q[0] < t - 3600:
             q.popleft()
         if len(q) >= per_hour:
             return True
         q.append(t)
-        while len(_hits) > _HITS_KEYS:                   # oldest visitors first: the table never grows for good
+        while key != "*" and len(_hits) > _HITS_KEYS:                   # oldest visitors first: the table never grows for good
             _hits.pop(next(iter(_hits)))
         return False
 
@@ -262,14 +283,14 @@ def _view(slug: str, lines: list[dict]) -> list[dict]:
         elif m.get("role") == "assistant":
             out.append({"role": "assistant", "label": m.get("label") or lab, "text": m.get("text", ""), "at": m.get("at")})
         elif m.get("role") == "error":
-            out.append({"role": "system", "text": UNAVAILABLE["message"], "at": m.get("at")})
+            out.append({"role": "system", "text": _m(UNAVAILABLE["message"]), "at": m.get("at")})
     return out
 
 
 def _live(token: str) -> tuple[str, dict]:
     slug = by_token(token)
     if slug is None:
-        raise EnterpriseError(404, "not_found", "Not found")
+        raise EnterpriseError(404, "not_found", _m("Not found"))
     return slug, settings(slug)
 
 
@@ -277,12 +298,12 @@ def public_info(token: str, conv: str = "", client: str = "") -> dict:
     """GET of the public link: the label, the limits and, with `conv`, the conversation (answers read now).
     `client` throttles the reads of one visitor (each one scans the enterprises)."""
     if client and limited("-", "get:" + client, GET_PER_HOUR):
-        raise EnterpriseError(429, "rate_limited", "Too many requests: try again later")
+        raise EnterpriseError(429, "rate_limited", _m("Too many requests: try again later"))
     slug, s = _live(token)
     out: dict[str, Any] = {"label": label(slug), "max_chars": s["public"]["max_chars"]}
     if conv:
         if not CONV_RE.match(conv) or not _file(slug, conv).exists():
-            raise EnterpriseError(404, "not_found", "Conversation not found")
+            raise EnterpriseError(404, "not_found", _m("Conversation not found"))
         lines = _resolve(slug, conv)
         out.update(conv=conv, messages=_view(slug, lines), pending=bool(_pending(lines)))
     return out
@@ -294,34 +315,34 @@ def public_post(token: str, client: str, message: Any, conv: Any = "", now: floa
     pub = s["public"]
     text = " ".join(str(message).split()) if isinstance(message, str) else ""
     if not text:
-        raise EnterpriseError(400, "empty", "Write a message")
+        raise EnterpriseError(400, "empty", _m("Write a message"))
     if len(text) > pub["max_chars"]:
-        raise EnterpriseError(400, "too_long", f"At most {pub['max_chars']} characters", max_chars=pub["max_chars"])
+        raise EnterpriseError(400, "too_long", _m("At most {n} characters", n=pub["max_chars"]), max_chars=pub["max_chars"])
     seat = desk_position(slug)
     d0 = enterprises.load(slug)
     if not seat or unprotected(d0) or desk_unfit(d0):
         log.warning("front desk of %s is not ready (no occupant, not Protected, or not restricted)", slug)
-        raise EnterpriseError(503, "unavailable", UNAVAILABLE["message"])
+        raise EnterpriseError(503, "unavailable", _m(UNAVAILABLE["message"]))
     if limited(slug, client, int(pub["rate_per_hour"]), now) or limited(slug, "*", GLOBAL_PER_HOUR, now):
-        raise EnterpriseError(429, "rate_limited", "Too many messages: try again later")
+        raise EnterpriseError(429, "rate_limited", _m("Too many messages: try again later"))
     pos, path = seat
     new = not (isinstance(conv, str) and conv)
     if new:
         conv = secrets.token_hex(8)
     elif not CONV_RE.match(conv) or not _file(slug, conv).exists():
-        raise EnterpriseError(404, "not_found", "Conversation not found")
+        raise EnterpriseError(404, "not_found", _m("Conversation not found"))
     else:
         if _pending(_resolve(slug, conv, now)):
-            raise EnterpriseError(409, "pending", "Wait for the answer to your last message")
+            raise EnterpriseError(409, "pending", _m("Wait for the answer to your last message"))
     reason = agents.gate(path)
     if reason:                                        # budget, switched off, rate, busy: the visitor is never told which
-        raise EnterpriseError(503, "unavailable", UNAVAILABLE["message"])
+        raise EnterpriseError(503, "unavailable", _m(UNAVAILABLE["message"]))
     f = _file(slug, conv)
     t = _now(now)
     with _lock:
         lines = _read_lines(f)
         if sum(1 for m in lines if m.get("role") == "visitor") >= MAX_VISITOR_MSGS:
-            raise EnterpriseError(400, "conversation_full", "This conversation is long enough: start a new one")
+            raise EnterpriseError(400, "conversation_full", _m("This conversation is long enough: start a new one"))
         n = 1 + max([m.get("n", 0) for m in lines if m.get("role") == "visitor"] or [0])
         _append(f, {"at": t, "role": "visitor", "text": text, "n": n})
         lines.append({"role": "visitor", "text": text, "n": n})
@@ -342,7 +363,7 @@ def public_post(token: str, client: str, message: Any, conv: Any = "", now: floa
     if new:
         enterprises.log(slug, "desk", "A visitor started a conversation", by="visitor", position=pos)
     if not sid:
-        raise EnterpriseError(503, "unavailable", UNAVAILABLE["message"])
+        raise EnterpriseError(503, "unavailable", _m(UNAVAILABLE["message"]))
     return {"conv": conv, "label": label(slug), "pending": True}
 
 
@@ -393,12 +414,24 @@ def conversation(slug: str, conv: str) -> dict:
     return {"id": conv, "messages": _view(slug, _resolve(slug, conv))}
 
 
+def _erase_transcript(csid: str) -> None:
+    """Claude Code's own transcript of a run holds the whole prompt: removed from every project folder."""
+    if not re.fullmatch(r"[A-Za-z0-9-]{8,64}", csid):
+        return
+    try:
+        for p in (config.claude_dir() / "projects").glob(f"*/{csid}.jsonl"):
+            p.unlink(missing_ok=True)
+    except OSError:
+        log.warning("desk transcript %s not deleted", csid)
+
+
 def _erase_session(path: str, sid: str) -> None:
     """The visitor's text leaves the desk agent's sessions (deleted for good, not trashed) and thread."""
     try:
         from . import trash
         from .sessions import service, store
         m = store.read(sid)
+        _erase_transcript(str((m or {}).get("csid") or ""))
         if m:
             if m.get("state") == "running":
                 service.stop(sid)
@@ -502,9 +535,10 @@ def route(slug: str, pos: str, department: str, text: str, *, session: str = "")
         raise EnterpriseError(429, "too_many", "Too many requests were passed on this hour")
     from . import enterprise_flow
     row = enterprise_flow.assign(slug, "", lead, f"Request from the front desk ({department}): {text}", session=session,
-                                 outside=True)
-    enterprises.log(slug, "desk", f"{pos} routes to {lead}: {text}", by=pos, position=lead, task=row.get("id", ""),
-                    session=session)
+                                 outside=True, sender=pos)
+    # the log keeps no visitor text: the task carries the request, the session ties it to the conversation
+    enterprises.log(slug, "desk", f"{pos} routes a request to {lead} (task {row.get('id', '')})", by=pos, position=lead,
+                    task=row.get("id", ""), session=session)
     return row
 
 

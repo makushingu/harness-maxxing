@@ -213,7 +213,8 @@ def test_switching_the_feature_off_retires_live_workers(ent, monkeypatch):
     _allow(monkeypatch)
     w = ew.start(SLUG, "writer", "NOTOOL x")["worker"]
     assert ent.put("/api/settings", json={"enterprises_page": False}).status_code == 200
-    ew.tick()
+    from maxxing.api import enterprise_flow as flow_api
+    flow_api.tick_all()                                             # the scheduler's pass, not the module's tick
     assert not agents.exists(w["agent"]) and ew._read(SLUG)["items"][0]["status"] == "stopped"
 
 

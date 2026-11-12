@@ -406,6 +406,48 @@ def test_desk_run_has_no_key_no_folder_and_two_commands_only(live):
     assert rs["settings"]["sandbox"]["network"]["allowedDomains"] == []
     assert "Bash(maxxing:*)" not in rs["settings"]["permissions"]["allow"]
     assert "--tools" not in agents.run_settings(FRONT, True, session=None)["args"]     # any other run is unchanged
+    from maxxing.sessions import runner, store
+    assert store.read(sid)["permission_mode"] == "default"                             # the mode the runner applies
+    assert runner.effective_mode(store.read(sid), {}) == "default"
+    hooks = rs["settings"]["hooks"]["PreToolUse"]
+    assert any("desk-hook" in h["command"] for e in hooks for h in e["hooks"])
+
+
+def test_a_desk_occupant_with_telegram_on_is_refused(live):
+    ent, token, anon = live
+    assert desk.desk_issues(FRONT) == []
+    _set(FRONT, telegram=True)
+    assert "telegram" in desk.desk_issues(FRONT) and "front" in desk.desk_unfit(enterprises.load(SLUG))
+    assert _say(anon, token).status_code == 503
+    assert ent.patch(E, json={"settings": {"desk": {"enabled": False}}}).status_code == 200
+    r = ent.patch(E, json={"settings": {"desk": {"enabled": True}}})
+    assert r.status_code == 400 and "Telegram" in r.json()["message"]
+
+
+def test_desk_hook_denies_everything_but_the_two_commands():
+    from maxxing import agent_guard as ag
+    ok = ('maxxing enterprise profile', 'maxxing enterprise profile --json', 'maxxing enterprise route care "R&D: need a quote"',
+          "maxxing enterprise route care 'it costs $5'")
+    for c in ok:
+        assert ag.desk_decision("Bash", {"command": c}) is None, c
+    bad = ("cat x", "rm x", "sed -i s/a/b/ memory.md", "maxxing enterprise profile; rm x", "maxxing enterprise profile && id",
+           "maxxing enterprise profile | sh", "maxxing enterprise profile `id`", "maxxing enterprise profile $(id)",
+           'maxxing enterprise route care "$(id)"', "maxxing enterprise profile > x", "maxxing enterprise show",
+           "maxxing enterprise profile" + chr(10) + "rm x", "maxxingx enterprise profile", " maxxing enterprise profile", "")
+    for c in bad:
+        assert ag.desk_decision("Bash", {"command": c}), c
+    assert ag.desk_decision("Read", {"file_path": "x"}) and ag.desk_decision("Bash", None) and ag.desk_decision("Bash", {"command": 3})
+
+
+def test_desk_hook_fails_closed(monkeypatch, capsys):
+    import io
+    from maxxing import agent_guard as ag
+    for raw in ("not json", "[]", json.dumps({"tool_name": "Bash", "tool_input": {"command": "cat x"}})):
+        monkeypatch.setattr("sys.stdin", io.StringIO(raw))
+        assert ag.desk_hook() == 0
+        assert json.loads(capsys.readouterr().out)["hookSpecificOutput"]["permissionDecision"] == "deny"
+    monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps({"tool_name": "Bash", "tool_input": {"command": "maxxing enterprise profile"}})))
+    assert ag.desk_hook() == 0 and capsys.readouterr().out == ""
 
 
 # ---- deleting a conversation deletes what it left in the agent -----------------------------------------------
@@ -461,8 +503,61 @@ def test_public_page_hashes_match_its_inline_code():
 @pytest.fixture(autouse=True)
 def _fresh_limits():
     desk._hits.clear()
+    desk._global_hits.clear()
 
 
 def test_only_the_desk_prefix_is_open_to_anonymous_bodies():
     from maxxing import bodylimit
     assert bodylimit._public("/api/public/desk/abc") and not bodylimit._public("/api/public/other")
+
+
+def test_global_cap_is_not_evicted_by_client_keys():
+    now = time.time()
+    for _ in range(desk.GLOBAL_PER_HOUR):
+        assert desk.limited(SLUG, "*", desk.GLOBAL_PER_HOUR, now) is False
+    for i in range(desk._HITS_KEYS + 50):
+        desk.limited(SLUG, f"client-{i}", 5, now)
+    assert desk.limited(SLUG, "*", desk.GLOBAL_PER_HOUR, now) is True
+
+
+def test_route_is_attributed_to_the_desk_and_leaves_no_visitor_text_in_the_log(ent):
+    from maxxing import enterprise_flow as flow
+    row = desk.route(SLUG, "front", "care", "Please call me about invoice 77", session="s1")
+    assert row["enterprise"]["requester"] == "front" and row["enterprise"]["owner"] == "care"
+    inbox = flow._read(flow._inbox_file(SLUG, "care"))
+    assert inbox[-1]["from"] == "front" and "invoice 77" in inbox[-1]["text"] and inbox[-1]["outside"] is True
+    items, _ = enterprises.decisions(SLUG)
+    assert not any("invoice 77" in i["text"] for i in items)
+    assert any(i["by"] == "front" and i["task"] == row["id"] for i in items)
+    flow.done(SLUG, "care", row["id"], "called")                    # the hand-in goes to the owner, not to the desk
+    assert not any(i["kind"] == "handin" for i in flow._read(flow._inbox_file(SLUG, "front")))
+
+
+def test_erasing_a_session_removes_its_claude_transcript(live, monkeypatch, tmp_path):
+    from maxxing import config
+    ent, token, anon = live
+    conv = _say(anon, token, "NOTOOL private words").json()["conv"]
+    _answered(anon, token, conv)
+    sid = next(m["session"] for m in desk._read_lines(desk._file(SLUG, conv)) if m.get("role") == "run")
+    from maxxing.sessions import store
+    csid = "11111111-2222-3333-4444-555555555555"
+    store.update(sid, csid=csid)
+    other = config.claude_dir() / "projects" / "some-slug"
+    other.mkdir(parents=True, exist_ok=True)
+    (other / f"{csid}.jsonl").write_text("private words")
+    keep = other / "99999999-2222-3333-4444-555555555555.jsonl"
+    keep.write_text("not ours")
+    assert ent.delete(f"{E}/desk/{conv}").status_code == 200
+    assert not (other / f"{csid}.jsonl").exists() and keep.exists()
+
+
+def test_public_page_and_errors_follow_the_server_language(live):
+    ent, token, anon = live
+    from maxxing import desk_page
+    en = anon.get(f"/desk/{token}")
+    assert 'lang="en"' in en.text and "Write your message" in en.text
+    assert ent.put("/api/settings", json={"language": "fr"}).status_code == 200
+    fr = anon.get(f"/desk/{token}")
+    assert 'lang="fr"' in fr.text and "Envoyer" in fr.text and "Write your message" not in fr.text
+    assert fr.headers["content-security-policy"] == desk_page.PAGES["fr"][3] and "img-src data:" in fr.headers["content-security-policy"]
+    assert "Réessayez" in desk._m(desk.UNAVAILABLE["message"]) and anon.post(_url(token), json={"message": " "}).json()["message"] == "Écrivez un message"

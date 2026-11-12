@@ -530,7 +530,8 @@ def log(slug: str, kind: str, text: str, *, by: str = "owner", position: str = "
         global _last_at
         with _lock:
             _last_at = max(round(time.time(), 6), round(_last_at + 0.000001, 6))   # unique: the paging key
-        line = {"at": _last_at, "kind": str(kind)[:40], "by": str(by)[:200], "position": str(position)[:48],
+            at = _last_at
+        line = {"at": at, "kind": str(kind)[:40], "by": str(by)[:200], "position": str(position)[:48],
                 "text": _text(text, TEXT_MAX), "task": str(task)[:40], "session": str(session)[:64], **extra}
         f = state(slug) / "decisions.jsonl"
         with _lock:
@@ -887,6 +888,13 @@ def get(slug: str, with_state: bool = True) -> dict:
                 if path not in paid:
                     paid.add(path)
                     total += cost
+            try:                                        # the position's workers spend from the same envelope
+                from . import enterprise_workers
+                extra = enterprise_workers.cost_today(slug, p["id"])
+            except Exception:  # noqa: BLE001
+                extra = 0.0
+            cost += extra
+            total += extra
             state = _state_of(occupant, st, waits.get(p["id"]))
             why = (waits.get(p["id"]) or {}).get("why", "") if state == "blocked" else ""
             p.update(state=state, occupant=occupant, cost_today=round(cost, 4), inbox=_inbox_count(slug, p["id"]),

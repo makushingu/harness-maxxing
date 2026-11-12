@@ -97,13 +97,18 @@ def tick_all(now: float | None = None) -> None:
     except Exception:  # noqa: BLE001
         log.exception("enterprise_flow.tick")
     if not enterprises.feature_on():
+        _run_ticker("enterprise_workers", now)            # switched off: it only retires the live workers
         return
     for name in TICKERS:
         if name not in SLOW:
             _run_ticker(name, now)
     if _slow_guard.acquire(blocking=False):
-        _slow_thread = threading.Thread(target=_run_slow, args=(now,), name="enterprise-slow", daemon=True)
-        _slow_thread.start()
+        try:
+            _slow_thread = threading.Thread(target=_run_slow, args=(now,), name="enterprise-slow", daemon=True)
+            _slow_thread.start()
+        except BaseException:
+            _slow_guard.release()                         # the thread never ran: the next pass may try again
+            raise
 
 
 async def _loop() -> None:

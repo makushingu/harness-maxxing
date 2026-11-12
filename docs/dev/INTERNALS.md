@@ -441,14 +441,15 @@ Who decides, who may spend, who may write to whom. Nothing here grants a right: 
 - Worker lookups: `seat_of_worker(path) -> (slug, pos) | None` (a live worker, or one ended today, whose spending
   still counts toward its position and the enterprise ceilings) and `cost_today(slug, pos=None)` (USD spent today by
   the workers: live ones read from the agent, ended ones as recorded).
+- **Desk turns** (`agents.run_settings`, `agent_guard.desk_decision`): the session is created in permission mode `default`, and `--settings` carries a `PreToolUse` hook (`agent_guard.py desk-hook`, stdlib, no network, denies on any error) refusing every call except one plain `maxxing enterprise profile|route ...` command (no `;&|<>` backquote `$()`, no expansion). Deleting a conversation also deletes the Claude Code transcript of each run.
 - **Desk** (`enterprise_desk`): `check_live` (called by `enterprises.update` when `desk.enabled` turns on) -> `400
   unprotected_occupants`, then `400 desk_not_restricted` from `desk_unfit(d)` (`{position: [issues]}` from
-  `desk_issues(path)`: keys, domains, writable folders, trust in outside events, no daily budget, no hourly run limit;
+  `desk_issues(path)`: keys, domains, writable folders, trust in outside events, Telegram on, no daily budget, no hourly run limit;
   `status()` returns it as `unfit`, and `public_post` answers 503 while it is not empty). Limits: `GLOBAL_PER_HOUR` (300
-  visitor messages an hour per enterprise), `GET_PER_HOUR` (1500 reads a visitor and hour, page and poll alike). The
+  visitor messages an hour per enterprise, kept apart from the per-client counters so those never evict it), `GET_PER_HOUR` (1500 reads a visitor and hour, page and poll alike). The
   visitor's page `GET /desk/<token>` is `desk_page.py`: one static document (inline style and script allowed by CSP hash
   only, `frame-ancestors 'none'`, `no-referrer`, `noindex`, no cookie, texts set with `textContent`) that calls
-  `/api/public/desk/<token>` of its own origin; the route answers 404 unless the link is live. Public link: `public_info/public_post(token, client, message, conv)` (api/enterprise_desk.py,
+  `/api/public/desk/<token>` of its own origin, in the server language (`desk_page.page(lang)`, en / fr, one CSP hash set each; error texts through `_m`); the route answers 404 unless the link is live. Public link: `public_info/public_post(token, client, message, conv)` (api/enterprise_desk.py,
   `/api/public/desk/<token>`, listed public in bodylimit): token compared in constant time, `rate_per_hour` per client key
   (in memory), `max_chars`, 40 visitor messages a conversation, one unanswered message at a time, the desk agent's own gate
   (budget / rate) answers a generic 503. A conversation is `desk/<conv>.jsonl` lines `visitor | run | assistant | error`;

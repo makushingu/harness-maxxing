@@ -716,8 +716,11 @@ def run_settings(path: str, outside: bool = False, session: str | None = None, g
     from . import agent_guard
     args += agent_guard.add_dirs(path, a)
     if desk:                                            # approvals off: what is not allowed below is denied, never asked
+        st = agent_guard.settings(path, a, approvals=True)
+        pre = st.setdefault("hooks", {}).setdefault("PreToolUse", [])      # deny by hook: holds whatever is pre-approved
+        pre.append({"matcher": "*", "hooks": [{"type": "command", "command": agent_guard.desk_hook_command()}]})
         return {"model": a["model"], "permission_mode": "default", "args": args + ["--tools", "Bash", "--allowedTools", DESK_TOOLS],
-                "sandbox": True, "settings": agent_guard.settings(path, a, approvals=True), "approvals": False,
+                "sandbox": True, "settings": st, "approvals": False,
                 "approvals_forced": False, "approval_timeout_s": a["limits"]["approval_timeout_s"], "keys": [],
                 "system_note": _enterprise_note(path)}
     if manager and not outside and not group:
@@ -2172,7 +2175,8 @@ def _fire(path: str, *, trigger: str, text: str, prompt: str, source: str, attac
                                model=((model or a["chat_model"]) if chat else None) or a["model"] or None,
                                attachments=attachments, source="agent", notify=False, cron=True, env=env,
                                timeout_s=run_timeout(a, timeout_s),
-                               permission_mode=a["permission_mode"], ref=ref)
+                               permission_mode="default" if trigger.startswith("enterprise-desk:") else a["permission_mode"],
+                               ref=ref)
     _hold_left(path, a, s["id"])
     _snapshot(path, s["id"])
     if chat:
