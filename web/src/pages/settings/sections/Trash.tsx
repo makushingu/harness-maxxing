@@ -55,10 +55,11 @@ function Row({ it }: { it: TrashItem }) {
         <Button
           variant="outline"
           size="sm"
+          aria-label={t('trash.restore')}
           loading={restore.isPending}
           onClick={restoreIt}
         >
-          <RotateCcw /> {t('trash.restore')}
+          <RotateCcw /> <span className="max-md:sr-only">{t('trash.restore')}</span>
         </Button>
       )}
       <Tooltip content={t('trash.deleteForever')}>

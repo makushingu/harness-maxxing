@@ -86,7 +86,7 @@ export default function CronsSection() {
   const external = q.data?.external ?? []
   return (
     <>
-      <div className="grid gap-8">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-8">
         <div className="-mt-2 flex justify-end">
           <Button onClick={() => setSeed({ mode: 'new' })}>
             <Plus />
