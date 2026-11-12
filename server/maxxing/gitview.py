@@ -745,3 +745,62 @@ def overview(refresh: bool = False) -> dict:
     for r in gh["repos"]:
         r["local_paths"] = clones.get(r["full_name"].lower(), [])
     return {"root": str(_root()), "local": local, "github": gh}
+
+
+# ---- Changes view (codediff): the pull request of a branch, and opening one ------------------------------------
+
+def _gh_send(full: str, path: str, body: dict) -> Any:
+    """POST to a repository URL with the first token GitHub accepts for it (a read-only token gets 403/404)."""
+    toks = _repo_tokens(_full(full))
+    if not toks:
+        raise GitError(400, "no_token", "add a GitHub token as GITHUB_TOKEN in Settings -> Keys")
+    last: GitError | None = None
+    for tok in toks:
+        headers = {"Authorization": f"Bearer {tok}", "Accept": "application/vnd.github+json",
+                   "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "harness-maxxing"}
+        try:
+            r = _client().post(github_api() + path, headers=headers, json=body)
+        except httpx.HTTPError as e:
+            raise GitError(502, "github_unreachable", f"GitHub unreachable: {type(e).__name__}") from None
+        if r.status_code in (200, 201):
+            return r.json()
+        try:
+            msg = r.json()
+            text = msg.get("message", "") + "".join(f" - {e.get('message', '')}" for e in msg.get("errors") or []
+                                                     if isinstance(e, dict))
+        except ValueError:
+            text = ""
+        if r.status_code in (401, 403, 404):
+            last = GitError(403, "no_write", "no GitHub token can write to this repository (Settings -> Keys)")
+            continue
+        raise GitError(400 if r.status_code == 422 else 502, "github_error", f"GitHub {r.status_code}: {text}"[:400])
+    raise last  # type: ignore[misc]
+
+
+def open_pull(full: str, head: str, base: str, title: str, body: str, draft: bool = False) -> dict:
+    p = _gh_send(full, f"/repos/{_full(full)}/pulls",
+                 {"title": title[:250], "body": body[:60000], "head": head, "base": base, "draft": draft})
+    return {"number": p.get("number"), "url": p.get("html_url"), "title": p.get("title"), "state": p.get("state"),
+            "draft": bool(p.get("draft"))}
+
+
+def branch_status(full: str, branch: str, sha: str | None) -> dict:
+    """The open pull request whose head is `branch` (or None), and the checks of `sha`."""
+    full = _full(full)
+    owner = full.split("/")[0]
+    pr = None
+    pulls = _gh_repo(full, f"/repos/{full}/pulls", {"state": "open", "head": f"{owner}:{branch}", "per_page": 1})
+    if isinstance(pulls, list) and pulls:
+        p = pulls[0]
+        pr = {"number": p.get("number"), "url": p.get("html_url"), "title": p.get("title"),
+              "draft": bool(p.get("draft")), "base": (p.get("base") or {}).get("ref")}
+    checks = None
+    if sha and SHA_RE.match(sha):
+        runs = _gh_repo(full, f"/repos/{full}/commits/{sha}/check-runs", {"per_page": 100})
+        items = (runs or {}).get("check_runs") or [] if isinstance(runs, dict) else []
+        if items:
+            ok = sum(1 for c in items if c.get("conclusion") in ("success", "neutral", "skipped"))
+            failed = sum(1 for c in items if c.get("conclusion") in ("failure", "timed_out", "cancelled",
+                                                                       "action_required"))
+            checks = {"total": len(items), "ok": ok, "failed": failed, "pending": len(items) - ok - failed}
+    return {"pr": pr, "checks": checks}

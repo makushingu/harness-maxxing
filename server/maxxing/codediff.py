@@ -98,6 +98,10 @@ def checked_repo(path: str) -> Path:
     return root
 
 
+def head_sha(repo: Path) -> str | None:
+    return _head(repo)
+
+
 def _head(repo: Path) -> str | None:
     r = _run(repo, "rev-parse", "--verify", "-q", "HEAD^{commit}", check=False)
     return r.stdout.strip() or None
@@ -163,7 +167,7 @@ def turn_end(sid: str, n: int, pre: dict[str, str], touched: set[str], cwd: str 
             continue
         if not files:
             continue
-        repos.append({**_repo_head(repo), "pre": base, "post": post, "approx": approx,
+        repos.append({**repo_head(repo), "pre": base, "post": post, "approx": approx,
                       "files": files[:MAX_FILES], "more": max(0, len(files) - MAX_FILES),
                       "add": sum(f["add"] for f in files), "del": sum(f["del"] for f in files)})
     return {"n": n, "repos": repos} if repos else None
@@ -211,6 +215,10 @@ def numstat(repo: Path, a: str, b: str, paths: list[str] | None = None) -> list[
     return out
 
 
+def raw_diff(repo: Path, a: str, b: str) -> str:
+    return _git(repo, "diff", "--no-color", "--no-ext-diff", "-M", "--stat", "-p", a, b)
+
+
 _HUNK = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)$")
 
 
@@ -249,7 +257,7 @@ def diff(repo: Path, a: str, b: str, path: str, old: str | None = None, full: bo
     return {"path": path, "hunks": hunks, "binary": binary, "cut": cut, "lines": total}
 
 
-def _repo_head(repo: Path) -> dict:
+def repo_head(repo: Path) -> dict:
     branch = _run(repo, "symbolic-ref", "--short", "-q", "HEAD", check=False).stdout.strip()
     up = _run(repo, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}", check=False).stdout.strip()
     ahead = behind = 0
@@ -287,13 +295,14 @@ def view(repo: Path, scope: str, base_sha: str | None = None, base_branch: str |
     else:
         a = _head(repo) or EMPTY_TREE
     files = numstat(repo, a, now)
-    return {**_repo_head(repo), "pre": a, "post": now, "approx": False, "files": files[:MAX_FILES],
+    return {**repo_head(repo), "pre": a, "post": now, "approx": False, "files": files[:MAX_FILES],
             "more": max(0, len(files) - MAX_FILES), "add": sum(f["add"] for f in files),
             "del": sum(f["del"] for f in files)}
 
 
-def commits(repo: Path, base_branch: str | None = None, limit: int = 100) -> list[dict]:
-    b = base_branch or default_base(repo)
+def commits(repo: Path, base_branch: str | None = None, limit: int = 100, everything: bool = False) -> list[dict]:
+    """Commits of HEAD not in `base_branch` (the default base when None); `everything`: the last ones of HEAD."""
+    b = None if everything else (base_branch or default_base(repo))
     rng = [f"{b}..HEAD"] if b else ["HEAD"]
     out = _git(repo, "log", f"-n{limit}", "--format=%H%x1f%h%x1f%s%x1f%an%x1f%at", *rng, check=False) \
         if _head(repo) else ""
@@ -351,18 +360,18 @@ def commit(repo: Path, message: str, paths: list[str] | None = None) -> dict:
     else:
         _git(repo, "add", "-A", write=True, timeout=WRITE_TIMEOUT)
     _git(repo, "commit", "-m", message, write=True, timeout=WRITE_TIMEOUT)
-    return {"sha": _git(repo, "rev-parse", "HEAD").strip(), **_repo_head(repo)}
+    return {"sha": _git(repo, "rev-parse", "HEAD").strip(), **repo_head(repo)}
 
 
 def push(repo: Path) -> dict:
-    head = _repo_head(repo)
+    head = repo_head(repo)
     if not head["branch"]:
         raise GitError(400, "detached", "not on a branch: create a branch first")
     if head["upstream"]:
         _git(repo, "push", write=True, timeout=WRITE_TIMEOUT)
     else:
         _git(repo, "push", "-u", "origin", f"HEAD:refs/heads/{head['branch']}", write=True, timeout=WRITE_TIMEOUT)
-    return _repo_head(repo)
+    return repo_head(repo)
 
 
 def new_branch(repo: Path, name: str) -> dict:
@@ -370,7 +379,7 @@ def new_branch(repo: Path, name: str) -> dict:
     if _run(repo, "check-ref-format", "--branch", name, check=False).returncode != 0:
         raise GitError(400, "bad_branch", "this is not a valid branch name")
     _git(repo, "switch", "-c", name, write=True)
-    return _repo_head(repo)
+    return repo_head(repo)
 
 
 def prune(keep_days: int = KEEP_DAYS, live: set[str] | None = None) -> int:

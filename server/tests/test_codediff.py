@@ -1,4 +1,5 @@
 """codediff: photos before / after a turn, views, restore, commit, push - never touching the user's index or HEAD."""
+import json
 import subprocess
 from pathlib import Path
 
@@ -188,3 +189,146 @@ def test_a_turn_outside_any_repository_reports_nothing(client, topic):
     s = client.post("/api/sessions", json={"path": topic, "message": "edit WRITEFILE:x.txt NOTOOL"}).json()
     wait_idle(client, s["id"])
     assert not [e for e in all_events(client, s["id"]) if e["type"] == "changes"]
+
+
+# ---- API ------------------------------------------------------------------------------------------------------
+
+from urllib.parse import parse_qs, urlparse  # noqa: E402
+
+from _conn_helpers import _Server  # noqa: E402
+from maxxing import gitview, vault  # noqa: E402
+
+
+@pytest.fixture
+def worked(client, topic, mx):
+    """A session that changed the topic repository in two turns."""
+    config.save_config({**config.load_config(), "files_root": str(mx["tmp"])})
+    folder = Path(mx["ws"]) / topic
+    _git(folder, "init", "-q", "-b", "main")
+    _git(folder, "config", "user.name", "Ann")
+    _git(folder, "config", "user.email", "a@example.com")
+    _git(folder, "add", ".")
+    _git(folder, "commit", "-qm", "start")
+    s = client.post("/api/sessions", json={"path": topic, "message": "one WRITEFILE:a.txt NOTOOL"}).json()
+    wait_idle(client, s["id"])
+    client.post(f"/api/sessions/{s['id']}/messages", json={"text": "two WRITEFILE:b.txt NOTOOL"})
+    wait_idle(client, s["id"])
+    return s["id"], folder
+
+
+def test_api_changes_of_a_turn_and_of_the_session(client, worked):
+    sid, folder = worked
+    last = client.get(f"/api/sessions/{sid}/changes").json()
+    assert last["n"] == 2 and [f["path"] for f in last["repos"][0]["files"]] == ["b.txt"]
+    first = client.get(f"/api/sessions/{sid}/changes", params={"n": 1}).json()
+    assert [f["path"] for f in first["repos"][0]["files"]] == ["a.txt"]
+    whole = client.get(f"/api/sessions/{sid}/changes", params={"scope": "session"}).json()
+    assert sorted(f["path"] for f in whole["repos"][0]["files"]) == ["a.txt", "b.txt"]
+    unc = client.get(f"/api/sessions/{sid}/changes", params={"scope": "uncommitted"}).json()
+    assert sorted(f["path"] for f in unc["repos"][0]["files"]) == ["a.txt", "b.txt"]
+    r = last["repos"][0]
+    d = client.get("/api/code/diff", params={"repo": r["root"], "a": r["pre"], "b": r["post"], "path": "b.txt"}).json()
+    assert d["hunks"][0]["lines"] == [{"t": "+", "o": None, "n": 1, "s": "changed by the fake"}]
+
+
+def test_api_restore_then_undo(client, worked):
+    sid, folder = worked
+    r = client.get(f"/api/sessions/{sid}/changes").json()["repos"][0]
+    res = client.post("/api/code/restore", json={"repo": r["root"], "source": r["pre"], "paths": ["b.txt"]}).json()
+    assert not (folder / "b.txt").exists() and (folder / "a.txt").exists()
+    client.post("/api/code/undo", json={"repos": [{"root": r["root"], "undo": res["undo"]}]})
+    assert (folder / "b.txt").exists()
+
+
+def test_api_revert_before_a_message(client, worked):
+    sid, folder = worked
+    out = client.post(f"/api/sessions/{sid}/revert", json={"n": 1}).json()
+    assert not (folder / "a.txt").exists() and not (folder / "b.txt").exists()
+    [r] = out["repos"]
+    client.post("/api/code/undo", json={"repos": [{"root": r["root"], "undo": r["undo"]}]})
+    assert (folder / "a.txt").exists() and (folder / "b.txt").exists()
+    assert client.post(f"/api/sessions/{sid}/revert", json={"n": 9}).status_code == 404
+
+
+def test_api_refuses_a_folder_that_is_not_a_repository(client, worked, mx):
+    r = client.get("/api/code/diff", params={"repo": "/etc", "a": "HEAD", "b": "now", "path": "passwd"})
+    assert r.status_code == 404
+    r = client.get("/api/code/diff", params={"repo": str(worked[1]), "a": "--output=/tmp/x", "b": "now",
+                                             "path": "a.txt"})
+    assert r.status_code == 400
+
+
+def _fake_github(pulls_made):
+    def handler(method, path, headers, body):
+        u = urlparse(path)
+        q = parse_qs(u.query)
+        if u.path == "/user":
+            return 200, {"login": "ann"}, "application/json"
+        if u.path == "/user/repos":
+            return 200, [{"full_name": "acme/app", "name": "app", "owner": {"login": "acme"}, "private": True,
+                          "permissions": {"push": True}, "default_branch": "main"}], "application/json"
+        if u.path == "/repos/acme/app/pulls" and method == "POST":
+            data = json.loads(body)
+            pulls_made.append(data)
+            return 201, {"number": 12, "html_url": "https://github.com/acme/app/pull/12", "title": data["title"],
+                         "state": "open", "draft": False}, "application/json"
+        if u.path == "/repos/acme/app/pulls":
+            if pulls_made and q.get("head") == ["acme:feat/x"]:
+                return 200, [{"number": 12, "html_url": "u", "title": "t", "draft": False,
+                              "base": {"ref": "main"}}], "application/json"
+            return 200, [], "application/json"
+        if u.path.startswith("/repos/acme/app/commits/") and u.path.endswith("/check-runs"):
+            return 200, {"check_runs": [{"conclusion": "success"}, {"conclusion": None}]}, "application/json"
+        return 404, {"message": "Not Found"}, "application/json"
+    return _Server(handler)
+
+
+def test_api_commit_push_and_pull_request(client, worked, tmp_path, monkeypatch):
+    sid, folder = worked
+    bare = tmp_path / "origin.git"
+    subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(bare)], check=True)
+    _git(folder, "remote", "add", "origin", "https://github.com/acme/app.git")
+    _git(folder, "config", "remote.origin.pushurl", str(bare))
+    _git(folder, "push", "-q", "origin", "main")
+    _git(folder, "update-ref", "refs/remotes/origin/main", "main")
+    assert client.post("/api/code/branch", json={"repo": str(folder), "name": "feat/x"}).json()["branch"] == "feat/x"
+    out = client.post("/api/code/commit", json={"repo": str(folder), "message": "Add a and b", "push": True}).json()
+    assert out["pushed"] and out["upstream"] == "origin/feat/x"
+    made: list = []
+    srv = _fake_github(made)
+    monkeypatch.setenv("MAXXING_GITHUB_API", srv.url)
+    try:
+        vault.put("GITHUB_TOKEN", "ghp_" + "A" * 36)
+        gitview.clear_cache()
+        pr = client.post("/api/code/pr", json={"repo": str(folder)}).json()
+        assert pr["number"] == 12 and made[0]["head"] == "feat/x" and made[0]["base"] == "main"
+        assert made[0]["title"] == "Add a and b"
+        st = client.get("/api/code/status", params={"repo": str(folder)}).json()
+        assert st["pr"]["number"] == 12 and st["checks"] == {"total": 2, "ok": 1, "failed": 0, "pending": 1}
+    finally:
+        srv.close()
+
+
+def test_api_commit_message_needs_a_change(client, worked):
+    _, folder = worked
+    _git(folder, "add", ".")
+    _git(folder, "commit", "-qm", "all")
+    r = client.post("/api/code/message", json={"repo": str(folder)})
+    assert r.status_code == 400 and r.json()["error"] == "nothing"
+
+
+def test_api_commit_message_is_proposed(client, worked):
+    r = client.post("/api/code/message", json={"repo": str(worked[1])})
+    assert r.status_code == 200 and r.json()["message"]
+
+
+def test_prune_drops_photos_of_gone_sessions_and_old_ones(repo, monkeypatch):
+    from maxxing import gitview
+    gitview.clear_cache()
+    codediff.snapshot(repo, "refs/maxxing/aaaaaaaa/1/pre")
+    codediff.snapshot(repo, "refs/maxxing/bbbbbbbb/1/pre")
+    assert codediff.prune(live={"aaaaaaaa"}) == 1
+    refs = _git(repo, "for-each-ref", "--format=%(refname)", "refs/maxxing")
+    assert "aaaaaaaa" in refs and "bbbbbbbb" not in refs
+    monkeypatch.setattr(codediff.time, "time", lambda: 4_000_000_000)
+    assert codediff.prune(live={"aaaaaaaa"}) == 1

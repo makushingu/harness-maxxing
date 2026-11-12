@@ -568,6 +568,36 @@ bad_repo|git_failed`, `403 outside_root`, `404 not_a_repo|not_found|no_branch`, 
 | GET | `/api/git/commit?repo=&sha=` | – | `{sha, parents, author, email, date, message, files:[{path, additions, deletions}], files_total, url?}` (a merge: diff against its first parent; message cut at 50 000 characters (`…`); ≤ 300 files; an annotated tag shows its commit; `sha` is an object id, never a branch or tag of that name; 404 `no_commit` for a tree or blob id) |
 | GET | `/api/git/pulls?repo=github:owner/name` | – | `[{number, title, author, head, base, draft, url, updated}]` (open, 30) · `400 not_github` |
 
+## Code (Changes view)
+
+`maxxing/codediff.py` + `maxxing/api/code.py`. Before and after every turn (not plan mode, compact or hand-off) the
+runner photographs the session's repositories (its folder's, the ones it changed before, the ones of the files Claude
+wrote): working tree incl. untracked files (`.gitignore` respected) written through a throwaway index, kept as a
+commit under `refs/maxxing/<sid8>/<n>/{pre,post}` (never pushed; deleted after 30 days or with the session by the
+nightly maintenance). The user's index, HEAD and files are never touched. A turn that changed something appends
+`mx_changes` `{n, repos:[{root, name, branch, pre, post, approx, files:[{path, old, status A|M|D|R|C|T, add, del,
+binary}], more, add, del}]}` to the log, shown as the event `changes`. Session meta: `code_turn`, `code_repos` (≤ 8,
+most recent first), `code_base` (`{root: first photo}`). `repo` = a repository's top folder inside the files root;
+revisions = 7-40 hex digits, `HEAD` or `now` (a fresh photo). Reads run without the repository's hooks / filters /
+fsmonitor (as `/api/git`); commit and push keep the repository's hooks. Errors as `/api/git` plus `404
+repo_not_found|no_photo`, `400 bad_rev|bad_path|bad_scope|no_message|nothing|detached|bad_branch|same_branch|
+not_github|no_base`, `403 no_write`, `409 running`.
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | `/api/sessions/{id}/changes?scope=turn&n=&base=` | – | `{scope, n, repos:[...]}` — `turn` (default: the last turn that changed something, or `n`): the `mx_changes` entry + live `branch, upstream, ahead, behind, remote`; `session` (first photo → now), `uncommitted` (HEAD → now), `branch` (merge-base with `base` or origin's default → now): one entry per known repository with changes (`error` when git failed) |
+| GET | `/api/code/diff?repo=&a=&b=&path=&old=&full=` | – | `{path, hunks:[{head, o, n, lines:[{t: ' '\|'+'\|'-', o, n, s}]}], binary, cut, lines}` (≤ 2 000 lines unless `full`) |
+| GET | `/api/code/commits?repo=&base=` | – | `[{sha, short, subject, author, at}]` (HEAD not in base, 100) |
+| GET | `/api/code/status?repo=` | – | `{root, name, branch, upstream, ahead, behind, remote, github, pr:{number, url, title, draft, base}\|null, checks:{total, ok, failed, pending}\|null, github_error?}` |
+| POST | `/api/code/restore` | `{repo, source, paths?}` | `{undo, restored, removed}` — files back as in `source` (all that differ when no `paths`); `undo` = photo taken first |
+| POST | `/api/code/undo` | `{repos:[{root, undo}]}` | `{repos:[...]}` — puts back what a restore / revert replaced |
+| POST | `/api/sessions/{id}/revert` | `{n}` | `{n, repos:[{root, name, undo, restored, removed, commits_kept}]}` — every repository changed by turn `n` or later back to its photo from before (files only; `409 running` during a turn) |
+| POST | `/api/code/commit` | `{repo, message, paths?, push}` | `{sha, branch, upstream, ahead, behind, ..., pushed?}` (`git add -A` of `paths` or everything) |
+| POST | `/api/code/push` | `{repo}` | head info (sets the upstream `origin/<branch>` the first time) |
+| POST | `/api/code/branch` | `{repo, name}` | head info (`git switch -c`) |
+| POST | `/api/code/pr` | `{repo, title?, body?, base?, draft}` | `{number, url, title, state, draft}` — pushes first if needed; title = the only commit's subject (else the newest), body = the commits; a token that can write to the repository |
+| POST | `/api/code/message` | `{repo, a=HEAD, b=now}` | `{message}` — proposed by a small `claude -p` call (Haiku) from the diff (40 kB) and the 10 last subjects; `Co-Authored-By` lines dropped |
+
 ## Infra
 
 Inventory (`maxxing/infra/`, Settings -> Features -> `infra_page`, off by default). One snapshot

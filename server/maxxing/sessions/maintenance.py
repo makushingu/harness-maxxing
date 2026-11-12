@@ -54,6 +54,11 @@ def run() -> dict:
             out["compacted"] += 1
             out["saved"] += r["before"] - r["after"]
     out["locks"] = store.prune_locks()
+    try:                                                # Changes view photos: 30 days, or the session is gone
+        from .. import codediff
+        out["photos"] = codediff.prune(live={sid[:8] for sid in store.list_ids()})
+    except Exception:                                   # never worth a failed maintenance pass
+        log.exception("pruning the Changes view photos failed")
     try:
         config.write_json(_state_path(), {"at": t0, "retry": skipped})
     except OSError:
