@@ -602,7 +602,8 @@ def desk_decision(tool: str, tool_input: object) -> str | None:
         words = shlex.split(cmd)
     except ValueError:
         return "That command is not allowed at the front desk."
-    if len(words) < 3 or words[:2] != ["maxxing", "enterprise"] or words[2] not in DESK_COMMANDS             or not cmd.startswith(f"maxxing enterprise {words[2]}"):
+    if len(words) < 3 or words[:2] != ["maxxing", "enterprise"] or words[2] not in DESK_COMMANDS \
+            or not cmd.startswith(f"maxxing enterprise {words[2]}"):
         return "The front desk may only run `maxxing enterprise profile` and `maxxing enterprise route`."
     return None
 
@@ -621,9 +622,18 @@ def desk_hook() -> int:
 
 
 def desk_hook_command() -> str:
-    """Same bootstrap as hook_command: `-I` keeps the agent folder off sys.path."""
-    boot = (f"import sys; sys.path.insert(0, {str(Path(__file__).resolve().parent.parent)!r}); "
-            "from maxxing.agent_guard import main; sys.exit(main(sys.argv))")
+    """Same bootstrap as hook_command (`-I` keeps the agent folder off sys.path), but any failure denies and exits 2."""
+    deny = json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",
+                                              "permissionDecisionReason": "The front desk hook failed."}})
+    root = str(Path(__file__).resolve().parent.parent)
+    boot = ("import sys\ntry:\n"
+            f" sys.path.insert(0, {root!r})\n"
+            " from maxxing.agent_guard import main\n"
+            " r = main(sys.argv)\n"
+            "except BaseException:\n"
+            f" print({deny!r})\n"
+            " r = 2\n"
+            "sys.exit(r)")
     return f"{shlex.quote(sys.executable)} -I -c {shlex.quote(boot)} desk-hook"
 
 

@@ -405,6 +405,7 @@ def test_desk_run_has_no_key_no_folder_and_two_commands_only(live):
     assert "--disallowedTools" not in args
     assert rs["settings"]["sandbox"]["network"]["allowedDomains"] == []
     assert "Bash(maxxing:*)" not in rs["settings"]["permissions"]["allow"]
+    assert rs["no_mcp"] is True and "no_mcp" not in agents.run_settings(FRONT, True, session=None)
     assert "--tools" not in agents.run_settings(FRONT, True, session=None)["args"]     # any other run is unchanged
     from maxxing.sessions import runner, store
     assert store.read(sid)["permission_mode"] == "default"                             # the mode the runner applies
@@ -417,7 +418,7 @@ def test_a_desk_occupant_with_telegram_on_is_refused(live):
     ent, token, anon = live
     assert desk.desk_issues(FRONT) == []
     _set(FRONT, telegram=True)
-    assert "telegram" in desk.desk_issues(FRONT) and "front" in desk.desk_unfit(enterprises.load(SLUG))
+    assert "has Telegram on" in desk.desk_issues(FRONT) and "front" in desk.desk_unfit(enterprises.load(SLUG))
     assert _say(anon, token).status_code == 503
     assert ent.patch(E, json={"settings": {"desk": {"enabled": False}}}).status_code == 200
     r = ent.patch(E, json={"settings": {"desk": {"enabled": True}}})
@@ -561,3 +562,23 @@ def test_public_page_and_errors_follow_the_server_language(live):
     assert 'lang="fr"' in fr.text and "Envoyer" in fr.text and "Write your message" not in fr.text
     assert fr.headers["content-security-policy"] == desk_page.PAGES["fr"][3] and "img-src data:" in fr.headers["content-security-policy"]
     assert "Réessayez" in desk._m(desk.UNAVAILABLE["message"]) and anon.post(_url(token), json={"message": " "}).json()["message"] == "Écrivez un message"
+
+
+def test_desk_hook_command_blocks_when_the_module_cannot_load(tmp_path):
+    import shlex
+    import subprocess
+    from maxxing import agent_guard as ag
+    (tmp_path / "maxxing").mkdir()
+    (tmp_path / "maxxing" / "__init__.py").write_text("")
+    (tmp_path / "maxxing" / "agent_guard.py").write_text("raise ImportError('broken')\n")
+    real = str(ag.Path(ag.__file__).resolve().parent.parent)
+    argv = [w.replace(repr(real), repr(str(tmp_path))) for w in shlex.split(ag.desk_hook_command())]
+    r = subprocess.run(argv, input="{}", capture_output=True, text=True)
+    assert r.returncode == 2
+    assert json.loads(r.stdout)["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+def test_route_refuses_the_desk_itself_and_an_unknown_target(ent):
+    for dept in ("front", "nobody"):
+        with pytest.raises(enterprises.EnterpriseError):
+            desk.route(SLUG, "front", dept, "help")

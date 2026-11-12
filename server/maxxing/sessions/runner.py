@@ -444,7 +444,9 @@ class Runner:
             "folder": str(approvals_dir()), "session": self.sid,
             "agent_path": str(meta.get("path") or "") if agent else "",
             "timeout": _approval_timeout(agent.get("approval_timeout_s") or cfg.get("approval_timeout_s"))}
-        mcp_plan = mcp_auto.plan(self.sid, cfg, meta, cwd, item.get("text") or "")   # MCP servers this turn needs
+        no_mcp = bool(agent.get("no_mcp"))              # a front desk turn: no MCP server at all, whatever is configured
+        mcp_plan = (mcp_auto.Plan(["--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}'], "", []) if no_mcp
+                    else mcp_auto.plan(self.sid, cfg, meta, cwd, item.get("text") or ""))   # MCP servers this turn needs
         hint = "\n\n".join(x for x in (mcp_plan.hint, spawn.CRON_SILENT if item.get("silent_ok") else "") if x)
         base = [spawn.claude_bin(), "-p", "--output-format", "stream-json", "--verbose"]
         allow = [] if agent or mode != "default" else workspace_allowed(meta.get("path") or "")
@@ -456,7 +458,7 @@ class Runner:
         base += ["--model", model] if model else []
         base += agent.get("args") or []
         from maxxing import pcbridge                    # not at import: the runner starts with stdlib-only modules
-        base += pcbridge.mcp_config_args() + mcp_plan.args + approval
+        base += ([] if no_mcp else pcbridge.mcp_config_args()) + mcp_plan.args + approval
         env = spawn.claude_env(meta.get("env") or {}, mode, agent.get("keys") if agent else None)
         env["MAXXING_SESSION"] = self.sid               # `maxxing mcp load` run by the turn finds its session
         text = (PLAN_PREFACE if plan else "") + build_prompt(item)

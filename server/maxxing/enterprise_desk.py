@@ -116,7 +116,7 @@ def desk_issues(path: str) -> list[str]:
     if a.get("trust_outside"):
         out.append("trusts outside events")
     if a.get("telegram"):
-        out.append("telegram")                          # each visitor message would be posted where deletion cannot reach
+        out.append("has Telegram on")                          # each visitor message would be posted where deletion cannot reach
     if not (lim.get("usd_per_day") or 0) > 0:
         out.append("has no daily budget")
     if not (lim.get("runs_per_hour") or 0) > 0:
@@ -185,7 +185,8 @@ def limited(slug: str, key: str, per_hour: int, now: float | None = None) -> boo
     """One more message of this visitor (client key): True when over `per_hour` in the last hour (in memory)."""
     t = _now(now)
     with _lock:
-        q = _global_hits.setdefault(slug, collections.deque()) if key == "*"             else _hits.setdefault((slug, key), collections.deque())
+        q = _global_hits.setdefault(slug, collections.deque()) if key == "*" \
+            else _hits.setdefault((slug, key), collections.deque())
         while q and q[0] < t - 3600:
             q.popleft()
         if len(q) >= per_hour:
@@ -431,10 +432,10 @@ def _erase_session(path: str, sid: str) -> None:
         from . import trash
         from .sessions import service, store
         m = store.read(sid)
-        _erase_transcript(str((m or {}).get("csid") or ""))
+        if m and m.get("state") == "running":
+            service.stop(sid)
+        _erase_transcript(str((m or {}).get("csid") or ""))     # after the stop: a live turn would write it again
         if m:
-            if m.get("state") == "running":
-                service.stop(sid)
             dest = trash.trash_session(sid)
             trash._remove(dest)                         # noqa: SLF001 - a hard delete: nothing keeps the words
             trash.invalidate_sizes()
@@ -500,8 +501,12 @@ def lead_of_department(slug: str, key: str) -> str | None:
     dept = next((i for i, v in d["departments"].items() if i.lower() == k or str(v.get("name") or "").lower() == k), None)
     if dept is None and any(p["department"] == key for p in d["positions"]):
         dept = key
-    if dept is None:
-        return key if any(p["id"] == key for p in d["positions"]) else None
+    if dept is None:                                    # a bare position id: only the head of its department
+        me = next((p for p in d["positions"] if p["id"] == key), None)
+        if me is None or (me["department"] and enterprises.lead_of(slug, key) in
+                          [p["id"] for p in d["positions"] if p["department"] == me["department"]]):
+            return None
+        return key
     members = [p["id"] for p in d["positions"] if p["department"] == dept]
     tops = [m for m in members if enterprises.lead_of(slug, m) not in members]
     return min(tops, key=lambda m: (len(enterprises.ancestors(slug, m)), m)) if tops else None
@@ -527,6 +532,8 @@ def route(slug: str, pos: str, department: str, text: str, *, session: str = "")
     if not text:
         raise EnterpriseError(400, "invalid", "Say what the visitor needs")
     lead = lead_of_department(slug, department)
+    if lead == pos:
+        lead = None                                     # never back to the desk itself
     if lead is None:
         d = enterprises.load(slug)
         names = sorted({*d["departments"], *(x["department"] for x in d["positions"] if x["department"])})

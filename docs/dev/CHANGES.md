@@ -91,7 +91,7 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   `--allowedTools` or the user's settings allow. Deleting a conversation (and retention) erases the visitor's text from
   the desk agent's sessions (hard delete), its thread and the Claude Code transcript of each run; what stays is the
   routed request (task text, lead's inbox); the `decisions.jsonl` line of a route carries no visitor text. `route` is
-  attributed to the desk position (`assign(..., sender=pos)`) while the owner stays the requester. Hand-ins make the
+  attributed to the desk position (`assign(..., sender=pos)`) while the desk position is the requester. `route` refuses the desk itself and a position that is not the head of its department; desk turns run with `--strict-mcp-config` and an empty server list (`no_mcp` in `run_settings`); the desk hook command fails closed (any boot error denies and exits 2) and has a 10 s timeout; an accept records `accepted_in` so an assign in the same run keeps the parent and hops; delivery runs start at the largest `hops` of their tasks (capped at `agents.MAX_DEPTH`); an import lists reserved position ids in `skipped`. Hand-ins make the
   delivered tasks the default parent. The desk has its own global hourly cap (not evicted with the client keys).
   Workers are retired when the feature is off (`tick_all` still runs the worker tick) and their cost is in the overview,
   the chart and the dashboard card (`cost_today`, `ceiling_hit`). A budget-less agent under a ceiling gets at most

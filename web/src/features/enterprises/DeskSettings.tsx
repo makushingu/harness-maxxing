@@ -61,6 +61,7 @@ export function DeskSettings({ enterprise: e }: { enterprise: Enterprise }) {
     'trusts outside events': 'ent.deskSettings.why.trust',
     'has no daily budget': 'ent.deskSettings.why.budget',
     'has no hourly run limit': 'ent.deskSettings.why.runs',
+    'has Telegram on': 'ent.deskSettings.why.telegram',
   }
   const reason = (r: string) => (reasonKeys[r] ? t(reasonKeys[r]) : r)
   // the occupants that are not Protected (sandboxed): the desk cannot be live while one exists

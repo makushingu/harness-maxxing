@@ -233,7 +233,7 @@ The **front desk** is a position that answers people **outside** the company on 
   department. Its runs use the **default permission mode** and only `maxxing enterprise profile` and
   `maxxing enterprise route` are let through: every other tool call, shell command included, is denied (a check that
   applies whatever the agent's own settings allow). The server checks it each time a visitor writes: with a key, a domain, a writable folder, trust in outside
-  events, or no daily budget or hourly run limit on its occupant, the desk answers *unavailable*. It routes, it does not solve: a refund request becomes a task for customer care, **marked as coming from
+  events, Telegram on, or no daily budget or hourly run limit on its occupant, the desk answers *unavailable*. It routes, it does not solve: a refund request becomes a task for customer care, **marked as coming from
   outside**, so everything it triggers asks you first.
 - **Going live is your decision**, and **needs every occupant of the chart to be protected** (sandboxed, so they cannot
   read what they should not) and **the desk's agent to be restricted** (no key, no domain, no writable folder, no trust

@@ -368,9 +368,11 @@ def _flush(slug: str, pos: str, now: float) -> str:
             except Exception:  # noqa: BLE001
                 logger.exception("trusted_delivery")
         prompt, text = _compose(slug, pos, items, trusted)
+        depth = min(max([int((_ent(_load_task(slug, i["task"])[0], slug) or {}).get("hops") or 0)
+                         for i in items if i.get("task")] or [0]), agents.MAX_DEPTH)     # the chain's depth, never past the agents' own limit
         sender = items[0].get("from") or "owner"
         r = agents.fire(path, trigger=f"enterprise:{slug}:{sender}", text=text, prompt=prompt,
-                        source=f"enterprise {_name(slug)}", depth=0, wait=True)
+                        source=f"enterprise {_name(slug)}", depth=depth, wait=True)
         if not r.get("started"):
             return _wait(slug, pos, now, r.get("reason") or "busy")
         ids = {i["id"] for i in items}
@@ -569,7 +571,8 @@ def _default_parents(slug: str, pos: str, session: str) -> list[dict]:
         if it.get("run") != session or it.get("kind") not in ("assign", "handin", "answer") or not it.get("task"):
             continue
         t, e = _load_task(slug, it["task"])
-        if t and e and t.get("status") != "done" and pos in (e.get("owner"), e.get("requester"))                 and all(x["_id"] != t["id"] for x in out):
+        live = t and e and (t.get("status") != "done" or e.get("accepted_in") == session)   # accepted in this run: still its parent
+        if live and pos in (e.get("owner"), e.get("requester")) and all(x["_id"] != t["id"] for x in out):
             out.append({**e, "_id": t["id"]})
     return out
 
@@ -698,7 +701,7 @@ def done(slug: str, pos: str, task_id: str, summary: str, *, session: str = "") 
     summary = (summary or "").strip()[:2000]
     api = _tasks()
     if pos == "" or pos == (e.get("requester") or ""):
-        row = _task_call(api.update_task, task_id, {"status": "done", "enterprise": {**e, "stage": ""}})
+        row = _task_call(api.update_task, task_id, {"status": "done", "enterprise": {**e, "stage": "", "accepted_in": session}})
         enterprises.log(slug, "accept", f"{_label(slug, pos)} accepts the task: {t['title']}", by=pos or "owner",
                         position=e.get("owner", ""), task=task_id, session=session)
     elif pos == e.get("owner"):

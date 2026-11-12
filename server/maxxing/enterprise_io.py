@@ -264,11 +264,14 @@ def import_zip(data: bytes) -> dict:
             raise _bad("not_an_export", "enterprise.json is not an object")
         want = src.get("id")
         base = want if isinstance(want, str) and enterprises._slug_ok(want) else importer.slug(str(src.get("name") or ""))
+        skipped: list[dict] = []
+        for p in src.get("positions") if isinstance(src.get("positions"), list) else []:     # `clean` drops reserved ids silently
+            if isinstance(p, dict) and p.get("id") in enterprises.RESERVED_POS:
+                skipped.append({"file": f"position {p['id']}", "reason": "reserved id: add it again under another id"})
         d = enterprises.clean(src)
         d.pop("id", None)
         d.update(rev=1, projects=[], grants=[])
         _safe_settings(d)
-        skipped: list[dict] = []
         _reset_choices(d, skipped)
         for p in d["positions"]:
             p["agent"] = None

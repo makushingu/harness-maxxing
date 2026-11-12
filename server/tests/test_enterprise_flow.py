@@ -536,6 +536,29 @@ def test_the_parent_also_defaults_from_a_handin_or_an_answer(ent, mx):
     assert nxt["enterprise"]["parent"] == top["id"] and nxt["enterprise"]["hops"] == 2
 
 
+def test_accepting_a_handin_then_assigning_keeps_the_chain(ent):
+    top = flow.assign(S, "ceo", "writer", "Part")
+    path = flow._inbox_dir(S) / "ceo.seen.jsonl"
+    flow._write(path, [{"id": "i_1", "kind": "handin", "task": top["id"], "from": "writer", "text": "x", "run": "sess-7"}])
+    flow.done(S, "ceo", top["id"], "", session="sess-7")                 # accept, then assign again in the same run
+    nxt = flow.assign(S, "ceo", "editor", "Next", session="sess-7")
+    assert nxt["enterprise"]["parent"] == top["id"] and nxt["enterprise"]["hops"] == 2
+
+
+def test_a_delivery_run_starts_at_the_depth_of_its_tasks(ent, monkeypatch):
+    depths = []
+    real = agents.fire
+
+    def spy(*a, **kw):
+        depths.append(kw.get("depth"))
+        return real(*a, **kw)
+    monkeypatch.setattr(agents, "fire", spy)
+    t = flow.assign(S, "ceo", "writer", "Part")
+    flow.tick(time.time() + 1)
+    wait_for(lambda: depths)
+    assert depths[-1] == min(t["enterprise"]["hops"], agents.MAX_DEPTH) == 1
+
+
 def test_a_full_inbox_logs_what_it_drops(ent, monkeypatch):
     monkeypatch.setattr(flow, "INBOX_MAX", 2)
     for i in range(3):

@@ -718,9 +718,9 @@ def run_settings(path: str, outside: bool = False, session: str | None = None, g
     if desk:                                            # approvals off: what is not allowed below is denied, never asked
         st = agent_guard.settings(path, a, approvals=True)
         pre = st.setdefault("hooks", {}).setdefault("PreToolUse", [])      # deny by hook: holds whatever is pre-approved
-        pre.append({"matcher": "*", "hooks": [{"type": "command", "command": agent_guard.desk_hook_command()}]})
+        pre.append({"matcher": "*", "hooks": [{"type": "command", "command": agent_guard.desk_hook_command(), "timeout": 10}]})
         return {"model": a["model"], "permission_mode": "default", "args": args + ["--tools", "Bash", "--allowedTools", DESK_TOOLS],
-                "sandbox": True, "settings": st, "approvals": False,
+                "sandbox": True, "settings": st, "approvals": False, "no_mcp": True,
                 "approvals_forced": False, "approval_timeout_s": a["limits"]["approval_timeout_s"], "keys": [],
                 "system_note": _enterprise_note(path)}
     if manager and not outside and not group:

@@ -283,3 +283,11 @@ def test_import_resets_the_owner_choices_that_widen_power_or_spend(cl):
     assert "autonomy" not in enterprises.load("wide")["departments"]["ops"]["settings"]
     reasons = " ".join(s["reason"] for s in r.json()["skipped"])
     assert sum(1 for s in r.json()["skipped"] if s["file"] in ("settings", "department ops")) >= 7 and "autonomy" in reasons
+
+
+def test_import_lists_a_position_with_a_reserved_id(cl):
+    chart = json.dumps({"version": 1, "name": "Acme", "positions": [
+        {"id": "boss", "title": "Boss"}, {"id": "policy", "title": "Policy", "reports_to": "boss"}]})
+    r = cl.post("/api/enterprises/import", content=_zip({"enterprise.json": chart}))
+    assert r.status_code == 200, r.text
+    assert any(s["file"] == "position policy" and "reserved" in s["reason"] for s in r.json()["skipped"])
