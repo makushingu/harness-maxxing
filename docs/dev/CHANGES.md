@@ -7,6 +7,9 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Security: `codediff.diff()` and `raw_diff()` pass `--no-textconv` (a `diff.<name>.textconv` from `.git/config`
+  bound by `.git/info/attributes` ran with the server's rights: `GIT_ATTR_SOURCE` only covers the worktree's
+  `.gitattributes`, `--no-ext-diff` only `diff.external`); test `test_a_diff_never_runs_the_repository_textconv`.
 - Workspace template: `templates/workspace/CLAUDE.md` gets a paragraph under "Use what Harness already has" (the
   Code mode terminal, opened only by the user: a terminal opened through `POST /api/term` is not in the drawer, whose
   tabs are per browser in `mx-terminals`; Revert / Changes view) and Hermes, OpenClaw on the `maxxing import` line;

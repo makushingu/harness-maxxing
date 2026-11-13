@@ -216,7 +216,7 @@ def numstat(repo: Path, a: str, b: str, paths: list[str] | None = None) -> list[
 
 
 def raw_diff(repo: Path, a: str, b: str) -> str:
-    return _git(repo, "diff", "--no-color", "--no-ext-diff", "-M", "--stat", "-p", a, b)
+    return _git(repo, "diff", "--no-color", "--no-ext-diff", "--no-textconv", "-M", "--stat", "-p", a, b)
 
 
 _HUNK = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)$")
@@ -224,7 +224,7 @@ _HUNK = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)$")
 
 def diff(repo: Path, a: str, b: str, path: str, old: str | None = None, full: bool = False) -> dict:
     """One file's diff between two tree-ish, as hunks of lines [{t: ' '|'+'|'-', o, n, s}]."""
-    raw = _git(repo, "diff", "--no-color", "--no-ext-diff", "-M", "-U3", a, b, "--",
+    raw = _git(repo, "diff", "--no-color", "--no-ext-diff", "--no-textconv", "-M", "-U3", a, b, "--",
                *([old] if old and old != path else []), path)
     hunks: list[dict] = []
     total = 0

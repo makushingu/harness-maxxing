@@ -36,6 +36,11 @@ New:
   instead of offering SSH; asked to undo a turn, to "Revert to before this message" and the Changes view. The help
   topic knows Tabs and Zones, the intelligence of a session, `/` commands, `@` and `maxxing team send`.
 
+Security:
+- **Changes view: a diff no longer runs a program named by the repository.** A repository whose `.git/config`
+  declares a `textconv` converter (with `.git/info/attributes`) had it run by the server when you opened a file's
+  diff in Changes or asked for a commit message. Both now read the files as they are, like the Git page.
+
 ## 2.0.0-alpha.146 - 2026-11-13
 
 New:

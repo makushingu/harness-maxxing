@@ -93,6 +93,23 @@ def test_a_diff_gives_hunks_with_line_numbers(repo):
     assert ("-", 2, None, "two") in lines and ("+", None, 2, "TWO") in lines and ("+", None, 4, "four") in lines
 
 
+def test_a_diff_never_runs_the_repository_textconv(repo, tmp_path):
+    """A `diff.<name>.textconv` program named by `.git/config` + `.git/info/attributes` is not run by a diff."""
+    flag = tmp_path / "ran"
+    hook = tmp_path / "hook.sh"
+    hook.write_text(f"#!/bin/sh\necho ran >> {flag}\ncat \"$1\"\n")
+    hook.chmod(0o755)
+    _git(repo, "config", "diff.evil.textconv", str(hook))
+    (repo / ".git" / "info").mkdir(exist_ok=True)
+    (repo / ".git" / "info" / "attributes").write_text("*.txt diff=evil\n")
+    (repo / "a.txt").write_text("one\nTWO\nthree\n")
+    now = codediff.snapshot(repo)
+    d = codediff.diff(repo, "HEAD", now, "a.txt")
+    assert any(l["s"] == "TWO" for h in d["hunks"] for l in h["lines"])
+    assert "+TWO" in codediff.raw_diff(repo, "HEAD", now)
+    assert not flag.exists()
+
+
 def test_restore_a_file_then_undo(repo):
     pre = codediff.snapshot(repo)
     (repo / "a.txt").write_text("broken\n")
