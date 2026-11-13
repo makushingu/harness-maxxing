@@ -23,6 +23,7 @@ os.environ["MAXXING_CRON_TICK"] = "0"             # no catch-up / retry loop in 
 os.environ["MAXXING_SESSION_MAINTENANCE"] = "0"   # no nightly session files upkeep thread (tests call run())
 os.environ["MAXXING_SHORT_TITLES"] = "0"           # no background title call (tests/test_titles.py opts in)
 os.environ["MAXXING_SEARCH_LOOP"] = "0"            # no background index refresh racing the tests (a query refreshes)
+os.environ["MAXXING_PRWATCH_LOOP"] = "0"           # no pull request watch in the background (tests call prwatch.scan)
 # run from a Claude session started by Harness: its turn variables would pass through to the fake `claude`
 for _var in ("CLAUDE_CODE_AUTO_COMPACT_WINDOW", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"):
     os.environ.pop(_var, None)

@@ -369,6 +369,19 @@ export type Session = {
   approvals?: number
   /** Git repositories its turns changed (Changes view, terminal tabs). */
   code_repos?: string[]
+  /** Its separate copy (Code mode): its own folder and branch of the topic's repository. */
+  worktree?: SessionCopy | null
+}
+/** A session's separate copy (server: maxxing/worktrees.py). */
+export type SessionCopy = {
+  path: string
+  repo: string
+  branch: string
+  base: string
+  pr?: { number: number; url?: string; fork?: boolean; full?: string } | null
+  kept_branch?: string | null
+  removed: boolean
+  preparing: boolean
 }
 /** A tool call an agent waits on (agents with `approvals`): Allow / Deny in the session. */
 export type Approval = {
@@ -394,7 +407,7 @@ export type Approval = {
 }
 export const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const
 export type Effort = (typeof EFFORTS)[number]
-export type CreateSessionBody = { path: string; message?: string; title?: string; model?: string; effort?: Effort | ''; attachments?: string[]; plan_mode?: boolean; /** Absolute path of a voice message sent directly. */ voice?: string; /** This page's id for the first message (see SendMessageBody). */ client_id?: string }
+export type CreateSessionBody = { path: string; message?: string; title?: string; model?: string; effort?: Effort | ''; attachments?: string[]; plan_mode?: boolean; /** Absolute path of a voice message sent directly. */ voice?: string; /** This page's id for the first message (see SendMessageBody). */ client_id?: string; /** Work on a separate copy (Code mode). */ worktree?: { repo: string; base?: string; prepare?: string; copy_env?: boolean; remember?: boolean } }
 export type PatchSessionBody = { title?: string; model?: string; effort?: Effort | ''; archived?: boolean; notify?: boolean; plan_mode?: boolean; favorite?: boolean; /** Move to another topic (idle sessions only). */ path?: string }
 export type SendMessageBody = { text: string; attachments?: string[]; hud?: boolean; /** Absolute path of a voice message sent directly: the server transcribes it, then sends it. */ voice?: string; /** This page's id for the message, found again in `client_ids` of its queue item and its log event (a reload mid-send checks it). */ client_id?: string; /** The @ of the composer: the server tells Claude how to write to each. */ mentions?: Mention[] }
 export type SendMessageResult = { queued: boolean; session: Session }
@@ -1104,7 +1117,7 @@ export type GitCommitDetail = {
   files_total: number
   url?: string
 }
-export type GitPull = { number: number; title: string; author: string | null; head: string | null; base: string | null; draft: boolean; url: string; updated: number }
+export type GitPull = { number: number; title: string; author: string | null; head: string | null; base: string | null; draft: boolean; url: string; updated: number; state?: 'open' | 'closed' | 'merged'; /** By someone who is not owner, member or collaborator. */ outside?: boolean; /** A review is asked from one of the server's GitHub accounts. */ review_me?: boolean }
 
 /* ---------------------------------------------------------------- Infra (server/maxxing/infra) */
 export type InfraKind = 'server' | 'site' | 'worker' | 'pages' | 'database' | 'bucket' | 'domain'

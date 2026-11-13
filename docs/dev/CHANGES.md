@@ -37,6 +37,44 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   source switch or a reload is on its way (`resume.current` set, `duration` NaN on the element) it moves the time
   to resume instead of being dropped. Before, the stall of a seek made the player take the Auto copy and resume at
   the time before the seek.
+- Separate copies (`maxxing/worktrees.py`, plan `code-worktree-pr`): session meta `worktree`, `runner._cwd` runs the turn
+  in the copy and `_copy_note` adds a line to `--append-system-prompt`; `titles.refine` / `update_session` rename the
+  branch (`worktrees.rename_for_title`) until it has an upstream; `move_session` refuses (`409 has_copy`); routes
+  `/api/code/copy-repos`, `/api/code/copy-prefs`, `/api/sessions/{id}/copy{,/merge,/remove,/prepare-log}`,
+  `/api/code/copies`, `/api/code/pr-session`; `<state>/worktrees.json` (per repository `prefix`, `prepare`,
+  `copy_env`), `<state>/worktrees/<sid8>.log`. `search.SKIP_DIRS` and `backup.PRUNE_DIRS` skip `worktrees`.
+- Pull requests: `gitview.github_pull`, `pull_comment`, `pull_review`, `pull_merge`, `pull_close`; `_gh_send` takes a
+  method (PUT merge, PATCH close; 405/409 -> `409 refused`); `github_pulls(full, state)` adds `state`, `outside`,
+  `review_me` (requested reviewer among the server's accounts); `codediff.parse_patch` shared by `codediff.diff` and
+  the PR files. Routes `/api/git/pull`, `/api/git/pull/{comment,review,merge,close}`, `/api/git/pulls?state=`.
+- Web: `features/code/{copyApi,prApi}.ts`, `NewCopy.tsx` (new session), `CopyBar.tsx` (bar + end window + header
+  mark), `PrPane.tsx` (viewer paths `mx-pr:<owner/name>|<n>[|files|checks|file|<path>]`, one pane per PR), `DiffRows.tsx`
+  (diff rows shared with `ChangesPane`), `PrReviewBlock.tsx` (` ```pr-review ` in `markdown.tsx`; PR text is rendered
+  with plain code blocks). Git page: `PullList` (filters, opens the PR view, also on a clone of a GitHub repository),
+  `CopyList`. i18n namespaces `copy`, `pr` in the `code` group. Tests `test_worktrees.py`, `test_pulls.py`
+  (`_conn_helpers._Server` answers PATCH).
+- Copies, round 2 (needs reported by T3 Code users): `.worktreeinclude` (`worktrees._copy_included`: `ls-files
+  --others --ignored --exclude-from` then `check-ignore`, capped `INCLUDE_MAX` / `INCLUDE_BYTES`); a block of 10 ports
+  per copy (`_free_ports`, meta `port`, `MAXXING_PORT` + `MAXXING_COPY_PATH` for turns - `runner` - and the
+  preparation, `_copy_note` names them); `gitview.merged_pull` + `branch_status.merged_pr` (the last merged PR of a
+  branch with no open one) and `copy/remove {merged_pr}` (looked up again server-side; branch deleted when its tip
+  is in the PR's head, so squash merges count); `api/code._pr_text` appends the repository's pull request template
+  (`PR_TEMPLATES`). `codediff.repo_head` reads `remote.origin.url` (no `insteadOf` rewrite, as `gitview` does).
+- Workspace template: `CLAUDE.md` (separate copy, PR view) and the help index line `35-code.md`: carried over by the
+  upgrade note of the next version.
+- PR watch (`maxxing/prwatch.py`, loop in `api/code.py` startup, `MAXXING_PRWATCH_LOOP=0` in tests): `scan()` every
+  `INTERVAL`; events `checks:<sha>` (all checks of the head completed, some in `FAILED`), `conflict:<sha>`
+  (`mergeable` false / `dirty`), `c:` / `r:` / `l:<id>` (issue comments, reviews with a body or changes requested,
+  line comments; OWN_ROLES only, never bots nor `_my_logins`); one `send_message(..., source="github")` per round,
+  `MAX_WAKES` per `WAKE_WINDOW`, never while running; state `<state>/prwatch.json` (`seen`, `wakes`, `updated`,
+  `done_sha`, `new` = first sight is history). Meta `worktree.watch` (`PUT /api/sessions/{id}/copy/watch`), `watch`
+  in the copy status (false for a fork's / outsider's PR). Web: eye in `CopyBar`, source label `GitHub`.
+- PR text by Claude: `POST /api/code/pr-text` (`_pr_draft`, `PR_PROMPT`, `_conversation` reads `mx_user` and `result`
+  lines of the session log); `_ask_claude` shared with `_message`. The end window of a copy always opens for
+  "Open a PR" (title + description fields, filled once, typed text wins); `codeApi.pr(repo, {title, body})`.
+- Big diffs: `codediff.MAX_LINE_CHARS` cuts a very long line until "show all" (`cut`); PR files are parsed whole
+  (`parse_patch(full=True)`, the PR view has no "show all"); a text file without GitHub patch is `too_big` (not
+  `binary`), the PR view links to GitHub; `files_total` = `changed_files` when GitHub lists fewer.
 
 ## 2.0.0-alpha.147 - 2026-11-13
 

@@ -29,6 +29,8 @@ import { useFileViewer } from './viewerStore'
 import { downloadProps, useDownloadZip } from './download'
 import { ChangesPane } from '@/features/code/ChangesPane'
 import { isChangesPath } from '@/features/code/api'
+import { PrPane } from '@/features/code/PrPane'
+import { isPrPath } from '@/features/code/prApi'
 
 export default function FileViewerHost() {
   const t = useT()
@@ -70,9 +72,12 @@ export default function FileViewerHost() {
               : 'inset-y-0 right-0 w-[min(860px,94vw)] border-l shadow-pop data-[state=open]:animate-sheet-right',
           )}
         >
-          <DialogPrimitive.Title className="sr-only">{path ? (isChangesPath(path) ? t('code.title') : isDiagram(path) ? t('diagram.title') : basename(path)) : t('viewer.title')}</DialogPrimitive.Title>
+          <DialogPrimitive.Title className="sr-only">{path ? (isChangesPath(path) ? t('code.title') : isPrPath(path) ? t('pr.title') : isDiagram(path) ? t('diagram.title') : basename(path)) : t('viewer.title')}</DialogPrimitive.Title>
           {path &&
-            (isChangesPath(path) ? (
+            (isPrPath(path) ? (
+              // one pane per pull request (not per tab or file): what is typed in its bar survives
+              <PrPane key={path.split('|').slice(0, 2).join('|')} path={path} index={index} count={list.length} fullscreen={fullscreen} canFull={!mobile} onFull={() => setFull(!full)} swipe={swipe} />
+            ) : isChangesPath(path) ? (
               <ChangesPane key={path} path={path} index={index} count={list.length} fullscreen={fullscreen} canFull={!mobile} onFull={() => setFull(!full)} swipe={swipe} />
             ) : isDiagram(path) ? (
               <DiagramPane key={path} id={path} index={index} count={list.length} fullscreen={fullscreen} canFull={!mobile} onFull={() => setFull(!full)} />
@@ -394,7 +399,7 @@ function usePrefetchNeighbours(list: string[], index: number) {
     const id = setTimeout(() => {
       for (const d of [1, -1]) {
         const p = list[(index + d + list.length) % list.length]
-        if (isDiagram(p) || isChangesPath(p)) continue
+        if (isDiagram(p) || isChangesPath(p) || isPrPath(p)) continue
         const k = kindOf(basename(p))
         if (k === 'image') void fileStamp(p).then((v) => prefetchImage(filePreviewUrl(p, PREVIEW_W, v)))
         else if (k === 'video') {

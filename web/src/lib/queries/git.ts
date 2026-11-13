@@ -8,7 +8,7 @@ export const gitKeys = {
   repos: ['git', 'repos'] as const,
   graph: (repo: string, limit: number, branches: string) => ['git', 'graph', repo, limit, branches] as const,
   commit: (repo: string, sha: string) => ['git', 'commit', repo, sha] as const,
-  pulls: (repo: string) => ['git', 'pulls', repo] as const,
+  pulls: (repo: string, state = 'open') => ['git', 'pulls', repo, state] as const,
 }
 
 export function useGitRepos() {
@@ -37,10 +37,10 @@ export function useGitCommit(repo: string | null, sha: string | null) {
     retry: false,
   })
 }
-export function useGitPulls(repo: string | null) {
+export function useGitPulls(repo: string | null, state: 'open' | 'closed' = 'open') {
   return useQuery({
-    queryKey: gitKeys.pulls(repo || ''),
-    queryFn: () => api.get<GitPull[]>('/api/git/pulls', { repo: repo! }),
+    queryKey: gitKeys.pulls(repo || '', state),
+    queryFn: () => api.get<GitPull[]>('/api/git/pulls', { repo: repo!, state }),
     enabled: !!repo && repo.startsWith('github:'),
     staleTime: 60_000,
     retry: false,

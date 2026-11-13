@@ -28,6 +28,7 @@ WRITE_TIMEOUT = 120
 REF_ROOT = "refs/maxxing"
 MAX_FILES = 400                     # files listed per repository and view
 MAX_DIFF_LINES = 2000               # lines of one file's diff sent at once ("show everything" lifts it)
+MAX_LINE_CHARS = 2000               # characters of one line (a minified file is one line of megabytes): idem
 KEEP_DAYS = 30                      # photos older than this are deleted by `prune`
 
 # writes keep the repository's hooks (a commit-msg or pre-push hook is the owner's own rule)
@@ -226,6 +227,11 @@ def diff(repo: Path, a: str, b: str, path: str, old: str | None = None, full: bo
     """One file's diff between two tree-ish, as hunks of lines [{t: ' '|'+'|'-', o, n, s}]."""
     raw = _git(repo, "diff", "--no-color", "--no-ext-diff", "--no-textconv", "-M", "-U3", a, b, "--",
                *([old] if old and old != path else []), path)
+    return {"path": path, **parse_patch(raw, full)}
+
+
+def parse_patch(raw: str, full: bool = False) -> dict:
+    """A unified diff (git's, or a GitHub pull request file's `patch`) -> {hunks, binary, cut, lines}."""
     hunks: list[dict] = []
     total = 0
     cut = False
@@ -248,13 +254,15 @@ def diff(repo: Path, a: str, b: str, path: str, old: str | None = None, full: bo
             cut = True
             continue
         t, s = ln[0], ln[1:]
+        if not full and len(s) > MAX_LINE_CHARS:
+            s, cut = s[:MAX_LINE_CHARS] + " …", True
         hunks[-1]["lines"].append({"t": t, "o": o if t != "+" else None, "n": n if t != "-" else None, "s": s})
         total += 1
         if t != "+":
             o += 1
         if t != "-":
             n += 1
-    return {"path": path, "hunks": hunks, "binary": binary, "cut": cut, "lines": total}
+    return {"hunks": hunks, "binary": binary, "cut": cut, "lines": total}
 
 
 def repo_head(repo: Path) -> dict:
@@ -265,7 +273,7 @@ def repo_head(repo: Path) -> dict:
         lr = _run(repo, "rev-list", "--left-right", "--count", f"{up}...HEAD", check=False).stdout.split()
         if len(lr) == 2:
             behind, ahead = int(lr[0]), int(lr[1])
-    remote = _run(repo, "remote", "get-url", "origin", check=False).stdout.strip()
+    remote = _run(repo, "config", "--get", "remote.origin.url", check=False).stdout.strip()
     return {"root": str(repo), "name": repo.name, "branch": branch or None, "upstream": up or None,
             "ahead": ahead, "behind": behind, "remote": remote or None}
 

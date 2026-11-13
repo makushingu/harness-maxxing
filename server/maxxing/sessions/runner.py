@@ -454,7 +454,8 @@ class Runner:
             "agent_path": str(meta.get("path") or "") if agent else "",
             "timeout": _approval_timeout(agent.get("approval_timeout_s") or cfg.get("approval_timeout_s"))}
         mcp_plan = mcp_auto.plan(self.sid, cfg, meta, cwd, item.get("text") or "")   # MCP servers this turn needs
-        hint = "\n\n".join(x for x in (mcp_plan.hint, spawn.CRON_SILENT if item.get("silent_ok") else "") if x)
+        copy = _copy_note(meta, cwd)
+        hint = "\n\n".join(x for x in (mcp_plan.hint, spawn.CRON_SILENT if item.get("silent_ok") else "", copy) if x)
         base = [spawn.claude_bin(), "-p", "--output-format", "stream-json", "--verbose"]
         allow = [] if agent or mode != "default" else workspace_allowed(meta.get("path") or "")
         base += spawn.permission_args(mode)[0] + spawn.settings_args(cfg, agent.get("settings"), allow)
@@ -470,6 +471,11 @@ class Runner:
         base += pcbridge.mcp_config_args() + mcp_plan.args + approval
         env = spawn.claude_env(meta.get("env") or {}, mode, agent.get("keys") if agent else None)
         env["MAXXING_SESSION"] = self.sid               # `maxxing mcp load` run by the turn finds its session
+        if copy:                                        # a separate copy: its folder and its own ports
+            wt = meta["worktree"]
+            env["MAXXING_COPY_PATH"] = str(wt.get("path") or "")
+            if wt.get("port"):
+                env["MAXXING_PORT"] = str(wt["port"])
         text = (PLAN_PREFACE if plan else "") + build_prompt(item)
         root = Path(cfg.get("workspace") or "/").resolve()
         prompt, json_in = stdin_payload(text, item, root)
@@ -681,6 +687,11 @@ class Runner:
 
     @staticmethod
     def _cwd(cfg: dict, meta: dict) -> str | None:
+        if meta.get("worktree"):                       # a separate copy of the topic's repository (worktrees.py)
+            from .. import worktrees
+            copy = worktrees.cwd_of(meta)
+            if copy:
+                return copy
         root = Path(cfg.get("workspace") or "/").resolve()
         cwd = (root / (meta.get("path") or "")).resolve()
         if cwd != root and root not in cwd.parents:
@@ -1136,6 +1147,26 @@ def relay_preface(r: dict) -> str:
 
 
 MENTION_KIND = {"session": "a Harness session", "agent": "a Harness agent", "team": "a person on Team"}
+
+
+def _copy_note(meta: dict, cwd: str) -> str:
+    """A session on a separate copy (worktrees.py): where to work, so that the topic's instructions about the main
+    folder do not send Claude there."""
+    wt = meta.get("worktree")
+    if not isinstance(wt, dict) or wt.get("removed") or wt.get("path") != cwd:
+        return ""
+    pr = wt.get("pr") or {}
+    note = (f"This session works on a separate copy (git worktree) of the repository {wt.get('repo')}: the folder "
+            f"{wt.get('path')}, branch {wt.get('branch')}, started from {wt.get('base')}. Make every change of that "
+            "repository here, never in its main folder (other sessions work there). Commit on this branch; the "
+            "user merges it or opens a pull request from Harness.")
+    if isinstance(wt.get("port"), int) and wt["port"]:
+        note += (f" A dev server or any other local service of this copy listens on ports {wt['port']} to "
+                 f"{wt['port'] + 9} ($MAXXING_PORT is the first): other copies use the usual ones.")
+    if pr.get("number"):
+        note += f" The branch is the one of pull request #{pr['number']}" + (
+            " (from a fork: pushing back is not possible)." if pr.get("fork") else ".")
+    return note
 
 
 def mentions_note(found: list[dict]) -> str:

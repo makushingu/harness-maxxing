@@ -51,7 +51,7 @@ class _Server:
                 self.end_headers()
                 self.wfile.write(data)
 
-            do_GET = do_POST = do_PUT = do_DELETE = _do
+            do_GET = do_POST = do_PUT = do_PATCH = do_DELETE = _do
 
         self.httpd = ThreadingHTTPServer(("127.0.0.1", 0), H)
         self.httpd.daemon_threads = True

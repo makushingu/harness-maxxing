@@ -138,8 +138,12 @@ def refine(sid: str, current: str, message: str) -> str | None:
             if m.get("title") != current:
                 return None
             m["title"] = title[:120]
+            copy = bool(m.get("worktree"))
     except KeyError:
         return None
+    if copy:                                           # its branch follows (worktrees.py)
+        from .. import worktrees
+        worktrees.rename_for_title(sid, title[:120])
     bus.invalidate("sessions")
     return title
 

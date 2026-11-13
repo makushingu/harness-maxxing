@@ -41,6 +41,8 @@ export type RepoStatus = {
   dirty: number
   github: string | null
   pr: { number: number; url: string; title: string; draft: boolean; base: string } | null
+  /** No open PR, but one of this branch was merged on GitHub. */
+  merged_pr?: { number: number; url: string; title: string; merged_at: string; base: string } | null
   checks: { total: number; ok: number; failed: number; pending: number } | null
   github_error?: string
 }
@@ -79,7 +81,9 @@ export const codeApi = {
   commit: (repo: string, message: string, push: boolean) => api.post<RepoStatus & { sha: string; pushed?: boolean }>('/api/code/commit', { repo, message, push }),
   push: (repo: string) => api.post<RepoStatus>('/api/code/push', { repo }),
   branch: (repo: string, name: string) => api.post<RepoStatus>('/api/code/branch', { repo, name }),
-  pr: (repo: string) => api.post<{ number: number; url: string; title: string }>('/api/code/pr', { repo }),
+  pr: (repo: string, text?: { title?: string; body?: string }) => api.post<{ number: number; url: string; title: string }>('/api/code/pr', { repo, ...text }),
+  /** Title and description of the PR, written by Claude from the session's conversation, its commits and its diff. */
+  prText: (repo: string, session?: string) => api.post<{ title: string; body: string }>('/api/code/pr-text', { repo, session }),
   message: (repo: string, a = 'HEAD', b = 'now') => api.post<{ message: string }>('/api/code/message', { repo, a, b }),
 }
 

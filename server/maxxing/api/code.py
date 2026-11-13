@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import re
@@ -124,7 +125,8 @@ async def status(repo: str):
         r = codediff.checked_repo(repo)
         head = codediff.repo_head(r)
         full = gitview.github_name(head.get("remote") or "") if head.get("remote") else None
-        out = {**head, "dirty": codediff.dirty(r), "github": full, "pr": None, "checks": None}
+        out = {**head, "dirty": codediff.dirty(r), "github": full, "pr": None, "merged_pr": None,
+               "checks": None}
         if full and head.get("branch"):
             try:
                 sha = codediff.head_sha(r)
@@ -211,8 +213,28 @@ def _pull(body: PullIn) -> dict:
                                            f"{base}")
     subjects = [c["subject"] for c in codediff.commits(r, f"origin/{base}")]
     title = (body.title or (subjects[-1] if len(subjects) == 1 else (subjects[0] if subjects else head["branch"])))
-    text = body.body if body.body is not None else "\n".join(f"- {s}" for s in reversed(subjects))
+    text = body.body if body.body is not None else _pr_text(r, subjects)
     return gitview.open_pull(full, head["branch"], base, title.strip(), text, body.draft)
+
+
+PR_TEMPLATES = (".github/pull_request_template.md", ".github/PULL_REQUEST_TEMPLATE.md", "pull_request_template.md",
+                "PULL_REQUEST_TEMPLATE.md", "docs/pull_request_template.md", "docs/PULL_REQUEST_TEMPLATE.md")
+
+
+def _pr_text(r, subjects: list[str]) -> str:
+    """The pull request's description: its commits, then the repository's pull request template when it has one
+    (the user fills it in on the PR, as on GitHub)."""
+    text = "\n".join(f"- {s}" for s in reversed(subjects))
+    for name in PR_TEMPLATES:
+        f = r / name
+        try:
+            if f.is_file() and not f.is_symlink() and f.stat().st_size < 20000:
+                tpl = f.read_text(errors="replace").strip()
+                if tpl:
+                    return f"{text}\n\n{tpl}" if text else tpl
+        except OSError:
+            continue
+    return text
 
 
 @router.post("/api/code/pr")
@@ -240,20 +262,7 @@ def _message(body: MessageIn) -> dict:
         raise GitError(400, "nothing", "nothing to commit")
     recent = [c["subject"] for c in codediff.commits(r, None, 10, everything=True)] if codediff.head_sha(r) else []
     prompt = "Recent subjects:\n" + "\n".join(recent) + "\n\nDiff:\n" + d
-    cmd = [spawn.claude_bin(), "-p", "--output-format", "json", "--model", MESSAGE_MODEL, "--tools", "",
-           "--no-session-persistence", "--strict-mcp-config", "--disable-slash-commands",
-           "--system-prompt", MESSAGE_PROMPT]
-    try:
-        p = subprocess.run(cmd, input=prompt.encode("utf-8", "replace").decode("utf-8"), capture_output=True,
-                           text=True, timeout=60, cwd=config.state_dir("claude-titles"),
-                           env=spawn.claude_env(None, "default"))
-        data = json.loads(p.stdout.strip().splitlines()[-1]) if p.stdout.strip() else {}
-    except (OSError, ValueError, subprocess.TimeoutExpired) as e:
-        log.info("commit message call failed: %s", e)
-        raise GitError(502, "no_message", "Claude could not write a message - type one") from None
-    text = str((data or {}).get("result") or "").strip().strip("`").strip()
-    if p.returncode != 0 or not text or (data or {}).get("is_error"):
-        raise GitError(502, "no_message", "Claude could not write a message - type one")
+    text = _ask_claude(MESSAGE_PROMPT, prompt, "Claude could not write a message - type one")
     lines = [ln for ln in text.splitlines() if not re.match(r"(?i)\s*co-authored-by:", ln)]
     return {"message": "\n".join(lines).strip()}
 
@@ -261,6 +270,85 @@ def _message(body: MessageIn) -> dict:
 @router.post("/api/code/message")
 async def message(body: MessageIn):
     return await _call(_message, body)
+
+
+def _ask_claude(system: str, prompt: str, failed: str) -> str:
+    """One short answer of Claude (MESSAGE_MODEL, no tools, no session): commit messages, PR descriptions."""
+    cmd = [spawn.claude_bin(), "-p", "--output-format", "json", "--model", MESSAGE_MODEL, "--tools", "",
+           "--no-session-persistence", "--strict-mcp-config", "--disable-slash-commands", "--system-prompt", system]
+    try:
+        p = subprocess.run(cmd, input=prompt.encode("utf-8", "replace").decode("utf-8"), capture_output=True,
+                           text=True, timeout=90, cwd=config.state_dir("claude-titles"),
+                           env=spawn.claude_env(None, "default"))
+        data = json.loads(p.stdout.strip().splitlines()[-1]) if p.stdout.strip() else {}
+    except (OSError, ValueError, subprocess.TimeoutExpired) as e:
+        log.info("short Claude call failed: %s", e)
+        raise GitError(502, "no_message", failed) from None
+    text = str((data or {}).get("result") or "").strip().strip("`").strip()
+    if p.returncode != 0 or not text or (data or {}).get("is_error"):
+        raise GitError(502, "no_message", failed)
+    return text
+
+
+CONVERSATION_CHARS = 24_000
+PR_PROMPT = (
+    "You write the title and the description of a GitHub pull request, from the conversation in which the change "
+    "was made, its commits and its diff. Reply with the title on the first line (at most 72 characters, no "
+    "prefix such as 'Title:'), a blank line, then the description in Markdown: why the change is needed, what it "
+    "does, how it was tested when the conversation says so - short, concrete, for a reviewer who did not read the "
+    "conversation. When a pull request template is given, fill in its sections instead. Never mention an AI, an "
+    "assistant, a conversation or a co-author. Write in the language of the recent commit subjects.")
+
+
+def _conversation(sid: str, limit: int = CONVERSATION_CHARS) -> str:
+    """What the user asked and what Claude answered at the end of each turn (no tool calls), the newest kept."""
+    parts: list[str] = []
+    try:
+        with open(store.log_path(sid), errors="replace") as f:
+            for ln in f:
+                if '"mx_user"' not in ln and '"result"' not in ln:
+                    continue
+                try:
+                    ev = json.loads(ln)
+                except ValueError:
+                    continue
+                if ev.get("type") == "mx_user" and (ev.get("text") or "").strip():
+                    parts.append("User: " + ev["text"].strip()[:4000])
+                elif ev.get("type") == "result" and isinstance(ev.get("result"), str) and ev["result"].strip():
+                    parts.append("Claude: " + ev["result"].strip()[:4000])
+    except OSError:
+        return ""
+    out = "\n\n".join(parts)
+    return out[-limit:]
+
+
+class PrTextIn(BaseModel):
+    repo: str
+    session: Optional[str] = None          # the session the change was made in: its conversation explains why
+    base: Optional[str] = None
+
+
+def _pr_draft(body: PrTextIn) -> dict:
+    r = codediff.checked_repo(body.repo)
+    base = (body.base or codediff.default_base(r) or "main").removeprefix("origin/")
+    subjects = [c["subject"] for c in codediff.commits(r, f"origin/{base}")]
+    d = codediff.raw_diff(r, f"origin/{base}", _rev(r, "now") if codediff.dirty(r) else "HEAD")
+    template = _pr_text(r, []).strip()
+    talk = _conversation(body.session) if body.session and store.is_valid_id(body.session) else ""
+    recent = [c["subject"] for c in codediff.commits(r, None, 10, everything=True)] if codediff.head_sha(r) else []
+    prompt = (("Conversation:\n" + talk + "\n\n" if talk else "") + "Commits of the branch:\n"
+              + "\n".join(f"- {s}" for s in reversed(subjects)) + "\n\nRecent subjects of the repository:\n"
+              + "\n".join(recent) + ("\n\nPull request template:\n" + template if template else "")
+              + "\n\nDiff:\n" + d[:MESSAGE_DIFF_CHARS])
+    text = _ask_claude(PR_PROMPT, prompt, "Claude could not write the description - type one")
+    lines = [ln for ln in text.splitlines() if not re.match(r"(?i)\s*co-authored-by:", ln)]
+    title = re.sub(r"^(?i:title:)\s*|^#+\s*", "", (lines[0] if lines else "").strip()).strip()[:120]
+    return {"title": title, "body": "\n".join(lines[1:]).strip()}
+
+
+@router.post("/api/code/pr-text")
+async def pr_text(body: PrTextIn):
+    return await _call(_pr_draft, body)
 
 
 class RevertIn(BaseModel):
@@ -321,3 +409,217 @@ async def undo(body: UndoIn):
             done.append({"root": str(repo), **codediff.restore(repo, _rev(repo, str(r.get("undo") or "")))})
         return {"repos": done}
     return await _call(run)
+
+
+# ---- separate copies (worktrees.py) ---------------------------------------------------------------------------
+
+@router.get("/api/code/copy-repos")
+async def copy_repos(path: str = ""):
+    """The repositories a new session of topic `path` can work on a separate copy of ([] without Code mode)."""
+    from .. import worktrees
+    if not worktrees.enabled():
+        return {"enabled": False, "repos": []}
+    return {"enabled": True, "repos": await _call(worktrees.repos_for, path.strip("/"))}
+
+
+class CopyPrefsIn(BaseModel):
+    repo: str
+    prefix: Optional[str] = None
+    prepare: Optional[str] = None
+    copy_env: Optional[bool] = None
+
+
+@router.put("/api/code/copy-prefs")
+async def copy_prefs(body: CopyPrefsIn):
+    from .. import worktrees
+
+    def run():
+        worktrees._need_enabled()
+        repo = worktrees.main_clone(codediff.checked_repo(body.repo))
+        prefix = worktrees.check_prefix(body.prefix) if body.prefix is not None else None
+        return worktrees.set_prefs(repo, prefix=prefix, prepare=(body.prepare or "")[:500] if body.prepare is not None
+                                   else None, copy_env=body.copy_env)
+    return await _call(run)
+
+
+@router.get("/api/sessions/{sid}/copy")
+async def copy_status(sid: str):
+    from .. import worktrees
+    return await _call(lambda: worktrees.status(_meta(sid)))
+
+
+def _idle(sid: str) -> dict:
+    meta = _meta(sid)
+    if store.runner_alive(sid, meta) and meta.get("state") == "running":
+        raise GitError(409, "running", "wait for the end of the turn (or stop it) first")
+    return meta
+
+
+class CopyEndIn(BaseModel):
+    message: Optional[str] = None          # commit what is not committed first, with this message
+
+
+@router.post("/api/sessions/{sid}/copy/merge")
+async def copy_merge(sid: str, body: CopyEndIn):
+    from .. import bus, worktrees
+
+    def run():
+        meta = _idle(sid)
+        wt = worktrees.live(meta)
+        if wt and body.message and codediff.dirty(Path(wt["path"])):
+            codediff.commit(Path(wt["path"]), body.message)
+        out = worktrees.merge(meta)
+        bus.invalidate("sessions")
+        return out
+    return await _call(run)
+
+
+class CopyRemoveIn(BaseModel):
+    force: bool = False                    # discard: uncommitted changes and the branch's own commits go too
+    merged_pr: bool = False                # its pull request was merged on GitHub: the branch goes too
+
+
+@router.post("/api/sessions/{sid}/copy/remove")
+async def copy_remove(sid: str, body: CopyRemoveIn):
+    from .. import bus, worktrees
+
+    def run():
+        meta = _idle(sid)
+        sha = None
+        if body.merged_pr:
+            st = worktrees.status(meta)
+            got = gitview.merged_pull(st["github"], st["branch"]) if st.get("github") and st.get("branch") else None
+            if not got:
+                raise GitError(409, "not_merged", "no merged pull request was found for this branch on GitHub")
+            sha = got["head_sha"]
+        out = worktrees.remove(meta, force=body.force, merged_sha=sha)
+        bus.invalidate("sessions")
+        return out
+    return await _call(run)
+
+
+@router.get("/api/code/copies")
+async def copies():
+    from .. import worktrees
+    return await _call(worktrees.listing)
+
+
+@router.get("/api/sessions/{sid}/copy/prepare-log")
+async def copy_prepare_log(sid: str):
+    from .. import worktrees
+    _meta(sid)
+    p = worktrees.prepare_log(sid)
+    try:
+        text = p.read_text(errors="replace")[-20_000:]
+    except OSError:
+        text = ""
+    return {"log": text}
+
+
+# ---- a session on a pull request: work on it, or have Claude review it -----------------------------------------
+
+TOPIC_RE = re.compile(r"\A(projects/[^/]+(?:/topics/[^/]+)?)(?:/|\Z)")
+
+
+def _topic_of(clone: Path) -> str | None:
+    """The topic (or project) folder holding a clone, as a workspace path."""
+    from .. import workspace
+    try:
+        rel = clone.resolve().relative_to(workspace.root().resolve()).as_posix()
+    except ValueError:
+        return None
+    m = TOPIC_RE.match(rel)
+    return m.group(1) if m else None
+
+
+class PrSessionIn(BaseModel):
+    repo: str                              # github:owner/name
+    number: int
+    review: bool = False                   # Claude reviews (plan mode) instead of working on it
+    message: Optional[str] = None          # the first message (written by the UI in the user's language)
+    clone: Optional[str] = None            # which local clone, when there are several
+
+
+def _pr_session(body: PrSessionIn) -> dict:
+    from .. import worktrees
+    from ..sessions import service
+    if not body.repo.startswith("github:"):
+        raise GitError(400, "not_github", "pull requests need github:owner/name")
+    worktrees._need_enabled()
+    full = gitview._full(body.repo[7:])
+    p = gitview._gh_repo(full, f"/repos/{full}/pulls/{gitview._number(body.number)}")
+    head = p.get("head") or {}
+    head_repo = (head.get("repo") or {}).get("full_name") or ""
+    clones = [Path(r["path"]) for r in gitview.local_repos() if (r.get("github") or "").lower() == full.lower()]
+    if body.clone:
+        clones = [c for c in clones if str(c) == body.clone]
+    placed = [(c, t) for c in clones if (t := _topic_of(c)) is not None]
+    if not placed:
+        raise GitError(400, "no_clone", f"clone {full} into a topic first: the session works in that topic")
+    clone, topic = placed[0]
+    outside = (p.get("author_association") or "") not in gitview.OWN_ROLES
+    pr = {"number": p.get("number"), "ref": head.get("ref"), "base": (p.get("base") or {}).get("ref"),
+          "fork": bool(head_repo) and head_repo.lower() != full.lower(), "outside": outside, "full": full,
+          "url": p.get("html_url")}
+    title = f"PR #{p.get('number')} {p.get('title') or ''}".strip()[:120]
+    s = service.create_session(topic, message=(body.message or "").strip() or None, title=title, source="web",
+                               plan_mode=body.review or outside, worktree={"repo": str(clone), "pr": pr})
+    return s
+
+
+@router.post("/api/code/pr-session")
+async def pr_session(body: PrSessionIn):
+    from ..sessions.service import SessionError
+
+    def run():
+        try:
+            return _pr_session(body)
+        except SessionError as e:
+            raise GitError(e.status, e.code, e.message) from None
+    return await _call(run)
+
+
+# ---- Claude watches the pull request of its copy (maxxing/prwatch.py) ------------------------------------------
+
+class WatchIn(BaseModel):
+    on: bool
+
+
+@router.put("/api/sessions/{sid}/copy/watch")
+async def copy_watch(sid: str, body: WatchIn):
+    from .. import bus, prwatch
+    _meta(sid)
+
+    def run():
+        out = prwatch.set_watch(sid, body.on)
+        bus.invalidate("sessions")
+        return out
+    return await _call(run)
+
+
+_watch_task: Optional[asyncio.Task] = None
+
+
+async def _watch_loop() -> None:
+    from .. import prwatch
+    while True:
+        await asyncio.sleep(prwatch.INTERVAL)
+        try:
+            await asyncio.to_thread(prwatch.scan)
+        except Exception:
+            log.exception("pull request watch failed")
+
+
+async def startup() -> None:
+    """MAXXING_PRWATCH_LOOP=0 turns the watch off (tests call prwatch.scan themselves)."""
+    global _watch_task
+    import os
+    if os.environ.get("MAXXING_PRWATCH_LOOP", "1") != "0":
+        _watch_task = asyncio.create_task(_watch_loop())
+
+
+async def shutdown() -> None:
+    if _watch_task:
+        _watch_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError, Exception):
+            await _watch_task

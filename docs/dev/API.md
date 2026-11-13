@@ -590,7 +590,7 @@ not_github|no_base`, `403 no_write`, `409 running`.
 | GET | `/api/sessions/{id}/changes?scope=turn&n=&base=` | – | `{scope, n, repos:[...]}` — `turn` (default: the last turn that changed something, or `n`): the `mx_changes` entry + live `branch, upstream, ahead, behind, remote`; `session` (first photo → now), `uncommitted` (HEAD → now), `branch` (merge-base with `base` or origin's default → now): one entry per known repository with changes (`error` when git failed) |
 | GET | `/api/code/diff?repo=&a=&b=&path=&old=&full=` | – | `{path, hunks:[{head, o, n, lines:[{t: ' '\|'+'\|'-', o, n, s}]}], binary, cut, lines}` (≤ 2 000 lines unless `full`) |
 | GET | `/api/code/commits?repo=&base=` | – | `[{sha, short, subject, author, at}]` (HEAD not in base, 100) |
-| GET | `/api/code/status?repo=` | – | `{root, name, branch, upstream, ahead, behind, remote, dirty (files a commit would take), github, pr:{number, url, title, draft, base}\|null, checks:{total, ok, failed, pending}\|null, github_error?}` |
+| GET | `/api/code/status?repo=` | – | `{root, name, branch, upstream, ahead, behind, remote, dirty (files a commit would take), github, pr:{number, url, title, draft, base}\|null (open), merged_pr:{number, url, title, merged_at, head_sha, base}\|null (no open one: the last merged PR of the branch), checks:{total, ok, failed, pending}\|null, github_error?}`; `remote` = `remote.origin.url` as configured (no `insteadOf` rewrite) |
 | POST | `/api/code/restore` | `{repo, source, paths?}` | `{undo, restored, removed}` — files back as in `source` (all that differ when no `paths`); `undo` = photo taken first |
 | POST | `/api/code/undo` | `{repos:[{root, undo}]}` | `{repos:[...]}` — puts back what a restore / revert replaced |
 | POST | `/api/sessions/{id}/revert` | `{n}` | `{n, repos:[{root, name, undo, restored, removed, commits_kept}]}` — every repository changed by turn `n` or later back to its photo from before (files only; `409 running` during a turn) |
@@ -598,7 +598,66 @@ not_github|no_base`, `403 no_write`, `409 running`.
 | POST | `/api/code/push` | `{repo}` | head info (sets the upstream `origin/<branch>` the first time) |
 | POST | `/api/code/branch` | `{repo, name}` | head info (`git switch -c`) |
 | POST | `/api/code/pr` | `{repo, title?, body?, base?, draft}` | `{number, url, title, state, draft}` — pushes first if needed; title = the only commit's subject (else the newest), body = the commits; a token that can write to the repository |
+| POST | `/api/code/pr-text` | `{repo, session?, base?}` | `{title, body}` — written by the same small call from the session's conversation (what the user asked and the final answer of each turn, 24 kB, the newest kept), the branch's commits, the diff against `origin/<base>` (40 kB) and the repository's PR template; `502 no_message` when Claude fails |
 | POST | `/api/code/message` | `{repo, a=HEAD, b=now}` | `{message}` — proposed by a small `claude -p` call (Haiku) from the diff (40 kB) and the 10 last subjects; `Co-Authored-By` lines dropped |
+
+### Separate copies (worktrees)
+
+`maxxing/worktrees.py`. Code mode only (`403 code_mode_off`). A session created with `worktree` gets a `git worktree`
+of a clone of its topic in `<topic>/worktrees/<slug>` (`.worktrees/` when the topic folder is inside the repository;
+then added to `.git/info/exclude`) on a new branch `<prefix>/<slug of the title>` (prefix `session` by default, per
+repository) from `base` (default: origin's default branch). Its turns run there (`runner._cwd`), with a line of
+`--append-system-prompt` naming the copy. The branch is renamed after the session's (short) title until it has an
+upstream. Session meta `worktree = {path, repo, branch, base, base_ref, created, named, pr?, prepare?, env_copied?,
+port, included?, removed?, kept_branch?}`; `Session.worktree` = `{path, repo, branch, base, pr, kept_branch, port, removed, preparing}`.
+Per-repository preferences `{prefix, prepare, copy_env}` in `<state>/worktrees.json`; the preparation runs once in a
+thread (15 min max), log `<state>/worktrees/<sid8>.log`. Errors: `400 not_here|bad_base|bad_prefix|is_pr|
+no_local_base`, `404 no_copy`, `409 uncommitted|conflict|base_busy|branch_in_use|running|has_copy` (moving the
+session). Deleting a session removes its copy when it is clean and its commits are in its base or pushed
+(`worktrees.on_delete`). A pull request's local branch is only moved forward to `origin/<branch>`, never reset.
+A `.worktreeinclude` at the root of the clone (gitignore syntax) names ignored files copied into every new copy
+(`included` = how many; only files git ignores, no links, 500 files / 200 MB at most). Each copy owns ports
+`port`..`port+9` (from 4100, blocks of 10 nothing listens on and no live copy owns): its turns and its preparation get
+`MAXXING_PORT` (first port) and `MAXXING_COPY_PATH`, and Claude is told to use them.
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | `/api/code/copy-repos?path=` | – | `{enabled, repos:[{root, name, branch, branches, default_base, github, prefs:{prefix, prepare, copy_env}}]}` — the clones of the topic (or the repository holding it) |
+| PUT | `/api/code/copy-prefs` | `{repo, prefix?, prepare?, copy_env?}` | the preferences |
+| POST | `/api/sessions` | `{…, worktree:{repo, base?, prepare?, copy_env?, remember?}}` | Session (the copy is made before the first turn) |
+| GET | `/api/sessions/{id}/copy` | – | `{path, repo, branch, base, pr, prepare, env_copied, included, port, exists, removed, ahead, behind (against the base), dirty, upstream, pushed_ahead, github, fork, watch}` |
+| PUT | `/api/sessions/{id}/copy/watch` | `{on}` | `{watch}` — Claude watches the copy's PR (on by default; never a fork's or an outsider's PR) |
+| POST | `/api/sessions/{id}/copy/merge` | `{message?}` | `{merged, base, sha, removed, kept_branch}` — commits first with `message`; merges the base into the branch in the copy (aborted on a conflict: `409 conflict`), then moves the base forward (fast-forward only) and removes the copy |
+| POST | `/api/sessions/{id}/copy/remove` | `{force, merged_pr?}` | `{removed, kept_branch}` — `force` = discard (uncommitted files and the branch go); else refused with uncommitted files, and the branch is kept unless merged; `merged_pr`: its PR was merged on GitHub (looked up again: `409 not_merged` otherwise) - the branch goes when its tip is in the PR's head (squash / rebase merges too) |
+| GET | `/api/sessions/{id}/copy/prepare-log` | – | `{log}` |
+| GET | `/api/code/copies` | – | the copies still on disk: `[{sid, title, path, archived, …status}]` |
+| POST | `/api/code/pr-session` | `{repo: "github:owner/name", number, review, message?, clone?}` | Session — in the topic of a local clone, on a copy of the PR's branch (a fork: `pr/<n>` from `refs/pull/<n>/head`); plan mode when `review` or when the author is outside (`author_association` not OWNER / MEMBER / COLLABORATOR). `400 no_clone` |
+
+**The PR watch** (`maxxing/prwatch.py`, a loop of `api/code.py`, every 3 min; `MAXXING_PRWATCH_LOOP=0` turns it off):
+for each session on a copy whose branch has an open PR (and `watch`), the new events - every check of the head ended
+with a failure, a conflict with the base, a comment / review / line comment from OWNER / MEMBER / COLLABORATOR (never a
+bot nor the server's own GitHub logins) - are sent to the session in one message, `source: "github"`, comments quoted
+as data. Once per event (keys in `<state>/prwatch.json`), never while a turn runs, at most 4 messages per session in
+24 h; what is there when the watch first sees the PR (or when it is turned back on) never wakes it. Comments are read
+only when the PR's `updated_at` moves.
+
+### Pull requests (GitHub)
+
+`gitview.github_pull` and the actions. `repo` = `github:owner/name`; the token used is the first of the vault that
+GitHub accepts (writes: one that can write, else `403 no_write`; GitHub refusing a merge: `409 refused`).
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | `/api/git/pulls?repo=&state=open` | – | `[{number, title, author, head, base, draft, url, updated, state: open\|closed\|merged, outside, review_me}]` (`state` open \| closed \| all, 30 most recently updated) |
+| GET | `/api/git/pull?repo=&number=` | – | `{full, number, title, body, author:{login, avatar}, association, outside, state, draft, mergeable, mergeable_state, head, head_sha, head_repo, fork, base, url, created, updated, commits, add, del, files:[{path, old, status, add, del, hunks, binary, cut, lines}] (≤ 300), files_total, conversation:[{kind: comment\|review, id, author, body, state?, at, url}], line_comments:[{id, path, line, side, author, body, at, reply_to, outdated}], checks:[{name, status, conclusion, url}], methods, can_write, local_paths}` |
+| POST | `/api/git/pull/comment` | `{repo, number, body}` | `{id, url}` |
+| POST | `/api/git/pull/review` | `{repo, number, event: APPROVE\|REQUEST_CHANGES\|COMMENT, body, comments:[{path, line, side, body}]}` | `{id, state, url}` |
+| POST | `/api/git/pull/merge` | `{repo, number, method: squash\|merge\|rebase, sha?}` | `{merged, sha, message}` |
+| POST | `/api/git/pull/close` | `{repo, number}` | `{state}` |
+
+A ` ```pr-review ` block in a message (`{"repo", "number", "event", "summary", "comments":[{path, line, body}]}`) is
+drawn as a review card with **Publish on GitHub** (the review `POST` above, on the user's click). Text from GitHub
+shown in the PR view never turns into such a card.
 
 ## Terminal
 

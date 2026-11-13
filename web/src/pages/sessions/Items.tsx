@@ -456,6 +456,7 @@ function sourceLabel(source: string, t: ReturnType<typeof useT>): string {
   if (source === 'telegram') return 'Telegram'
   if (source === 'cron') return t('sessions.source.cron')
   if (source === 'cli') return t('sessions.source.cli')
+  if (source === 'github') return 'GitHub'
   return source
 }
 

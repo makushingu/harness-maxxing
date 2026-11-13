@@ -12,6 +12,8 @@ import { FILE_HREF, fileHrefPath } from '@/features/files/viewerStore'
 // ```git blocks: the live graph of a repository (features/git), loaded the first time one shows up.
 const GitBlock = React.lazy(withGroups(['git'], () => import('@/features/git/GitBlock')))
 const InfraBlock = React.lazy(withGroups(['infra'], () => import('@/features/infra/InfraBlock')))
+// ```pr-review blocks: a review Claude wrote for a pull request, published on GitHub by the user's click
+const PrReviewBlock = React.lazy(withGroups(['code'], () => import('@/features/code/PrReviewBlock')))
 
 // Syntax highlighting (grammars in ./highlight, a separate chunk): code blocks render plain until the first one with
 // a language loads it, then every mounted Markdown re-renders highlighted. Unknown languages render as plain code.
@@ -165,6 +167,14 @@ export const Markdown = React.memo(function Markdown({ children, className, onLi
           return (
             <React.Suspense fallback={<CodeBlock code={code} className="my-3" />}>
               <GitBlock code={code} className="my-3" />
+            </React.Suspense>
+          )
+        }
+        if (lang === 'pr-review') {
+          const code = textOf(child?.props?.children).replace(/\n$/, '')
+          return (
+            <React.Suspense fallback={<CodeBlock code={code} className="my-3" />}>
+              <PrReviewBlock code={code} className="my-3" />
             </React.Suspense>
           )
         }
