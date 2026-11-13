@@ -731,7 +731,7 @@ export function PdfView({ path, className }: { path: string; className?: string 
   if (paged && info.isPending) return <PageSkeleton />
   if (paged && info.data)
     return (
-      <Sensitive placeholder={<div className="m-4 flex-1 rounded-lg bg-muted/60" aria-label={t('presentation.hidden')} />}>
+      <Sensitive placeholder={<div className="m-4 flex-1 rounded-lg bg-muted" aria-label={t('presentation.hidden')} />}>
         <PdfPages key={path} path={path} pages={info.data.pages} ratio={info.data.ratio} version={info.data.mtime} className={className}>
           {actions(true)}
         </PdfPages>

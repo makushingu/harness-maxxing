@@ -203,7 +203,7 @@ export function PdfPages({
 
   return (
     <div className={cn('flex min-h-0 flex-1 flex-col', className)} data-testid="pdf-pages">
-      <div ref={box} className="min-h-0 flex-1 overflow-auto overscroll-contain bg-muted/40" data-zoomed={zoom > 1.01 ? '' : undefined} data-testid="pdf-scroll">
+      <div ref={box} className="min-h-0 flex-1 overflow-auto overscroll-contain bg-sunken" data-zoomed={zoom > 1.01 ? '' : undefined} data-testid="pdf-scroll">
         <div className="mx-auto grid gap-2 p-2 md:gap-3 md:p-4" style={{ width: `${zoom * 100}%`, maxWidth: PAGE_MAX * zoom }}>
           {list.map((n) => (
             <Page key={n} path={path} n={n} w={w} version={version} ratio={ratio} root={box} />

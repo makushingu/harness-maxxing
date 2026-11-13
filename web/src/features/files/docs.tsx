@@ -30,7 +30,7 @@ export function DocView({ path, className }: { path: string; className?: string 
   if (d.type === 'sheets') return <SheetsView key={path} sheets={d.sheets} truncated={d.truncated} className={className} />
   return (
     <>
-      {d.truncated && <p className="shrink-0 border-b bg-muted/40 px-4 py-1.5 text-xs text-muted-foreground">{t('doc.truncated')}</p>}
+      {d.truncated && <p className="shrink-0 border-b bg-fill-1 px-4 py-1.5 text-xs text-muted-foreground">{t('doc.truncated')}</p>}
       <Sensitive block className="m-6" length={12}>
         <MarkdownReader key={path} content={d.markdown} path={path} image={image} testId="doc-view" className="mx-auto w-full max-w-3xl px-5 py-6 md:px-8 md:py-8" />
       </Sensitive>
@@ -102,7 +102,7 @@ export function SheetsView({ sheets, truncated, className }: { sheets: FileSheet
               </thead>
               <tbody>
                 {view.slice(0, shown).map((r) => (
-                  <tr key={r.i} className="hover:bg-accent/50">
+                  <tr key={r.i} className="hover:bg-accent">
                     <td className="sticky left-0 h-7 border-r border-b bg-card px-2 py-1 text-right text-[11px] text-muted-foreground tabular-nums">{r.i + 1}</td>
                     {Array.from({ length: cols }, (_, ci) => {
                       const c = r.cells[ci] ?? ''
@@ -127,7 +127,7 @@ export function SheetsView({ sheets, truncated, className }: { sheets: FileSheet
         </Sensitive>
       </div>
       {sheets.length > 1 && (
-        <div className="flex shrink-0 items-center gap-1 overflow-x-auto border-t bg-muted/30 px-2 py-1" role="tablist" aria-label={t('doc.sheets')}>
+        <div className="flex shrink-0 items-center gap-1 overflow-x-auto border-t bg-fill-1 px-2 py-1" role="tablist" aria-label={t('doc.sheets')}>
           {sheets.map((s, i) => (
             <button
               key={i}
