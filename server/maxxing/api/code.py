@@ -321,3 +321,98 @@ async def undo(body: UndoIn):
             done.append({"root": str(repo), **codediff.restore(repo, _rev(repo, str(r.get("undo") or "")))})
         return {"repos": done}
     return await _call(run)
+
+
+# ---- separate copies (worktrees.py) ---------------------------------------------------------------------------
+
+@router.get("/api/code/copy-repos")
+async def copy_repos(path: str = ""):
+    """The repositories a new session of topic `path` can work on a separate copy of ([] without Code mode)."""
+    from .. import worktrees
+    if not worktrees.enabled():
+        return {"enabled": False, "repos": []}
+    return {"enabled": True, "repos": await _call(worktrees.repos_for, path.strip("/"))}
+
+
+class CopyPrefsIn(BaseModel):
+    repo: str
+    prefix: Optional[str] = None
+    prepare: Optional[str] = None
+    copy_env: Optional[bool] = None
+
+
+@router.put("/api/code/copy-prefs")
+async def copy_prefs(body: CopyPrefsIn):
+    from .. import worktrees
+
+    def run():
+        repo = worktrees.main_clone(codediff.checked_repo(body.repo))
+        prefix = worktrees.check_prefix(body.prefix) if body.prefix is not None else None
+        return worktrees.set_prefs(repo, prefix=prefix, prepare=(body.prepare or "")[:500] if body.prepare is not None
+                                   else None, copy_env=body.copy_env)
+    return await _call(run)
+
+
+@router.get("/api/sessions/{sid}/copy")
+async def copy_status(sid: str):
+    from .. import worktrees
+    return await _call(lambda: worktrees.status(_meta(sid)))
+
+
+def _idle(sid: str) -> dict:
+    meta = _meta(sid)
+    if store.runner_alive(sid, meta) and meta.get("state") == "running":
+        raise GitError(409, "running", "wait for the end of the turn (or stop it) first")
+    return meta
+
+
+class CopyEndIn(BaseModel):
+    message: Optional[str] = None          # commit what is not committed first, with this message
+
+
+@router.post("/api/sessions/{sid}/copy/merge")
+async def copy_merge(sid: str, body: CopyEndIn):
+    from .. import bus, worktrees
+
+    def run():
+        meta = _idle(sid)
+        wt = worktrees.live(meta)
+        if wt and body.message and codediff.dirty(Path(wt["path"])):
+            codediff.commit(Path(wt["path"]), body.message)
+        out = worktrees.merge(meta)
+        bus.invalidate("sessions")
+        return out
+    return await _call(run)
+
+
+class CopyRemoveIn(BaseModel):
+    force: bool = False                    # discard: uncommitted changes and the branch's own commits go too
+
+
+@router.post("/api/sessions/{sid}/copy/remove")
+async def copy_remove(sid: str, body: CopyRemoveIn):
+    from .. import bus, worktrees
+
+    def run():
+        out = worktrees.remove(_idle(sid), force=body.force)
+        bus.invalidate("sessions")
+        return out
+    return await _call(run)
+
+
+@router.get("/api/code/copies")
+async def copies():
+    from .. import worktrees
+    return await _call(worktrees.listing)
+
+
+@router.get("/api/sessions/{sid}/copy/prepare-log")
+async def copy_prepare_log(sid: str):
+    from .. import worktrees
+    _meta(sid)
+    p = worktrees.prepare_log(sid)
+    try:
+        text = p.read_text(errors="replace")[-20_000:]
+    except OSError:
+        text = ""
+    return {"log": text}

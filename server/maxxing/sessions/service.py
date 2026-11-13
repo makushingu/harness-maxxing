@@ -167,7 +167,18 @@ def public(meta: dict) -> dict:
             "last_text": m.get("last_text") or "", "error": m.get("error") or None,
             "plan_mode": bool(m.get("plan_mode")), "plan_ready": bool(m.get("plan_ready")),
             "permission_mode": m.get("permission_mode") or "", "approvals": _approvals_waiting(m["id"]),
-            "code_repos": [r for r in (m.get("code_repos") or []) if isinstance(r, str)]}
+            "code_repos": [r for r in (m.get("code_repos") or []) if isinstance(r, str)],
+            "worktree": _worktree_public(m)}
+
+
+def _worktree_public(m: dict) -> dict | None:
+    """The session's separate copy (worktrees.py), what the list and the header show."""
+    wt = m.get("worktree")
+    if not isinstance(wt, dict):
+        return None
+    return {**{k: wt.get(k) for k in ("path", "repo", "branch", "base", "pr", "kept_branch")},
+            "removed": bool(wt.get("removed")),
+            "preparing": (wt.get("prepare") or {}).get("state") == "running"}
 
 
 def _approvals_waiting(sid: str) -> int:
@@ -318,8 +329,10 @@ def create_session(path: str, message: str | None = None, title: str | None = No
                    env: dict | None = None, timeout_s: int | None = None, plan_mode: bool = False,
                    permission_mode: str = "", auto_title: bool = False, voice_path: str | None = None,
                    client_id: str | None = None, silent_ok: bool = False, ref: str | None = None,
-                   effort: str | None = None) -> dict:
-    """`auto_title`: `title` was made from the first message by the caller (Telegram) - still worth a short title.
+                   effort: str | None = None, worktree: dict | None = None) -> dict:
+    """`worktree` = {repo, base?, prepare?, copy_env?, pr?}: the session works on a separate copy (worktrees.py),
+    made before its first turn.
+    `auto_title`: `title` was made from the first message by the caller (Telegram) - still worth a short title.
     `silent_ok`: a scheduled job that reports every run - its turn may answer [SILENT] (runner, spawn.CRON_SILENT).
     `ref`: as send_message's, for the first message."""
     try:
@@ -338,6 +351,17 @@ def create_session(path: str, message: str | None = None, title: str | None = No
     automatic, has_text = auto_title or not given, bool((message or "").strip())
     if effort:
         meta["effort"] = effort
+    if worktree:
+        from .. import worktrees
+        from ..gitsafe import GitError
+        if (worktree.get("pr") or {}).get("outside"):
+            meta["plan_mode"] = True                  # code of a stranger: read before anything runs
+        try:
+            meta["worktree"] = worktrees.create(p, str(worktree.get("repo") or ""), worktree.get("base"),
+                                                given or meta["title"], meta["id"], pr=worktree.get("pr"),
+                                                prepare=worktree.get("prepare"), copy_env=worktree.get("copy_env"))
+        except GitError as e:
+            raise SessionError(e.status, e.code, e.message) from None
     if automatic and not has_text:
         meta["title_auto"] = meta["title"]       # short title on the first message (titles.first_message)
     store.create(meta)
@@ -729,8 +753,10 @@ def update_session(sid: str, title: str | None = None, model: str | None = None,
         effort = _check_effort(effort)
     if path is not None:
         move_session(sid, path, cur)
+    renamed = False
     with store.edit(sid) as m:
         if title is not None and title.strip():
+            renamed = m.get("title") != title.strip()[:120]
             m["title"] = title.strip()[:120]
         if model is not None:
             m["model"] = model
@@ -746,6 +772,9 @@ def update_session(sid: str, title: str | None = None, model: str | None = None,
             m["plan_mode"] = bool(plan_mode)
             if not plan_mode:
                 m["plan_ready"] = False
+    if renamed and cur.get("worktree"):
+        from .. import worktrees
+        worktrees.rename_for_title(sid, title.strip()[:120])
     bus.invalidate("sessions", "workspace")
     return get_session(sid) or {}
 
@@ -1338,6 +1367,10 @@ def move_session(sid: str, path: str, meta: dict | None = None) -> None:
         return
     if m.get("state") == "running" or _waiting(m):
         raise SessionError(409, "busy", "Wait for the current turn to finish before moving the session")
+    from .. import worktrees
+    if worktrees.live(m):
+        raise SessionError(409, "has_copy", "This session works on a separate copy of its topic: finish or "
+                                            "discard the copy before moving it")
     root = workspace.root()
     with store.edit(sid) as mm:
         if mm.get("state") == "running" or _waiting(mm):      # again under the lock: a turn may have just started

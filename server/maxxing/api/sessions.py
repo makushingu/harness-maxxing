@@ -50,6 +50,14 @@ class _Text(BaseModel):
 CLIENT_ID_RE = r"^[A-Za-z0-9_-]{1,64}$"
 
 
+class WorktreeIn(BaseModel):
+    repo: str
+    base: str | None = Field(None, max_length=200)
+    prepare: str | None = Field(None, max_length=500)    # this time only ("" = none); remembered with `remember`
+    copy_env: bool | None = None
+    remember: bool = False                               # keep prepare / copy_env for the next copies of this repo
+
+
 class CreateIn(_Text):
     path: str = ""
     message: str | None = None
@@ -60,6 +68,7 @@ class CreateIn(_Text):
     plan_mode: bool = False
     voice: str | None = None          # absolute path of a voice message sent directly (transcribed afterwards)
     client_id: str | None = Field(None, pattern=CLIENT_ID_RE)   # the sender's id for the first message (see MessageIn)
+    worktree: WorktreeIn | None = None                    # work on a separate copy (Code mode, worktrees.py)
 
 
 class PatchIn(_Text):
@@ -137,9 +146,25 @@ async def list_sessions(path: str | None = None, archived: int | None = Query(No
 
 @router.post("/sessions")
 async def create_session(body: CreateIn):
+    wt = None
+    if body.worktree:
+        wt = {"repo": body.worktree.repo, "base": body.worktree.base, "prepare": body.worktree.prepare,
+              "copy_env": body.worktree.copy_env}
+        if body.worktree.remember:
+            await asyncio.to_thread(_remember_copy, body.worktree)
     return await _call(service.create_session, body.path, message=body.message, title=body.title,
                        model=body.model, effort=body.effort, attachments=body.attachments, source="web",
-                       plan_mode=body.plan_mode, voice_path=body.voice, client_id=body.client_id)
+                       plan_mode=body.plan_mode, voice_path=body.voice, client_id=body.client_id, worktree=wt)
+
+
+def _remember_copy(w: WorktreeIn) -> None:
+    from .. import codediff, worktrees
+    from ..gitsafe import GitError
+    try:
+        repo = worktrees.main_clone(codediff.checked_repo(w.repo))
+    except GitError:
+        return                                            # create_session says why
+    worktrees.set_prefs(repo, prepare=w.prepare, copy_env=w.copy_env)
 
 
 @router.get("/sessions/search")

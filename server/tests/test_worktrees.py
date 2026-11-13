@@ -1,0 +1,174 @@
+"""Separate copies (worktrees.py): a session on its own folder and branch, its end (merge, discard), Code mode only."""
+import subprocess
+import time
+from pathlib import Path
+
+import pytest
+
+from conftest import wait_for, wait_idle
+from maxxing import config, worktrees
+from maxxing.sessions import store
+
+ENV = {"GIT_AUTHOR_NAME": "Ann", "GIT_AUTHOR_EMAIL": "a@example.com", "GIT_COMMITTER_NAME": "Ann",
+       "GIT_COMMITTER_EMAIL": "a@example.com", "PATH": "/usr/bin:/bin"}
+
+
+def _git(repo, *args) -> str:
+    return subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True, text=True,
+                          env={**ENV, "HOME": str(repo)}).stdout
+
+
+def _init(folder: Path) -> Path:
+    folder.mkdir(parents=True, exist_ok=True)
+    _git(folder, "init", "-q", "-b", "main")
+    _git(folder, "config", "user.name", "Ann")
+    _git(folder, "config", "user.email", "a@example.com")
+    (folder / "a.txt").write_text("one\n")
+    (folder / ".gitignore").write_text(".env\nnode_modules/\n")
+    _git(folder, "add", ".")
+    _git(folder, "commit", "-qm", "start")
+    return folder
+
+
+@pytest.fixture
+def code(client, topic, mx):
+    """Code mode on, the workspace inside the files root, a clone `app` in the topic."""
+    config.save_config({**config.load_config(), "files_root": str(mx["tmp"]), "code_mode": True})
+    clone = _init(Path(mx["ws"]) / topic / "app")
+    return topic, clone
+
+
+def _new(client, topic, clone, message="fix the login page WRITEFILE:x.txt NOTOOL", **extra):
+    r = client.post("/api/sessions", json={"path": topic, "message": message,
+                                           "worktree": {"repo": str(clone), **extra}})
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+def test_the_topic_lists_its_repositories(client, code):
+    topic, clone = code
+    r = client.get("/api/code/copy-repos", params={"path": topic}).json()
+    assert r["enabled"] and [x["root"] for x in r["repos"]] == [str(clone)]
+    assert r["repos"][0]["default_base"] == "main" and r["repos"][0]["prefs"]["prefix"] == "session"
+
+
+def test_without_code_mode_there_is_no_copy(client, code):
+    topic, clone = code
+    config.save_config({**config.load_config(), "code_mode": False})
+    assert client.get("/api/code/copy-repos", params={"path": topic}).json() == {"enabled": False, "repos": []}
+    r = client.post("/api/sessions", json={"path": topic, "message": "hi", "worktree": {"repo": str(clone)}})
+    assert r.status_code == 403
+
+
+def test_a_session_works_in_its_own_copy_and_branch(client, code, mx):
+    topic, clone = code
+    s = _new(client, topic, clone)
+    wt = s["worktree"]
+    folder = Path(wt["path"])
+    assert folder.parent == Path(mx["ws"]) / topic / "worktrees"         # visible, beside the clone
+    assert wt["branch"].startswith("session/") and wt["base"] == "main"
+    wait_idle(client, s["id"])
+    assert (folder / "x.txt").is_file() and not (clone / "x.txt").exists()   # the turn ran in the copy
+    assert _git(clone, "status", "--porcelain") == ""                     # the clone never sees it
+    st = client.get(f"/api/sessions/{s['id']}/copy").json()
+    assert st["exists"] and st["dirty"] == 1 and st["ahead"] == 0
+
+
+def test_the_branch_follows_the_title_until_it_is_pushed(client, code):
+    topic, clone = code
+    s = _new(client, topic, clone)
+    wait_idle(client, s["id"])
+    r = client.patch(f"/api/sessions/{s['id']}", json={"title": "Login fix"})
+    assert r.json()["worktree"]["branch"] == "session/login-fix"
+    assert "session/login-fix" in _git(clone, "branch", "--list")
+
+
+def test_a_copy_inside_the_repository_is_hidden_and_excluded(client, topic, mx):
+    config.save_config({**config.load_config(), "files_root": str(mx["tmp"]), "code_mode": True})
+    folder = _init(Path(mx["ws"]) / topic)                                 # the topic IS the repository
+    s = _new(client, topic, folder)
+    assert Path(s["worktree"]["path"]).parent == folder / ".worktrees"
+    wait_idle(client, s["id"])
+    assert _git(folder, "status", "--porcelain") == ""
+    assert "/.worktrees/" in (folder / ".git" / "info" / "exclude").read_text()
+
+
+def test_merge_into_the_base_then_the_copy_goes(client, code):
+    topic, clone = code
+    s = _new(client, topic, clone)
+    wait_idle(client, s["id"])
+    r = client.post(f"/api/sessions/{s['id']}/copy/merge", json={})
+    assert r.status_code == 409 and r.json()["error"] == "uncommitted"
+    r = client.post(f"/api/sessions/{s['id']}/copy/merge", json={"message": "Add x"})
+    assert r.status_code == 200, r.text
+    assert r.json()["merged"] and not Path(s["worktree"]["path"]).exists()
+    assert (clone / "x.txt").is_file()                                    # main moved forward, checked out
+    assert _git(clone, "log", "-1", "--format=%s").strip() == "Add x"
+    assert "session/" not in _git(clone, "branch", "--list")              # merged: the branch went too
+    sess = client.get(f"/api/sessions/{s['id']}").json()
+    assert sess["worktree"]["removed"]
+    client.post(f"/api/sessions/{s['id']}/messages", json={"text": "again WRITEFILE:y.txt NOTOOL"})
+    wait_idle(client, s["id"])
+    assert not (clone / "y.txt").exists()                                  # back in the topic folder
+
+
+def test_a_conflict_with_the_base_leaves_the_copy_as_it_was(client, code):
+    topic, clone = code
+    s = _new(client, topic, clone, message="hi NOTOOL")
+    wait_idle(client, s["id"])
+    folder = Path(s["worktree"]["path"])
+    (folder / "a.txt").write_text("copy\n")
+    _git(folder, "commit", "-qam", "copy")
+    (clone / "a.txt").write_text("main\n")
+    _git(clone, "commit", "-qam", "main")
+    r = client.post(f"/api/sessions/{s['id']}/copy/merge", json={})
+    assert r.status_code == 409 and r.json()["error"] == "conflict"
+    assert (folder / "a.txt").read_text() == "copy\n" and _git(folder, "status", "--porcelain") == ""
+
+
+def test_discard_removes_folder_and_branch(client, code):
+    topic, clone = code
+    s = _new(client, topic, clone)
+    wait_idle(client, s["id"])
+    assert client.post(f"/api/sessions/{s['id']}/copy/remove", json={}).status_code == 409   # not committed
+    r = client.post(f"/api/sessions/{s['id']}/copy/remove", json={"force": True})
+    assert r.status_code == 200 and r.json()["kept_branch"] is None
+    assert not Path(s["worktree"]["path"]).exists() and "session/" not in _git(clone, "branch", "--list")
+
+
+def test_a_session_on_a_copy_cannot_move_topic(client, code):
+    topic, clone = code
+    client.post("/api/workspace/projects/acme/topics", json={"name": "other"})
+    s = _new(client, topic, clone, message="hi NOTOOL")
+    wait_idle(client, s["id"])
+    r = client.patch(f"/api/sessions/{s['id']}", json={"path": "projects/acme/topics/other"})
+    assert r.status_code == 409
+
+
+def test_preparation_and_env_files(client, code):
+    topic, clone = code
+    (clone / ".env").write_text("A=1\n")
+    s = _new(client, topic, clone, message="hi NOTOOL", prepare="echo ready > prepared.txt", copy_env=True,
+             remember=True)
+    folder = Path(s["worktree"]["path"])
+    assert (folder / ".env").read_text() == "A=1\n"
+    wait_for(lambda: (store.read(s["id"])["worktree"].get("prepare") or {}).get("state") == "done")
+    assert (folder / "prepared.txt").read_text().strip() == "ready"
+    assert worktrees.prefs(clone)["prepare"] == "echo ready > prepared.txt"
+    log = client.get(f"/api/sessions/{s['id']}/copy/prepare-log").json()["log"]
+    assert "$ echo ready" in log and "[exit 0]" in log
+
+
+def test_the_git_page_lists_the_copies(client, code):
+    topic, clone = code
+    s = _new(client, topic, clone, message="hi NOTOOL")
+    wait_idle(client, s["id"])
+    [c] = client.get("/api/code/copies").json()
+    assert c["sid"] == s["id"] and c["exists"] and c["repo"] == str(clone)
+
+
+def test_slugs():
+    assert worktrees.slug("Fix the login page!") == "fix-the-login-page"
+    assert worktrees.slug("Éditer l'accueil") == "editer-l-accueil"
+    assert len(worktrees.slug("word " * 30)) <= worktrees.SLUG_MAX
+    assert worktrees.slug("…") == ""

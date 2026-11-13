@@ -671,6 +671,11 @@ class Runner:
 
     @staticmethod
     def _cwd(cfg: dict, meta: dict) -> str | None:
+        if meta.get("worktree"):                       # a separate copy of the topic's repository (worktrees.py)
+            from .. import worktrees
+            copy = worktrees.cwd_of(meta)
+            if copy:
+                return copy
         root = Path(cfg.get("workspace") or "/").resolve()
         cwd = (root / (meta.get("path") or "")).resolve()
         if cwd != root and root not in cwd.parents:
