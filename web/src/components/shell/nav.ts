@@ -14,7 +14,8 @@ export const navRow = (collapsed: boolean, active?: boolean) =>
     // attribute, so every row of the bar has the same weight (folded, divided by the scale so it looks the same).
     'mx-nav-row group relative flex h-9 w-full items-center gap-3 rounded-md px-2.5 text-sm font-medium text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
     '[&>svg]:transition-transform [&>svg]:duration-300 [&>svg]:ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:[&>svg]:transition-none',
-    active ? 'mx-lg-pill bg-accent text-foreground' : '',
+    // the highlight itself is ActiveMark's pill, so it can glide to the next row
+    active ? 'isolate text-foreground' : '',
     collapsed ? (active ? '[&>svg]:[stroke-width:1.8]' : '[&>svg]:[stroke-width:1.53]') : active ? '[&>svg]:[stroke-width:2]' : '[&>svg]:[stroke-width:1.7]',
     // folded icon bar: 44 px square targets, slightly bigger icons (18 px scaled to 20 px); 36 px in a short window,
     // so every row still fits above the bottom block instead of being cut off

@@ -32,6 +32,15 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   (`--wall-a/-b`), translucent `color-mix` on the classes above, `backdrop-filter` only on `.mx-bar` and `.mx-glass`
   (DESIGN.md rule relaxed for this opt-in; `test_no_backdrop_blur` skips the glass rules of `globals.css`),
   `--glass-edge` inset highlight; disabled under `prefers-reduced-transparency`. Not part of the server-shared look (`/api/settings/look`).
+- Web, glass 2nd pass: wallpaper in `--wall`, also on `.mx-wall` (the phone `Drawer`, opaque) and on the folded list
+  `.mx-list.mx-list-peek` (list tint over the fixed wallpaper: opaque, same look as the list kept beside the page);
+  fills raised (cards 62/56 %, message box 86 %, `.mx-glass` 86 % with the cards' sheen + gradient rim); the
+  `.mx-lg-pill` halo is neutral; the message box in focus lights its rim instead of `border-ring` + ring; the glass
+  `box-shadow` replaced the ring of `.mx-lg-btn` / `.mx-lg-pill`, so a soft `:focus-visible` outline instead.
+- Web, gliding selection: `ActiveMark` now renders the active row's pill (`bg-accent` / `.mx-lg-pill`, `-z-10` in the
+  `isolate` row) next to its bar and FLIPs both; `navRow(active)` no longer paints a background. `Segmented`: one
+  absolute highlight placed from the chosen option's offsets (ResizeObserver: options may wrap), FLIP translate +
+  scaleX on change; no animation with reduced motion.
 
 ## 2.0.0-alpha.149 - 2026-11-13
 

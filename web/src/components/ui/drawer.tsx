@@ -99,7 +99,7 @@ export function DrawerContent({ side, className, children, ref, ...props }: Reac
       <DialogPrimitive.Content
         ref={refs}
         className={cn(
-          'fixed inset-y-0 z-50 flex w-[min(88vw,380px)] flex-col bg-sidebar text-foreground outline-none will-change-transform',
+          'fixed inset-y-0 z-50 flex w-[min(88vw,380px)] flex-col bg-sidebar mx-wall text-foreground outline-none will-change-transform',
           'pt-[var(--safe-top)] pb-[var(--safe-bottom-ui)]',
           side === 'left'
             ? 'left-0 border-r border-sidebar-border pl-[var(--safe-left)] data-[state=closed]:animate-sheet-left-out data-[state=open]:animate-sheet-left'

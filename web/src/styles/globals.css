@@ -201,17 +201,28 @@ html.dark[data-material='glass'] {
   --wall-a: color-mix(in oklch, var(--primary) 38%, transparent);
   --wall-b: color-mix(in oklch, oklch(0.6 0.18 calc(var(--accent-h, 256) + 60)) 30%, transparent);
 }
-html[data-material='glass'] .mx-shell {
-  background:
+/* the wallpaper, also behind the phone drawer (`.mx-wall`, opaque: the drawer shows the gradient, not the page) and the
+   folded list over the page (below): fixed, so every layer shows the same part of it */
+html[data-material='glass'] {
+  --wall:
     radial-gradient(60rem 40rem at 0% 0%, var(--wall-a), transparent 70%),
     radial-gradient(50rem 36rem at 100% 100%, var(--wall-b), transparent 70%),
-    radial-gradient(40rem 30rem at 70% 10%, color-mix(in oklch, var(--primary) 8%, transparent), transparent 70%),
-    var(--sidebar);
+    radial-gradient(40rem 30rem at 70% 10%, color-mix(in oklch, var(--primary) 8%, transparent), transparent 70%);
+}
+html[data-material='glass'] :is(.mx-shell, .mx-wall) {
+  background: var(--wall), var(--sidebar);
   background-attachment: fixed;
 }
 html[data-material='glass'] .mx-frame { background: transparent; }
 html[data-material='glass'] .mx-list {
-  background: color-mix(in oklch, var(--list) 45%, transparent);
+  --list-glass: color-mix(in oklch, var(--list) 45%, transparent);
+  background: var(--list-glass);
+}
+/* the folded list shown over the page: the same look as the list kept beside it, but opaque (it paints the wallpaper
+   itself instead of letting the page show through) */
+html[data-material='glass'] .mx-list.mx-list-peek {
+  background: linear-gradient(var(--list-glass), var(--list-glass)), var(--wall), var(--sidebar);
+  background-attachment: scroll, fixed, fixed, fixed;
 }
 html[data-material='glass']:not([data-compact]) .mx-content {
   background: color-mix(in oklch, var(--background) 58%, transparent);
@@ -226,22 +237,29 @@ html[data-material='glass'] .mx-bar {
   backdrop-filter: blur(18px) saturate(1.5);
 }
 /* floating layers: menus, selects, popovers, dialogs, sheets, the palette, the / menu */
+/* floating layers: menus, selects, popovers, dialogs, sheets, the palette, the / menu. Nearly opaque (they hold text
+   to read over anything), the rest of the look from the cards' liquid glass: sheen, bright rim, specular line. */
 html[data-material='glass'] .mx-glass {
-  background: color-mix(in oklch, var(--popover) 66%, transparent);
-  backdrop-filter: blur(var(--glass-blur)) saturate(1.7);
-  box-shadow: inset 0 1px 0 var(--glass-edge), var(--shadow-pop);
+  --pop-fill: color-mix(in oklch, var(--popover) 86%, transparent);
+  border-color: transparent;
+  background:
+    linear-gradient(180deg, var(--lg-sheen), transparent 30%) padding-box,
+    linear-gradient(var(--pop-fill), var(--pop-fill)) padding-box,
+    linear-gradient(140deg, var(--lg-rim-hi), var(--lg-rim-lo) 32%, var(--lg-rim-lo) 68%, var(--lg-rim-mid)) border-box;
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.6);
+  box-shadow: inset 0 1px 0 var(--lg-spec), var(--shadow-pop);
 }
 @media (prefers-reduced-transparency: reduce) {
-  html[data-material='glass'] .mx-shell { background: var(--sidebar); }
+  html[data-material='glass'] :is(.mx-shell, .mx-wall, .mx-list.mx-list-peek) { background: var(--sidebar); }
   html[data-material='glass'] :is(.mx-bar, .mx-glass) { backdrop-filter: none; }
-  html[data-material='glass'] .mx-glass { background: var(--popover); }
+  html[data-material='glass'] .mx-glass { --pop-fill: var(--popover); }
 }
 
 /* Liquid glass on the elements themselves (cards, the message box, buttons, the selected row / option): a see-through
    fill, a sheen from the top, a bright rim brighter at the top left (a gradient border: background-clip, no
    pseudo-element), a specular line, a soft drop. No blur here: they sit on the still panel. */
 html[data-material='glass'] {
-  --lg-fill: color-mix(in oklch, var(--card) 48%, transparent);
+  --lg-fill: color-mix(in oklch, var(--card) 62%, transparent);
   --lg-sheen: oklch(1 0 0 / 0.55);
   --lg-rim-hi: oklch(1 0 0 / 0.95);
   --lg-rim-lo: oklch(0.5 0 0 / 0.12);
@@ -250,7 +268,7 @@ html[data-material='glass'] {
   --lg-drop: 0 10px 28px -14px rgb(0 0 0 / 0.25), 0 1px 2px rgb(0 0 0 / 0.06);
 }
 html.dark[data-material='glass'] {
-  --lg-fill: color-mix(in oklch, var(--card) 42%, transparent);
+  --lg-fill: color-mix(in oklch, var(--card) 56%, transparent);
   --lg-sheen: oklch(1 0 0 / 0.07);
   --lg-rim-hi: oklch(1 0 0 / 0.32);
   --lg-rim-lo: oklch(1 0 0 / 0.04);
@@ -267,11 +285,23 @@ html[data-material='glass'] :is(.mx-lg, .mx-lg-btn, .mx-lg-pill) {
   box-shadow: inset 0 1px 0 var(--lg-spec), var(--lg-drop);
 }
 html[data-material='glass'] .mx-lg-btn:hover { --lg-fill: color-mix(in oklch, var(--foreground) 10%, transparent); }
+/* the selection: a light tint of the accent and a neutral drop (a coloured halo read as an outline) */
 html[data-material='glass'] .mx-lg-pill {
-  --lg-fill: color-mix(in oklch, var(--primary) 16%, transparent);
-  --lg-drop: 0 4px 14px -6px color-mix(in oklch, var(--primary) 45%, transparent);
+  --lg-fill: color-mix(in oklch, var(--primary) 13%, transparent);
+  --lg-drop: 0 1px 2px rgb(0 0 0 / 0.08), 0 6px 16px -10px rgb(0 0 0 / 0.3);
 }
-html[data-material='glass'] .mx-lg:focus-within:has(textarea) { border-color: var(--ring); }
+/* the message box: nearly opaque (text is typed there); in focus no accent outline or ring, the rim lights up */
+html[data-material='glass'] .mx-lg:has(textarea) { --lg-fill: color-mix(in oklch, var(--card) 86%, transparent); }
+html[data-material='glass'] .mx-lg:focus-within:has(textarea) {
+  --lg-rim-lo: color-mix(in oklch, var(--foreground) 16%, transparent);
+  --lg-rim-mid: color-mix(in oklch, var(--foreground) 28%, transparent);
+  --lg-drop: 0 12px 32px -14px rgb(0 0 0 / 0.32), 0 0 0 4px color-mix(in oklch, var(--foreground) 4%, transparent);
+}
+/* keyboard focus: the glass replaces the ring's box-shadow, so a soft outline instead (still visible, not a hard line) */
+html[data-material='glass'] :is(.mx-lg-btn, .mx-lg-pill):focus-visible {
+  outline: 2px solid color-mix(in oklch, var(--ring) 55%, transparent);
+  outline-offset: 2px;
+}
 @media (prefers-reduced-transparency: reduce) {
   html[data-material='glass'] :is(.mx-lg, .mx-lg-btn, .mx-lg-pill) { --lg-fill: var(--card); }
 }
