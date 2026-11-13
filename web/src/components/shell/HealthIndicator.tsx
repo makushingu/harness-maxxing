@@ -1,15 +1,16 @@
 import * as React from 'react'
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { AlertTriangle, Check, CheckCircle2, ChevronRight, CircleAlert, Cpu, Download, HardDrive, Info, MemoryStick, Monitor, Moon, Sun, Undo2 } from 'lucide-react'
+import { AlertTriangle, Check, CheckCircle2, ChevronRight, CircleAlert, Cpu, Download, Eye, EyeOff, HardDrive, Info, MemoryStick, Monitor, Moon, Sun, Undo2 } from 'lucide-react'
 import { useHealth, useMarkHealthSeen } from '@/lib/queries'
 import { fmtBytes, fmtDuration } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useLang, useT } from '@/i18n'
 import type { Health } from '@/lib/types'
-import { useUI, type Theme } from '@/stores/ui'
+import { resolveTheme, useUI, type Theme } from '@/stores/ui'
 import { Popover, PopoverContent, PopoverTrigger, ProgressBar, Segmented, Sensitive, Skeleton, Switch, Tooltip } from '@/components/ui'
 import { CloseOnNav } from './CloseOnNav'
+import { iconBtn } from './nav'
 import { MeterBar, MeterIcon, MeterValue, MiniMeter, type MeterTone } from './Meter'
 import { ClaudeStatus, UsageLines } from './UsageIndicator'
 import { useMood } from './mood'
@@ -181,9 +182,10 @@ const alertHover = {
  *    92%", a problem in its alert colour; two lines at most) over CPU / RAM /
  *    disk in three columns, then the ring with "Claude quota · Max" and "5 h 47 % · Week 12 %".
  *  Each part keeps the same height folded or not, so nothing above it moves when the bar unfolds. The meters open the
- *  status panel (issues, theme, presentation mode); the Claude entry leads to Settings -> Stats. Same two elements
- *  folded or not, so the keyboard focus survives folding. */
-export function StatusBlock({ collapsed }: { collapsed?: boolean }) {
+ *  status panel (issues; folded, also the theme and presentation mode); the Claude entry leads to Settings -> Stats.
+ *  Same two elements folded or not, so the keyboard focus survives folding. Unfolded, a last line of four icons
+ *  under them (`SidebarLook`). */
+export function StatusBlock({ collapsed, lead, tail }: { collapsed?: boolean; /** unfolded: Settings, first of the last line */ lead?: React.ReactNode; /** unfolded: Help, at its end */ tail?: React.ReactNode }) {
   const s = useStatusLine()
   const rows = useHealthRows()
   const alert = s.alert
@@ -267,10 +269,48 @@ export function StatusBlock({ collapsed }: { collapsed?: boolean }) {
           </PopoverTrigger>
         </Tooltip>
         <PopoverContent side="right" align="end" className="w-80 p-3" data-testid="status-panel">
-          <StatusPanel />
+          <StatusPanel look={!!collapsed} />
         </PopoverContent>
       </Popover>
       <ClaudeStatus collapsed={collapsed} />
+      {!collapsed && <SidebarLook lead={lead} tail={tail} />}
+    </div>
+  )
+}
+
+/** The very bottom of the unfolded sidebar, under the Claude quota: one line of four icons in the middle (names in
+ *  tooltips): Settings (`lead`, a page), a sun / moon that switches between light and dark (it shows the theme on
+ *  screen; "System" stays in Settings -> Appearance), the eye of presentation mode (crossed out and tinted while on)
+ *  and Help (`tail`). Folded, Help and Settings keep their rows and the status panel its theme and presentation lines. */
+function SidebarLook({ lead, tail }: { lead?: React.ReactNode; tail?: React.ReactNode }) {
+  const t = useT()
+  const theme = useUI((s) => s.theme)
+  const setTheme = useUI((s) => s.setTheme)
+  const presentation = useUI((s) => s.presentation)
+  const setPresentation = useUI((s) => s.setPresentation)
+  const dark = resolveTheme(theme) === 'dark'
+  const themeLabel = `${t('shell.theme')} · ${t(dark ? 'theme.dark' : 'theme.light')}`
+  const presLabel = presentation ? t('presentation.off') : t('presentation.on')
+  return (
+    <div className="mx-side-reveal mt-0.5 flex h-10 min-w-0 items-center justify-center gap-2" data-testid="sidebar-look">
+      {lead}
+      <Tooltip content={themeLabel} side="top">
+        <button type="button" className={iconBtn()} aria-label={themeLabel} onClick={() => setTheme(dark ? 'light' : 'dark')}>
+          {dark ? <Moon /> : <Sun />}
+        </button>
+      </Tooltip>
+      <Tooltip content={presLabel} side="top">
+        <button
+          type="button"
+          className={cn(iconBtn(), presentation && 'bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary')}
+          aria-label={presLabel}
+          aria-pressed={presentation}
+          onClick={() => setPresentation(!presentation)}
+        >
+          {presentation ? <EyeOff /> : <Eye />}
+        </button>
+      </Tooltip>
+      {tail}
     </div>
   )
 }
@@ -292,8 +332,9 @@ const panelRow =
   'flex min-h-9 min-w-0 items-center gap-3 rounded-md px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:min-h-11'
 
 /** What the status line opens (the touch menu shows it inline): the health issues or "all good", the Claude plan
- *  (-> Settings -> Stats), CPU / RAM / disk (-> Settings -> System), the theme, presentation mode, Install app. */
-export function StatusPanel({ touch, onInstall }: { touch?: boolean; /** touch menu: Install app */ onInstall?: () => void }) {
+ *  (-> Settings -> Stats), CPU / RAM / disk (-> Settings -> System), then (`look`, always on touch: the unfolded
+ *  sidebar has them as icons on its last line) the theme, presentation mode, Install app. */
+export function StatusPanel({ touch, look = touch, onInstall }: { touch?: boolean; /** the theme and presentation lines */ look?: boolean; /** touch menu: Install app */ onInstall?: () => void }) {
   const t = useT()
   const theme = useUI((s) => s.theme)
   const setTheme = useUI((s) => s.setTheme)
@@ -311,7 +352,7 @@ export function StatusPanel({ touch, onInstall }: { touch?: boolean; /** touch m
         </span>
         <HealthMeters />
       </Link>
-      <div className="mt-1 grid gap-1 border-t pt-2">
+      {look && <div className="mt-1 grid gap-1 border-t pt-2">
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1.5 px-2 py-1">
           <span className="text-sm">{t('shell.theme')}</span>
           <Segmented<Theme>
@@ -336,7 +377,7 @@ export function StatusPanel({ touch, onInstall }: { touch?: boolean; /** touch m
             <span className="min-w-0 flex-1">{t('pwa.install')}</span>
           </button>
         )}
-      </div>
+      </div>}
     </div>
   )
 }

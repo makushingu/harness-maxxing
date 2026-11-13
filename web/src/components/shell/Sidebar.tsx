@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
 import { openPalette } from '@/commands/registry'
 import { Button, CountBadge, CountDot, KeepTooltipShape, Kbd, MOD, NamedIcon, Tooltip } from '@/components/ui'
-import { navRow, navTourId, useNavEntries, useUnpinnedPages, type NavEntry, type NavItem } from './nav'
+import { iconBtn, navRow, navTourId, useNavEntries, useUnpinnedPages, type NavEntry, type NavItem } from './nav'
 import { armEntryPeek, entryPeek, SecondBar, useClosedList } from './PageList'
 import { Logo } from './Logo'
 import { ResizeEdge } from './ResizeEdge'
@@ -336,13 +336,14 @@ export const Sidebar = React.memo(function Sidebar() {
 
             <div className="flex-1" />
 
-            <div className={block('border-t border-sidebar-border')}>
+            <div className={block('border-t border-sidebar-border has-[>div:only-child:empty]:hidden')}>
               {/* folded: a 44 px target and a bigger icon, like the rows (UpdateIndicator keeps its own small look) */}
               <div className={cn('empty:hidden', '[&_svg]:[stroke-width:1.7]', collapsed && '[&>*]:h-11 [@media(max-height:820px)]:[&>*]:h-9 [&_svg]:size-[18px] [&>*>span:first-child]:size-5')}>
                 <UpdateIndicator collapsed={collapsed} />
               </div>
-              <HelpMenu collapsed={collapsed} />
-              {end.map((item) => navItem(item, entries.length + 1))}
+              {/* unfolded, Settings and Help are icons of the last line (StatusBlock `lead` / `tail`) */}
+              {collapsed && <HelpMenu collapsed />}
+              {collapsed && end.map((item) => navItem(item, entries.length + 1))}
               {/* folded: the way to pin the bar (pinned, the button sits beside the logo) */}
               {collapsed && !tablet && (
                 <Tooltip content={<>{pinLabel} <Kbd className="border-background/20 bg-background/15 text-background">{MOD} \</Kbd></>} side="right">
@@ -353,7 +354,20 @@ export const Sidebar = React.memo(function Sidebar() {
               )}
             </div>
 
-            <StatusBlock collapsed={collapsed} />
+            <StatusBlock
+              collapsed={collapsed}
+              lead={
+                !collapsed &&
+                end.map((item) => (
+                  <Tooltip key={item.to} content={t(item.label)} side="top">
+                    <NavLink to={item.to} end={item.end} data-tour={navTourId(item)} aria-label={t(item.label)} className={({ isActive }) => iconBtn(isActive)}>
+                      <item.icon />
+                    </NavLink>
+                  </Tooltip>
+                ))
+              }
+              tail={!collapsed && <HelpMenu collapsed={false} compact />}
+            />
           </KeepTooltipShape.Provider>
         </aside>
         {pinned && <ResizeEdge side={slot} min={SIDEBAR_W.min} max={SIDEBAR_W.max} onWidth={setWidth} />}

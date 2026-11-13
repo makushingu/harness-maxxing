@@ -21,6 +21,11 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   figures; no chevron any more, the block is 8 px taller. Texts: `mood.*`, a dictionary group of their own (`mood`
   in i18n/groups.ts, fetched by `useMood` once the shell shows: the core dictionary is at its first-load budget,
   test_web_first_load); "Checking…" while they download. `shell.claudePct` and `usePlanPct` removed (unused).
+- Web, sidebar last line (unfolded bar): `SidebarLook` in HealthIndicator.tsx, four `iconBtn` (nav.ts) centred
+  (`justify-center gap-2`): Settings (`lead` of `StatusBlock`, a NavLink with tooltip + `aria-label`, `data-tour`
+  kept), sun / moon (light <-> dark), the eye of presentation mode, Help (`tail`, `HelpMenu compact`). The Help and
+  Settings rows show only in the folded bar; `StatusPanel` takes `look` (theme + presentation lines: folded bar and
+  touch menu only).
 - Sessions: `ViewSwitch` (computer: one button left of New session, after the layouts button which comes and goes with the
   mode; its icon = four square bars whose shape follows `data-kind`, moved by the transitions of `.mx-view-glyph` in
   globals.css, so nothing plays at page load; `currentColor`, the colour of the ghost icon buttons beside it) and `TabsToggle` (phone) in `pages/sessions/Tabs.tsx`; the store's `tabs` defaults to true and `merge` sets

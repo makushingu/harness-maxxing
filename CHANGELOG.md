@@ -12,6 +12,10 @@ New:
   finished sessions waiting, agents with news, sessions at work. For the Claude plan, a light forecast: at the pace
   of the current window, the quota runs out before its reset ("At this pace, 5-hour quota out by 16:40 (resets
   18:00)."), or it will hold. Two lines at most; a click opens the status panel, as before.
+- **Sidebar: four icons on the last line.** The unfolded sidebar ends with four icons in the middle of a line, under
+  the Claude quota (names on hover): Settings, light / dark, presentation mode and Help. Settings and Help no longer
+  take a row each, and the theme and presentation mode leave the status panel (they stay in it when the sidebar is
+  folded, and in the phone menu).
 - **Sessions: Tabs or Zones.** Two modes, one switch at the top right (Alt+T): **Tabs** shows one session at a
   time with the open ones as tabs above, **Zones** puts them side by side. The switch is one icon left of
   **New session**, no text, in the colour of the other icons of the bar: it draws the mode in use, and its bars move from one picture to the other when
