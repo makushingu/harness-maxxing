@@ -101,7 +101,7 @@ export function TaskDetails({ task, status }: { task: Task; status: TaskStatus }
   const t = useT()
   const report = task.summary && task.summary !== task.description ? task.summary : ''
   return (
-    <div className="grid gap-1.5 rounded-md border bg-card/60 px-2.5 py-2">
+    <div className="grid gap-1.5 rounded-md border bg-card px-2.5 py-2">
       <Facts task={task} status={status} />
       {status === 'running' && <LastAction task={task} />}
       {status === 'interrupted' && <p className="text-xs text-muted-foreground">{t('tasks.interruptedHint')}</p>}
@@ -109,7 +109,7 @@ export function TaskDetails({ task, status }: { task: Task; status: TaskStatus }
         <div className="grid gap-1">
           <span className="text-xs font-medium text-muted-foreground">{t('tasks.report')}</span>
           <Sensitive block>
-            <div className="max-h-80 overflow-auto rounded-md bg-muted/60 px-2.5 py-2 text-[13px]">
+            <div className="max-h-80 overflow-auto rounded-md bg-muted px-2.5 py-2 text-[13px]">
               <Markdown>{report}</Markdown>
             </div>
           </Sensitive>

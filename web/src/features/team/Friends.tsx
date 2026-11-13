@@ -91,7 +91,7 @@ export function FriendsView({ team, onOpenChat, compact, query }: { team: TeamSt
                     tabIndex={0}
                     onClick={() => dm.open(id)}
                     onKeyDown={(e) => e.key === 'Enter' && dm.open(id)}
-                    className="group/f flex cursor-pointer items-center gap-3 rounded-lg px-2 py-1.5 transition-colors hover:bg-accent/60"
+                    className="group/f flex cursor-pointer items-center gap-3 rounded-lg px-2 py-1.5 transition-colors hover:bg-muted"
                   >
                     <PersonAvatar person={p} status />
                     <span className="min-w-0 flex-1">

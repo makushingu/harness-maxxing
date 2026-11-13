@@ -321,7 +321,7 @@ export function McpSection() {
           <EmptyState compact icon={Plug} title={t('mcp.empty')} description={t('mcp.emptyDesc')} />
         ) : (
           <>
-            <div className="hidden grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_auto_auto] gap-4 border-y bg-muted/30 px-4 py-2 text-xs font-medium text-muted-foreground md:grid">
+            <div className="hidden grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_auto_auto] gap-4 border-y bg-fill-1 px-4 py-2 text-xs font-medium text-muted-foreground md:grid">
               <span>{t('mcp.name')}</span>
               <span>{t('mcp.where')}</span>
               <span>{t('mcp.stateCol')}</span>

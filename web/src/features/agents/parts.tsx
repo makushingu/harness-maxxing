@@ -264,7 +264,7 @@ export function WebhookMade({ hook }: { hook: AgentWebhookResult['hook'] }) {
   return (
     <div className="grid gap-3" data-testid="agent-hook-made">
       <p className="text-sm text-muted-foreground">{t(`feed.where.${hook.kind}` as TKey)}</p>
-      <div className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2">
+      <div className="flex items-center gap-2 rounded-md border bg-muted px-3 py-2">
         <code className="min-w-0 flex-1 font-mono text-xs break-all" data-testid="agent-hook-url">
           <Sensitive>{hook.url}</Sensitive>
         </code>

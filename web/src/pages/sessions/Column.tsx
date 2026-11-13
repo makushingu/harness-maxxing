@@ -272,7 +272,7 @@ function StackedComposer({ colKey, stacked, children }: { colKey: string; stacke
             useSessionsUI.getState().focus(colKey)
             requestAnimationFrame(() => focusComposer(colKey))
           }}
-          className="mx-3 mb-2 flex h-8 w-[calc(100%-1.5rem)] items-center gap-2 rounded-lg border bg-muted/40 px-3 text-left text-[13px] text-muted-foreground transition-colors animate-in hover:bg-accent hover:text-foreground"
+          className="mx-3 mb-2 flex h-8 w-[calc(100%-1.5rem)] items-center gap-2 rounded-lg border bg-muted px-3 text-left text-[13px] text-muted-foreground transition-colors animate-in hover:bg-accent hover:text-foreground"
           data-testid="composer-folded"
         >
           <PenLine className="size-3.5 shrink-0" />
@@ -778,7 +778,7 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
           onRename={actions.rename}
         />
         {session?.archived && !agentRun && (
-          <div className="flex items-center gap-2 border-b bg-muted/40 px-4 py-1.5 text-xs text-muted-foreground">
+          <div className="flex items-center gap-2 border-b bg-muted px-4 py-1.5 text-xs text-muted-foreground">
             <Archive className="size-3.5" /> {t('sessions.archivedBanner')}
             <Button size="sm" variant="link" className="ml-auto h-auto text-xs" onClick={actions.archive}>
               {t('sessions.menu.unarchive')}
@@ -1225,7 +1225,7 @@ export function WhereBadge({ kind, name, description, dir, hint, children }: { k
   return (
     <TooltipRoot delayDuration={350}>
       <TooltipTrigger asChild>
-        <span className="inline-flex h-[18px] min-w-0 items-center gap-1 rounded-md border bg-muted/50 px-1.5 text-[11px] font-medium text-foreground/80 max-md:h-5 max-md:text-xs" data-testid={`where-${kind}`}>
+        <span className="inline-flex h-[18px] min-w-0 items-center gap-1 rounded-md border bg-muted px-1.5 text-[11px] font-medium text-foreground/80 max-md:h-5 max-md:text-xs" data-testid={`where-${kind}`}>
           {children}
           <span className="truncate"><Sensitive length={8}>{name}</Sensitive></span>
         </span>

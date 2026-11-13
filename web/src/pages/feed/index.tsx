@@ -56,7 +56,7 @@ export default function FeedPage() {
   const row = (active: boolean) =>
     cn(
       'flex h-9 w-full min-w-0 items-center gap-2.5 rounded-md px-2.5 text-left text-sm transition-colors pointer-coarse:h-11',
-      active ? 'bg-accent font-medium text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
+      active ? 'bg-accent font-medium text-accent-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
     )
   return (
     <Page

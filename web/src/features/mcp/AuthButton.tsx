@@ -23,7 +23,7 @@ export function McpAuthButton({ server }: { server: string }) {
   const target = found.find((s) => s.state === 'needs_auth') || found[0]
   if (!target) return null
   return (
-    <div className="flex flex-wrap items-center gap-2 border-t bg-background/40 px-2.5 py-2">
+    <div className="flex flex-wrap items-center gap-2 border-t bg-sunken px-2.5 py-2">
       {/* the button stays when the last check said "connected": the agent asks because its sign-in expired since */}
       <Button size="sm" variant={target.state === 'connected' ? 'outline' : undefined} onClick={() => setOpen(true)}>
         <LogIn /> {t('mcp.connectTitle', { name: target.name })}

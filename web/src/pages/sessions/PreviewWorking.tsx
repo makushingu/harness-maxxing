@@ -50,7 +50,7 @@ export default function PreviewWorking({ session }: { session: Session }) {
           <ItemRow key={it.key} item={it} live={!it.result} />
         ))}
         {tasks.length > 0 && (
-          <ul className="grid gap-0.5 rounded-lg border bg-card/60 p-1">
+          <ul className="grid gap-0.5 rounded-lg border bg-card p-1">
             {tasks.slice(-MAX_TASKS).map((tk) => (
               <li key={tk.id} className="grid grid-cols-[minmax(0,1fr)] content-center gap-0.5 px-2 py-1">
                 <TaskLine task={tk} />

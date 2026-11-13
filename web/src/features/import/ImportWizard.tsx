@@ -25,7 +25,7 @@ function PromptBox({ text }: { text: string }) {
   const [copied, setCopied] = React.useState(false)
   return (
     <div className="grid gap-2">
-      <pre className="max-h-64 overflow-y-auto rounded-lg border bg-muted/40 p-3 font-mono text-[12px] leading-relaxed break-words whitespace-pre-wrap">{text}</pre>
+      <pre className="max-h-64 overflow-y-auto rounded-lg border bg-muted p-3 font-mono text-[12px] leading-relaxed break-words whitespace-pre-wrap">{text}</pre>
       <div>
         <Button
           size="sm"
@@ -45,7 +45,7 @@ function PromptBox({ text }: { text: string }) {
 
 function Num({ n, label }: { n: number; label: string }) {
   return (
-    <div className="grid gap-0.5 rounded-lg border bg-muted/30 px-3 py-2">
+    <div className="grid gap-0.5 rounded-lg border bg-fill-1 px-3 py-2">
       <span className="text-xl font-semibold tabular-nums">{n}</span>
       <span className="text-xs text-muted-foreground">{label}</span>
     </div>

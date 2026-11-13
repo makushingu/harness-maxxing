@@ -365,7 +365,7 @@ function SandboxFields({ agent: a }: { agent: AgentDetail }) {
       aria-checked={a.sandbox === on}
       onClick={() => setBox(on)}
       className={cn(
-        'flex items-start gap-3 rounded-xl border bg-card p-3 text-left transition-colors hover:bg-accent/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+        'flex items-start gap-3 rounded-xl border bg-card p-3 text-left transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
         a.sandbox === on && 'border-primary bg-primary/5 hover:bg-primary/5',
       )}
       data-testid={id}

@@ -28,16 +28,23 @@
   --l-content: 0.988;
   --l-card: 1;
   --l-float: 1;
-  --l-muted: 0.958;
   --l-accent: 0.94;
   --sidebar: oklch(var(--l-frame) var(--sf-c) var(--sf-h));
   --list: oklch(var(--l-list) var(--sf-c) var(--sf-h));
   --background: oklch(var(--l-content) var(--sf-c) var(--sf-h));
   --card: oklch(var(--l-card) calc(var(--sf-c) * 0.6) var(--sf-h));
   --popover: oklch(var(--l-float) calc(var(--sf-c) * 0.6) var(--sf-h));
-  --muted: oklch(var(--l-muted) calc(var(--sf-c) * 1.2) var(--sf-h));
   --secondary: oklch(var(--l-accent) calc(var(--sf-c) * 1.3) var(--sf-h));
-  --accent: oklch(var(--l-accent) calc(var(--sf-c) * 1.3) var(--sf-h));
+  /* Fills = veils of the text color, the same on every level (a row of a card and a row of a bar look alike):
+     fill-1 subtle (zebra, quiet zones), muted = fill-2 (chips, soft hover), accent = fill-3 (hover / selected).
+     sunken = a recessed zone (toward the frame color). Never an ad hoc bg-muted/37: one of these. */
+  --fill-1: color-mix(in oklch, var(--foreground) var(--a-fill-1), transparent);
+  --muted: color-mix(in oklch, var(--foreground) var(--a-fill-2), transparent);
+  --accent: color-mix(in oklch, var(--foreground) var(--a-fill-3), transparent);
+  --sunken: color-mix(in oklch, var(--sidebar) 60%, transparent);
+  --a-fill-1: 3%;
+  --a-fill-2: 5.5%;
+  --a-fill-3: 8.5%;
   --foreground: oklch(0.141 0.005 285.823);
   --card-foreground: var(--foreground);
   --popover-foreground: var(--foreground);
@@ -107,8 +114,10 @@ html[data-kbd] [data-col]:has([data-kbd-box]:focus-within) [data-kbd-hide] {
   --l-content: 0.19;
   --l-card: 0.232;
   --l-float: 0.258;
-  --l-muted: 0.27;
   --l-accent: 0.305;
+  --a-fill-1: 3.5%;
+  --a-fill-2: 6.5%;
+  --a-fill-3: 10.5%;
   --foreground: oklch(0.985 0 0);
   --secondary-foreground: oklch(0.985 0 0);
   --muted-foreground: oklch(0.705 0.015 286.067);
@@ -205,7 +214,7 @@ html[data-material='glass'] .mx-list {
   background: color-mix(in oklch, var(--list) 45%, transparent);
 }
 html[data-material='glass']:not([data-compact]) .mx-content {
-  background: color-mix(in oklch, var(--background) 74%, transparent);
+  background: color-mix(in oklch, var(--background) 58%, transparent);
   box-shadow: inset 0 1px 0 var(--glass-edge), var(--shadow-panel);
 }
 html[data-material='glass'][data-compact] .mx-content { background: color-mix(in oklch, var(--background) 88%, transparent); }
@@ -228,6 +237,45 @@ html[data-material='glass'] .mx-glass {
   html[data-material='glass'] .mx-glass { background: var(--popover); }
 }
 
+/* Liquid glass on the elements themselves (cards, the message box, buttons, the selected row / option): a see-through
+   fill, a sheen from the top, a bright rim brighter at the top left (a gradient border: background-clip, no
+   pseudo-element), a specular line, a soft drop. No blur here: they sit on the still panel. */
+html[data-material='glass'] {
+  --lg-fill: color-mix(in oklch, var(--card) 48%, transparent);
+  --lg-sheen: oklch(1 0 0 / 0.55);
+  --lg-rim-hi: oklch(1 0 0 / 0.95);
+  --lg-rim-lo: oklch(0.5 0 0 / 0.12);
+  --lg-rim-mid: oklch(1 0 0 / 0.6);
+  --lg-spec: oklch(1 0 0 / 0.9);
+  --lg-drop: 0 10px 28px -14px rgb(0 0 0 / 0.25), 0 1px 2px rgb(0 0 0 / 0.06);
+}
+html.dark[data-material='glass'] {
+  --lg-fill: color-mix(in oklch, var(--card) 42%, transparent);
+  --lg-sheen: oklch(1 0 0 / 0.07);
+  --lg-rim-hi: oklch(1 0 0 / 0.32);
+  --lg-rim-lo: oklch(1 0 0 / 0.04);
+  --lg-rim-mid: oklch(1 0 0 / 0.14);
+  --lg-spec: oklch(1 0 0 / 0.16);
+  --lg-drop: 0 14px 34px -14px rgb(0 0 0 / 0.6), 0 1px 2px rgb(0 0 0 / 0.3);
+}
+html[data-material='glass'] :is(.mx-lg, .mx-lg-btn, .mx-lg-pill) {
+  border: 1px solid transparent;
+  background:
+    linear-gradient(180deg, var(--lg-sheen), transparent 42%) padding-box,
+    linear-gradient(var(--lg-fill), var(--lg-fill)) padding-box,
+    linear-gradient(140deg, var(--lg-rim-hi), var(--lg-rim-lo) 32%, var(--lg-rim-lo) 68%, var(--lg-rim-mid)) border-box;
+  box-shadow: inset 0 1px 0 var(--lg-spec), var(--lg-drop);
+}
+html[data-material='glass'] .mx-lg-btn:hover { --lg-fill: color-mix(in oklch, var(--foreground) 10%, transparent); }
+html[data-material='glass'] .mx-lg-pill {
+  --lg-fill: color-mix(in oklch, var(--primary) 16%, transparent);
+  --lg-drop: 0 4px 14px -6px color-mix(in oklch, var(--primary) 45%, transparent);
+}
+html[data-material='glass'] .mx-lg:focus-within:has(textarea) { border-color: var(--ring); }
+@media (prefers-reduced-transparency: reduce) {
+  html[data-material='glass'] :is(.mx-lg, .mx-lg-btn, .mx-lg-pill) { --lg-fill: var(--card); }
+}
+
 @theme inline {
   /* chosen in Settings > General (src/lib/fonts.ts sets --mx-font-* on <html>) */
   --font-sans: var(--mx-font-sans, 'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif);
@@ -244,6 +292,8 @@ html[data-material='glass'] .mx-glass {
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
+  --color-fill-1: var(--fill-1);
+  --color-sunken: var(--sunken);
   --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);

@@ -36,7 +36,7 @@ export function CopyBar({ session, running, onAsk }: { session: Session; running
   if (!wt) return null
   if (wt.removed) {
     return wt.kept_branch ? (
-      <div className="flex items-center gap-2 border-t bg-muted/40 px-3 py-1 text-[11px] text-muted-foreground" data-testid="copy-bar">
+      <div className="flex items-center gap-2 border-t bg-muted px-3 py-1 text-[11px] text-muted-foreground" data-testid="copy-bar">
         <FolderGit2 className="size-3.5 shrink-0" />
         <span className="min-w-0 truncate"><Sensitive>{t('copy.goneKept', { branch: wt.kept_branch })}</Sensitive></span>
       </div>
@@ -74,7 +74,7 @@ export function CopyBar({ session, running, onAsk }: { session: Session; running
     }
   }
   return (
-    <div className="flex min-w-0 items-center gap-2 border-t bg-muted/40 px-3 py-1 text-[12px]" data-testid="copy-bar">
+    <div className="flex min-w-0 items-center gap-2 border-t bg-muted px-3 py-1 text-[12px]" data-testid="copy-bar">
       <Tooltip
         content={
           <span className="grid max-w-80 gap-0.5 text-[11px]">

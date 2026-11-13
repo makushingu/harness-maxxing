@@ -317,7 +317,7 @@ export function SessionPreviewCard({
         ) : (
           <div className="grid gap-2.5">
             {user ? (
-              <div className="rounded-md bg-muted/60 px-2.5 py-1.5">
+              <div className="rounded-md bg-muted px-2.5 py-1.5">
                 <p className="text-[10px] font-medium tracking-wide text-muted-foreground uppercase">{t('shell.preview.you')}</p>
                 <p className={`${running ? 'line-clamp-1' : 'line-clamp-3'} break-words whitespace-pre-line`}>
                   <Sensitive length={20}>{plain(user)}</Sensitive>
@@ -339,7 +339,7 @@ export function SessionPreviewCard({
       </div>
       {running && (
         // the thread's own bottom rows while Claude works; until its chunk is there, the current tool alone
-        <div className="flex max-h-[176px] shrink-0 flex-col justify-end overflow-hidden border-t bg-muted/30 px-3 pt-2 pb-0.5">
+        <div className="flex max-h-[176px] shrink-0 flex-col justify-end overflow-hidden border-t bg-fill-1 px-3 pt-2 pb-0.5">
           <React.Suspense fallback={nowLine}>
             {streamOn ? <PreviewWorking session={session} /> : nowLine}
           </React.Suspense>

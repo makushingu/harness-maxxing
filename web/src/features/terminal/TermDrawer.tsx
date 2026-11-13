@@ -122,7 +122,7 @@ export default function TermDrawer({ sid, places, onQuote, onHide }: { sid: stri
               key={id}
               role="tab"
               aria-selected={id === active}
-              className={cn('group/tab flex h-7 shrink-0 items-center gap-1 rounded-md pr-0.5 pl-2 text-xs pointer-coarse:h-10', id === active ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-accent/60')}
+              className={cn('group/tab flex h-7 shrink-0 items-center gap-1 rounded-md pr-0.5 pl-2 text-xs pointer-coarse:h-10', id === active ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-muted')}
             >
               <button type="button" className="max-w-36 truncate outline-none" onClick={() => ui().setActive(sid, id)}>
                 <Sensitive>{title(id)}</Sensitive>
@@ -315,7 +315,7 @@ function KeyBar({ send }: { send: (s: string) => void }) {
   return (
     <div className="flex shrink-0 gap-1 overflow-x-auto border-t px-1.5 py-1" data-testid="term-keys">
       {keys.map(([label, seq]) => (
-        <button key={label} type="button" onPointerDown={(e) => e.preventDefault()} onClick={() => send(seq)} className="h-9 min-w-10 shrink-0 rounded-md border bg-muted/40 px-2 font-mono text-xs active:bg-accent">
+        <button key={label} type="button" onPointerDown={(e) => e.preventDefault()} onClick={() => send(seq)} className="h-9 min-w-10 shrink-0 rounded-md border bg-muted px-2 font-mono text-xs active:bg-accent">
           {label}
         </button>
       ))}

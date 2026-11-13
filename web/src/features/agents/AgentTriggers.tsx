@@ -105,7 +105,7 @@ export function AgentTriggers({ agent: a, onMailSettings }: { agent: AgentDetail
                 </DropdownMenu>
               </div>
               {h && (
-                <div className="flex items-center gap-1 rounded-lg bg-muted/60 py-0.5 pr-0.5 pl-2">
+                <div className="flex items-center gap-1 rounded-lg bg-muted py-0.5 pr-0.5 pl-2">
                   <code className="min-w-0 flex-1 truncate font-mono text-[11px]" data-testid="agent-trigger-url">
                     <Sensitive>{h.url}</Sensitive>
                   </code>
@@ -141,7 +141,7 @@ export function AgentTriggers({ agent: a, onMailSettings }: { agent: AgentDetail
                 <details className="text-xs text-muted-foreground">
                   <summary className="cursor-pointer hover:text-foreground">{t('agents.when.howTo')}</summary>
                   <p className="mt-1">{t('agents.when.howToGeneric')}</p>
-                  <code className="mt-1 block rounded-md bg-muted/60 px-2 py-1 font-mono text-[11px] break-all">{'{"title": "…", "body": "…", "level": "info", "id": "unique-id"}'}</code>
+                  <code className="mt-1 block rounded-md bg-muted px-2 py-1 font-mono text-[11px] break-all">{'{"title": "…", "body": "…", "level": "info", "id": "unique-id"}'}</code>
                 </details>
               )}
             </div>
@@ -154,7 +154,7 @@ export function AgentTriggers({ agent: a, onMailSettings }: { agent: AgentDetail
             key={g.account}
             type="button"
             onClick={onMailSettings}
-            className="flex items-center gap-2 rounded-xl border bg-card px-3 py-2.5 text-left hover:bg-accent/50"
+            className="flex items-center gap-2 rounded-xl border bg-card px-3 py-2.5 text-left hover:bg-muted"
             data-testid="agent-mail-trigger-row"
           >
             <Mail className="size-4 shrink-0 text-primary" />

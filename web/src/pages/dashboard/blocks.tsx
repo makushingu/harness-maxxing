@@ -150,7 +150,7 @@ function LaneTrack({ lane, b, i, width }: { lane: Lane; b: TimelineBlock; i: num
   const toneOf = (st: string) => (st === 'error' ? 'var(--color-destructive)' : st === 'ok' ? 'var(--color-success)' : color)
   const vars = (e: { at: number }) => ({ '--i': Math.min(i, 10), '--x': Math.round(pct(e.at, b)), left: `${pct(e.at, b)}%` })
   return (
-    <div data-track className="relative h-7 rounded-md bg-muted/40">
+    <div data-track className="relative h-7 rounded-md bg-muted">
       {mode !== 'band' && (
         <div
           className="mx-sweep absolute inset-x-1 top-1/2 h-px -translate-y-1/2"
@@ -329,11 +329,11 @@ export function BlockView({ block }: { block: Block }) {
                   )}
                 </>
               )
-              const cls = 'group flex h-full items-center gap-3 rounded-lg border bg-background/40 px-3 py-2.5'
+              const cls = 'group flex h-full items-center gap-3 rounded-lg border bg-sunken px-3 py-2.5'
               return (
                 <li key={i} {...rise(i)}>
                   {it.href ? (
-                    <SmartLink href={it.href} className={cn(cls, 'outline-none transition-colors hover:border-primary/50 hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring')}>
+                    <SmartLink href={it.href} className={cn(cls, 'outline-none transition-colors hover:border-primary/50 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring')}>
                       {inner}
                     </SmartLink>
                   ) : (
@@ -391,7 +391,7 @@ export function BlockView({ block }: { block: Block }) {
       )
     case 'chart':
       return (
-        <Sensitive placeholder={<div className="h-[140px] rounded-lg bg-muted/50" />}>
+        <Sensitive placeholder={<div className="h-[140px] rounded-lg bg-muted" />}>
           <Chart kind={block.kind} series={block.series} unit={block.unit} />
         </Sensitive>
       )

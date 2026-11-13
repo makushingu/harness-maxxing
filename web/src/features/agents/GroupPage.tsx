@@ -255,7 +255,7 @@ function MemberBar({ group: g, onMention }: { group: AgentGroup; onMention: (slu
                 <DropdownMenuTrigger asChild>
                   <button
                     type="button"
-                    className={cn('flex min-w-0 items-center gap-1.5 rounded-full py-0.5 pr-2.5 pl-0.5 text-left outline-none hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring', touch && 'min-h-10 pl-1', (m.paused || !m.exists) && 'opacity-55')}
+                    className={cn('flex min-w-0 items-center gap-1.5 rounded-full py-0.5 pr-2.5 pl-0.5 text-left outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring', touch && 'min-h-10 pl-1', (m.paused || !m.exists) && 'opacity-55')}
                     aria-label={m.display_name}
                   >
                     <AgentAvatarIcon avatar={m.avatar} size={touch ? 28 : 24} />

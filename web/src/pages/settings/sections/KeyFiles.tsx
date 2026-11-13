@@ -246,7 +246,7 @@ function FileRow({ f, onEdit }: { f: SecretFile; onEdit: () => void }) {
         </span>
         {f.sha256 && (
           // the server gives the start of the SHA-256 only (12 hex characters): shown as is
-          <code className="shrink-0 rounded-md bg-muted/60 px-2 py-1 font-mono text-xs" title="SHA-256">
+          <code className="shrink-0 rounded-md bg-muted px-2 py-1 font-mono text-xs" title="SHA-256">
             {f.sha256}
           </code>
         )}
@@ -297,7 +297,7 @@ export function KeyFilesCard() {
           <EmptyState compact icon={FileKey} title={t('keyfiles.empty')} description={t('keyfiles.emptyDesc')} />
         ) : (
           <>
-            <div className="hidden grid-cols-[minmax(0,1.2fr)_minmax(0,1.4fr)_auto_auto] gap-4 border-y bg-muted/30 px-4 py-2 text-xs font-medium text-muted-foreground md:grid">
+            <div className="hidden grid-cols-[minmax(0,1.2fr)_minmax(0,1.4fr)_auto_auto] gap-4 border-y bg-fill-1 px-4 py-2 text-xs font-medium text-muted-foreground md:grid">
               <span>{t('keys.name')}</span>
               <span>{t('keyfiles.file')}</span>
               <span>{t('keys.exposeShort')}</span>

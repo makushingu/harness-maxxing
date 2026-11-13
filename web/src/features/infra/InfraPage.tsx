@@ -79,7 +79,7 @@ function InfraNav({ tab, onTab, items, search }: { tab: Tab; onTab: (t: Tab) => 
                   onClick={() => onTab(e.id)}
                   aria-current={tab === e.id ? 'page' : undefined}
                   className={cn(
-                    'relative flex h-9 w-full flex-col justify-center rounded-md px-2.5 text-sm text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground pointer-coarse:h-11',
+                    'relative flex h-9 w-full flex-col justify-center rounded-md px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground pointer-coarse:h-11',
                     tab === e.id && 'bg-accent font-medium text-foreground hover:bg-accent',
                   )}
                   data-testid={`infra-tab-${e.id}`}
@@ -439,7 +439,7 @@ function Detail({ r, v, byId, onOpen, projects }: { r: InfraResource; v: InfraVi
                 const LIcon = KIND_ICON[l.kind]
                 return (
                   <li key={l.id}>
-                    <button type="button" onClick={() => onOpen(l.id)} className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-[13px] hover:bg-accent/60">
+                    <button type="button" onClick={() => onOpen(l.id)} className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-[13px] hover:bg-muted">
                       <StatusDot tone={STATUS_TONE[l.status]} />
                       <LIcon className="size-3.5 text-muted-foreground" />
                       <span className="truncate">

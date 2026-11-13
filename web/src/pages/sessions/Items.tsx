@@ -671,12 +671,12 @@ function ToolCard({ item, live }: { item: Extract<Item, { kind: 'tool' }>; live:
   const full = file && FILE_TOOLS.has(use.name) ? file : use.summary.startsWith(use.name) ? use.summary.slice(use.name.length).replace(/^[:\s]+/, '') : use.summary
   const summary = file && FILE_TOOLS.has(use.name) ? relPath(file, bases) : relPaths(full, bases)
   return (
-    <div ref={root} className={cn('min-w-0 overflow-hidden rounded-lg border bg-card/60 text-[13px]', err && 'border-destructive/40')}>
+    <div ref={root} className={cn('min-w-0 overflow-hidden rounded-lg border bg-card text-[13px]', err && 'border-destructive/40')}>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        className="flex h-8 w-full min-w-0 items-center gap-2 px-2.5 text-left hover:bg-accent/60 focus-visible:bg-accent focus-visible:outline-none max-md:h-10"
+        className="flex h-8 w-full min-w-0 items-center gap-2 px-2.5 text-left hover:bg-muted focus-visible:bg-accent focus-visible:outline-none max-md:h-10"
       >
         <Icon className={cn('size-3.5 shrink-0', err ? 'text-destructive' : 'text-muted-foreground')} />
         <span className="shrink-0 font-medium">{name}</span>
@@ -698,7 +698,7 @@ function ToolCard({ item, live }: { item: Extract<Item, { kind: 'tool' }>; live:
       </button>
       {authServer && <McpAuthButton server={authServer} />}
       {open && (
-        <div className="grid gap-2 border-t bg-background/40 p-2.5">
+        <div className="grid gap-2 border-t bg-sunken p-2.5">
           <Sensitive block>
             {task && status && <TaskDetails task={task} status={status} />}
             <ToolInput name={use.name} input={input} diff={diff} display={file ? relPath(file, bases) : null} />
@@ -752,7 +752,7 @@ export function ToolInput({ name, input, diff, display }: { name: string; input:
       {diff ? (
         <DiffView lines={diff} />
       ) : name === 'Bash' && typeof input.command === 'string' ? (
-        <pre className="overflow-x-auto rounded-md bg-muted/60 px-2.5 py-2 font-mono text-[12px] leading-relaxed whitespace-pre-wrap">
+        <pre className="overflow-x-auto rounded-md bg-muted px-2.5 py-2 font-mono text-[12px] leading-relaxed whitespace-pre-wrap">
           <span className="text-muted-foreground select-none">$ </span>
           {input.command}
         </pre>
@@ -766,7 +766,7 @@ export function ToolInput({ name, input, diff, display }: { name: string; input:
           ))}
         </ul>
       ) : !file || Object.keys(input).length > 1 ? (
-        <pre className="max-h-64 overflow-auto rounded-md bg-muted/60 px-2.5 py-2 font-mono text-[12px] leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]">{JSON.stringify(input, null, 2)}</pre>
+        <pre className="max-h-64 overflow-auto rounded-md bg-muted px-2.5 py-2 font-mono text-[12px] leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]">{JSON.stringify(input, null, 2)}</pre>
       ) : null}
     </div>
   )
@@ -795,7 +795,7 @@ export function DiffView({ lines }: { lines: DiffLine[] }) {
   const [all, setAll] = React.useState(false)
   const shown = all || lines.length <= DIFF_ROWS ? lines : lines.slice(0, DIFF_ROWS)
   return (
-    <div className="max-h-96 overflow-auto rounded-md border bg-muted/30 font-mono text-[12px] leading-[1.55]">
+    <div className="max-h-96 overflow-auto rounded-md border bg-fill-1 font-mono text-[12px] leading-[1.55]">
       {shown.map((l, i) => (
         <div
           key={i}
@@ -828,7 +828,7 @@ function ToolOutput({ text, error }: { text: string; error: boolean }) {
   return (
     <div className="group/msg relative grid gap-1">
       <MessageGrip text={text} className="absolute top-1 right-1 bg-muted" />
-      <pre className={cn('max-h-80 overflow-auto rounded-md px-2.5 py-2 font-mono text-[12px] leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]', error ? 'bg-destructive/10 text-destructive' : 'bg-muted/60')}>
+      <pre className={cn('max-h-80 overflow-auto rounded-md px-2.5 py-2 font-mono text-[12px] leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]', error ? 'bg-destructive/10 text-destructive' : 'bg-muted')}>
         {shown}
         {long && !all && '…'}
       </pre>

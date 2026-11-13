@@ -93,7 +93,7 @@ export function SeenByLine({ list }: { list?: MailSeenBy[] }) {
   const lang = useLang()
   if (!list?.length) return null
   return (
-    <div className="grid gap-1 rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground" data-testid="mail-seen-line">
+    <div className="grid gap-1 rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground" data-testid="mail-seen-line">
       {byAgent(list).map((g) => {
         const m = AGENT_PATH_RE.exec(g.agent)
         const name = <Sensitive length={6}>{g.name}</Sensitive>

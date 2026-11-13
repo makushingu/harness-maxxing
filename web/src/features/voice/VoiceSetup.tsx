@@ -323,7 +323,7 @@ export function RecordTest({ status }: { status: VoiceStatus }) {
       </div>
       {err && <Callout tone="error">{err}</Callout>}
       {res && (
-        <div className="grid gap-2 rounded-lg border bg-muted/30 p-3.5" data-voice-result>
+        <div className="grid gap-2 rounded-lg border bg-fill-1 p-3.5" data-voice-result>
           <p className="text-sm whitespace-pre-wrap">{res.text || <span className="text-muted-foreground">{t('voice.noSpeech')}</span>}</p>
           <p className="flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-muted-foreground tabular-nums">
             <span>{t('voice.stat.audio', { s: res.duration_s.toFixed(1) })}</span>

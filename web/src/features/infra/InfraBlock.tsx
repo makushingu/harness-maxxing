@@ -86,7 +86,7 @@ export function InfraBlock({ code, className }: { code: string; className?: stri
           {items.map((r) => {
             const Icon = KIND_ICON[r.kind]
             return (
-              <li key={r.id} className="flex min-w-0 items-center gap-2 rounded-md px-1.5 py-1 text-[13px] hover:bg-accent/50">
+              <li key={r.id} className="flex min-w-0 items-center gap-2 rounded-md px-1.5 py-1 text-[13px] hover:bg-muted">
                 <StatusDot tone={STATUS_TONE[r.status]} label={statusText(r, t)} />
                 <Icon className="size-3.5 shrink-0 text-muted-foreground" />
                 <Link to={`/infra?id=${encodeURIComponent(r.id)}`} className="truncate font-medium text-foreground no-underline hover:underline">

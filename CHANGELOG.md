@@ -10,10 +10,15 @@ Changed:
   no longer share the same background: the sidebar is the darkest (the lightest grey in light mode), the list is one
   step lighter, and the page sits in a panel with rounded corners; cards, menus and dialogs each come one step
   nearer. The same steps apply everywhere, with the neutral or tinted background and every accent color.
+- **Hovered and selected rows look the same everywhere.** Light fills (hover, selection, quiet zones) are now three
+  shades of the text color instead of a different grey on each screen, so a row reacts the same in the sidebar, a
+  list, the page or a card.
 
 Added:
 - **Glass material** (Settings -> Appearance -> Material): the bars, menus, dialogs and the search window become
-  see-through and blurred over a soft backdrop in your accent color, in dark and light mode. Solid stays the default.
+  see-through and blurred over a soft backdrop in your accent color, in dark and light mode; cards, the message box,
+  buttons and the selected row become liquid glass (a see-through fill with a bright edge and a sheen, the selection
+  tinted by your accent). Solid stays the default.
 
 ## 2.0.0-alpha.149 - 2026-11-13
 

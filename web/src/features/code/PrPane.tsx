@@ -204,7 +204,7 @@ function Conversation({ pr }: { pr: Pull }) {
     <div className="grid gap-3" data-testid="pr-conversation">
       {pr.outside && <p className="rounded-lg border border-warning/30 bg-warning/8 px-3 py-2 text-[13px]">{t('pr.outsideBanner')}</p>}
       <article className="rounded-lg border">
-        <header className="flex items-center gap-2 border-b bg-muted/30 px-3 py-1.5 text-xs text-muted-foreground">
+        <header className="flex items-center gap-2 border-b bg-fill-1 px-3 py-1.5 text-xs text-muted-foreground">
           <Sensitive><span className="font-medium text-foreground">{pr.author.login}</span></Sensitive>
           <span>{fmtRelative(pr.created, lang)}</span>
           <span className="ml-auto inline-flex items-center gap-1 font-mono text-[11px]"><GitBranch className="size-3" /><Sensitive>{`${pr.head} → ${pr.base}`}</Sensitive></span>
@@ -215,7 +215,7 @@ function Conversation({ pr }: { pr: Pull }) {
       </article>
       {pr.conversation.map((e) => (
         <article key={`${e.kind}-${e.id}`} className="rounded-lg border">
-          <header className="flex items-center gap-2 border-b bg-muted/30 px-3 py-1.5 text-xs text-muted-foreground">
+          <header className="flex items-center gap-2 border-b bg-fill-1 px-3 py-1.5 text-xs text-muted-foreground">
             <Sensitive><span className="font-medium text-foreground">{e.author.login}</span></Sensitive>
             {e.kind === 'review' && e.state && <ReviewState state={e.state} />}
             <span className="ml-auto">{fmtRelative(e.at, lang)}</span>

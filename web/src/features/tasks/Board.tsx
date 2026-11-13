@@ -282,7 +282,7 @@ export function TaskBoard({ columns, projects, today, layout = 'grid', hideProje
               aria-label={col.label}
               data-column={col.id}
               className={cn(
-                'flex w-[84vw] max-w-[360px] shrink-0 snap-start flex-col rounded-xl border bg-muted/25',
+                'flex w-[84vw] max-w-[360px] shrink-0 snap-start flex-col rounded-xl border bg-fill-1',
                 grid ? 'md:w-auto md:max-w-none' : 'md:w-64',
                 col.tone === 'danger' && all.length > 0 && 'border-destructive/30',
                 drag && col.droppable === false && 'opacity-60',

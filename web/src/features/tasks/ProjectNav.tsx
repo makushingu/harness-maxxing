@@ -107,7 +107,7 @@ function ProjectEntry({ project, emoji, stats, active, onClick }: { project: Tas
     </>
   )
   return (
-    <div {...ctx.props} className={cn('group/entry relative flex items-center rounded-md', active ? 'bg-accent' : 'hover:bg-accent/60', project.hidden && 'opacity-60')}>
+    <div {...ctx.props} className={cn('group/entry relative flex items-center rounded-md', active ? 'bg-accent' : 'hover:bg-muted', project.hidden && 'opacity-60')}>
       <button
         type="button"
         onClick={onClick}

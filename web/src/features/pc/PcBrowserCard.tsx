@@ -112,7 +112,7 @@ function Setup({ s, onDone, canCancel }: { s: PcStatus; onDone: () => void; canC
         </div>
         <div className="grid grid-cols-[minmax(0,1fr)] gap-1.5">
           <p className="text-[13px] text-muted-foreground">{t(os === 'windows' ? 'pc.orCommandWin' : 'pc.orCommand')}</p>
-          <div className="flex min-w-0 items-center gap-2 rounded-lg border bg-muted/40 px-3 py-2">
+          <div className="flex min-w-0 items-center gap-2 rounded-lg border bg-muted px-3 py-2">
             <code className="min-w-0 flex-1 truncate font-mono text-xs">{pairing.commands[os]}</code>
             <CopyButton text={pairing.commands[os]} />
           </div>

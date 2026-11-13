@@ -45,7 +45,7 @@ export function Segmented<T extends string>({
             className={cn(
               'inline-flex items-center justify-center gap-1.5 rounded-md px-3 font-medium whitespace-nowrap text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring [&_svg]:size-4',
               size === 'sm' ? 'h-7 text-[13px] max-md:h-10 pointer-coarse:h-10' : 'h-7 text-sm max-md:h-10 pointer-coarse:h-10',
-              active && 'bg-background text-foreground shadow-xs dark:bg-secondary',
+              active && 'mx-lg-pill bg-background text-foreground shadow-xs dark:bg-secondary',
             )}
           >
             {o.icon}

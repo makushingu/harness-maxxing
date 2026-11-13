@@ -346,7 +346,7 @@ export function SelectionBar({ entries, actions, onSelectAll, onClear, total, cl
   const download = useDownloadEntries()
   if (!entries.length) return null
   return (
-    <div role="toolbar" aria-label={t('files.sel.bar')} className={cn('flex shrink-0 items-center gap-1 border-b bg-accent/40 px-2 py-1.5 animate-in', className)} data-testid="selection-bar">
+    <div role="toolbar" aria-label={t('files.sel.bar')} className={cn('flex shrink-0 items-center gap-1 border-b bg-muted px-2 py-1.5 animate-in', className)} data-testid="selection-bar">
       <Tooltip content={t('files.sel.clear')}>
         <Button variant="ghost" size="icon-sm" onClick={onClear} aria-label={t('files.sel.clear')} data-testid="sel-clear">
           <X />
@@ -403,7 +403,7 @@ export function SelectCheck({ checked, className }: { checked: boolean; classNam
       aria-hidden
       className={cn(
         'pointer-events-none items-center justify-center rounded-full border-2 transition-colors',
-        checked ? 'flex border-primary bg-primary text-primary-foreground' : 'hidden border-foreground/40 bg-background/80 group-data-[selecting]/sel:flex',
+        checked ? 'flex border-primary bg-primary text-primary-foreground' : 'hidden border-foreground/40 bg-sunken group-data-[selecting]/sel:flex',
         className,
       )}
     >

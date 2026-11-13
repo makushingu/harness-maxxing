@@ -133,8 +133,8 @@ function LogsCard() {
         </div>
       }
     >
-      <Sensitive block placeholder={<div className="h-80 rounded-lg bg-muted/60" />}>
-        <pre ref={box} className={cn('h-80 overflow-auto rounded-lg border bg-muted/30 p-3 font-mono text-[12px] leading-relaxed whitespace-pre-wrap break-all', isLoading && 'animate-shimmer')}>
+      <Sensitive block placeholder={<div className="h-80 rounded-lg bg-muted" />}>
+        <pre ref={box} className={cn('h-80 overflow-auto rounded-lg border bg-fill-1 p-3 font-mono text-[12px] leading-relaxed whitespace-pre-wrap break-all', isLoading && 'animate-shimmer')}>
           {data?.lines.length ? data.lines.join('\n') : isLoading ? '' : t('system.noLogs')}
         </pre>
       </Sensitive>

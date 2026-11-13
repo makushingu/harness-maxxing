@@ -467,7 +467,7 @@ export function GroupForm({
           <button
             type="button"
             onClick={withClaude}
-            className="flex items-start gap-3 rounded-xl border bg-card p-3 text-left transition-colors hover:border-primary/40 hover:bg-accent/40"
+            className="flex items-start gap-3 rounded-xl border bg-card p-3 text-left transition-colors hover:border-primary/40 hover:bg-muted"
             data-testid="group-with-claude"
           >
             <Sparkles className="mt-0.5 size-5 shrink-0 text-primary" />

@@ -115,7 +115,7 @@ function LocalRow({ r, root, onOpen }: { r: GitLocalRepo; root: string; onOpen: 
   const rel = r.path.startsWith(root + '/') ? r.path.slice(root.length + 1) : r.path
   return (
     <li>
-      <button type="button" onClick={onOpen} className="flex h-full w-full items-start gap-3 rounded-xl border bg-card p-3.5 text-left transition-colors hover:border-primary/40 hover:bg-accent/40" data-testid="git-local">
+      <button type="button" onClick={onOpen} className="flex h-full w-full items-start gap-3 rounded-xl border bg-card p-3.5 text-left transition-colors hover:border-primary/40 hover:bg-muted" data-testid="git-local">
         <FolderGit2 className="mt-0.5 size-5 shrink-0 text-primary" />
         <div className="grid min-w-0 flex-1 gap-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -161,7 +161,7 @@ function GithubRow({ r, onOpen }: { r: GitHubRepo; onOpen: () => void }) {
   const lang = useLang()
   return (
     <li>
-      <button type="button" onClick={onOpen} className="flex h-full w-full items-start gap-3 rounded-xl border bg-card p-3.5 text-left transition-colors hover:border-primary/40 hover:bg-accent/40" data-testid="git-github">
+      <button type="button" onClick={onOpen} className="flex h-full w-full items-start gap-3 rounded-xl border bg-card p-3.5 text-left transition-colors hover:border-primary/40 hover:bg-muted" data-testid="git-github">
         <Github className="mt-0.5 size-5 shrink-0 text-primary" />
         <div className="grid min-w-0 flex-1 gap-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -504,7 +504,7 @@ function PullList({ repo, wide }: { repo: string; wide: boolean }) {
         <ul className="grid grid-cols-[minmax(0,1fr)] gap-1.5">
           {list.map((p) => (
             <li key={p.number}>
-              <button type="button" onClick={() => void openPr(repo.slice(7), p.number)} className="grid w-full grid-cols-[minmax(0,1fr)] gap-0.5 rounded-md p-1.5 text-left text-[13px] hover:bg-accent/60" data-testid="git-pull">
+              <button type="button" onClick={() => void openPr(repo.slice(7), p.number)} className="grid w-full grid-cols-[minmax(0,1fr)] gap-0.5 rounded-md p-1.5 text-left text-[13px] hover:bg-muted" data-testid="git-pull">
                 <span className="flex min-w-0 items-center gap-1.5">
                   <span className="truncate">
                     <span className="text-muted-foreground">#{p.number}</span> {p.title}
@@ -546,7 +546,7 @@ function CopyList({ clone }: { clone: string }) {
       <ul className="grid grid-cols-[minmax(0,1fr)] gap-1.5">
         {list.map((c) => (
           <li key={c.sid}>
-            <button type="button" onClick={() => navigate(`/sessions/${c.sid}`)} className="grid w-full grid-cols-[minmax(0,1fr)] gap-0.5 rounded-md p-1.5 text-left text-[13px] hover:bg-accent/60">
+            <button type="button" onClick={() => navigate(`/sessions/${c.sid}`)} className="grid w-full grid-cols-[minmax(0,1fr)] gap-0.5 rounded-md p-1.5 text-left text-[13px] hover:bg-muted">
               <span className="truncate">{c.title}</span>
               <span className="flex min-w-0 items-center gap-1 font-mono text-[11px] text-muted-foreground">
                 <GitBranch className="size-3 shrink-0" />

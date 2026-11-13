@@ -560,7 +560,7 @@ function BoardSkeleton() {
   return (
     <div className="grid gap-4 md:grid-cols-3" aria-hidden>
       {[3, 2, 2].map((n, i) => (
-        <div key={i} className="grid content-start gap-2 rounded-xl border bg-muted/25 p-2 max-md:hidden first:max-md:grid">
+        <div key={i} className="grid content-start gap-2 rounded-xl border bg-fill-1 p-2 max-md:hidden first:max-md:grid">
           <Skeleton className="m-1 h-5 w-24" />
           {Array.from({ length: n }, (_, j) => (
             <Skeleton key={j} className="h-[68px] rounded-lg" />

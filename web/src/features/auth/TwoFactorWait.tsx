@@ -87,7 +87,7 @@ export function TwoFactorWait({ challenge, trustOption = false, onDone }: { chal
   const mm = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`
   return (
     <div className="grid gap-5">
-      <div className="flex gap-3 rounded-lg border bg-muted/40 p-4 text-sm">
+      <div className="flex gap-3 rounded-lg border bg-muted p-4 text-sm">
         <Send className="mt-0.5 size-5 shrink-0 text-primary" />
         <div className="grid gap-1">
           <p className="font-medium">{t('twofa.check')}</p>

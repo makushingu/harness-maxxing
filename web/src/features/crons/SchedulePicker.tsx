@@ -177,7 +177,7 @@ export function SchedulePreview({ schedule }: { schedule: string }) {
   const q = useCronPreview(debounced)
   const p = debounced ? q.data : undefined
   return (
-    <div className="min-h-[164px] rounded-lg border bg-muted/30 p-3 text-sm" aria-live="polite" data-testid="cron-preview">
+    <div className="min-h-[164px] rounded-lg border bg-fill-1 p-3 text-sm" aria-live="polite" data-testid="cron-preview">
       {!debounced ? (
         <p className="text-muted-foreground">{t('crons.previewEmpty')}</p>
       ) : !p ? (
@@ -229,7 +229,7 @@ export function OncePreview({ onceAt }: { onceAt: string }) {
   const p = debounced ? q.data : undefined
   const at = p?.valid ? p.next[0] : undefined
   return (
-    <div className="rounded-lg border bg-muted/30 p-3 text-sm" aria-live="polite" data-testid="cron-once-preview">
+    <div className="rounded-lg border bg-fill-1 p-3 text-sm" aria-live="polite" data-testid="cron-once-preview">
       {!debounced ? (
         <p className="text-muted-foreground">{t('crons.previewEmpty')}</p>
       ) : !p ? (

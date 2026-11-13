@@ -139,7 +139,7 @@ export function TabsBar({ sessions, onPick, className, compact }: { sessions: Se
               className={cn(
                 // computer: the chips share the bar with the page's actions - they narrow (down to 7rem) before the bar scrolls
                 'group flex h-8 max-w-56 max-md:max-w-44 max-md:shrink-0 md:min-w-28 items-center gap-1.5 rounded-full border pr-1 pl-2.5 pointer-coarse:h-10 pointer-coarse:pr-0 text-[13px] transition-colors',
-                on ? 'border-primary/50 bg-primary/10 text-foreground' : 'border-transparent bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground',
+                on ? 'border-primary/50 bg-primary/10 text-foreground' : 'border-transparent bg-muted text-muted-foreground hover:bg-muted hover:text-foreground',
               )}
               data-tab={c.key}
             >

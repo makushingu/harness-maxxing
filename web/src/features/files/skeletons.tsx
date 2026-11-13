@@ -71,7 +71,7 @@ function TableSkeleton() {
   return (
     <Wait className="overflow-hidden p-4" label="table">
       <div className="overflow-hidden rounded-lg border">
-        <div className="flex gap-4 border-b bg-muted/40 px-3 py-2.5">
+        <div className="flex gap-4 border-b bg-muted px-3 py-2.5">
           {cols.map((w, i) => (
             <Bone key={i} className="h-3 bg-muted-foreground/20" style={{ width: `${w}%` }} />
           ))}
@@ -103,7 +103,7 @@ function PictureSkeleton() {
 
 function PageSkeleton() {
   return (
-    <Wait className="flex items-start justify-center overflow-hidden bg-muted/40 p-4 [container-type:size] md:p-6" label="pdf">
+    <Wait className="flex items-start justify-center overflow-hidden bg-muted p-4 [container-type:size] md:p-6" label="pdf">
       <div
         className="grid content-start gap-2.5 rounded-sm border bg-card p-[7%] shadow-pop"
         style={{ width: 'min(34rem, 100cqw, calc((100cqh - 1rem) / 1.414))', aspectRatio: '1 / 1.414' }}

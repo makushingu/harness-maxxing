@@ -35,13 +35,13 @@ export function CopyButton({ text, className, label }: { text: string | (() => s
 export function CodeBlock({ code, language, className, inline, children }: { code: string; language?: string; className?: string; inline?: boolean; children?: React.ReactNode }) {
   if (inline)
     return (
-      <div className={cn('flex min-w-0 items-center gap-2 rounded-md border bg-muted/50 py-1 pr-1 pl-3 font-mono text-[13px]', className)}>
+      <div className={cn('flex min-w-0 items-center gap-2 rounded-md border bg-muted py-1 pr-1 pl-3 font-mono text-[13px]', className)}>
         <span className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap select-all">{code}</span>
         <CopyButton text={code} />
       </div>
     )
   return (
-    <div className={cn('group relative min-w-0 overflow-hidden rounded-lg border bg-muted/40', className)}>
+    <div className={cn('group relative min-w-0 overflow-hidden rounded-lg border bg-muted', className)}>
       {language && <div className="border-b px-3 py-1.5 font-mono text-[11px] text-muted-foreground uppercase">{language}</div>}
       <CopyButton text={code} className="absolute top-1.5 right-1.5 bg-popover opacity-0 group-hover:opacity-100 focus-visible:opacity-100 max-md:opacity-100 pointer-coarse:opacity-100" />
       <pre className="overflow-x-auto p-3 font-mono text-[12.5px] leading-relaxed">{children ?? <code>{code}</code>}</pre>

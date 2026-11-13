@@ -67,7 +67,7 @@ export function UpdatePlan({ v, onUpdate, updating }: { v: VersionInfo; onUpdate
   const adapt = p.verdict === 'adapt'
   return (
     <div className="grid gap-3" data-testid="preflight" data-verdict={p.verdict}>
-      <div className={cn('grid grid-cols-[minmax(0,1fr)] gap-2.5 rounded-lg border p-3.5', adapt ? 'border-warning/40 bg-warning/5' : 'bg-muted/30')}>
+      <div className={cn('grid grid-cols-[minmax(0,1fr)] gap-2.5 rounded-lg border p-3.5', adapt ? 'border-warning/40 bg-warning/5' : 'bg-fill-1')}>
         <div className="flex items-center gap-2 text-sm font-medium">
           {adapt ? <Wrench className="size-4 text-warning" /> : <ShieldCheck className="size-4 text-success" />}
           {adapt ? t('update.adaptTitle') : mine ? t('update.simpleTitleCustoms', { count: mine }) : t('update.simpleTitle')}

@@ -439,7 +439,7 @@ export function ImageView({ path, version, onPrev, onNext, position, className }
         }}
         {...pz.pan}
       >
-        <Sensitive placeholder={<div className="size-full rounded-lg bg-muted/60" aria-label={t('presentation.hidden')} />}>
+        <Sensitive placeholder={<div className="size-full rounded-lg bg-muted" aria-label={t('presentation.hidden')} />}>
           {!loaded && (
             // Instant placeholder: the cached thumbnail, blurred, at the size the image will have.
             <img src={thumb} alt="" aria-hidden draggable={false} className="pointer-events-none absolute inset-4 m-auto max-h-[calc(100%-2rem)] max-w-[calc(100%-2rem)] object-contain blur-md select-none" />
@@ -603,7 +603,7 @@ export function DiagramView({ code, className }: { code: string; className?: str
         onDoubleClick={(e) => toggle({ x: e.clientX, y: e.clientY })}
         {...pz.pan}
       >
-        <Sensitive placeholder={<div className="size-full rounded-lg bg-muted/60" aria-label={t('presentation.hidden')} />}>
+        <Sensitive placeholder={<div className="size-full rounded-lg bg-muted" aria-label={t('presentation.hidden')} />}>
           {html ? (
             <div
               data-zoomable
@@ -657,7 +657,7 @@ export function MediaView({ path, kind, version, className }: { path: string; ki
   if (failed) return <FileInfoCard path={path} reason={t('files.mediaError')} className={className} />
   return (
     <div className={cn('flex min-h-40 flex-1 items-center justify-center p-4 [container-type:size] md:p-6', className)}>
-      <Sensitive placeholder={<div className="aspect-video w-full max-w-3xl rounded-lg bg-muted/60" aria-label={t('presentation.hidden')} />}>
+      <Sensitive placeholder={<div className="aspect-video w-full max-w-3xl rounded-lg bg-muted" aria-label={t('presentation.hidden')} />}>
         <MediaPlayer key={path} path={path} kind={kind} version={version} onError={fail} />
       </Sensitive>
     </div>
@@ -669,8 +669,8 @@ export function PdfView({ path, className }: { path: string; className?: string 
   const t = useT()
   return (
     <div className={cn('flex min-h-0 flex-1 flex-col', className)}>
-      <Sensitive placeholder={<div className="m-4 flex-1 rounded-lg bg-muted/60" aria-label={t('presentation.hidden')} />}>
-        <iframe key={path} src={fileRawUrl(path)} title={basename(path)} className="min-h-0 w-full flex-1 border-0 bg-muted/30" />
+      <Sensitive placeholder={<div className="m-4 flex-1 rounded-lg bg-muted" aria-label={t('presentation.hidden')} />}>
+        <iframe key={path} src={fileRawUrl(path)} title={basename(path)} className="min-h-0 w-full flex-1 border-0 bg-fill-1" />
       </Sensitive>
       {/* Some browsers (most mobile ones) do not render PDFs inline: always offer a way out. */}
       <div className="flex shrink-0 items-center justify-end gap-1 border-t px-3 py-1.5">
@@ -715,7 +715,7 @@ export function FileInfoCard({
   return (
     <div className={cn('flex min-h-0 flex-1 items-center justify-center p-6', className)}>
       <div className="grid w-full max-w-sm justify-items-center gap-4 rounded-xl border bg-card p-6 text-center">
-        <div className="flex size-12 items-center justify-center rounded-xl border bg-muted/60 text-muted-foreground">
+        <div className="flex size-12 items-center justify-center rounded-xl border bg-muted text-muted-foreground">
           <Icon className="size-6" strokeWidth={1.6} />
         </div>
         <div className="grid min-w-0 gap-1">

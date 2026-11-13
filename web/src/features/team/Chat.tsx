@@ -106,13 +106,13 @@ export function ChatList({
               type="button"
               onClick={() => dm.open(id)}
               title={p.name}
-              className="flex w-14 shrink-0 flex-col items-center gap-1 rounded-lg py-1.5 transition-colors hover:bg-accent/60"
+              className="flex w-14 shrink-0 flex-col items-center gap-1 rounded-lg py-1.5 transition-colors hover:bg-muted"
             >
               <PersonAvatar person={p} size="lg" status />
               <span className="w-full truncate px-0.5 text-center text-[11px] text-muted-foreground">{p.name.split(' ')[0]}</span>
             </button>
           ))}
-          <button type="button" onClick={() => setAddOpen(true)} title={t('team.friends.add')} className="flex w-14 shrink-0 flex-col items-center gap-1 rounded-lg py-1.5 transition-colors hover:bg-accent/60">
+          <button type="button" onClick={() => setAddOpen(true)} title={t('team.friends.add')} className="flex w-14 shrink-0 flex-col items-center gap-1 rounded-lg py-1.5 transition-colors hover:bg-muted">
             <span className="inline-flex size-10 items-center justify-center rounded-full border border-dashed border-muted-foreground/40 text-muted-foreground">
               <UserPlus className="size-4" />
             </span>
@@ -133,7 +133,7 @@ export function ChatList({
                 data-chat-row={c.id}
                 onClick={() => onOpen(c.id)}
                 className={cn(
-                  'flex w-full min-w-0 items-center gap-3 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-accent/60',
+                  'flex w-full min-w-0 items-center gap-3 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-muted',
                   active === c.id && 'bg-accent',
                 )}
               >
@@ -406,7 +406,7 @@ export function ChatView({ team, chatId, onBack, compact, headerExtra, leading }
       {sel ? (
         <SelectBar count={sel.size} preset={preset} compact={compact} onPreset={choose} onNone={() => (setSel(new Set()), setPreset(null))} onCancel={() => setSel(null)} onRun={runSummary} />
       ) : failed ? null : chat.left ? (
-        <div className={cn('shrink-0 border-t bg-muted/30 text-center text-[13px] text-muted-foreground', compact ? 'p-3' : 'p-4')}>{t('team.group.leftNotice')}</div>
+        <div className={cn('shrink-0 border-t bg-fill-1 text-center text-[13px] text-muted-foreground', compact ? 'p-3' : 'p-4')}>{t('team.group.leftNotice')}</div>
       ) : (
         <Composer
           ref={composer}
@@ -470,7 +470,7 @@ function ChatHeader({ team, chat, title, compact, writing }: { team: TeamState |
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button type="button" className="-my-1 flex min-w-0 flex-1 items-center gap-2.5 rounded-lg py-1 pr-2 transition-colors hover:bg-accent/50">
+        <button type="button" className="-my-1 flex min-w-0 flex-1 items-center gap-2.5 rounded-lg py-1 pr-2 transition-colors hover:bg-muted">
           {face}
         </button>
       </PopoverTrigger>
@@ -685,7 +685,7 @@ function MessageRow({
       className={cn(
         'group/msg relative flex gap-2 rounded-xl outline-none',
         tight ? 'mt-0.5' : 'mt-3',
-        selecting && 'cursor-pointer select-none -mx-2 px-2 py-0.5 transition-colors hover:bg-accent/40',
+        selecting && 'cursor-pointer select-none -mx-2 px-2 py-0.5 transition-colors hover:bg-muted',
         selecting && selected && 'bg-primary/[0.07] hover:bg-primary/10',
       )}
       onClick={selecting ? (e) => onSelect(e.shiftKey) : undefined}
@@ -723,7 +723,7 @@ function MessageRow({
               <button
                 type="button"
                 onClick={() => document.getElementById(`tm-${m.reply_to}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
-                className={cn('flex max-w-full min-w-0 items-stretch gap-2 rounded-lg bg-muted/60 py-1 pr-2.5 pl-1 text-left text-[12px] hover:bg-muted', right && 'self-end')}
+                className={cn('flex max-w-full min-w-0 items-stretch gap-2 rounded-lg bg-muted py-1 pr-2.5 pl-1 text-left text-[12px] hover:bg-muted', right && 'self-end')}
               >
                 <span className="w-[3px] shrink-0 rounded-full bg-primary/60" />
                 <span className="min-w-0">
@@ -1164,7 +1164,7 @@ function Composer({
     <div className={cn('shrink-0 border-t bg-background', compact ? 'p-2' : 'px-4 py-3 md:px-8')}>
       <div className={cn('mx-auto flex flex-col rounded-xl border bg-card p-1.5 focus-within:border-primary/50', !compact && 'max-w-3xl')}>
         {(editing || replyTo) && (
-          <div className="mb-1 flex items-center gap-2 rounded-lg bg-muted/60 py-1 pr-1 pl-2 text-[12px]">
+          <div className="mb-1 flex items-center gap-2 rounded-lg bg-muted py-1 pr-1 pl-2 text-[12px]">
             {editing ? <Pencil className="size-3.5 shrink-0 text-primary" /> : <Reply className="size-3.5 shrink-0 text-primary" />}
             <span className="min-w-0 flex-1 truncate">
               <span className="font-medium">{editing ? t('team.msg.editing') : t('team.msg.replyingTo', { name: replyName })}</span>

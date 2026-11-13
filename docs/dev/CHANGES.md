@@ -14,6 +14,14 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   margin, `--shadow-panel`, desktop only), `mx-bar` (sticky headers), `mx-glass` (floating layers: popover, dropdown,
   select, dialog, alert dialog, sheet, palette, `/` menu, session preview). Light mode: hover/selected rows on the bars
   rise to white (`--accent` redefined under `.mx-frame, .mx-list`). Sidebar and second bar lost their right border.
+- Web, fills: `--fill-1` / `--muted` / `--accent` are now `color-mix` veils of `--foreground` (`--a-fill-1/2/3`:
+  3 / 5.5 / 8.5 % light, 3.5 / 6.5 / 10.5 % dark), `--sunken` = `--sidebar` at 60 %; utilities `bg-fill-1`,
+  `bg-sunken`. Codemod: `bg-muted/20-30` → `bg-fill-1`, `bg-muted/40-70` and `bg-accent/30-70` → `bg-muted`,
+  `bg-card/60` → `bg-card`, `bg-background/40-80` in quiet zones → `bg-sunken` (overlays over text kept). New test
+  `test_fills_come_from_the_scale`. `--secondary` stays solid.
+- Web, liquid glass (Glass material only): `.mx-lg` (Card, Composer box), `.mx-lg-btn` (button secondary/outline),
+  `.mx-lg-pill` (`navRow` active, `Segmented` active); vars `--lg-fill/-sheen/-rim-hi/-rim-lo/-rim-mid/-spec/-drop`;
+  the content panel goes to 58 % in glass so the wallpaper shows through the cards.
 - Web, material: `useUI().material` = `solid | glass` (localStorage `mx-ui`, mirrored by the `index.html` first-paint
   script as `html[data-material]`), Settings -> Appearance row. Glass = accent wallpaper on `.mx-shell`
   (`--wall-a/-b`), translucent `color-mix` on the classes above, `backdrop-filter` only on `.mx-bar` and `.mx-glass`

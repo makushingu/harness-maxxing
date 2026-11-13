@@ -57,7 +57,7 @@ function PrReviewBlock({ code, className }: { code: string; className?: string }
   }
   return (
     <div className={cn('overflow-hidden rounded-lg border', className)} data-testid="pr-review-block">
-      <div className="flex flex-wrap items-center gap-2 border-b bg-muted/30 px-3 py-2 text-[13px]">
+      <div className="flex flex-wrap items-center gap-2 border-b bg-fill-1 px-3 py-2 text-[13px]">
         <GitPullRequest className="size-4 text-muted-foreground" />
         <span className="font-medium">{t('pr.draftTitle')}</span>
         <button type="button" onClick={() => void openPr(r.repo, r.number)} className="text-muted-foreground hover:text-foreground hover:underline">

@@ -323,10 +323,10 @@ function AgentTile({ agent: a, index, layout }: { agent: Agent; index: number; l
       {...dnd.props}
       {...ctx.props}
       className={cn(
-        'group/tile relative grid cursor-pointer justify-items-center gap-3 rounded-xl border bg-card px-3 pt-5 pb-4 text-center transition-colors hover:border-primary/40 hover:bg-accent/30 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+        'group/tile relative grid cursor-pointer justify-items-center gap-3 rounded-xl border bg-card px-3 pt-5 pb-4 text-center transition-colors hover:border-primary/40 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
         dnd.dragging && 'opacity-50',
         dnd.side && 'border-primary',
-        current && 'border-primary bg-accent/30',
+        current && 'border-primary bg-muted',
       )}
       aria-current={current || undefined}
       data-testid="agent-card"

@@ -28,7 +28,7 @@ export function PlaceTag({ p, className }: { p: Place; className?: string }) {
 
 export function PlaceIcon({ p, className }: { p: Place; className?: string }) {
   return (
-    <span className={cn('grid size-7 shrink-0 place-items-center rounded-lg border bg-muted/60 text-muted-foreground', className)}>
+    <span className={cn('grid size-7 shrink-0 place-items-center rounded-lg border bg-muted text-muted-foreground', className)}>
       <p.icon className="size-3.5" />
     </span>
   )
@@ -48,7 +48,7 @@ export function ResourceRow({ r, byId, v, onOpen }: { r: InfraResource; byId: Ma
         onClick={onOpen}
         onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), onOpen())}
         className={cn(
-          'grid cursor-pointer grid-cols-[minmax(0,1fr)] items-center gap-x-4 gap-y-0.5 px-3.5 py-2 transition-colors hover:bg-accent/50 md:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)_13rem] pointer-coarse:py-2.5',
+          'grid cursor-pointer grid-cols-[minmax(0,1fr)] items-center gap-x-4 gap-y-0.5 px-3.5 py-2 transition-colors hover:bg-muted md:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)_13rem] pointer-coarse:py-2.5',
           r.hidden && 'opacity-60',
         )}
         data-testid="infra-row"
@@ -130,7 +130,7 @@ function PlaceGroup({ p, list, byId, v, onOpen, sub }: { p: Place; list: InfraRe
         ))}
       </ul>
       {sorted.length > shown.length && (
-        <button type="button" onClick={() => setAll(true)} className="w-full border-t px-3.5 py-2 text-left text-xs text-muted-foreground hover:bg-accent/50 hover:text-foreground">
+        <button type="button" onClick={() => setAll(true)} className="w-full border-t px-3.5 py-2 text-left text-xs text-muted-foreground hover:bg-muted hover:text-foreground">
           {t('infra.place.more', { count: sorted.length - shown.length })}
         </button>
       )}

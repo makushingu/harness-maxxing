@@ -314,7 +314,7 @@ export const Sidebar = React.memo(function Sidebar({ drawer }: { /** touch layou
                   type="button"
                   onClick={openPalette}
                   data-tour="palette"
-                  className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-md border bg-background/60 px-2.5 text-sm text-muted-foreground shadow-xs transition hover:border-ring/40 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none dark:bg-input/20"
+                  className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-md border bg-fill-1 px-2.5 text-sm text-muted-foreground shadow-xs transition hover:border-ring/40 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none dark:bg-input/20"
                   aria-label={t('palette.open')}
                 >
                   <Search className="size-4 shrink-0" strokeWidth={1.7} />

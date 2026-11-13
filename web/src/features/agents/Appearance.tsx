@@ -65,7 +65,7 @@ export function ProfileHead({ agent: a, className }: { agent: AgentDetail; class
         type="button"
         onClick={() => setOpen(true)}
         aria-label={t('agents.look.edit', { name: a.display_name })}
-        className={cn('group/head -m-1.5 flex min-w-0 items-center gap-3 rounded-xl p-1.5 text-left transition-colors hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none', className)}
+        className={cn('group/head -m-1.5 flex min-w-0 items-center gap-3 rounded-xl p-1.5 text-left transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none', className)}
         data-testid="agent-appearance-open"
       >
         <span className="relative shrink-0">

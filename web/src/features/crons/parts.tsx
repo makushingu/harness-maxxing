@@ -140,7 +140,7 @@ function RunRow({ run, tz, showName, defaultOpen }: { run: CronRun; tz?: string;
         type="button"
         onClick={() => hasOut && setOpen((o) => !o)}
         aria-expanded={hasOut ? open : undefined}
-        className={cn('flex min-h-11 items-center gap-2.5 px-3 py-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset', hasOut && 'hover:bg-accent/40')}
+        className={cn('flex min-h-11 items-center gap-2.5 px-3 py-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset', hasOut && 'hover:bg-muted')}
       >
         <StatusDot tone={run.ok ? 'ok' : 'error'} label={run.ok ? t('crons.ok') : t('crons.failed')} />
         <span className="grid min-w-0 flex-1 gap-0.5">

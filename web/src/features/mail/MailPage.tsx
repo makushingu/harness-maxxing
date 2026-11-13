@@ -111,7 +111,7 @@ function FolderList({ acc, folders, loading, error, current, onPick, newName, se
                     onClick={() => onPick(f.name)}
                     className={cn(
                       'flex h-8 w-full items-center gap-2 rounded-md pr-2 text-left text-[13px] transition-colors pointer-coarse:h-10',
-                      active ? 'bg-accent font-medium text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
+                      active ? 'bg-accent font-medium text-accent-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
                     )}
                     style={{ paddingLeft: 8 + depth(f) * 12 }}
                     title={f.role ? f.name : mask(f.name)}
@@ -177,7 +177,7 @@ function MailboxNav({ acc, all, accounts, folders, loading, error, current, onPi
   const row = (active: boolean) =>
     cn(
       'flex h-9 w-full min-w-0 items-center gap-2.5 rounded-md px-2.5 text-left text-[13px] transition-colors pointer-coarse:h-10',
-      active ? 'bg-accent font-medium text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
+      active ? 'bg-accent font-medium text-accent-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
     )
   return (
     <div className="flex min-h-0 flex-1 flex-col" data-testid="mail-boxes">
@@ -262,7 +262,7 @@ function Row({ m, selected, checked, onOpen, onCheck, menu }: { m: MailSummary; 
       {...ctx.props}
       className={cn(
         'group relative flex cursor-pointer items-start gap-2.5 border-b px-3 py-2.5 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
-        selected ? 'bg-accent' : checked ? 'bg-primary/5' : 'hover:bg-accent/40',
+        selected ? 'bg-accent' : checked ? 'bg-primary/5' : 'hover:bg-muted',
       )}
       onClick={onOpen}
       // the row opens with Enter / Space too (its checkbox keeps its own keys)

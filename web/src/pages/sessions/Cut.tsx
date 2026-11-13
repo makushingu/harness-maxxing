@@ -41,7 +41,7 @@ export function CutCard({ cut, last, children }: { cut: Cut; /** The thread ends
   const resumeText = t('cut.resumeText')
   const title = t(`cut.${kind}.title`)
   return (
-    <div role={last ? 'alert' : undefined} data-testid="cut-card" data-kind={kind} className="rounded-lg border bg-muted/30 text-xs">
+    <div role={last ? 'alert' : undefined} data-testid="cut-card" data-kind={kind} className="rounded-lg border bg-fill-1 text-xs">
       <div className="flex items-start gap-2.5 px-3 pt-2.5 pb-2">
         <Icon className={cn('mt-0.5 size-4 shrink-0', kind === 'error' ? 'text-destructive' : 'text-warning')} />
         <div className="min-w-0 flex-1">
@@ -73,7 +73,7 @@ export function CutCard({ cut, last, children }: { cut: Cut; /** The thread ends
             </div>
           ) : null}
           {open && lines && (
-            <pre className="mt-2 max-h-40 overflow-auto rounded-md bg-background/60 px-2.5 py-2 font-mono text-[11px] leading-4 whitespace-pre-wrap text-muted-foreground [overflow-wrap:anywhere]">
+            <pre className="mt-2 max-h-40 overflow-auto rounded-md bg-sunken px-2.5 py-2 font-mono text-[11px] leading-4 whitespace-pre-wrap text-muted-foreground [overflow-wrap:anywhere]">
               <Sensitive>{lines}</Sensitive>
             </pre>
           )}

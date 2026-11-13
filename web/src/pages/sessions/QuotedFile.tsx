@@ -21,7 +21,7 @@ export function QuotedFile({ path, className, draggable }: { path: string; class
       draggable={draggable}
       onClick={() => open(path)}
       title={path}
-      className={cn('flex max-w-full min-w-0 items-center gap-2 rounded-md text-left outline-none hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring', className)}
+      className={cn('flex max-w-full min-w-0 items-center gap-2 rounded-md text-left outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring', className)}
     >
       <span className="relative flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-muted">
         {media && !masked ? <Thumb path={path} w={160} loading="lazy" className="size-full object-cover" /> : <Icon className="size-4 text-muted-foreground" />}
