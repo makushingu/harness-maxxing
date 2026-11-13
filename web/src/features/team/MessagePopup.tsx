@@ -66,7 +66,7 @@ function MessagePopups() {
   const { data: team } = useTeam()
   if (!team) return null
   return (
-    <div className="w-full divide-y rounded-lg border" data-testid="team-popups">
+    <div className="w-full max-w-[min(356px,calc(100vw-16px))] divide-y rounded-lg border" data-testid="team-popups">
       {list.map((p) => {
         const chat = team.chats.find((c) => c.id === p.chat)
         return chat && <MessagePopup key={p.chat} team={team} chat={chat} popup={p} />
