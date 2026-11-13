@@ -21,10 +21,10 @@ export const navRow = (collapsed: boolean, active?: boolean) =>
     collapsed && 'h-11 justify-center px-0 [&>svg]:[transform:scale(1.1112)] [@media(max-height:820px)]:h-9',
   )
 
-/** An icon button of the sidebar's last line (Settings, theme, presentation mode, Help): same hover and focus as a row. */
+/** An icon button of the sidebar's last line (Settings, theme, presentation mode, Help): same hover and focus as a row; 40 px to the finger. */
 export const iconBtn = (active?: boolean) =>
   cn(
-    'flex size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-accent data-[state=open]:text-foreground [&_svg]:size-[18px] [&_svg]:[stroke-width:1.7]',
+    'flex size-9 shrink-0 items-center pointer-coarse:size-10 justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-accent data-[state=open]:text-foreground [&_svg]:size-[18px] [&_svg]:[stroke-width:1.7]',
     active && 'bg-accent text-foreground [&_svg]:text-primary [&_svg]:[stroke-width:2]',
   )
 
