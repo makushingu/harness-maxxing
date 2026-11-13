@@ -470,7 +470,8 @@ def status(meta: dict) -> dict:
     if not isinstance(wt, dict):
         raise GitError(404, "no_copy", "this session has no separate copy")
     keys = ("path", "repo", "branch", "base", "pr", "prepare", "env_copied", "included", "port", "created")
-    out = {**{k: wt.get(k) for k in keys},
+    from .prwatch import watching
+    out = {**{k: wt.get(k) for k in keys}, "watch": watching(wt),
            "exists": False, "removed": bool(wt.get("removed"))}
     folder = Path(str(wt.get("path") or ""))
     if wt.get("removed") or not folder.is_dir():

@@ -32,6 +32,19 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   (`PR_TEMPLATES`). `codediff.repo_head` reads `remote.origin.url` (no `insteadOf` rewrite, as `gitview` does).
 - Workspace template: `CLAUDE.md` (separate copy, PR view) and the help index line `35-code.md`: carried over by the
   upgrade note of the next version.
+- PR watch (`maxxing/prwatch.py`, loop in `api/code.py` startup, `MAXXING_PRWATCH_LOOP=0` in tests): `scan()` every
+  `INTERVAL`; events `checks:<sha>` (all checks of the head completed, some in `FAILED`), `conflict:<sha>`
+  (`mergeable` false / `dirty`), `c:` / `r:` / `l:<id>` (issue comments, reviews with a body or changes requested,
+  line comments; OWN_ROLES only, never bots nor `_my_logins`); one `send_message(..., source="github")` per round,
+  `MAX_WAKES` per `WAKE_WINDOW`, never while running; state `<state>/prwatch.json` (`seen`, `wakes`, `updated`,
+  `done_sha`, `new` = first sight is history). Meta `worktree.watch` (`PUT /api/sessions/{id}/copy/watch`), `watch`
+  in the copy status (false for a fork's / outsider's PR). Web: eye in `CopyBar`, source label `GitHub`.
+- PR text by Claude: `POST /api/code/pr-text` (`_pr_draft`, `PR_PROMPT`, `_conversation` reads `mx_user` and `result`
+  lines of the session log); `_ask_claude` shared with `_message`. The end window of a copy always opens for
+  "Open a PR" (title + description fields, filled once, typed text wins); `codeApi.pr(repo, {title, body})`.
+- Big diffs: `codediff.MAX_LINE_CHARS` cuts a very long line until "show all" (`cut`); PR files are parsed whole
+  (`parse_patch(full=True)`, the PR view has no "show all"); a text file without GitHub patch is `too_big` (not
+  `binary`), the PR view links to GitHub; `files_total` = `changed_files` when GitHub lists fewer.
 
 ## 2.0.0-alpha.147 - 2026-11-13
 

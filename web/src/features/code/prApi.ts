@@ -6,7 +6,7 @@ import type { Session } from '@/lib/types'
 import type { DiffLine } from './api'
 
 export type PrPerson = { login: string; avatar: string }
-export type PrFile = { path: string; old: string | null; status: 'A' | 'M' | 'D' | 'R' | 'C'; add: number; del: number; hunks: { head: string; o: number; n: number; lines: DiffLine[] }[]; binary: boolean; cut: boolean; lines: number }
+export type PrFile = { path: string; old: string | null; status: 'A' | 'M' | 'D' | 'R' | 'C'; add: number; del: number; hunks: { head: string; o: number; n: number; lines: DiffLine[] }[]; binary: boolean; cut: boolean; lines: number; /** A text file too big for GitHub to send its diff. */ too_big?: boolean }
 export type PrEntry = { kind: 'comment' | 'review'; id: number; author: PrPerson; body: string; state?: string; at: number; url?: string }
 export type PrLineComment = { id: number; path: string; line: number | null; side: 'LEFT' | 'RIGHT'; author: PrPerson; body: string; at: number; reply_to: number | null; outdated: boolean }
 export type PrCheck = { name: string; status: string | null; conclusion: string | null; url: string | null }

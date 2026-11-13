@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import re
@@ -261,20 +262,7 @@ def _message(body: MessageIn) -> dict:
         raise GitError(400, "nothing", "nothing to commit")
     recent = [c["subject"] for c in codediff.commits(r, None, 10, everything=True)] if codediff.head_sha(r) else []
     prompt = "Recent subjects:\n" + "\n".join(recent) + "\n\nDiff:\n" + d
-    cmd = [spawn.claude_bin(), "-p", "--output-format", "json", "--model", MESSAGE_MODEL, "--tools", "",
-           "--no-session-persistence", "--strict-mcp-config", "--disable-slash-commands",
-           "--system-prompt", MESSAGE_PROMPT]
-    try:
-        p = subprocess.run(cmd, input=prompt.encode("utf-8", "replace").decode("utf-8"), capture_output=True,
-                           text=True, timeout=60, cwd=config.state_dir("claude-titles"),
-                           env=spawn.claude_env(None, "default"))
-        data = json.loads(p.stdout.strip().splitlines()[-1]) if p.stdout.strip() else {}
-    except (OSError, ValueError, subprocess.TimeoutExpired) as e:
-        log.info("commit message call failed: %s", e)
-        raise GitError(502, "no_message", "Claude could not write a message - type one") from None
-    text = str((data or {}).get("result") or "").strip().strip("`").strip()
-    if p.returncode != 0 or not text or (data or {}).get("is_error"):
-        raise GitError(502, "no_message", "Claude could not write a message - type one")
+    text = _ask_claude(MESSAGE_PROMPT, prompt, "Claude could not write a message - type one")
     lines = [ln for ln in text.splitlines() if not re.match(r"(?i)\s*co-authored-by:", ln)]
     return {"message": "\n".join(lines).strip()}
 
@@ -282,6 +270,85 @@ def _message(body: MessageIn) -> dict:
 @router.post("/api/code/message")
 async def message(body: MessageIn):
     return await _call(_message, body)
+
+
+def _ask_claude(system: str, prompt: str, failed: str) -> str:
+    """One short answer of Claude (MESSAGE_MODEL, no tools, no session): commit messages, PR descriptions."""
+    cmd = [spawn.claude_bin(), "-p", "--output-format", "json", "--model", MESSAGE_MODEL, "--tools", "",
+           "--no-session-persistence", "--strict-mcp-config", "--disable-slash-commands", "--system-prompt", system]
+    try:
+        p = subprocess.run(cmd, input=prompt.encode("utf-8", "replace").decode("utf-8"), capture_output=True,
+                           text=True, timeout=90, cwd=config.state_dir("claude-titles"),
+                           env=spawn.claude_env(None, "default"))
+        data = json.loads(p.stdout.strip().splitlines()[-1]) if p.stdout.strip() else {}
+    except (OSError, ValueError, subprocess.TimeoutExpired) as e:
+        log.info("short Claude call failed: %s", e)
+        raise GitError(502, "no_message", failed) from None
+    text = str((data or {}).get("result") or "").strip().strip("`").strip()
+    if p.returncode != 0 or not text or (data or {}).get("is_error"):
+        raise GitError(502, "no_message", failed)
+    return text
+
+
+CONVERSATION_CHARS = 24_000
+PR_PROMPT = (
+    "You write the title and the description of a GitHub pull request, from the conversation in which the change "
+    "was made, its commits and its diff. Reply with the title on the first line (at most 72 characters, no "
+    "prefix such as 'Title:'), a blank line, then the description in Markdown: why the change is needed, what it "
+    "does, how it was tested when the conversation says so - short, concrete, for a reviewer who did not read the "
+    "conversation. When a pull request template is given, fill in its sections instead. Never mention an AI, an "
+    "assistant, a conversation or a co-author. Write in the language of the recent commit subjects.")
+
+
+def _conversation(sid: str, limit: int = CONVERSATION_CHARS) -> str:
+    """What the user asked and what Claude answered at the end of each turn (no tool calls), the newest kept."""
+    parts: list[str] = []
+    try:
+        with open(store.log_path(sid), errors="replace") as f:
+            for ln in f:
+                if '"mx_user"' not in ln and '"result"' not in ln:
+                    continue
+                try:
+                    ev = json.loads(ln)
+                except ValueError:
+                    continue
+                if ev.get("type") == "mx_user" and (ev.get("text") or "").strip():
+                    parts.append("User: " + ev["text"].strip()[:4000])
+                elif ev.get("type") == "result" and isinstance(ev.get("result"), str) and ev["result"].strip():
+                    parts.append("Claude: " + ev["result"].strip()[:4000])
+    except OSError:
+        return ""
+    out = "\n\n".join(parts)
+    return out[-limit:]
+
+
+class PrTextIn(BaseModel):
+    repo: str
+    session: Optional[str] = None          # the session the change was made in: its conversation explains why
+    base: Optional[str] = None
+
+
+def _pr_draft(body: PrTextIn) -> dict:
+    r = codediff.checked_repo(body.repo)
+    base = (body.base or codediff.default_base(r) or "main").removeprefix("origin/")
+    subjects = [c["subject"] for c in codediff.commits(r, f"origin/{base}")]
+    d = codediff.raw_diff(r, f"origin/{base}", _rev(r, "now") if codediff.dirty(r) else "HEAD")
+    template = _pr_text(r, []).strip()
+    talk = _conversation(body.session) if body.session and store.is_valid_id(body.session) else ""
+    recent = [c["subject"] for c in codediff.commits(r, None, 10, everything=True)] if codediff.head_sha(r) else []
+    prompt = (("Conversation:\n" + talk + "\n\n" if talk else "") + "Commits of the branch:\n"
+              + "\n".join(f"- {s}" for s in reversed(subjects)) + "\n\nRecent subjects of the repository:\n"
+              + "\n".join(recent) + ("\n\nPull request template:\n" + template if template else "")
+              + "\n\nDiff:\n" + d[:MESSAGE_DIFF_CHARS])
+    text = _ask_claude(PR_PROMPT, prompt, "Claude could not write the description - type one")
+    lines = [ln for ln in text.splitlines() if not re.match(r"(?i)\s*co-authored-by:", ln)]
+    title = re.sub(r"^(?i:title:)\s*|^#+\s*", "", (lines[0] if lines else "").strip()).strip()[:120]
+    return {"title": title, "body": "\n".join(lines[1:]).strip()}
+
+
+@router.post("/api/code/pr-text")
+async def pr_text(body: PrTextIn):
+    return await _call(_pr_draft, body)
 
 
 class RevertIn(BaseModel):
@@ -510,3 +577,49 @@ async def pr_session(body: PrSessionIn):
         except SessionError as e:
             raise GitError(e.status, e.code, e.message) from None
     return await _call(run)
+
+
+# ---- Claude watches the pull request of its copy (maxxing/prwatch.py) ------------------------------------------
+
+class WatchIn(BaseModel):
+    on: bool
+
+
+@router.put("/api/sessions/{sid}/copy/watch")
+async def copy_watch(sid: str, body: WatchIn):
+    from .. import bus, prwatch
+    _meta(sid)
+
+    def run():
+        out = prwatch.set_watch(sid, body.on)
+        bus.invalidate("sessions")
+        return out
+    return await _call(run)
+
+
+_watch_task: Optional[asyncio.Task] = None
+
+
+async def _watch_loop() -> None:
+    from .. import prwatch
+    while True:
+        await asyncio.sleep(prwatch.INTERVAL)
+        try:
+            await asyncio.to_thread(prwatch.scan)
+        except Exception:
+            log.exception("pull request watch failed")
+
+
+async def startup() -> None:
+    """MAXXING_PRWATCH_LOOP=0 turns the watch off (tests call prwatch.scan themselves)."""
+    global _watch_task
+    import os
+    if os.environ.get("MAXXING_PRWATCH_LOOP", "1") != "0":
+        _watch_task = asyncio.create_task(_watch_loop())
+
+
+async def shutdown() -> None:
+    if _watch_task:
+        _watch_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError, Exception):
+            await _watch_task

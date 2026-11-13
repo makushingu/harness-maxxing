@@ -39,6 +39,7 @@ A `--system-prompt` that names chat sessions (short titles) gets $FAKE_CLAUDE_TI
 title") as its `-p --output-format json` answer; FAIL / AUTH_EXPIRED in the message still fail.
 An `--append-system-prompt` about the Feedback button (the check before a feedback is sent) gets
 $FAKE_CLAUDE_FEEDBACK (default: a "send" verdict) the same way.
+A `--system-prompt` that writes a pull request answers "Title: Make two loud", then "Asked: <the first User: line>".
 Threads are remembered in $FAKE_CLAUDE_DIR (default /tmp/fake-claude-<uid>): --resume of an
 unknown id fails ("No conversation found…"), --session-id of a known id fails ("already in use").
 Every call is appended to $FAKE_CLAUDE_DIR/calls.jsonl (argv, prompt, cwd, a few env vars).
@@ -452,6 +453,11 @@ def turn(o: dict, sid: str, model: str, prompt: str, t0: float) -> int | None:
         if "name chat sessions" in (o.get("system_prompt") or ""):
             print(json.dumps(result(sid, model, os.environ.get("FAKE_CLAUDE_TITLE", "Fake short title"), t0=t0,
                                     keep=False)))
+            return 0
+        if "description of a GitHub pull request" in (o.get("system_prompt") or ""):
+            asked = re.search(r"^User: (.*)$", prompt, re.M)
+            text = "Title: Make two loud\n\nAsked: " + (asked.group(1) if asked else "-") + "\nCo-Authored-By: X <x@x>"
+            print(json.dumps(result(sid, model, text, t0=t0, keep=False)))
             return 0
         if "Feedback button" in (o.get("append_system_prompt") or ""):
             print(json.dumps(result(sid, model, os.environ.get("FAKE_CLAUDE_FEEDBACK", '{"verdict": "send"}'), t0=t0,

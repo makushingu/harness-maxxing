@@ -896,8 +896,11 @@ def github_pull(full_name: str, number: int) -> dict:
     flist = []
     for f in files[:MAX_PR_FILES]:
         patch = f.get("patch")
-        d = parse_patch(patch or "") if patch else {"hunks": [], "binary": f.get("status") != "renamed",
-                                                    "cut": False, "lines": 0}
+        changed = bool(f.get("additions") or f.get("deletions"))
+        # GitHub's patch is bounded already: taken whole. No patch: a binary file, or a text file too big for
+        # GitHub to send its diff (it still counts its lines) - `too_big`, the view links to GitHub.
+        d = parse_patch(patch, full=True) if patch else {"hunks": [], "binary": f.get("status") != "renamed" and not changed,
+                                                         "cut": False, "lines": 0, "too_big": changed}
         flist.append({"path": f.get("filename") or "", "old": f.get("previous_filename"),
                       "status": {"added": "A", "removed": "D", "renamed": "R", "copied": "C"}.get(f.get("status"), "M"),
                       "add": f.get("additions") or 0, "del": f.get("deletions") or 0, **d})
@@ -931,7 +934,7 @@ def github_pull(full_name: str, number: int) -> dict:
             "base": (p.get("base") or {}).get("ref"), "url": p.get("html_url"),
             "created": _ts(p.get("created_at")), "updated": _ts(p.get("updated_at")),
             "commits": p.get("commits") or 0, "add": p.get("additions") or 0, "del": p.get("deletions") or 0,
-            "files": flist, "files_total": len(files), "conversation": conv, "line_comments": lines,
+            "files": flist, "files_total": max(len(files), p.get("changed_files") or 0), "conversation": conv, "line_comments": lines,
             "checks": _checks(full, head.get("sha")), "methods": methods,
             "can_write": bool(perms.get("push") or perms.get("maintain") or perms.get("admin")),
             "local_paths": [r["path"] for r in local_repos() if (r.get("github") or "").lower() == full.lower()]}

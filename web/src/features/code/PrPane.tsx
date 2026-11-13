@@ -350,7 +350,18 @@ function PrFileBody({ pr, file }: { pr: Pull; file: PrFile }) {
         </span>
       </div>
       {file.binary || !rows.length ? (
-        <EmptyState icon={FileQuestion} title={file.binary ? t('code.binaryFile') : t('pr.noPatch')} className="flex-1" />
+        <EmptyState
+          icon={FileQuestion}
+          title={file.binary ? t('code.binaryFile') : file.too_big ? t('pr.tooBig', { add: file.add, del: file.del }) : t('pr.noPatch')}
+          action={
+            file.too_big && pr.url ? (
+              <Button size="sm" variant="outline" asChild>
+                <a href={`${pr.url}/files`} target="_blank" rel="noopener noreferrer"><ExternalLink /> {t('pr.onGithub')}</a>
+              </Button>
+            ) : undefined
+          }
+          className="flex-1"
+        />
       ) : (
         <DiffRows rows={rows} sel={sel} onPick={pick} below={below} />
       )}

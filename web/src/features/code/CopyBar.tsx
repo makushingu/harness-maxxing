@@ -5,9 +5,9 @@
 // its branch. Plan: plans/code-worktree-pr.md (lot 4).
 import * as React from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { Check, CircleAlert, FolderGit2, GitBranch, GitMerge, GitPullRequest, Loader2, MoreHorizontal, Sparkles, Trash2, Wrench } from 'lucide-react'
+import { Check, CircleAlert, Eye, EyeOff, FolderGit2, GitBranch, GitMerge, GitPullRequest, Loader2, MoreHorizontal, Sparkles, Trash2, Wrench } from 'lucide-react'
 import {
-  Button, Checkbox, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, Sensitive, Textarea, Tooltip, toast,
+  Button, Checkbox, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, Input, Sensitive, Textarea, Tooltip, toast,
 } from '@/components/ui'
 import { errorMessage, isApiError } from '@/lib/api'
 import { cn } from '@/lib/utils'
@@ -65,18 +65,12 @@ export function CopyBar({ session, running, onAsk }: { session: Session; running
     }
   }
 
-  const openPr = async () => {
-    setBusy(true)
+  const toggleWatch = async () => {
     try {
-      if (dirty) return setEnd('pr')
-      const out = await codeApi.pr(wt.path)
-      void qc.invalidateQueries({ queryKey: ['code'] })
-      toast.success(t('code.prOpened'))
-      if (s?.github) openFileViewer(prPath({ full: s.github, n: out.number }))
+      await copyApi.watch(session.id, !s?.watch)
+      void qc.invalidateQueries({ queryKey: copyKeys.status(session.id) })
     } catch (e) {
       toast.error(t('code.failed'), errorMessage(e))
-    } finally {
-      setBusy(false)
     }
   }
   return (
@@ -122,6 +116,13 @@ export function CopyBar({ session, running, onAsk }: { session: Session; running
             <GitPullRequest />#{prOf.n}
           </Button>
         )}
+        {prOf && !mergedPr && github && (
+          <Tooltip content={s?.watch ? t('copy.watchOn') : t('copy.watchOff')}>
+            <Button size="icon-sm" variant="ghost" className={cn('size-7', s?.watch ? 'text-primary' : 'text-muted-foreground')} aria-label={t('copy.watch')} aria-pressed={!!s?.watch} onClick={() => void toggleWatch()} data-testid="copy-watch">
+              {s?.watch ? <Eye /> : <EyeOff />}
+            </Button>
+          </Tooltip>
+        )}
         {mergedPr && (
           <>
             <Tooltip content={t('copy.prMergedHint')}>
@@ -137,8 +138,8 @@ export function CopyBar({ session, running, onAsk }: { session: Session; running
           </>
         )}
         {main === 'pr' && (
-          <Button size="sm" variant="outline" className="h-7" onClick={() => void openPr()} disabled={busy || running || !s?.ahead && !dirty} data-testid="copy-open-pr">
-            {busy ? <Loader2 className="animate-spin" /> : <GitPullRequest />}
+          <Button size="sm" variant="outline" className="h-7" onClick={() => setEnd('pr')} disabled={running || !s?.ahead && !dirty} data-testid="copy-open-pr">
+            <GitPullRequest />
             {t('code.openPrBtn')}
           </Button>
         )}
@@ -177,6 +178,10 @@ function EndDialog({ session, st, what, onClose, onAsk }: { session: Session; st
   const [commitFirst, setCommitFirst] = React.useState(dirty > 0)
   const [msg, setMsg] = React.useState('')
   const [busy, setBusy] = React.useState<null | 'message' | 'go'>(null)
+  const [prTitle, setPrTitle] = React.useState('')
+  const [prBody, setPrBody] = React.useState('')
+  const [writing, setWriting] = React.useState(false)
+  const asked = React.useRef(false)
   const canPr = !!st.github && !st.fork && !st.pr
   const choices: End[] = [...(canPr ? (['pr'] as End[]) : []), ...(!st.pr ? (['merge'] as End[]) : []), 'discard']
   const propose = async (auto = false) => {
@@ -195,6 +200,26 @@ function EndDialog({ session, st, what, onClose, onAsk }: { session: Session; st
     if (dirty > 0 && choice !== 'discard' && !msg) void propose(true)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once, when the window opens
   }, [])
+  // the PR's title and description, written by Claude from this session's conversation (what was typed wins)
+  const writePr = async (auto = false) => {
+    setWriting(true)
+    try {
+      const r = await codeApi.prText(st.path, session.id)
+      setPrTitle((cur) => (auto && cur.trim() ? cur : r.title))
+      setPrBody((cur) => (auto && cur.trim() ? cur : r.body))
+    } catch (e) {
+      if (!auto) toast.error(t('copy.noPrText'), errorMessage(e))
+    } finally {
+      setWriting(false)
+    }
+  }
+  React.useEffect(() => {
+    if (choice === 'pr' && !asked.current) {
+      asked.current = true
+      void writePr(true)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, the first time "Open a PR" is chosen
+  }, [choice])
   const go = async () => {
     setBusy('go')
     try {
@@ -206,7 +231,7 @@ function EndDialog({ session, st, what, onClose, onAsk }: { session: Session; st
         toast.success(t('copy.merged', { base: r.base }))
       } else {
         if (commitFirst && dirty) await codeApi.commit(st.path, msg.trim(), false)
-        const out = await codeApi.pr(st.path)
+        const out = await codeApi.pr(st.path, { title: prTitle.trim() || undefined, body: prBody.trim() ? prBody : undefined })
         toast.success(t('code.prOpened'))
         if (st.github) openFileViewer(prPath({ full: st.github, n: out.number }))
       }
@@ -267,6 +292,19 @@ function EndDialog({ session, st, what, onClose, onAsk }: { session: Session; st
                 </Tooltip>
               </div>
             )}
+          </div>
+        )}
+        {choice === 'pr' && (
+          <div className="grid gap-2" data-testid="copy-pr-text">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-sm font-medium">{t('copy.prText')}</span>
+              <Button variant="ghost" size="sm" className="h-7" onClick={() => void writePr()} disabled={writing || !!busy}>
+                {writing ? <Loader2 className="animate-spin" /> : <Sparkles className="size-3.5" />}
+                {writing ? t('copy.prWriting') : t('copy.prRewrite')}
+              </Button>
+            </div>
+            <Input value={prTitle} onChange={(e) => setPrTitle(e.target.value)} placeholder={t('copy.prTitlePh')} aria-label={t('copy.prTitlePh')} />
+            <Textarea value={prBody} onChange={(e) => setPrBody(e.target.value)} minRows={4} maxRows={12} placeholder={writing ? t('copy.prWriting') : t('copy.prBodyPh')} className="text-[13px]" />
           </div>
         )}
         {lost && <p className="text-xs text-destructive">{t('copy.lost', { files: dirty, commits: st.ahead ?? 0 })}</p>}

@@ -598,6 +598,7 @@ not_github|no_base`, `403 no_write`, `409 running`.
 | POST | `/api/code/push` | `{repo}` | head info (sets the upstream `origin/<branch>` the first time) |
 | POST | `/api/code/branch` | `{repo, name}` | head info (`git switch -c`) |
 | POST | `/api/code/pr` | `{repo, title?, body?, base?, draft}` | `{number, url, title, state, draft}` — pushes first if needed; title = the only commit's subject (else the newest), body = the commits; a token that can write to the repository |
+| POST | `/api/code/pr-text` | `{repo, session?, base?}` | `{title, body}` — written by the same small call from the session's conversation (what the user asked and the final answer of each turn, 24 kB, the newest kept), the branch's commits, the diff against `origin/<base>` (40 kB) and the repository's PR template; `502 no_message` when Claude fails |
 | POST | `/api/code/message` | `{repo, a=HEAD, b=now}` | `{message}` — proposed by a small `claude -p` call (Haiku) from the diff (40 kB) and the 10 last subjects; `Co-Authored-By` lines dropped |
 
 ### Separate copies (worktrees)
@@ -624,12 +625,21 @@ A `.worktreeinclude` at the root of the clone (gitignore syntax) names ignored f
 | GET | `/api/code/copy-repos?path=` | – | `{enabled, repos:[{root, name, branch, branches, default_base, github, prefs:{prefix, prepare, copy_env}}]}` — the clones of the topic (or the repository holding it) |
 | PUT | `/api/code/copy-prefs` | `{repo, prefix?, prepare?, copy_env?}` | the preferences |
 | POST | `/api/sessions` | `{…, worktree:{repo, base?, prepare?, copy_env?, remember?}}` | Session (the copy is made before the first turn) |
-| GET | `/api/sessions/{id}/copy` | – | `{path, repo, branch, base, pr, prepare, env_copied, included, port, exists, removed, ahead, behind (against the base), dirty, upstream, pushed_ahead, github, fork}` |
+| GET | `/api/sessions/{id}/copy` | – | `{path, repo, branch, base, pr, prepare, env_copied, included, port, exists, removed, ahead, behind (against the base), dirty, upstream, pushed_ahead, github, fork, watch}` |
+| PUT | `/api/sessions/{id}/copy/watch` | `{on}` | `{watch}` — Claude watches the copy's PR (on by default; never a fork's or an outsider's PR) |
 | POST | `/api/sessions/{id}/copy/merge` | `{message?}` | `{merged, base, sha, removed, kept_branch}` — commits first with `message`; merges the base into the branch in the copy (aborted on a conflict: `409 conflict`), then moves the base forward (fast-forward only) and removes the copy |
 | POST | `/api/sessions/{id}/copy/remove` | `{force, merged_pr?}` | `{removed, kept_branch}` — `force` = discard (uncommitted files and the branch go); else refused with uncommitted files, and the branch is kept unless merged; `merged_pr`: its PR was merged on GitHub (looked up again: `409 not_merged` otherwise) - the branch goes when its tip is in the PR's head (squash / rebase merges too) |
 | GET | `/api/sessions/{id}/copy/prepare-log` | – | `{log}` |
 | GET | `/api/code/copies` | – | the copies still on disk: `[{sid, title, path, archived, …status}]` |
 | POST | `/api/code/pr-session` | `{repo: "github:owner/name", number, review, message?, clone?}` | Session — in the topic of a local clone, on a copy of the PR's branch (a fork: `pr/<n>` from `refs/pull/<n>/head`); plan mode when `review` or when the author is outside (`author_association` not OWNER / MEMBER / COLLABORATOR). `400 no_clone` |
+
+**The PR watch** (`maxxing/prwatch.py`, a loop of `api/code.py`, every 3 min; `MAXXING_PRWATCH_LOOP=0` turns it off):
+for each session on a copy whose branch has an open PR (and `watch`), the new events - every check of the head ended
+with a failure, a conflict with the base, a comment / review / line comment from OWNER / MEMBER / COLLABORATOR (never a
+bot nor the server's own GitHub logins) - are sent to the session in one message, `source: "github"`, comments quoted
+as data. Once per event (keys in `<state>/prwatch.json`), never while a turn runs, at most 4 messages per session in
+24 h; what is there when the watch first sees the PR (or when it is turned back on) never wakes it. Comments are read
+only when the PR's `updated_at` moves.
 
 ### Pull requests (GitHub)
 

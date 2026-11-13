@@ -37,6 +37,8 @@ export type CopyStatus = {
   pushed_ahead?: number
   github?: string | null
   fork?: boolean
+  /** Claude watches the copy's PR: a failed check, a conflict or a comment wakes the session up. */
+  watch?: boolean
 }
 export type CopyListed = CopyStatus & { sid: string; title: string; path: string; archived: boolean }
 
@@ -68,6 +70,7 @@ export const copyApi = {
   merge: (sid: string, message?: string) => api.post<{ merged: boolean; base: string; kept_branch: string | null }>(`/api/sessions/${seg(sid)}/copy/merge`, { message }),
   remove: (sid: string, force: boolean, mergedPr = false) => api.post<{ removed: boolean; kept_branch: string | null }>(`/api/sessions/${seg(sid)}/copy/remove`, { force, merged_pr: mergedPr }),
   prefs: (repo: string, p: { prefix?: string; prepare?: string; copy_env?: boolean }) => api.put<CopyRepo['prefs']>('/api/code/copy-prefs', { repo, ...p }),
+  watch: (sid: string, on: boolean) => api.put<{ watch: boolean }>(`/api/sessions/${seg(sid)}/copy/watch`, { on }),
   prepareLog: (sid: string) => api.get<{ log: string }>(`/api/sessions/${seg(sid)}/copy/prepare-log`),
 }
 

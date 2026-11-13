@@ -20,6 +20,13 @@ New:
   separate copy of its branch; **Ask Claude to review** starts one in plan mode that drafts the review as a card you
   publish yourself. A pull request from outside the repository is marked and its sessions start in plan mode. A PR
   opened from Harness starts from the repository's pull request template.
+- **Claude writes the PR and watches it.** **Open a PR** shows a title and a description Claude wrote from the
+  conversation, the commits and the diff (you can change them). While the PR is open, a failed check, a conflict or a
+  comment from someone of the repository wakes the session up: Claude fixes, pushes and says what it did - once per
+  event, 4 times a day at most, never for comments from outside the repository. The eye beside the PR in the bar of
+  the copy turns it off.
+- **Big diffs shown whole.** A PR's files show their whole diff; a file too big for GitHub links to it; a minified
+  line is cut until **Show all**.
 
 ## 2.0.0-alpha.147 - 2026-11-13
 

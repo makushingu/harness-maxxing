@@ -28,6 +28,7 @@ WRITE_TIMEOUT = 120
 REF_ROOT = "refs/maxxing"
 MAX_FILES = 400                     # files listed per repository and view
 MAX_DIFF_LINES = 2000               # lines of one file's diff sent at once ("show everything" lifts it)
+MAX_LINE_CHARS = 2000               # characters of one line (a minified file is one line of megabytes): idem
 KEEP_DAYS = 30                      # photos older than this are deleted by `prune`
 
 # writes keep the repository's hooks (a commit-msg or pre-push hook is the owner's own rule)
@@ -253,6 +254,8 @@ def parse_patch(raw: str, full: bool = False) -> dict:
             cut = True
             continue
         t, s = ln[0], ln[1:]
+        if not full and len(s) > MAX_LINE_CHARS:
+            s, cut = s[:MAX_LINE_CHARS] + " …", True
         hunks[-1]["lines"].append({"t": t, "o": o if t != "+" else None, "n": n if t != "-" else None, "s": s})
         total += 1
         if t != "+":
