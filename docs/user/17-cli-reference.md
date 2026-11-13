@@ -269,10 +269,9 @@ OAuth sign-ins (state "To connect") are done in Settings -> MCP -> **Connect**. 
 | `maxxing browser settings [--ask \| --no-ask] [--wait MIN] [--downloads \| --no-downloads] [--idle MIN] [--tab-sleep MIN] [--max-tabs N] [--max-profiles N]` | the settings shared by every profile: ask you when stuck, how long it waits for you, downloads, a profile / a tab sleeps after, tabs awake per profile, profiles running at once |
 | `maxxing browser profile add NAME [--exit ID] [--sites a.com,b.com \| --public] [--fallback-vps]` | a new profile (its id is made from the name); `--exit`: an exit id or `direct`; `--fallback-vps`: when its exit is down, go out by the server's address instead of waiting |
 | `maxxing browser profile set ID [--name N] [--exit ID] [--sites ... \| --public] [--fallback-vps \| --wait-exit]` | change a profile |
-| `maxxing browser profile rm ID` | delete a profile and its sign-ins (`main` cannot be deleted) |
+| `maxxing browser profile rm ID` | delete a profile and its sign-ins (`main` cannot be deleted; an agent that had it has no browser any more) |
 | `maxxing browser exit test ID\|direct` | what the sites see through an exit (`direct` = the server): address, country, operator, kind, delay, speed; exit code 1 when it fails |
-| `maxxing browser on PATH [--profile ID]` / `off PATH` | let a project (`acme`), a topic (`acme/blog`) or an agent (`acme/blog/writer`) use it, or not |
-| `maxxing browser use PATH ID\|inherit` | the profile of a project, a topic or an agent (`inherit` = its parent's) |
+| `maxxing browser set PATH on\|off\|inherit [--profile ID\|own\|inherit]` | let a project (`acme`), a topic (`acme/blog`) or an agent (`acme/blog/writer`) use it, or not (`inherit` = its parent's switch, not for an agent), and with which profile (`own` = the agent's own browser, made when it is turned on; `inherit` = its parent's) |
 | `maxxing browser show PATH [--json]` | what it gets (on or off, its profile) and where each is inherited from |
 | `maxxing browser forget ID` | erase a profile's sign-ins, tabs and journal |
 

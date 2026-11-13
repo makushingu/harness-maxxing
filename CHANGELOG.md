@@ -17,11 +17,14 @@ New:
   clicks and fills forms in a Chromium of your server, and you watch it live, take over for a captcha or a sign-in
   and hand back. Off until you turn it on (Settings -> Features -> Harness Browser), then let a project, a topic
   (its menu -> **Browser...**) or an agent (its settings) use it. **Profiles** keep sign-ins, sites and exit apart (a
-  client, an agent that reads e-mail); a project, a topic or an agent picks one, or inherits it. **Exits** send a
+  client, a second shop account); a project or a topic picks one, or inherits it, and each agent gets **its own
+  browser** (or shares one you choose), shown live in its info panel. **Exits** send a
   profile's pages out by your phone (Tailscale), a rented proxy or a WireGuard box instead of the server's
   data-center address, which some sites block; **Test** shows the address the sites see and its kind. When an exit is
   down, the profile waits and you get a notification - never the server's address behind your back - and Claude goes
-  on once it is back. The live view keeps up with a slow connection. [Show me](#show:browser)
+  on once it is back. The address bar searches Google for what is not an address; copy, paste, the page's messages
+  and its file buttons work from the live view; the browser speaks your language and keeps your time zone. The live
+  view keeps up with a slow connection. [Show me](#show:browser)
 
 ## 2.0.0-alpha.149 - 2026-11-13
 

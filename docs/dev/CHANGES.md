@@ -45,19 +45,29 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   Browser", INTERNALS "maxxing.browser", user doc 33). Config `browser_feature` (default false) + `config.json ->
   browser` = `{ask, wait_min, downloads, idle_min, tab_sleep_min, max_tabs, max_active_profiles (3, 1..8),
   exit_wait_s (180, 0..900), profiles: [{id, name, exit: "direct"|<exit id>, web: list|public, sites, on_exit_down:
-  wait|vps}] (<= 20, `main` always first, not deletable), exits: [{id, name, type: proxy {url, user} | tailscale
+  wait|vps, agent: "" | <agent path>}] (<= 20, `main` always first, not deletable; `agent` = that agent's own browser), exits: [{id, name, type: proxy {url, user} | tailscale
   {node, login_server} | wireguard {}}] (<= 10)}`; `browser.clean_settings(raw, strict)`. Exit secrets in the vault
   `BROWSER_EXIT_<ID>` (`expose: false`). Owners: `browser: {enabled?, profile?}` in a project's / topic's
   `.maxxing.json` (`workspace.folder_browser` / `set_folder_browser`) and agent.json (`agents._clean_browser`,
   `browser` in `SECURITY_FIELDS`: off is safer, the rest is asked); `browser.resolve` = agent -> topic -> project ->
-  `{enabled: false, profile: main}`, an agent's `enabled` never inherited.
+  `{enabled: false, profile: main}`, an agent's `enabled` never inherited. Own browser: `agents.update` turning an
+  agent on without a profile (or with a deleted one), or `browser.profile = "own"` (`browser.OWN`, also through
+  `PUT /owner` and change cards), calls `browser.own_profile(path)` (made once, copies `exit/web/sites/on_exit_down`
+  of the topic's resolved profile, name = display name) and writes its id; `resolve` gives an agent whose own
+  profile is gone `enabled: false, gone: true` (never main); `GET /owner` adds `own_profile`, `gone`.
 - Modules: `exits.py` (exits, `Runtime` up/down state + 30 s watcher, `Tailscale` = own userspace `tailscaled`, `WireGuard` =
   `wireproxy`, units `maxxing-bx-<install>-<eid>`, `test()` via ip-api.com + 2 MB download, `wait_down` / `set_resume` /
   `_resume_waiters`, `feed_action`), `pool.py` (one Chromium per profile, `max_active_profiles`, `exit_ready`, a
   chrome-devtools-mcp per turn), `live.py` (frames acknowledged after every viewer's `{"t":"got"}`, adaptive JPEG
-  quality 30..70, `?q=auto|high|low`), `unit.py` (unit `maxxing-br-<install>-<pid>`, `set_level` -> `cpu.set_level`,
-  `cpu.turn_slice_args()`), `proxy.py` (upstream through the exit by checked IP, 502 + marked down when it fails),
-  `tabs.py` (every turn of a profile sees all its tabs; `by` = who opened it), `view.py`, `relay.py`, `rules.py`,
+  quality 30..70, `?q=auto|high|low`; `Watcher.dialog` / `chooser` from `Page.javascriptDialogOpening` /
+  `fileChooserOpened` (interception on for its sessions), viewer events `{"t":"copy"}` -> `{"t":"copied", text}`,
+  `{"t":"dialog", accept, text}`, `{"t":"chooser"}` = cancel; `give_files`), `unit.py` (unit
+  `maxxing-br-<install>-<pid>`, `set_level` -> `cpu.set_level`, `cpu.turn_slice_args()`, `--lang` /
+  `--accept-lang` from `config.language`, `TZ` from `config.timezone`; `run/<pid>/uploads` emptied at each start), `proxy.py` (upstream through the exit by checked IP, 502 + marked down when it fails),
+  `tabs.py` (every turn of a profile sees all its tabs; `by` = who opened it), `view.py`, `relay.py`, `rules.py`
+  (`address(text)`: an address or `https://www.google.com/search?q=`; `DOM.setFileInputFiles` allowed only for files
+  under `rules.UPLOAD_ROOTS` = `/mxrun/uploads/` (+ the real folder in direct mode),
+  `Page.setInterceptFileChooserDialog` allowed),
   `cdm.py`, `asks.py`, `replays.py`, `turns.py`; `browser_mcp.py` (stdlib, per turn) + `runner.browser_args`.
   Removed v3 notions (research branch only): tab scopes `me` / `topic:` / `project:` / `agent:`, "Share with",
   filtering by scope in the relay, `profile: keep|fresh`, global `web` / `sites`.
@@ -68,15 +78,21 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   `tabs/main.json`; top-level `web` / `sites` -> profile `main`.
 - Routes (`api/browser.py`): `GET /api/browser`, `PUT /settings`, `POST /setup {exits?}`, `/profiles` (POST, GET / PUT
   / DELETE `{pid}`, `{pid}/open|stop|sleep|forget`, `{pid}/tabs`, `{pid}/tabs/{key}/show`, DELETE `{pid}/tabs/{key}`),
-  `/exits` (POST, PUT / DELETE `{eid}`, `{eid}/test` incl. `direct`, GET / POST `{eid}/tailscale`), GET / PUT
+  `{pid}/picture?path=&w=` (JPEG of the tab `path` used last, else the one shown; 204 when not running, never
+  starts it), `{pid}/files` (multipart `files`, <= 50 MB each: for the page's open file chooser, 409 without one;
+  `pool.stage`), `/exits` (POST, PUT / DELETE `{eid}`, `{eid}/test` incl. `direct`, GET / POST `{eid}/tailscale`), GET / PUT
   `/owner` (`inherit: [...]`), `POST /waiting/{sid} {action: resume|retry|dismiss}`, `/asks`, `/live-token`, WS
   `/live?t=&profile=&q=`, loopback `POST /mcp/{sid}` and WS `/cdp/{pid}`. Sessions list: `browser_asks`,
   `browser_exit` (`sessions/service.py`). Feed: ref `browserexit:<eid>` (`feed.HANDLERS`), actions `retry`, `resume`.
+- `pool.public` adds `dialog {type, message, default}` and `chooser {multiple}`. Claude's `upload_file`:
+  `pool.claude_file` (a file of the turn's topic / project folder, <= 50 MB) copied by `pool.stage` into the uploads
+  folder, `filePath` rewritten.
 - CLI `cmd_browser.py`: `maxxing browser setup [--exits] | status [--json] | settings [...] [--max-profiles N] |
-  profile add|set|rm | exit test ID|direct | on PATH [--profile] | off | use PATH ID|inherit | show [--json] | forget ID`;
-  `agent_guard.BROWSER_OWNER_ONLY` refuses `on off use profile forget setup settings stop` in agent turns.
+  profile add|set|rm | exit test ID|direct | set PATH on|off|inherit [--profile ID|own|inherit] | show [--json] |
+  forget ID`; `agent_guard.BROWSER_OWNER_ONLY` refuses `set profile forget setup settings stop` in agent turns.
 - Web: `features/browser/{BrowserPage, BrowserPanel, BrowserFeature, ProfileSettings, Exits, SessionBrowser,
-  LiveView, BrowserWindow, profiles, open}`; route `/browser` (`?profile=`, `&view=settings`, `?exit=<id>|new|direct`,
+  LiveView, BrowserWindow, AgentBrowserCard, profiles, open}` (`AgentBrowserCard` in the agent's info panel: a
+  picture every 2 s while visible and running); route `/browser` (`?profile=`, `&view=settings`, `?exit=<id>|new|direct`,
   `?session=`); project and topic menus -> **Browser...** (`Tree.tsx`), agent settings section `browser`; sidebar
   line in `HealthIndicator.tsx`. i18n group `browser` (`groups.ts`) loaded with `/browser`, elsewhere on its first
   key (`ON_DEMAND` in `test_web_i18n_groups.py`). Showcase `browser` (Settings -> Features, `data-tour="browser-feature"`).

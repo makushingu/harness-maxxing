@@ -23,15 +23,18 @@ It is off everywhere until you turn it on:
      topic of the project that does not choose for itself);
    - a topic: its **...** menu -> **Browser...** (every session of the topic; **Inherited** = what its project says);
    - an agent: its settings -> **Browser**. An agent is off until you turn it on for it: it never inherits the switch
-     of its topic or project.
+     of its topic or project. Turned on, it gets **its own browser** (see below).
 
 The browser has its own page: **Browser** in the sidebar.
 
 ## Profiles
 
 A **profile** is a browser of its own: its own sign-ins (cookies), its own list of sites, its own exit (where its pages
-go out, see below). **Main** always exists and is used by everything that does not choose another one. Make another
-profile for what you want kept apart: a client, a second shop account, an agent that reads e-mail.
+go out, see below). **Main** always exists and is used by the sessions of every project and topic that do not choose
+another one. Make another profile for what you want kept apart: a client, a second shop account. Each agent turned on
+gets one of its own (see [Agents](#agents)).
+
+On the Browser page, **Your browsers** lists Main and the profiles you made, **Agents' browsers** the agents' own.
 
 - **New profile**: the **+** of the Browser page -> **New profile**, give it a name (`Shop`, `Client Acme`).
 - **Profile settings** (button above the live view): its name, its **Exit**, **Sites it may open**, **When the exit is
@@ -46,21 +49,17 @@ profile for what you want kept apart: a client, a second shop account, an agent 
   router, `*.local`...) are always refused, as are `file:` pages and the browser's own settings pages.
 - **Sign-ins** stay in the profile on the server. **Forget sign-ins** erases its cookies, its tabs and the journal of
   its actions (the values typed are never kept, only their length): you will have to sign in again.
-- **Delete the profile** erases its sign-ins and tabs too. Whatever chose it goes back to what it inherits (in the
-  end, **Main**). **Main** cannot be deleted.
+- **Delete the profile** erases its sign-ins and tabs too. A project or a topic that chose it goes back to what it
+  inherits (in the end, **Main**). An agent that used it has **no browser** any more (never your sign-ins by itself):
+  turn its browser on again to give it a new one. **Main** cannot be deleted.
 
 ## Who uses which profile
 
-The **Browser...** window of a project or a topic, and the **Browser** section of an agent's settings, have a
-**Profile** choice. **Inherited** takes the one of the parent: an agent takes its topic's, a topic its project's, a
-project **Main**. So choosing a profile for a project is enough for all its topics and their sessions.
+The **Browser...** window of a project or a topic has a **Profile** choice. **Inherited** takes the one of the parent:
+a topic its project's, a project **Main**. So choosing a profile for a project is enough for all its topics and their
+sessions.
 
 The same window shows the profile's exit and its state, and **Open the browser** on that profile.
-
-An agent that reads text from outside (e-mail, a webhook, the feed) should have **its own profile**: on **Main** it
-works with your sign-ins, and a message written by a stranger could try to steer it. Its settings say so with a
-warning until you give it one. Such an agent also asks you before every browser action (unless you trust its outside
-texts), like for its other tools.
 
 ## Exits: where the pages go out
 
@@ -127,10 +126,22 @@ see a data-center address and ask more checks.
 
 ## Using it, watching Claude
 
+The address bar opens what you type: an address (`example.com`), or a **Google search** for anything else (a profile
+limited to a list of sites needs `google.com` in it to search). A new tab has the same search box in its middle.
+
+- **Copy and paste**: Ctrl+C (⌘C) on the page copies its selected text to your clipboard; Ctrl+V pastes yours into
+  the page.
+- **A file for the page** (a photo, a PDF to send): click its file button on the page, then **Choose a file** in the
+  bar that shows; the file goes from your device to that page only. Claude can give a page a file of its own project
+  or topic folder (never one elsewhere on the server).
+- **A message from the page** (alert, confirm, "leave this page?"): it shows over the page with **OK** / **Cancel**.
+- The browser speaks the language of Harness and keeps its time zone (Settings -> General): sites answer in your
+  language and see your time.
+
 The **Browser** page has two parts:
 
-- the second bar: **Profiles** (each with its exit and its state: tabs open, asleep, paused), then **Exits**, and **+**
-  to add a profile or an exit;
+- the second bar: **Your browsers**, then **Agents' browsers** (each with its exit and its state: tabs open, asleep,
+  paused), then **Exits**, and **+** to add a profile or an exit;
 - the profile picked, live: its name, **via** its exit, who uses it, **Profile settings**, **Sleep**; then the browser
   itself: tabs, `+` for a new tab, the address bar, the page (full screen on a phone). A new tab shows your sites to
   open in one click.
@@ -182,10 +193,21 @@ action. **Skip** tells it to do without that step. With no answer in time, it gi
 
 ## Agents
 
+- **Its own browser**: an agent turned on gets a browser of its own, with its name: its own sign-ins, apart from
+  yours. It starts with the sites and the exit of the browser it would have used (its topic's, else Main), then you
+  change them in its profile settings. Sign it in to the sites it needs once (open its browser, sign in, done).
+- **Sign-ins** (its settings -> Browser): **Its own browser** (the default), **Its topic's**, or **Share** another
+  browser (Main, a client's, another agent's): it then works with the sites you are signed in to there. An agent that
+  reads text from outside (e-mail, a webhook, the feed) should keep its own: a message written by a stranger could try
+  to steer it, and its settings warn you when it uses Main. Such an agent also asks you before every browser action
+  (unless you trust its outside texts), like for its other tools.
+- **In its info panel** (the **Info** button of the agent page): a small live picture of its tab while its browser
+  runs, **Claude is acting** when it is, **Waits for you** when it asks you something. A click opens its browser to
+  watch or take over.
 - An agent never changes the browser settings (`maxxing browser` commands that change them are refused in its runs).
-- In your conversation with an agent, it can ask for its browser itself: turning it **on** or choosing a profile is a
-  request you allow (a card in the conversation), turning it **off** is done at once. Once on, the conversation and
-  the runs of the agent both have it.
+- In your conversation with an agent, it can ask for its browser itself: turning it **on**, choosing whose sign-ins
+  it uses, is a request you allow (a card in the conversation), turning it **off** is done at once. Once on, the
+  conversation and the runs of the agent both have it.
 
 ## From a terminal
 
@@ -194,8 +216,10 @@ maxxing browser setup [--exits]                install what it needs (root); --e
 maxxing browser status                         feature, what is missing, settings, profiles, exits, requests
 maxxing browser profile add Shop --sites shop.example.com
 maxxing browser profile set shop --exit phone --public
-maxxing browser on acme                        a project (acme/blog = a topic, acme/blog/writer = an agent)
-maxxing browser use acme/blog/writer shop      its profile (inherit = the parent's)
+maxxing browser set acme on                    a project (acme/blog = a topic, acme/blog/writer = an agent)
+maxxing browser set acme/blog/writer on        an agent: its own browser
+maxxing browser set acme/blog/writer on --profile shop    it shares the sign-ins of shop (own = its own again)
+maxxing browser set acme/blog inherit --profile inherit   a topic: its project's switch and profile
 maxxing browser show acme/blog                 what it gets, and where it is inherited from
 maxxing browser exit test phone                what the sites see through that exit (direct = the server)
 maxxing browser forget shop                    erase a profile's sign-ins, tabs and journal

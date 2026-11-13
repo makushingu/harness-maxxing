@@ -692,7 +692,10 @@ unless `browser_feature`. Settings: `config.json -> browser` = the globals (`bro
 `web` / `sites` at the top - become those of `main`). Who uses which profile: `{enabled?, profile?}` in a project's /
 topic's `.maxxing.json` (`workspace.folder_browser` / `set_folder_browser`) and in agent.json `browser`;
 `browser.resolve(path)` walks `chain(path)` (agent, topic, project): nearest key wins, an agent's `enabled` stops at
-the agent, an unknown profile = `main`. `active_for(path)` = (owner, profile, settings) when turns there get the tools.
+the agent, an unknown profile = `main` (an agent's own choice gone = no browser, `gone`). An agent turned on without a
+profile, or with `profile: "own"` (`browser.OWN`), gets `own_profile(path)` (in `agents.update`, after the lock: a
+profile with `agent` = its path, made once from its topic's resolved profile). `active_for(path)` = (owner, profile,
+settings) when turns there get the tools.
 Modules:
 - `__init__` settings, profiles, owners, folders; `migrate()` (server start and every profile start): the one
   browser's folder `profiles/harness` -> `profiles/main`, `tabs.json` -> `tabs/main.json` (only when the new one is
@@ -715,15 +718,20 @@ Modules:
   free -> `409 too_many_profiles`); per turn a `Turn` with its own chrome-devtools-mcp (`cdm.Child`, stopped after
   300 s idle or with the turn); `call()` = turn file -> folder still on -> tool known -> page allowed -> `exit_ready`
   (exit seen up < 30 s ago, else checked every 10 s up to `exit_wait_s`, then `exits.wait_down` and an error result) ->
-  start -> call. `_tidy` every 15 s: dead / off / deleted / sites changed (`POLICY_KEYS`, restart once unused) /
+  start -> call (`upload_file`: `claude_file` copies a file of the turn's topic / project into `run/<pid>/uploads/`
+  with `stage`, the path given to Chromium is `/mxrun/uploads/...`; `rules.check_command` lets
+  `DOM.setFileInputFiles` through only for those). `thumb(pid, path)` = a picture for the agent's card. `_tidy` every 15 s: dead / off / deleted / sites changed (`POLICY_KEYS`, restart once unused) /
   idle -> stop; tabs to sleep; CPU level.
 - `unit` the profile's unit `maxxing-br-<install>-<pid>` (user `maxxing-browser`, PrivateNetwork + socat to the
   proxy socket, MemoryMax 1536M, in `maxxing-turns.slice` when CPU priorities are on); `set_level(pid, live|background)`
-  -> `cpu.set_level` (live while someone watches it or Claude acted in the last 15 s).
+  -> `cpu.set_level` (live while someone watches it or Claude acted in the last 15 s). Chromium gets `--lang` /
+  `--accept-lang` from the interface's language and `TZ` from the Harness time zone (`unit.locale`, `unit.timezone`).
 - `live` `Watcher`: one DevTools connection per profile, the screencast for the viewers; a frame is acknowledged to
   Chromium only when every viewer confirmed it (`delivered`, from the WS `{"t":"got"}`, or 1 s at worst); quality
   `auto` moves 30..70 by 10 (at most every 3 s) with the slowest viewer's delivery time (> 0.25 s down, < 0.08 s up);
-  frames never larger than the viewer.
+  frames never larger than the viewer. It also intercepts the page's file chooser (`chooser`, files from
+  `POST /files` -> `give_files`) and its dialogs (`dialog`, answered with `{"t":"dialog"}`), copies the selection
+  (`{"t":"copy"}`), and turns what is typed in the address bar into an address or a search (`rules.address`).
 - `tabs` the tabs of a profile, `rules` (sites, Chromium policy, `rules.json` DevTools command rules), `relay`
   (DevTools between a client and `cdp.sock`, filtered), `view` (which tab each DevTools session drives), `cdm`
   (chrome-devtools-mcp, trimmed tool list), `asks` (`ask_human` requests: feed `human:<id>`), `replays` (journal),

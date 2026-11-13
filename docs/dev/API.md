@@ -561,7 +561,8 @@ always exists, cannot be deleted) and **exits** (where a profile's traffic leave
 there, not stored). Who uses which profile: a `browser` block `{enabled?, profile?}` in the `.maxxing.json` of a
 project or a topic and in an agent's agent.json; a missing key is inherited agent -> topic -> project -> default
 (`enabled: false`, `profile: "main"`); an agent's `enabled` is never inherited; a profile that no longer exists =
-`main`. Every turn of a profile sees all its tabs (`by` says who opened one). Bus topic `browser` on every start / stop /
+`main`, except an agent's own choice: it then has no browser (`enabled: false`, `gone`). An agent turned on without a
+profile (or `profile: "own"`) gets its own browser: a profile with `agent` = its path, made once. Every turn of a profile sees all its tabs (`by` says who opened one). Bus topic `browser` on every start / stop /
 tab change / request / exit state change (`sessions` too when a turn starts or stops waiting for an exit).
 Errors: `{error, message}`.
 
@@ -571,7 +572,8 @@ BrowserSettings { ask: bool (true), wait_min: int (30, 1..1440), downloads: bool
                   max_active_profiles: int (3, 1..8), exit_wait_s: int (180, 0..900) }
 BrowserProfile  { id (^[a-z0-9][a-z0-9-]{0,23}$, not "direct"), name (<= 40), exit: "direct"|exit id,
                   web: "list"|"public", sites: [string] (<= 50, "example.com", subdomains included),
-                  on_exit_down: "wait"|"vps" }                                       (<= 20 profiles, main first)
+                  on_exit_down: "wait"|"vps", agent: ""|agent path (its own browser, set by the server) }
+                                                                                     (<= 20 profiles, main first)
 BrowserExit     { id, name, type: "proxy"|"tailscale"|"wireguard",
                   proxy: url ("socks5://host:port"|"http://host:port"; no scheme = socks5), user
                   tailscale: node (the device used as exit node, its Tailscale IP), login_server ("https://..." Headscale, "" = Tailscale)
@@ -590,7 +592,9 @@ BrowserTab      { key, url, title, by: {kind: "you"|"session"|"agent", sid?, nam
 BrowserState    { profile, state, started, last_use, stops_at, tabs: [BrowserTab], front: key|null,
                   page: {url, title}|null, control: bool (the person has the tab shown), control_by,
                   busy: bool (a turn acted on the tab shown in the last 15 s), turns: [{session, path, kind}],
-                  mem, level: ""|"live"|"background" (CPU level of its unit), bytes, blocked: [host] (5 newest) }
+                  mem, level: ""|"live"|"background" (CPU level of its unit), bytes, blocked: [host] (5 newest),
+                  dialog: {type: "alert"|"confirm"|"prompt"|"beforeunload", message, default}|null (open on a page),
+                  chooser: {multiple}|null (a page asked for files) }
 Summary         { running: [pid], mem, turns: {sid: pid}, tabs: {pid: awake}, cap, server_used, server_total,
                   level: "ok"|"warn"|"critical" }
 Waiting         { session, owner, exit, profile, at, resume: bool }      (a turn stopped by a down exit)
@@ -598,7 +602,8 @@ OwnerView       { owner: "project:<path>"|"topic:<path>"|"agent:<path>", path, k
                   enabled, profile, from: {enabled, profile} (owner that set it, "" = default), feature,
                   inherited: OwnerResolve of the parent|null (topic, agent), chain: [owner] (nearest first),
                   exit: ExitView|null (its profile's, not direct), outside_on_main: bool (an agent that reads mail /
-                  webhooks / the feed on main), asks: [BrowserAsk] }
+                  webhooks / the feed on main), own_profile: pid|null (an agent's own browser), gone: bool (an
+                  agent whose own browser was deleted: none), asks: [BrowserAsk] }
 BrowserAsk      { id (16 hex), session, owner, profile, reason, what: "captcha"|"sign_in"|"code"|"payment"|"consent"|"other",
                   at, expires, status: "pending"|"done"|"skip"|"timeout"|"expired", note?, decided_at?, decided_by? }
 BrowserAction   { at, session, tool, args (values typed -> "<n chars>", urls without query), ok, ms?, page?, refused? }
@@ -617,6 +622,8 @@ BrowserAction   { at, session, tool, args (values typed -> "<n chars>", urls wit
 | POST | `/api/browser/profiles/{pid}/stop` | – | `BrowserState`; the profile sleeps (its tabs are kept, asleep) |
 | POST | `/api/browser/profiles/{pid}/sleep` | – | `BrowserState` + `slept`: every tab not shown sleeps |
 | POST | `/api/browser/profiles/{pid}/forget` | – | `BrowserState`; stopped, sign-ins, tabs and journal erased |
+| GET | `/api/browser/profiles/{pid}/picture?path=&w=480` | – | JPEG (`no-store`) of the tab the folder `path` used last, else the one shown, `w` 160..960 px wide; `204` while the profile is not running (never starts it) (`404 no_profile`) |
+| POST | `/api/browser/profiles/{pid}/files` | multipart `files` (<= 20, 50 MB each) | `BrowserState`; given to the page that asked (its file input, `chooser`), copied into the profile's uploads folder (`409 no_chooser`, `413 too_large`) |
 | POST | `/api/browser/profiles/{pid}/tabs` | `{url?}` | `BrowserState`; a new tab of the person (`400 refused` for a page its rules refuse) |
 | POST | `/api/browser/profiles/{pid}/tabs/{key}/show` | – | `BrowserState`; shows it, wakes an asleep one (`404 no_tab`) |
 | DELETE | `/api/browser/profiles/{pid}/tabs/{key}` | – | `BrowserState` |
@@ -627,12 +634,12 @@ BrowserAction   { at, session, tool, args (values typed -> "<n chars>", urls wit
 | GET | `/api/browser/exits/{eid}/tailscale` | – | `{state: "needs_setup"\|"needs_login"\|"starting"\|"no_node"\|"node_offline"\|"up", backend, auth_url, account, nodes: [{id, name, dns, os, online, active}] (devices offering an exit node), node, error?}`; starts its `tailscaled` and, signed out, `tailscale up` for a sign-in address (`404 no_exit` not a Tailscale exit) |
 | POST | `/api/browser/exits/{eid}/tailscale` | `{node?}` \| `{action: "login"\|"logout"}` | same as GET; `node`: use that device (`--exit-node`, LAN access off) and save it (`400 bad_node`) |
 | GET | `/api/browser/owner?path=` | – | `OwnerView` (`400 bad_path`: not a project / topic / agent folder, `404 not_found`) |
-| PUT | `/api/browser/owner` | `{path, enabled?, profile?, inherit?: ["enabled"\|"profile"]}` | `OwnerView`; `inherit` removes the owner's own key (`400 bad_browser`, `404 no_profile`) |
+| PUT | `/api/browser/owner` | `{path, enabled?, profile?, inherit?: ["enabled"\|"profile"]}` | `OwnerView`; `inherit` removes the owner's own key; `profile: "own"` (agents only) = its own browser; `enabled: true` on an agent whose own browser is gone makes a new one (`400 bad_browser`, `404 no_profile`) |
 | POST | `/api/browser/waiting/{sid}` | `{action: "resume"\|"retry"\|"dismiss"}` | `resume` / `retry`: `{ok (the exit works now), waiting: Waiting\|null}` (`resume` = the turn goes on when the exit is back); `dismiss`: `{ok}` (`404 not_waiting`) |
 | GET | `/api/browser/asks?session=&path=` | – | `{asks: [BrowserAsk]}` pending |
 | POST | `/api/browser/asks/{id}` | `{action: "done"\|"skip", note?}` | `BrowserAsk` (`409 decided`); the person's hand is released. `done` stores the hand-back in the request file (never in the response): `trail` (pages the person went to in that session's tab, without query), `page`, `picture` (base64 JPEG): `ask_human` returns them to Claude (text + an image block) |
 | POST | `/api/browser/live-token` | – | `{token}` one use, 30 s |
-| WS | `/api/browser/live?t=<token>&profile=<pid>&q=auto\|high\|low` | signed-in cookie + token | one profile (default `main`; `4403` bad token / cookie, `4404` no profile). Server -> binary JPEG frames of the tab shown, text `{"t":"state", browser: BrowserState, me, asks}` (when it changes) / `{"t":"error", text}`. Client -> `{"t":"got"}` after drawing each frame (the next one is sent only then, or after 1 s; frames are never queued: newest only), `{"t":"mouse", type: down\|up\|move, x, y (0..1), button?, clicks?, alt?, ctrl?, meta?, shift?}`, `{"t":"wheel", x, y, dx, dy}`, `{"t":"key", type: down\|up, key, code, keyCode, text?}`, `{"t":"text", text}`, `{"t":"nav", url}`, `{"t":"back"\|"forward"\|"reload"}` (each one gives the person the tab shown), `{"t":"take"}`, `{"t":"release", done?: true\|"skip", note?}`, `{"t":"quality", q}`, `{"t":"size", w, h, dpr?}` (CSS px of the view: the page in front is laid out for it, clamped 360x320..2560x1600; back to 1280x800 when nobody watches). `auto`: JPEG quality 30..70 follows the time a frame takes to reach the slowest viewer |
+| WS | `/api/browser/live?t=<token>&profile=<pid>&q=auto\|high\|low` | signed-in cookie + token | one profile (default `main`; `4403` bad token / cookie, `4404` no profile). Server -> binary JPEG frames of the tab shown, text `{"t":"state", browser: BrowserState, me, asks}` (when it changes) / `{"t":"error", text}`. Client -> `{"t":"got"}` after drawing each frame (the next one is sent only then, or after 1 s; frames are never queued: newest only), `{"t":"mouse", type: down\|up\|move, x, y (0..1), button?, clicks?, alt?, ctrl?, meta?, shift?}`, `{"t":"wheel", x, y, dx, dy}`, `{"t":"key", type: down\|up, key, code, keyCode, text?}`, `{"t":"text", text}`, `{"t":"nav", url}` (`rules.address`: not an address = a Google search), `{"t":"back"\|"forward"\|"reload"}` (each one gives the person the tab shown), `{"t":"copy"}` -> `{"t":"copied", text}` (the page's selection), `{"t":"dialog", accept, text?}` (answers `dialog`), `{"t":"chooser"}` (no file for the page), `{"t":"take"}`, `{"t":"release", done?: true\|"skip", note?}`, `{"t":"quality", q}`, `{"t":"size", w, h, dpr?}` (CSS px of the view: the page in front is laid out for it, clamped 360x320..2560x1600; back to 1280x800 when nobody watches). `auto`: JPEG quality 30..70 follows the time a frame takes to reach the slowest viewer |
 | POST | `/api/browser/mcp/{sid}` | JSON-RPC `tools/list` \| `tools/call` | loopback + `Authorization: Bearer <turn token>` only (`browser_mcp.py`); owner and profile come from the turn file; refusals, a down exit (after `exit_wait_s`) and `409 too_many_profiles` come back as `isError` tool results |
 | WS | `/api/browser/cdp/{pid}` | – | loopback + `X-Browser-Secret` (one per turn) only: that turn's chrome-devtools-mcp to its profile's Chromium, filtered by `rules.json` and by its view (view.py) |
 
