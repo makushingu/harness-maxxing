@@ -114,7 +114,7 @@ export default function TermDrawer({ sid, places, onQuote, onHide }: { sid: stri
   return (
     <div className="relative flex shrink-0 flex-col border-t bg-background" style={{ height: mobile ? '58dvh' : h }} data-testid="term-drawer">
       {!mobile && <div className="absolute inset-x-0 -top-1 z-10 h-2 cursor-row-resize" onPointerDown={drag} aria-hidden />}
-      <div className="flex h-9 shrink-0 items-center gap-1 border-b px-1.5">
+      <div className="flex h-9 shrink-0 items-center gap-1 border-b px-1.5 pointer-coarse:h-11">
         <SquareTerminal className="ml-1 size-3.5 shrink-0 text-muted-foreground" />
         <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto" role="tablist">
           {ids.map((id) => (
@@ -122,19 +122,19 @@ export default function TermDrawer({ sid, places, onQuote, onHide }: { sid: stri
               key={id}
               role="tab"
               aria-selected={id === active}
-              className={cn('group/tab flex h-7 shrink-0 items-center gap-1 rounded-md pr-0.5 pl-2 text-xs', id === active ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-accent/60')}
+              className={cn('group/tab flex h-7 shrink-0 items-center gap-1 rounded-md pr-0.5 pl-2 text-xs pointer-coarse:h-10', id === active ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-accent/60')}
             >
               <button type="button" className="max-w-36 truncate outline-none" onClick={() => ui().setActive(sid, id)}>
                 <Sensitive>{title(id)}</Sensitive>
               </button>
-              <button type="button" className="rounded p-0.5 opacity-60 hover:bg-background hover:opacity-100" aria-label={t('term.close')} onClick={() => void close(id)}>
+              <button type="button" className="flex items-center justify-center rounded p-0.5 opacity-60 hover:bg-background hover:opacity-100 pointer-coarse:size-10" aria-label={t('term.close')} onClick={() => void close(id)}>
                 <X className="size-3" />
               </button>
             </div>
           ))}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon-sm" className="size-7" aria-label={t('term.new')} data-testid="term-new">
+              <Button variant="ghost" size="icon-sm" className="size-7 pointer-coarse:size-10" aria-label={t('term.new')} data-testid="term-new">
                 <Plus className="size-3.5" />
               </Button>
             </DropdownMenuTrigger>
