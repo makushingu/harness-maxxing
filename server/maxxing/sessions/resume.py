@@ -13,6 +13,8 @@ Measured on 30 real returns, each summary judged blind against the turn done wit
   cache warm (pause >= MIN_PAUSE_S) and context >= WARM_FACTOR x smart_resume_tokens   -> targeted summary first
   otherwise the idle compaction rule (runner._idle_compact, plain summary) - with smart resume on it adds nothing
   unless idle_compact_tokens is set lower.
+
+Every threshold is first brought within reach of the model's context window (`fit`): 300k means nothing on a 200k model.
 """
 from __future__ import annotations
 
@@ -21,6 +23,10 @@ import math
 MIN_PAUSE_S = 300                       # below this, a message is just the next one of the conversation
 WARM_FACTOR = 2                         # cache still warm: re-reading is cheap, only summarize a much bigger thread
 MIN_TOKENS = 20_000                     # a lower non-zero setting is raised to this (like idle compaction)
+# Kept free below a model's context window by every compaction threshold (`fit`). Claude Code compacts by itself, in
+# the middle of a turn, 20-35k below the window (measured on a 200k model: at 166-180k, ~75 s each time): a session
+# summarized between two messages at window - 70k starts its next turn with room to work before that point.
+WINDOW_HEADROOM = 70_000
 MESSAGE_CHARS = 6000                    # the returning message as shown to the summary turn
 SUMMARY_PROMPT = (
     "The user is back after a pause. Summarize this conversation so that a NEW session (same folder, same "
@@ -42,16 +48,30 @@ def threshold(cfg: dict) -> int:
     return max(n, MIN_TOKENS) if n > 0 else 0
 
 
+def fit(limit: int, window: object = None) -> int:
+    """The compaction threshold `limit` (tokens) on a model whose context window is `window`: at most
+    window - WINDOW_HEADROOM, never under half the window. A threshold above the window would never be met, and the
+    session would only be compacted by Claude Code in the middle of its turns. Unknown window: `limit` as it is."""
+    try:
+        w = int(window or 0)
+    except (TypeError, ValueError, OverflowError):   # a hand-edited meta: no cap, never a crashed turn
+        return limit
+    if limit <= 0 or w <= 0:
+        return limit
+    return min(limit, max(w - WINDOW_HEADROOM, w // 2))
+
+
 def away_text(seconds: float) -> str:
     return f"{seconds / 3600:.0f} h" if seconds >= 5400 else f"{seconds / 60:.0f} min"
 
 
-def candidate(m: dict, item: dict, cfg: dict, now: float) -> tuple[float, int] | None:
+def candidate(m: dict, item: dict, cfg: dict, now: float, window: object = None) -> tuple[float, int] | None:
     """(seconds away, context tokens) when the user message `item` coming back to session `m` gets a targeted
-    summary first; None otherwise (then the idle rule applies)."""
+    summary first; None otherwise (then the idle rule applies). `window`: the context window of the session's model."""
     limit = threshold(cfg)
     if not limit:
         return None
+    limit, warm = fit(limit, window), fit(limit * WARM_FACTOR, window)
     if (item.get("kind") or "user") != "user" or item.get("source") in ("system", "cron") or item.get("steer") \
             or item.get("plan_approved") or item.get("held"):
         return None
@@ -70,7 +90,7 @@ def candidate(m: dict, item: dict, cfg: dict, now: float) -> tuple[float, int] |
         return None
     if base and ctx - base < limit // 2:
         return None                                    # mostly fixed context: a summary would save nothing
-    if now - last < after and ctx < limit * WARM_FACTOR:
+    if now - last < after and ctx < warm:
         return None                                    # cache still warm and a medium context: just go on
     return now - last, ctx
 

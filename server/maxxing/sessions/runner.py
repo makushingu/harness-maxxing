@@ -337,7 +337,8 @@ class Runner:
 
     def _take(self, m: dict, q: list, cfg: dict, now: float) -> dict:
         """Pop the queue head (under the session lock), with the summary turn first when the return is worth it."""
-        smart = resume.candidate(m, q[0], cfg, now)
+        window = store.window_for(m, cfg)              # thresholds follow the model: 300k is out of reach on 200k
+        smart = resume.candidate(m, q[0], cfg, now, window)
         item = q.pop(0)
         item.pop("held", None)
         item.pop("inject", None)                       # an inject that missed its turn: a normal message
@@ -345,7 +346,7 @@ class Runner:
             idle = (resume.away_text(smart[0]), smart[1] // 1000)
             prompt = resume.summary_prompt(item.get("text") or "")
         else:                                          # the idle rule: a plain summary
-            idle = _idle_compact(m, item, cfg, now)
+            idle = _idle_compact(m, item, cfg, now, window)
             prompt = SUMMARY_PROMPT
         if idle:                                       # the summary runs first, the message waits at the head
             q.insert(0, {**item, "held": True})        # a Stop cancels the summary, never the user's message
@@ -656,17 +657,26 @@ class Runner:
         limit = config.int_setting(cfg, "auto_compact_tokens")
         if limit <= 0 or err is not None or a.stopped or not a.context_tokens:
             return
-        limit = max(limit, AUTO_COMPACT_MIN)
+        asked = max(limit, AUTO_COMPACT_MIN)
+        window = store.context_window_of(a.result or {}, a.real_model) or store.known_windows().get(a.real_model or "")
+        limit = resume.fit(asked, window)              # a model with a small window: summarized well before its end
         if a.context_tokens < limit or (item.get("kind") or "user") not in ("user", "seed"):
             return
         with store.edit(self.sid) as m:
             q = m.get("queue") or []
             if m.get("cron") or m.get("plan_ready") or any(x.get("kind") in ("compact", "handoff") for x in q):
                 return
+            try:
+                base = int(m.get("base_tokens") or 0)  # what a fresh thread costs anyway (CLAUDE.md, memory...)
+            except (TypeError, ValueError, OverflowError):
+                base = 0
+            if base and a.context_tokens - base < limit // 2:
+                return                                 # mostly fixed context: a summary would save nothing
             m["queue"] = [{"text": SUMMARY_PROMPT, "attachments": [], "source": "system", "kind": "compact",
                            "auto": True, "at": time.time()}] + q
+        small = f" - this model's window is {window // 1000}k" if window and limit < asked else ""
         self.note(f"The context reached {a.context_tokens // 1000}k tokens: Harness summarizes this session and "
-                  "continues in a fresh thread (automatic compaction, Settings -> Claude). The history stays "
+                  f"continues in a fresh thread (automatic compaction, Settings -> Claude{small}). The history stays "
                   "displayed here.")
 
     @staticmethod
@@ -1305,7 +1315,7 @@ HUD_PREFACE = ("[Sent from the HUD: a small floating window over the user's scre
                "Never edit the original capture.]\n\n")
 
 
-def _idle_compact(m: dict, item: dict, cfg: dict, now: float) -> tuple[str, int] | None:
+def _idle_compact(m: dict, item: dict, cfg: dict, now: float, window: object = None) -> tuple[str, int] | None:
     """Idle compaction: (time away, context in k tokens) when a user message comes back to a big session whose
     prompt cache has expired (last call more than `idle_compact_after_s` ago). The history would be re-sent
     uncached anyway: summarizing it now costs that once, and every later turn starts from a small seed."""
@@ -1319,9 +1329,12 @@ def _idle_compact(m: dict, item: dict, cfg: dict, now: float) -> tuple[str, int]
         return None
     if not math.isfinite(after) or not math.isfinite(last):
         return None
-    if limit <= 0 or after <= 0 or not last or ctx < max(limit, IDLE_COMPACT_MIN) or now - last < after:
+    if limit <= 0 or after <= 0 or not last or now - last < after:
         return None
-    if base and ctx - base < max(limit, IDLE_COMPACT_MIN) // 2:
+    limit = resume.fit(max(limit, IDLE_COMPACT_MIN), window)
+    if ctx < limit:
+        return None
+    if base and ctx - base < limit // 2:
         return None                                    # mostly fixed context: a summary would save nothing
     if (item.get("kind") or "user") != "user" or item.get("source") in ("system", "cron") or item.get("steer") \
             or item.get("plan_approved"):

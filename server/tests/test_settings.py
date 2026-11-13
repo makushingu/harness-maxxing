@@ -55,6 +55,8 @@ def test_put_and_validate(client, org):
     assert cfg["timezone"] == "Europe/Paris" and cfg["port"] == 8787          # other keys untouched
 
     assert client.put("/api/settings", json={"timezone": "Mars/Base"}).json()["error"] == "invalid_timezone"
+    # `localtime` is a link to /etc/localtime, not a zone: handed to timedatectl it breaks the server's clock
+    assert client.put("/api/settings", json={"timezone": "localtime"}).json()["error"] == "invalid_timezone"
     assert client.put("/api/settings", json={"language": "de"}).status_code == 422
     assert client.put("/api/settings", json={"public_url": "ftp://x"}).json()["error"] == "invalid_url"
     assert client.put("/api/settings", json={"files_root": "/does/not/exist"}).json()["error"] == "invalid_files_root"

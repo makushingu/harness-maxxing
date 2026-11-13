@@ -105,6 +105,29 @@ def test_catch_up_uses_the_configured_zone():
     assert crons.catch_up_slot(j, [], now, PARIS) == ts(2026, 11, 7, 7, zone=PARIS)
 
 
+def test_no_catch_up_of_a_slot_cron_is_about_to_fire_on_another_clock(org, monkeypatch):
+    """system_clock "follow" but the system zone is not config.timezone any more (changed or broken outside Harness):
+    cron fires on the system clock. The 07:00 job is not "missed" at 07:10 in Paris - cron starts it at 07:00 UTC."""
+    config.update_config(timezone="Europe/Paris")
+    monkeypatch.setenv("MAXXING_SYSTEM_ZONE", "UTC")
+    j = crons.create_job({"name": "Morning", "command": "echo hi", "schedule": "0 7 * * *"})
+    raw = crons._load_raw()
+    raw[0]["created"] = raw[0]["updated"] = ts(2026, 11, 1)
+    crons._save_raw(raw)
+    started = []
+    monkeypatch.setattr(crons, "spawn_run", lambda cid, trigger="manual", attempt=1: started.append((cid, trigger)))
+    assert crons.fire_zone().key == "UTC"
+    assert crons.tick(ts(2026, 11, 7, 7, 10, zone=PARIS)) == []                     # 06:10 UTC: cron has not fired yet
+    assert crons.tick(ts(2026, 11, 7, 7, 10)) == [(j["id"], "catch-up")]            # 07:10 UTC and no run: missed
+    started.clear()
+    monkeypatch.setenv("MAXXING_SYSTEM_ZONE", "Europe/Paris")                       # same clock: the displayed time
+    assert crons.fire_zone().key == "Europe/Paris"
+    assert crons.tick(ts(2026, 11, 7, 7, 10, zone=PARIS)) == [(j["id"], "catch-up")]
+    config.update_config(system_clock="keep")                                       # guarded lines fire in config.timezone
+    monkeypatch.setenv("MAXXING_SYSTEM_ZONE", "UTC")
+    assert crons.fire_zone().key == "Europe/Paris"
+
+
 def test_tick_starts_one_catch_up_and_the_run_records_it(org, monkeypatch):
     j = crons.create_job({"name": "Morning", "command": "echo hi", "schedule": "0 7 * * *"})
     raw = crons._load_raw()

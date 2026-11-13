@@ -252,7 +252,8 @@ def test_install_from_a_local_copy(tmp_path):
 
 
 @pytest.mark.parametrize("value, ok", [("Europe/Paris", True), ("UTC", True), ("../etc/passwd", False),
-                                       ("Europe/Paris;id", False), ("/etc/localtime", False)])
+                                       ("Europe/Paris;id", False), ("/etc/localtime", False),
+                                       ("localtime", False)])
 def test_timezone_names_are_validated(value, ok):
     """F12: every value written into files and units is checked first."""
     r = sh('valid_tz_name "$V" && echo fine', V=value)

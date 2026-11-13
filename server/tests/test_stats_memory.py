@@ -105,6 +105,11 @@ def test_known_windows_per_model(client, mx):
     store.record_windows({"modelUsage": {"claude-a": {"contextWindow": 1000000}, "claude-b": {"contextWindow": 200000}, "x": "bad"}})
     store.record_windows({"modelUsage": {"claude-b": {"contextWindow": 400000}}})
     assert store.known_windows() == {"claude-a": 1000000, "claude-b": 400000}
+    # the window of a session's next turn: its model's (else the default model's), else its last turn's
+    assert store.window_for({"model": "claude-b", "context_window": 1000000}, {}) == 400000
+    assert store.window_for({"model": "", "context_window": 200000}, {"default_model": "claude-a"}) == 1000000
+    assert store.window_for({"model": "claude-new", "context_window": 200000}, {}) == 200000
+    assert store.window_for({"model": "claude-new"}, {}) is None and store.window_for({"context_window": "x"}, {}) is None
     service._models_cache = (0, [])
     by = {m["id"]: m for m in service.models()}
     assert all("context_window" in m for m in by.values())

@@ -704,6 +704,23 @@ def test_auto_compact_after_a_big_context(client, topic, mx):
     assert wait_idle(client, s3["id"])["turns"] == 1
 
 
+def test_auto_compact_follows_the_model_window(client, topic, mx, monkeypatch):
+    """300k is out of reach of a 200k model: its sessions are summarized from 130k (window - 70k), not left to
+    Claude Code's own compaction in the middle of a turn."""
+    monkeypatch.setenv("FAKE_CLAUDE_WINDOW", "200000")
+    assert client.get("/api/claude/status").json()["auto_compact_tokens"] == 300000
+    s = client.post("/api/sessions", json={"path": topic, "message": "long work BIGCTX NOTOOL"}).json()
+    s2 = wait_for(lambda: (lambda x: x if x["turns"] == 3 and x["state"] == "idle" else None)(
+        client.get(f"/api/sessions/{s['id']}").json()), 30)
+    assert s2 is not None and s2["context_window"] == 200000
+    notes = [e["text"] for e in all_events(client, s["id"]) if e["type"] == "note"]
+    assert any("150k tokens" in n and "this model's window is 200k" in n for n in notes)
+    # the same context on a 1M model stays under the 300k asked
+    monkeypatch.setenv("FAKE_CLAUDE_WINDOW", "1000000")
+    s3 = client.post("/api/sessions", json={"path": topic, "message": "again BIGCTX NOTOOL"}).json()
+    assert wait_idle(client, s3["id"])["turns"] == 1
+
+
 def test_damaged_session_file_never_stops_turn_ends(client, topic):
     """A hand-edited session file (turns "x", finished_at "?") is skipped by the watcher; the other sessions'
     turn ends are still reported (C5)."""
@@ -859,6 +876,11 @@ def test_idle_compaction_rule():
     # a context that is mostly the fixed part of every thread (CLAUDE.md, memory): nothing to save
     assert _idle_compact({**m, "base_tokens": 24000}, user, cfg, 9000) is None
     assert _idle_compact({**m, "base_tokens": 12000}, user, cfg, 9000) == ("2 h", 25)
+    # a threshold out of reach of the model's window (200k) is brought to window - 70k
+    big, far = {**m, "context_tokens": 140000}, {**cfg, "idle_compact_tokens": 200000}
+    assert _idle_compact(big, user, far, 9000) is None and _idle_compact(big, user, far, 9000, 1000000) is None
+    assert _idle_compact(big, user, far, 9000, 200000) == ("2 h", 140)
+    assert _idle_compact({**big, "context_tokens": 125000}, user, far, 9000, 200000) is None
 
 
 def test_queue_preview_skips_the_message_being_sent_and_cuts_long_texts():

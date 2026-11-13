@@ -338,6 +338,8 @@ def put_settings(body: SettingsIn):
     changes = {k: v for k, v in changes.items() if k not in cfg or cfg[k] != v}
     if "timezone" in changes:
         try:
+            if changes["timezone"] in config.PSEUDO_ZONES:
+                raise ValueError
             ZoneInfo(changes["timezone"])
         except Exception:
             raise _err("invalid_timezone", f"unknown time zone {changes['timezone']!r}") from None

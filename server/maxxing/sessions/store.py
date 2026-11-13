@@ -274,6 +274,16 @@ def known_windows() -> dict[str, int]:
     return {str(k): int(v) for k, v in d.items() if isinstance(v, (int, float)) and v > 0} if isinstance(d, dict) else {}
 
 
+def window_for(m: dict, cfg: dict) -> int | None:
+    """Context window of the model the next turn of session `m` runs on: the one Claude Code reported for that model
+    on this server, else the window of the session's last turn. None: not known yet (first turn of a new model)."""
+    try:
+        return known_windows().get(str(m.get("model") or cfg.get("default_model") or "")) \
+            or int(m.get("context_window") or 0) or None
+    except (TypeError, ValueError, OverflowError):   # a hand-edited meta
+        return None
+
+
 def record_windows(result: dict) -> None:
     """Remember modelUsage[..].contextWindow of a raw result (each model, including sub-agents)."""
     mu = result.get("modelUsage") if isinstance(result.get("modelUsage"), dict) else {}

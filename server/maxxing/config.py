@@ -34,6 +34,9 @@ DOCS_DIR = CODE / "docs" / "user"
 SKILLS_DIR = CODE / "skills"
 TEMPLATES_DIR = CODE / "templates"
 
+# Names tzdata ships that are not zones: `localtime` is a link to /etc/localtime, so `timedatectl set-timezone
+# localtime` makes /etc/localtime point at itself (the server falls back to UTC, cron fires an hour or more off).
+PSEUDO_ZONES = ("localtime", "posixrules")
 PUBLIC_URL_RE = re.compile(r"^https?://[A-Za-z0-9.\-]+(:\d{1,5})?(/[^\s]*)?$")   # shared by PUT /api/settings and init
 
 DEFAULT_CONFIG: dict[str, Any] = {
@@ -53,7 +56,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "default_model": "",
     "permission_mode": "bypass",          # bypass | acceptEdits | default | ask
     # A turn that ends above this context (tokens) is followed by a summary turn and a fresh thread seeded with it
-    # (the same as "Compact"): long sessions stop re-sending their whole history. 0 = off.
+    # (the same as "Compact"): long sessions stop re-sending their whole history. 0 = off. This threshold and the two
+    # below follow the model: never above its context window - 70k (sessions/resume.fit), 130k on a 200k model.
     "auto_compact_tokens": 300000,
     # Idle compaction: a message that comes back to a session after its prompt cache expired (last call more than
     # idle_compact_after_s ago) with a context of at least idle_compact_tokens is preceded by the same summary turn:

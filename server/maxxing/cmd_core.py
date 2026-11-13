@@ -525,6 +525,8 @@ def do_init(a: argparse.Namespace) -> dict:
         raise SystemExit(f"Refusing to bind {a.bind!r}: use 127.0.0.1 (behind Caddy) or the Tailscale IP.")
     if a.timezone is not None:                    # same zone check as PUT /api/settings, before anything is written
         try:
+            if a.timezone in config.PSEUDO_ZONES:
+                raise ValueError
             ZoneInfo(a.timezone)
         except Exception:
             raise SystemExit(f"Unknown time zone {a.timezone!r}: use an IANA name such as Europe/Paris.") from None

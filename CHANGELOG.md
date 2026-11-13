@@ -6,6 +6,14 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 ## Unreleased
 
 Changed:
+- **Sessions: compaction follows the model's context window.** The thresholds of Settings -> Claude (automatic
+  compaction 300k, compact when you come back 200k, smart resume 100k) were the same for every model: on a model
+  with a 200k window they were out of reach, so a long session was never summarized by Harness between two messages
+  and Claude Code compacted it by itself in the middle of its turns, near the end of the window (measured on one
+  server: 47 times in 3 days, about 75 s of waiting each). A threshold now counts as at most the model's window
+  minus 70k (130k on a 200k model); the note of the compaction says so. Models with a 1M window: no change. An
+  automatic compaction is also skipped when the context is mostly what every new thread loads anyway (CLAUDE.md,
+  memory), like the two other rules.
 - **Sessions: a turn that stops short says it in one card, with a button.** When Claude stops before the end
   (usage limit reached, Claude's servers down, a crash), the thread no longer shows Claude Code's raw sentence, a
   red technical line and the same line again above the message box: one card says what happened in plain words
@@ -14,6 +22,16 @@ Changed:
   lines behind **Details**. Once you have resumed, the card stays as a trace, without its buttons.
 
 Fixed:
+- **Settings: `localtime` is no longer accepted as a time zone.** tzdata ships it as a link to `/etc/localtime`;
+  written by `PUT /api/settings`, `maxxing init --timezone` or the installer, it made `/etc/localtime` point at
+  itself: the server silently fell back to UTC, and every scheduled job then ran twice (once at the right time
+  by the catch-up, once an hour or two later by cron). `maxxing doctor` already reports the mismatch (time zone
+  line); the fix is `timedatectl set-timezone <zone> && systemctl restart cron`.
+- **Scheduled jobs: no double run when the server's clock is not the configured time zone.** With the system
+  zone changed or broken outside Harness (server clock on "follow"), cron fires on the system clock while the
+  catch-up looked for missed runs in the configured zone: each job was "missed" at its displayed time, caught up
+  a few minutes later, then started again by cron. The catch-up now follows the clock cron really fires on: the
+  job runs once, at the system's time, until the zones are put back in line (`maxxing doctor`, time zone line).
 - **Videos: going back on the bar goes back.** While a video played, a click earlier on its bar (at 0:07, back to
   0:01) could do nothing: the playback carried on from where it was. It happened when the player changed to the
   lighter copy at that very moment, more often on a slow connection. The player now goes where you clicked.

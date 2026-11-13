@@ -16,6 +16,7 @@ Behaviour is driven by the prompt (read from stdin, or a positional argument):
   HUGE          a 3 MB tool result, an image result and a 100 kB Write input (log clipping tests)
   AUTH_EXPIRED  (or env FAKE_CLAUDE_AUTH_EXPIRED=1) fails like an expired OAuth sign-in
   BIGCTX        the last answer reports a 150k-token context (automatic compaction tests)
+                (env FAKE_CLAUDE_WINDOW: the context window the result reports, default 1000000)
   MCPUSE:<srv>  calls the tool mcp__<srv>__ping (MCP auto-loading tests)
   MCPLOAD       runs `maxxing mcp load $FAKE_CLAUDE_MCPLOAD` (python -m maxxing) like a turn asking for a server
   APPROVE       asks the --permission-prompt-tool MCP server about a Bash call (approval tests)
@@ -239,7 +240,7 @@ def result(sid: str, model: str, text: str, ok: bool = True, errors: list | None
          "usage": usage(10, 40, 2400, 600),
          "modelUsage": {model: {"inputTokens": 10, "outputTokens": 40, "cacheReadInputTokens": 2400,
                                 "cacheCreationInputTokens": 600, "costUSD": cost,
-                                "contextWindow": 1000000}} if ok else {},
+                                "contextWindow": int(os.environ.get("FAKE_CLAUDE_WINDOW") or 1000000)}} if ok else {},
          "permission_denials": [], "uuid": str(uuid.uuid4())}
     if errors:
         r["errors"] = errors

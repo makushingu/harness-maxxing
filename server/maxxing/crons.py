@@ -881,6 +881,8 @@ def align_system_timezone(tz: str) -> bool:
     could not be switched (no systemd-timedated, polkit...): cron then still fires in the old zone."""
     if _crontab_file() is not None or os.environ.get("MAXXING_SYSTEM_TZ") == "0":
         return True
+    if tz in config.PSEUDO_ZONES:                      # never handed to timedatectl (see config.PSEUDO_ZONES)
+        return False
     try:
         cur = subprocess.run(["timedatectl", "show", "-p", "Timezone", "--value"],
                              capture_output=True, text=True, timeout=10).stdout.strip()
@@ -982,14 +984,30 @@ def _zone(name: str) -> ZoneInfo:
         return ZoneInfo("UTC")
 
 
-def guarded() -> bool:
-    """True when crontab lines must be guarded (clock kept and zones that differ)."""
-    if not keep_system_clock():
-        return False
+def _zones_differ() -> bool:
+    """config.timezone and the system zone are not the same clock (any offset that differs over the next year)."""
     a, b = _zone(config.load_config().get("timezone") or "UTC"), _zone(system_zone_name())
     now = dt.datetime.now(dt.timezone.utc)
     return any((now + dt.timedelta(days=30 * k)).astimezone(a).utcoffset()
                != (now + dt.timedelta(days=30 * k)).astimezone(b).utcoffset() for k in range(13))
+
+
+def guarded() -> bool:
+    """True when crontab lines must be guarded (clock kept and zones that differ)."""
+    return keep_system_clock() and _zones_differ()
+
+
+def fire_zone() -> ZoneInfo:
+    """The zone the crontab lines really fire in: config.timezone, except when the system zone differs and the lines
+    are not guarded (system_clock "follow", but the system zone was changed or broken outside Harness - doctor says
+    so). cron then fires on the system clock: a missed slot is one of THAT clock. Computed in config.timezone, every
+    job was "missed" at its displayed time, caught up, then started again by cron when the system clock got there."""
+    if keep_system_clock() or (_crontab_file() is not None and not os.environ.get("MAXXING_SYSTEM_ZONE")):
+        return tz()
+    try:
+        return _zone(system_zone_name()) if _zones_differ() else tz()
+    except Exception:  # noqa: BLE001 - never a stopped tick
+        return tz()
 
 
 def _whole_hours_apart() -> bool:
@@ -1657,7 +1675,7 @@ def tick(now: float | None = None) -> list[tuple[str, str]]:
     jobs = _read_raw()
     if not jobs:
         return []
-    zone, started = tz(), []
+    zone, started = fire_zone(), []
     runs: dict[str, list[dict]] = {}
     history = _all_runs()
     since = _known_since(history)
@@ -1761,7 +1779,7 @@ def _skip_reason(cid: str, trigger: str, attempt: int, now: float) -> str | None
         return "gone"
     job = {**DEFAULTS, **job}
     if trigger == "catch-up":
-        if catch_up_slot(job, _runs_of(cid), now, tz(), _known_since(_all_runs())) is None:
+        if catch_up_slot(job, _runs_of(cid), now, fire_zone(), _known_since(_all_runs())) is None:
             return "not missed any more"
     elif trigger == "retry":
         if _take_retry(cid, attempt, now) is None:
@@ -1803,7 +1821,7 @@ def run_job(cid: str, trigger: str = "manual", attempt: int = 1) -> dict | None:
         if why:
             log.info("cron %s: %s run skipped: %s", cid, trigger, why)
             return {"skipped": why, "cron_id": cid}     # the interrupted run is still reported (finally)
-        slot = catch_up_slot(job, _runs_of(cid), time.time(), tz()) if trigger == "catch-up" else None
+        slot = catch_up_slot(job, _runs_of(cid), time.time(), fire_zone()) if trigger == "catch-up" else None
         start = time.time()
         _mark(lockf, start)
         _live_locks[cid] = (lockf, start)

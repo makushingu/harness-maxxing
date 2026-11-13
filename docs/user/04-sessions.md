@@ -372,6 +372,13 @@ thread, with the note "Back after 2 h: Harness summarized the session ... for yo
 returns: 38 to 67 % fewer tokens from 100k, and details kept better than with the plain summary. Below the threshold
 the full thread goes on. Off = the "Compact when you come back" rule alone.
 
+**Models with a smaller context window.** The three thresholds above are written for models with a 1M window. On a
+model with a smaller one (200k for some), a threshold above *the window minus 70k* counts as that value: 130k on a
+200k model, whatever the setting says. Without it the 300k threshold would never be met, and the session would only
+be compacted by Claude Code itself, in the middle of a turn, each time it reaches the end of the window (about a
+minute of waiting, many times a day on a long session). The note of an automatic compaction then adds "this model's
+window is 200k". Nothing changes on a 1M model, and Off stays off.
+
 ## When a turn stops short
 
 When Claude stops before the end (usage limit reached, Claude's servers down, a crash), the conversation shows one

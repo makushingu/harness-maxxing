@@ -134,6 +134,24 @@ def test_candidate_rule():
     assert resume.candidate({**m, "cache_at": 9000 - 100}, user, cfg, 9000) is None   # a side question warmed it
 
 
+def test_thresholds_follow_the_model_window():
+    """A threshold out of reach of the model (300k on a 200k window) is brought to window - 70k."""
+    assert resume.fit(300000, 200000) == 130000 and resume.fit(100000, 200000) == 100000
+    assert resume.fit(300000, 1000000) == 300000 and resume.fit(300000, None) == 300000
+    assert resume.fit(300000, 100000) == 50000                                  # never under half the window
+    assert resume.fit(0, 200000) == 0 and resume.fit(300000, "x") == 300000
+    cfg = {"smart_resume_tokens": 200000, "idle_compact_after_s": 3600}
+    m = {"context_tokens": 140000, "finished_at": 1000.0, "fresh": False}
+    user = {"kind": "user", "source": "web"}
+    assert resume.candidate(m, user, cfg, 9000) is None                         # window unknown: the 200k asked
+    assert resume.candidate(m, user, cfg, 9000, 1000000) is None
+    assert resume.candidate(m, user, cfg, 9000, 200000) == (8000, 140000)       # 200k window: from 130k
+    assert resume.candidate({**m, "context_tokens": 125000}, user, cfg, 9000, 200000) is None
+    cfg = {**cfg, "smart_resume_tokens": 100000}                                # warm cache: 2 x 100k, capped at 130k
+    assert resume.candidate(m, user, cfg, 1000 + 1200, 200000) == (1200, 140000)
+    assert resume.candidate(m, user, cfg, 1000 + 1200, 1000000) is None
+
+
 def test_summary_prompt():
     p = resume.summary_prompt("fix {that} file")
     assert p.endswith("The user's next message:\nfix {that} file") and "For the next message" in p
