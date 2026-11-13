@@ -941,3 +941,12 @@ def test_tailscale_names_the_devices_online_but_not_approved_as_exit(monkeypatch
     assert out["state"] == "no_node"
     assert out["unapproved"] == [{"name": "localhost", "os": "iOS"}]
     assert [n["name"] for n in out["nodes"]] == ["pixel"]
+
+
+def test_the_unit_script_sets_its_own_home():
+    """A launcher's --setenv=HOME (a wrapper) wins over the unit's Environment=: in a read-only HOME, Chromium's crash
+    handler stops it at once. The unit script sets HOME itself (not in direct mode, where MX_RUN is the home)."""
+    from maxxing.browser import unit
+    sh = unit.HOST_SH.read_text()
+    assert '[ -z "$MX_RUN" ] && export HOME=/tmp' in sh
+    assert sh.index("export HOME=/tmp") < sh.index("exec ")
