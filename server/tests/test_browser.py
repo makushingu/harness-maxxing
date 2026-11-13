@@ -86,9 +86,62 @@ def test_the_proxy_refuses_local_answers_and_raw_addresses(tmp_path, monkeypatch
                 raise OSError("no such host")
             return [(2, 1, 6, "", (answers[host], port))]
         monkeypatch.setattr(loop, "getaddrinfo", fake)
-        assert await px.check("public.test", 443) == "93.184.216.34"
+        assert await px.check("public.test", 443) == ["93.184.216.34"]
         for h in ("rebind.test", "lan.test", "localhost", "127.0.0.1", "[::1]", "x.localhost", "nowhere.test"):
             assert await px.check(h, 443) is None, h
+    asyncio.run(go())
+
+
+def test_the_proxy_tries_ipv4_first_then_the_next_address(tmp_path, monkeypatch):
+    """A site with an IPv6 address first (Wikipedia) opened through a phone exit with no IPv6 way out: IPv4 is tried
+    first, and an address that fails gives way to the next one instead of failing the page."""
+    from maxxing.browser import exits
+    from maxxing.browser.proxy import Proxy
+
+    async def go():
+        px = Proxy(tmp_path / "p.sock")
+        loop = asyncio.get_running_loop()
+
+        async def fake(host, port, **kw):
+            return [(10, 1, 6, "", ("2a02:ec80::1", port, 0, 0)), (2, 1, 6, "", ("185.15.59.224", port)),
+                    (2, 1, 6, "", ("185.15.59.225", port))]
+        monkeypatch.setattr(loop, "getaddrinfo", fake)
+        assert await px.check("wiki.test", 443) == ["185.15.59.224", "185.15.59.225", "2a02:ec80::1"]
+
+        async def echo(r, w):
+            w.write(b"hello from the second address")
+            await w.drain()
+            w.close()
+        srv = await asyncio.start_server(echo, "127.0.0.1", 0)
+        port = srv.sockets[0].getsockname()[1]
+        tried = []
+        real = exits.open_via
+
+        async def open_via(up, ip, p, timeout=15.0):
+            tried.append(ip)
+            if ip != "127.0.0.1":
+                raise OSError("the SOCKS proxy could not connect (code 1)")
+            return await real(up, ip, p, timeout)
+        monkeypatch.setattr(exits, "open_via", open_via)
+
+        async def check(host, p):
+            return ["192.0.2.1", "127.0.0.1"]
+        px.check = check
+        await px.start()
+        try:
+            r, w = await asyncio.open_unix_connection(str(tmp_path / "p.sock"))
+            w.write(f"CONNECT wiki.test:{port} HTTP/1.1\r\nHost: wiki.test\r\n\r\n".encode())
+            await w.drain()
+            data = b""
+            while b"second address" not in data:
+                chunk = await asyncio.wait_for(r.read(200), 5)
+                assert chunk, data
+                data += chunk
+            assert data.startswith(b"HTTP/1.1 200") and tried == ["192.0.2.1", "127.0.0.1"]
+            w.close()
+        finally:
+            await px.stop()
+            srv.close()
     asyncio.run(go())
 
 
@@ -106,7 +159,7 @@ def test_the_proxy_forwards_to_the_checked_address_only(tmp_path):
         px = Proxy(tmp_path / "p.sock")
 
         async def check(host, p):
-            return "127.0.0.1" if host == "allowed.test" else None
+            return ["127.0.0.1"] if host == "allowed.test" else None
         px.check = check
         await px.start()
         try:
@@ -722,7 +775,7 @@ def test_the_proxy_goes_out_by_the_exit_to_the_checked_address(tmp_path, mx):
         px = Proxy(tmp_path / "p.sock", upstream=upstream)
 
         async def check(host, p):
-            return "93.184.215.14" if host == "shop.example.com" else None
+            return ["93.184.215.14"] if host == "shop.example.com" else None
         px.check = check
         await px.start()
         try:

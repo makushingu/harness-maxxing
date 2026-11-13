@@ -28,6 +28,7 @@ HEAD_MAX = 64 * 1024
 CONNECT_TIMEOUT = 15.0
 IDLE_TIMEOUT = 300.0                  # a tunnel with no byte either way for this long is closed
 MAX_CONNECTIONS = 256
+MAX_ADDRESSES = 4
 EXIT_PAGE = "The exit of this browser profile is offline ({why}). Harness Maxxing waits for it: it never uses the server's address instead."
 BLOCK_PAGE = "Blocked by Harness Maxxing: {host} cannot be reached from this browser (not a public internet site)."
 
@@ -103,21 +104,29 @@ class Proxy:
             rest = (f"{method} {path} {version}\r\n" + "\r\n".join(kept) + "\r\nConnection: close\r\n\r\n").encode("latin-1")
         if not host or port is None or not 0 < port < 65536:
             return await _answer(w, 400, "Bad request")
-        ip = await self.check(host, port)
-        if ip is None:
+        ips = await self.check(host, port)
+        if not ips:
             self.blocked.append((time.time(), host))
             return await _answer(w, 403, BLOCK_PAGE.format(host=host))
         eid, up = None, None
         try:
             if self.upstream is not None:
                 eid, up = await asyncio.to_thread(self.upstream)
-            ur, uw = await exits.open_via(up, ip, port, CONNECT_TIMEOUT)
         except exits.ExitDown as e:
             return await _answer(w, 502, EXIT_PAGE.format(why=e))
-        except (OSError, ConnectionError, asyncio.TimeoutError, asyncio.IncompleteReadError) as e:
+        err: Exception | None = None
+        for ip in ips[:MAX_ADDRESSES]:              # IPv4 first: a phone exit often has no IPv6 way out
+            try:
+                ur, uw = await exits.open_via(up, ip, port, CONNECT_TIMEOUT)
+                break
+            except exits.ExitDown as e:
+                return await _answer(w, 502, EXIT_PAGE.format(why=e))
+            except (OSError, ConnectionError, asyncio.TimeoutError, asyncio.IncompleteReadError) as e:
+                err = e
+        else:
             if eid:                                   # the exit, or the site? a quick check says
                 asyncio.get_running_loop().create_task(exits.runtime().check(eid))
-            return await _answer(w, 502, f"{host} did not answer" + (f" through the exit ({e})" if eid else ""))
+            return await _answer(w, 502, f"{host} did not answer" + (f" through the exit ({err})" if eid else ""))
         try:
             if method == "CONNECT":
                 w.write(b"HTTP/1.1 200 Connection Established\r\n\r\n")
@@ -129,8 +138,8 @@ class Proxy:
         finally:
             _close(uw)
 
-    async def check(self, host: str, port: int) -> str | None:
-        """The address to connect to, or None when the host is not a public internet site."""
+    async def check(self, host: str, port: int) -> list[str] | None:
+        """The addresses to try, IPv4 first, or None when the host is not a public internet site."""
         h = host.strip("[]").rstrip(".").lower()
         if rules.local_host(h) or rules.parse_ip(h) is not None:
             return None
@@ -144,8 +153,10 @@ class Proxy:
             ip = rules.parse_ip(addr[0].split("%", 1)[0])
             if ip is None or not rules.ip_public(ip):
                 return None                          # one private answer is enough to refuse (rebinding)
-            ips.append(addr[0])
-        return ips[0] if ips else None
+            if addr[0] not in ips:
+                ips.append(addr[0])
+        ips.sort(key=lambda a: ":" in a)             # stable: the resolver's order inside each family
+        return ips or None
 
     async def _pipe(self, r: asyncio.StreamReader, w: asyncio.StreamWriter, out: bool) -> None:
         try:
