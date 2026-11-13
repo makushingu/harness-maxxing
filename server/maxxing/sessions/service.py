@@ -176,7 +176,7 @@ def _worktree_public(m: dict) -> dict | None:
     wt = m.get("worktree")
     if not isinstance(wt, dict):
         return None
-    return {**{k: wt.get(k) for k in ("path", "repo", "branch", "base", "pr", "kept_branch")},
+    return {**{k: wt.get(k) for k in ("path", "repo", "branch", "base", "pr", "kept_branch", "port")},
             "removed": bool(wt.get("removed")),
             "preparing": (wt.get("prepare") or {}).get("state") == "running"}
 

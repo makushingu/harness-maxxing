@@ -41,6 +41,8 @@ export type RepoStatus = {
   dirty: number
   github: string | null
   pr: { number: number; url: string; title: string; draft: boolean; base: string } | null
+  /** No open PR, but one of this branch was merged on GitHub. */
+  merged_pr?: { number: number; url: string; title: string; merged_at: string; base: string } | null
   checks: { total: number; ok: number; failed: number; pending: number } | null
   github_error?: string
 }

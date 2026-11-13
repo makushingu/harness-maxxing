@@ -124,7 +124,8 @@ async def status(repo: str):
         r = codediff.checked_repo(repo)
         head = codediff.repo_head(r)
         full = gitview.github_name(head.get("remote") or "") if head.get("remote") else None
-        out = {**head, "dirty": codediff.dirty(r), "github": full, "pr": None, "checks": None}
+        out = {**head, "dirty": codediff.dirty(r), "github": full, "pr": None, "merged_pr": None,
+               "checks": None}
         if full and head.get("branch"):
             try:
                 sha = codediff.head_sha(r)
@@ -211,8 +212,28 @@ def _pull(body: PullIn) -> dict:
                                            f"{base}")
     subjects = [c["subject"] for c in codediff.commits(r, f"origin/{base}")]
     title = (body.title or (subjects[-1] if len(subjects) == 1 else (subjects[0] if subjects else head["branch"])))
-    text = body.body if body.body is not None else "\n".join(f"- {s}" for s in reversed(subjects))
+    text = body.body if body.body is not None else _pr_text(r, subjects)
     return gitview.open_pull(full, head["branch"], base, title.strip(), text, body.draft)
+
+
+PR_TEMPLATES = (".github/pull_request_template.md", ".github/PULL_REQUEST_TEMPLATE.md", "pull_request_template.md",
+                "PULL_REQUEST_TEMPLATE.md", "docs/pull_request_template.md", "docs/PULL_REQUEST_TEMPLATE.md")
+
+
+def _pr_text(r, subjects: list[str]) -> str:
+    """The pull request's description: its commits, then the repository's pull request template when it has one
+    (the user fills it in on the PR, as on GitHub)."""
+    text = "\n".join(f"- {s}" for s in reversed(subjects))
+    for name in PR_TEMPLATES:
+        f = r / name
+        try:
+            if f.is_file() and not f.is_symlink() and f.stat().st_size < 20000:
+                tpl = f.read_text(errors="replace").strip()
+                if tpl:
+                    return f"{text}\n\n{tpl}" if text else tpl
+        except OSError:
+            continue
+    return text
 
 
 @router.post("/api/code/pr")
@@ -388,6 +409,7 @@ async def copy_merge(sid: str, body: CopyEndIn):
 
 class CopyRemoveIn(BaseModel):
     force: bool = False                    # discard: uncommitted changes and the branch's own commits go too
+    merged_pr: bool = False                # its pull request was merged on GitHub: the branch goes too
 
 
 @router.post("/api/sessions/{sid}/copy/remove")
@@ -395,7 +417,15 @@ async def copy_remove(sid: str, body: CopyRemoveIn):
     from .. import bus, worktrees
 
     def run():
-        out = worktrees.remove(_idle(sid), force=body.force)
+        meta = _idle(sid)
+        sha = None
+        if body.merged_pr:
+            st = worktrees.status(meta)
+            got = gitview.merged_pull(st["github"], st["branch"]) if st.get("github") and st.get("branch") else None
+            if not got:
+                raise GitError(409, "not_merged", "no merged pull request was found for this branch on GitHub")
+            sha = got["head_sha"]
+        out = worktrees.remove(meta, force=body.force, merged_sha=sha)
         bus.invalidate("sessions")
         return out
     return await _call(run)

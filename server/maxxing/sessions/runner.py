@@ -470,6 +470,11 @@ class Runner:
         base += pcbridge.mcp_config_args() + mcp_plan.args + approval
         env = spawn.claude_env(meta.get("env") or {}, mode, agent.get("keys") if agent else None)
         env["MAXXING_SESSION"] = self.sid               # `maxxing mcp load` run by the turn finds its session
+        if copy:                                        # a separate copy: its folder and its own ports
+            wt = meta["worktree"]
+            env["MAXXING_COPY_PATH"] = str(wt.get("path") or "")
+            if wt.get("port"):
+                env["MAXXING_PORT"] = str(wt["port"])
         text = (PLAN_PREFACE if plan else "") + build_prompt(item)
         root = Path(cfg.get("workspace") or "/").resolve()
         prompt, json_in = stdin_payload(text, item, root)
@@ -1145,6 +1150,9 @@ def _copy_note(meta: dict, cwd: str) -> str:
             f"{wt.get('path')}, branch {wt.get('branch')}, started from {wt.get('base')}. Make every change of that "
             "repository here, never in its main folder (other sessions work there). Commit on this branch; the "
             "user merges it or opens a pull request from Harness.")
+    if isinstance(wt.get("port"), int) and wt["port"]:
+        note += (f" A dev server or any other local service of this copy listens on ports {wt['port']} to "
+                 f"{wt['port'] + 9} ($MAXXING_PORT is the first): other copies use the usual ones.")
     if pr.get("number"):
         note += f" The branch is the one of pull request #{pr['number']}" + (
             " (from a fork: pushing back is not possible)." if pr.get("fork") else ".")

@@ -23,6 +23,13 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   with plain code blocks). Git page: `PullList` (filters, opens the PR view, also on a clone of a GitHub repository),
   `CopyList`. i18n namespaces `copy`, `pr` in the `code` group. Tests `test_worktrees.py`, `test_pulls.py`
   (`_conn_helpers._Server` answers PATCH).
+- Copies, round 2 (needs reported by T3 Code users): `.worktreeinclude` (`worktrees._copy_included`: `ls-files
+  --others --ignored --exclude-from` then `check-ignore`, capped `INCLUDE_MAX` / `INCLUDE_BYTES`); a block of 10 ports
+  per copy (`_free_ports`, meta `port`, `MAXXING_PORT` + `MAXXING_COPY_PATH` for turns - `runner` - and the
+  preparation, `_copy_note` names them); `gitview.merged_pull` + `branch_status.merged_pr` (the last merged PR of a
+  branch with no open one) and `copy/remove {merged_pr}` (looked up again server-side; branch deleted when its tip
+  is in the PR's head, so squash merges count); `api/code._pr_text` appends the repository's pull request template
+  (`PR_TEMPLATES`). `codediff.repo_head` reads `remote.origin.url` (no `insteadOf` rewrite, as `gitview` does).
 - Workspace template: `CLAUDE.md` (separate copy, PR view) and the help index line `35-code.md`: carried over by the
   upgrade note of the next version.
 

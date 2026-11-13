@@ -94,7 +94,12 @@ its own folder and its own branch, so two sessions on the same repository never 
   until it is pushed. The prefix can be changed per repository.
 - **Prepare the copy**: a copy has no `node_modules` or `.venv` (they are not in git). Give a command (`npm ci`,
   `uv sync`…) run once in each new copy, and tick **Copy the .env files** if the project needs them; both are kept for
-  the repository. A failed preparation shows in the bar: one click asks Claude to look at its log.
+  the repository. A failed preparation shows in the bar: one click asks Claude to look at its log. Other ignored
+  files a copy needs (a local config, certificates): list them in a `.worktreeinclude` file at the root of the
+  repository, with the syntax of `.gitignore` (the same file Claude Code reads); every new copy gets them.
+- **Ports**: each copy has 10 ports of its own (4100-4109 for the first one, 4110-4119 for the next…), so that the dev
+  servers of two copies never fight for 3000. Claude knows them; your preparation command and scripts read the first
+  one in `$MAXXING_PORT`. Hover the branch in the bar to see them.
 - **The bar above the composer**: the branch, `← main`, the commits of the branch, what is not committed; one main
   button: **Open a PR** on a GitHub repository, **Merge into main** otherwise. ⋯ **Bring in main** (asks Claude to
   merge the latest main and settle the conflicts), **Discard the copy**.
@@ -102,6 +107,8 @@ its own folder and its own branch, so two sessions on the same repository never 
   committed are committed first with a message Claude proposes. A merge brings the base into the branch first, in the
   copy: on a conflict nothing changes and Claude is asked to settle it. After a merge the copy and its branch go away;
   discarding deletes them too, with their commits (the window says what would be lost).
+- **A PR merged on GitHub**: the bar says **PR #12 merged** and offers **Remove the copy**: the copy and its branch go
+  (a squash or rebase merge counts too); nothing goes while files are left in it.
 - The session stays: after the copy is gone it works in the topic folder again. A session sent to the trash takes its
   copy with it when nothing would be lost; otherwise the copy stays (the Git page lists the copies of a clone).
 - A session on a copy cannot move to another topic. Agents never get a copy.

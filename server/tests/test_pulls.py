@@ -21,9 +21,9 @@ def _git(repo, *args) -> str:
 
 
 class GH:
-    def __init__(self, association="MEMBER", fork=False):
+    def __init__(self, association="MEMBER", fork=False, merged_head=None):
         self.sent: list[tuple[str, str, dict]] = []
-        self.association, self.fork = association, fork
+        self.association, self.fork, self.merged_head = association, fork, merged_head
         self.srv = _Server(self.handler)
 
     def handler(self, method, path, headers, body):
@@ -47,6 +47,10 @@ class GH:
               "head": {"ref": "fix/two", "sha": "a" * 40, "repo": {"full_name": head_repo}},
               "base": {"ref": "main"}, "commits": 1, "additions": 1, "deletions": 1,
               "requested_reviewers": [{"login": "ann"}], "updated_at": "2026-11-13T10:00:00Z"}
+        if u.path == "/repos/acme/app/pulls" and method == "GET" and self.merged_head:   # merged on GitHub
+            closed = {**pr, "state": "closed", "merged_at": "2026-11-13T12:00:00Z",
+                      "head": {**pr["head"], "sha": self.merged_head}}
+            return 200, [closed] if q.get("state") == ["closed"] else [], j
         if u.path == "/repos/acme/app/pulls" and method == "GET":
             return 200, [pr], j
         if u.path == "/repos/acme/app/pulls/7" and method == "GET":
@@ -180,3 +184,29 @@ def test_a_pr_session_needs_a_clone_in_a_topic(client, gh, topic, mx):
     gh()
     r = client.post("/api/code/pr-session", json={"repo": "github:acme/app", "number": 7})
     assert r.status_code == 400 and r.json()["error"] == "no_clone"
+
+
+def test_a_copy_whose_pr_was_merged_on_github_is_put_away_with_its_branch(client, gh, clone):
+    topic, c = clone
+    g = gh()
+    s = client.post("/api/code/pr-session", json={"repo": "github:acme/app", "number": 7, "message": "go NOTOOL"}).json()
+    wait_idle(client, s["id"])
+    r = client.post(f"/api/sessions/{s['id']}/copy/remove", json={"merged_pr": True})
+    assert r.status_code == 409 and "merged" in r.text                  # still open: nothing happens
+    assert Path(s["worktree"]["path"]).is_dir()
+    g.merged_head = _git(c, "rev-parse", "fix/two").strip()               # squash-merged on GitHub
+    gitview.clear_cache()
+    st = client.get("/api/code/status", params={"repo": s["worktree"]["path"]}).json()
+    assert st["pr"] is None and st["merged_pr"]["number"] == 7, st
+    r = client.post(f"/api/sessions/{s['id']}/copy/remove", json={"merged_pr": True})
+    assert r.status_code == 200, r.text
+    assert r.json()["kept_branch"] is None and not Path(s["worktree"]["path"]).exists()
+    assert "fix/two" not in _git(c, "branch", "--list")
+
+
+def test_a_pr_gets_the_repository_template(tmp_path):
+    from maxxing.api.code import _pr_text
+    assert _pr_text(tmp_path, ["one", "two"]) == "- two\n- one"
+    (tmp_path / ".github").mkdir()
+    (tmp_path / ".github" / "pull_request_template.md").write_text("## Why\n\n## Tests\n")
+    assert _pr_text(tmp_path, ["one"]) == "- one\n\n## Why\n\n## Tests"

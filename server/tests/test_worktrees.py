@@ -209,3 +209,42 @@ def test_a_deleted_session_takes_its_copy_only_when_nothing_is_lost(client, code
     assert client.delete(f"/api/sessions/{worked['id']}").status_code in (200, 204)
     assert not Path(clean["worktree"]["path"]).exists()
     assert Path(worked["worktree"]["path"], "y.txt").is_file()                # a file left: the copy stays
+
+
+def test_worktreeinclude_files_and_a_block_of_ports(client, code):
+    import json, os
+    topic, clone = code
+    (clone / ".gitignore").write_text(".env\nnode_modules/\n*.local\n")
+    (clone / ".worktreeinclude").write_text("*.local\na.txt\n")
+    _git(clone, "add", ".")
+    _git(clone, "commit", "-qm", "include")
+    (clone / "conf").mkdir()
+    (clone / "conf" / "db.local").write_text("secret=1\n")
+    (clone / "node_modules").mkdir()
+    (clone / "node_modules" / "x.local").write_text("big\n")      # named, ignored: copied as well
+    (clone / "notes.txt").write_text("untracked, not ignored\n")
+    one = _new(client, topic, clone, message="hi NOTOOL")
+    two = _new(client, topic, clone, message="hi NOTOOL")
+    folder = Path(one["worktree"]["path"])
+    assert (folder / "conf" / "db.local").read_text() == "secret=1\n"
+    assert not (folder / "notes.txt").exists()                        # not ignored by git: never copied
+    assert (folder / "a.txt").read_text() == "one\n"                  # tracked: the copy has it already
+    st = client.get(f"/api/sessions/{one['id']}/copy").json()
+    assert st["included"] == 2
+    p1, p2 = st["port"], client.get(f"/api/sessions/{two['id']}/copy").json()["port"]
+    assert p1 >= worktrees.PORT_START and abs(p1 - p2) >= worktrees.PORT_BLOCK
+    wait_idle(client, one["id"])
+    calls = [json.loads(x) for x in open(os.path.join(os.environ["FAKE_CLAUDE_DIR"], "calls.jsonl"))]
+    call = [c for c in calls if c["cwd"] == str(folder)][-1]
+    assert call["env"]["MAXXING_PORT"] == str(p1)
+    note = call["argv"][call["argv"].index("--append-system-prompt") + 1]
+    assert f"ports {p1} to {p1 + 9}" in note
+
+
+def test_the_preparation_knows_its_ports(client, code):
+    topic, clone = code
+    s = _new(client, topic, clone, message="hi NOTOOL", prepare='echo "$MAXXING_PORT $MAXXING_COPY_PATH" > p.txt')
+    folder = Path(s["worktree"]["path"])
+    wait_for(lambda: (store.read(s["id"])["worktree"].get("prepare") or {}).get("state") == "done")
+    port = store.read(s["id"])["worktree"]["port"]
+    assert (folder / "p.txt").read_text().split() == [str(port), str(folder)]

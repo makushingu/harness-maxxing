@@ -12,8 +12,11 @@ The end of a copy: a pull request (GitHub repositories), a local merge into its 
 "discard". Merging happens in the copy first (the base is merged into the branch, a conflict is left to the user
 or Claude there), then the base only moves forward. Never for agents (like the terminal).
 
-Meta of a session: `worktree = {path, repo, branch, base, created, named, prepare?, removed?}`.
-Per-repository preferences (`prefix`, `prepare`, `copy_env`) in `<state>/worktrees.json`.
+Meta of a session: `worktree = {path, repo, branch, base, created, named, port, prepare?, included?, removed?}`.
+Per-repository preferences (`prefix`, `prepare`, `copy_env`) in `<state>/worktrees.json`. A `.worktreeinclude` at
+the root of the repository (gitignore syntax, as in Claude Code) names the ignored files every new copy gets.
+Each copy owns a block of PORT_BLOCK ports from `port` (`MAXXING_PORT` for its turns and its preparation), so that
+the dev servers of two copies never fight for 3000.
 """
 from __future__ import annotations
 
@@ -22,6 +25,7 @@ import logging
 import os
 import re
 import shutil
+import socket
 import subprocess
 import threading
 import time
@@ -40,6 +44,9 @@ PREPARE_TIMEOUT = 15 * 60
 SCAN_DEPTH = 2                       # repositories looked for under a topic folder (topic/repo, topic/x/repo)
 SKIP = {"node_modules", "__pycache__", "venv", ".venv", "dist", "build", "attachments", DIR, HIDDEN}
 ENV_MAX = 20                         # .env files copied at most
+INCLUDE = ".worktreeinclude"
+INCLUDE_MAX, INCLUDE_BYTES = 500, 200 * 1024 * 1024   # files named by .worktreeinclude: at most
+PORT_START, PORT_BLOCK, PORT_SLOTS = 4100, 10, 80   # copy n gets 4100 + 10 n ... + 9
 _lock = threading.Lock()
 
 
@@ -247,10 +254,16 @@ def create(topic_path: str, repo: str, base: str | None, title: str, sid: str, *
         wt["pr"] = {k: pr.get(k) for k in ("number", "url", "fork", "full") if pr.get(k) is not None}
     if copy_env if copy_env is not None else p["copy_env"]:
         wt["env_copied"] = _copy_env(r, folder)
+    included = _copy_included(r, folder)
+    if included:
+        wt["included"] = len(included)
+    with _lock:
+        wt["port"] = _free_ports(sid)
     cmd = (prepare if prepare is not None else p["prepare"]).strip()
     if cmd:
         wt["prepare"] = {"cmd": cmd, "state": "running", "started": time.time()}
-        threading.Thread(target=_prepare, args=(sid, folder, cmd), name=f"wt-prep-{sid[:8]}", daemon=True).start()
+        threading.Thread(target=_prepare, args=(sid, folder, cmd, copy_env_vars(wt)), name=f"wt-prep-{sid[:8]}",
+                         daemon=True).start()
     return wt
 
 
@@ -299,11 +312,78 @@ def _copy_env(repo: Path, folder: Path) -> list[str]:
     return done
 
 
+def _copy_included(repo: Path, folder: Path) -> list[str]:
+    """The ignored files named by the repository's `.worktreeinclude` (gitignore syntax), copied to the same place
+    in the copy. Only files git ignores (a tracked file is in the copy already), never a link, capped."""
+    spec = repo / INCLUDE
+    if not spec.is_file() or spec.is_symlink():
+        return []
+    try:
+        listed = codediff._run(repo, "ls-files", "--others", "--ignored", f"--exclude-from={spec}", "-z",
+                               check=False, timeout=30).stdout.split("\0")
+    except GitError as e:
+        log.info("%s not read: %s", spec, e.message)
+        return []
+    listed = [x for x in listed if x and not x.endswith("/")][:INCLUDE_MAX * 4]
+    ignored: list[str] = []
+    for i in range(0, len(listed), 200):              # only what git ignores
+        out = codediff._run(repo, "check-ignore", "--", *listed[i:i + 200], check=False).stdout
+        ignored += [x for x in out.splitlines() if x]
+    done: list[str] = []
+    size = 0
+    for rel in ignored:
+        src, dst = repo / rel, folder / rel
+        try:
+            if not src.is_file() or src.is_symlink() or dst.exists() or folder.resolve() not in dst.resolve().parents:
+                continue
+            size += src.stat().st_size
+            if size > INCLUDE_BYTES or len(done) >= INCLUDE_MAX:
+                log.info("%s: copy limit reached, %d files copied", spec, len(done))
+                break
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, dst)
+            done.append(rel)
+        except OSError as e:
+            log.info("%s not copied: %s", rel, e)
+    return done
+
+
+def _listening(port: int) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(0.05)
+        return s.connect_ex(("127.0.0.1", port)) == 0
+
+
+def _free_ports(sid: str) -> int:
+    """The first port of a block no other live copy owns and nothing listens on (0 when all are taken)."""
+    from .sessions import store
+    used = set()
+    for other in store.list_ids():
+        if other == sid:
+            continue
+        w = (store.read_cached(other) or {}).get("worktree")
+        if isinstance(w, dict) and not w.get("removed") and isinstance(w.get("port"), int):
+            used.add(w["port"])
+    for i in range(PORT_SLOTS):
+        first = PORT_START + i * PORT_BLOCK
+        if first not in used and not any(_listening(first + k) for k in range(PORT_BLOCK)):
+            return first
+    return 0
+
+
+def copy_env_vars(wt: dict) -> dict[str, str]:
+    """What the turns and the preparation command of a copy get: its folder and its ports."""
+    out = {"MAXXING_COPY_PATH": str(wt.get("path") or "")}
+    if wt.get("port"):
+        out["MAXXING_PORT"] = str(wt["port"])
+    return out
+
+
 def prepare_log(sid: str) -> Path:
     return config.state_dir("worktrees") / f"{sid[:8]}.log"
 
 
-def _prepare(sid: str, folder: Path, cmd: str) -> None:
+def _prepare(sid: str, folder: Path, cmd: str, env: dict[str, str] | None = None) -> None:
     """Run the repository's preparation command (`npm ci`, `uv sync`...) once in the new copy, logged."""
     from .sessions import store
     for _ in range(100):                     # the session's meta is written right after the copy is made
@@ -316,7 +396,7 @@ def _prepare(sid: str, folder: Path, cmd: str) -> None:
             out.write(f"$ {cmd}\n")
             out.flush()
             p = subprocess.run(["/bin/sh", "-c", cmd], cwd=folder, stdout=out, stderr=subprocess.STDOUT,
-                               stdin=subprocess.DEVNULL, timeout=PREPARE_TIMEOUT)
+                               stdin=subprocess.DEVNULL, timeout=PREPARE_TIMEOUT, env={**os.environ, **(env or {})})
             state = "done" if p.returncode == 0 else "failed"
             out.write(f"\n[exit {p.returncode}]\n")
     except subprocess.TimeoutExpired:
@@ -389,7 +469,8 @@ def status(meta: dict) -> dict:
     wt = meta.get("worktree")
     if not isinstance(wt, dict):
         raise GitError(404, "no_copy", "this session has no separate copy")
-    out = {**{k: wt.get(k) for k in ("path", "repo", "branch", "base", "pr", "prepare", "env_copied", "created")},
+    keys = ("path", "repo", "branch", "base", "pr", "prepare", "env_copied", "included", "port", "created")
+    out = {**{k: wt.get(k) for k in keys},
            "exists": False, "removed": bool(wt.get("removed"))}
     folder = Path(str(wt.get("path") or ""))
     if wt.get("removed") or not folder.is_dir():
@@ -460,9 +541,10 @@ def _checked_out(repo: Path, branch: str) -> Path | None:
     return None
 
 
-def remove(meta: dict, force: bool = False, delete_branch: bool = True) -> dict:
+def remove(meta: dict, force: bool = False, delete_branch: bool = True, merged_sha: str | None = None) -> dict:
     """Remove the copy's folder (refused with uncommitted changes unless `force`). The branch goes too when it is
-    merged into the base, has nothing of its own, or `force` (discard); else it is kept and named."""
+    merged into the base, has nothing of its own, its tip is in `merged_sha` (the head of its pull request, merged
+    on GitHub - squash and rebase merges included), or `force` (discard); else it is kept and named."""
     wt = meta.get("worktree")
     if not isinstance(wt, dict) or wt.get("removed"):
         raise GitError(404, "no_copy", "this session has no separate copy")
@@ -479,10 +561,10 @@ def remove(meta: dict, force: bool = False, delete_branch: bool = True) -> dict:
                       timeout=codediff.WRITE_TIMEOUT)
     codediff._run(repo, "worktree", "prune", check=False, write=True)
     kept = None
-    if branch and delete_branch and _branch_exists(repo, branch) and not wt.get("pr"):
+    if branch and delete_branch and _branch_exists(repo, branch) and (not wt.get("pr") or merged_sha):
         bases = {b for b in (wt.get("base"), wt.get("base_ref")) if b}     # main, or origin/main
         merged = any(codediff._run(repo, "merge-base", "--is-ancestor", branch, b, check=False).returncode == 0
-                     for b in bases)
+                     for b in [*bases, *([merged_sha] if merged_sha else [])])
         if merged or force:
             codediff._run(repo, "branch", "-D", branch, check=False, write=True)
         else:

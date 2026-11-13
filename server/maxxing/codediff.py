@@ -270,7 +270,7 @@ def repo_head(repo: Path) -> dict:
         lr = _run(repo, "rev-list", "--left-right", "--count", f"{up}...HEAD", check=False).stdout.split()
         if len(lr) == 2:
             behind, ahead = int(lr[0]), int(lr[1])
-    remote = _run(repo, "remote", "get-url", "origin", check=False).stdout.strip()
+    remote = _run(repo, "config", "--get", "remote.origin.url", check=False).stdout.strip()
     return {"root": str(repo), "name": repo.name, "branch": branch or None, "upstream": up or None,
             "ahead": ahead, "behind": behind, "remote": remote or None}
 

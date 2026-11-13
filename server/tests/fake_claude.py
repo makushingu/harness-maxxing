@@ -251,7 +251,7 @@ def record(o: dict, prompt: str, images: int = 0, continued: bool = False) -> No
     with open(STORE / "calls.jsonl", "a") as f:
         f.write(json.dumps({"argv": sys.argv[1:], "prompt": prompt, "images": images, "cwd": os.getcwd(),
                             "env": {k: os.environ.get(k) for k in ("IS_SANDBOX", "CLAUDE_CODE_OAUTH_TOKEN",
-                                                                   "ANTHROPIC_API_KEY", "MX_TEST_VAR",
+                                                                   "ANTHROPIC_API_KEY", "MX_TEST_VAR", "MAXXING_PORT",
                                                                    "CLAUDE_CODE_AUTO_COMPACT_WINDOW",
                                                                    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
                                                                    "MAXXING_SESSION")},

@@ -819,6 +819,7 @@ def branch_status(full: str, branch: str, sha: str | None) -> dict:
         p = pulls[0]
         pr = {"number": p.get("number"), "url": p.get("html_url"), "title": p.get("title"),
               "draft": bool(p.get("draft")), "base": (p.get("base") or {}).get("ref")}
+    merged = None if pr else merged_pull(full, branch)
     checks = None
     if sha and SHA_RE.match(sha):
         runs = _gh_repo(full, f"/repos/{full}/commits/{sha}/check-runs", {"per_page": 100})
@@ -828,7 +829,20 @@ def branch_status(full: str, branch: str, sha: str | None) -> dict:
             failed = sum(1 for c in items if c.get("conclusion") in ("failure", "timed_out", "cancelled",
                                                                        "action_required"))
             checks = {"total": len(items), "ok": ok, "failed": failed, "pending": len(items) - ok - failed}
-    return {"pr": pr, "checks": checks}
+    return {"pr": pr, "merged_pr": merged, "checks": checks}
+
+
+def merged_pull(full: str, branch: str) -> dict | None:
+    """The last pull request of `branch` merged on GitHub (squash and rebase merges too), with the head it had."""
+    full = _full(full)
+    pulls = _gh_repo(full, f"/repos/{full}/pulls", {"state": "closed", "head": f"{full.split('/')[0]}:{branch}",
+                                                    "sort": "updated", "direction": "desc", "per_page": 5})
+    for p in pulls if isinstance(pulls, list) else []:
+        sha = (p.get("head") or {}).get("sha") or ""
+        if p.get("merged_at") and SHA_RE.match(sha):
+            return {"number": p.get("number"), "url": p.get("html_url"), "title": p.get("title"),
+                    "merged_at": p.get("merged_at"), "head_sha": sha, "base": (p.get("base") or {}).get("ref")}
+    return None
 
 
 # ---- one pull request, read and acted on in Harness (the PR view) ----------------------------------------------

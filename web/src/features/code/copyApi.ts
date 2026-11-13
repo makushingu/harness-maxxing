@@ -21,6 +21,10 @@ export type CopyStatus = {
   pr?: { number: number; url?: string; fork?: boolean; full?: string } | null
   prepare?: { cmd: string; state: 'running' | 'done' | 'failed' } | null
   env_copied?: string[]
+  /** Files copied because the repository's .worktreeinclude names them. */
+  included?: number
+  /** First of the copy's 10 ports ($MAXXING_PORT). */
+  port?: number
   exists: boolean
   removed: boolean
   /** Commits of the branch not in its base / of the base not in the branch. */
@@ -62,7 +66,7 @@ export function useCopies(enabled = true) {
 
 export const copyApi = {
   merge: (sid: string, message?: string) => api.post<{ merged: boolean; base: string; kept_branch: string | null }>(`/api/sessions/${seg(sid)}/copy/merge`, { message }),
-  remove: (sid: string, force: boolean) => api.post<{ removed: boolean; kept_branch: string | null }>(`/api/sessions/${seg(sid)}/copy/remove`, { force }),
+  remove: (sid: string, force: boolean, mergedPr = false) => api.post<{ removed: boolean; kept_branch: string | null }>(`/api/sessions/${seg(sid)}/copy/remove`, { force, merged_pr: mergedPr }),
   prefs: (repo: string, p: { prefix?: string; prepare?: string; copy_env?: boolean }) => api.put<CopyRepo['prefs']>('/api/code/copy-prefs', { repo, ...p }),
   prepareLog: (sid: string) => api.get<{ log: string }>(`/api/sessions/${seg(sid)}/copy/prepare-log`),
 }

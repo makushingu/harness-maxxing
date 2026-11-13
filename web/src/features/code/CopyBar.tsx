@@ -1,7 +1,8 @@
 // The bar above the composer of a session on a separate copy (Code mode): its branch against its base, what is not
 // committed, and one main button - "Open a PR" on GitHub, "Merge into <base>" otherwise -, the others behind
 // "Finish…" (commit first with a message proposed by Claude, open a PR, merge here, discard). A copy on a pull
-// request shows that PR and opens it in the PR view. Plan: plans/code-worktree-pr.md (lot 4).
+// request shows that PR and opens it in the PR view; once it is merged on GitHub, "Remove the copy" takes the copy and
+// its branch. Plan: plans/code-worktree-pr.md (lot 4).
 import * as React from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Check, CircleAlert, FolderGit2, GitBranch, GitMerge, GitPullRequest, Loader2, MoreHorizontal, Sparkles, Trash2, Wrench } from 'lucide-react'
@@ -43,10 +44,26 @@ export function CopyBar({ session, running, onAsk }: { session: Session; running
   }
   const s = st.data
   const pr = repo.data?.pr
+  const mergedPr = !pr && s?.exists ? repo.data?.merged_pr : null
   const github = !!s?.github && !s.fork
   const dirty = s?.dirty ?? 0
   const prOf = wt.pr?.number && s?.github ? { full: wt.pr.full || s.github, n: wt.pr.number } : pr && s?.github ? { full: s.github, n: pr.number } : null
-  const main: End | null = !s?.exists || wt.pr ? null : github ? (pr ? null : 'pr') : 'merge'
+  const main: End | null = !s?.exists || wt.pr || mergedPr ? null : github ? (pr ? null : 'pr') : 'merge'
+
+  const putAway = async () => {
+    if (dirty) return toast.error(t('copy.mergedDirty'))
+    setBusy(true)
+    try {
+      await copyApi.remove(session.id, false, true)
+      toast.success(t('copy.putAwayDone'))
+      void qc.invalidateQueries({ queryKey: ['code'] })
+      void qc.invalidateQueries({ queryKey: ['sessions'] })
+    } catch (e) {
+      toast.error(t('code.failed'), errorMessage(e))
+    } finally {
+      setBusy(false)
+    }
+  }
 
   const openPr = async () => {
     setBusy(true)
@@ -64,7 +81,15 @@ export function CopyBar({ session, running, onAsk }: { session: Session; running
   }
   return (
     <div className="flex min-w-0 items-center gap-2 border-t bg-muted/40 px-3 py-1 text-[12px]" data-testid="copy-bar">
-      <Tooltip content={<span className="block max-w-80 font-mono text-[11px] break-all">{wt.path}</span>}>
+      <Tooltip
+        content={
+          <span className="grid max-w-80 gap-0.5 text-[11px]">
+            <span className="font-mono break-all">{wt.path}</span>
+            {!!s?.port && <span>{t('copy.ports', { a: s.port, b: s.port + 9 })}</span>}
+            {!!s?.included && <span>{t('copy.included', { count: s.included })}</span>}
+          </span>
+        }
+      >
         <span className="inline-flex min-w-0 items-center gap-1 font-mono text-[11px]">
           <GitBranch className="size-3.5 shrink-0 text-primary" />
           <span className="truncate"><Sensitive>{s?.branch || wt.branch}</Sensitive></span>
@@ -92,10 +117,24 @@ export function CopyBar({ session, running, onAsk }: { session: Session; running
       )}
       {s && !s.exists && <span className="text-[11px] text-destructive">{t('copy.missing')}</span>}
       <div className="ml-auto flex shrink-0 items-center gap-1">
-        {prOf && (
+        {prOf && !mergedPr && (
           <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => openFileViewer(prPath(prOf))} data-testid="copy-pr">
             <GitPullRequest />#{prOf.n}
           </Button>
+        )}
+        {mergedPr && (
+          <>
+            <Tooltip content={t('copy.prMergedHint')}>
+              <Button size="sm" variant="ghost" className="h-7 px-2 text-success" onClick={() => s?.github && openFileViewer(prPath({ full: s.github, n: mergedPr.number }))} data-testid="copy-pr-merged">
+                <GitMerge />
+                {t('copy.prMerged', { n: mergedPr.number })}
+              </Button>
+            </Tooltip>
+            <Button size="sm" variant="outline" className="h-7" onClick={() => void putAway()} disabled={busy || running} data-testid="copy-put-away">
+              {busy ? <Loader2 className="animate-spin" /> : <Check />}
+              {t('copy.putAway')}
+            </Button>
+          </>
         )}
         {main === 'pr' && (
           <Button size="sm" variant="outline" className="h-7" onClick={() => void openPr()} disabled={busy || running || !s?.ahead && !dirty} data-testid="copy-open-pr">

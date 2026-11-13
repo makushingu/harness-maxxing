@@ -590,7 +590,7 @@ not_github|no_base`, `403 no_write`, `409 running`.
 | GET | `/api/sessions/{id}/changes?scope=turn&n=&base=` | – | `{scope, n, repos:[...]}` — `turn` (default: the last turn that changed something, or `n`): the `mx_changes` entry + live `branch, upstream, ahead, behind, remote`; `session` (first photo → now), `uncommitted` (HEAD → now), `branch` (merge-base with `base` or origin's default → now): one entry per known repository with changes (`error` when git failed) |
 | GET | `/api/code/diff?repo=&a=&b=&path=&old=&full=` | – | `{path, hunks:[{head, o, n, lines:[{t: ' '\|'+'\|'-', o, n, s}]}], binary, cut, lines}` (≤ 2 000 lines unless `full`) |
 | GET | `/api/code/commits?repo=&base=` | – | `[{sha, short, subject, author, at}]` (HEAD not in base, 100) |
-| GET | `/api/code/status?repo=` | – | `{root, name, branch, upstream, ahead, behind, remote, dirty (files a commit would take), github, pr:{number, url, title, draft, base}\|null, checks:{total, ok, failed, pending}\|null, github_error?}` |
+| GET | `/api/code/status?repo=` | – | `{root, name, branch, upstream, ahead, behind, remote, dirty (files a commit would take), github, pr:{number, url, title, draft, base}\|null (open), merged_pr:{number, url, title, merged_at, head_sha, base}\|null (no open one: the last merged PR of the branch), checks:{total, ok, failed, pending}\|null, github_error?}`; `remote` = `remote.origin.url` as configured (no `insteadOf` rewrite) |
 | POST | `/api/code/restore` | `{repo, source, paths?}` | `{undo, restored, removed}` — files back as in `source` (all that differ when no `paths`); `undo` = photo taken first |
 | POST | `/api/code/undo` | `{repos:[{root, undo}]}` | `{repos:[...]}` — puts back what a restore / revert replaced |
 | POST | `/api/sessions/{id}/revert` | `{n}` | `{n, repos:[{root, name, undo, restored, removed, commits_kept}]}` — every repository changed by turn `n` or later back to its photo from before (files only; `409 running` during a turn) |
@@ -608,21 +608,25 @@ then added to `.git/info/exclude`) on a new branch `<prefix>/<slug of the title>
 repository) from `base` (default: origin's default branch). Its turns run there (`runner._cwd`), with a line of
 `--append-system-prompt` naming the copy. The branch is renamed after the session's (short) title until it has an
 upstream. Session meta `worktree = {path, repo, branch, base, base_ref, created, named, pr?, prepare?, env_copied?,
-removed?, kept_branch?}`; `Session.worktree` = `{path, repo, branch, base, pr, kept_branch, removed, preparing}`.
+port, included?, removed?, kept_branch?}`; `Session.worktree` = `{path, repo, branch, base, pr, kept_branch, port, removed, preparing}`.
 Per-repository preferences `{prefix, prepare, copy_env}` in `<state>/worktrees.json`; the preparation runs once in a
 thread (15 min max), log `<state>/worktrees/<sid8>.log`. Errors: `400 not_here|bad_base|bad_prefix|is_pr|
 no_local_base`, `404 no_copy`, `409 uncommitted|conflict|base_busy|branch_in_use|running|has_copy` (moving the
 session). Deleting a session removes its copy when it is clean and its commits are in its base or pushed
 (`worktrees.on_delete`). A pull request's local branch is only moved forward to `origin/<branch>`, never reset.
+A `.worktreeinclude` at the root of the clone (gitignore syntax) names ignored files copied into every new copy
+(`included` = how many; only files git ignores, no links, 500 files / 200 MB at most). Each copy owns ports
+`port`..`port+9` (from 4100, blocks of 10 nothing listens on and no live copy owns): its turns and its preparation get
+`MAXXING_PORT` (first port) and `MAXXING_COPY_PATH`, and Claude is told to use them.
 
 | Method | Path | Body | Response |
 |---|---|---|---|
 | GET | `/api/code/copy-repos?path=` | – | `{enabled, repos:[{root, name, branch, branches, default_base, github, prefs:{prefix, prepare, copy_env}}]}` — the clones of the topic (or the repository holding it) |
 | PUT | `/api/code/copy-prefs` | `{repo, prefix?, prepare?, copy_env?}` | the preferences |
 | POST | `/api/sessions` | `{…, worktree:{repo, base?, prepare?, copy_env?, remember?}}` | Session (the copy is made before the first turn) |
-| GET | `/api/sessions/{id}/copy` | – | `{path, repo, branch, base, pr, prepare, exists, removed, ahead, behind (against the base), dirty, upstream, pushed_ahead, github, fork}` |
+| GET | `/api/sessions/{id}/copy` | – | `{path, repo, branch, base, pr, prepare, env_copied, included, port, exists, removed, ahead, behind (against the base), dirty, upstream, pushed_ahead, github, fork}` |
 | POST | `/api/sessions/{id}/copy/merge` | `{message?}` | `{merged, base, sha, removed, kept_branch}` — commits first with `message`; merges the base into the branch in the copy (aborted on a conflict: `409 conflict`), then moves the base forward (fast-forward only) and removes the copy |
-| POST | `/api/sessions/{id}/copy/remove` | `{force}` | `{removed, kept_branch}` — `force` = discard (uncommitted files and the branch go); else refused with uncommitted files, and the branch is kept unless merged |
+| POST | `/api/sessions/{id}/copy/remove` | `{force, merged_pr?}` | `{removed, kept_branch}` — `force` = discard (uncommitted files and the branch go); else refused with uncommitted files, and the branch is kept unless merged; `merged_pr`: its PR was merged on GitHub (looked up again: `409 not_merged` otherwise) - the branch goes when its tip is in the PR's head (squash / rebase merges too) |
 | GET | `/api/sessions/{id}/copy/prepare-log` | – | `{log}` |
 | GET | `/api/code/copies` | – | the copies still on disk: `[{sid, title, path, archived, …status}]` |
 | POST | `/api/code/pr-session` | `{repo: "github:owner/name", number, review, message?, clone?}` | Session — in the topic of a local clone, on a copy of the PR's branch (a fork: `pr/<n>` from `refs/pull/<n>/head`); plan mode when `review` or when the author is outside (`author_association` not OWNER / MEMBER / COLLABORATOR). `400 no_clone` |
