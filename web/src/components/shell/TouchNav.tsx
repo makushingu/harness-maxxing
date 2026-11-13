@@ -328,11 +328,11 @@ function HelpRows({ close }: { close: () => void }) {
   )
 }
 
-/** The sidebar's status line as a card: "All good · Claude 47 %", a tap unfolds the status panel in place. */
+/** The sidebar's status line as a card: its short sentence (`mood.ts`), a tap unfolds the status panel in place. */
 function StatusCard({ onInstall }: { onInstall?: () => void }) {
   const [open, setOpen] = React.useState(false)
-  const s = useStatusLine(true)
-  const alert = s.tone === 'error' || s.tone === 'warn'
+  const s = useStatusLine()
+  const alert = !!s.alert
   return (
     <div className="mx-3 mt-3 grid min-w-0 gap-1 rounded-xl border bg-card p-1.5" data-tour="health">
       <button
@@ -341,16 +341,15 @@ function StatusCard({ onInstall }: { onInstall?: () => void }) {
         onClick={() => setOpen(!open)}
         data-testid="touch-status"
         className={cn(
-          'flex min-h-11 w-full min-w-0 items-center gap-2.5 rounded-lg px-2.5 text-left text-[15px] outline-none transition-colors active:bg-accent focus-visible:ring-2 focus-visible:ring-ring',
+          'flex min-h-11 w-full min-w-0 items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[15px] leading-5 outline-none transition-colors active:bg-accent focus-visible:ring-2 focus-visible:ring-ring',
           alert && (s.tone === 'error' ? 'text-destructive' : 'text-warning'),
         )}
       >
         <span className="flex size-4 shrink-0 items-center justify-center">
           <StatusDot tone={s.tone} pulse={s.tone === 'error'} />
         </span>
-        <span className="min-w-0 flex-1 truncate">
-          {s.health}
-          {s.plan && <span className="text-muted-foreground"> · <Sensitive length={3}>{s.plan}</Sensitive></span>}
+        <span className="line-clamp-2 min-w-0 flex-1" data-testid="status-mood">
+          {s.figures ? <Sensitive length={14}>{s.health}</Sensitive> : s.health}
         </span>
         <ChevronDown className={cn('size-4 shrink-0 text-muted-foreground transition-transform', open && 'rotate-180')} />
       </button>

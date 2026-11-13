@@ -9,10 +9,10 @@ import { useLang, useT } from '@/i18n'
 import type { Health } from '@/lib/types'
 import { useUI, type Theme } from '@/stores/ui'
 import { Popover, PopoverContent, PopoverTrigger, ProgressBar, Segmented, Sensitive, Skeleton, Switch, Tooltip } from '@/components/ui'
-import { useTween } from '@/lib/useTween'
 import { CloseOnNav } from './CloseOnNav'
 import { MeterBar, MeterIcon, MeterValue, MiniMeter, type MeterTone } from './Meter'
-import { ClaudeStatus, usePlanPct, UsageLines } from './UsageIndicator'
+import { ClaudeStatus, UsageLines } from './UsageIndicator'
+import { useMood } from './mood'
 
 /** Issues not marked as seen: the ones the dot and the count are about. */
 export function openIssues(h: Health): Health['issues'] {
@@ -148,17 +148,12 @@ function Metric({ label, value, pct }: { label: string; value: string; pct: numb
   )
 }
 
-/** The status line's text: "All good · Claude 47 %", the issue count instead of "All good" when something needs
- *  attention, no Claude part without plan usage. */
-export function useStatusLine(visible?: boolean) {
-  const t = useT()
-  const { data: h } = useHealth()
-  const tone = healthTone(h)
-  const raw = usePlanPct(visible)
-  const tween = Math.round(useTween(raw ?? NaN)) // counts up / down like the panel's figures (not from nothing on load)
-  const pct = raw === null ? null : tween
-  const health = !h ? t('health.checking') : tone === 'ok' ? t('shell.allGood') : t('health.issues', { count: openIssues(h).length })
-  return { tone, health, plan: pct === null ? null : t('shell.claudePct', { pct }), label: pct === null ? health : `${health} · ${t('shell.claudePct', { pct })}` }
+/** The status line: one short sentence about the server (`mood.ts`: a problem, the quota that will not last until its
+ *  reset, a busy CPU, things left unread... or that all is well) and its dot. */
+export function useStatusLine() {
+  const m = useMood()
+  const tone = m.level === 'note' ? 'warn' : m.level
+  return { tone, health: m.text, alert: m.level === 'error' || m.level === 'warn' ? m.level : null, figures: !!(m.vars || m.when) } as const
 }
 
 /** CPU / RAM / disk as the meters need them (null while the health loads). */
@@ -182,7 +177,8 @@ const alertHover = {
 
 /** The bottom of the sidebar: CPU / RAM / disk, then the Claude quota under them.
  *  - Folded bar: three tiny meters (icon + short bar) and the health dot, then the Claude ring (the sparkle as a faint watermark inside).
- *  - Unfolded / pinned: the health line ("All good" with its dot, or "2 problems" in its alert colour) over CPU / RAM /
+ *  - Unfolded / pinned: the status line (a short sentence with its dot, `mood.ts`: "All good", "Running hot! CPU at
+ *    92%", a problem in its alert colour; two lines at most) over CPU / RAM /
  *    disk in three columns, then the ring with "Claude quota · Max" and "5 h 47 % · Week 12 %".
  *  Each part keeps the same height folded or not, so nothing above it moves when the bar unfolds. The meters open the
  *  status panel (issues, theme, presentation mode); the Claude entry leads to Settings -> Stats. Same two elements
@@ -190,7 +186,8 @@ const alertHover = {
 export function StatusBlock({ collapsed }: { collapsed?: boolean }) {
   const s = useStatusLine()
   const rows = useHealthRows()
-  const alert = s.tone === 'error' || s.tone === 'warn' ? s.tone : null
+  const alert = s.alert
+  const present = useUI((u) => u.presentation)
   // the panel's links (System, Stats) lead away: close it when the page changes
   const [open, setOpen] = useState(false)
   const close = React.useCallback(() => setOpen(false), [])
@@ -217,22 +214,22 @@ export function StatusBlock({ collapsed }: { collapsed?: boolean }) {
             data-testid="status-line"
             aria-label={label}
             className={cn(
-              'group grid h-[66px] w-full min-w-0 content-center gap-1.5 rounded-md px-1.5 text-left outline-none transition-colors duration-300 hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-accent',
+              'group grid h-[74px] w-full min-w-0 content-center gap-1.5 rounded-md px-1.5 text-left outline-none transition-colors duration-300 hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-accent',
               collapsed && 'w-11 justify-items-center px-0',
               collapsed && alert && cn(alertBg[alert], alertHover[alert]),
             )}
           >
             {!rows ? (
-              <Skeleton className={collapsed ? 'h-12 w-8' : 'h-12'} />
+              <Skeleton className={collapsed ? 'h-14 w-8' : 'h-14'} />
             ) : collapsed ? (
               <>
                 {rows.map((r) => (
                   <MiniMeter key={r.key} icon={r.icon} pct={r.pct} tone={r.tone} label={r.label} />
                 ))}
-                {/* the health dot only says something is wrong (all good = nothing; notifications live in the bell);
+                {/* the health dot only says something needs a look (all good = nothing; notifications live in the bell);
                     its room is kept so the block never changes height */}
                 <span className="mt-0.5 flex size-3 items-center justify-center">
-                  {alert && <LiveDot tone={s.tone} />}
+                  {(s.tone === 'warn' || s.tone === 'error') && <LiveDot tone={s.tone} />}
                 </span>
               </>
             ) : (
@@ -240,15 +237,17 @@ export function StatusBlock({ collapsed }: { collapsed?: boolean }) {
                 {/* the health line: its alert colour while something needs attention (a stronger tint on hover) */}
                 <span
                   className={cn(
-                    'mx-side-reveal -mx-0.5 flex h-6 min-w-0 items-center gap-2 rounded px-1.5 text-xs font-medium transition-colors duration-500',
+                    'mx-side-reveal -mx-0.5 flex h-8 min-w-0 items-center gap-2 rounded px-1.5 text-xs leading-4 font-medium transition-colors duration-500',
                     alert ? cn(alertBg[alert], alertHover[alert]) : 'text-muted-foreground',
                   )}
                 >
                   <span className="flex size-4 shrink-0 items-center justify-center">
                     <LiveDot tone={s.tone} />
                   </span>
-                  <span className="min-w-0 flex-1 truncate">{s.health}</span>
-                  <ChevronRight className="size-3.5 shrink-0 opacity-70" />
+                  {/* a sentence: two lines at most, the whole of it on hover */}
+                  <span data-testid="status-mood" title={present ? undefined : s.health} className="line-clamp-2 min-w-0 flex-1">
+                    {s.figures ? <Sensitive length={14}>{s.health}</Sensitive> : s.health}
+                  </span>
                 </span>
                 <span className="mx-side-reveal grid grid-cols-3 items-center gap-x-3" data-testid="sidebar-meters">
                   {rows.map((r) => (

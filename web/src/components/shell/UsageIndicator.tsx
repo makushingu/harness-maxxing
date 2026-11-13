@@ -54,14 +54,6 @@ const used = (w: { pct: number }) => Math.min(100, Math.max(0, Math.round(w.pct)
 const tone = (w: { pct: number }): MeterTone => (used(w) >= 90 ? 'error' : used(w) >= 70 ? 'warn' : undefined)
 const rowIcon = (key: string) => (key === 'five' ? Clock : CalendarDays)
 
-/** The plan figure of the sidebar's status line: the week when the server has it, else the 5-hour window; null
- *  without plan usage. */
-export function usePlanPct(visible?: boolean): number | null {
-  const p = usePlanUsage(visible)
-  const r = p?.rows.find((x) => x.key === 'week') ?? p?.rows[0]
-  return r ? used(r.w) : null
-}
-
 /** The plan in the status panel: a "Claude · Max  >" heading, then one line per window (icon, "5 h", "23 % used"
  *  counting to its new value) over a full-width bar; a link to Settings -> Usage (folded: the thin bars only).
  *  Bars glide and change colour smoothly (70 % warning, 90 % critical), the icon pops when the level changes. */

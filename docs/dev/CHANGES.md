@@ -7,6 +7,37 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Web, sidebar status line: `components/shell/mood.ts`. `pickMood(facts)` (pure) returns ONE sentence (`key`, `vars`,
+  `when` = times formatted by the hook, `level` ok / note / warn / error / idle, `to`, `issues`), most pressing first:
+  open health problems (one sentence per issue `code`, `ISSUE_MOOD`; several = their count; an unknown code keeps
+  `health.issues`), quota at 100 %, CPU >= 85 %, RAM >= 90 %, quota forecast, quota >= 90 %, disk >= 80 %, feed unread
+  > 10, sessions unread >= 5, agents attention, Team unread >= 5, then the calm ones (just restarted, sessions
+  running, 5-hour quota that will hold, night, 30 days up, `shell.allGood`). `forecast(window, length, now)`: the
+  usage so far as a straight line to `resets_at` (window start = reset - 5 h / 7 d); says nothing before 15 % of the
+  window or under 20 % used. `useMood()` gathers the queries the shell already runs (Team / Agents only when their
+  page is on) and `useStatusLine()` (HealthIndicator.tsx) maps it to the line: `note` = amber dot without the alert
+  background; the line still opens the status panel (the touch menu's status card shows the same sentence, without
+  the Claude figure); two lines (`line-clamp-2`, whole text in `title`), masked in presentation mode when it holds
+  figures; no chevron any more, the block is 8 px taller. Texts: `mood.*`, a dictionary group of their own (`mood`
+  in i18n/groups.ts, fetched by `useMood` once the shell shows: the core dictionary is at its first-load budget,
+  test_web_first_load); "Checking…" while they download. `shell.claudePct` and `usePlanPct` removed (unused).
+- Sessions: `ViewSwitch` (computer: one button left of New session, after the layouts button which comes and goes with the
+  mode; its icon = four square bars whose shape follows `data-kind`, moved by the transitions of `.mx-view-glyph` in
+  globals.css, so nothing plays at page load; `currentColor`, the colour of the ghost icon buttons beside it) and `TabsToggle` (phone) in `pages/sessions/Tabs.tsx`; the store's `tabs` defaults to true and `merge` sets
+  it false for a stored `mx-sessions` key without the field (a browser from before keeps its columns). The Sessions
+  page has no `PageHeader` on a computer (`useDocumentTitle` called directly): one `sessions-bar` holds the tabs and
+  the actions, measured by a ResizeObserver (`tight` = New session and Waiting without their label). Removed:
+  `SubtitleWithBadges`, `WhereBadge`'s `generic`, keys `sessions.description`, `where.howTo`, `where.topicHelpAny`,
+  `tabs.toggle/on/off`.
+- Feedback: `POST /api/settings/feedback/check` (`feedback.check`: one read-only `claude -p`, tools Read/Grep/Glob,
+  cwd `system/help` when it exists, default model, 90 s, one at a time; verdict `send | answer | self` with `answer`,
+  `prompt`, `topic`; fail-open: anything unclear is `send`); `forced` on `POST /api/settings/feedback` appends
+  `FORCED_NOTE` to the message (the cloud is unchanged); `FeedbackDialog` answer view, session created with
+  `prompt` in `topic`; mock routes for feedback; `tests/fake_claude.py` knows `--allowedTools` / `--add-dir`.
+- Import: `importer.py` `HINTS` / `PROMPT` rewritten for Hermes and OpenClaw, `_entries` strips every single folder
+  above the export, `_plan` finds the skill folder by its `SKILL.md` (`skill_root`) and takes `memories/MEMORY.md` /
+  `USER.md` as root memory, `_apply` keeps the generated heading over an imported CLAUDE.md without one;
+  `cmd_import.py` prints `finish_prompt`.
 - Side questions: `aside.ask` no longer refuses a thread whose `fresh` flag is still set when the session is
   `running` (`fresh` is cleared only when a turn ends, so the whole first turn of a thread - new session, or the
   thread after a compaction - answered 409 `no_thread`). The fork is tried; if Claude has not written the thread yet

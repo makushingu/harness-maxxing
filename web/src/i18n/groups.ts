@@ -33,6 +33,8 @@ export const GROUPS = {
   skw: ['skw'],
   // the guided tour: loaded with its chunk (tour/Tour.tsx); its entry points (menu, palette) use help.*
   tour: ['tour'],
+  // the sentences of the status line (components/shell/mood.ts): fetched once the shell shows, not before it
+  mood: ['mood'],
 } as const satisfies Record<string, readonly string[]>
 
 export type Group = keyof typeof GROUPS
