@@ -14,6 +14,11 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   margin, `--shadow-panel`, desktop only), `mx-bar` (sticky headers), `mx-glass` (floating layers: popover, dropdown,
   select, dialog, alert dialog, sheet, palette, `/` menu, session preview). Light mode: hover/selected rows on the bars
   rise to white (`--accent` redefined under `.mx-frame, .mx-list`). Sidebar and second bar lost their right border.
+- Web, sessions: `TaskBar` (pill above the composer, `data-testid="task-bar"`) removed; `RunningRow` (Thread.tsx)
+  shows the running tasks itself through `TasksRunning` (Tasks.tsx, `data-testid="tasks-running"`, same popover,
+  `runningTasks()`): the count leads when nothing else is pending or when the pending tool launched one of them,
+  otherwise "· N subagents" after the tool (`tasks.short*`). `RunningRow tasks={false}` in `PreviewWorking` (the
+  preview lists them already).
 - Web, fills: `--fill-1` / `--muted` / `--accent` are now `color-mix` veils of `--foreground` (`--a-fill-1/2/3`:
   3 / 5.5 / 8.5 % light, 3.5 / 6.5 / 10.5 % dark), `--sunken` = `--sidebar` at 60 %; utilities `bg-fill-1`,
   `bg-sunken`. Codemod: `bg-muted/20-30` → `bg-fill-1`, `bg-muted/40-70` and `bg-accent/30-70` → `bg-muted`,

@@ -1,12 +1,12 @@
 // Background work of Claude Code (sub-agents, commands sent to the background) in the thread: the details shown
-// under its Agent / Bash line, and the bar above the composer listing what still runs (a click opens its line).
+// under its Agent / Bash line, and the list of what still runs on the thread's status line (a click opens its line).
 import * as React from 'react'
 import { Ban, Bot, Check, ChevronRight, CircleAlert, SquareTerminal } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
 import { Popover, PopoverContent, PopoverTrigger, Sensitive, Spinner } from '@/components/ui'
 import { Markdown } from '@/components/ui/markdown'
-import { isShownTask, taskStatus, useLogSelect, type Task, type TaskStatus } from './log'
+import { isShownTask, taskStatus, type Task, type TaskStatus } from './log'
 import { fmtElapsed, fmtTokens } from './util'
 
 const OPEN_EVENT = 'mx-open-task'
@@ -119,60 +119,64 @@ export function TaskDetails({ task, status }: { task: Task; status: TaskStatus }
   )
 }
 
-/** Above the composer while sub-agents or background commands run: "2 agents running"; a click lists them, a click
- *  on one opens its line in the thread. Built from the loaded log, so it is back as it was after a reload. */
-export function TaskBar({ sid, running }: { sid: string; running: boolean }) {
+/** The sub-agents and background commands of the status line at the end of the thread (`RunningRow`): "8 subagents
+ *  running" when nothing else is pending, or "· 8 subagents" after the current tool. A click lists them, a click on
+ *  one opens its line in the thread. Built from the loaded log, so it is back as it was after a reload. */
+export function TasksRunning({ tasks, lead }: { tasks: Task[]; lead: boolean }) {
   const t = useT()
-  const all = useLogSelect(sid, (st) => st.tasks)
   const [open, setOpen] = React.useState(false)
-  const live = React.useMemo(
-    () => (running ? Object.values(all).filter((tk) => isShownTask(tk) && taskStatus(tk, running) === 'running').sort((a, b) => a.started - b.started) : []),
-    [all, running],
-  )
   React.useEffect(() => {
-    if (!live.length) setOpen(false)
-  }, [live.length])
-  if (!live.length) return null
-  const agentsOnly = live.every((tk) => tk.kind === 'agent')
+    if (!tasks.length) setOpen(false)
+  }, [tasks.length])
+  if (!tasks.length) return null
+  const agentsOnly = tasks.every((tk) => tk.kind === 'agent')
+  const label = lead
+    ? t(agentsOnly ? 'tasks.bar' : 'tasks.barAny', { count: tasks.length })
+    : t(agentsOnly ? 'tasks.short' : 'tasks.shortAny', { count: tasks.length })
   return (
-    <div className="mx-auto w-full max-w-(--mx-read,860px) px-3 pt-1">
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <button
-            type="button"
-            data-testid="task-bar"
-            aria-live="polite"
-            className="mx-queue-in flex h-7 items-center pointer-coarse:h-10 gap-1.5 rounded-full border bg-card px-2.5 text-xs text-muted-foreground shadow-xs hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-          >
-            <Spinner className="size-3.5 text-primary" />
-            <span>{t(agentsOnly ? 'tasks.bar' : 'tasks.barAny', { count: live.length })}</span>
-            <ChevronRight className={cn('size-3.5 transition-transform', open && '-rotate-90')} />
-          </button>
-        </PopoverTrigger>
-        <PopoverContent side="top" align="start" className="w-[min(28rem,calc(100vw-16px))] p-1.5">
-          <p className="px-2 pt-1 pb-1.5 text-xs font-medium text-muted-foreground">{t('tasks.title')}</p>
-          <ul className="grid gap-0.5">
-            {live.map((tk) => {
-              return (
-                <li key={tk.id}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setOpen(false)
-                      if (tk.tool_use_id) openTaskLine(tk.tool_use_id)
-                    }}
-                    className="grid w-full grid-cols-[minmax(0,1fr)] content-center gap-0.5 rounded-md px-2 py-1.5 text-left pointer-coarse:min-h-10 hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
-                  >
-                    <TaskLine task={tk} />
-                  </button>
-                </li>
-              )
-            })}
-          </ul>
-        </PopoverContent>
-      </Popover>
-    </div>
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          data-testid="tasks-running"
+          className={cn(
+            'flex min-w-0 items-center gap-1 rounded-md px-1.5 -mx-1.5 py-0.5 hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none pointer-coarse:py-2',
+            !lead && 'shrink-0',
+          )}
+        >
+          {!lead && <span aria-hidden>·</span>}
+          <span className="truncate">{label}</span>
+          <ChevronRight className={cn('size-3.5 shrink-0 transition-transform', open && '-rotate-90')} />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent side="top" align="start" className="w-[min(28rem,calc(100vw-16px))] p-1.5">
+        <p className="px-2 pt-1 pb-1.5 text-xs font-medium text-muted-foreground">{t('tasks.title')}</p>
+        <ul className="grid gap-0.5">
+          {tasks.map((tk) => (
+            <li key={tk.id}>
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false)
+                  if (tk.tool_use_id) openTaskLine(tk.tool_use_id)
+                }}
+                className="grid w-full grid-cols-[minmax(0,1fr)] content-center gap-0.5 rounded-md px-2 py-1.5 text-left pointer-coarse:min-h-10 hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
+              >
+                <TaskLine task={tk} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      </PopoverContent>
+    </Popover>
   )
+}
+
+/** The tasks still running, oldest first (`RunningRow`). */
+export function runningTasks(tasks: Record<string, Task>): Task[] {
+  return Object.values(tasks)
+    .filter((tk) => isShownTask(tk) && taskStatus(tk, true) === 'running')
+    .sort((a, b) => a.started - b.started)
 }
 
 /** One running task as the bar's list shows it: icon, what it is, running time, its last action, tools and tokens

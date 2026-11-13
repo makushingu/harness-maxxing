@@ -222,8 +222,8 @@ into another app, the content arrives as plain text (a file as its path).
 - **Agents and background commands**: when Claude hands work to a sub-agent, or runs a command in the background,
   its card keeps spinning, with the time it has been running, until that work really ends (✓ done, ✗ failed, ⊘
   stopped or interrupted). Expand it for where it is: its last action, the tools and tokens used so far, then the
-  agent's report once it is done. While some still run, a pill above the composer says so (**2 agents running**):
-  click it to list them, click one to jump to its card. All of it comes back as it was after a reload or a lost
+  agent's report once it is done. While some still run, the last line of the conversation says so (**2 subagents
+  running**, or **· 2 subagents** after what Claude is doing): click it to list them, click one to jump to its card. All of it comes back as it was after a reload or a lost
   connection.
 - **Diagrams**: to explain how something works, Claude can draw a small diagram (a flowchart, a sequence, the
   states of something...) right in the answer. Click it to open it in the file viewer like a picture (zoom,

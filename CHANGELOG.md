@@ -10,6 +10,9 @@ Changed:
   no longer share the same background: the sidebar is the darkest (the lightest grey in light mode), the list is one
   step lighter, and the page sits in a panel with rounded corners; cards, menus and dialogs each come one step
   nearer. The same steps apply everywhere, with the neutral or tinted background and every accent color.
+- **Sub-agents: one line instead of two.** The bubble above the message box that said "8 subagents running" is
+  gone: the last line of the conversation says it (or adds "· 8 subagents" after what Claude is doing) and a click
+  on it lists them, as the bubble did.
 - **Hovered and selected rows look the same everywhere.** Light fills (hover, selection, quiet zones) are now three
   shades of the text color instead of a different grey on each screen, so a row reacts the same in the sidebar, a
   list, the page or a card.

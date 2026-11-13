@@ -58,7 +58,7 @@ export default function PreviewWorking({ session }: { session: Session }) {
             ))}
           </ul>
         )}
-        <RunningRow session={session} log={log} />
+        <RunningRow session={session} log={log} tasks={false} />
       </div>
     </ItemContext.Provider>
   )

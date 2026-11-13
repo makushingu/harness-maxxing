@@ -71,7 +71,6 @@ import {
   useContextMenu,
 } from '@/components/ui'
 import { Combobox } from '@/components/ui/combobox'
-import { TaskBar } from './Tasks'
 import { endingCut, forgetLog, getLog, loadEarlier, loadLog, seedEmptyLog, useLogSelect, useSessionLog, useSessionStream } from './log'
 import { PlanChip, PlanNotice } from './Plan'
 import { ApprovalCards } from './Approvals'
@@ -828,7 +827,6 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
         )}
         {!notFound && aside.aside && <AsidePanel aside={aside.aside} onClose={aside.close} />}
         {!notFound && <ApprovalCards session={session} />}
-        {!notFound && <TaskBar sid={sid} running={running} />}
         {!notFound && termOpen && (
           <React.Suspense fallback={null}>
             <TermDrawer
