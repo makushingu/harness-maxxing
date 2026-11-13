@@ -5,7 +5,7 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
-## Unreleased
+## 2.0.0-alpha.147 - 2026-11-13
 
 - Side questions: `aside.ask` no longer refuses a thread whose `fresh` flag is still set when the session is
   `running` (`fresh` is cleared only when a turn ends, so the whole first turn of a thread - new session, or the

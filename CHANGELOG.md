@@ -3,7 +3,7 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
-## Unreleased
+## 2.0.0-alpha.147 - 2026-11-13
 
 New:
 - **The sidebar says how the server is doing.** "All good" at the bottom of the sidebar (and of the phone menu) is
