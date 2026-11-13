@@ -197,3 +197,15 @@ def test_claude_is_told_to_work_in_the_copy(client, code, mx):
     call = [c for c in calls if c["cwd"] == s["worktree"]["path"]][-1]
     note = call["argv"][call["argv"].index("--append-system-prompt") + 1]
     assert "separate copy" in note and s["worktree"]["branch"] in note and str(clone) in note
+
+
+def test_a_deleted_session_takes_its_copy_only_when_nothing_is_lost(client, code):
+    topic, clone = code
+    clean = _new(client, topic, clone, message="hi NOTOOL")
+    worked = _new(client, topic, clone, message="other WRITEFILE:y.txt NOTOOL")
+    wait_idle(client, clean["id"])
+    wait_idle(client, worked["id"])
+    assert client.delete(f"/api/sessions/{clean['id']}").status_code in (200, 204)
+    assert client.delete(f"/api/sessions/{worked['id']}").status_code in (200, 204)
+    assert not Path(clean["worktree"]["path"]).exists()
+    assert Path(worked["worktree"]["path"], "y.txt").is_file()                # a file left: the copy stays

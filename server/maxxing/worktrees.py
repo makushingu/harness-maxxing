@@ -272,7 +272,9 @@ def _pr_branch(repo: Path, pr: dict) -> tuple[str, str, str | None]:
         used = codediff._git(repo, "worktree", "list", "--porcelain", check=False)
         if f"branch refs/heads/{ref}\n" in used + "\n":
             raise GitError(409, "branch_in_use", f"the branch {ref} is already open in another folder")
-        codediff._run(repo, "branch", "-f", ref, f"origin/{ref}", check=False, write=True)
+        # only moved forward: a local branch with commits of its own is never reset
+        if codediff._run(repo, "merge-base", "--is-ancestor", ref, f"origin/{ref}", check=False).returncode == 0:
+            codediff._run(repo, "branch", "-f", ref, f"origin/{ref}", check=False, write=True)
     else:
         codediff._git(repo, "branch", ref, f"origin/{ref}", write=True)
     return ref, ref, f"origin/{ref}"
@@ -304,6 +306,10 @@ def prepare_log(sid: str) -> Path:
 def _prepare(sid: str, folder: Path, cmd: str) -> None:
     """Run the repository's preparation command (`npm ci`, `uv sync`...) once in the new copy, logged."""
     from .sessions import store
+    for _ in range(100):                     # the session's meta is written right after the copy is made
+        if store.read(sid) is not None:
+            break
+        time.sleep(0.1)
     state = "failed"
     try:
         with open(prepare_log(sid), "w") as out:
@@ -501,6 +507,21 @@ def _follow_transcript(meta: dict, folder: Path) -> None:
         service._move_transcript(meta.get("csid") or meta["id"], folder, workspace.root() / (meta.get("path") or ""))
     except Exception:  # noqa: BLE001 - best effort: the runner starts a new thread otherwise
         log.info("transcript of %s not moved", meta.get("id"))
+
+
+def on_delete(meta: dict) -> None:
+    """A session goes to the trash: its copy goes too when nothing would be lost (no file left, no commit of its own
+    that is not in its base or pushed). Otherwise it stays, listed on the Git page while the session is restorable."""
+    wt = live(meta)
+    if not wt:
+        return
+    try:
+        st = status(meta)
+        if st.get("dirty") or (st.get("ahead") and (not st.get("upstream") or st.get("pushed_ahead"))):
+            return
+        remove(meta, force=False, delete_branch=True)
+    except (GitError, KeyError) as e:
+        log.info("copy of %s kept: %s", meta.get("id"), getattr(e, "message", e))
 
 
 def listing() -> list[dict]:

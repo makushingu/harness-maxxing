@@ -794,6 +794,9 @@ def delete_session(sid: str) -> None:
     m = _require(sid)
     if m.get("state") == "running":
         stop(sid)
+    if m.get("worktree"):
+        from .. import worktrees
+        worktrees.on_delete(m)
     from .. import trash
     trash.trash_session(sid)
     _models_seen.pop(sid, None)

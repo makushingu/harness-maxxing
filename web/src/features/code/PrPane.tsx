@@ -517,7 +517,7 @@ function ActionBar({ pr }: { pr: Pull }) {
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-2 border-t pt-2">
-        <span className="text-[11px] text-muted-foreground">{t('pr.withClaude')}</span>
+        <span className="text-[11px] text-muted-foreground max-md:hidden">{t('pr.withClaude')}</span>
         <Tooltip content={!code ? t('pr.needCodeMode') : noClone ? t('pr.needClone', { repo: pr.full }) : t('pr.workTip')}>
           <span>
             <Button size="sm" variant="outline" onClick={() => void session(false)} disabled={!!busy || !code || noClone} data-testid="pr-work">

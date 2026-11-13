@@ -1,5 +1,6 @@
 <<<<<<<< HEAD:web/dist/assets/showcases-CYpZBOOT.js
 <<<<<<<< HEAD:web/dist/assets/showcases-CYpZBOOT.js
+<<<<<<<< HEAD:web/dist/assets/showcases-CYpZBOOT.js
 import{y as e}from"./index-BtnOolK1.js";import{i as t}from"./diagram-BYeYYIup.js";import{n}from"./steps-CFAWxNh1.js";var r=`flowchart LR
 ========
 import{y as e}from"./index-6LHMKuLV.js";import{i as t}from"./diagram-CMYfcIdG.js";import{n}from"./steps-CSmfOHSt.js";var r=`flowchart LR
@@ -7,6 +8,9 @@ import{y as e}from"./index-6LHMKuLV.js";import{i as t}from"./diagram-CMYfcIdG.js
 ========
 import{y as e}from"./index-4hfG5oWh.js";import{i as t}from"./diagram-BYV08-Xd.js";import{n}from"./steps-DcEbfrJy.js";var r=`flowchart LR
 >>>>>>>> ebb3c1a81 (Docs: separate copies and pull requests in Harness (user page, API, changelogs, workspace hints)):web/dist/assets/showcases-DKKnaYvm.js
+========
+import{y as e}from"./index-DrtZX9gx.js";import{i as t}from"./diagram-Bx8NczEw.js";import{n}from"./steps-BlEmmiNv.js";var r=`flowchart LR
+>>>>>>>> 8c70f8eb9 (Copies: removed with their session when nothing is lost; a PR branch is only moved forward; branch in the session list):web/dist/assets/showcases-CLv__3w1.js
   A[Question] --> B{Claude}
   B -->|reads| C[Files]
   B -->|runs| D[Tools]

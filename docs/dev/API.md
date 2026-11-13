@@ -612,7 +612,8 @@ removed?, kept_branch?}`; `Session.worktree` = `{path, repo, branch, base, pr, k
 Per-repository preferences `{prefix, prepare, copy_env}` in `<state>/worktrees.json`; the preparation runs once in a
 thread (15 min max), log `<state>/worktrees/<sid8>.log`. Errors: `400 not_here|bad_base|bad_prefix|is_pr|
 no_local_base`, `404 no_copy`, `409 uncommitted|conflict|base_busy|branch_in_use|running|has_copy` (moving the
-session).
+session). Deleting a session removes its copy when it is clean and its commits are in its base or pushed
+(`worktrees.on_delete`). A pull request's local branch is only moved forward to `origin/<branch>`, never reset.
 
 | Method | Path | Body | Response |
 |---|---|---|---|

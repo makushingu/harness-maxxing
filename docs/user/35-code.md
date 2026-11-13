@@ -102,7 +102,8 @@ its own folder and its own branch, so two sessions on the same repository never 
   committed are committed first with a message Claude proposes. A merge brings the base into the branch first, in the
   copy: on a conflict nothing changes and Claude is asked to settle it. After a merge the copy and its branch go away;
   discarding deletes them too, with their commits (the window says what would be lost).
-- The session stays: after the copy is gone it works in the topic folder again.
+- The session stays: after the copy is gone it works in the topic folder again. A session sent to the trash takes its
+  copy with it when nothing would be lost; otherwise the copy stays (the Git page lists the copies of a clone).
 - A session on a copy cannot move to another topic. Agents never get a copy.
 
 ## Terminal

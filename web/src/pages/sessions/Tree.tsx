@@ -38,6 +38,7 @@ import {
   StarOff,
   Trash2,
   X,
+  GitBranch,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useLongPress } from '@/lib/long-press'
@@ -1075,7 +1076,15 @@ const SessionRow = React.memo(function SessionRow({
               </span>
             )}
             <span className="shrink-0 tabular-nums">{fmtRelative(s.updated, lang)}</span>
-            {model && !label && <span className="truncate">· {modelLabel(model, claude?.models)}</span>}
+            {s.worktree && !s.worktree.removed ? (
+              // on a separate copy: its branch says more than the model
+              <span className="inline-flex min-w-0 items-center gap-0.5 font-mono text-primary/80" data-testid="session-branch">
+                · <GitBranch className="size-3 shrink-0" />
+                <span className="truncate"><Sensitive length={8}>{s.worktree.branch}</Sensitive></span>
+              </span>
+            ) : (
+              model && !label && <span className="truncate">· {modelLabel(model, claude?.models)}</span>
+            )}
             {s.queue > 0 && <span className="shrink-0">· {t('sessions.queue.short', { count: s.queue })}</span>}
           </span>
         </span>
