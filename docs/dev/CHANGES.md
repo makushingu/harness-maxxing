@@ -7,6 +7,13 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- `maxxing sessions new TOPIC [TEXT...]` (`cmd_sessions._new`): `<project>/<topic>` or a full path, an agent path
+  refused (`agents run`); `service.check_hops` (split from `relay_message`) refuses before anything is created, then
+  `create_session` (title = `titles.provisional` of the text unless `--title`, `auto_title`) and the first message goes
+  through `relay_message` (from a turn: `relay` with sender and hops, source `session`; from a shell: `cli`). Not in
+  `agent_guard.CLI_ALLOWED`: refused in a sandboxed agent. Template `CLAUDE.md` row of `maxxing sessions` updated:
+  **upgrade note at the version** - replace the row starting with `` | `maxxing sessions send`` by the template's.
+  Tests: `tests/test_mentions.py::test_sessions_new_…`.
 - Agents' box like a session's. `POST /api/agents/{p}/{t}/{a}/run` takes `voice` (a file under the agent's
   `attachments/`, checked like the attachments) and `effort` (a new conversation's); `agents.fire(voice=, effort=)`
   (owner's words only) hands `voice_path` to `service.send_message` / `create_session` (an empty message: no "Run

@@ -8,6 +8,9 @@
                                               write to another session as if typed in it (TO = its id or title);
                                               from a turn, the message says which session sent it
   maxxing sessions list [--json]              the sessions that are not archived (id, state, topic, title)
+  maxxing sessions new TOPIC [TEXT...] [--title T] [--model M] [--effort E] [--file P] [--json]
+                                              start a session in a topic (TOPIC = <project>/<topic> or its path) with
+                                              a first message; from a turn, the message says which session sent it
 """
 from __future__ import annotations
 
@@ -27,6 +30,14 @@ def _configure(p) -> None:
     s.add_argument("text", nargs="+", help="the message")
     s.add_argument("--file", action="append", default=[], help="attach a file (absolute path), repeatable")
     s.add_argument("--json", action="store_true")
+    n = sub.add_parser("new", help="start a session in a topic, with a first message (from a turn: says who sent it)")
+    n.add_argument("topic", help="<project>/<topic>, or its path projects/<project>/topics/<topic>")
+    n.add_argument("text", nargs="*", help="the first message (none: an empty session)")
+    n.add_argument("--title", default="", help="its title (default: made from the first message)")
+    n.add_argument("--model", default="", help="its model (default: the server's)")
+    n.add_argument("--effort", default="", help="low, medium, high, xhigh, max (default: Claude Code's)")
+    n.add_argument("--file", action="append", default=[], help="attach a file (absolute path), repeatable")
+    n.add_argument("--json", action="store_true")
     ls = sub.add_parser("list", help="the sessions that are not archived")
     ls.add_argument("--json", action="store_true")
 
@@ -69,6 +80,49 @@ def _send(a) -> int:
     return 0
 
 
+def _topic(raw: str) -> str:
+    """<project>/<topic> -> projects/<project>/topics/<topic>; a full path is kept as it is."""
+    p = (raw or "").strip().strip("/")
+    parts = p.split("/")
+    return f"projects/{parts[0]}/topics/{parts[1]}" if len(parts) == 2 and parts[0] != "projects" else p
+
+
+def _new(a) -> int:
+    import json
+    import sys
+    from pathlib import Path
+    from . import agent_guard, agents
+    from .sessions import service, titles
+    path = _topic(a.topic)
+    if agents.is_agent_path(path):
+        print("This is an agent: use `maxxing agents run <agent> \"...\"`.", file=sys.stderr)
+        return 2
+    meta = agent_guard.turn_meta()
+    turn = agent_guard.agent_turn()
+    text = " ".join(a.text).strip()
+    files = [str(Path(f).expanduser().resolve()) for f in a.file]
+    try:
+        # created empty, then the first message goes in like a send: from a turn it says who sent it, and the
+        # sends in a row stay capped (MAX_HOPS) - a session that starts sessions never loops forever
+        hops = turn["depth"] + 1
+        service.check_hops(hops)                         # refused before anything is created
+        s = service.create_session(path, title=a.title or (titles.provisional(text) if text else None),
+                                   model=a.model or None, effort=a.effort or None,
+                                   source="session" if meta else "cli", auto_title=not a.title and bool(text))
+        if text or files:
+            sender = {"id": meta.get("id") or "", "title": meta.get("title") or "",
+                      "path": meta.get("path") or ""} if meta else None
+            s = service.relay_message(s["id"], text, files, sender=sender, hops=hops)["session"] or s
+    except service.SessionError as e:
+        print(e.message, file=sys.stderr)
+        return 1
+    if a.json:
+        print(json.dumps({"session": s.get("id"), "title": s.get("title"), "path": s.get("path")}))
+    else:
+        print(f"started {s.get('id', '')[:8]} {s.get('title', '')} in {s.get('path', '')}")
+    return 0
+
+
 def _list(a) -> int:
     import json
     from .sessions import service
@@ -88,6 +142,8 @@ def _handler(a) -> int:
         return _send(a)
     if a.sess_cmd == "list":
         return _list(a)
+    if a.sess_cmd == "new":
+        return _new(a)
     from .sessions import service, store
     total_before = total_after = 0
     skipped = 0
@@ -107,4 +163,4 @@ def _handler(a) -> int:
     return 0
 
 
-cli.register("sessions", "write to a session (send), list them, logs maintenance (compact-logs), token report", _configure, _handler)
+cli.register("sessions", "start a session (new), write to one (send), list them, logs maintenance (compact-logs), token report", _configure, _handler)

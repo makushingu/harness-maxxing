@@ -449,14 +449,19 @@ def relay_message(to: str, text: str, attachments: list[str] | None = None, send
     target = find_session(to)
     if sender and target["id"] == sender.get("id"):
         raise SessionError(400, "self", "A session cannot send a message to itself")
-    if hops > MAX_HOPS:
-        raise SessionError(429, "too_many_hops", f"Not sent: this message comes from {hops - 1} sends in a row "
-                           f"between sessions or agents (at most {MAX_HOPS}). Ask the user instead.")
+    check_hops(hops)
     relay = {"hops": hops}
     if sender:
         relay.update({"from": sender.get("id") or "", "title": sender.get("title") or "",
                       "path": sender.get("path") or ""})
     return send_message(target["id"], text, attachments, "session" if sender else "cli", relay=relay)
+
+
+def check_hops(hops: int) -> None:
+    """A message that comes from `hops` sends in a row (sessions, agents): refused above MAX_HOPS."""
+    if hops > MAX_HOPS:
+        raise SessionError(429, "too_many_hops", f"Not sent: this message comes from {hops - 1} sends in a row "
+                           f"between sessions or agents (at most {MAX_HOPS}). Ask the user instead.")
 
 
 def find_session(to: str) -> dict:

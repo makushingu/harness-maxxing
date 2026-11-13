@@ -6,6 +6,11 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 ## Unreleased
 
 Changed:
+- **`maxxing sessions new`: start a session from the command line.** `maxxing sessions new acme/blog "Write the
+  newsletter"` starts a session in that topic with a first message (`--title`, `--model`, `--effort`, `--file`).
+  Claude can use it from a session or from an agent that is not in its sandbox, like `maxxing sessions send`: the
+  message says which session started it, and sends in a row stay limited to 3. Agents keep `maxxing agents create`,
+  `run` and `send`, which a session can already use.
 - **Agents: the message box works like a session's.** The microphone sends a voice message directly (Settings ->
   Voice -> Send voice messages right away, on by default): the recording shows at once in the conversation and its
   words under it once the server has transcribed them, instead of waiting for the transcript before sending. The
