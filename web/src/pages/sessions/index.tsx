@@ -850,29 +850,29 @@ function ShortcutsHelp({ open, onOpenChange }: { open: boolean; onOpenChange: (o
   const maxxing = useMaxxingEnabled()
   const codeMode = !!useSettings().data?.code_mode
   const rows: [string[], string][] = [
-    [['Enter'], t('sessions.shortcuts.send')],
-    [['Shift', 'Enter'], t('sessions.shortcuts.newline')],
-    [[MOD, 'Enter'], t('sessions.shortcuts.send')],
-    [['Esc'], t('sessions.shortcuts.blur')],
-    [['/'], t('sessions.shortcuts.focus')],
-    [['/'], t('sessions.shortcuts.slash')],
-    [['@'], t('sessions.shortcuts.mention')],
-    [[MOD, 'Shift', 'V'], t('sessions.shortcuts.plainPaste')],
-    ...(codeMode ? [[['Ctrl', 'J'], t('sessions.shortcuts.terminal')] as [string[], string]] : []),
-    [['Alt', 'N'], t('sessions.shortcuts.new')],
+    [['Enter'], t('kbd.send')],
+    [['Shift', 'Enter'], t('kbd.newline')],
+    [[MOD, 'Enter'], t('kbd.send')],
+    [['Esc'], t('kbd.blur')],
+    [['/'], t('kbd.focus')],
+    [['/'], t('kbd.slash')],
+    [['@'], t('kbd.mention')],
+    [[MOD, 'Shift', 'V'], t('kbd.plainPaste')],
+    ...(codeMode ? [[['Ctrl', 'J'], t('kbd.terminal')] as [string[], string]] : []),
+    [['Alt', 'N'], t('kbd.new')],
     [['Alt', '←'], t('sessions.shortcuts.prev')],
     [['Alt', '→'], t('sessions.shortcuts.next')],
-    [['Alt', 'W'], t('sessions.shortcuts.close')],
+    [['Alt', 'W'], t('kbd.close')],
     [['Alt', 'T'], t('tabs.switch')],
     ...(maxxing ? [[['Alt', 'M'], t('maxxing.toggle')] as [string[], string]] : []),
-    [[MOD, 'K'], t('sessions.shortcuts.palette')],
+    [[MOD, 'K'], t('kbd.palette')],
   ]
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="md:max-w-md">
         <DialogHeader>
           <DialogTitle>{t('sessions.shortcuts.title')}</DialogTitle>
-          <DialogDescription>{t('sessions.shortcuts.desc')}</DialogDescription>
+          <DialogDescription>{t('kbd.desc')}</DialogDescription>
         </DialogHeader>
         <ul className="grid gap-1.5">
           {rows.map(([keys, label], i) => (

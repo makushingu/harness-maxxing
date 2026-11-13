@@ -35,8 +35,9 @@ export const GROUPS = {
   skw: ['skw'],
   // the guided tour: loaded with its chunk (tour/Tour.tsx); its entry points (menu, palette) use help.*
   tour: ['tour'],
-  // the composer's / and @ menus and the intelligence (effort) level: loaded on their first text asked
-  composer: ['slash', 'mention', 'effort'],
+  // the composer's / and @ menus, the intelligence (effort) level and the rows of the session shortcuts window
+  // (pages/sessions/index.tsx): loaded on their first text asked
+  composer: ['slash', 'mention', 'effort', 'kbd'],
   // the Changes view of a session (features/code): loaded when it opens
   code: ['code', 'copy', 'pr'],
   // the terminal drawer and its setting (features/terminal)
