@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
 import { openPalette } from '@/commands/registry'
 import { Button, CountBadge, CountDot, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, KeepTooltipShape, Kbd, MOD, NamedIcon, Tooltip } from '@/components/ui'
-import { navRow, navTourId, useNavEntries, type NavItem, type PinnedPage } from './nav'
+import { iconBtn, navRow, navTourId, useNavEntries, type NavItem, type PinnedPage } from './nav'
 import { armEntryPeek, entryPeek, SecondBar, useClosedList } from './PageList'
 import { Logo } from './Logo'
 import { ResizeEdge } from './ResizeEdge'
@@ -343,7 +343,7 @@ export const Sidebar = React.memo(function Sidebar({ drawer }: { /** touch layou
               <div className={cn('empty:hidden', '[&_svg]:[stroke-width:1.7]', collapsed && '[&>*]:h-11 [@media(max-height:820px)]:[&>*]:h-9 [&_svg]:size-[18px] [&>*>span:first-child]:size-5')}>
                 <UpdateIndicator collapsed={collapsed} />
               </div>
-              {/* unfolded, Help and Settings sit at the end of the last line (StatusBlock `tail`) */}
+              {/* unfolded, Settings and Help are icons of the last line (StatusBlock `lead` / `tail`) */}
               {collapsed && <HelpMenu collapsed />}
               {collapsed && end.map((item) => navItem(item, pages.length + 1))}
               {/* folded: the way to pin the bar (pinned, the button sits beside the logo) */}
@@ -361,21 +361,11 @@ export const Sidebar = React.memo(function Sidebar({ drawer }: { /** touch layou
               lead={
                 !collapsed &&
                 end.map((item) => (
-                  <NavLink
-                    key={item.to}
-                    to={item.to}
-                    end={item.end}
-                    data-tour={navTourId(item)}
-                    className={({ isActive }) =>
-                      cn(
-                        'flex h-9 min-w-0 items-center gap-2.5 rounded-md px-2 text-sm font-medium text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring [&_svg]:size-[18px] [&_svg]:shrink-0 [&_svg]:[stroke-width:1.7]',
-                        isActive && 'bg-accent text-foreground [&_svg]:text-primary [&_svg]:[stroke-width:2]',
-                      )
-                    }
-                  >
-                    <item.icon />
-                    <span className="truncate">{t(item.label)}</span>
-                  </NavLink>
+                  <Tooltip key={item.to} content={t(item.label)} side="top">
+                    <NavLink to={item.to} end={item.end} data-tour={navTourId(item)} aria-label={t(item.label)} className={({ isActive }) => iconBtn(isActive)}>
+                      <item.icon />
+                    </NavLink>
+                  </Tooltip>
                 ))
               }
               tail={!collapsed && <HelpMenu collapsed={false} compact />}

@@ -7,6 +7,8 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Web, sidebar last line: Settings is an `iconBtn` like the three others (`Sidebar.tsx`, `lead` of `StatusBlock`:
+  tooltip + `aria-label`, `data-tour` kept), `SidebarLook` centres the four (`justify-center gap-2`); folded bar unchanged.
 - Web, sidebar status line: `components/shell/mood.ts`. `pickMood(facts)` (pure) returns ONE sentence (`key`, `vars`,
   `when` = times formatted by the hook, `level` ok / note / warn / error / idle, `to`, `issues`), most pressing first:
   open health problems (one sentence per issue `code`, `ISSUE_MOOD`; several = their count; an unknown code keeps

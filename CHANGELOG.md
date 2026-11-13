@@ -12,6 +12,8 @@ New:
   finished sessions waiting, agents with news, sessions at work. For the Claude plan, a light forecast: at the pace
   of the current window, the quota runs out before its reset ("At this pace, 5-hour quota out by 16:40 (resets
   18:00)."), or it will hold. Two lines at most; a click leads where it is dealt with.
+- **Sidebar: four icons on the last line.** Settings loses its name there: Settings, light / dark, presentation
+  mode and Help are four icons in the middle of the line (names on hover), on a computer and in the phone menu.
 - **Sessions: Tabs or Zones.** Two modes, one switch at the top right (Alt+T): **Tabs** shows one session at a
   time with the open ones as tabs above, **Zones** puts them side by side. The switch is one icon left of
   **New session**, no text, in the colour of the other icons of the bar: it draws the mode in use, and its bars move from one picture to the other when

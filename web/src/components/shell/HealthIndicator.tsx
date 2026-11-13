@@ -150,7 +150,7 @@ const alertHover = {
  *  a problem is open it opens the problems window (`IssuesDialog`) instead,
  *  the meters to Settings -> System, the Claude entry to Settings -> Stats. Under it, the theme and
  *  presentation mode (`SidebarLook`). Same elements folded or not, so the keyboard focus survives folding. */
-export function StatusBlock({ collapsed, lead, tail }: { collapsed?: boolean; /** unfolded: Settings, at the start of the last line */ lead?: React.ReactNode; /** unfolded: Help, at its end */ tail?: React.ReactNode }) {
+export function StatusBlock({ collapsed, lead, tail }: { collapsed?: boolean; /** unfolded: Settings, the first icon of the last line */ lead?: React.ReactNode; /** unfolded: Help, at its end */ tail?: React.ReactNode }) {
   const t = useT()
   const s = useStatusLine()
   const rows = useHealthRows()
@@ -260,10 +260,10 @@ export function StatusBlock({ collapsed, lead, tail }: { collapsed?: boolean; /*
   )
 }
 
-/** The very bottom of the sidebar, under the Claude quota. Unfolded, one line: Settings with its name on the left
- *  (`lead`, a page), then on the right the quick actions as icons (names in tooltips): a sun / moon that switches between
- *  light and dark (it shows the theme on screen; "System" stays in Settings -> Appearance), the eye of presentation
- *  mode (crossed out and tinted while on) and Help (`tail`). Folded: the sun / moon and the eye one under the other
+/** The very bottom of the sidebar, under the Claude quota. Unfolded, one line of four icons in the middle (names in
+ *  tooltips): Settings (`lead`, a page), a sun / moon that switches between light and dark (it shows the theme on
+ *  screen; "System" stays in Settings -> Appearance), the eye of presentation mode (crossed out and tinted while on)
+ *  and Help (`tail`). Folded: the sun / moon and the eye one under the other
  *  (Help and Settings keep their rows above). */
 function SidebarLook({ collapsed, lead, tail }: { collapsed?: boolean; lead?: React.ReactNode; tail?: React.ReactNode }) {
   const t = useT()
@@ -302,8 +302,8 @@ function SidebarLook({ collapsed, lead, tail }: { collapsed?: boolean; lead?: Re
       </div>
     )
   return (
-    <div className="mx-side-reveal mt-0.5 flex h-10 min-w-0 items-center gap-1" data-testid="sidebar-look">
-      <span className="flex min-w-0 flex-1">{lead}</span>
+    <div className="mx-side-reveal mt-0.5 flex h-10 min-w-0 items-center justify-center gap-2" data-testid="sidebar-look">
+      {lead}
       {buttons}
       {tail}
     </div>
