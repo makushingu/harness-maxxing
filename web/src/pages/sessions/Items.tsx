@@ -19,6 +19,7 @@ import { useOpenPreview } from './FilePreview'
 import { MediaPlayer } from '@/features/files/MediaPlayer'
 import { QuotedFile } from './QuotedFile'
 import { ChangesChip } from './ChangesChip'
+import { CutCard } from './Cut'
 import { useRevert } from '@/features/code/useRevert'
 import { SendToDialog, SendToSub, type SendTarget } from '@/features/team/SendTo'
 import { gripRef } from './contentDrag'
@@ -51,12 +52,15 @@ export const ItemContext = React.createContext<ItemCtx>({ filesRoot: null, model
 export const ItemRow = React.memo(function ItemRow({
   item,
   live,
+  last,
   onHide,
   onEdit,
   onFork,
 }: {
   item: Item
   live: boolean
+  /** The thread ends on this row, a failed turn: its card offers to resume. */
+  last?: boolean
   /** Only for a message that got no answer: delete it, or (with onEdit) bring it back into the composer. */
   onHide?: (key: string, at: number) => void
   onEdit?: (key: string, at: number, seed: Seed) => void
@@ -97,11 +101,17 @@ export const ItemRow = React.memo(function ItemRow({
     case 'init':
       return <InitRow model={item.ev.model} />
     case 'result':
-      return <ResultRow ev={item.ev} changes={item.changes} />
+      return item.cut ? (
+        <CutCard cut={item.cut} last={!!last}>
+          <ResultRow ev={item.ev} changes={item.changes} />
+        </CutCard>
+      ) : (
+        <ResultRow ev={item.ev} changes={item.changes} />
+      )
     case 'changes':
       return <LoneChanges ev={item.ev} />
     case 'note':
-      return <NoteRow text={item.ev.text} level={item.ev.level} />
+      return item.cut ? <CutCard cut={item.cut} last={!!last} /> : <NoteRow text={item.ev.text} level={item.ev.level} />
   }
 })
 

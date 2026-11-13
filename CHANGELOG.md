@@ -3,6 +3,21 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## Unreleased
+
+Changed:
+- **Sessions: a turn that stops short says it in one card, with a button.** When Claude stops before the end
+  (usage limit reached, Claude's servers down, a crash), the thread no longer shows Claude Code's raw sentence, a
+  red technical line and the same line again above the message box: one card says what happened in plain words
+  ("Usage limit reached"), with **Resume** (sends "Continue where you stopped."), the model of the next turn right
+  beside it (to resume with another one), a link to the usage page when a limit is the cause, and the technical
+  lines behind **Details**. Once you have resumed, the card stays as a trace, without its buttons.
+
+Fixed:
+- **Videos: going back on the bar goes back.** While a video played, a click earlier on its bar (at 0:07, back to
+  0:01) could do nothing: the playback carried on from where it was. It happened when the player changed to the
+  lighter copy at that very moment, more often on a slow connection. The player now goes where you clicked.
+
 ## 2.0.0-alpha.147 - 2026-11-13
 
 New:

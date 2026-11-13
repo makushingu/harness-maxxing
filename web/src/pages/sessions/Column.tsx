@@ -72,7 +72,7 @@ import {
 } from '@/components/ui'
 import { Combobox } from '@/components/ui/combobox'
 import { TaskBar } from './Tasks'
-import { forgetLog, getLog, loadEarlier, loadLog, seedEmptyLog, useLogSelect, useSessionLog, useSessionStream } from './log'
+import { endingCut, forgetLog, getLog, loadEarlier, loadLog, seedEmptyLog, useLogSelect, useSessionLog, useSessionStream } from './log'
 import { PlanChip, PlanNotice } from './Plan'
 import { ApprovalCards } from './Approvals'
 import { MaxxingControls, MaxxingMeter } from './MaxxingMeter'
@@ -88,6 +88,7 @@ import { Composer, type ComposerHandle } from './Composer'
 import { QuotePill } from './Quote'
 import { FileMenu } from './FileMenu'
 import { ItemContext } from './Items'
+import { CutContext, type CutActions } from './Cut'
 import { ContextGauge, ModelPicker, StateBadge } from './Widgets'
 import { useSlashCommands } from './slashCommands'
 import { SessionOptions, type OptionAction } from './SessionOptions'
@@ -634,6 +635,28 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
     },
   }
 
+  // The card of a failed turn the thread ends on (Cut.tsx): Resume is a message like any other, and the model of
+  // the next turn is the composer's picker.
+  const cutDo = React.useRef({ send: onSend, model: actions.model })
+  cutDo.current = { send: onSend, model: actions.model }
+  const endsOnCut = useLogSelect(sid, (st) => !!endingCut(st.items))
+  const cutModel = session?.model
+  const cutReal = session?.real_model
+  const cutTokens = session?.context_tokens
+  const cutError = session?.state === 'error' ? session.error : null
+  const cutOff = !session || !!authReason
+  const cut = React.useMemo<CutActions>(
+    () =>
+      cutOff
+        ? { error: cutError }
+        : {
+            resume: (text) => void cutDo.current.send(text, []),
+            model: <ModelPicker chosen={cutModel || ''} real={cutReal} contextTokens={cutTokens} onChange={(m) => cutDo.current.model(m)} />,
+            error: cutError,
+          },
+    [cutOff, cutModel, cutReal, cutTokens, cutError],
+  )
+
   // The composer's "/" menu: the commands of this session, then the skills of its topic.
   const idleWithTurns = () => {
     if (running || !session?.turns) toast.info(t(running ? 'slash.busy' : 'slash.empty'))
@@ -769,10 +792,13 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
               </Button>
             </div>
           ) : (
-            <LiveThread ref={thread} sid={sid} session={session} pending={pending} onRetry={onRetry} onLoadEarlier={onLoadEarlier} onEdit={onEdit} onFork={path ? onFork : undefined} />
+            <CutContext.Provider value={cut}>
+              <LiveThread ref={thread} sid={sid} session={session} pending={pending} onRetry={onRetry} onLoadEarlier={onLoadEarlier} onEdit={onEdit} onFork={path ? onFork : undefined} />
+            </CutContext.Provider>
           )}
         </ItemContext.Provider>
-        {session?.state === 'error' && session.error && !running && (
+        {/* a failed turn says it in its own card of the thread */}
+        {session?.state === 'error' && session.error && !running && !endsOnCut && (
           <div className="mx-auto w-full max-w-(--mx-read,860px) px-3">
             <div role="alert" className="rounded-md bg-destructive/10 px-3 py-1.5 text-xs text-destructive">
               <Sensitive>{session.error}</Sensitive>

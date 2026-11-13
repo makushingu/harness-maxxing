@@ -291,7 +291,9 @@ function maxxingFinish(s, i) {
   s.turns += 1; s.cost_usd = +(s.cost_usd + cost).toFixed(4); s.updated = now(); s.unread = true; s.state = failed ? 'error' : 'idle'
   if (failed) {
     s.error = 'Claude exited with code 1: overloaded, retry later'
-    addEvents(s, { type: 'result', ok: false, error: s.error, cost_usd: cost, duration_ms: 20000, model, at: now() })
+    addEvents(s, { type: 'assistant', text: 'API Error: 529 Overloaded. Retry in a moment.', error: 'server_error', at: now() },
+      { type: 'result', ok: false, cost_usd: cost, duration_ms: 20000, model, at: now() },
+      { type: 'note', text: 'Turn failed: ' + s.error, level: 'error', failed: true, at: now() })
   } else {
     const answer = s.plan_mode
       ? `**Plan for “${s.title}”**\n\n1. Read the files involved.\n2. Make the change in small steps.\n3. Check the result and report.\n\nValidate the plan and I start.`
@@ -367,7 +369,10 @@ function conversation(s, d) {
     ev.push({ type: 'tool_use', id: e1, name: 'Edit', input: { file_path: `${cwd}/memory.md`, old_string: '## Decisions', new_string: `## Decisions\n- 2026-10-11: ${s.title}` }, summary: `Edit ${s.path}/memory.md`, at: at() })
     ev.push({ type: 'tool_result', tool_use_id: e1, text: 'The file has been updated successfully.', is_error: false, at: at() })
     if (s.state === 'error') {
-      ev.push({ type: 'note', text: 'Turn failed: ' + s.error, level: 'error', at: at() })
+      // a turn the API refused, as the server writes it: the line of Claude Code, the failed result, the process's end
+      ev.push({ type: 'assistant', text: "You've reached your Opus limit. Switch to another model, or manage usage credits at https://claude.ai/settings/usage, to continue.", error: 'rate_limit', at: at() })
+      ev.push({ type: 'result', ok: false, cost_usd: 0.35, duration_ms: 113000, model, usage: { input: 2100, output: 7600, cache_read: 909000, cache_write: 43900 }, at: at() })
+      ev.push({ type: 'note', text: 'Turn failed: ' + s.error, level: 'error', failed: true, at: at() })
       return ev
     }
     ev.push({ type: 'assistant', text: `Done — I added a line under **Decisions** in \`memory.md\`.\n\n${d.last}`, at: at() })

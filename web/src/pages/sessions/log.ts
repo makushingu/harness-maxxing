@@ -24,10 +24,14 @@ export type Item =
   | { kind: 'thinking'; key: string; ev: Ev<'thinking'> }
   | { kind: 'tool'; key: string; use: Ev<'tool_use'>; result: Ev<'tool_result'> | null; /** The background work it started. */ task?: Task }
   | { kind: 'init'; key: string; ev: Ev<'init'> }
-  | { kind: 'result'; key: string; ev: Ev<'result'>; /** What the turn changed in git repositories. */ changes?: Ev<'changes'> }
-  | { kind: 'note'; key: string; ev: Ev<'note'> }
+  | { kind: 'result'; key: string; ev: Ev<'result'>; /** What the turn changed in git repositories. */ changes?: Ev<'changes'>; /** The turn failed: shown as one card. */ cut?: Cut }
+  | { kind: 'note'; key: string; ev: Ev<'note'>; /** The turn failed before any result line: shown as one card. */ cut?: Cut }
   /** Changes of a turn that ended without a result line (stopped): shown alone. */
   | { kind: 'changes'; key: string; ev: Ev<'changes'> }
+
+/** How a failed turn ended, gathered for one card (Cut.tsx): what Claude Code wrote in place of an answer (`text`,
+ *  with its reason `api`: rate_limit, server_error…) and the last lines of the process (`detail`). */
+export type Cut = { text?: string; api?: string; detail?: string }
 
 /** A task as the thread knows it: its `task` events merged. `interrupted`: a later turn started while it was
  *  still running (its Claude process is gone; a later event of the same task clears it). */
@@ -173,12 +177,22 @@ export function fold(st: LogState, evs: SessionEvent[], next: number, sid: strin
         if (ev.model && ev.model !== lastModel) items.push({ kind: 'init', key, ev })
         if (ev.model) lastModel = ev.model
         break
-      case 'result':
-        items.push({ kind: 'result', key, ev })
+      case 'result': {
+        // A call the API refused: the line written in place of an answer belongs to the card of the failed turn.
+        const said = items[items.length - 1]
+        if (!ev.ok && said?.kind === 'assistant' && said.ev.error) items[items.length - 1] = { kind: 'result', key, ev, cut: { text: said.ev.text, api: said.ev.error } }
+        else items.push({ kind: 'result', key, ev })
         break
-      case 'note':
-        items.push({ kind: 'note', key, ev })
+      }
+      case 'note': {
+        // The end of a failed turn joins what the turn already said about it (one card, not three rows).
+        const end = items[items.length - 1]
+        if (!ev.failed) items.push({ kind: 'note', key, ev })
+        else if (end?.kind === 'result' && !end.ev.ok) items[items.length - 1] = { ...end, cut: { ...end.cut, detail: ev.text } }
+        else if (end?.kind === 'assistant' && end.ev.error) items[items.length - 1] = { kind: 'note', key, ev, cut: { text: end.ev.text, api: end.ev.error, detail: ev.text } }
+        else items.push({ kind: 'note', key, ev, cut: { detail: ev.text } })
         break
+      }
       case 'changes': {
         // On the turn's result line (written just before), and its message offers "Revert to before this message".
         let placed = false
@@ -442,6 +456,16 @@ export function withoutHidden(items: Item[], hidden: Record<string, boolean>): I
     if (!skipping) out.push(it)
   }
   return out
+}
+
+/** Key of the failed turn the thread ends on (nothing was sent since), else null: its card offers to resume. */
+export function endingCut(items: Item[]): string | null {
+  for (let i = items.length - 1; i >= 0; i--) {
+    const it = items[i]
+    if ((it.kind === 'result' || it.kind === 'note') && it.cut) return it.key
+    if (it.kind !== 'note' && it.kind !== 'changes') return null
+  }
+  return null
 }
 
 /** Keys of the user messages that got no answer (their turn was stopped or failed before Claude wrote anything):

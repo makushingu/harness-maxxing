@@ -27,6 +27,8 @@ export const GROUPS = {
   maxxing: ['maxxing'],
   // dragging content from one session into another: loaded when a drag starts
   drag: ['drag'],
+  // the card of a failed turn (pages/sessions/Cut.tsx): loaded when a thread shows one
+  cut: ['cut'],
   // a pasted text that became a file: loaded on that paste
   paste: ['paste'],
   // extra words of the Settings sections for the command palette: loaded on its first search

@@ -372,6 +372,14 @@ thread, with the note "Back after 2 h: Harness summarized the session ... for yo
 returns: 38 to 67 % fewer tokens from 100k, and details kept better than with the plain summary. Below the threshold
 the full thread goes on. Off = the "Compact when you come back" rule alone.
 
+## When a turn stops short
+
+When Claude stops before the end (usage limit reached, Claude's servers down, a crash), the conversation shows one
+card that says what happened in plain words. **Resume** sends "Continue where you stopped."; the model next to it
+is the one of the next turn, change it to resume with another one. A limit adds a link to your usage page, and
+**Details** shows the technical lines. Once you have resumed, the card stays as a trace, without its buttons. A turn
+you stopped yourself keeps its plain **Stopped.** line.
+
 ## Edit or delete a message that got no answer
 
 A message you stopped before Claude answered (it shows **Stopped.** under it) can be fixed or removed. Right-click

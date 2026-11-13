@@ -415,13 +415,13 @@ export type SessionEvent =
   | { type: 'user'; text: string; attachments: string[]; at: number; source: SessionSource; /** Audio of a voice message sent directly. */ voice?: string[]; /** The web pages' ids of the message(s) it carries (SendMessageBody.client_id). */ client_ids?: string[]; /** Added to a running turn (Add to plan): read at Claude's next step. */ injected?: boolean; /** Sent by another session's turn (`maxxing sessions send`). */ from?: { session: string; title: string } }
   /** Transcript of the voice message just above (or why it failed). */
   | { type: 'voice_text'; text: string; error: string | null; stopped?: boolean; at: number }
-  | { type: 'assistant'; text: string; at: number }
+  | { type: 'assistant'; text: string; at: number; /** Written by Claude Code in place of an answer, the API refused the call: why (rate_limit, server_error…). */ error?: string }
   | { type: 'thinking'; text: string; at: number }
   | { type: 'tool_use'; id: string; name: string; input: unknown; input_lines?: Record<string, number>; summary: string; at: number }
   | { type: 'tool_result'; tool_use_id: string; text: string; is_error: boolean; at: number }
   | { type: 'init'; model: string; cwd: string; at: number }
   | { type: 'result'; ok: boolean; cost_usd: number; duration_ms: number; model: string; usage: Usage; at: number }
-  | { type: 'note'; text: string; level: 'info' | 'warn' | 'error'; at: number }
+  | { type: 'note'; text: string; level: 'info' | 'warn' | 'error'; at: number; /** The turn's process ended on a failure (its last lines). */ failed?: boolean }
   /** What turn `n` changed in git repositories (Changes view, features/code). */
   | ChangesEvent
   /** `ref` = `at` of a user event: hidden from the thread (or shown again). */

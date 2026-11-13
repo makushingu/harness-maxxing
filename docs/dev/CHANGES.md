@@ -5,6 +5,22 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## Unreleased
+
+- Failed turn as one card (`web/src/pages/sessions/Cut.tsx`). `normalize.py`: an `assistant` event written by
+  Claude Code in place of an answer (raw event with `error`: `rate_limit`, `server_error`, `authentication_failed`…)
+  carries `error`; the `note` of `mx_done` with a non-zero code (not stopped, not timed out) carries `failed: true`.
+  `log.ts` folds them into `cut` on the turn's `result` item (or on the `note` item when the process died before any
+  result): the refused answer is no longer an `assistant` item, so its user message counts as unanswered.
+  `endingCut(items)` = the failed turn the thread ends on; only that card has Resume / the model picker
+  (`CutContext`, set by `Column.tsx`), and the `session.error` banner above the composer is hidden then. A result
+  that is not ok without either mark (a stopped turn) stays the plain result line. Texts: dictionary group `cut`
+  (not in the first load). The mock writes failed turns like the server.
+- `MediaPlayer.tsx` `seek()`: writes `last.current.t` at once (it was only set by `timeupdate`), and while a
+  source switch or a reload is on its way (`resume.current` set, `duration` NaN on the element) it moves the time
+  to resume instead of being dropped. Before, the stall of a seek made the player take the Auto copy and resume at
+  the time before the seek.
+
 ## 2.0.0-alpha.147 - 2026-11-13
 
 - Audit fixes (straight to `main`, merged here): `approvals.py` survives a WebFetch request whose URL does not

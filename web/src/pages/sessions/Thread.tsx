@@ -16,7 +16,7 @@ import type { SentItem, Session } from '@/lib/types'
 import { ItemRow, UserMessage } from './Items'
 import { onThreadDragEnd, onThreadDragStart } from './contentDrag'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
-import { isShownTask, setHiddenLocal, taskStatus, turnKeys, unanswered, withoutHidden, type Item, type LogState } from './log'
+import { endingCut, isShownTask, setHiddenLocal, taskStatus, turnKeys, unanswered, withoutHidden, type Item, type LogState } from './log'
 import type { Pending, Seed } from './store'
 import { fmtElapsed } from './util'
 
@@ -248,6 +248,8 @@ export const Thread = React.forwardRef<ThreadHandle, {
   // Deleting an unanswered message: its rows slide out, then the thread drops them; "Undo" in the toast.
   const sid = session?.id
   const hideable = React.useMemo(() => unanswered(items, running), [items, running])
+  // The failed turn the thread ends on (nothing sent since, nothing running): its card offers to resume.
+  const cutKey = React.useMemo(() => (running || optimistic.length || serverSent.length ? null : endingCut(items)), [items, running, optimistic.length, serverSent.length])
   const [leaving, setLeaving] = React.useState<ReadonlySet<string>>(new Set())
   const itemsRef = React.useRef(items)
   itemsRef.current = items
@@ -339,7 +341,7 @@ export const Thread = React.forwardRef<ThreadHandle, {
                     className={cn(anim.className, leaving.has(it.key) && 'pointer-events-none translate-x-4 opacity-0 transition-[opacity,transform] duration-150 ease-in')}
                   >
                     <ErrorBoundary>
-                      <ItemRow item={it} live={running && it.kind === 'tool' && !it.result && from + i > turnStart} onHide={hideable.has(it.key) ? onHide : undefined} onEdit={onEdit && onEditItem} onFork={onFork && onForkItem} />
+                      <ItemRow item={it} live={running && it.kind === 'tool' && !it.result && from + i > turnStart} last={it.key === cutKey} onHide={hideable.has(it.key) ? onHide : undefined} onEdit={onEdit && onEditItem} onFork={onFork && onForkItem} />
                     </ErrorBoundary>
                   </div>
                 )

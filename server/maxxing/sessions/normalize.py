@@ -121,7 +121,7 @@ def normalize(ev: dict) -> list[dict]:
         if ev.get("code") not in (0, None) and not ev.get("stopped") and not ev.get("timed_out"):
             tail = (ev.get("stderr") or "").strip()
             text = f"Turn failed: {tail[-500:]}" if tail else f"Turn failed (exit code {ev.get('code')})."
-            return [{"type": "note", "text": text, "level": "error", "at": at}]
+            return [{"type": "note", "text": text, "level": "error", "failed": True, "at": at}]   # the turn's end
         return []
     if ev.get("parent_tool_use_id"):
         return []
@@ -202,12 +202,15 @@ def _task(ev: dict, sub: str, at: float | None) -> list[dict]:
 
 def _assistant(ev: dict, at: float | None) -> list[dict]:
     out = []
+    # Written by Claude Code in place of an answer when the API refused the call: `error` says why
+    # (rate_limit, server_error, authentication_failed...). The page shows it as the end of the turn.
+    refused = {"error": str(ev["error"])[:60]} if ev.get("error") else {}
     for b in (ev.get("message") or {}).get("content") or []:
         if not isinstance(b, dict):
             continue
         bt = b.get("type")
         if bt == "text" and (b.get("text") or "").strip():
-            out.append({"type": "assistant", "text": b["text"], "at": at})
+            out.append({"type": "assistant", "text": b["text"], "at": at, **refused})
         elif bt == "thinking" and (b.get("thinking") or "").strip():
             out.append({"type": "thinking", "text": b["thinking"], "at": at})
         elif bt == "tool_use":

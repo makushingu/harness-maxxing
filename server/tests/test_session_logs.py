@@ -505,3 +505,20 @@ def test_clip_line_survives_a_lone_surrogate_and_deep_nesting():
     assert clip.clip_line(deep) == deep
     shallow_deep = '{"thinking_tokens": 1, "a": ' + "[" * 2000 + "]" * 2000 + "}"
     assert len(shallow_deep) <= 4096 and clip.drop_line(shallow_deep) is False
+
+
+def test_a_turn_the_api_refused_says_so_in_its_events():
+    """The page shows the end of such a turn as one card: the line Claude Code wrote in place of an answer carries
+    its reason, and the note of the failed process is marked as the end of the turn."""
+    from maxxing.sessions.normalize import normalize_lines
+    said = {"type": "assistant", "error": "rate_limit",
+            "message": {"model": "<synthetic>", "content": [{"type": "text", "text": "You've reached your limit."}]}}
+    lines = [said, {"type": "result", "is_error": True, "subtype": "success", "api_error_status": 429},
+             {"type": "mx_done", "code": 1, "stderr": "[claude-code:x] {}", "stopped": False, "timed_out": False},
+             {"type": "assistant", "message": {"content": [{"type": "text", "text": "A real answer."}]}},
+             {"type": "mx_note", "text": "Something else", "level": "error"}]
+    refused, result, end, answer, note = normalize_lines([json.dumps(e) for e in lines])
+    assert refused["error"] == "rate_limit" and refused["text"] == "You've reached your limit."
+    assert result["ok"] is False
+    assert end["failed"] is True and end["level"] == "error" and end["text"].startswith("Turn failed: ")
+    assert "error" not in answer and "failed" not in note
