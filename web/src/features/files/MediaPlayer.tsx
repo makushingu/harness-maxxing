@@ -407,8 +407,15 @@ export function MediaPlayer({ path, kind, version, onError, onOpen, keepAlive, w
   }
   const seek = (to: number) => {
     const m = media.current
-    if (!m || !Number.isFinite(m.duration)) return
+    if (!m) return
+    // a source switch or a reload on its way: it resumes where this seek asks, not where the playback was
+    if (resume.current) {
+      resume.current.t = last.current.t = Math.max(0, Math.min(duration || to, to))
+      return setTime(resume.current.t)
+    }
+    if (!Number.isFinite(m.duration)) return
     m.currentTime = Math.max(0, Math.min(m.duration, to))
+    last.current.t = m.currentTime // a switch that starts before the next `timeupdate` resumes here
     setTime(m.currentTime)
   }
   const setVol = (v: number) => {
