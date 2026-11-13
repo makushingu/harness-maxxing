@@ -78,3 +78,11 @@ def test_retry_of_a_part_that_failed_is_big_enough_to_tap():
     inline = src[src.index('data-testid="part-error"'):]
     button = re.search(r'<button[^>]*className="([^"]*)"', inline)
     assert button and "pointer-coarse:min-h-10" in button[1].split()
+
+
+def test_a_sheet_that_refuses_to_close_springs_back_after_a_swipe():
+    # a dialog busy saving ignores the close: the sheet stayed where the finger left it, nearly off the screen
+    src = (WEB / "components" / "ui" / "sheet-drag.ts").read_text()
+    after = src[src.index("dismiss.current()"):]
+    after = after[:after.index("} else set(0, true)")]
+    assert "setTimeout" in after and "data-state" in after and "set(0, true)" in after
