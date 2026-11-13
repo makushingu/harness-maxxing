@@ -121,7 +121,10 @@ def always_rule(d: dict) -> str:
         return f"Edit(/{p})"                        # "//abs": an absolute path; Edit rules cover Write too
     if tool == "WebFetch":
         from urllib.parse import urlsplit
-        host = urlsplit(str(inp.get("url") or "")).hostname or ""
+        try:
+            host = urlsplit(str(inp.get("url") or "")).hostname or ""
+        except ValueError:                           # "http://[::1": not a URL, no rule
+            return ""
         return f"WebFetch(domain:{host})" if re.fullmatch(r"[a-z0-9.-]{1,253}", host) else ""
     if tool in ("Task", "Agent", "Skill"):           # the subagent / skill runs under the same rules: ask each time
         return ""

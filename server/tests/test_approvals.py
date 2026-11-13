@@ -517,6 +517,7 @@ def test_always_allow_is_refused_for_an_agent_and_with_deny(client, topic, mx):
     ("Write", {"file_path": "/root/maxxing/x.md", "content": "hi"}, "Edit(//root/maxxing/x.md)"),
     ("Edit", {"file_path": "relative.md"}, ""),
     ("WebFetch", {"url": "https://Example.com/a?b=1"}, "WebFetch(domain:example.com)"),
+    ("WebFetch", {"url": "http://[::1"}, ""),                              # not a URL: no rule, not a 500
     ("Task", {"prompt": "do it"}, ""),
     ("Write", {"file_path": "/root/"}, ""),                              # a folder: the whole tree below it
     ("Write", {"file_path": "/tmp/[ab].txt"}, ""),                       # gitignore patterns
