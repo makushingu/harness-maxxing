@@ -3,6 +3,20 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## Unreleased
+
+New:
+- **Files: Word, Excel, PowerPoint and OpenDocument files open in the viewer.** A `.docx`, `.pptx`, `.odt` or `.odp`
+  shows as a page of text (headings, lists, tables, links, its pictures, one section per slide with its notes), a
+  `.xlsx` or `.ods` as a table per sheet with the column letters, the row numbers, a filter and the sheets as tabs at
+  the bottom - on the Files page and when a path is clicked in a conversation, with nothing to install. The words
+  and numbers of the file, not its layout: **Download** gives the original. Old `.doc` / `.xls` / `.ppt` still
+  download.
+- **Files: a PDF reads on a phone.** Where the browser shows no PDF inside a page (most phones: an empty frame or
+  the first page only), the PDF now opens page by page, as far as the last one: two fingers, a double tap or
+  **− / +** zoom, pages load as you scroll and the bar shows the page you are on. On a computer the browser's own
+  reader stays.
+
 ## 2.0.0-alpha.149 - 2026-11-13
 
 Changed:

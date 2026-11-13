@@ -10,14 +10,14 @@ import { ChevronLeft, ChevronRight, Code2, Download, Eye, FileQuestion, Folder, 
 import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, EmptyState, Segmented, Sensitive, Tooltip } from '@/components/ui'
 import { isApiError } from '@/lib/api'
 import { api } from '@/lib/api'
-import { filePreviewUrl, fileStamp, fileThumbUrl, prefetchImage, PREVIEW_W, useFileContent, useFileKind, useFileStamp } from '@/lib/queries/files'
+import { fileDocQuery, filePreviewUrl, fileStamp, fileThumbUrl, prefetchImage, PREVIEW_W, useFileContent, useFileKind, useFileStamp } from '@/lib/queries/files'
 import { qk } from '@/lib/queries/keys'
 import type { FileContent, FileEntry, FileList } from '@/lib/types'
 import { fmtBytes } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
 import { useIsMobile } from '@/stores/media'
-import { basename, dirname, iconFor, isRendered, isTextual, kindOf } from './kinds'
+import { basename, dirname, iconFor, isRendered, isTextDoc, isTextual, kindOf } from './kinds'
 import { PreviewBody } from './FilePreview'
 import { TextZoomControl, zoomsText } from './textZoom'
 import { FolderView } from './rich'
@@ -142,7 +142,7 @@ function ViewerPane({ path, index, count, fullscreen, canFull, onFull }: { path:
             {[multi ? `${index + 1} / ${count}` : null, content.data ? fmtBytes(content.data.size) : null].filter(Boolean).join(' · ') || <Sensitive length={14}>{parent}</Sensitive>}
           </span>
         </div>
-        {!isDir && isTextual(kind) && content.data && zoomsText(kind, view === 'preview') && <TextZoomControl />}
+        {!isDir && (isTextDoc(name) || (isTextual(kind) && content.data && zoomsText(kind, view === 'preview'))) && <TextZoomControl />}
         {!isDir && isRendered(kind) && (
           <Segmented
             size="sm"
@@ -277,7 +277,7 @@ function ViewerPane({ path, index, count, fullscreen, canFull, onFull }: { path:
       </div>
       <div className="relative flex min-h-0 flex-1 flex-col" {...swipe}>
         {probe.isPending ? (
-          <FileSkeleton kind={kind} preview={view === 'preview'} />
+          <FileSkeleton kind={kind} preview={view === 'preview'} name={name} />
         ) : probe.isError || probe.data === 'missing' ? (
           // Never a skeleton forever: a path that does not exist (or is outside the files root) says so.
           <EmptyState
@@ -296,7 +296,7 @@ function ViewerPane({ path, index, count, fullscreen, canFull, onFull }: { path:
             }}
           />
         ) : !stamp.ready ? (
-          <FileSkeleton kind={kind} preview={view === 'preview'} />
+          <FileSkeleton kind={kind} preview={view === 'preview'} name={name} />
         ) : (
           <PreviewBody path={path} kind={kind} view={view} content={content} version={stamp.version} />
         )}
@@ -408,6 +408,7 @@ function usePrefetchNeighbours(list: string[], index: number) {
           void qc.prefetchQuery(videoInfoQuery(p)) // the player's box gets the video's shape at once
         }
         else if (k === 'pdf') prefetchImage(fileThumbUrl(p, 240, null))
+        else if (k === 'document') void qc.prefetchQuery(fileDocQuery(p))
         else if (k === 'markdown' || k === 'csv' || k === 'code' || k === 'text')
           void qc.prefetchQuery({ queryKey: qk.files.read(p), queryFn: () => api.get<FileContent>('/api/files/read', { path: p }), staleTime: 30_000 })
       }

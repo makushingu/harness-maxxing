@@ -5,6 +5,22 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## Unreleased
+
+- Documents: `maxxing/documents.py` (stdlib only: zipfile + ElementTree) reads OOXML and ODF: `read(path)` ->
+  `{type: text|slides, markdown}` or `{type: sheets, sheets: [{name, rows, truncated}]}`, `media(path, name)` for a
+  picture of the package; `Unreadable(unsupported|too_large)`. Guards: XML parts capped, 8 s deadline, DTD refused,
+  text escaped, links http(s)/mailto only, pictures png/jpg/gif/webp/bmp only. Routes `GET /api/files/doc`
+  (413 / 415) and `/api/files/doc/media`. Web: kind `document` (`kinds.ts`, `isSheets` / `isTextDoc`),
+  `features/files/docs.tsx` (`DocView`, `SheetsView`), `MarkdownView` / `MarkdownReader` take `image` (a ref of the
+  Markdown -> URL).
+- PDF pages: `GET /api/files/pdf` (`{pages, ratio, mtime}`, 415 without poppler / ffmpeg) and `/api/files/pdf/page`
+  (`n`, `w` mapped to 640 / 1280 / 2048, WebP cached in `state/thumbs`). `_pdf_thumb` renders through an uncompressed
+  TIFF (0.04 s instead of 0.33 s for the PNG; ~0.35 s per page with the WebP). Web: `PdfView` keeps the iframe when
+  `navigator.pdfViewerEnabled` and the pointer is fine, else `features/files/pdfPages.tsx` (pages near the screen
+  only, zoom 1-4 by pinch / double tap / Ctrl + wheel, the picture asked again at the zoom once the fingers are up,
+  `data-zoomed` holds the viewer's swipe); a 415 falls back to the iframe.
+
 ## 2.0.0-alpha.149 - 2026-11-13
 
 - Web, file viewer loaders: `features/files/skeletons.tsx` (`FileSkeleton({kind, preview})`: picture, PDF page,

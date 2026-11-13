@@ -1,6 +1,6 @@
 // <FilePreview path="/abs/path" /> — read-only preview of any file, reusable anywhere (Sessions drawer,
 // dashboards…). Renders image (zoom/fit), video/audio, pdf, markdown / CSV table / HTML page (rendered,
-// toggle to source), archive contents, font specimen, code/text (CodeMirror read-only), and an info card
+// toggle to source), office documents (text, slides, sheets), archive contents, font specimen, code/text (CodeMirror read-only), and an info card
 // with a download button for other binaries / files over 2 MB. Fills its parent: give it a height.
 // Presentation mode: the content and the name are masked at source.
 import * as React from 'react'
@@ -13,7 +13,8 @@ import { fmtBytes } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
 import { useIsMobile } from '@/stores/media'
-import { basename, iconFor, isRendered, isTextual, kindOf, type FileKind } from './kinds'
+import { basename, iconFor, isRendered, isTextDoc, isTextual, kindOf, type FileKind } from './kinds'
+import { DocView } from './docs'
 import { ArchiveView, CsvView, FontView, HtmlView } from './rich'
 import { FileInfoCard, ImageView, LazyCodeEditor, MediaView, PdfView } from './viewers'
 import { FileSkeleton } from './skeletons'
@@ -49,7 +50,7 @@ export function FilePreview({ path, className, header = true, openInFiles = true
             <Sensitive length={10}>{name}</Sensitive>
           </span>
           {content.data && <span className="text-xs text-muted-foreground tabular-nums max-sm:hidden">{fmtBytes(content.data.size)}</span>}
-          {isTextual(kind) && content.data && zoomsText(kind, mdMode === 'preview') && <TextZoomControl />}
+          {(isTextDoc(name) || (isTextual(kind) && content.data && zoomsText(kind, mdMode === 'preview'))) && <TextZoomControl />}
           {isRendered(kind) && (kind === 'html' || content.data) && (
             <Segmented
               size="sm"
@@ -113,6 +114,8 @@ export function PreviewBody({ path, kind, view = 'preview', content, version }: 
       return <ArchiveView path={path} />
     case 'font':
       return <FontView path={path} version={version} />
+    case 'document':
+      return <DocView path={path} />
     case 'other':
       return <FileInfoCard path={path} reason={t('files.binaryHint')} />
     case 'html':
