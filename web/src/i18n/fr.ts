@@ -317,6 +317,7 @@ export const fr: Record<keyof typeof en, string> = {
   'slash.compact': 'Compacter la conversation (résumé, contexte réduit)',
   'slash.handoff': 'Continuer dans une nouvelle session avec un résumé',
   'slash.new': 'Nouvelle session dans ce topic',
+  'slash.newChat': 'Nouvelle conversation avec cet agent',
   'slash.rename': 'Renommer la session : /rename Nouveau titre',
   'slash.busy': 'Attendez la fin du tour',
   'slash.empty': "Rien à faire : la session n'a pas encore de tour",

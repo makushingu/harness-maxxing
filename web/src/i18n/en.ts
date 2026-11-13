@@ -319,6 +319,7 @@ export const en = {
   'slash.compact': 'Compact the conversation (summary, smaller context)',
   'slash.handoff': 'Continue in a new session with a summary',
   'slash.new': 'New session in this topic',
+  'slash.newChat': 'New conversation with this agent',
   'slash.rename': 'Rename this session: /rename New title',
   'slash.busy': 'Wait for the end of the turn',
   'slash.empty': 'Nothing to do yet: the session has no turn',

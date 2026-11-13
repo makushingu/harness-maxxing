@@ -7,6 +7,16 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Agents' box like a session's. `POST /api/agents/{p}/{t}/{a}/run` takes `voice` (a file under the agent's
+  `attachments/`, checked like the attachments) and `effort` (a new conversation's); `agents.fire(voice=, effort=)`
+  (owner's words only) hands `voice_path` to `service.send_message` / `create_session` (an empty message: no "Run
+  your routine."), the run message of the thread carries `voice: [path]`, and owner messages that wait keep both.
+  `voicejobs._run` calls `agents.voice_heard(path, audio, job)` for an agent path: the run message whose `voice` has
+  the recording gets the transcript as `text` (or `voice_error`). Web: `OwnerMessage` shows `VoiceNote` (exported from
+  `Items.tsx`); the agent `Composer` passes `onVoiceMessage` (upload, then run; refused = the recording comes back
+  attached), its `ModelPicker` has the effort and patches the conversation's session once there is one
+  (`useSession(chat_session)`), and the "/" menu comes from `useSlashCommands` + the new `pages/sessions/useSlashMenu.tsx`
+  (the menu of a box without "@"). Tests: `tests/test_agent_voice.py`.
 - Failed turn as one card (`web/src/pages/sessions/Cut.tsx`). `normalize.py`: an `assistant` event written by
   Claude Code in place of an answer (raw event with `error`: `rate_limit`, `server_error`, `authentication_failed`…)
   carries `error`; the `note` of `mx_done` with a non-zero code (not stopped, not timed out) carries `failed: true`.

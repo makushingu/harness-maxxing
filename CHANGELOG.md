@@ -6,6 +6,12 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 ## Unreleased
 
 Changed:
+- **Agents: the message box works like a session's.** The microphone sends a voice message directly (Settings ->
+  Voice -> Send voice messages right away, on by default): the recording shows at once in the conversation and its
+  words under it once the server has transcribed them, instead of waiting for the transcript before sending. The
+  model and the intelligence are picked under the box and change the current conversation (before, a model picked
+  there only counted for the next new conversation). `/` opens the same menu as in a session: `/model`, `/effort`,
+  `/new` (new conversation), `/compact` and the skills of the topic.
 - **Sessions: compaction follows the model's context window.** The thresholds of Settings -> Claude (automatic
   compaction 300k, compact when you come back 200k, smart resume 100k) were the same for every model: on a model
   with a 200k window they were out of reach, so a long session was never summarized by Harness between two messages

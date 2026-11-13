@@ -37,7 +37,8 @@ unloaded. One message is transcribed at a time; the others wait their turn.
 Language) if you always speak the same one, or for very short or noisy notes.
 
 ## In the browser
-- The **mic button** sits next to *Send* in every session.
+- The **mic button** sits next to *Send* in every session and in an agent's conversation (the same voice
+  messages; in an agent group, the transcript is put in the box).
 - **Tap** to start, tap ✓ to stop; or **hold** to talk and release to stop (push-to-talk). Slide left
   while holding, press **Esc** or ✕ to cancel.
 - **When you stop, the voice message is sent right away**, like on Telegram: it appears in the

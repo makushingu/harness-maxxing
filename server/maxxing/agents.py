@@ -2012,25 +2012,30 @@ def run_timeout(a: dict, asked: int | None = None) -> int:
 
 def fire(path: str, *, trigger: str, text: str = "", prompt: str = "", source: str = "manual",
          attachments: list[str] | None = None, depth: int = 0, cron_env: dict | None = None,
-         timeout_s: int | None = None, reply_to: str | None = None, wait: bool = False, model: str | None = None) -> dict:
+         timeout_s: int | None = None, reply_to: str | None = None, wait: bool = False, model: str | None = None,
+         effort: str | None = None, voice: str | None = None) -> dict:
     """Start a new session of the agent -> {started: bool, session?, reason?, continued?}.
     trigger: "manual", "cron:<job id>", "feed:<trigger id>", "telegram", "agent:<from path>".
     reply_to: the id of a thread message; its session goes on with this message (no new session).
     wait: the caller tries again later when the budget is held by a run in progress (reason busy, nothing posted).
-    model: the model of a new conversation of the owner (picked by the owner; default chat_model, then model).
+    model, effort: those of a new conversation of the owner (picked by the owner; default chat_model, then model).
+    voice: a voice message of the owner sent directly (a file under <agent>/attachments/): its session transcribes
+    it (sessions/voicejobs.py) and the transcript fills its message of the thread (voice_heard).
     The guards and the start are one step under _lock: triggers arriving together never pass the same guard."""
     text, prompt = _utf8(text or ""), _utf8(prompt or "")    # a lone surrogate could not be stored (500)
     with _lock:
         return _fire(path, trigger=trigger, text=text, prompt=prompt, source=source, attachments=attachments,
                      depth=depth, cron_env=cron_env, timeout_s=timeout_s, reply_to=reply_to, wait=wait,
-                     model=model)
+                     model=model, effort=effort, voice=voice)
 
 
 def _fire(path: str, *, trigger: str, text: str, prompt: str, source: str, attachments: list[str] | None,
           depth: int, cron_env: dict | None, timeout_s: int | None, reply_to: str | None, wait: bool,
-          model: str | None = None, waited: str | None = None) -> dict:
+          model: str | None = None, waited: str | None = None, effort: str | None = None,
+          voice: str | None = None) -> dict:
     """waited: the id of the owner's message that waited (_owner_wait): its run message is already in the thread."""
     owner = _owner_chat(trigger, source, text)
+    voice = voice if owner else None                     # only the owner's own words are sent as a recording
     if depth > MAX_DEPTH:
         reason = "depth"
     else:
@@ -2042,7 +2047,7 @@ def _fire(path: str, *, trigger: str, text: str, prompt: str, source: str, attac
             _drain_owner(path)                          # the owner's messages that waited go first, in order
         if reason == "busy" or _read_state(path).get("owner_wait"):
             r = _owner_wait(path, trigger=trigger, prompt=prompt, source=source, attachments=attachments,
-                            reply_to=reply_to, model=model)
+                            reply_to=reply_to, model=model, effort=effort, voice=voice)
             if r:
                 return r
     if reason == "busy" and wait:
@@ -2062,7 +2067,7 @@ def _fire(path: str, *, trigger: str, text: str, prompt: str, source: str, attac
         tidy(path)
     except Exception:  # noqa: BLE001 - a tidy-up never stops a run
         log.exception("agent %s: tidy", path)
-    message = frame(prompt, text, source) if text else (prompt or "Run your routine.")
+    message = frame(prompt, text, source) if text else (prompt or ("" if voice else "Run your routine."))
     sid = _reply_session(path, reply_to) if reply_to else None
     if sid and not owner and _is_manager(sid):
         sid = None                                      # outside text never enters the owner's conversation
@@ -2078,9 +2083,10 @@ def _fire(path: str, *, trigger: str, text: str, prompt: str, source: str, attac
     mid = waited or _secrets.token_hex(6)               # its run message, found again by its turn (refs)
     ref = f"agent-run:{mid}"
     said = text or prompt or ""
+    heard = {"voice": [voice]} if voice else {}
     cap = CHAT_TEXT_MAX if owner else 600
     if sid:
-        r = service.send_message(sid, message, attachments=attachments, source="agent", ref=ref)
+        r = service.send_message(sid, message, attachments=attachments, source="agent", ref=ref, voice_path=voice)
         _hold_left(path, a, sid)
         _snapshot(path, sid)
         if chat and not reply_to:
@@ -2089,14 +2095,14 @@ def _fire(path: str, *, trigger: str, text: str, prompt: str, source: str, attac
             _set_msg(path, waited, waiting=None, session=sid)
         else:
             post(path, "run", said, cap=cap, id=mid, trigger=trigger, source=source, session=sid,
-                 **({"reply_to": reply_to} if reply_to else {}), **own,
+                 **({"reply_to": reply_to} if reply_to else {}), **own, **heard,
                  **({"attachments": list(attachments)} if attachments else {}))
         return {"started": True, "continued": True, "session": r["session"]}
     outside, inherited = bool(text), False
     if trigger in CONVERSATIONAL or trigger.startswith("agent:"):
         ctx, from_outside = _context(path, own=chat)
         if ctx:
-            message = f"{message}\n\n{ctx}"
+            message = f"{message}\n\n{ctx}" if message else ctx
             inherited = from_outside and not outside  # outside text, one run later: this run asks first as well
     title = f"{a['name'] or parse(path)[2]} - {_local(time.time())}"
     env = {"MAXXING_AGENT": path, "MAXXING_AGENT_TRIGGER": trigger, "MAXXING_AGENT_DEPTH": str(depth),
@@ -2109,7 +2115,8 @@ def _fire(path: str, *, trigger: str, text: str, prompt: str, source: str, attac
                                model=((model or a["chat_model"]) if chat else None) or a["model"] or None,
                                attachments=attachments, source="agent", notify=False, cron=True, env=env,
                                timeout_s=run_timeout(a, timeout_s),
-                               permission_mode=a["permission_mode"], ref=ref)
+                               permission_mode=a["permission_mode"], ref=ref, voice_path=voice,
+                               effort=(effort if chat else None) or None)
     _hold_left(path, a, s["id"])
     _snapshot(path, s["id"])
     if chat:
@@ -2117,7 +2124,7 @@ def _fire(path: str, *, trigger: str, text: str, prompt: str, source: str, attac
     if waited:
         _set_msg(path, waited, waiting=None, session=s["id"], **({"chat": "new"} if chat else {}))
     else:
-        post(path, "run", said, cap=cap, id=mid, trigger=trigger, source=source, session=s["id"], **own,
+        post(path, "run", said, cap=cap, id=mid, trigger=trigger, source=source, session=s["id"], **own, **heard,
              **({"chat": "new"} if chat else {}), **({"attachments": list(attachments)} if attachments else {}))
     return {"started": True, "session": s}
 
@@ -2132,7 +2139,8 @@ _waiting_seeded = False
 
 
 def _owner_wait(path: str, *, trigger: str, prompt: str, source: str, attachments: list[str] | None,
-                reply_to: str | None, model: str | None) -> dict | None:
+                reply_to: str | None, model: str | None, effort: str | None = None,
+                voice: str | None = None) -> dict | None:
     """Keeps the owner's message until the run in progress ends -> the answer of fire, None = no room (refused)."""
     st = _read_state(path)
     q = st.get("owner_wait") if isinstance(st.get("owner_wait"), list) else []
@@ -2140,10 +2148,10 @@ def _owner_wait(path: str, *, trigger: str, prompt: str, source: str, attachment
         return None
     msg = post(path, "run", prompt, cap=CHAT_TEXT_MAX, trigger=trigger, source=source, owner=True, waiting=True,
                **({"reply_to": reply_to} if reply_to else {}),
-               **({"attachments": list(attachments)} if attachments else {}))
+               **({"attachments": list(attachments)} if attachments else {}), **({"voice": [voice]} if voice else {}))
     q.append({"id": msg["id"], "trigger": trigger, "source": source, "prompt": prompt,
               "attachments": list(attachments or []), "reply_to": reply_to or "", "model": model or "",
-              "at": msg["at"]})
+              "effort": effort or "", "voice": voice or "", "at": msg["at"]})
     st = _read_state(path)
     st["owner_wait"] = q
     _write_state(path, st)
@@ -2173,7 +2181,8 @@ def _drain_owner(path: str) -> int:
             _fire(path, trigger=str(it.get("trigger") or "manual"), text="", prompt=str(it.get("prompt") or ""),
                   source=str(it.get("source") or "manual"), attachments=it.get("attachments") or None, depth=0,
                   cron_env=None, timeout_s=None, reply_to=it.get("reply_to") or None, wait=False,
-                  model=it.get("model") or None, waited=str(it.get("id") or ""))
+                  model=it.get("model") or None, waited=str(it.get("id") or ""), effort=it.get("effort") or None,
+                  voice=it.get("voice") or None)
             n += 1
         except Exception:  # noqa: BLE001 - one bad message never blocks the next ones
             log.exception("agent %s: waiting message", path)
@@ -2231,6 +2240,23 @@ def _set_msg(path: str, mid: str, **fields: Any) -> None:
             tmp.replace(f)
             break
     _invalidate_thread(path)
+
+
+def voice_heard(path: str, audio: str, job: dict) -> None:
+    """A voice message of the owner sent directly was transcribed by its session (sessions/voicejobs.py, in the
+    server): its words fill its message of the thread (found by the recording's path, unique to each upload)."""
+    if not is_agent_path(path) or not exists(path):
+        return
+    for m in reversed(_thread_all(path)[-200:]):
+        if m.get("kind") == "run" and audio in (m.get("voice") or []):
+            heard = str(job.get("text") or "").strip()
+            if job.get("state") == "done" and heard:
+                _set_msg(path, str(m.get("id") or ""), text=heard[:CHAT_TEXT_MAX], voice_error=None,
+                         cut=len(heard) if len(heard) > CHAT_TEXT_MAX else None)
+            else:
+                _set_msg(path, str(m.get("id") or ""),
+                         voice_error=str(job.get("error") or "nothing was heard in the recording")[:300])
+            return
 
 
 def _group_of(sid: str) -> str:

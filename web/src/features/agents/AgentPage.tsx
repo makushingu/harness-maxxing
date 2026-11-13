@@ -19,8 +19,9 @@ import { useLang, useT, type TFn } from '@/i18n'
 import { errorMessage } from '@/lib/api'
 import {
   agentRoute, agentRunRoute, useAgent, useAgentSandbox, useAgentSeen, useAgentTemplates, useAgentThread, fetchAgentThreadBefore, useCrons, useFileContent, useNewAgentChat, usePatchAgent, useRunAgent, useStopSession, useWorkspace, useWriteFile,
+  uploadAttachment, useCompactSession, usePatchSession, useSession,
 } from '@/lib/queries'
-import type { AgentDetail, AgentMessage, Approval, Cron } from '@/lib/types'
+import type { AgentDetail, AgentMessage, Approval, Cron, Effort } from '@/lib/types'
 import { fmtDate, fmtDuration, fmtRelative } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useCompact, useMediaQuery } from '@/stores/media'
@@ -41,7 +42,9 @@ import { ApprovalLine, ThreadApprovalBody, useThreadApprovals } from './approval
 import { AttachButton, AttachList, bringBackDraft, insertAtCaret, useAttachments, useDraftText, withQuote } from './attach'
 import { agentDraftKey } from '@/lib/drafts'
 import { VoiceButton } from '@/features/voice/VoiceButton'
-import { AttachmentStrip, MessageMedia, useMessageMenu } from '@/pages/sessions/Items'
+import { AttachmentStrip, MessageMedia, useMessageMenu, VoiceNote } from '@/pages/sessions/Items'
+import { useSlashCommands } from '@/pages/sessions/slashCommands'
+import { useSlashMenu } from '@/pages/sessions/useSlashMenu'
 import { AnswerContext, AnswerText } from './answer'
 import { useSessionLog } from '@/pages/sessions/log'
 
@@ -620,10 +623,18 @@ function OwnerMessage({ m, answers }: { m: AgentMessage; answers?: AgentMessage 
   return (
     <div className="group/msg relative flex flex-col items-end gap-1.5 pl-8" data-kind="run" data-owner>
       {!!m.attachments?.length && <AttachmentStrip paths={m.attachments} />}
-      <div className="relative max-w-full rounded-2xl rounded-br-md bg-secondary px-3.5 py-2 text-[14px] leading-relaxed whitespace-pre-wrap text-secondary-foreground [overflow-wrap:anywhere]" onContextMenu={onContextMenu} {...touch} data-quote>
-        {menu}
-        <Sensitive block>{m.text || t('agents.conv.routine')}</Sensitive>
-      </div>
+      {m.voice?.length ? (
+        // a voice message sent directly: its recording, then its words once its session transcribed them
+        <div className="relative max-w-full" onContextMenu={m.text ? onContextMenu : undefined} {...(m.text ? touch : {})} data-quote>
+          {menu}
+          <VoiceNote paths={m.voice} heard={m.text ? { text: m.text, error: null } : m.voice_error ? { text: '', error: m.voice_error } : undefined} />
+        </div>
+      ) : (
+        <div className="relative max-w-full rounded-2xl rounded-br-md bg-secondary px-3.5 py-2 text-[14px] leading-relaxed whitespace-pre-wrap text-secondary-foreground [overflow-wrap:anywhere]" onContextMenu={onContextMenu} {...touch} data-quote>
+          {menu}
+          <Sensitive block>{m.text || t('agents.conv.routine')}</Sensitive>
+        </div>
+      )}
       <CutNote m={m} />
       <div className="flex min-w-0 max-w-full items-center gap-1.5 text-[11px] text-muted-foreground">
         {answers && (
@@ -982,11 +993,34 @@ function Composer({ agent: a, replyTo, onCancelReply, onSend, ref }: { agent: Ag
   const t = useT()
   const run = useRunAgent()
   const fresh = useNewAgentChat()
-  // The agent's model unless one is picked in the box; a change of its settings (page, its conversation) wins again.
+  const patchSession = usePatchSession()
+  const compact = useCompactSession()
+  // Model and effort, as in a session: those of its conversation once there is one (changed for its next turns);
+  // before, the pick for the next one - the agent's model unless one is picked (a change of its settings wins again).
+  const { data: chat } = useSession(a.chat_session || null)
   const setting = a.chat_model || a.model || ''
   const [picked, setModel] = React.useState<string | null>(null)
+  const [pickedEffort, setEffort] = React.useState<Effort | ''>('')
   React.useEffect(() => setModel(null), [setting])
-  const model = picked ?? setting
+  const model = chat ? chat.model || setting : (picked ?? setting)
+  const effort = chat ? chat.effort || '' : pickedEffort
+  const onModel = (m: string) => (chat ? patchSession.mutate({ id: chat.id, model: m }) : setModel(m))
+  const onEffort = (e: Effort | '') => (chat ? patchSession.mutate({ id: chat.id, effort: e }) : setEffort(e))
+  const chatRunning = !!chat && (chat.state === 'running' || !!chat.queue)
+  const commands = useSlashCommands(a.path, {
+    model,
+    onModel,
+    effort,
+    onEffort,
+    onCompact: chat
+      ? () => {
+          if (chatRunning) toast.info(t('slash.busy'))
+          else compact.mutate(chat.id, { onSuccess: () => toast.success(t('sessions.compacting')) })
+        }
+      : undefined,
+    onNew: a.chat_session ? () => fresh.mutate({ path: a.path }) : undefined,
+    newChat: true,
+  })
   const key = agentDraftKey('agent', a.path)
   const { text, setText } = useDraftText(key)
   const input = React.useRef<HTMLTextAreaElement>(null)
@@ -1006,6 +1040,7 @@ function Composer({ agent: a, replyTo, onCancelReply, onSend, ref }: { agent: Ag
     placeAt.current = null
   }, [text])
   const files = useAttachments(a.path, undefined, { draftKey: key, putText })
+  const slash = useSlashMenu({ text, setText, commands: a.enabled ? commands : undefined, input })
   React.useEffect(() => {
     if (replyTo) input.current?.focus()
   }, [replyTo])
@@ -1035,8 +1070,11 @@ function Composer({ agent: a, replyTo, onCancelReply, onSend, ref }: { agent: Ag
     },
   }))
   const canSend = (!!text.trim() || files.paths.length > 0) && !files.uploading
+  // the pick for a new conversation (an existing one has its own: changed through its session)
+  const nextPick = () => (chat ? {} : { model: picked || undefined, effort: pickedEffort || undefined })
   // Nothing can be sent now (files uploading, a send in flight): a dictation then waits in the box.
-  const busy = files.uploading || !a.enabled || run.isPending
+  const [voiceUp, setVoiceUp] = React.useState(false)
+  const busy = files.uploading || !a.enabled || run.isPending || voiceUp
   const alive = React.useRef(true)
   React.useEffect(() => {
     alive.current = true
@@ -1045,6 +1083,7 @@ function Composer({ agent: a, replyTo, onCancelReply, onSend, ref }: { agent: Ag
     }
   }, [])
   const submit = (heard?: string) => {
+    if (!heard && !files.paths.length && slash.runTyped()) return
     const typed = text.trim()
     const v = heard ? [typed, heard].filter(Boolean).join('\n\n') : typed
     if ((!v && !files.paths.length) || busy) return
@@ -1055,7 +1094,7 @@ function Composer({ agent: a, replyTo, onCancelReply, onSend, ref }: { agent: Ag
     onSend?.()
     // mutateAsync: its answer arrives even once this box is gone (another agent opened): the message never stays
     // stored as a draft while it is sent, and comes back (to this box or to the stored draft) only if it failed.
-    run.mutateAsync({ path: a.path, text: v, reply_to: replyTo?.id, attachments: files.paths, model: picked || undefined }).then(
+    run.mutateAsync({ path: a.path, text: v, reply_to: replyTo?.id, attachments: files.paths, ...nextPick() }).then(
       (r) => {
         if (r.started) {
           if (alive.current) onCancelReply()
@@ -1080,9 +1119,33 @@ function Composer({ agent: a, replyTo, onCancelReply, onSend, ref }: { agent: Ag
   const voice = React.useRef(onVoice)
   voice.current = onVoice
   const onTranscript = React.useCallback((heard: string, autoSend: boolean) => voice.current(heard, autoSend), [])
+  // Voice message sent directly (voice setting on by default), as in a session: the recording goes at once, its
+  // session transcribes it and its words fill the message. Not sendable now, or refused: it comes back attached.
+  const onVoiceMessage = (file: File) => {
+    if (busy) return void files.add([file])
+    const reply = replyTo?.id
+    onSend?.()
+    setVoiceUp(true)
+    uploadAttachment(a.path, file)
+      .then((up) => run.mutateAsync({ path: a.path, voice: up.path, reply_to: reply, ...nextPick() }))
+      .then(
+        (r) => {
+          if (!r.started) {
+            if (alive.current) files.add([file])
+            toast.error(t('agents.run.notStarted'), reasonText(t, r.reason))
+          } else if (alive.current && reply) onCancelReply()
+        },
+        (e) => {
+          if (alive.current) files.add([file])
+          toast.error(errorMessage(e))
+        },
+      )
+      .finally(() => alive.current && setVoiceUp(false))
+  }
   return (
     <div className="shrink-0 border-t bg-background px-3 py-3 md:px-8">
       <div className="relative mx-auto flex max-w-3xl flex-col rounded-xl border bg-card p-1.5 focus-within:border-primary/50" {...(a.enabled ? files.dropProps : {})}>
+        {slash.node}
         {replyTo && (
           <div className="mb-1 flex items-center gap-2 rounded-lg bg-muted/60 py-1 pr-1 pl-2 text-[12px]" data-testid="agent-replying">
             <Reply className="size-3.5 shrink-0 text-primary" />
@@ -1108,6 +1171,7 @@ function Composer({ agent: a, replyTo, onCancelReply, onSend, ref }: { agent: Ag
               onPaste={files.onPaste}
               onChange={(e) => setText(e.target.value)}
               onKeyDown={(e) => {
+                if (slash.onKeyDown(e)) return
                 const k = files.keyAction(e)
                 if (k === 'send') submit()
                 else if (k === 'escape') {
@@ -1121,8 +1185,8 @@ function Composer({ agent: a, replyTo, onCancelReply, onSend, ref }: { agent: Ag
               className="min-h-8 flex-1 resize-none border-0 bg-transparent px-1.5 py-1.5 text-[14px] shadow-none focus-visible:ring-0 dark:bg-transparent"
               data-testid="agent-run-text"
             />
-            <VoiceButton onTranscript={onTranscript} />
-            <Button size="icon-sm" onClick={() => submit()} disabled={!canSend} loading={run.isPending} aria-label={t('agents.run.now')} data-testid="agent-run">
+            <VoiceButton onTranscript={onTranscript} onVoiceMessage={onVoiceMessage} />
+            <Button size="icon-sm" onClick={() => submit()} disabled={!canSend} loading={run.isPending || voiceUp} aria-label={t('agents.run.now')} data-testid="agent-run">
               <Send />
             </Button>
           </div>
@@ -1131,7 +1195,7 @@ function Composer({ agent: a, replyTo, onCancelReply, onSend, ref }: { agent: Ag
       </div>
       {a.enabled && !replyTo && (
         <div className="mx-auto mt-1 flex max-w-3xl items-center gap-2 px-1" data-testid="agent-chat-bar">
-          <ModelPicker chosen={model} onChange={setModel} />
+          <ModelPicker chosen={model} real={chat?.real_model} contextTokens={chat?.context_tokens} onChange={onModel} effort={effort} onEffort={onEffort} />
           {a.chat_session && (
             <Tooltip content={t('agents.chat.newHint')}>
               <Button variant="ghost" size="sm" className="ml-auto h-7 text-xs text-muted-foreground" onClick={() => fresh.mutate({ path: a.path })} loading={fresh.isPending} data-testid="agent-new-chat">
