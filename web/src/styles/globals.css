@@ -23,9 +23,9 @@
      nearer level is lighter; in light mode the frame is grey and the content near white. Documented in DESIGN.md. */
   --sf-h: 286;
   --sf-c: 0.004;
-  --l-frame: 0.952;
-  --l-list: 0.972;
-  --l-content: 0.992;
+  --l-frame: 0.928;
+  --l-list: 0.958;
+  --l-content: 0.988;
   --l-card: 1;
   --l-float: 1;
   --l-muted: 0.958;
@@ -102,13 +102,13 @@ html[data-kbd] [data-col]:has([data-kbd-box]:focus-within) [data-kbd-hide] {
 
 .dark {
   --sf-c: 0.006;
-  --l-frame: 0.118;
-  --l-list: 0.148;
-  --l-content: 0.172;
-  --l-card: 0.204;
-  --l-float: 0.228;
-  --l-muted: 0.25;
-  --l-accent: 0.285;
+  --l-frame: 0.1;
+  --l-list: 0.145;
+  --l-content: 0.19;
+  --l-card: 0.232;
+  --l-float: 0.258;
+  --l-muted: 0.27;
+  --l-accent: 0.305;
   --foreground: oklch(0.985 0 0);
   --secondary-foreground: oklch(0.985 0 0);
   --muted-foreground: oklch(0.705 0.015 286.067);
