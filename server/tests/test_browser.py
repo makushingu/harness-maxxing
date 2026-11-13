@@ -302,12 +302,15 @@ def test_an_owner_is_off_until_turned_on(client, topic, mx):
     assert browser.active_for(A) is None and browser.active_for(T) is None
     r = client.put("/api/browser/owner", json={"path": A, "enabled": True})
     assert r.status_code == 200, r.text
-    assert r.json()["own"] == {"enabled": True} and r.json()["profile"] == "main" and r.json()["from"]["profile"] == ""
+    # turned on, an agent gets its own browser (its own sign-ins), made from the one it would have shared
+    assert r.json()["own"] == {"enabled": True, "profile": "writer"} and r.json()["profile"] == "writer"
+    assert r.json()["own_profile"] == "writer" and r.json()["from"]["profile"] == f"agent:{A}"
+    assert browser.profile("writer")["agent"] == A and browser.profile("writer")["name"] == "writer"
     assert browser.active_for(A) is None                 # the feature is off
     assert client.put("/api/settings", json={"browser_feature": True}).status_code == 200
     assert client.get("/api/settings").json()["browser_feature"] is True
     owner, prof, s = browser.active_for(A)
-    assert owner == f"agent:{A}" and prof["id"] == "main" and prof["web"] == "list"
+    assert owner == f"agent:{A}" and prof["id"] == "writer" and prof["web"] == "list"
     assert client.get(f"/api/agents/acme/blog/writer").json()["browser"]["enabled"] is True
     r = client.put("/api/browser/settings", json={"idle_min": 45})
     assert r.status_code == 200 and r.json()["settings"]["idle_min"] == 45
@@ -323,7 +326,7 @@ def test_an_owner_is_off_until_turned_on(client, topic, mx):
     assert client.get("/api/browser/owner", params={"path": "projects/acme/topics/nope"}).status_code == 404
     st = client.get("/api/browser").json()
     assert st["feature"] is True and st["settings"]["idle_min"] == 45
-    assert [p["id"] for p in st["profiles"]] == ["main"] and st["profiles"][0]["state"] == "stopped"
+    assert [p["id"] for p in st["profiles"]] == ["main", "writer"] and st["profiles"][0]["state"] == "stopped"
     assert client.get("/api/browser/profiles/main").json()["browser"]["tabs"] == []
     assert client.get("/api/browser/profiles/nope").status_code == 404
     assert client.post("/api/browser/profiles/main/tabs/nope/show").status_code == 404
@@ -369,7 +372,7 @@ def test_a_turn_gets_the_browser_only_when_it_is_on(client, topic, mx):
     assert oct(Path(args[1]).stat().st_mode & 0o777) == "0o600"
     assert spec["env"]["MAXXING_BROWSER_OWNER"] == f"agent:{A}" and spec["env"]["MAXXING_BROWSER_URL"].endswith(
         "/api/browser/mcp/sess01")
-    assert spec["env"]["MAXXING_BROWSER_PROFILE"] == "main"
+    assert spec["env"]["MAXXING_BROWSER_PROFILE"] == "writer"          # its own browser
     forced = {"args": [], "approvals_forced": True}
     assert "--allowedTools" not in runner.browser_args("sess02", A, forced)
     assert runner.browser_args("sess03", T, {}) == []          # its topic: off
@@ -883,6 +886,7 @@ def test_an_agent_fed_by_notifications_on_the_main_profile_is_warned(client, top
     from maxxing import agents
     _agent(client)
     assert client.put("/api/browser/owner", json={"path": A, "enabled": True}).status_code == 200
+    assert client.put("/api/browser/owner", json={"path": A, "profile": "main"}).status_code == 200   # shares main
     assert client.get("/api/browser/owner", params={"path": A}).json()["outside_on_main"] is False
     real = agents.load
     monkeypatch.setattr(agents, "load", lambda path: {**real(path), "triggers": [{"kind": "feed", "sources": ["github"]}]})
@@ -1053,3 +1057,26 @@ def test_claude_gives_a_page_only_files_of_its_folder(tmp_path, monkeypatch):
     for bad in ("../other/secret.txt", str(ws / "projects/acme/topics/other/secret.txt"), "/etc/passwd", "nope.pdf"):
         with pytest.raises(browser.BrowserError):
             pool_mod.claude_file(B(), "projects/acme/topics/blog", bad)
+
+
+def test_an_agent_has_its_own_browser_or_shares_one_and_never_falls_back_to_main(client, topic, mx):
+    """Turned on: its own browser (the exit and sites of the one it would have used). Sharing is a choice; its own
+    browser deleted, it has none (never main's sign-ins by itself); "own" makes it again."""
+    from maxxing import agents, browser
+    _agent(client)
+    client.put("/api/settings", json={"browser_feature": True})
+    assert client.put("/api/browser/profiles/main", json={"web": "public"}).status_code == 200
+    r = client.put("/api/browser/owner", json={"path": A, "enabled": True}).json()
+    assert r["profile"] == "writer" and browser.profile("writer")["web"] == "public"
+    # shares the sign-ins of main, then its own again (the same browser, not a second one)
+    assert client.put("/api/browser/owner", json={"path": A, "profile": "main"}).json()["profile"] == "main"
+    r = client.put("/api/browser/owner", json={"path": A, "profile": "own"}).json()
+    assert r["profile"] == "writer" and [p["id"] for p in browser.profiles()] == ["main", "writer"]
+    assert client.put("/api/browser/owner", json={"path": T, "profile": "own"}).status_code == 400
+    # its browser deleted: off, said so
+    assert client.delete("/api/browser/profiles/writer").status_code == 200
+    r = client.get("/api/browser/owner", params={"path": A}).json()
+    assert r["enabled"] is False and r["gone"] is True and browser.active_for(A) is None
+    # its manager asks for its own browser (a change card, applied through agents.update): made again
+    agents.update(A, {"browser": {"profile": "own"}})
+    assert browser.resolve(A)["profile"] == "writer" and browser.active_for(A)[1]["id"] == "writer"

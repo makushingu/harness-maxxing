@@ -1219,11 +1219,26 @@ def update(path: str, fields: dict) -> dict:
             f["limits"] = {**cur["limits"], **f["limits"]}
         if "avatar" in f and isinstance(f["avatar"], dict):
             f["avatar"] = {**cur["avatar"], **f["avatar"]}
+        own = False
         if "browser" in f and isinstance(f["browser"], dict):
             f["browser"] = {**cur["browser"], **f["browser"]}
+            from . import browser as _browser
+            if f["browser"].get("profile") == _browser.OWN:     # "its own browser": made below, outside the lock
+                f["browser"].pop("profile")
+                own = True
         data = clean({**cur, **{k: v for k, v in f.items() if k in known}}, strict=True)
+        # turned on without a browser of its own choosing: its own (never everybody's sign-ins by default)
+        own = own or (bool(data["browser"].get("enabled")) and not cur["browser"].get("enabled")
+                      and "profile" not in data["browser"])
         boxed = _auto_box(cur, data, f)
         _save(path, data)
+    if own:
+        from . import browser as _browser
+        pid = _browser.own_profile(path)
+        with _lock:
+            d2 = load(path)
+            d2["browser"] = {**d2.get("browser", {}), "profile": pid}
+            _save(path, clean(d2, strict=True))
     if data["sandbox"] and not cur["sandbox"]:
         from . import agent_guard
         agent_guard.ensure_profile()

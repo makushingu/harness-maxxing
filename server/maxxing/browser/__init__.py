@@ -11,7 +11,9 @@ global ones (sleep, asks, downloads) plus
 
 Who uses which profile: a `browser` block {enabled?, profile?} in the .maxxing.json of a project or a topic and in an
 agent's agent.json; a missing key is inherited (agent -> topic -> project -> off / `main`). An agent's `enabled` is
-its own (never inherited: its owner turns it on).
+its own (never inherited: its owner turns it on). An agent turned on gets **its own browser** (a profile of its own,
+`agent` = its path, `own_profile`); sharing the sign-ins of another profile is a choice. An agent whose profile was
+deleted has no browser any more (never someone else's sign-ins by itself).
 
 Modules: rules (what may be opened / sent), proxy (the only way out of a browser), exits (the exits and their
 runtimes), unit (the systemd unit of a profile's Chromium), cdm (chrome-devtools-mcp, the tools Claude gets: one per
@@ -36,7 +38,8 @@ DEFAULTS = {"ask": True, "wait_min": 30, "downloads": False, "idle_min": 30, "ta
             "max_active_profiles": 3, "exit_wait_s": 180}
 NUMBERS = {"wait_min": (1, 1440), "idle_min": (5, 1440), "tab_sleep_min": (2, 720), "max_tabs": (2, 30),
            "max_active_profiles": (1, 8), "exit_wait_s": (0, 900)}
-PROFILE_DEFAULTS = {"name": "", "exit": DIRECT, "web": "list", "sites": [], "on_exit_down": "wait"}
+PROFILE_DEFAULTS = {"name": "", "exit": DIRECT, "web": "list", "sites": [], "on_exit_down": "wait", "agent": ""}
+OWN = "own"                                    # an agent's browser.profile: "its own browser" (made when asked)
 OWNER_DEFAULTS = {"enabled": False, "profile": MAIN}
 WEB_MODES = ("list", "public")
 EXIT_DOWN = ("wait", "vps")
@@ -72,7 +75,7 @@ def new_id(name: str, taken: set[str]) -> str:
     base = re.sub(r"[^a-z0-9]+", "-", _name(name).lower().encode("ascii", "ignore").decode()).strip("-")[:20]
     base = base or _secrets.token_hex(3)
     out, n = base, 2
-    while out in taken or out in (DIRECT,):
+    while out in taken or out in (DIRECT, OWN):
         out, n = f"{base[:18]}-{n}", n + 1
     return out
 
@@ -97,6 +100,9 @@ def clean_profile(raw: object, strict: bool = False, exits: set[str] | None = No
     if exits is not None and ex != DIRECT and ex not in exits:
         _bad(strict, "exit", f"no exit {ex!r}")     # read back as it is: the profile then waits, never goes direct
     out["exit"] = ex[:40]
+    agent = str(src.get("agent") or "")
+    if agent and re.fullmatch(r"projects/[^/]+/topics/[^/]+/agents/[^/]+", agent) and len(agent) <= 300:
+        out["agent"] = agent                       # the agent this browser is for (its own)
     if "sites" in src:
         items = src["sites"] if isinstance(src["sites"], list) else []
         if strict:
@@ -196,6 +202,23 @@ def set_profile(values: dict, pid: str | None = None) -> dict:
         cur.update(values)
     out = _save(s)
     return profile(pid, out)  # type: ignore[return-value]
+
+
+def own_profile(path: str) -> str:
+    """The id of an agent's own browser, made the first time: its sites and its exit are those of the browser it
+    had until now (its topic's, else main), its name the agent's."""
+    s = settings()
+    mine = next((p for p in s["profiles"] if p.get("agent") == path), None)
+    if mine:
+        return mine["id"]
+    from .. import agents
+    try:
+        name = agents.get(path).get("display_name") or path.rsplit("/", 1)[-1]
+    except Exception:  # noqa: BLE001
+        name = path.rsplit("/", 1)[-1]
+    was = profile(resolve(path.rsplit("/", 2)[0], s)["profile"], s) or profile(MAIN, s) or {}
+    keep = {k: was[k] for k in ("exit", "web", "sites", "on_exit_down") if k in was}
+    return set_profile({**keep, "name": name, "agent": path})["id"]
 
 
 def delete_profile(pid: str) -> None:
@@ -306,6 +329,8 @@ def resolve(path: str, s: dict | None = None) -> dict:
                 out[key], out["from"][key] = v, o
                 break
     if profile(out["profile"], s) is None:
+        if owners and owners[0].startswith("agent:") and out["from"]["profile"] == owners[0]:
+            out["enabled"], out["gone"] = False, True   # its own browser was deleted: none, never main by itself
         out["profile"], out["from"]["profile"] = MAIN, ""
     return out
 

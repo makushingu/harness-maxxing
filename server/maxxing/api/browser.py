@@ -418,6 +418,8 @@ def _owner_view(owner: str) -> dict:
             "exit": exits.runtime().public(exits.get(p["exit"])) if p and p["exit"] != browser.DIRECT
             and exits.get(p["exit"]) else None,
             "outside_on_main": owner.startswith("agent:") and r["profile"] == browser.MAIN and _outside(path),
+            "own_profile": next((x["id"] for x in s["profiles"] if x.get("agent") == path), None),
+            "gone": bool(r.get("gone")),
             "asks": asks.pending(owner=owner)}
 
 
@@ -445,7 +447,9 @@ class OwnerIn(BaseModel):
 async def put_owner(body: OwnerIn) -> dict:
     owner = _owner(body.path)
     path = browser.owner_path(owner)
-    if body.profile and browser.profile(body.profile) is None:
+    if body.profile == browser.OWN and not owner.startswith("agent:"):
+        raise HTTPException(400, detail={"error": "bad_browser", "message": "Only an agent has a browser of its own"})
+    if body.profile and body.profile != browser.OWN and browser.profile(body.profile) is None:
         raise HTTPException(404, detail={"error": "no_profile", "message": "No such browser profile"})
 
     def save() -> None:
