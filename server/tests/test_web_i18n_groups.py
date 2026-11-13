@@ -30,7 +30,7 @@ def test_network_error_is_translated():
 
 
 # groups loaded by their own trigger (a paste, a drag, a hover...), not with a page
-ON_DEMAND = {"paste", "drag", "where", "media", "skw", "tour", "maxxing", "feedback", "composer"}
+ON_DEMAND = {"paste", "drag", "where", "media", "skw", "tour", "maxxing", "feedback", "composer", "cut"}
 
 # (route, group) pairs knowingly left undeclared, with the reason
 KNOWN = {
