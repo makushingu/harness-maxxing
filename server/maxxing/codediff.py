@@ -287,6 +287,13 @@ def default_base(repo: Path) -> str | None:
     return None
 
 
+def _base(b: str | None) -> str | None:
+    """A branch to compare with, as the caller gave it: never an option (`--output=...` would write a file)."""
+    if b and b.startswith("-"):
+        raise GitError(400, "bad_base", f"not a branch: {b[:80]}")
+    return b
+
+
 def view(repo: Path, scope: str, base_sha: str | None = None, base_branch: str | None = None) -> dict:
     """One repository in a view other than a single turn. `scope`: session (from `base_sha`, the session's first
     photo) | uncommitted (HEAD) | branch (merge-base with `base_branch` or the default base)."""
@@ -294,7 +301,7 @@ def view(repo: Path, scope: str, base_sha: str | None = None, base_branch: str |
     if scope == "session" and base_sha:
         a = base_sha
     elif scope == "branch":
-        b = base_branch or default_base(repo)
+        b = _base(base_branch) or default_base(repo)
         if not b:
             raise GitError(400, "no_base", "no main branch to compare with")
         a = _git(repo, "merge-base", b, "HEAD").strip()
@@ -308,7 +315,7 @@ def view(repo: Path, scope: str, base_sha: str | None = None, base_branch: str |
 
 def commits(repo: Path, base_branch: str | None = None, limit: int = 100, everything: bool = False) -> list[dict]:
     """Commits of HEAD not in `base_branch` (the default base when None); `everything`: the last ones of HEAD."""
-    b = None if everything else (base_branch or default_base(repo))
+    b = None if everything else (_base(base_branch) or default_base(repo))
     rng = [f"{b}..HEAD"] if b else ["HEAD"]
     out = _git(repo, "log", f"-n{limit}", "--format=%H%x1f%h%x1f%s%x1f%an%x1f%at", *rng, check=False) \
         if _head(repo) else ""
@@ -330,6 +337,7 @@ def _safe_paths(repo: Path, paths: list[str]) -> list[str]:
             raise GitError(400, "bad_path", f"not a file of this repository: {p}")
         out.append(p)
     return out
+
 
 
 def restore(repo: Path, source: str, paths: list[str] | None = None) -> dict:

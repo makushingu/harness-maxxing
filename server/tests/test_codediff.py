@@ -129,6 +129,17 @@ def test_restore_everything_removes_new_files(repo):
     assert set(res["removed"]) == {"made.txt"}
 
 
+def test_a_base_branch_is_never_an_option(repo, tmp_path):
+    _git(repo, "switch", "-qc", "feat/y")
+    out = tmp_path / "x"
+    for call in (lambda: codediff.commits(repo, f"--output={out}"),
+                 lambda: codediff.view(repo, "branch", base_branch="--all")):
+        with pytest.raises(GitError) as e:
+            call()
+        assert e.value.status == 400
+    assert not list(tmp_path.glob("x*"))
+
+
 def test_paths_outside_the_repo_are_refused(repo):
     with pytest.raises(GitError):
         codediff.restore(repo, "HEAD", ["../../etc/passwd"])
