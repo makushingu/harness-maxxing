@@ -619,7 +619,7 @@ def _handler(a) -> int:
             return 2
         d = agents.get(path)
         try:
-            role = (agents.folder(path) / "CLAUDE.md").read_text(encoding="utf-8")
+            role = (agents.folder(path) / "CLAUDE.md").read_text(encoding="utf-8", errors="replace")
         except OSError:
             role = ""
         print(json.dumps({**{k: d.get(k) for k in ("path", "display_name", "enabled", "model", "permission_mode",
