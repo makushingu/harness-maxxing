@@ -96,7 +96,7 @@ UI; the server CLI is `maxxing`:
 | `maxxing cron list\|sync\|run <id>` | scheduled jobs |
 | `maxxing backup run\|status\|restore` | memory backup to a private GitHub repo |
 | `maxxing telegram status\|test` | Telegram bridge |
-| `maxxing import ZIP [--dry-run]` / `--prompt AGENT` | import another agent's memory (Settings -> Import does the same) |
+| `maxxing import ZIP [--dry-run]` / `--prompt AGENT` | import another agent's memory: Hermes, OpenClaw, Claude Code... (Settings -> Import does the same) |
 | `maxxing keys list\|get\|set\|delete` | the Keys vault from a script: `printf %s "$V" \| maxxing keys set NAME` (value on stdin); scripts read keys as env vars (`$NAME`) |
 | `maxxing packs list\|add <id>` | starter packs: ready-made projects (only missing files are added) |
 | `maxxing infra status\|list\|site\|db\|bucket\|server` | where every site / database / bucket / domain / server is; create them on this server the standard way |
@@ -136,6 +136,11 @@ servers -> Infra (`maxxing-infra`); repositories -> Git; a chat with other peopl
 dashboard or a page of its own -> an extension. Some pages are optional: `maxxing status` (line `Pages`)
 says which are on. When the right one is off, say it exists and that Settings -> Features turns it on in
 one click, then use it, rather than building a substitute.
+
+In a session: a shell the user types in themselves -> the terminal of Code mode (Ctrl+J, `/terminal`, or the
+session's ⋯ menu; only the user can open it; off by default, Settings -> Features -> Sessions, password asked);
+undo what a turn changed -> "Revert to before this message" (menu of the message) or the Changes view (button
+under the answer: diff, Undo a file, commit, push, pull request).
 
 ## Safety with shared code and data
 
