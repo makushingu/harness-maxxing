@@ -150,24 +150,32 @@ function SideList({ pid, exitId }: { pid: string | null; exitId: string | null }
   const { data: st } = useBrowserStatus()
   if (!st) return <Skeleton className="m-2 h-40" />
   const waitingProfiles = new Set(st.waiting.map((w) => w.profile))
+  const row = (p: (typeof st.profiles)[number]) => {
+    const e = st.exits.find((x) => x.id === p.exit)
+    const down = e?.state === 'down'
+    const tone = down ? 'bg-destructive' : p.state === 'running' ? 'bg-success' : 'bg-muted-foreground/50'
+    const right = waitingProfiles.has(p.id) ? t('browser.paused') : p.state === 'running' ? t('browser.tabsAwake', { count: p.awake }) : ''
+    return (
+      <Row key={p.id} to={`/browser?profile=${encodeURIComponent(p.id)}`} active={pid === p.id} tone={tone} title={profileName(p, t)} right={right} testid="browser-side-profile">
+        {exitName(p.exit, st.exits, t)}
+        {e && testWhere(e.test) ? ` · ${testWhere(e.test)}` : ''}
+        {down ? ` · ${t('browser.exit.down')}` : p.state !== 'running' ? ` · ${t('browser.asleepShort')}` : ''}
+      </Row>
+    )
+  }
+  const agentsOwn = st.profiles.filter((p) => p.agent)
   return (
     <div className="grid content-start gap-4 overflow-y-auto p-2" data-testid="browser-side">
       <div className="grid gap-0.5">
         <h3 className="px-2.5 pb-1 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">{t('browser.profiles')}</h3>
-        {st.profiles.map((p) => {
-          const e = st.exits.find((x) => x.id === p.exit)
-          const down = e?.state === 'down'
-          const tone = down ? 'bg-destructive' : p.state === 'running' ? 'bg-success' : 'bg-muted-foreground/50'
-          const right = waitingProfiles.has(p.id) ? t('browser.paused') : p.state === 'running' ? t('browser.tabsAwake', { count: p.awake }) : ''
-          return (
-            <Row key={p.id} to={`/browser?profile=${encodeURIComponent(p.id)}`} active={pid === p.id} tone={tone} title={profileName(p, t)} right={right} testid="browser-side-profile">
-              {exitName(p.exit, st.exits, t)}
-              {e && testWhere(e.test) ? ` · ${testWhere(e.test)}` : ''}
-              {down ? ` · ${t('browser.exit.down')}` : p.state !== 'running' ? ` · ${t('browser.asleepShort')}` : ''}
-            </Row>
-          )
-        })}
+        {st.profiles.filter((p) => !p.agent).map(row)}
       </div>
+      {agentsOwn.length > 0 && (
+        <div className="grid gap-0.5" data-testid="browser-side-agents">
+          <h3 className="px-2.5 pb-1 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">{t('browser.agentBrowsers')}</h3>
+          {agentsOwn.map(row)}
+        </div>
+      )}
       <div className="grid gap-0.5">
         <h3 className="px-2.5 pb-1 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">{t('browser.exits')}</h3>
         {st.exits.map((e) => (

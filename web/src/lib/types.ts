@@ -1389,6 +1389,8 @@ export type BrowserProfile = {
   sites: string[]
   /** exit down: wait (default) or go out by the server's address */
   on_exit_down: 'wait' | 'vps'
+  /** the agent this browser is for (its own browser), "" for the user's */
+  agent: string
 }
 export type BrowserProfileRow = BrowserProfile & {
   state: 'starting' | 'running' | 'stopped'
