@@ -89,6 +89,9 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   (`RESUME_LOST` on a first turn) the answer is 409 `no_thread` "This session is only starting". Checked with the
   real CLI: `--resume <csid> --fork-session` finds a thread 2 s into its first turn. Test:
   `test_sessions.py::test_side_question_during_the_first_turn_of_a_thread`.
+- Web, session shortcuts window (`ShortcutsHelp` in `pages/sessions/index.tsx`): rows `/` (slash menu), `@`
+  (mentions), Mod+Shift+V (plain paste, `plainPaste` of `Composer.tsx`) and Ctrl+J only when `settings.code_mode`
+  (the key is caught by `Column.tsx`, Ctrl on macOS too); i18n `sessions.shortcuts.{slash,mention,plainPaste,terminal}`.
 - Security: `codediff.diff()` and `raw_diff()` pass `--no-textconv` (a `diff.<name>.textconv` from `.git/config`
   bound by `.git/info/attributes` ran with the server's rights: `GIT_ATTR_SOURCE` only covers the worktree's
   `.gitattributes`, `--no-ext-diff` only `diff.external`); test `test_a_diff_never_runs_the_repository_textconv`.

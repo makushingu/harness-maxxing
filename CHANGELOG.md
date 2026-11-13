@@ -29,6 +29,9 @@ New:
   line is cut until **Show all**.
 
 Changed:
+- **Session shortcuts list the new keys.** The shortcuts window of Sessions now shows `/` (commands at the start of
+  a message), `@` (name a session, an agent or a contact), Ctrl/⌘+Shift+V (paste as text) and, with Code mode on,
+  Ctrl+J (open or close the terminal).
 - **`maxxing sessions new`: start a session from the command line.** `maxxing sessions new acme/blog "Write the
   newsletter"` starts a session in that topic with a first message (`--title`, `--model`, `--effort`, `--file`).
   Claude can use it from a session or from an agent that is not in its sandbox, like `maxxing sessions send`: the
