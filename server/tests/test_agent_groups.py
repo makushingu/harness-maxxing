@@ -411,3 +411,29 @@ def test_a_lone_surrogate_in_an_answer_does_not_stop_the_group(client, topic):
     agent_rooms.on_turn_end(P, W, "s1", "bad \ud800 text", True, 0.0)     # valid JSON, not UTF-8
     assert not agent_rooms._read_state(P).get("current")
     assert [m for m in agent_rooms.room(P) if m["text"] == "bad ? text"]
+
+
+def test_two_edits_at_once_both_land(client, topic, monkeypatch):
+    import threading
+    import time
+    _setup(client)
+    path = agent_rooms.group_path("acme", "team")
+    real, first = agent_rooms.load, threading.Event()
+
+    def slow_load(p):                                   # the first edit reads, then the second one runs meanwhile
+        data = real(p)
+        if threading.current_thread().name == "a" and not first.is_set():
+            first.set()
+            time.sleep(0.3)
+        return data
+
+    monkeypatch.setattr(agent_rooms, "load", slow_load)
+    a = threading.Thread(target=agent_rooms.update, args=(path, {"shared_files": False}), name="a")
+    a.start()
+    assert first.wait(5)
+    b = threading.Thread(target=agent_rooms.update, args=(path, {"emoji": "🚀"}), name="b")
+    b.start()
+    a.join(5)
+    b.join(5)
+    g = real(path)
+    assert g["emoji"] == "🚀" and not g["shared_files"]
