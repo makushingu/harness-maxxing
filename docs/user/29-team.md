@@ -98,7 +98,7 @@ maxxing team list
   match, the command lists them and sends nothing.
 - **What**: the message goes out in your name, exactly like one you typed in Team (Claude is not shown as the author).
   `--file` attaches a file of the server (repeat it for several, 10 at most); `-` as the message reads it from the
-  standard input (a long text from a script).
+  standard input (a long text from a script). A text over 8,000 characters is refused, not cut.
 - `maxxing team list` shows the contacts and groups you can write to.
 - It only sends: no command reads your chats, so what people write still never reaches Claude unless you send it to a
   session yourself. Agents in the sandbox cannot use it; a free agent can, like a session.

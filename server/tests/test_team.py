@@ -556,6 +556,13 @@ def test_cli_send_by_name_list_and_files(client, sent, capsys, tmp_path):
     assert cli.main(["team", "send", "lea", "x"]) == 2 and "Features" in capsys.readouterr().err
 
 
+def test_cli_send_refuses_a_too_long_text(client, sent, capsys, tmp_path):
+    from maxxing import cli
+    n = len(sent)
+    assert cli.main(["team", "send", "lea", "x" * (team.TEXT_MAX + 1)]) == 2       # not cut without a word
+    assert str(team.TEXT_MAX) in capsys.readouterr().err and len(sent) == n
+
+
 def test_a_write_from_another_process_refreshes_the_pages(sent, monkeypatch):
     from maxxing import bus
     seen = []

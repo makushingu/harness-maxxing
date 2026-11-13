@@ -764,6 +764,8 @@ def send_to(to: str, text: str, files: list[str] | None = None) -> dict:
     r = find_recipient(to)
     if not (text or "").strip() and not files:
         raise TeamError(400, "empty", "Empty message")
+    if len((text or "").strip()) > TEXT_MAX:           # send() would cut it without a word
+        raise TeamError(400, "too_long", f"At most {TEXT_MAX} characters per message")
     cid = r.get("chat") or create_chat("dm", [r["id"]])["id"]
     attached = _attach(files or [])
     try:
