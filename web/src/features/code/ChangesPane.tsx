@@ -13,8 +13,10 @@ import { errorMessage } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
 import { useFileViewer } from '@/features/files/viewerStore'
+import { DiffRows, diffRows, selected, useLineSelection } from './DiffRows'
+import { prPath } from './prApi'
 import {
-  changesPath, codeApi, parseChangesPath, quoteInSession, useChanges, useFileDiff, useRepoStatus, type ChangedFile, type ChangesRef, type ChangesScope, type DiffLine, type RepoChanges, type Undo,
+  changesPath, codeApi, parseChangesPath, quoteInSession, useChanges, useFileDiff, useRepoStatus, type ChangedFile, type ChangesRef, type ChangesScope, type RepoChanges, type Undo,
 } from './api'
 
 const SCOPES: ChangesScope[] = ['turn', 'session', 'uncommitted', 'branch']
@@ -212,7 +214,7 @@ function RepoBlock({ sid, scope, repo, onOpen }: { sid: string; scope: ChangesSc
           <Sensitive>{repo.name}</Sensitive>
         </span>
         <BranchChip repo={repo} st={st.data} />
-        {st.data?.pr ? <PrBadge pr={st.data.pr} checks={st.data.checks} /> : null}
+        {st.data?.pr ? <PrBadge pr={st.data.pr} checks={st.data.checks} full={st.data.github} /> : null}
         <span className="ml-auto text-[11px] text-muted-foreground tabular-nums">
           <span className="text-success">+{repo.add}</span> <span className="text-destructive">−{repo.del}</span>
         </span>
@@ -283,18 +285,32 @@ function BranchChip({ repo, st }: { repo: RepoChanges; st?: { branch: string | n
   )
 }
 
-function PrBadge({ pr, checks }: { pr: { number: number; url: string; draft: boolean }; checks: { total: number; ok: number; failed: number; pending: number } | null }) {
+function PrBadge({ pr, checks, full }: { pr: { number: number; url: string; draft: boolean }; checks: { total: number; ok: number; failed: number; pending: number } | null; full: string | null }) {
   const t = useT()
+  const { show } = useFileViewer()
   const tone = !checks || !checks.total ? 'text-muted-foreground' : checks.failed ? 'text-destructive' : checks.pending ? 'text-warning' : 'text-success'
   const tip = checks?.total ? t('code.checks', { ok: checks.ok, total: checks.total, failed: checks.failed, pending: checks.pending }) : t('code.noChecks')
+  const inner = (
+    <>
+      <GitPullRequest className="size-3" />#{pr.number}
+      {pr.draft && <span className="text-muted-foreground">{t('code.draft')}</span>}
+      {checks?.total ? checks.failed ? <CircleAlert className={cn('size-3', tone)} /> : checks.pending ? <CircleDot className={cn('size-3', tone)} /> : <Check className={cn('size-3', tone)} /> : null}
+    </>
+  )
+  const cls = 'inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-[11px] hover:underline'
   return (
     <Tooltip content={tip}>
-      <a href={pr.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-[11px] hover:underline" data-testid="changes-pr">
-        <GitPullRequest className="size-3" />#{pr.number}
-        {pr.draft && <span className="text-muted-foreground">{t('code.draft')}</span>}
-        {checks?.total ? checks.failed ? <CircleAlert className={cn('size-3', tone)} /> : checks.pending ? <CircleDot className={cn('size-3', tone)} /> : <Check className={cn('size-3', tone)} /> : null}
-        <ExternalLink className="size-3 text-muted-foreground" />
-      </a>
+      {full ? (
+        // the pull request opens here, in the PR view (GitHub stays one click away there)
+        <button type="button" onClick={() => show(prPath({ full, n: pr.number }))} className={cls} data-testid="changes-pr">
+          {inner}
+        </button>
+      ) : (
+        <a href={pr.url} target="_blank" rel="noreferrer" className={cls} data-testid="changes-pr">
+          {inner}
+          <ExternalLink className="size-3 text-muted-foreground" />
+        </a>
+      )}
     </Tooltip>
   )
 }
@@ -461,21 +477,11 @@ function FileBody({ sid, repo, file }: { sid: string; repo: RepoChanges; file: C
   const restore = useRestore()
   const { close } = useFileViewer()
   // Selected lines (index in the flat list of rows): click a line number, shift-click to extend.
-  const [sel, setSel] = React.useState<{ a: number; b: number } | null>(null)
-  const rows = React.useMemo(() => {
-    const out: ({ kind: 'head'; text: string } | { kind: 'line'; l: DiffLine })[] = []
-    for (const h of d.data?.hunks ?? []) {
-      out.push({ kind: 'head', text: h.head })
-      for (const l of h.lines) out.push({ kind: 'line', l })
-    }
-    return out
-  }, [d.data])
-  const pick = (i: number, ext: boolean) => setSel((s) => (ext && s ? { a: Math.min(s.a, i), b: Math.max(s.b, i) } : s && s.a === i && s.b === i ? null : { a: i, b: i }))
+  const { sel, pick } = useLineSelection()
+  const rows = React.useMemo(() => diffRows(d.data?.hunks ?? []), [d.data])
   const ask = () => {
     if (!sel) return
-    const lines = rows.slice(sel.a, sel.b + 1).flatMap((r) => (r.kind === 'line' ? [r.l] : []))
-    const nums = lines.map((l) => l.n ?? l.o).filter((x): x is number => x != null)
-    const range = nums.length ? (nums[0] === nums[nums.length - 1] ? `${nums[0]}` : `${nums[0]}-${nums[nums.length - 1]}`) : ''
+    const { lines, range } = selected(rows, sel)
     const where = `${repo.root}/${file.path}${range ? `:${range}` : ''}`
     quoteInSession(sid, `${where}\n\`\`\`diff\n${lines.map((l) => `${l.t}${l.s}`).join('\n')}\n\`\`\``)
     close()
@@ -519,45 +525,18 @@ function FileBody({ sid, repo, file }: { sid: string; repo: RepoChanges; file: C
       ) : rows.length === 0 ? (
         <EmptyState icon={GitCompare} title={t('code.noDiff')} className="flex-1" />
       ) : (
-        <div className="min-h-0 flex-1 overflow-auto font-mono text-[12px] leading-[1.6]" data-testid="file-diff">
-          <div className="min-w-max">
-            {rows.map((r, i) =>
-              r.kind === 'head' ? (
-                <div key={i} className="sticky left-0 bg-primary/6 px-3 py-0.5 text-[11px] text-muted-foreground">
-                  {r.text}
-                </div>
-              ) : (
-                <div
-                  key={i}
-                  className={cn(
-                    'flex',
-                    r.l.t === '+' && 'bg-success/12',
-                    r.l.t === '-' && 'bg-destructive/12',
-                    sel && i >= sel.a && i <= sel.b && 'ring-1 ring-primary/60 ring-inset bg-primary/10',
-                  )}
-                >
-                  <button
-                    type="button"
-                    tabIndex={-1}
-                    onClick={(e) => pick(i, e.shiftKey)}
-                    className="flex shrink-0 cursor-pointer text-right text-muted-foreground/70 select-none hover:text-foreground"
-                    aria-label={t('code.selectLine')}
-                  >
-                    <span className="w-10 pr-1.5">{r.l.o ?? ''}</span>
-                    <span className="w-10 pr-1.5">{r.l.n ?? ''}</span>
-                  </button>
-                  <span className={cn('w-4 shrink-0 text-center select-none', r.l.t === '+' ? 'text-success' : r.l.t === '-' ? 'text-destructive' : 'text-muted-foreground')}>{r.l.t === ' ' ? '' : r.l.t}</span>
-                  <span className="pr-4 whitespace-pre">{r.l.s || ' '}</span>
-                </div>
-              ),
-            )}
-          </div>
-          {d.data.cut && (
-            <button type="button" onClick={() => setFull(true)} className="sticky left-0 px-3 py-2 font-sans text-xs text-primary hover:underline">
-              {t('code.showAll', { count: d.data.lines })}
-            </button>
-          )}
-        </div>
+        <DiffRows
+          rows={rows}
+          sel={sel}
+          onPick={pick}
+          footer={
+            d.data.cut && (
+              <button type="button" onClick={() => setFull(true)} className="sticky left-0 px-3 py-2 font-sans text-xs text-primary hover:underline">
+                {t('code.showAll', { count: d.data.lines })}
+              </button>
+            )
+          }
+        />
       )}
       {!sel && rows.length > 0 && <p className="border-t px-3 py-1 text-[11px] text-muted-foreground max-md:hidden">{t('code.selectHint')}</p>}
     </div>

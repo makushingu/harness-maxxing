@@ -36,7 +36,7 @@ export const GROUPS = {
   // the composer's / and @ menus and the intelligence (effort) level: loaded on their first text asked
   composer: ['slash', 'mention', 'effort'],
   // the Changes view of a session (features/code): loaded when it opens
-  code: ['code'],
+  code: ['code', 'copy', 'pr'],
   // the terminal drawer and its setting (features/terminal)
   term: ['term'],
   // the sentences of the status line (components/shell/mood.ts): fetched once the shell shows, not before it

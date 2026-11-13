@@ -1,14 +1,17 @@
 // Feature page "Git & GitHub" (/git, Settings -> Features -> git_page). Second-level sidebar: the two sources (this server,
 // GitHub) then the repositories of the one picked, most recent first. A source: its repositories as cards. A repository:
-// graph of branches and commits, commit details, open pull requests, Server | GitHub switch when it has both sides.
+// graph of branches and commits, commit details, pull requests (a click opens the PR view), the separate copies of a
+// clone (Code mode), Server | GitHub switch when it has both sides.
 // The repository shown is in the URL (?repo=<path or github:owner/name>), so a chat block can link to it.
 import * as React from 'react'
-import { Link, useSearchParams } from 'react-router'
+import { Link, useNavigate, useSearchParams } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   ArrowDown, ArrowUp, ExternalLink, FolderGit2, GitBranch, GitPullRequest, KeyRound, Lock, PencilLine, RefreshCw, Server, Star,
 } from 'lucide-react'
-import { gitKeys, refreshGitRepos, useGitGraph, useGitPulls, useGitRepos } from '@/lib/queries'
+import { gitKeys, refreshGitRepos, useGitGraph, useGitPulls, useGitRepos, useSettings } from '@/lib/queries'
+import { useCopies } from '@/features/code/copyApi'
+import { openPr } from '@/features/code/prApi'
 import type { GitHubRepo, GitLocalRepo, GitPermission } from '@/lib/types'
 import { errorMessage } from '@/lib/api'
 import { fmtRelative } from '@/lib/format'
@@ -290,17 +293,17 @@ function SourceCards({ source, account, query, onOpen }: { source: Source; accou
 
 function RepoView({ repo, onSwitch, refresh }: { repo: string; onSwitch: (repo: string) => void; refresh: React.ReactNode }) {
   const t = useT()
-  const lang = useLang()
   const [limit, setLimit] = React.useState(200)
   const { data, error, isLoading, isFetching } = useGitGraph(repo, { limit })
   const { data: overview } = useGitRepos()
-  const pulls = useGitPulls(repo)
   const [selected, setSelected] = React.useState<string | null>(null)
   React.useEffect(() => setSelected(null), [repo])
   // below 1700 px the side column would squeeze the graph: the picked commit opens in a bottom sheet instead
   const wide = useMediaQuery('(min-width: 1700px)')
   const r = data?.repo
   const isGh = repo.startsWith('github:')
+  // the pull requests of the repository, also on a clone of a GitHub repository
+  const prRepo = isGh ? repo : r?.github && overview?.github.connected ? `github:${r.github}` : null
   // the other side of the same repository (clone <-> GitHub), when there is one
   const other = isGh
     ? overview?.local.find((l) => l.github && `github:${l.github}`.toLowerCase() === repo.toLowerCase())?.path
@@ -388,40 +391,8 @@ function RepoView({ repo, onSwitch, refresh }: { repo: string; onSwitch: (repo: 
           ) : (
             <p className="rounded-xl border border-dashed p-4 text-[13px] text-muted-foreground">{t('git.pickCommit')}</p>
           )}
-          {isGh && (wide || !!pulls.data?.length) && (
-            <div className="grid gap-2 rounded-xl border bg-card p-3">
-              <p className="flex items-center gap-2 text-sm font-medium">
-                <GitPullRequest className="size-4" /> {t('git.pulls')}
-                {pulls.data && <span className="text-xs font-normal text-muted-foreground">{pulls.data.length}</span>}
-              </p>
-              {pulls.isLoading ? (
-                <Skeleton className="h-10" />
-              ) : pulls.error ? (
-                <p className="text-xs text-destructive">{errorMessage(pulls.error)}</p>
-              ) : !pulls.data?.length ? (
-                <p className="text-xs text-muted-foreground">{t('git.noPulls')}</p>
-              ) : (
-                <ul className="grid grid-cols-[minmax(0,1fr)] gap-1.5">
-                  {pulls.data.map((p) => (
-                    <li key={p.number}>
-                      <a href={p.url} target="_blank" rel="noopener noreferrer" className="grid grid-cols-[minmax(0,1fr)] gap-0.5 rounded-md p-1.5 text-[13px] hover:bg-accent/60">
-                        <span className="truncate">
-                          <span className="text-muted-foreground">#{p.number}</span> {p.title}
-                          {p.draft && <span className="ml-1 text-xs text-muted-foreground">({t('git.draft')})</span>}
-                        </span>
-                        <span className="flex min-w-0 items-center gap-1 font-mono text-[11px] text-muted-foreground">
-                          <GitBranch className="size-3 shrink-0" />
-                          <span className="truncate">
-                            {p.head} → {p.base} · {p.author} · {fmtRelative(p.updated, lang)}
-                          </span>
-                        </span>
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
+          {prRepo && <PullList repo={prRepo} wide={wide} />}
+          {!isGh && r?.path && <CopyList clone={r.path} />}
         </div>
       </div>
       {!wide && (
@@ -491,5 +462,104 @@ export default function GitPage() {
         </Page>
       )}
     </>
+  )
+}
+
+type PullFilter = 'open' | 'mine' | 'closed'
+
+/** The pull requests of a GitHub repository: a click opens one in the PR view (read, comment, review, merge). */
+function PullList({ repo, wide }: { repo: string; wide: boolean }) {
+  const t = useT()
+  const lang = useLang()
+  const [filter, setFilter] = React.useState<PullFilter>('open')
+  const pulls = useGitPulls(repo, filter === 'closed' ? 'closed' : 'open')
+  const list = (pulls.data ?? []).filter((p) => filter !== 'mine' || p.review_me)
+  if (!wide && filter === 'open' && !pulls.data?.length) return null
+  return (
+    <div className="grid gap-2 rounded-xl border bg-card p-3" data-testid="git-pulls">
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="flex items-center gap-2 text-sm font-medium">
+          <GitPullRequest className="size-4" /> {t('git.pullsTitle')}
+        </p>
+        <Segmented
+          size="sm"
+          className="ml-auto"
+          aria-label={t('git.pulls')}
+          value={filter}
+          onChange={setFilter}
+          options={[
+            { value: 'open', label: t('git.pullsOpen') },
+            { value: 'mine', label: t('git.pullsMine') },
+            { value: 'closed', label: t('git.pullsClosed') },
+          ]}
+        />
+      </div>
+      {pulls.isLoading ? (
+        <Skeleton className="h-10" />
+      ) : pulls.error ? (
+        <p className="text-xs text-destructive">{errorMessage(pulls.error)}</p>
+      ) : !list.length ? (
+        <p className="text-xs text-muted-foreground">{filter === 'mine' ? t('git.noPullsMine') : t('git.noPulls')}</p>
+      ) : (
+        <ul className="grid grid-cols-[minmax(0,1fr)] gap-1.5">
+          {list.map((p) => (
+            <li key={p.number}>
+              <button type="button" onClick={() => void openPr(repo.slice(7), p.number)} className="grid w-full grid-cols-[minmax(0,1fr)] gap-0.5 rounded-md p-1.5 text-left text-[13px] hover:bg-accent/60" data-testid="git-pull">
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <span className="truncate">
+                    <span className="text-muted-foreground">#{p.number}</span> {p.title}
+                  </span>
+                  {p.draft && <span className="shrink-0 text-xs text-muted-foreground">({t('git.draft')})</span>}
+                  {p.state === 'merged' && <Badge variant="default" className="shrink-0">{t('git.merged')}</Badge>}
+                  {p.outside && <Badge variant="warning" className="shrink-0">{t('git.outside')}</Badge>}
+                  {p.review_me && p.state === 'open' && <Badge variant="muted" className="shrink-0">{t('git.reviewMe')}</Badge>}
+                </span>
+                <span className="flex min-w-0 items-center gap-1 font-mono text-[11px] text-muted-foreground">
+                  <GitBranch className="size-3 shrink-0" />
+                  <span className="truncate">
+                    {p.head} → {p.base} · {p.author} · {fmtRelative(p.updated, lang)}
+                  </span>
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+/** The separate copies of a clone (Code mode): each with its session, a click opens the session. */
+function CopyList({ clone }: { clone: string }) {
+  const t = useT()
+  const navigate = useNavigate()
+  const { data: settings } = useSettings()
+  const copies = useCopies(!!settings?.code_mode)
+  const list = (copies.data ?? []).filter((c) => c.repo === clone)
+  if (!list.length) return null
+  return (
+    <div className="grid gap-2 rounded-xl border bg-card p-3" data-testid="git-copies">
+      <p className="flex items-center gap-2 text-sm font-medium">
+        <FolderGit2 className="size-4" /> {t('git.copies')}
+        <span className="text-xs font-normal text-muted-foreground">{list.length}</span>
+      </p>
+      <ul className="grid grid-cols-[minmax(0,1fr)] gap-1.5">
+        {list.map((c) => (
+          <li key={c.sid}>
+            <button type="button" onClick={() => navigate(`/sessions/${c.sid}`)} className="grid w-full grid-cols-[minmax(0,1fr)] gap-0.5 rounded-md p-1.5 text-left text-[13px] hover:bg-accent/60">
+              <span className="truncate">{c.title}</span>
+              <span className="flex min-w-0 items-center gap-1 font-mono text-[11px] text-muted-foreground">
+                <GitBranch className="size-3 shrink-0" />
+                <span className="truncate">
+                  {c.branch} ← {c.base}
+                  {c.ahead ? ` · ↑${c.ahead}` : ''}
+                  {c.dirty ? ` · ${t('copy.dirty', { count: c.dirty })}` : ''}
+                </span>
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }

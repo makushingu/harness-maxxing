@@ -85,6 +85,8 @@ import { EASE_OUT, reducedMotion } from '@/lib/presence'
 import { focusComposer, groupAt, MAX_STACK, outboxMove, saveDraft, saveQuotes, seedComposer, useSessionsUI, usePending, usePendingFor, type Col, type OutboxEntry, type Seed } from './store'
 import { Thread, type ThreadHandle } from './Thread'
 import { Composer, type ComposerHandle } from './Composer'
+import { CopyBar, CopyMark } from '@/features/code/CopyBar'
+import { NewCopy, useNewCopy } from '@/features/code/NewCopy'
 import { QuotePill } from './Quote'
 import { FileMenu } from './FileMenu'
 import { ItemContext } from './Items'
@@ -817,6 +819,16 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
             />
           </React.Suspense>
         )}
+        {!notFound && session?.worktree && (
+          <CopyBar
+            session={session}
+            running={running}
+            onAsk={(text) => {
+              composer.current?.bringBack({ text, quotes: [], attachments: [] })
+              composer.current?.focus()
+            }}
+          />
+        )}
         {!notFound && (
           <StackedComposer colKey={col.key} stacked={!!place && place.n >= 3}>
           <Composer
@@ -954,7 +966,8 @@ function ColumnHeader({
         <div data-kbd-hide="" className="mt-0.5 flex h-6 min-w-0 items-center gap-2 text-[13px] text-muted-foreground">
           {session ? (
             <>
-              <MoveSessionPicker session={session} rootLabel={rootLabel} locked={fixedPlace} />
+              <MoveSessionPicker session={session} rootLabel={rootLabel} locked={fixedPlace || (!!session.worktree && !session.worktree.removed)} />
+              <CopyMark session={session} />
               {session.source === 'cron' && <Clock className="size-3.5 shrink-0" aria-label={t('sessions.source.cron')} />}
               <SessionMarks session={session} className="size-3.5" />
               <span className="ml-auto flex shrink-0 items-center gap-3 tabular-nums">
@@ -1001,7 +1014,8 @@ function ColumnHeader({
       <div data-kbd-hide="" className={cn('flex h-5 min-w-0 items-center gap-2 text-[11px] text-muted-foreground', slim && 'hidden')}>
         {session ? (
           <>
-            <MoveSessionPicker session={session} rootLabel={rootLabel} locked={fixedPlace} />
+            <MoveSessionPicker session={session} rootLabel={rootLabel} locked={fixedPlace || (!!session.worktree && !session.worktree.removed)} />
+              <CopyMark session={session} />
             {session.source === 'cron' && (
               <Tooltip content={t('sessions.source.cron')}>
                 <span className="inline-flex shrink-0 items-center"><Clock className="size-3" /></span>
@@ -1220,6 +1234,7 @@ export function NewSessionColumn({ col, variant, index, count, place }: { col: E
   const [model, setModel] = React.useState('')
   const [effort, setEffort] = React.useState<Effort | ''>('')
   const [planMode, setPlanMode] = React.useState(false)
+  const copy = useNewCopy(col.path)
   const newCommands = useSlashCommands(col.path, { model, onModel: setModel, effort, onEffort: setEffort, plan: planMode, onPlan: () => setPlanMode((p) => !p) })
   const composer = React.useRef<ComposerHandle>(null)
   const [dragFiles, setDragFiles] = React.useState(false)
@@ -1250,7 +1265,7 @@ export function NewSessionColumn({ col, variant, index, count, place }: { col: E
   const onSend = async (text: string, attachments: string[], clientId?: string) => {
     if (made.current) return toMade(made.current, text, attachments, { client_id: clientId })
     try {
-      const s = await create.mutateAsync({ path: col.path, message: text, client_id: clientId, title: title.trim() || undefined, model: model || undefined, effort: effort || undefined, attachments, plan_mode: planMode || undefined })
+      const s = await create.mutateAsync({ path: col.path, message: text, client_id: clientId, title: title.trim() || undefined, model: model || undefined, effort: effort || undefined, attachments, plan_mode: planMode || undefined, worktree: copy.value })
       made.current = s.id
       seedEmptyLog(s.id)
       usePending.getState().add(s.id, { text, attachments, queued: false })
@@ -1268,7 +1283,7 @@ export function NewSessionColumn({ col, variant, index, count, place }: { col: E
     try {
       const up = await uploadAttachment(col.path, file)
       if (made.current) return toMade(made.current, '', [], { voice: up.path })
-      const s = await create.mutateAsync({ path: col.path, title: title.trim() || undefined, model: model || undefined, effort: effort || undefined, plan_mode: planMode || undefined, voice: up.path })
+      const s = await create.mutateAsync({ path: col.path, title: title.trim() || undefined, model: model || undefined, effort: effort || undefined, plan_mode: planMode || undefined, voice: up.path, worktree: copy.value })
       made.current = s.id
       seedEmptyLog(s.id)
       usePending.getState().add(s.id, { text: '', attachments: [], queued: false, voice: true })
@@ -1378,6 +1393,7 @@ export function NewSessionColumn({ col, variant, index, count, place }: { col: E
                 <span className="text-xs text-muted-foreground">{t('plan.newHint')}</span>
               </span>
             </label>
+            <NewCopy c={copy} title={title} id={`copy-${col.key}`} />
             <p className="text-[13px] text-muted-foreground">{t('sessions.new.hint')}</p>
           </div>
         </div>

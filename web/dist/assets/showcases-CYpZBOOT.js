@@ -1,4 +1,8 @@
+<<<<<<<< HEAD:web/dist/assets/showcases-CYpZBOOT.js
 import{y as e}from"./index-BtnOolK1.js";import{i as t}from"./diagram-BYeYYIup.js";import{n}from"./steps-CFAWxNh1.js";var r=`flowchart LR
+========
+import{y as e}from"./index-6LHMKuLV.js";import{i as t}from"./diagram-CMYfcIdG.js";import{n}from"./steps-CSmfOHSt.js";var r=`flowchart LR
+>>>>>>>> c6a7a4ce8 (Web: separate copies (new session, copy bar, finish), the PR view, PRs and copies on the Git page, Claude's review block):web/dist/assets/showcases-D1jazrD0.js
   A[Question] --> B{Claude}
   B -->|reads| C[Files]
   B -->|runs| D[Tools]

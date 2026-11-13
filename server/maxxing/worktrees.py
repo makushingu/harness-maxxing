@@ -474,9 +474,9 @@ def remove(meta: dict, force: bool = False, delete_branch: bool = True) -> dict:
     codediff._run(repo, "worktree", "prune", check=False, write=True)
     kept = None
     if branch and delete_branch and _branch_exists(repo, branch) and not wt.get("pr"):
-        base = wt.get("base_ref") or wt.get("base") or ""
-        merged = bool(base) and codediff._run(repo, "merge-base", "--is-ancestor", branch, base,
-                                              check=False).returncode == 0
+        bases = {b for b in (wt.get("base"), wt.get("base_ref")) if b}     # main, or origin/main
+        merged = any(codediff._run(repo, "merge-base", "--is-ancestor", branch, b, check=False).returncode == 0
+                     for b in bases)
         if merged or force:
             codediff._run(repo, "branch", "-D", branch, check=False, write=True)
         else:

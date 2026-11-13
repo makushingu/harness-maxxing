@@ -112,6 +112,20 @@ def test_merge_into_the_base_then_the_copy_goes(client, code):
     assert not (clone / "y.txt").exists()                                  # back in the topic folder
 
 
+def test_merge_from_origin_main_drops_the_branch_too(client, code, tmp_path):
+    topic, clone = code
+    bare = tmp_path / "o.git"
+    subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(bare)], check=True)
+    _git(clone, "remote", "add", "origin", str(bare))
+    _git(clone, "push", "-q", "-u", "origin", "main")
+    _git(clone, "remote", "set-head", "origin", "main")
+    s = _new(client, topic, clone)
+    assert s["worktree"]["base"] == "main"
+    wait_idle(client, s["id"])
+    r = client.post(f"/api/sessions/{s['id']}/copy/merge", json={"message": "Add x"})
+    assert r.status_code == 200 and r.json()["kept_branch"] is None, r.text
+
+
 def test_a_conflict_with_the_base_leaves_the_copy_as_it_was(client, code):
     topic, clone = code
     s = _new(client, topic, clone, message="hi NOTOOL")
@@ -172,3 +186,14 @@ def test_slugs():
     assert worktrees.slug("Éditer l'accueil") == "editer-l-accueil"
     assert len(worktrees.slug("word " * 30)) <= worktrees.SLUG_MAX
     assert worktrees.slug("…") == ""
+
+
+def test_claude_is_told_to_work_in_the_copy(client, code, mx):
+    import json, os
+    topic, clone = code
+    s = _new(client, topic, clone, message="hi NOTOOL")
+    wait_idle(client, s["id"])
+    calls = [json.loads(x) for x in open(os.path.join(os.environ["FAKE_CLAUDE_DIR"], "calls.jsonl"))]
+    call = [c for c in calls if c["cwd"] == s["worktree"]["path"]][-1]
+    note = call["argv"][call["argv"].index("--append-system-prompt") + 1]
+    assert "separate copy" in note and s["worktree"]["branch"] in note and str(clone) in note
