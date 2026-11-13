@@ -11,7 +11,7 @@ import { Columns2, Keyboard, LayoutGrid, MessageSquarePlus, MessagesSquare, Pane
 import { useT } from '@/i18n'
 import { cn } from '@/lib/utils'
 import { animateIn, animateOut, EASE_OUT, reducedMotion, usePresence } from '@/lib/presence'
-import { useTabSwitchMotion } from './tabMotion'
+import { useModeMotion, useTabSwitchMotion } from './tabMotion'
 import { useOpenSync } from './openSync'
 import { useRegisterCommands } from '@/commands/registry'
 import { useHotkey } from '@/commands/shortcuts'
@@ -450,6 +450,9 @@ function Workspace() {
   // tabs view: the session that comes on screen slides in from the side of its tab
   const tabShown = tabs ? [...places.places].find(([, pl]) => !pl.hidden)?.[0] : undefined
   useTabSwitchMotion(tabs, tabShown, cols.map((c) => c.key), colElCb)
+  // Tabs <-> Zones: the sessions come down from their tabs, or go back up into them
+  const bar = React.useRef<HTMLDivElement>(null)
+  useModeMotion(tabs, cols.map((c) => c.key), tabShown, colElCb, bar)
   React.useLayoutEffect(() => {
     for (const p of shownCols) {
       const el = colEl(p.key)
@@ -596,7 +599,6 @@ function Workspace() {
 
   // Computer: the tabs and the actions share one bar. The actions keep their labels while every tab has room for
   // its title; past that they are icons (the tabs narrow next, then the bar scrolls).
-  const bar = React.useRef<HTMLDivElement>(null)
   const [barWidth, setBarWidth] = React.useState(0)
   React.useLayoutEffect(() => {
     const el = bar.current

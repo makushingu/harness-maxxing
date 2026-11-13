@@ -41,7 +41,7 @@ export const Composer = React.forwardRef<ComposerHandle, {
   steering?: boolean
   /** A steer was accepted: the current turn is ending, the queued messages start right after. */
   steerPending?: boolean
-  /** Add now: the queued messages go into the running turn without interrupting it (read at Claude's next step). */
+  /** Add to plan: the queued messages go into the running turn without interrupting it (read at Claude's next step). */
   onInject?: () => void
   injecting?: boolean
   /** Edit: takes the queued messages back (server queue emptied) - they are put in the composer. */

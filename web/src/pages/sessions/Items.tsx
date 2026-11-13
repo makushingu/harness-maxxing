@@ -263,7 +263,7 @@ export function UserMessage({
   attachments: string[]
   at?: number
   source?: string
-  /** Added to a running turn (Add now). */
+  /** Added to a running turn (Add to plan). */
   injected?: boolean
   pending?: boolean
   queued?: boolean

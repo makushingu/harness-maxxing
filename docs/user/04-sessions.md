@@ -160,6 +160,13 @@ others stay in the composer. The **×** of the card empties the queue at once to
 refuses). **Stop** still cancels the turn
 and the queue (background work included).
 
+**Add to the plan, without interrupting.** **Add to plan** (in the same card) hands the waiting messages to the
+task that runs, without stopping anything: Claude reads them at its next step, between two actions, and goes on
+with them in mind ("only the intro for now", "also update the README"). In the conversation the message is marked
+*added to the plan*. Where **Steer** cuts the current step short to make Claude read you now, **Add to plan** lets
+it finish what it is doing. A voice message or a plan approval cannot be added this way: it goes at the end of the
+task (or use **Steer**).
+
 **Ask without interrupting.** **Question** (in the same card) asks the waiting messages on the side:
 Claude answers about the session - where it is at, why it did something, what is left - without stopping
 its task. The answer opens in a larger panel above the composer; close it with its **×**. It is not added
@@ -286,7 +293,7 @@ in its menu).
   When it is done, it shows **the answer** with its images - one at a time, ‹ › to go through them;
   a click opens the file in the app. The arrow next to the send button folds it into a slim bar
   (steps only) and back.
-- **Enter** sends; during a turn the message waits in the queue and **Steer** sends it right away.
+- **Enter** sends; during a turn the message waits in the queue: **Add to plan** hands it to the running task, **Steer** interrupts and sends it right away.
   The square button stops the turn.
 - **Share my screen** (the screen icon): pick a screen or a window once; from then on a capture is
   attached to every message you send from the HUD, so Claude sees what you see. When it helps, Claude

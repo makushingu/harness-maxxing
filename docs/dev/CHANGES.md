@@ -7,6 +7,16 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Web, Sessions, Tabs <-> Zones: `useModeMotion` (pages/sessions/tabMotion.ts, `MODE_MS` 340, 35 ms between
+  sessions). The places "before" are read during the render that changes `tabs` (the tab chips `[data-tab]` of
+  `sessions-bar` when leaving Tabs, the columns when leaving Zones: the commit has not moved anything yet), the
+  animations start in a layout effect: to Zones each column slides from its chip's x and unrolls (`clip-path`
+  inset from the top, opacity); to Tabs each chip rises from its column's x and the shown session slides from its
+  column's centre. Web Animations, `fill: backwards` for the delays, nothing under `prefers-reduced-motion`,
+  nothing on load. The page's `bar` ref moved above the hook.
+- Sessions, wording only: "Add now" is "Add to plan" (`sessions.queue.inject`, `injectTip`, `sessions.msg.injected`
+  = "added to the plan"; docs/user/04-sessions gains its paragraph). Route, signal and runner unchanged
+  (POST /api/sessions/{id}/inject, SIGUSR2, `runner_caps`).
 - Web, sidebar status line: `components/shell/mood.ts`. `pickMood(facts)` (pure) returns ONE sentence (`key`, `vars`,
   `when` = times formatted by the hook, `level` ok / note / warn / error / idle, `to`, `issues`), most pressing first:
   open health problems (one sentence per issue `code`, `ISSUE_MOOD`; several = their count; an unknown code keeps

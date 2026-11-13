@@ -21,6 +21,13 @@ New:
   **New session**, no text, in the colour of the other icons of the bar: it draws the mode in use, and its bars move from one picture to the other when
   you change (tab heads drop into columns, columns go back up into tabs). A new browser starts in Tabs; a browser
   that already had its sessions keeps its mode.
+- **Sessions: the change of mode moves.** Going from Tabs to Zones, every session comes down from its tab and
+  unrolls into its column, one after the other; back to Tabs, the tabs rise from the columns and the session that
+  stays glides to the middle. Nothing jumps any more (and nothing moves when reduced motion is asked for).
+- **Sessions: Add to plan.** **Add now**, on the waiting messages, is now called **Add to plan**: it hands them to
+  the running task without interrupting it, Claude reads them at its next step and goes on with them in mind.
+  **Steer** remains the one that interrupts to be read at once. The message is marked *added to the plan* in the
+  conversation.
 - **Sessions: no more page title.** On a computer the title and its description are gone: one bar holds the tabs,
   the switch and the actions (the buttons keep only their icon when the tabs need the room).
 - **Feedback: your own Harness reads the message first.** A question, a setting or something that already exists
