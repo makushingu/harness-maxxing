@@ -237,7 +237,7 @@ def resize(t: Term, cols: int, rows: int) -> None:
     try:
         _set_size(t.fd, cols, rows)
         os.killpg(os.getpgid(t.pid), signal.SIGWINCH)
-    except (OSError, ValueError, ProcessLookupError):
+    except (OSError, ValueError, TypeError, OverflowError, ProcessLookupError):   # [Infinity, 1]: no resize
         pass
 
 

@@ -125,6 +125,15 @@ def test_a_folder_name_with_nul_or_a_surrogate_is_a_400(on, term_env):
         assert r.status_code == 400 and r.json()["error"] == "bad_cwd", cwd
 
 
+def test_frames_that_are_not_objects_keep_the_connection(on, term_env):
+    t = on.post("/api/term", json={"cwd": str(term_env["files"])}).json()
+    with on.websocket_connect(f"/api/term/{t['id']}/ws?token={t['token']}", headers=ORIGIN) as ws:
+        for bad in ("[1]", '"x"', "3", "null", '{"r": [Infinity, 30]}', '{"r": [null, 30]}'):
+            ws.send_text(bad)
+        ws.send_text(json.dumps({"i": "echo still-$((2+3))\n"}))
+        assert b"still-5" in _read_until(ws, b"still-5")
+
+
 def test_doctor_lists_programs_started_by_hand_and_forgotten():
     from maxxing.cmd_core import stale_units
     now = 1_800_000_000

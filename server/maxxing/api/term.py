@@ -124,6 +124,8 @@ async def stream(ws: WebSocket, tid: str, token: str = ""):
                 m = json.loads(msg)
             except ValueError:
                 continue
+            if not isinstance(m, dict):              # [1], "x", 3: not a frame of ours
+                continue
             if isinstance(m.get("i"), str):
                 await asyncio.to_thread(terminal.write, t, m["i"].encode("utf-8", "replace"))
             elif isinstance(m.get("r"), list) and len(m["r"]) == 2:
