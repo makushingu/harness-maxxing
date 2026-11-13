@@ -5,10 +5,12 @@ import { useNavigate } from 'react-router'
 import { ChevronLeft, ChevronRight, Download, ExternalLink, FileWarning, Maximize, Minus, Plus, type LucideIcon } from 'lucide-react'
 import type { Components } from 'react-markdown'
 import { Button, Sensitive, Spinner, Tooltip } from '@/components/ui'
-import { fileRawUrl, filePreviewUrl, fileThumbUrl, PREVIEW_W } from '@/lib/queries/files'
+import { fileRawUrl, filePreviewUrl, fileThumbUrl, PREVIEW_W, usePdfInfo } from '@/lib/queries/files'
 import { fmtBytes } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
+import { useMediaQuery } from '@/stores/media'
+import { canPrefetch } from '@/lib/prefetchIdle'
 import { useHotkey } from '@/commands/shortcuts'
 import { useTouchZoom, type Pt } from '@/lib/touch-zoom'
 import { useDiagramSvg } from '@/components/ui/diagram'
@@ -16,10 +18,41 @@ import { basename, CONVERTED_IMAGE, dirname, extOf, resolvePath } from './kinds'
 import type { CodeEditorProps } from './CodeEditor'
 import { MediaPlayer } from './MediaPlayer'
 import { downloadProps, inIosApp, openRawProps } from './download'
-import { CodeSkeleton, ProseSkeleton } from './skeletons'
+import { CodeSkeleton, PageSkeleton, ProseSkeleton } from './skeletons'
+import { PdfPages } from './pdfPages'
 
-const CodeEditorChunk = React.lazy(() => import('./CodeEditor'))
-const MarkdownChunk = React.lazy(() => import('@/components/ui/markdown').then((m) => ({ default: m.Markdown })))
+/** A lazy component that can be warmed before it shows, and that renders at once when its chunk is there: even
+ *  then a Suspense pass costs time (React keeps a fallback it has shown for 300 ms). */
+function warmLazy<P extends object>(load: () => Promise<{ default: React.ComponentType<P> }>) {
+  let ready: React.ComponentType<P> | null = null
+  let pending: Promise<{ default: React.ComponentType<P> }> | null = null
+  const get = () =>
+    (pending ??= load().then(
+      (m) => {
+        ready = m.default
+        return m
+      },
+      (e) => {
+        pending = null
+        throw e
+      },
+    ))
+  const Lazy = React.lazy(get)
+  /** Decided once per mount: switching from the lazy component to the loaded one would mount it again. */
+  function Chunk(props: P) {
+    const [now] = React.useState(() => ready)
+    return React.createElement((now ?? Lazy) as React.ComponentType<P>, props)
+  }
+  return { Chunk, warm: () => void get().catch(() => undefined) }
+}
+
+const codeEditor = warmLazy<CodeEditorProps>(() => import('./CodeEditor'))
+const markdown = warmLazy<React.ComponentProps<typeof import('@/components/ui/markdown').Markdown>>(() => import('@/components/ui/markdown').then((m) => ({ default: m.Markdown })))
+const CodeEditorChunk = codeEditor.Chunk
+const MarkdownChunk = markdown.Chunk
+/** Start loading the chunk a file will be drawn with, while its content is still on its way. */
+export const warmCodeEditor = codeEditor.warm
+export const warmMarkdown = markdown.warm
 
 /** CodeMirror, loaded on demand. Fills its parent (give the parent a height). */
 export function LazyCodeEditor(props: CodeEditorProps) {
@@ -51,9 +84,10 @@ function decodeFileRef(ref: string) {
 
 /**
  * Rendered markdown of a file: relative images are served from the file's folder, relative links open
- * in the Files page. The raw text is never modified.
+ * in the Files page. The raw text is never modified. `image`: where the pictures of this text are instead (a
+ * document's own pictures); null = not shown.
  */
-export function MarkdownView({ content, path, className }: { content: string; path: string; className?: string }) {
+export function MarkdownView({ content, path, className, image }: { content: string; path: string; className?: string; image?: (ref: string) => string | null }) {
   const navigate = useNavigate()
   const dir = dirname(path)
   const onLink = React.useCallback(
@@ -69,11 +103,15 @@ export function MarkdownView({ content, path, className }: { content: string; pa
       img({ src, alt }) {
         const s = typeof src === 'string' ? src : ''
         if (!s) return null
+        if (image) {
+          const url = isFileRef(s) ? image(decodeFileRef(s)) : null
+          return url ? <img src={url} alt={alt || ''} loading="lazy" /> : null
+        }
         if (isFileRef(s)) return <img src={fileRawUrl(resolvePath(dir, decodeFileRef(s.replace(/[?#].*$/, ''))))} alt={alt || ''} loading="lazy" />
         return /^https?:/i.test(s) ? <img src={s} alt={alt || ''} loading="lazy" referrerPolicy="no-referrer" /> : null
       },
     }),
-    [dir],
+    [dir, image],
   )
   return (
     <React.Suspense fallback={<ProseSkeleton />}>
@@ -362,7 +400,8 @@ export function ImageView({ path, version, onPrev, onNext, position, className }
   // The original is fetched quietly once the preview is on screen, so zooming is instant (as before) while
   // opening stays fast. It replaces the preview without any visible change.
   React.useEffect(() => {
-    if (!loaded || previewFull || full) return
+    // not on a light connection (Save-Data, 2G / 3G): there the original comes with the first zoom
+    if (!loaded || previewFull || full || !canPrefetch()) return
     const id = setTimeout(() => setFull(true), 150)
     return () => clearTimeout(id)
   }, [loaded, previewFull, full])
@@ -665,28 +704,48 @@ export function MediaView({ path, kind, version, className }: { path: string; ki
 }
 
 
+/** The browser's own PDF viewer in a frame where it has one. Where it has none (most phones: an empty frame, or
+ *  the first page only), the pages come as pictures from the server (PdfPages); without the server's PDF tools, or
+ *  for a file it cannot read, the frame and its "open in a new tab" stay. */
 export function PdfView({ path, className }: { path: string; className?: string }) {
   const t = useT()
+  const touch = useMediaQuery('(pointer: coarse)')
+  const paged = touch || !navigator.pdfViewerEnabled
+  const info = usePdfInfo(path, paged)
+  const actions = (short: boolean) => (
+    <>
+      <Button asChild variant="ghost" size="sm" className="h-7 pointer-coarse:h-9">
+        <a {...openRawProps(path)} aria-label={t(inIosApp() ? 'files.openRawInApp' : 'files.openRaw')}>
+          <ExternalLink />
+          <span className={cn(short && 'max-sm:sr-only')}>{t(inIosApp() ? 'files.openRawInApp' : 'files.openRaw')}</span>
+        </a>
+      </Button>
+      <Button asChild variant="ghost" size="sm" className="h-7 pointer-coarse:h-9">
+        <a {...downloadProps(path)} aria-label={t('files.download')}>
+          <Download />
+          <span className={cn(short && 'max-sm:sr-only')}>{t('files.download')}</span>
+        </a>
+      </Button>
+    </>
+  )
+  if (paged && info.isPending) return <PageSkeleton />
+  if (paged && info.data)
+    return (
+      <Sensitive placeholder={<div className="m-4 flex-1 rounded-lg bg-muted/60" aria-label={t('presentation.hidden')} />}>
+        <PdfPages key={path} path={path} pages={info.data.pages} ratio={info.data.ratio} version={info.data.mtime} className={className}>
+          {actions(true)}
+        </PdfPages>
+      </Sensitive>
+    )
   return (
     <div className={cn('flex min-h-0 flex-1 flex-col', className)}>
       <Sensitive placeholder={<div className="m-4 flex-1 rounded-lg bg-muted" aria-label={t('presentation.hidden')} />}>
         <iframe key={path} src={fileRawUrl(path)} title={basename(path)} className="min-h-0 w-full flex-1 border-0 bg-fill-1" />
       </Sensitive>
-      {/* Some browsers (most mobile ones) do not render PDFs inline: always offer a way out. */}
+      {/* Some browsers do not render PDFs inline: always offer a way out. */}
       <div className="flex shrink-0 items-center justify-end gap-1 border-t px-3 py-1.5">
         <span className="mr-auto text-xs text-muted-foreground max-sm:hidden">{t('files.pdfHint')}</span>
-        <Button asChild variant="ghost" size="sm" className="h-7 pointer-coarse:h-9">
-          <a {...openRawProps(path)}>
-            <ExternalLink />
-            {t(inIosApp() ? 'files.openRawInApp' : 'files.openRaw')}
-          </a>
-        </Button>
-        <Button asChild variant="ghost" size="sm" className="h-7 pointer-coarse:h-9">
-          <a {...downloadProps(path)}>
-            <Download />
-            {t('files.download')}
-          </a>
-        </Button>
+        {actions(false)}
       </div>
     </div>
   )

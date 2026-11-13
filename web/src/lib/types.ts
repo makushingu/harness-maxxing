@@ -579,6 +579,12 @@ export type InvalidatePayload = { topics: BusTopic[] }
 export type FileEntry = { name: string; path: string; type: 'file' | 'dir'; size: number; mtime: number; mime: string }
 export type FileList = { path: string; parent: string | null; root: string; entries: FileEntry[] }
 export type FileContent = { path: string; content: string; mtime: number; size: number; mime: string; editable: boolean }
+/** An office document read by the server: text and slides as Markdown, a spreadsheet as the rows of its sheets. */
+export type FileSheet = { name: string; rows: string[][]; truncated: boolean }
+export type FileDoc = { path: string; mtime: number; size: number; truncated: boolean } & (
+  | { type: 'text' | 'slides'; markdown: string }
+  | { type: 'sheets'; sheets: FileSheet[] }
+)
 export type FileWriteBody = { path: string; content: string; expected_mtime?: number }
 export type FileWriteResult = { ok: boolean; mtime: number }
 export type FileSearchHit = { path: string; name: string; type: 'file' | 'dir' }

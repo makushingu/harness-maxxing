@@ -5,19 +5,17 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 
 ## Unreleased
 
-Changed:
-- **Clearer backgrounds: you see at a glance what you are looking at.** The sidebar, the list beside it and the page
-  no longer share the same background: the sidebar is the darkest (the lightest grey in light mode), the list is one
-  step lighter, and the page sits in a panel with rounded corners; cards, menus and dialogs each come one step
-  nearer. The same steps apply everywhere, with the neutral or tinted background and every accent color.
-- **Sub-agents: one line instead of two.** The bubble above the message box that said "8 subagents running" is
-  gone: the last line of the conversation says it (or adds "· 8 subagents" after what Claude is doing) and a click
-  on it lists them, as the bubble did.
-- **Hovered and selected rows look the same everywhere.** Light fills (hover, selection, quiet zones) are now three
-  shades of the text color instead of a different grey on each screen, so a row reacts the same in the sidebar, a
-  list, the page or a card.
-
-Added:
+New:
+- **Files: Word, Excel, PowerPoint and OpenDocument files open in the viewer.** A `.docx`, `.pptx`, `.odt` or `.odp`
+  shows as a page of text (headings, lists, tables, links, its pictures, one section per slide with its notes), a
+  `.xlsx` or `.ods` as a table per sheet with the column letters, the row numbers, a filter and the sheets as tabs at
+  the bottom - on the Files page and when a path is clicked in a conversation, with nothing to install. The words
+  and numbers of the file, not its layout: **Download** gives the original. Old `.doc` / `.xls` / `.ppt` still
+  download.
+- **Files: a PDF reads on a phone.** Where the browser shows no PDF inside a page (most phones: an empty frame or
+  the first page only), the PDF now opens page by page, as far as the last one: two fingers, a double tap or
+  **− / +** zoom, pages load as you scroll and the bar shows the page you are on. On a computer the browser's own
+  reader stays.
 - **Glass material** (Settings -> Appearance -> Material): the bars, menus, dialogs and the search window become
   see-through and blurred over a soft backdrop in your accent color, in dark and light mode; cards, the message box,
   buttons and the selected row become liquid glass (a see-through fill with a bright edge and a sheen, the selection
@@ -29,6 +27,25 @@ Added:
   become liquid glass like the app's.
 - The interface and the pages now appear top to bottom, in order: at startup, in the sessions list, in Settings and
   on the dashboard (a card's content after the card).
+
+
+Changed:
+- **Files: the viewer opens faster.** A file clicked in a conversation used to wait three times before anything
+  showed: for the viewer itself, for a look at its folder, then for its date. The viewer is now ready before the
+  click, and a file with a known extension asks for its content at once: on a connection of 8 Mbit/s, an image, a
+  video, a Word or Excel file, a PDF or a file of code shows two to four times sooner (0.2 to 0.5 s instead of 0.5
+  to 0.9 s). A big image no longer downloads its original on a light connection before you zoom, and a PDF read page
+  by page asks each page once instead of twice.
+- **Clearer backgrounds: you see at a glance what you are looking at.** The sidebar, the list beside it and the page
+  no longer share the same background: the sidebar is the darkest (the lightest grey in light mode), the list is one
+  step lighter, and the page sits in a panel with rounded corners; cards, menus and dialogs each come one step
+  nearer. The same steps apply everywhere, with the neutral or tinted background and every accent color.
+- **Sub-agents: one line instead of two.** The bubble above the message box that said "8 subagents running" is
+  gone: the last line of the conversation says it (or adds "· 8 subagents" after what Claude is doing) and a click
+  on it lists them, as the bubble did.
+- **Hovered and selected rows look the same everywhere.** Light fills (hover, selection, quiet zones) are now three
+  shades of the text color instead of a different grey on each screen, so a row reacts the same in the sidebar, a
+  list, the page or a card.
 
 ## 2.0.0-alpha.149 - 2026-11-13
 

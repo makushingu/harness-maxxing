@@ -42,6 +42,8 @@ export const GROUPS = {
   code: ['code', 'copy', 'pr'],
   // the terminal drawer and its setting (features/terminal)
   term: ['term'],
+  // Office documents and the page-by-page PDF reader (features/files/docs.tsx, pdfPages.tsx): on the first one opened
+  docs: ['doc'],
   // the sentences of the status line (components/shell/mood.ts): fetched once the shell shows, not before it
   mood: ['mood'],
 } as const satisfies Record<string, readonly string[]>

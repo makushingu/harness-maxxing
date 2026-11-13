@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { api, ApiError, isApiError, networkError, withQuery } from '../api'
-import type { FileContent, FileList, FileWriteBody, FileWriteResult, Ok, UploadResult } from '../types'
+import type { FileContent, FileDoc, FileList, FileWriteBody, FileWriteResult, Ok, UploadResult } from '../types'
 import { qk } from './keys'
 import { useMut } from './util'
 
@@ -43,6 +43,7 @@ export const fileKindQuery = (qc: QueryClient, path: string) => ({
     const listDir = async (p: string) => {
       const list = await api.get<FileList>('/api/files/list', { path: p })
       qc.setQueryData(qk.files.list(p), list)
+      seedFileStamps(list.entries) // the viewer's media URLs need the mtime: no second round trip for it
       if (!p) qc.setQueryData(qk.files.list(list.path), list)
       return list
     }
@@ -120,6 +121,8 @@ async function flushStamps() {
           if (!missingSince.has(k)) missingSince.set(k, Date.now())
         } else missingSince.delete(k)
         known.set(k, mtimes[p] ?? null)
+        // a file's mtime does not depend on the folder it was asked within: the viewer (no `within`) starts with it
+        if (within && mtimes[p] != null && !known.has(p)) known.set(p, mtimes[p])
         for (const fn of fns) fn(mtimes[p] ?? null)
       }
     }
@@ -170,6 +173,29 @@ export const refreshFileStamps = (qc: QueryClient) => qc.invalidateQueries({ que
 /** Image for the viewer: a WebP of at most `w` px when the original is heavy (> 300 KB), else the original. */
 export const filePreviewUrl = (path: string, w = PREVIEW_W, version?: number | null) => withQuery('/api/files/preview', { path, w, v: ver(version) })
 export const PREVIEW_W = 2048
+
+/** An office document as the server reads it (Markdown, or the rows of its sheets). */
+export const fileDocQuery = (path: string) => ({
+  queryKey: ['files', 'doc', path] as const,
+  queryFn: ({ signal }: { signal?: AbortSignal }) => api.get<FileDoc>('/api/files/doc', { path }, { signal }),
+  retry: false,
+  staleTime: 30_000,
+})
+export const useFileDoc = (path: string) => useQuery(fileDocQuery(path))
+/** A picture stored in a document, by the name its Markdown gives. */
+export const docMediaUrl = (path: string, name: string, version?: number | null) => withQuery('/api/files/doc/media', { path, name, v: ver(version) })
+/** Pages of a PDF for the page-by-page reader (`enabled`: only where the browser shows no PDF in the page). */
+export const filePdfQuery = (path: string) => ({
+  queryKey: ['files', 'pdf', path] as const,
+  queryFn: ({ signal }: { signal?: AbortSignal }) => api.get<{ pages: number; ratio: number; mtime: number }>('/api/files/pdf', { path }, { signal }),
+  retry: false,
+  staleTime: 30_000,
+})
+export function usePdfInfo(path: string, enabled: boolean) {
+  return useQuery({ ...filePdfQuery(path), enabled })
+}
+export const PDF_PAGE_WIDTHS = [640, 1280, 2048]
+export const pdfPageUrl = (path: string, n: number, w: number, version?: number | null) => withQuery('/api/files/pdf/page', { path, n, w, v: ver(version) })
 
 /** Start downloading an image before it is shown (hover on a media link): the click then opens it instantly. */
 const prefetched = new Set<string>()

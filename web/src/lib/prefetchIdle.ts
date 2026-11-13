@@ -99,6 +99,8 @@ export function startIdlePrefetch(qc: QueryClient): () => void {
       )
     },
     () => prefetchPages(pageTops(qc)),
+    // the file viewer's code: the first file opened shows without waiting for it
+    () => import('@/features/files/viewerLoad').then((m) => m.loadFileViewer()),
   ]
   const next = () => {
     const step = steps.shift()

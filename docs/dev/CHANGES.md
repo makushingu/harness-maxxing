@@ -7,6 +7,32 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Documents: `maxxing/documents.py` (stdlib only: zipfile + ElementTree) reads OOXML and ODF: `read(path)` ->
+  `{type: text|slides, markdown}` or `{type: sheets, sheets: [{name, rows, truncated}]}`, `media(path, name)` for a
+  picture of the package; `Unreadable(unsupported|too_large)`. Guards: XML parts capped, 8 s deadline, DTD refused,
+  text escaped, links http(s)/mailto only, pictures png/jpg/gif/webp/bmp only. Routes `GET /api/files/doc`
+  (413 / 415) and `/api/files/doc/media`. Web: kind `document` (`kinds.ts`, `isSheets` / `isTextDoc`),
+  `features/files/docs.tsx` (`DocView`, `SheetsView`), `MarkdownView` / `MarkdownReader` take `image` (a ref of the
+  Markdown -> URL).
+- PDF pages: `GET /api/files/pdf` (`{pages, ratio, mtime}`, 415 without poppler / ffmpeg) and `/api/files/pdf/page`
+  (`n`, `w` mapped to 640 / 1280 / 2048, WebP cached in `state/thumbs`). `_pdf_thumb` renders through an uncompressed
+  TIFF (0.04 s instead of 0.33 s for the PNG; ~0.35 s per page with the WebP). Web: `PdfView` keeps the iframe when
+  `navigator.pdfViewerEnabled` and the pointer is fine, else `features/files/pdfPages.tsx` (pages near the screen
+  only, zoom 1-4 by pinch / double tap / Ctrl + wheel, the picture asked again at the zoom once the fingers are up,
+  `data-zoomed` holds the viewer's swipe); a 415 falls back to the iframe.
+- Web, file viewer speed: the viewer's chunk is loaded by `features/files/viewerLoad.ts` (`loadFileViewer`, with
+  the `files` words) and mounted by `AppShell` WITHOUT Suspense: React keeps a fallback it has shown for 300 ms
+  (even `null`), which delayed every first opening. It is warmed by the last step of `startIdlePrefetch` and by a
+  delegated `pointerover` on `[data-mx-file]` / `#mx-file=` links (the chunk only, no request about the path).
+  `warmLazy()` (`viewers.tsx`) does the same for CodeMirror and Markdown: warmed when the file opens
+  (`warmCodeEditor`, `warmMarkdown`), rendered directly once loaded. `ViewerPane`: a name with a known extension
+  (`kind !== 'binary'`) no longer waits for the probe (`eager`): `/read`, `/stat`, `/doc`, `/pdf` leave with the
+  listings, and the first answer shows the file (the probe still decides when it says folder or missing). The
+  probe's listings seed the stamps (`seedFileStamps`), a stamp asked `within` a folder also seeds the plain one,
+  `prefetchMedia` (thumbnail hover) asks the stamp first (`fileStamp`) so it loads the URL the viewer uses.
+  `ImageView` fetches the original after the preview only when `canPrefetch()`. `PdfPages` starts from the
+  screen's width (it asked the first pages at 2048 then again at 1280 on a phone). Not changed: video Auto quality.
+
 - Web, surface levels (`styles/globals.css`): the surfaces come from one lightness scale per theme (`--l-frame`
   `--l-list` `--l-content` `--l-card` `--l-float` `--l-muted` `--l-accent`) and a hue/chroma pair (`--sf-h`, `--sf-c`;
   `[data-tint='tinted']` only changes the pair). New token `list` (`bg-list`, second bar). Shell classes: `mx-shell`

@@ -1,7 +1,8 @@
 import * as React from 'react'
 import { store as lsStore } from '@/lib/utils'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
-import { useFileViewer } from '@/features/files/viewerStore'
+import { loadFileViewer, warmFileViewer } from '@/features/files/viewerLoad'
+import { FILE_HREF, useFileViewer } from '@/features/files/viewerStore'
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { useGlobalBus } from '@/lib/sse'
@@ -56,7 +57,6 @@ function usePrefetch() {
 }
 
 const WhatsNewDialog = React.lazy(withGroups(['show'], () => import('@/features/whatsnew/WhatsNewDialog')))
-const FileViewerHost = React.lazy(withGroups(['files'], () => import('@/features/files/Viewer')))
 const TeamLive = React.lazy(() => import('@/features/team/Live').then((m) => ({ default: m.TeamLive })))
 const TeamBubbles = React.lazy(withGroups(['team'], () => import('@/features/team/TeamBubbles').then((m) => ({ default: m.TeamBubbles }))))
 const FeedbackDialog = React.lazy(withGroups(['feedback'], () => import('./FeedbackDialog').then((m) => ({ default: m.FeedbackDialog }))))
@@ -75,19 +75,38 @@ function FeedbackHost() {
   ) : null
 }
 
-/** The file viewer: its code loads the first time a file is opened. */
+/** The file viewer: its code loads the first time a file is opened, or as soon as the pointer reaches a file of a
+ *  conversation. Mounted without Suspense: React keeps a fallback it has shown for 300 ms, even an empty one. */
 function FileViewer() {
   const open = useFileViewer((s) => s.open)
-  const [loaded, setLoaded] = React.useState(false)
+  const [Host, setHost] = React.useState<React.ComponentType | null>(null)
   React.useEffect(() => {
-    if (open) setLoaded(true)
-  }, [open])
-  return loaded ? (
-    <React.Suspense fallback={null}>
-      <ErrorBoundary className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2 bg-popover">
-        <FileViewerHost />
-      </ErrorBoundary>
-    </React.Suspense>
+    if (!open || Host) return
+    let live = true
+    loadFileViewer().then(
+      (m) => live && setHost(() => m.default),
+      (e) =>
+        live &&
+        setHost(() => () => {
+          throw e // the boundary below says the viewer could not load
+        }),
+    )
+    return () => {
+      live = false
+    }
+  }, [open, Host])
+  React.useEffect(() => {
+    if (Host) return
+    const warm = (e: Event) => {
+      if (e.target instanceof Element && e.target.closest(`[data-mx-file], a[href^="${FILE_HREF}"]`)) warmFileViewer()
+    }
+    document.addEventListener('pointerover', warm, { passive: true })
+    return () => document.removeEventListener('pointerover', warm)
+  }, [Host])
+  return Host ? (
+    <ErrorBoundary className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2 bg-popover">
+      <Host />
+    </ErrorBoundary>
   ) : null
 }
 

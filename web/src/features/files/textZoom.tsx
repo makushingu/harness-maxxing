@@ -88,7 +88,7 @@ export function TextZoomControl({ className, inlineFrom = 768 }: { className?: s
 const HEADS = ':scope > h1, :scope > h2, :scope > h3, :scope > h4, :scope > h5, :scope > h6'
 
 /** Rendered markdown in its own scroller, zoomed, that remembers where the reader was (key: `path`). */
-export function MarkdownReader({ content, path, className, testId }: { content: string; path: string; className?: string; testId?: string }) {
+export function MarkdownReader({ content, path, className, testId, image }: { content: string; path: string; className?: string; testId?: string; image?: (ref: string) => string | null }) {
   const zoom = useTextZoom((s) => s.zoom)
   const box = React.useRef<HTMLDivElement>(null)
   const inner = React.useRef<HTMLDivElement>(null)
@@ -193,7 +193,7 @@ export function MarkdownReader({ content, path, className, testId }: { content: 
   return (
     <div ref={box} className="min-h-0 flex-1 overflow-y-auto overscroll-contain" data-testid={testId}>
       <div ref={inner} style={zoom === 1 ? undefined : { zoom }}>
-        <MarkdownView content={content} path={path} className={className} />
+        <MarkdownView content={content} path={path} className={className} image={image} />
       </div>
     </div>
   )
