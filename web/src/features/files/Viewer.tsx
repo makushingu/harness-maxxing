@@ -21,7 +21,8 @@ import { basename, dirname, iconFor, isRendered, isTextual, kindOf } from './kin
 import { PreviewBody } from './FilePreview'
 import { TextZoomControl, zoomsText } from './textZoom'
 import { FolderView } from './rich'
-import { CodeSkeleton, DiagramView, MediaSkeleton } from './viewers'
+import { DiagramView } from './viewers'
+import { FileSkeleton } from './skeletons'
 import { videoInfoQuery } from './videoQuality'
 import { CodeBlock, CopyButton } from '@/components/ui/code-block'
 import { DIAGRAM_PREFIX, diagramCode } from '@/components/ui/diagram'
@@ -276,7 +277,7 @@ function ViewerPane({ path, index, count, fullscreen, canFull, onFull }: { path:
       </div>
       <div className="relative flex min-h-0 flex-1 flex-col" {...swipe}>
         {probe.isPending ? (
-          <CodeSkeleton />
+          <FileSkeleton kind={kind} preview={view === 'preview'} />
         ) : probe.isError || probe.data === 'missing' ? (
           // Never a skeleton forever: a path that does not exist (or is outside the files root) says so.
           <EmptyState
@@ -295,7 +296,7 @@ function ViewerPane({ path, index, count, fullscreen, canFull, onFull }: { path:
             }}
           />
         ) : !stamp.ready ? (
-          kind === 'video' || kind === 'audio' ? <MediaSkeleton kind={kind} /> : <CodeSkeleton />
+          <FileSkeleton kind={kind} preview={view === 'preview'} />
         ) : (
           <PreviewBody path={path} kind={kind} view={view} content={content} version={stamp.version} />
         )}

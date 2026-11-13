@@ -4,6 +4,7 @@ import * as React from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowDown, ArrowUp, ExternalLink, File as FileIcon, Folder, RefreshCw, Search, ShieldCheck } from 'lucide-react'
 import { Button, EmptyState, Input, Sensitive, Skeleton, toast, Tooltip } from '@/components/ui'
+import { ProseSkeleton } from './skeletons'
 import { api, errorMessage, isApiError } from '@/lib/api'
 import { qk } from '@/lib/queries/keys'
 import { fileRawUrl, fileThumbUrl, useFileList } from '@/lib/queries/files'
@@ -165,7 +166,7 @@ export function HtmlView({ path, version, className }: { path: string; version?:
           ) : q.isError ? (
             <FileInfoCard path={path} reason={t('viewer.htmlError')} />
           ) : (
-            <Skeleton className="absolute inset-4" />
+            <ProseSkeleton className="absolute inset-0" />
           )}
         </Sensitive>
       </div>

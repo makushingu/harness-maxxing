@@ -5,6 +5,14 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## Unreleased
+
+- Web, file viewer loaders: `features/files/skeletons.tsx` (`FileSkeleton({kind, preview})`: picture, PDF page,
+  prose, table, numbered code lines, media, card; `CodeSkeleton` / `ProseSkeleton` / `MediaSkeleton` moved there
+  from `viewers.tsx`), used by `Viewer.tsx` (probe and version pending), `FilePreview.tsx`, `pages/files/FileView.tsx`
+  and `HtmlView`. `.mx-file-wait` (`globals.css`): fades in after 120 ms, one `::after` band sweeps by transform
+  (`mx-sweep`); bones are `bg-muted-foreground/15` (visible in the dark theme).
+
 ## 2.0.0-alpha.148 - 2026-11-13
 
 - Copies, review before integration: a pull request from a fork or from outside the repository (`fork` / `outside`)

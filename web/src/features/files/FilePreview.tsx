@@ -15,7 +15,8 @@ import { useT } from '@/i18n'
 import { useIsMobile } from '@/stores/media'
 import { basename, iconFor, isRendered, isTextual, kindOf, type FileKind } from './kinds'
 import { ArchiveView, CsvView, FontView, HtmlView } from './rich'
-import { CodeSkeleton, FileInfoCard, ImageView, LazyCodeEditor, MediaView, PdfView, ProseSkeleton } from './viewers'
+import { FileInfoCard, ImageView, LazyCodeEditor, MediaView, PdfView } from './viewers'
+import { FileSkeleton } from './skeletons'
 import { MarkdownReader, TextZoomControl, ZoomBox, zoomsText } from './textZoom'
 import { useTextZoom } from './readPos'
 import { downloadProps } from './download'
@@ -117,7 +118,7 @@ export function PreviewBody({ path, kind, view = 'preview', content, version }: 
     case 'html':
       if (view === 'preview') return <HtmlView path={path} version={version ?? content.data?.mtime} />
   }
-  if (content.isPending) return kind === 'markdown' && view === 'preview' ? <ProseSkeleton /> : <CodeSkeleton />
+  if (content.isPending) return <FileSkeleton kind={kind} preview={view === 'preview'} />
   if (content.isError) return <ReadError path={path} error={content.error} onRetry={() => content.refetch()} />
   const data = content.data!
   if (kind === 'csv' && view === 'preview') return <CsvView content={data.content} name={basename(path)} />

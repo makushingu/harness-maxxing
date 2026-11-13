@@ -37,7 +37,8 @@ import { openFileViewer, useFileViewer } from '@/features/files/viewerStore'
 
 /** From the Files page the viewer opens fullscreen (the page is the panel already). */
 const viewerFullscreen = () => useFileViewer.getState().setFull(true)
-import { CodeSkeleton, FileInfoCard, ImageView, LazyCodeEditor, MediaView, PdfView, ProseSkeleton } from '@/features/files/viewers'
+import { FileInfoCard, ImageView, LazyCodeEditor, MediaView, PdfView } from '@/features/files/viewers'
+import { FileSkeleton } from '@/features/files/skeletons'
 import { ReadError } from '@/features/files/FilePreview'
 import { MarkdownReader, TextZoomControl, ZoomBox, zoomsText } from '@/features/files/textZoom'
 import { useTextZoom } from '@/features/files/readPos'
@@ -259,7 +260,7 @@ export function FileView({ path, siblings, actions, entry }: { path: string; sib
   else if (kind === 'other') body = <FileInfoCard path={path} size={size} reason={t('files.binaryHint')} />
   else if (content.isError && !base) body = <ReadError path={path} error={content.error} onRetry={() => content.refetch()} />
   else if (kind === 'html' && effMode === 'preview' && !dirty) body = <HtmlView path={path} version={base?.mtime ?? entry?.mtime} />
-  else if (!base) body = kind === 'markdown' && mode === 'preview' ? <ProseSkeleton /> : <CodeSkeleton />
+  else if (!base) body = <FileSkeleton kind={kind} preview={mode === 'preview'} />
   else if (presentation) body = <Sensitive block className="m-4" length={12}>{null}</Sensitive>
   else if (rendered) {
     const preview =

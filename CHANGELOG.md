@@ -3,6 +3,14 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## Unreleased
+
+Changed:
+- **Files: the preview loads in the shape of the file.** While a file opens (a path clicked in a conversation, the
+  Files page), the viewer no longer shows the same grey bars for everything: a picture frame for an image, a page for
+  a PDF, a page of text for Markdown, a table for a CSV, numbered lines for code, a player for a video or a sound, a
+  card for the rest. A light band sweeps over it, and a file that opens at once no longer flashes a loader.
+
 ## 2.0.0-alpha.148 - 2026-11-13
 
 New:

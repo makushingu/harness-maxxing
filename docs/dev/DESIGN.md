@@ -155,6 +155,7 @@ domain components reused by onboarding **and** settings: `ClaudeConnect`, `Claud
 | Situation | Do |
 |---|---|
 | First load of a page / card | **Skeleton with the final footprint** (same height as the content). Never a centered spinner, never an empty flash. |
+| A file opening in the viewer | `FileSkeleton` (`features/files/skeletons.tsx`): the shape of that kind of file, shown after 120 ms with one sweeping band (`.mx-file-wait`). |
 | Refreshing data already shown | keep the old data visible (React Query does it), optional small spinner in the trigger, `opacity-60` on the card. |
 | Lazy route chunk loading | nothing to do: the router keeps the previous page and shows the 2 px top progress bar after 120 ms. |
 | Empty list | `EmptyState` with an icon, one sentence and a call to action. |

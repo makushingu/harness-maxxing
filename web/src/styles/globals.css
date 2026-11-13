@@ -495,6 +495,17 @@ html[data-compact] .mx-sheet[data-state='closed'] { animation: mx-sheet-down 180
 .mx-future-bubble { animation: mx-future-bubble 2.2s steps(11, end) infinite; }
 @keyframes mx-future-bubble { 0% { transform: translateY(0); opacity: 1; } 99% { transform: translateY(-14px); opacity: 0.6; } 100% { transform: translateY(0); opacity: 1; } }
 
+/* File viewer loaders (features/files/skeletons.tsx): the shape of the file shows after 120 ms (a file that comes at
+   once never flashes), then one light band sweeps over all of it - a transform, every 1.6 s - instead of each bar
+   pulsing on its own. The reduced-motion rule below leaves the shape still. */
+.mx-file-wait { position: relative; overflow: hidden; animation: mx-fade 240ms ease-out 120ms both; }
+.mx-file-wait::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none; transform: translateX(-100%);
+  background: linear-gradient(100deg, transparent 20%, color-mix(in oklch, var(--background) 55%, transparent) 50%, transparent 80%);
+  animation: mx-sweep 1.6s ease-in-out 360ms infinite;
+}
+@keyframes mx-sweep { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

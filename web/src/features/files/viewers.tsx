@@ -4,7 +4,7 @@ import * as React from 'react'
 import { useNavigate } from 'react-router'
 import { ChevronLeft, ChevronRight, Download, ExternalLink, FileWarning, Maximize, Minus, Plus, type LucideIcon } from 'lucide-react'
 import type { Components } from 'react-markdown'
-import { Button, Sensitive, Skeleton, Spinner, Tooltip } from '@/components/ui'
+import { Button, Sensitive, Spinner, Tooltip } from '@/components/ui'
 import { fileRawUrl, filePreviewUrl, fileThumbUrl, PREVIEW_W } from '@/lib/queries/files'
 import { fmtBytes } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -16,35 +16,10 @@ import { basename, CONVERTED_IMAGE, dirname, extOf, resolvePath } from './kinds'
 import type { CodeEditorProps } from './CodeEditor'
 import { MediaPlayer } from './MediaPlayer'
 import { downloadProps, inIosApp, openRawProps } from './download'
+import { CodeSkeleton, ProseSkeleton } from './skeletons'
 
 const CodeEditorChunk = React.lazy(() => import('./CodeEditor'))
 const MarkdownChunk = React.lazy(() => import('@/components/ui/markdown').then((m) => ({ default: m.Markdown })))
-
-/* ------------------------------------------------------------------ skeletons */
-export function CodeSkeleton({ className }: { className?: string }) {
-  return (
-    <div className={cn('grid content-start gap-2.5 p-4 pl-12', className)} aria-hidden>
-      {[72, 55, 88, 40, 64, 80, 30, 58, 76, 46].map((w, i) => (
-        <Skeleton key={i} className="h-3" style={{ width: `${w}%` }} />
-      ))}
-    </div>
-  )
-}
-
-export function ProseSkeleton({ className }: { className?: string }) {
-  return (
-    <div className={cn('mx-auto grid w-full max-w-3xl content-start gap-4 p-6', className)} aria-hidden>
-      <Skeleton className="h-7 w-1/2" />
-      {[92, 86, 70].map((w, i) => (
-        <Skeleton key={i} className="h-3.5" style={{ width: `${w}%` }} />
-      ))}
-      <Skeleton className="mt-3 h-5 w-1/3" />
-      {[88, 64].map((w, i) => (
-        <Skeleton key={i} className="h-3.5" style={{ width: `${w}%` }} />
-      ))}
-    </div>
-  )
-}
 
 /** CodeMirror, loaded on demand. Fills its parent (give the parent a height). */
 export function LazyCodeEditor(props: CodeEditorProps) {
@@ -689,19 +664,6 @@ export function MediaView({ path, kind, version, className }: { path: string; ki
   )
 }
 
-/** While the file's version is asked (a moment): the black box of a video, the card of an audio file - not lines of
- *  text that turn into a picture. */
-export function MediaSkeleton({ kind }: { kind: 'video' | 'audio' }) {
-  return (
-    <div className="flex min-h-40 flex-1 items-center justify-center p-4 [container-type:size] md:p-6" aria-hidden data-testid="media-skeleton">
-      {kind === 'video' ? (
-        <div className="rounded-xl bg-black shadow-pop" style={{ width: 'min(48rem, 100cqw, calc(100cqh * 16 / 9))', aspectRatio: '16 / 9' }} />
-      ) : (
-        <Skeleton className="h-28 w-full max-w-lg rounded-xl" />
-      )}
-    </div>
-  )
-}
 
 export function PdfView({ path, className }: { path: string; className?: string }) {
   const t = useT()
