@@ -738,6 +738,19 @@ class Pool:
         await asyncio.to_thread(replays.forget, pid)
         self._changed()
 
+    async def thumb(self, pid: str, path: str = "", width: int = 480) -> bytes | None:
+        """A small picture for a card (the agent's panel): the tab this folder used last, else the one shown. Only
+        while the profile runs (never starts it)."""
+        b = self.get(pid)
+        if not b or not b.watcher:
+            return None
+        tid = None
+        if path:
+            mine_ = [t for t in b.tabs.awake() if (t.get("by") or {}).get("path") == path]
+            if mine_:
+                tid = max(mine_, key=lambda t: t.get("used") or 0)["target"]
+        return await b.watcher.picture(quality=55, width=max(160, min(960, width)), tid=tid)
+
     # ---- what the UI shows -----------------------------------------------------------------------------------
     def public(self, pid: str) -> dict:
         """One profile: its state, tabs, who has the hand, its turns, memory, traffic."""

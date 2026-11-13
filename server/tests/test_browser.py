@@ -1085,3 +1085,11 @@ def test_an_agent_has_its_own_browser_or_shares_one_and_never_falls_back_to_main
     assert browser.resolve(A)["profile"] == "main"
     agents.update(A, {"browser": {"profile": "own"}})
     assert browser.resolve(A)["profile"] == "writer" and browser.active_for(A)[1]["id"] == "writer"
+
+
+def test_a_profile_picture_is_empty_while_it_sleeps(client, mx):
+    """The agent panel's card never starts a browser to draw it."""
+    client.put("/api/settings", json={"browser_feature": True})
+    assert client.get("/api/browser/profiles/main/picture").status_code == 204
+    assert client.get("/api/browser/profiles/nope/picture").status_code == 404
+    assert client.post("/api/browser/profiles/main/files", files={"files": ("a.txt", b"x")}).status_code == 409

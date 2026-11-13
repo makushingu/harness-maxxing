@@ -39,7 +39,7 @@ import time
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, WebSocket
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 from starlette.websockets import WebSocketDisconnect
 
@@ -264,6 +264,16 @@ async def new_tab(pid: str, body: TabIn) -> dict:
     except browser.BrowserError as e:
         raise _err(e) from None
     return p.public(pid)
+
+
+@router.get("/profiles/{pid}/picture", dependencies=AUTH)
+async def picture(pid: str, path: str = "", w: int = 480) -> Response:
+    """A small JPEG of the profile's tab (the one `path` used last, else the one shown); 204 while it is not running."""
+    _profile(pid)
+    data = await pool_mod.pool().thumb(pid, path.strip("/"), w)
+    if not data:
+        return Response(status_code=204)
+    return Response(data, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
 
 
 @router.post("/profiles/{pid}/files", dependencies=AUTH)
