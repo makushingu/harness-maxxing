@@ -1,10 +1,12 @@
-"""The tabs of the Harness Browser and their scopes, kept in <state>/browser/tabs.json.
+"""The tabs of one profile of the Harness Browser, kept in <state>/browser/tabs/<profile>.json.
 
-    {"tabs": [{key, url, title, scope, by: {kind: you|session|agent, sid?, name?, path?}, at, used, asleep}]}
+    {"tabs": [{key, url, title, by: {kind: you|session|agent, sid?, name?, path?}, at, used, asleep}]}
 
+Every turn of the profile sees all its tabs; `by` says who opened one (the tools mark it "yours" for that turn).
 `key` is ours and stays the same while a tab sleeps and wakes; `target` (Chromium's id) is only known while the tab is
-awake (not saved). A page Chromium opens gets its scope the first time anyone sees it (`resolve`): the scope of the
-tab that opened it (a popup), else the oldest claim waiting (a turn or a person just asked for a new tab), else `me`.
+awake (not saved). A page Chromium opens learns who opened it the first time anyone sees it (`resolve`): the opener
+of the tab that opened it (a popup), else the oldest claim waiting (a turn or a person just asked for a new tab), else
+the person.
 """
 from __future__ import annotations
 
@@ -20,10 +22,11 @@ URL_MAX = 2000
 
 
 class Tabs:
-    def __init__(self) -> None:
+    def __init__(self, pid: str = browser.MAIN) -> None:
+        self.pid = pid
         self.items: dict[str, dict] = {}
         self.by_target: dict[str, str] = {}
-        self.claims: list[dict] = []           # {scope, by, key?, at}
+        self.claims: list[dict] = []           # {by, key?, at}
         self.dirty = False
 
     # ---- loading / saving --------------------------------------------------------------------------------------
@@ -32,12 +35,15 @@ class Tabs:
         self.items, self.by_target, self.claims = {}, {}, []
         try:
             import json
-            d = json.loads((browser.home() / "tabs.json").read_text())
+            d = json.loads(self.file().read_text())
         except (OSError, ValueError):
             return
         for t in (d.get("tabs") or [])[-MAX_ASLEEP:] if isinstance(d, dict) else []:
             if isinstance(t, dict) and t.get("key") and str(t.get("url") or "").startswith(("http://", "https://")):
                 self.items[str(t["key"])] = {**_clean(t), "asleep": True, "target": None}
+
+    def file(self):
+        return browser.tabs_dir() / f"{self.pid}.json"
 
     def save(self) -> None:
         if not self.dirty:
@@ -46,8 +52,8 @@ class Tabs:
         keep = [{k: v for k, v in t.items() if k != "target"} for t in self.ordered()
                 if str(t.get("url") or "").startswith(("http://", "https://"))]
         try:
-            browser.home().mkdir(parents=True, exist_ok=True)
-            config.write_json(browser.home() / "tabs.json", {"tabs": keep[-MAX_ASLEEP:]})
+            browser.tabs_dir().mkdir(parents=True, exist_ok=True)
+            config.write_json(self.file(), {"tabs": keep[-MAX_ASLEEP:]})
         except OSError:
             pass
 
@@ -59,10 +65,6 @@ class Tabs:
         k = self.by_target.get(target or "")
         return self.items.get(k) if k else None
 
-    def scope_of(self, target: str) -> str | None:
-        t = self.of_target(target)
-        return t["scope"] if t else None
-
     def awake(self) -> list[dict]:
         return [t for t in self.ordered() if t.get("target")]
 
@@ -70,14 +72,13 @@ class Tabs:
         return [t for t in self.ordered() if not t.get("target")]
 
     # ---- new pages ---------------------------------------------------------------------------------------------
-    def claim(self, scope: str, by: dict, key: str | None = None) -> None:
-        """Someone is about to open a page (a turn's new tab, a person's, a tab woken up): it gets this scope."""
+    def claim(self, by: dict, key: str | None = None) -> None:
+        """Someone is about to open a page (a turn's new tab, a person's, a tab woken up): it is theirs."""
         now = time.time()
-        self.claims = [c for c in self.claims if now - c["at"] < CLAIM_S] + [
-            {"scope": scope, "by": by, "key": key, "at": now}]
+        self.claims = [c for c in self.claims if now - c["at"] < CLAIM_S] + [{"by": by, "key": key, "at": now}]
 
     def resolve(self, info: dict) -> dict | None:
-        """The tab of a page Chromium tells about (targetInfo); a page seen for the first time gets its scope here."""
+        """The tab of a page Chromium tells about (targetInfo); a page seen for the first time learns its opener here."""
         if info.get("type") != "page" or str(info.get("url") or "").startswith(INTERNAL):
             return None
         target = str(info.get("targetId") or "")
@@ -96,15 +97,9 @@ class Tabs:
             t = self.items[claim["key"]]
             t.update(target=target, asleep=False, used=now)
         else:
-            if opener:
-                scope, by = opener["scope"], opener["by"]
-            elif claim:
-                scope, by = claim["scope"], claim["by"]
-            else:
-                scope, by = browser.ME, {"kind": "you"}
+            by = opener["by"] if opener else claim["by"] if claim else {"kind": "you"}
             t = {"key": secrets.token_hex(5), "target": target, "url": str(info.get("url") or "")[:URL_MAX],
-                 "title": str(info.get("title") or "")[:200], "scope": scope, "by": by, "at": now, "used": now,
-                 "asleep": False}
+                 "title": str(info.get("title") or "")[:200], "by": by, "at": now, "used": now, "asleep": False}
             self.items[t["key"]] = t
         self.by_target[target] = t["key"]
         self.dirty = True
@@ -146,39 +141,27 @@ class Tabs:
         if t:
             t["used"] = time.time()
 
-    def set_scope(self, key: str, scope: str) -> dict | None:
-        t = self.items.get(key)
-        if not t:
-            return None
-        if t["scope"] != scope:
-            t["scope"] = scope
-            if scope == browser.ME:
-                t["by"] = {"kind": "you"}
-            self.dirty = True
-        return t
-
     def drop(self, key: str) -> None:
         t = self.items.pop(key, None)
         if t and t.get("target"):
             self.by_target.pop(t["target"], None)
         self.dirty = True
 
-    def visible_to(self, path: str) -> list[dict]:
-        return [t for t in self.ordered() if browser.visible(t["scope"], path)]
-
 
 def _clean(t: dict) -> dict:
     by = t.get("by") if isinstance(t.get("by"), dict) else {"kind": "you"}
-    scope = str(t.get("scope") or browser.ME)
-    if scope.startswith("agent:") and not browser.clean_scope(scope):     # its agent is gone: the user's again
-        scope = browser.ME
     return {"key": str(t["key"])[:20], "url": str(t.get("url") or "")[:URL_MAX], "title": str(t.get("title") or "")[:200],
-            "scope": scope, "by": {k: str(v)[:200] for k, v in by.items() if k in ("kind", "sid", "name", "path")},
+            "by": {k: str(v)[:200] for k, v in by.items() if k in ("kind", "sid", "name", "path")},
             "at": float(t.get("at") or time.time()), "used": float(t.get("used") or time.time())}
+
+
+def mine(t: dict, sid: str, path: str) -> bool:
+    """Did this turn open it (a session: this one; an agent: any of its runs)?"""
+    by = t.get("by") or {}
+    return by.get("sid") == sid or (by.get("kind") == "agent" and bool(path) and by.get("path") == path)
 
 
 def public(t: dict, front: str | None = None) -> dict:
     from .live import rules_page
-    return {"key": t["key"], "url": rules_page(t["url"]), "title": t["title"][:120], "scope": t["scope"],
-            "by": t["by"], "asleep": not t.get("target"), "front": bool(front and t.get("target") == front),
-            "used": t["used"]}
+    return {"key": t["key"], "url": rules_page(t["url"]), "title": t["title"][:120], "by": t["by"],
+            "asleep": not t.get("target"), "front": bool(front and t.get("target") == front), "used": t["used"]}

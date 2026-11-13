@@ -1,9 +1,9 @@
 """The browser of a turn: its token file and its MCP config (written by the runner, so: no heavy imports here).
 
-    <state>/browser/turns/<session>.json    {owner, token, at}   (0600; removed when the turn ends)
+    <state>/browser/turns/<session>.json    {owner, profile, token, at}   (0600; removed when the turn ends)
     <state>/browser/turns/<session>.mcp.json                     (the --mcp-config of the turn, 0600)
 
-The server trusts the owner of that file, never one sent by the turn (POST /api/browser/mcp/<session>, Bearer token).
+The server trusts the owner and the profile of that file, never ones sent by the turn (POST /api/browser/mcp/<session>, Bearer token).
 """
 from __future__ import annotations
 
@@ -26,10 +26,11 @@ def turn_file(sid: str) -> Path:
     return browser.turns_dir() / f"{sid}.json"
 
 
-def write_turn(sid: str, owner: str) -> str:
+def write_turn(sid: str, owner: str, profile: str = browser.MAIN) -> str:
     token = secrets.token_urlsafe(32)
     browser.turns_dir().mkdir(parents=True, exist_ok=True, mode=0o700)
-    config.write_json(turn_file(sid), {"owner": owner, "token": token, "at": time.time()}, mode=0o600)
+    config.write_json(turn_file(sid), {"owner": owner, "profile": profile, "token": token, "at": time.time()},
+                      mode=0o600)
     return token
 
 
@@ -83,13 +84,14 @@ def clear_turns() -> None:
             f.unlink(missing_ok=True)
 
 
-def mcp_args(sid: str, owner: str, settings: dict) -> list[str]:
+def mcp_args(sid: str, owner: str, profile: str, settings: dict) -> list[str]:
     """`--mcp-config <file>` giving the turn the browser tools + ask_human (browser_mcp.py, stdio)."""
     from .. import browser_mcp, pcbridge
-    token = write_turn(sid, owner)
+    token = write_turn(sid, owner, profile)
     wait = int(settings.get("wait_min") or 30) * 60 if settings.get("ask", True) else 0
     env = {"MAXXING_BROWSER_URL": f"http://{pcbridge.local_host()}:{pcbridge.local_port()}/api/browser/mcp/{sid}",
            "MAXXING_BROWSER_TOKEN": token, "MAXXING_SESSION": sid, "MAXXING_BROWSER_OWNER": owner,
+           "MAXXING_BROWSER_PROFILE": profile,
            "MAXXING_BROWSER_ASKS": str(browser.asks_dir()) if settings.get("ask", True) else "",
            "MAXXING_BROWSER_WAIT": str(wait)}
     spec = {"type": "stdio", "command": sys.executable,

@@ -1295,10 +1295,10 @@ def workspace_allowed(path: str) -> list[str]:
 
 
 BROWSER_NOTE = ("The Harness Browser is available (mcp__maxxing-browser__* tools) for pages that need JavaScript, a "
-                "sign-in or clicks. Read pages with WebFetch, curl or an API first: they are faster and cheaper. It is "
-                "shared with the user (their sign-ins): you see only the tabs of this topic and project; open your "
-                "own with new_page and leave the user's tabs as they are. When a page needs the user (a captcha, a "
-                "sign-in, a code), call ask_human.")
+                "sign-in or clicks. Read pages with WebFetch, curl or an API first: they are faster and cheaper. It "
+                "is a profile shared with the user (their sign-ins) and maybe other sessions: open your own tabs with "
+                "new_page and leave the others as they are. When a page needs the user (a captcha, a sign-in, a "
+                "code), call ask_human. If the browser says its exit is offline, stop using it and say so.")
 
 
 def browser_args(sid: str, path: str, agent: dict) -> list[str]:
@@ -1311,7 +1311,7 @@ def browser_args(sid: str, path: str, agent: dict) -> list[str]:
         if not on:
             return []
         from maxxing.browser import turns
-        args = turns.mcp_args(sid, on[0], on[1])
+        args = turns.mcp_args(sid, on[0], on[1]["id"], on[2])
     except Exception:  # noqa: BLE001 - a turn must never fail because of the browser
         return []
     if agent.get("approvals_forced"):

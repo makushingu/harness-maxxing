@@ -2,7 +2,7 @@
 
 Every command going to the browser passes `rules.check_command` (rules.json) and, when it opens a page, the allowed
 sites (`rules.page_refusal`): a refused one gets a DevTools error answer, the browser never sees it. A turn's tools
-also pass through a view (view.py: only the tabs of its topic / project).
+are followed by a view (view.py: which tab each command is on), and wait while the person has that tab.
 """
 from __future__ import annotations
 
@@ -34,14 +34,6 @@ def filter_command(raw: str | bytes, sites: list[str] | None) -> tuple[str | Non
     return (raw.decode() if isinstance(raw, bytes) else raw), None
 
 
-def _debug(way: str, m: dict, passed: bool) -> None:
-    import os
-    f = os.environ.get("MAXXING_BROWSER_DEBUG")
-    if f:
-        with open(f, "a") as fh:
-            fh.write(f"{way} {'PASS' if passed else 'DROP'} {json.dumps(m)[:400]}\n")
-
-
 async def connect(sock: Path, path: str):
     return await unix_connect(str(sock), "ws://localhost" + path, max_size=MAX_FRAME, ping_interval=None,
                               open_timeout=10)
@@ -54,26 +46,18 @@ async def pump(sock: Path, path: str, sites: Callable[[], list[str] | None],
     turn's tools may see; wait_tab(targetId): waits while the person has that tab, returns why it gave up (or None)."""
     up = await connect(sock, path)
 
-    async def flush() -> None:
-        while view is not None and view.extra:
-            await up.send(view.extra.pop(0))
-
     async def down() -> None:
         try:
             async for msg in up:
                 text = msg if isinstance(msg, str) else msg.decode()
-                if view is None:
-                    await send(text)
-                    continue
-                try:
-                    m = json.loads(text)
-                except ValueError:
-                    continue
-                out = await view.message(m) if isinstance(m, dict) else None
-                _debug("down", m, out is not None)
-                await flush()
-                if out is not None:
-                    await send(text if out is m else json.dumps(out))
+                if view is not None:
+                    try:
+                        m = json.loads(text)
+                    except ValueError:
+                        m = None
+                    if isinstance(m, dict):
+                        view.message(m)
+                await send(text)
         except ConnectionClosed:
             pass
 
@@ -88,10 +72,11 @@ async def pump(sock: Path, path: str, sites: Callable[[], list[str] | None],
                     cmd = json.loads(fwd)
                 except ValueError:
                     cmd = {}
-                why = view.command(cmd) if isinstance(cmd, dict) else "not a DevTools command"
-                _debug("up", cmd, why is None)
+                why = None if isinstance(cmd, dict) else "not a DevTools command"
+                if why is None:
+                    view.command(cmd)
                 if why is None and wait_tab is not None and cmd.get("sessionId"):
-                    target = view.sessions.get(str(cmd["sessionId"]))
+                    target = view.page(str(cmd["sessionId"]))
                     if target:
                         why = await wait_tab(target)
                 if why is not None:

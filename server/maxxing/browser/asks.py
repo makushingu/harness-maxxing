@@ -52,7 +52,7 @@ def _all() -> list[dict]:
 
 
 def public(d: dict) -> dict:
-    return {k: d.get(k) for k in ("id", "session", "owner", "reason", "what", "at", "expires", "status", "note",
+    return {k: d.get(k) for k in ("id", "session", "owner", "profile", "reason", "what", "at", "expires", "status", "note",
                                   "decided_at", "decided_by")}
 
 
@@ -63,6 +63,10 @@ def pending(owner: str | None = None, session: str | None = None) -> list[dict]:
 
 def pending_for(owner: str) -> bool:
     return any(d.get("owner") == owner and d.get("status") == "pending" for d in _all())
+
+
+def pending_for_profile(pid: str) -> bool:
+    return any((d.get("profile") or browser.MAIN) == pid and d.get("status") == "pending" for d in _all())
 
 
 def pending_for_any() -> bool:

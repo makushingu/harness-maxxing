@@ -4,6 +4,11 @@ registry (tabs.py: scopes).
 
 One DevTools connection for the browser (our own, through `relay.Cdp`: the same command rules). Pictures are only
 produced while someone watches (and the picture given to Claude with a hand-back).
+
+Smoothness: Chromium makes the next picture only once the last one is acknowledged, and we acknowledge it only when
+every viewer got it (`delivered`, or ACK_LATE at worst): pictures never pile up on a slow connection, the screen shows
+the newest page. The JPEG quality follows the time a picture takes to reach the slowest viewer ("auto"), between
+Q_MIN and Q_MAX; pictures are never larger than the viewer's own size.
 """
 from __future__ import annotations
 
@@ -20,7 +25,11 @@ from .relay import Cdp
 
 log = logging.getLogger("maxxing.browser")
 
-QUALITY = {"high": (60, 1920, 1200), "low": (45, 960, 960)}   # JPEG quality, largest picture
+QUALITY = {"auto": (60, 1920, 1200), "high": (70, 1920, 1200), "low": (40, 960, 960)}   # JPEG quality, largest picture
+Q_MIN, Q_MAX, Q_STEP = 30, 70, 10
+SLOW_S, FAST_S = 0.25, 0.08          # a picture's way to the slowest viewer: above -> lower quality, below -> higher
+ADAPT_EVERY = 3.0                    # at most one quality change this often (each one restarts the screencast)
+ACK_LATE = 1.0                       # a viewer that does not confirm a picture holds the others at most this long
 SIZE = (1280, 800)                  # the pages' size when nobody watches (Claude's)
 MIN_SIZE, MAX_SIZE = (360, 320), (2560, 1600)
 INTERNAL = ("chrome://", "chrome-untrusted://", "devtools://", "chrome-extension://")   # Chromium's own UI pages
@@ -52,6 +61,14 @@ class Watcher:
         self.size: tuple[int, int] = SIZE           # the pages' size: the live view's while someone watches
         self.sized: dict[int, tuple[int, int]] = {}   # windowId -> the size it was given
         self.extra: tuple[int, int] = (0, 0)          # window size - page size (headless still counts a toolbar)
+        self.unacked: tuple[str, object] | None = None   # (DevTools session, frame id) of the picture in flight
+        self.waiting: set[int] = set()                # viewers that did not confirm the last picture yet
+        self._late: asyncio.TimerHandle | None = None
+        self.q = QUALITY["auto"][0]                   # the quality now ("auto" moves it)
+        self.trip: dict[int, float] = {}              # viewer -> smoothed time a picture takes to reach it
+        self.adapted = time.monotonic()
+        self.frames = 0                               # pictures made (stats)
+        self.frame_bytes = 0
 
     async def start(self) -> None:
         self.cdp = await Cdp.open(self.sock, self.path, self._event)
@@ -169,8 +186,12 @@ class Watcher:
 
     # ---- screencast ------------------------------------------------------------------------------------------
     def _want(self) -> tuple[int, int, int]:
-        low = any(q == "low" for q in self.quality.values())
-        return QUALITY["low" if low else "high"]
+        modes = set(self.quality.values())
+        mode = "low" if "low" in modes else "auto" if "auto" in modes else "high"
+        q, w, h = QUALITY[mode]
+        if mode == "auto":
+            q = self.q
+        return q, min(w, self.size[0]), min(h, self.size[1])
 
     async def _cast(self) -> None:
         if not self.cdp:
@@ -196,23 +217,65 @@ class Watcher:
                 log.info("screencast: %s", e)
 
     async def _frame(self, session: str | None, p: dict) -> None:
-        if self.cdp and session:
-            await self.cdp.send_nowait("Page.screencastFrameAck", {"sessionId": p.get("sessionId")}, session)
-        if self.sessions.get(self.casting or "") != session:
+        if self.sessions.get(self.casting or "") != session or not self.viewers:
+            if self.cdp and session:
+                await self.cdp.send_nowait("Page.screencastFrameAck", {"sessionId": p.get("sessionId")}, session)
             return
+        await self._ack()                           # an older one still waiting (a viewer that left)
         self.meta = p.get("metadata") or {}
         self._learn(self.meta)
         self.frame = base64.b64decode(p.get("data") or "")
         self.frame_at = time.time()
+        self.frames += 1
+        self.frame_bytes += len(self.frame)
+        self.unacked = (str(session), p.get("sessionId"))
+        self.waiting = set(self.viewers)
+        self._late = asyncio.get_running_loop().call_later(ACK_LATE, lambda: asyncio.ensure_future(self._ack()))
         for send in list(self.viewers.values()):
             try:
                 await send(self.frame)
             except Exception:  # noqa: BLE001
                 pass
 
-    async def watch(self, vid: int, send: Callable[[Any], Any], quality: str = "high") -> None:
+    async def _ack(self) -> None:
+        """Let Chromium make the next picture."""
+        if self._late is not None:
+            self._late.cancel()
+            self._late = None
+        ack, self.unacked = self.unacked, None
+        self.waiting = set()
+        if ack and self.cdp:
+            with contextlib.suppress(Exception):
+                await self.cdp.send_nowait("Page.screencastFrameAck", {"sessionId": ack[1]}, ack[0])
+
+    def delivered(self, vid: int, size: int, secs: float) -> None:
+        """A viewer got the last picture (its page confirmed it, `secs` after it was sent)."""
+        old = self.trip.get(vid)
+        self.trip[vid] = secs if old is None else old * 0.7 + secs * 0.3
+        self.waiting.discard(vid)
+        if self.unacked and not self.waiting:
+            asyncio.ensure_future(self._ack())
+        self._adapt()
+
+    def _adapt(self) -> None:
+        """"auto": lower the quality while pictures are slow to arrive, raise it back when they are fast."""
+        if "auto" not in self.quality.values() or not self.trip or time.monotonic() - self.adapted < ADAPT_EVERY:
+            return
+        slow = max(self.trip.values())
+        q = self.q - Q_STEP if slow > SLOW_S else self.q + Q_STEP // 2 if slow < FAST_S else self.q
+        q = max(Q_MIN, min(Q_MAX, q))
+        if q != self.q:
+            self.q = q
+            self.adapted = time.monotonic()
+            asyncio.ensure_future(self._restart_cast())
+
+    def stats(self) -> dict:
+        return {"q": self.q, "frames": self.frames, "avg_kb": round(self.frame_bytes / self.frames / 1024, 1)
+                if self.frames else 0, "trip_ms": int(max(self.trip.values()) * 1000) if self.trip else None}
+
+    async def watch(self, vid: int, send: Callable[[Any], Any], quality: str = "auto") -> None:
         self.viewers[vid] = send
-        self.quality[vid] = quality if quality in QUALITY else "high"
+        self.quality[vid] = quality if quality in QUALITY else "auto"
         await self._restart_cast()
         if self.frame:
             await send(self.frame)
@@ -221,6 +284,10 @@ class Watcher:
     async def unwatch(self, vid: int) -> None:
         self.viewers.pop(vid, None)
         self.quality.pop(vid, None)
+        self.trip.pop(vid, None)
+        self.waiting.discard(vid)
+        if self.unacked and not self.waiting:
+            await self._ack()
         if not self.viewers and self.size != SIZE:      # back to Claude's size
             self.size = SIZE
             if self.front:
@@ -228,8 +295,9 @@ class Watcher:
                     await self._fit(self.front)
         await self._restart_cast()
 
-    async def resize(self, w: object, h: object) -> None:
-        """The live view's size (CSS pixels): the page in front is laid out for it, like a browser window."""
+    async def resize(self, w: object, h: object, dpr: object = None) -> None:
+        """The live view's size (CSS pixels): the page in front is laid out for it, like a browser window (and its
+        pictures are never larger)."""
         try:
             size = (max(MIN_SIZE[0], min(MAX_SIZE[0], int(w))), max(MIN_SIZE[1], min(MAX_SIZE[1], int(h))))
         except (TypeError, ValueError):
@@ -239,6 +307,8 @@ class Watcher:
         self.size = size
         if self.front:
             await self._fit(self.front)
+        if self.viewers:
+            await self._restart_cast()
 
     async def _fit(self, tid: str) -> None:
         """Give the window of this page the current size (headless: the window is the page)."""
@@ -269,11 +339,13 @@ class Watcher:
             await self._fit(tid)
 
     async def set_quality(self, vid: int, quality: str) -> None:
+        """auto (default) | high | low (a phone on a slow network)."""
         if vid in self.viewers and quality in QUALITY:
             self.quality[vid] = quality
             await self._restart_cast()
 
     async def _restart_cast(self) -> None:
+        await self._ack()
         async with self._lock:
             if self.casting and self.cdp:
                 s = self.sessions.get(self.casting)

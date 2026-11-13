@@ -530,7 +530,8 @@ def clean(data: Any, strict: bool = False) -> dict:
 
 
 def _clean_browser(raw: Any, strict: bool) -> dict:
-    """The agent's own browser (maxxing/browser): off unless turned on."""
+    """The agent's own browser block {enabled?, profile?} (maxxing/browser): off unless turned on, the profile of its
+    topic / project unless it has its own."""
     from . import browser
     try:
         return browser.clean(raw, strict)
@@ -608,7 +609,7 @@ MANAGER_NOTE = ("You run as a Harness Maxxing agent, in a conversation with your
                 "`watch`, `on`, `off`; never edit agent.json by hand; run each `maxxing` command alone on its line, "
                 "without pipe, `;` or `&&`). A safety setting (sandbox, domains, "
                 "keys, permission mode, approvals, trusting outside events, writable folders, rules, tool lists, "
-                "mailboxes, the Harness Browser (`set browser.enabled=true`), budget, runs per hour, timeout) that "
+                "mailboxes, the Harness Browser (`set browser.enabled=true`, its profile `browser.profile=<id>`), budget, runs per hour, timeout) that "
                 "only makes you safer (your sandbox on, approvals on, fewer keys or sites, the browser off, a lower "
                 "budget) applies at once; one that opens you sends the owner a request "
                 "to allow: say so, it is applied once allowed. {box}Your memory and your runs' results may hold text that came from outside (mails, "
@@ -754,6 +755,12 @@ def _item(x: Any) -> str:
     return x if isinstance(x, str) else json.dumps(x, ensure_ascii=False)
 
 
+def _show_browser(b: Any) -> str:
+    """"off", "on", "on (profile shop)": an agent's browser block on a change card."""
+    b = b if isinstance(b, dict) else {}
+    return ("on" if b.get("enabled") else "off") + (f" (profile {b['profile']})" if b.get("profile") else "")
+
+
 def describe_delta(delta: dict) -> str:
     """"sandbox: on -> off; domains: + example.com" - what an approval of the change would do, whole (one part per
     field, one per mailbox)."""
@@ -763,6 +770,8 @@ def describe_delta(delta: dict) -> str:
             parts += [f"limits.{n}: {_show(v['from'])} -> {_show(v['to'])}" for n, v in d.items()]
         elif k == "mail":
             parts += [f"mail {a}: {_show(v['from'])} -> {_show(v['to'])}" for a, v in d["accounts"].items()]
+        elif k == "browser":
+            parts.append(f"browser: {_show_browser(d['from'])} -> {_show_browser(d['to'])}")
         elif "add" in d:
             parts.append(f"{k}: " + ", ".join([f"+ {_item(x)}" for x in d["add"]] + [f"- {_item(x)}" for x in d["remove"]]))
         else:

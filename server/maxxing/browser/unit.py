@@ -186,7 +186,8 @@ def unit_prefix() -> str:
 
 
 def unit_name(slug: str) -> str:
-    return unit_prefix() + slug.rsplit("-", 1)[-1]
+    """The unit of a profile (slug = its id)."""
+    return unit_prefix() + slug
 
 
 def chrome_major(chrome: Path) -> str:
@@ -225,10 +226,8 @@ def _direct() -> bool:
     return os.environ.get("MAXXING_BROWSER_LAUNCH") == "direct"
 
 
-def prepare_dirs(profile: Path, run: Path, fresh: bool, downloads: Path | None) -> None:
+def prepare_dirs(profile: Path, run: Path, downloads: Path | None) -> None:
     ids = user_ids()
-    if fresh and profile.exists():
-        shutil.rmtree(profile, ignore_errors=True)
     for d, mode in ((profile, 0o700), (run, 0o750)):
         d.mkdir(parents=True, exist_ok=True)
         os.chmod(d, mode)
@@ -259,7 +258,7 @@ async def start(slug: str, profile: Path, run: Path, policy: dict, downloads: Pa
                                                     start_new_session=True)
     props = [f"User={USER}", f"Group={USER}", "PrivateNetwork=yes", "ProtectSystem=strict", "ProtectHome=yes",
              "PrivateTmp=yes", "PrivateIPC=yes", "NoNewPrivileges=yes", f"MemoryMax={MEMORY_MAX}", "TasksMax=512",
-             "Nice=5", "ProtectKernelTunables=yes", "ProtectKernelModules=yes", "ProtectControlGroups=yes",
+             "CPUWeight=30", "IOWeight=30", "ProtectKernelTunables=yes", "ProtectKernelModules=yes", "ProtectControlGroups=yes",
              "RestrictSUIDSGID=yes", "LockPersonality=yes", "UMask=0077",
              f"BindReadOnlyPaths={chrome.parent}:/opt/mxchrome", f"BindPaths={profile}:/mxprofile",
              f"BindPaths={run}:/mxrun", f"BindReadOnlyPaths={HOST_SH.resolve()}:/mxhost.sh",
@@ -268,7 +267,7 @@ async def start(slug: str, profile: Path, run: Path, policy: dict, downloads: Pa
     if downloads is not None:
         props.append(f"BindPaths={downloads}:/mxdownloads")
     cmd = ["systemd-run", "--quiet", "--collect", "--unit", unit_name(slug), "--description",
-           "Harness Maxxing: Harness Browser"]
+           f"Harness Maxxing: Harness Browser ({slug})"]
     for p in props:
         cmd += ["-p", p]
     cmd += ["/bin/sh", "/mxhost.sh", *args]
@@ -277,6 +276,22 @@ async def start(slug: str, profile: Path, run: Path, policy: dict, downloads: Pa
     if proc.returncode != 0:
         raise RuntimeError("the browser did not start: " + (err or b"").decode(errors="replace")[-300:].strip())
     return None
+
+
+LEVELS = {"live": 1000, "normal": 100, "background": 30}
+
+
+def set_level(slug: str, level: str, proc: asyncio.subprocess.Process | None = None) -> None:
+    """CPU / disk priority of a profile's unit (Settings -> System -> CPU priorities): `live` while someone watches it
+    or Claude acts in it, `background` while it waits. Weights only matter when the processor is full."""
+    if proc is not None or _direct() or not config.load_config().get("cpu_priorities", True):
+        return
+    w = LEVELS.get(level, 100)
+    try:
+        subprocess.run(["systemctl", "set-property", "--runtime", unit_name(slug), f"CPUWeight={w}", f"IOWeight={w}"],
+                       capture_output=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        pass
 
 
 async def http_get(sock: Path, path: str, timeout: float = 5.0) -> dict:

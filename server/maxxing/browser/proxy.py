@@ -5,6 +5,10 @@ Every host is resolved here and refused unless all its addresses are on the publ
 the address that was checked (no DNS rebinding). Names that point at a local network (localhost, *.local, nip.io...)
 and raw IP addresses are refused before any lookup. Which pages may be opened ("list" mode) is the Chromium policy's
 job: through this proxy pass the images, scripts and API calls of those pages, from any public site.
+
+A profile with an exit (exits.py) sends the connection to the checked address through it (`upstream`): the house's
+network behind a phone or a box is never reached, a name is never resolved there. An exit that is down gets a 502
+page and its state is marked down (the turn's tools wait for it, pool.py); never a fallback to this server's address.
 """
 from __future__ import annotations
 
@@ -16,7 +20,7 @@ import time
 from collections import deque
 from pathlib import Path
 
-from . import rules
+from . import exits, rules
 
 log = logging.getLogger("maxxing.browser")
 
@@ -24,12 +28,16 @@ HEAD_MAX = 64 * 1024
 CONNECT_TIMEOUT = 15.0
 IDLE_TIMEOUT = 300.0                  # a tunnel with no byte either way for this long is closed
 MAX_CONNECTIONS = 256
+EXIT_PAGE = "The exit of this browser profile is offline ({why}). Harness Maxxing waits for it: it never uses the server's address instead."
 BLOCK_PAGE = "Blocked by Harness Maxxing: {host} cannot be reached from this browser (not a public internet site)."
 
 
 class Proxy:
-    def __init__(self, sock: Path, gid: int | None = None) -> None:
+    def __init__(self, sock: Path, gid: int | None = None, upstream=None) -> None:
+        """upstream(): (exit id, exits.Upstream) of the profile now, (None, None) = straight from this server;
+        raises exits.ExitDown when its exit cannot carry traffic."""
         self.sock, self.gid = sock, gid
+        self.upstream = upstream
         self.server: asyncio.base_events.Server | None = None
         self.bytes_in = self.bytes_out = 0
         self.blocked: deque[tuple[float, str]] = deque(maxlen=20)
@@ -99,10 +107,17 @@ class Proxy:
         if ip is None:
             self.blocked.append((time.time(), host))
             return await _answer(w, 403, BLOCK_PAGE.format(host=host))
+        eid, up = None, None
         try:
-            ur, uw = await asyncio.wait_for(asyncio.open_connection(ip, port), CONNECT_TIMEOUT)
-        except (OSError, asyncio.TimeoutError):
-            return await _answer(w, 502, f"{host} did not answer")
+            if self.upstream is not None:
+                eid, up = await asyncio.to_thread(self.upstream)
+            ur, uw = await exits.open_via(up, ip, port, CONNECT_TIMEOUT)
+        except exits.ExitDown as e:
+            return await _answer(w, 502, EXIT_PAGE.format(why=e))
+        except (OSError, ConnectionError, asyncio.TimeoutError, asyncio.IncompleteReadError) as e:
+            if eid:                                   # the exit, or the site? a quick check says
+                asyncio.get_running_loop().create_task(exits.runtime().check(eid))
+            return await _answer(w, 502, f"{host} did not answer" + (f" through the exit ({e})" if eid else ""))
         try:
             if method == "CONNECT":
                 w.write(b"HTTP/1.1 200 Connection Established\r\n\r\n")

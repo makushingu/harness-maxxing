@@ -1,5 +1,5 @@
-"""Harness Browser (maxxing/browser): rules, proxy, relay filter, tab scopes and what a turn sees, ask_human, turn
-tokens, runner flags, API, CLI.
+"""Harness Browser (maxxing/browser): rules, proxy and exits, profiles and who uses which, tabs, ask_human, turn
+tokens, runner flags, API, CLI, the live view's pace.
 
 No real Chromium here: the parts that start one (unit.py, live.py) are tried by hand on a real server.
 """
@@ -249,28 +249,31 @@ def test_an_owner_is_off_until_turned_on(client, topic, mx):
     assert browser.active_for(A) is None and browser.active_for(T) is None
     r = client.put("/api/browser/owner", json={"path": A, "enabled": True})
     assert r.status_code == 200, r.text
-    assert r.json()["settings"] == {"enabled": True} and r.json()["scope"] == f"agent:{A}"
+    assert r.json()["own"] == {"enabled": True} and r.json()["profile"] == "main" and r.json()["from"]["profile"] == ""
     assert browser.active_for(A) is None                 # the feature is off
     assert client.put("/api/settings", json={"browser_feature": True}).status_code == 200
     assert client.get("/api/settings").json()["browser_feature"] is True
-    owner, s = browser.active_for(A)
-    assert owner == f"agent:{A}" and s["web"] == "list"
+    owner, prof, s = browser.active_for(A)
+    assert owner == f"agent:{A}" and prof["id"] == "main" and prof["web"] == "list"
     assert client.get(f"/api/agents/acme/blog/writer").json()["browser"]["enabled"] is True
-    # the browser's settings are global (one browser), a topic / an agent only has its switch
-    r = client.put("/api/browser/settings", json={"sites": ["not a site"]})
-    assert r.status_code == 400
-    r = client.put("/api/browser/settings", json={"web": "public", "idle_min": 45})
-    assert r.status_code == 200 and r.json()["idle_min"] == 45
-    r = client.put("/api/browser/owner", json={"path": T, "settings": {"enabled": True, "web": "list"}})   # older client
-    assert r.status_code == 200 and browser.active_for(T)[1]["web"] == "public"
-    assert json.loads((mx["ws"] / T / ".maxxing.json").read_text())["browser"] == {"enabled": True}
-    assert client.get("/api/browser/owner", params={"path": "projects/acme"}).status_code == 400
+    r = client.put("/api/browser/settings", json={"idle_min": 45})
+    assert r.status_code == 200 and r.json()["settings"]["idle_min"] == 45
+    assert client.put("/api/browser/profiles/main", json={"sites": ["not a site"]}).status_code == 400
+    assert client.put("/api/browser/profiles/main", json={"web": "public"}).status_code == 200
+    # a project turns it on for all its topics; the agent's switch is its own
+    r = client.put("/api/browser/owner", json={"path": "projects/acme", "enabled": True})
+    assert r.status_code == 200 and r.json()["kind"] == "project"
+    assert browser.active_for(T)[1]["web"] == "public"
+    assert json.loads((mx["ws"] / "projects/acme/.maxxing.json").read_text())["browser"] == {"enabled": True}
+    assert client.get("/api/browser/owner", params={"path": T}).json()["from"]["enabled"] == "project:projects/acme"
+    assert client.get("/api/browser/owner", params={"path": "projects"}).status_code == 400
     assert client.get("/api/browser/owner", params={"path": "projects/acme/topics/nope"}).status_code == 404
     st = client.get("/api/browser").json()
-    assert st["feature"] is True and st["settings"]["idle_min"] == 45 and st["browser"]["state"] == "stopped"
-    assert st["browser"]["name"] == "Harness Browser" and st["browser"]["tabs"] == []
-    assert client.put("/api/browser/tabs/nope", json={"scope": "me"}).status_code == 404
-    assert client.put("/api/browser/tabs/nope", json={"scope": "topic:projects/acme/topics/nope"}).status_code == 400
+    assert st["feature"] is True and st["settings"]["idle_min"] == 45
+    assert [p["id"] for p in st["profiles"]] == ["main"] and st["profiles"][0]["state"] == "stopped"
+    assert client.get("/api/browser/profiles/main").json()["browser"]["tabs"] == []
+    assert client.get("/api/browser/profiles/nope").status_code == 404
+    assert client.post("/api/browser/profiles/main/tabs/nope/show").status_code == 404
 
 
 def test_the_mcp_route_needs_the_turn_token(client, mx):
@@ -306,13 +309,14 @@ def test_a_turn_gets_the_browser_only_when_it_is_on(client, topic, mx):
     agent: dict = {"args": ["--allowedTools", "Read"]}
     assert runner.browser_args("sess01", A, agent) == []
     client.put("/api/settings", json={"browser_feature": True})
-    client.put("/api/browser/owner", json={"path": A, "settings": {"enabled": True}})
+    client.put("/api/browser/owner", json={"path": A, "enabled": True})
     args = runner.browser_args("sess01", A, agent)
     assert args[0] == "--mcp-config" and agent["args"] == ["--allowedTools", "Read,mcp__maxxing-browser"]
     spec = json.loads(Path(args[1]).read_text())["mcpServers"]["maxxing-browser"]
     assert oct(Path(args[1]).stat().st_mode & 0o777) == "0o600"
     assert spec["env"]["MAXXING_BROWSER_OWNER"] == f"agent:{A}" and spec["env"]["MAXXING_BROWSER_URL"].endswith(
         "/api/browser/mcp/sess01")
+    assert spec["env"]["MAXXING_BROWSER_PROFILE"] == "main"
     forced = {"args": [], "approvals_forced": True}
     assert "--allowedTools" not in runner.browser_args("sess02", A, forced)
     assert runner.browser_args("sess03", T, {}) == []          # its topic: off
@@ -322,7 +326,7 @@ def test_a_turn_gets_the_browser_only_when_it_is_on(client, topic, mx):
 
 def test_a_session_turn_lists_the_browser_tools(client, topic, mx):
     client.put("/api/settings", json={"browser_feature": True})
-    client.put("/api/browser/owner", json={"path": T, "settings": {"enabled": True, "sites": ["example.com"]}})
+    client.put("/api/browser/owner", json={"path": T, "enabled": True})
     sid = client.post("/api/sessions", json={"path": T, "message": "NOTOOL hi"}).json()["id"]
     wait_idle(client, sid)
     calls = [json.loads(ln) for ln in (mx["fake_dir"] / "calls.jsonl").read_text().splitlines()]
@@ -363,13 +367,13 @@ def test_the_manager_asks_for_its_browser_and_turns_it_off_at_once(client, topic
     _agent(client, sandbox=True)
     r = agents.request_change(A, {"browser": {"enabled": True}}, session="sess-mgr1")
     assert r["applied"] == [] and r["asked"] == ["browser"]
-    assert agents.load(A)["browser"]["enabled"] is False
+    assert not agents.load(A)["browser"].get("enabled")
     assert "browser: off -> on" in approvals.get(r["request"])["input"]["description"]
     approvals.decide(r["request"], "allow")
     assert agents.load(A)["browser"]["enabled"] is True
     r = agents.request_change(A, {"browser": {"enabled": False}}, session="sess-mgr1")
     assert r["applied"] == ["browser"] and r["asked"] == []
-    assert agents.load(A)["browser"]["enabled"] is False
+    assert not agents.load(A)["browser"].get("enabled")
 
 
 def test_an_agent_turn_cannot_change_its_browser(monkeypatch):
@@ -379,18 +383,23 @@ def test_an_agent_turn_cannot_change_its_browser(monkeypatch):
     assert agent_guard.check_cli(["browser", "status"]) is None
 
 
-def test_cli_on_off_show(mx, capsys):
+def test_cli_on_off_use_show(mx, capsys):
     from maxxing import browser, cli
     (mx["ws"] / T).mkdir(parents=True)
     assert cli.main(["browser", "on", "acme/blog"]) == 0
-    assert browser.owner_settings(f"topic:{T}") == {"enabled": True}
-    assert cli.main(["browser", "settings", "--sites", "example.com,shop.example.org", "--tab-sleep", "30"]) == 0
-    s = browser.settings()
-    assert s["sites"] == ["example.com", "shop.example.org"] and s["tab_sleep_min"] == 30 and s["web"] == "list"
+    assert browser.own_block(f"topic:{T}") == {"enabled": True}
+    assert cli.main(["browser", "profile", "add", "Shop", "--sites", "example.com,shop.example.org"]) == 0
+    assert browser.profile("shop")["sites"] == ["example.com", "shop.example.org"]
+    assert cli.main(["browser", "use", "acme", "shop"]) == 0                    # the project's: its topics inherit
+    assert browser.resolve(T)["profile"] == "shop" and browser.resolve(T)["from"]["profile"] == "project:projects/acme"
+    assert cli.main(["browser", "settings", "--tab-sleep", "30"]) == 0 and browser.settings()["tab_sleep_min"] == 30
     assert cli.main(["browser", "show", "acme/blog", "--json"]) == 0
+    assert cli.main(["browser", "use", "acme", "inherit"]) == 0 and browser.resolve(T)["profile"] == "main"
     assert cli.main(["browser", "off", "acme/blog"]) == 0
-    assert browser.owner_settings(f"topic:{T}")["enabled"] is False
+    assert browser.own_block(f"topic:{T}")["enabled"] is False
     assert cli.main(["browser", "settings", "--max-tabs", "99"]) == 1          # out of range
+    assert cli.main(["browser", "profile", "rm", "main"]) == 1                 # main stays
+    assert cli.main(["browser", "profile", "rm", "shop"]) == 0 and browser.profile("shop") is None
     with pytest.raises(SystemExit):
         cli.main(["browser", "on", "acme/nope"])
 
@@ -404,31 +413,42 @@ def test_a_page_blocked_by_the_list_is_explained():
     assert pool._explain(ok) is ok
 
 
-def test_claude_is_told_what_the_person_did_in_a_shared_tab(mx):
+def _browser(pid="main"):
+    from maxxing import browser
     from maxxing.browser import pool as pool_mod
+    from maxxing.browser.tabs import Tabs
     p = pool_mod.Pool()
-    p.b = b = pool_mod.Browser({})
-    p.tabs.resolve({"targetId": "t1", "type": "page", "url": "about:blank"})
-    p.tabs.set_scope(p.tabs.of_target("t1")["key"], f"topic:{T}")
-    p.tabs.resolve({"targetId": "t2", "type": "page", "url": "about:blank"})      # the person's own tab
-    p._moved("t1", "https://shop.example.com/login?token=secret", "Sign in")     # nobody took over: not a person's move
+    b = pool_mod.Browser(browser.profile(pid) or {"id": pid}, p.tabs(pid))
+    p.browsers[pid] = b
+    return p, b
+
+
+def test_claude_is_told_what_the_person_did_in_a_tab_of_its_own(mx):
+    from maxxing.browser import pool as pool_mod
+    p, b = _browser()
+    t = pool_mod.Turn("s1", f"topic:{T}")
+    b.tabs.claim(t.by)
+    b.tabs.resolve({"targetId": "t1", "type": "page", "url": "about:blank"})       # the turn's tab
+    b.tabs.resolve({"targetId": "t2", "type": "page", "url": "about:blank"})       # the person's own tab
+    p._moved(b, "t1", "https://shop.example.com/login?token=secret", "Sign in")  # nobody took over: not a person's move
     assert b.trail == {}
     b.control = {"tab": "t1", "vid": 1, "at": time.time()}
-    p._moved("t1", "https://shop.example.com/login?token=secret", "")
-    p._moved("t1", "https://shop.example.com/login?token=secret", "Sign in")    # its title came later: same entry
-    p._moved("t1", "https://shop.example.com/account", "My account")
+    p._moved(b, "t1", "https://shop.example.com/login?token=secret", "")
+    p._moved(b, "t1", "https://shop.example.com/login?token=secret", "Sign in")    # its title came later: same entry
+    p._moved(b, "t1", "https://shop.example.com/account", "My account")
     assert [x["url"] for x in b.trail["t1"]] == ["https://shop.example.com/login", "https://shop.example.com/account"]
     b.control = {"tab": "t2", "vid": 1, "at": time.time()}
-    p._moved("t2", "https://bank.example.com/", "My bank")                      # a tab of the person only: never told
+    p._moved(b, "t2", "https://bank.example.com/", "My bank")                      # a tab of the person only: never told
     assert "t2" not in b.trail
-    t = pool_mod.Turn("s1", f"topic:{T}")
     t.told_at = 0
     told = pool_mod.trail_text(p._untold(b, t))
     assert told == "https://shop.example.com/login (Sign in) -> https://shop.example.com/account (My account)"
     assert p._untold(b, t) == []                    # told once
     other = pool_mod.Turn("s2", "topic:projects/acme/topics/shop")
     other.told_at = 0
-    assert p._untold(b, other) == []                # another topic never hears of it
+    assert p._untold(b, other) == []                # another turn's tab: not told to it
+    note = p._tabs_note(b, t)[0]["text"]
+    assert "Tabs you opened: about:blank" in note and "The person is using the tab" in note
 
 
 def test_a_hand_back_gives_the_pages_and_a_picture(tmp_path, mx, monkeypatch):
@@ -470,123 +490,117 @@ def test_decide_keeps_only_the_hand_back_fields(mx):
     assert "picture" not in out and asks.get(rid)["status"] == "done"
 
 
-# ---- tabs and what a turn sees ---------------------------------------------------------------------------------------
-def test_scopes_say_who_sees_a_tab(mx):
+# ---- profiles and who uses which -------------------------------------------------------------------------------------
+def test_settings_of_before_the_profiles_become_the_main_profile(mx):
+    from maxxing import browser, config
+    config.update_config(browser={"web": "list", "sites": ["example.com"], "profile": "keep", "idle_min": 40})
+    s = browser.settings()
+    assert s["idle_min"] == 40 and s["exits"] == []
+    assert s["profiles"] == [{**browser.PROFILE_DEFAULTS, "id": "main", "sites": ["example.com"]}]
+    old = browser.profiles_dir() / "harness"
+    old.mkdir(parents=True)
+    (browser.home() / "tabs.json").write_text('{"tabs": []}')
+    browser.migrate()
+    assert browser.profile_dir("main").is_dir() and not old.exists()
+    assert (browser.tabs_dir() / "main.json").is_file()
+
+
+def test_profiles_are_added_changed_and_deleted(mx):
     from maxxing import browser
+    shop = browser.set_profile({"name": "Boutique Paris", "web": "public"})
+    assert shop["id"] == "boutique-paris" and shop["exit"] == "direct" and shop["on_exit_down"] == "wait"
+    assert browser.set_profile({"name": "Boutique Paris"})["id"] == "boutique-paris-2"
+    with pytest.raises(browser.BrowserError):
+        browser.set_profile({"exit": "nope"}, "boutique-paris")             # no such exit
+    with pytest.raises(browser.BrowserError):
+        browser.set_profile({"name": " "})
+    assert browser.set_profile({"sites": ["https://Shop.Example.com/x"]}, "boutique-paris")["sites"] == \
+        ["shop.example.com"]
+    with pytest.raises(browser.BrowserError):
+        browser.delete_profile("main")
+    browser.delete_profile("boutique-paris-2")
+    assert [p["id"] for p in browser.profiles()] == ["main", "boutique-paris"]
+
+
+def test_a_folder_inherits_its_profile_and_an_agent_its_switch_never(mx):
+    from maxxing import agents, browser, workspace
     (mx["ws"] / T).mkdir(parents=True)
-    agent = f"{T}/agents/writer"
-    assert browser.scope_for(T) == f"topic:{T}" and browser.scope_for(agent) == f"agent:{agent}"
-    assert browser.visible(f"topic:{T}", T) and browser.visible(f"topic:{T}", "projects/acme/topics/blog/sub")
-    # an agent sees its own tabs only: the topic's / project's ones when the user gives it one
-    assert browser.visible(f"agent:{agent}", agent) and not browser.visible(f"agent:{agent}", T)
-    assert not browser.visible(f"agent:{agent}", f"{T}/agents/other")
-    assert not browser.visible(f"topic:{T}", agent) and not browser.visible("project:projects/acme", agent)
-    assert not browser.visible(f"topic:{T}", "projects/acme/topics/shop")
-    assert browser.visible("project:projects/acme", "projects/acme/topics/shop")
-    assert not browser.visible("project:projects/acme", "projects/other/topics/x")
-    assert not browser.visible("me", T) and not browser.visible(None, T)
-    assert browser.clean_scope(f"topic:{T}") == f"topic:{T}" and browser.clean_scope("project:projects/acme")
-    assert browser.clean_scope("topic:projects/acme/topics/nope") is None and browser.clean_scope("me") == "me"
-    assert browser.clean_scope("topic:../../etc") is None and browser.clean_scope("everyone") is None
-    assert browser.clean_scope(f"agent:{agent}") is None                # no such agent
-    (mx["ws"] / agent).mkdir(parents=True)
-    (mx["ws"] / agent / "agent.json").write_text("{}")
-    assert browser.clean_scope(f"agent:{agent}") == f"agent:{agent}"
-    assert browser.clean_scope(f"agent:{T}/agents/../../x") is None
+    agents.create(T, "writer")
+    browser.set_profile({"name": "Shop"})
+    browser.set_profile({"name": "Support"})
+    assert browser.chain(A) == [f"agent:{A}", f"topic:{T}", "project:projects/acme"]
+    assert browser.resolve(A) == {"enabled": False, "profile": "main", "from": {"enabled": "", "profile": ""}}
+    workspace.set_folder_browser("projects/acme", {"enabled": True, "profile": "shop"})
+    r = browser.resolve(T)
+    assert r["enabled"] and r["profile"] == "shop" and r["from"] == {"enabled": "project:projects/acme",
+                                                                     "profile": "project:projects/acme"}
+    r = browser.resolve(A)
+    assert not r["enabled"] and r["profile"] == "shop"           # its switch is its own, its profile inherited
+    workspace.set_folder_browser(T, {"profile": "support"})
+    assert browser.resolve(A)["profile"] == "support" and browser.resolve(T)["enabled"]
+    agents.update(A, {"browser": {"enabled": True, "profile": "main"}})
+    assert browser.resolve(A) == {"enabled": True, "profile": "main", "from": {"enabled": f"agent:{A}",
+                                                                                "profile": f"agent:{A}"}}
+    used = browser.used_by("support")
+    assert [u["owner"] for u in used] == [f"topic:{T}"]
+    browser.delete_profile("support")                            # gone: back to main
+    assert browser.resolve(T)["profile"] == "main"
 
 
-def test_a_new_page_takes_the_scope_of_who_asked(mx):
-    from maxxing.browser.tabs import Tabs
-    t = Tabs()
+def test_a_new_page_belongs_to_who_asked(mx):
+    from maxxing.browser.tabs import Tabs, mine
+    t = Tabs("main")
     first = t.resolve({"targetId": "p0", "type": "page", "url": "about:blank"})
-    assert first["scope"] == "me"                                       # nobody asked: the person's
+    assert first["by"] == {"kind": "you"}                               # nobody asked: the person's
     assert t.resolve({"targetId": "x", "type": "page", "url": "chrome://omnibox-popup.top-chrome/"}) is None
-    t.claim(f"topic:{T}", {"kind": "session", "sid": "s1"})
-    mine = t.resolve({"targetId": "p1", "type": "page", "url": "about:blank"})
-    assert mine["scope"] == f"topic:{T}" and mine["by"]["sid"] == "s1"
+    t.claim({"kind": "session", "sid": "s1", "path": T})
+    own = t.resolve({"targetId": "p1", "type": "page", "url": "about:blank"})
+    assert own["by"]["sid"] == "s1" and mine(own, "s1", "") and not mine(own, "s2", "")
     popup = t.resolve({"targetId": "p2", "type": "page", "url": "https://a.example.com/", "openerId": "p1"})
-    assert popup["scope"] == f"topic:{T}"                               # a popup: its opener's
-    assert t.resolve({"targetId": "p1", "type": "page", "url": "https://x.example"}) is mine
+    assert popup["by"]["sid"] == "s1"                                   # a popup: its opener's
+    assert t.resolve({"targetId": "p1", "type": "page", "url": "https://x.example"}) is own
     t.changed({"targetId": "p1", "url": "https://shop.example.com/", "title": "Shop"})
     t.gone("p1", keep=True)                                             # asleep: kept without a page
-    assert mine["target"] is None and mine in t.asleep()
-    t.claim(mine["scope"], mine["by"], key=mine["key"])                 # woken: the same tab again
+    assert own["target"] is None and own in t.asleep()
+    t.claim(own["by"], key=own["key"])                                  # woken: the same tab again
     again = t.resolve({"targetId": "p9", "type": "page", "url": "https://shop.example.com/"})
-    assert again is mine and mine["target"] == "p9"
+    assert again is own and own["target"] == "p9"
     t.dirty = True
     t.save()
-    t2 = Tabs()
+    t2 = Tabs("main")
     t2.load()                                                           # a browser start: all asleep, blank ones gone
     assert {x["url"] for x in t2.ordered()} == {"https://shop.example.com/", "https://a.example.com/"}
     assert all(not x["target"] for x in t2.ordered())
+    assert Tabs("other").file() != t2.file()
 
 
-def test_a_turn_sees_only_the_tabs_of_its_topic(mx):
-    from maxxing import browser
-    from maxxing.browser.tabs import Tabs
-    from maxxing.browser.view import View, EXTRA_ID
-    tabs = Tabs()
-    tabs.resolve({"targetId": "mine", "type": "page", "url": "about:blank"})
-    tabs.set_scope(tabs.of_target("mine")["key"], f"topic:{T}")
-    tabs.resolve({"targetId": "private", "type": "page", "url": "https://bank.example.com/"})
-    holder = {"mine-tab": "mine", "private-tab": "private"}
-
-    async def page_of(tab, wait):
-        return holder.get(tab)
-
-    def sees(info):
-        tab = tabs.resolve(info) if "url" in info else tabs.of_target(info["targetId"])
-        return bool(tab and browser.visible(tab["scope"], T))
-    used = []
-    v = View(sees, lambda: tabs.claim(f"topic:{T}", {"kind": "session"}), used.append, page_of, holder.get)
-
-    def ev(method, params, session=None):
-        m = {"method": method, "params": params}
-        if session:
-            m["sessionId"] = session
-        return asyncio.run(v.message(m))
-    info = lambda tid, kind, url="about:blank": {"targetId": tid, "type": kind, "url": url}  # noqa: E731
-    assert ev("Target.targetCreated", {"targetInfo": info("private", "page", "https://bank.example.com/")}) is None
-    assert ev("Target.targetCreated", {"targetInfo": info("mine", "page")}) is not None
-    assert ev("Target.targetCreated", {"targetInfo": info("b1", "browser")}) is not None
-    # Puppeteer attaches to tab targets: the private one is let go (run + detach), never shown
-    assert ev("Target.attachedToTarget", {"sessionId": "S1", "waitingForDebugger": True,
-                                          "targetInfo": info("private-tab", "tab")}) is None
-    sent = [json.loads(x) for x in v.extra]
-    assert [x["method"] for x in sent] == ["Runtime.runIfWaitingForDebugger", "Target.detachFromTarget"]
-    assert all(x["id"] > EXTRA_ID for x in sent)
-    assert asyncio.run(v.message({"id": sent[0]["id"], "result": {}})) is None      # the relay's answers: swallowed
-    assert ev("Target.attachedToTarget", {"sessionId": "S2", "targetInfo": info("mine-tab", "tab")}) is not None
-    assert ev("Target.attachedToTarget", {"sessionId": "S3", "targetInfo": info("mine", "page")}, "S2") is not None
-    assert ev("Page.frameNavigated", {"frame": {}}, "S3") is not None
-    assert ev("Page.frameNavigated", {"frame": {}}, "S1") is None
-    # commands: on its sessions yes, on others / on a hidden target no
-    assert v.command({"id": 5, "method": "Page.navigate", "sessionId": "S3", "params": {"url": "https://a.example"}}) is None
-    assert used[-1] == "mine"
-    assert v.command({"id": 6, "method": "Runtime.evaluate", "sessionId": "S1", "params": {}}) is not None
-    assert v.command({"id": 7, "method": "Target.attachToTarget", "params": {"targetId": "private"}}) is not None
-    assert v.command({"id": 8, "method": "Target.closeTarget", "params": {"targetId": "mine"}}) is None
-    v.command({"id": 9, "method": "Target.getTargets", "params": {}})
-    out = asyncio.run(v.message({"id": 9, "result": {"targetInfos": [info("mine", "page"), info("b1", "browser"),
-                                                                     info("private", "page", "https://bank.example.com/")]}}))
-    assert [i["targetId"] for i in out["result"]["targetInfos"]] == ["mine", "b1"]
-    # a new tab it asks for is its topic's
-    v.command({"id": 10, "method": "Target.createTarget", "params": {"url": "about:blank"}})
-    assert ev("Target.targetCreated", {"targetInfo": info("new", "page")}) is not None
-    assert tabs.of_target("new")["scope"] == f"topic:{T}"
-    # a tab whose scope changes to "me" disappears for the turn
-    tabs.set_scope(tabs.of_target("new")["key"], "me")
-    out = ev("Target.targetInfoChanged", {"targetInfo": info("new", "page", "https://a.example/")})
-    assert out == {"method": "Target.targetDestroyed", "params": {"targetId": "new"}}
+def test_the_view_follows_which_tab_a_command_is_on(mx):
+    from maxxing.browser.view import View
+    used, created = [], []
+    holder = {"tab1": "page1"}
+    v = View(lambda: created.append(1), used.append, holder.get)
+    v.message({"method": "Target.attachedToTarget", "params": {"sessionId": "S1", "targetInfo": {
+        "targetId": "tab1", "type": "tab"}}})
+    v.message({"method": "Target.attachedToTarget", "sessionId": "S1", "params": {"sessionId": "S2", "targetInfo": {
+        "targetId": "page1", "type": "page"}}})
+    v.command({"id": 1, "method": "Page.navigate", "sessionId": "S2", "params": {"url": "https://a.example"}})
+    assert used == ["page1"] and v.page("S1") == "page1"
+    v.command({"id": 2, "method": "Target.attachToTarget", "params": {"targetId": "page2"}})
+    v.message({"id": 2, "result": {"sessionId": "S3"}})
+    assert v.page("S3") == "page2"
+    v.command({"id": 3, "method": "Target.createTarget", "params": {"url": "about:blank"}})
+    assert created == [1]
+    v.message({"method": "Target.detachedFromTarget", "params": {"sessionId": "S3"}})
+    assert v.page("S3") == ""
 
 
 def test_claude_waits_while_the_person_has_its_tab(mx, monkeypatch):
     from maxxing.browser import pool as pool_mod
     monkeypatch.setattr(pool_mod, "TAB_WAIT", 0.6)
-    p = pool_mod.Pool()
+    p, b = _browser()
 
     async def run():
-        p.b = b = pool_mod.Browser({})
+        b.released = asyncio.Event()
         b.state = "running"
         b.control = {"tab": "t1", "vid": 1, "name": "web", "at": time.time()}
         b.released.clear()
@@ -594,27 +608,14 @@ def test_claude_waits_while_the_person_has_its_tab(mx, monkeypatch):
         assert "using this tab" in (await p.wait_tab(b, "t1"))       # gave up
         waiter = asyncio.create_task(p.wait_tab(b, "t1"))
         await asyncio.sleep(0.1)
-        await p.release(1)                                           # the person lets it go: Claude goes on
+        await p.release("main", 1)                                   # the person lets it go: Claude goes on
         assert await asyncio.wait_for(waiter, 2) is None
     asyncio.run(run())
 
 
-def test_a_browser_session_does_not_get_around_the_view(mx):
+def test_cookies_are_never_read_over_devtools():
     from maxxing.browser import rules
-    from maxxing.browser.view import View
-    hidden = {"targetId": "private", "type": "page", "url": "https://bank.example.com/"}
-    v = View(lambda info: info.get("targetId") == "mine", lambda: None, None, None, lambda t: None)
-    v.command({"id": 1, "method": "Target.attachToBrowserTarget", "params": {}})
-    asyncio.run(v.message({"id": 1, "result": {"sessionId": "B1"}}))
-    assert "B1" in v.browser_sessions
-    # discovery / auto-attach through the browser session: the hidden page stays hidden
-    assert asyncio.run(v.message({"method": "Target.targetCreated", "params": {"targetInfo": hidden}, "sessionId": "B1"})) is None
-    assert asyncio.run(v.message({"method": "Target.attachedToTarget", "sessionId": "B1",
-                                  "params": {"sessionId": "S9", "targetInfo": hidden, "waitingForDebugger": False}})) is None
-    assert "S9" not in v.sessions
-    assert v.command({"id": 2, "method": "Target.attachToTarget", "sessionId": "B1",
-                      "params": {"targetId": "private", "flatten": True}}) is not None
-    # cookies are never read or set over DevTools (everybody's sign-ins are in this one browser)
+    # a profile's sign-ins are never read or set over DevTools (the user's accounts are in it)
     for m in ("Network.getCookies", "Network.setCookie", "Storage.getCookies", "Target.sendMessageToTarget"):
         assert rules.check_command(json.dumps({"id": 3, "method": m, "params": {}}))[0] is not None, m
 
@@ -648,4 +649,250 @@ def test_the_live_view_lays_the_page_out_for_its_own_size():
         await w.unwatch(1)
         assert w.size == live.SIZE and w.cdp.bounds[-1] == (1280, 943)
 
+    asyncio.run(run())
+
+
+# ---- exits ---------------------------------------------------------------------------------------------------------
+def test_exits_keep_their_secret_in_the_vault(mx):
+    from maxxing import browser, config, vault
+    from maxxing.browser import exits
+    e = exits.set_exit({"name": "Rented", "type": "proxy", "url": "proxy.example.net:1080", "user": "me"}, None, "pw")
+    assert e == {"id": "rented", "name": "Rented", "type": "proxy", "url": "socks5://proxy.example.net:1080",
+                 "user": "me"}
+    assert vault.get("BROWSER_EXIT_RENTED") == "pw" and "pw" not in json.dumps(config.load_config())
+    with pytest.raises(browser.BrowserError):
+        exits.set_exit({"name": "x", "type": "proxy", "url": "ftp://a.example:21"})
+    with pytest.raises(browser.BrowserError):
+        exits.set_exit({"name": "x", "type": "tailscale", "login_server": "http://plain.example"})
+    browser.set_profile({"name": "Shop", "exit": "rented"})
+    with pytest.raises(browser.BrowserError) as err:
+        exits.delete_exit("rented")
+    assert err.value.code == "in_use"
+    browser.set_profile({"exit": "direct"}, "shop")
+    exits.delete_exit("rented")
+    assert vault.get("BROWSER_EXIT_RENTED") is None and exits.exits() == []
+
+
+async def _fake_socks(log: list, accept: bool = True):
+    """A SOCKS5 server (user / password) that answers "hello via exit" whatever the address asked."""
+    async def handle(r, w):
+        try:
+            head = await r.readexactly(2)
+            await r.readexactly(head[1])
+            w.write(b"\x05\x02")
+            await w.drain()
+            ver, ulen = await r.readexactly(2)
+            user = (await r.readexactly(ulen)).decode()
+            plen = (await r.readexactly(1))[0]
+            pw = (await r.readexactly(plen)).decode()
+            ok = accept and (user, pw) == ("me", "pw")
+            w.write(b"\x01" + (b"\x00" if ok else b"\x01"))
+            await w.drain()
+            if not ok:
+                return
+            req = await r.readexactly(4)
+            addr = await r.readexactly(4 if req[3] == 1 else 16)
+            port = int.from_bytes(await r.readexactly(2), "big")
+            import ipaddress
+            log.append((str(ipaddress.ip_address(addr)), port))
+            w.write(b"\x05\x00\x00\x01" + bytes(4) + b"\x00\x00")
+            w.write(b"hello via exit")
+            await w.drain()
+        finally:
+            w.close()
+    return await asyncio.start_server(handle, "127.0.0.1", 0)
+
+
+def test_the_proxy_goes_out_by_the_exit_to_the_checked_address(tmp_path, mx):
+    """A profile with an exit: the host is checked here, the exit gets the checked address (never the name), a down
+    exit gets the "offline" page, never this server's own way out."""
+    from maxxing.browser import exits
+    from maxxing.browser.proxy import Proxy
+
+    async def go():
+        seen: list = []
+        srv = await _fake_socks(seen)
+        port = srv.sockets[0].getsockname()[1]
+        up = {"v": ("rented", exits.Upstream("socks5", "127.0.0.1", port, "me", "pw"))}
+
+        def upstream():
+            if isinstance(up["v"], Exception):
+                raise up["v"]
+            return up["v"]
+        px = Proxy(tmp_path / "p.sock", upstream=upstream)
+
+        async def check(host, p):
+            return "93.184.215.14" if host == "shop.example.com" else None
+        px.check = check
+        await px.start()
+        try:
+            r, w = await asyncio.open_unix_connection(str(tmp_path / "p.sock"))
+            w.write(b"CONNECT shop.example.com:443 HTTP/1.1\r\nHost: shop.example.com\r\n\r\n")
+            await w.drain()
+            data = b""
+            while b"hello via exit" not in data:
+                chunk = await asyncio.wait_for(r.read(200), 5)
+                assert chunk, data
+                data += chunk
+            assert data.startswith(b"HTTP/1.1 200") and seen == [("93.184.215.14", 443)]
+            w.close()
+            up["v"] = exits.ExitDown("the phone is offline")
+            r, w = await asyncio.open_unix_connection(str(tmp_path / "p.sock"))
+            w.write(b"CONNECT shop.example.com:443 HTTP/1.1\r\nHost: shop.example.com\r\n\r\n")
+            await w.drain()
+            data = await asyncio.wait_for(r.read(500), 5)
+            assert data.startswith(b"HTTP/1.1 502") and b"the phone is offline" in data
+            w.close()
+            assert seen == [("93.184.215.14", 443)]
+        finally:
+            await px.stop()
+            srv.close()
+    asyncio.run(go())
+
+
+def test_an_http_proxy_exit_gets_a_connect_with_its_password():
+    from maxxing.browser import exits
+
+    async def go():
+        got: list = []
+
+        async def handle(r, w):
+            got.append((await r.readuntil(b"\r\n\r\n")).decode())
+            w.write(b"HTTP/1.1 200 Connection established\r\n\r\nhi")
+            await w.drain()
+            w.close()
+        srv = await asyncio.start_server(handle, "127.0.0.1", 0)
+        port = srv.sockets[0].getsockname()[1]
+        r, w = await exits.open_via(exits.Upstream("http", "127.0.0.1", port, "me", "pw"), "93.184.215.14", 443)
+        assert await r.read(10) == b"hi"
+        w.close()
+        srv.close()
+        assert got[0].startswith("CONNECT 93.184.215.14:443 HTTP/1.1") and "Proxy-Authorization: Basic bWU6cHc=" in got[0]
+    asyncio.run(go())
+
+
+def test_a_tool_waits_for_its_exit_then_says_it_is_offline(client, topic, mx, monkeypatch):
+    """Down exit: the tool waits `exit_wait_s`, answers that the exit is offline, the session keeps a card and the user
+    gets one notification; when it comes back, a session that asked to go on gets a message."""
+    from maxxing import browser, feed
+    from maxxing.browser import exits, pool as pool_mod
+    from maxxing.sessions import service
+    monkeypatch.setattr(pool_mod, "EXIT_POLL", 0.05)
+    browser.set_settings({"exit_wait_s": 0})
+    exits.set_exit({"name": "Phone", "type": "proxy", "url": "socks5://127.0.0.1:9"})
+    prof = browser.set_profile({"name": "Shop", "exit": "phone"})
+    rt = exits.runtime()
+    state = {"ok": False}
+
+    async def check(eid):
+        rt.mark(eid, state["ok"], "" if state["ok"] else "no answer")
+        if state["ok"]:
+            await asyncio.to_thread(exits._resume_waiters, eid)
+        return state["ok"]
+    monkeypatch.setattr(rt, "check", check)
+    sent = []
+    monkeypatch.setattr(service, "send_message", lambda sid, text, *a, **k: sent.append((sid, text)))
+    p = pool_mod.Pool()
+    why = asyncio.run(p.exit_ready(prof, "sess01", f"topic:{T}"))
+    assert "is offline (no answer)" in why and "never uses this server's address" in why
+    w = exits.waiting_for("sess01")
+    assert w["exit"] == "phone" and w["profile"] == "shop" and w["resume"] is False
+    ev = feed.find("browserexit:phone")
+    assert ev and {a["id"] for a in ev["actions"]} == {"retry", "resume"}
+    feed.act(ev["id"], "resume")                                   # "go on when it is back"
+    assert exits.waiting_for("sess01")["resume"] is True
+    state["ok"] = True
+    assert asyncio.run(p.exit_ready(prof, "sess01", f"topic:{T}")) is None
+    assert exits.waiting_for("sess01") is None
+    assert asyncio.run(check("phone")) is True
+    # a profile that may fall back never waits
+    assert asyncio.run(p.exit_ready({**prof, "on_exit_down": "vps"}, "sess02", f"topic:{T}")) is None
+
+
+def test_exits_come_back_and_resume_the_turns_that_asked(mx, monkeypatch):
+    from maxxing.browser import exits
+    from maxxing.sessions import service, store
+    sent = []
+    monkeypatch.setattr(service, "send_message", lambda sid, text, *a, **k: sent.append(sid))
+    monkeypatch.setattr(store, "read", lambda sid: {"id": sid, "state": "idle"})
+    e = {"id": "phone", "name": "Phone"}
+    exits.wait_down("sess01", f"topic:{T}", e, {"id": "shop", "name": "Shop"})
+    exits.wait_down("sess02", f"topic:{T}", e, {"id": "shop", "name": "Shop"})
+    exits.set_resume("sess01")
+    exits._resume_waiters("phone")
+    assert sent == ["sess01"] and exits._waiters() == []
+
+
+def test_too_many_profiles_put_the_oldest_unused_one_to_sleep(mx, monkeypatch):
+    from maxxing import browser
+    from maxxing.browser import pool as pool_mod
+    browser.set_settings({"max_active_profiles": 2})
+    for n in ("A", "B", "C"):
+        browser.set_profile({"name": n})
+    p = pool_mod.Pool()
+    stopped = []
+
+    async def stop(pid, why):
+        stopped.append(pid)
+        p.browsers.pop(pid, None)
+    monkeypatch.setattr(p, "_stop_locked", stop)
+    for pid, used in (("a", 10), ("b", 20)):
+        b = p.browsers[pid] = pool_mod.Browser(browser.profile(pid), p.tabs(pid))
+        b.state, b.last_use = "running", used
+    asyncio.run(p._make_room("c"))
+    assert stopped == ["a"]
+    p.browsers["a"] = b = pool_mod.Browser(browser.profile("a"), p.tabs("a"))
+    b.state = "running"
+    b.turns["s"] = pool_mod.Turn("s", f"topic:{T}")
+    p.browsers["b"].control = {"tab": "x", "vid": 1, "at": time.time()}
+    with pytest.raises(browser.BrowserError) as err:
+        asyncio.run(p._make_room("c"))
+    assert err.value.code == "too_many_profiles"
+
+
+# ---- the live view's pace ------------------------------------------------------------------------------------------
+def test_a_picture_is_acknowledged_only_once_every_viewer_got_it():
+    """Chromium makes the next picture only after our ack: one picture in flight, so a slow viewer gets fewer pictures,
+    never late ones; slow ones lower the quality ("auto")."""
+    from maxxing.browser import live
+
+    class FakeCdp:
+        def __init__(self):
+            self.sent = []
+
+        async def send_nowait(self, method, params=None, session=None):
+            self.sent.append((method, (params or {}).get("sessionId")))
+
+        async def call(self, method, params=None, session=None, timeout=30.0):
+            self.sent.append((method, params))
+            return {}
+
+    async def run():
+        w = live.Watcher(None, "", lambda: None)
+        w.cdp, w.front, w.casting = FakeCdp(), "T1", "T1"
+        w.sessions["T1"] = "S1"
+        got = []
+
+        async def send(data):
+            got.append(data)
+        await w.watch(1, send)
+        await w.watch(2, send)
+        w.cdp.sent.clear()
+        await w._frame("S1", {"sessionId": 7, "data": "aGk=", "metadata": {}})
+        assert got[-2:] == [b"hi", b"hi"] and w.cdp.sent == []          # not acknowledged yet
+        w.delivered(1, 2, 0.01)
+        await asyncio.sleep(0)
+        assert w.cdp.sent == []
+        w.delivered(2, 2, 0.02)
+        await asyncio.sleep(0.01)
+        assert w.cdp.sent == [("Page.screencastFrameAck", 7)]
+        # a slow viewer: the quality goes down (at most once per ADAPT_EVERY)
+        w.adapted = 0
+        q = w.q
+        w.delivered(2, 2, 2.0)
+        w.delivered(2, 2, 2.0)
+        assert w.q == q - live.Q_STEP
+        assert w._want()[0] == w.q
+        await w.unwatch(1)
+        await w.unwatch(2)
     asyncio.run(run())
