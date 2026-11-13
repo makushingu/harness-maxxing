@@ -35,6 +35,7 @@ import socket
 import ssl
 import struct
 import subprocess
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -391,6 +392,8 @@ class Tailscale:
     """A `tailscaled` of the browser's own (userspace networking: no network interface, nothing else of this server
     goes through it), its state and socket in <state>/browser/exits/<id>/, its SOCKS5 server on the loopback."""
 
+    _ups: dict[str, subprocess.Popen] = {}         # the `tailscale up` running per exit (one at a time)
+
     @staticmethod
     def sock(eid: str) -> Path:
         return _dir(eid) / "tailscaled.sock"
@@ -404,7 +407,7 @@ class Tailscale:
             return port
         bins = tailscale_bins()
         if not bins:
-            raise ExitDown("Tailscale is not installed on this server (Settings -> Browser -> the exit -> Set up)")
+            raise ExitDown("Tailscale is not installed on this server (Browser page -> the exit -> Set up)")
         port = _free_port()
         (_dir(eid) / "port").write_text(str(port))
         stop_unit_sync(eid)
@@ -471,6 +474,9 @@ class Tailscale:
         bins = tailscale_bins()
         if not bins:
             return
+        running = cls._ups.get(eid)
+        if running is not None and running.poll() is None:
+            return                                  # the wizard asks every few seconds: one `up` is enough
         args = [bins[1], f"--socket={cls.sock(eid)}", "up", f"--hostname={HOSTNAME}", "--accept-dns=false",
                 "--accept-routes=false", "--shields-up", "--timeout=120s"]
         if e.get("login_server"):
@@ -483,7 +489,15 @@ class Tailscale:
             args.append(f"--auth-key=file:{f}")
         if e.get("node"):
             args += [f"--exit-node={e['node']}", "--exit-node-allow-lan-access=false"]
-        subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        proc = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        cls._ups[eid] = proc
+        if key:
+            def forget_key() -> None:               # the key stays in the vault only
+                with contextlib.suppress(subprocess.TimeoutExpired):
+                    proc.wait(timeout=180)
+                with contextlib.suppress(OSError):
+                    (_dir(eid) / "authkey").unlink()
+            threading.Thread(target=forget_key, daemon=True).start()
 
     @classmethod
     def use_node(cls, e: dict, node: str) -> None:
@@ -509,7 +523,7 @@ class WireGuard:
             return port
         binp = wireproxy_bin()
         if not binp:
-            raise ExitDown("wireproxy is not installed on this server (Settings -> Browser -> the exit -> Set up)")
+            raise ExitDown("wireproxy is not installed on this server (Browser page -> the exit -> Set up)")
         conf = vault.get(secret_name(eid))
         if not conf or "[Interface]" not in conf:
             raise ExitDown("No WireGuard config for this exit yet")
@@ -779,7 +793,7 @@ def wait_down(sid: str, owner: str, e: dict, profile: dict) -> None:
                   dedupe=f"browserexit:{e['id']}:{int(runtime().state.get(e['id'], {}).get('since') or 0)}",
                   ref=f"browserexit:{e['id']}",
                   agent=browser.owner_path(owner) if owner.startswith("agent:") else None,
-                  actions=[{"id": "retry", "label": "Test now", "style": "default"},
+                  actions=[{"id": "retry", "label": "Retry now", "style": "default"},
                            {"id": "resume", "label": "Go on when it is back", "style": "primary"}])
     except Exception:  # noqa: BLE001 - the feed is a nicety
         log.exception("feed event for a browser exit failed")

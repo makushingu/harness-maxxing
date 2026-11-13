@@ -170,7 +170,7 @@ class Pool:
                       key=lambda b: b.last_use)
         if not free:
             raise browser.BrowserError(409, "too_many_profiles",
-                                       f"{limit} browser profiles are in use right now (Settings -> Browser): "
+                                       f"{limit} browser profiles are in use right now (Settings -> Features -> Harness Browser): "
                                        "try again when one is free")
         await self._stop_locked(free[0].pid, "to make room for another profile")
 
@@ -205,8 +205,10 @@ class Pool:
         if not p or p["exit"] == browser.DIRECT:
             return None, None
         e = exits.get(p["exit"])
-        if e is None:
-            return None, None                       # its exit was deleted: the profile is back to direct
+        if e is None:                               # its exit is gone (config edited by hand): never direct by itself
+            if p["on_exit_down"] == "vps":
+                return None, None
+            raise exits.ExitDown(f"the exit {p['exit']!r} of this profile no longer exists")
         try:
             return e["id"], exits.runtime().upstream(e)
         except exits.ExitDown:
@@ -442,7 +444,9 @@ class Pool:
             return None
         e = exits.get(p["exit"])
         if e is None:
-            return None
+            return (f"The browser profile \"{p['name'] or p['id']}\" goes out by an exit that no longer exists "
+                    f"({p['exit']}). Stop using the browser and tell the user to choose an exit in the profile's "
+                    "settings (Browser page).")
         rt = exits.runtime()
         st = rt.state.get(e["id"]) or {}
         if st.get("ok") and time.time() - st.get("at", 0) < exits.CHECK_EVERY:

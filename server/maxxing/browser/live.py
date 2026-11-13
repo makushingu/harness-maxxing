@@ -1,6 +1,6 @@
 """The live view of the Harness Browser: which tab is shown, its picture (screencast) for the people watching, their
 mouse and keyboard, and the person's tab actions (open, wake, close). Every page it hears of goes through the tabs
-registry (tabs.py: scopes).
+registry (tabs.py: who opened each tab).
 
 One DevTools connection for the browser (our own, through `relay.Cdp`: the same command rules). Pictures are only
 produced while someone watches (and the picture given to Claude with a hand-back).
@@ -268,10 +268,6 @@ class Watcher:
             self.q = q
             self.adapted = time.monotonic()
             asyncio.ensure_future(self._restart_cast())
-
-    def stats(self) -> dict:
-        return {"q": self.q, "frames": self.frames, "avg_kb": round(self.frame_bytes / self.frames / 1024, 1)
-                if self.frames else 0, "trip_ms": int(max(self.trip.values()) * 1000) if self.trip else None}
 
     async def watch(self, vid: int, send: Callable[[Any], Any], quality: str = "auto") -> None:
         self.viewers[vid] = send

@@ -63,6 +63,10 @@ missing and never re-create a project or topic you deleted.
   with its role, its memory and a little character; they start by themselves (a schedule, a webhook, a notification,
   their Telegram thread, another agent), within a daily budget. See [Agents](agents). A [group](agent-groups) puts
   several of them in one conversation: you write, they answer in turn and hand work to each other.
+- **Harness Browser** (Settings -> Features): a Chromium on your server for sites without an API - Claude opens
+  pages, clicks and fills forms, you watch it live and take over for a captcha or a sign-in. Profiles keep sign-ins
+  apart, and an exit can send a profile's pages out by your phone or a proxy instead of the server's address. See
+  [Harness Browser](browser).
 - **Tasks** (optional, **Settings -> Features**): a kanban board stored in `tasks.json`, which Claude can read and update.
 - **Crons** (in **Settings**): scheduled shell commands or Harness prompts, with history and Telegram reports.
 - **Telegram**: talk to the same sessions from your phone, one thread per open session.

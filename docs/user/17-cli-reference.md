@@ -264,12 +264,21 @@ OAuth sign-ins (state "To connect") are done in Settings -> MCP -> **Connect**. 
 
 | Command | Purpose |
 |---|---|
-| `maxxing browser setup` | install what it needs on this server (root): Chromium, its user, `socat`, AppArmor profile, browser tools |
-| `maxxing browser status [--json]` | feature on or off, what is missing, its settings, its tabs, requests waiting for you |
-| `maxxing browser settings [--sites a.com,b.com \| --public] [--fresh \| --keep] [--ask \| --no-ask] [--wait MIN] [--downloads \| --no-downloads] [--idle MIN] [--tab-sleep MIN] [--max-tabs N]` | the browser's settings (refused in an agent's runs) |
-| `maxxing browser on PATH` / `off PATH` | let the sessions of a topic (`acme/blog`) or an agent (`acme/blog/writer`) use it, or not |
-| `maxxing browser show PATH [--json]` | its switch and the tabs it sees |
-| `maxxing browser forget` | erase the sign-ins, the tabs and the journal |
+| `maxxing browser setup [--exits]` | install what it needs on this server (root): `socat`, Chromium, its user, its AppArmor profile, the browser tools; `--exits`: also Tailscale and wireproxy (exits by a phone or a box) |
+| `maxxing browser status [--json]` | feature on or off, what is missing, the settings, the profiles and their exit, the exits, requests waiting for you |
+| `maxxing browser settings [--ask \| --no-ask] [--wait MIN] [--downloads \| --no-downloads] [--idle MIN] [--tab-sleep MIN] [--max-tabs N] [--max-profiles N]` | the settings shared by every profile: ask you when stuck, how long it waits for you, downloads, a profile / a tab sleeps after, tabs awake per profile, profiles running at once |
+| `maxxing browser profile add NAME [--exit ID] [--sites a.com,b.com \| --public] [--fallback-vps]` | a new profile (its id is made from the name); `--exit`: an exit id or `direct`; `--fallback-vps`: when its exit is down, go out by the server's address instead of waiting |
+| `maxxing browser profile set ID [--name N] [--exit ID] [--sites ... \| --public] [--fallback-vps \| --wait-exit]` | change a profile |
+| `maxxing browser profile rm ID` | delete a profile and its sign-ins (`main` cannot be deleted) |
+| `maxxing browser exit test ID\|direct` | what the sites see through an exit (`direct` = the server): address, country, operator, kind, delay, speed; exit code 1 when it fails |
+| `maxxing browser on PATH [--profile ID]` / `off PATH` | let a project (`acme`), a topic (`acme/blog`) or an agent (`acme/blog/writer`) use it, or not |
+| `maxxing browser use PATH ID\|inherit` | the profile of a project, a topic or an agent (`inherit` = its parent's) |
+| `maxxing browser show PATH [--json]` | what it gets (on or off, its profile) and where each is inherited from |
+| `maxxing browser forget ID` | erase a profile's sign-ins, tabs and journal |
+
+`PATH` = `<project>`, `<project>/<topic>`, `<project>/<topic>/<agent>` or the full folder. `on`, `off`, `use`,
+`profile`, `forget`, `setup` and `settings` are refused in an agent's runs. Exits are added on the Browser page
+(their passwords go to Settings -> Keys).
 
 See [Harness Browser](33-browser.md).
 

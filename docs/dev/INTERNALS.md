@@ -685,6 +685,60 @@ about:blank / data. The authoritative check is in the agent (`pc-agent/cdpfilter
 filtered (downloads, file inputs, drag of files, permissions, PWA / Extensions, non-page URLs). `actions.jsonl` keeps
 URLs without query / fragment / userinfo. A channel with more than 64 MB waiting for the local socket is ended.
 
+## maxxing.browser  (owner: organisation) - Harness Browser
+Chromium on this server for the user, their sessions and their agents (API.md "Harness Browser", user doc 33). Off
+unless `browser_feature`. Settings: `config.json -> browser` = the globals (`browser.DEFAULTS`), `profiles: [...]`,
+`exits: [...]` (`clean_settings`: complete and valid, `strict=True` on every save; settings of before the profiles -
+`web` / `sites` at the top - become those of `main`). Who uses which profile: `{enabled?, profile?}` in a project's /
+topic's `.maxxing.json` (`workspace.folder_browser` / `set_folder_browser`) and in agent.json `browser`;
+`browser.resolve(path)` walks `chain(path)` (agent, topic, project): nearest key wins, an agent's `enabled` stops at
+the agent, an unknown profile = `main`. `active_for(path)` = (owner, profile, settings) when turns there get the tools.
+Modules:
+- `__init__` settings, profiles, owners, folders; `migrate()` (server start and every profile start): the one
+  browser's folder `profiles/harness` -> `profiles/main`, `tabs.json` -> `tabs/main.json` (only when the new one is
+  missing).
+- `exits` exits and their runtimes: `Runtime` (in memory: `state[eid] = {ok, since, error, latency_ms, at}`, last
+  `tests`, the upstream kept 20 s), a watcher (every 30 s: the exits of running profiles and of waiting turns, TCP to
+  1.1.1.1:443 through the exit); `Tailscale` = our own `tailscaled --tun=userspace-networking
+  --socks5-server=127.0.0.1:<port>` with state and socket in `<state>/browser/exits/<eid>/`, `tailscale up
+  --hostname=harness-browser --accept-dns=false --accept-routes=false --shields-up` (+ `--login-server`, the vault's
+  auth key, `--exit-node=<node> --exit-node-allow-lan-access=false`); `WireGuard` = `wireproxy` with the vault's config
+  + a `[Socks5]` on the loopback. Both in a unit `maxxing-bx-<install>-<eid>` (MemoryMax 256M, Restart=on-failure),
+  started when needed, kept while the server runs; binaries pinned (`TAILSCALE_VERSION`, `WIREPROXY_VERSION`, sha256
+  per arch) in `<state>/tools/`, else the system's. `test()` = ip-api.com (HTTP) through the exit + 2 MB from
+  speed.cloudflare.com (TLS).
+- `proxy` the only way out of a profile's unit: HTTP proxy on `run/<pid>/proxy.sock`; resolves every host here,
+  refuses it unless all its addresses are public, connects to the checked IP, directly or through
+  `exits.open_via(upstream, ip, port)` (SOCKS5 / HTTP CONNECT by IP: a name is never resolved behind the exit).
+  Exit down: a 502 page, the exit marked down; direct only when the profile says `on_exit_down: vps`.
+- `pool` one `Browser` per running profile (`max_active_profiles`; `_make_room` stops the one unused the longest, none
+  free -> `409 too_many_profiles`); per turn a `Turn` with its own chrome-devtools-mcp (`cdm.Child`, stopped after
+  300 s idle or with the turn); `call()` = turn file -> folder still on -> tool known -> page allowed -> `exit_ready`
+  (exit seen up < 30 s ago, else checked every 10 s up to `exit_wait_s`, then `exits.wait_down` and an error result) ->
+  start -> call. `_tidy` every 15 s: dead / off / deleted / sites changed (`POLICY_KEYS`, restart once unused) /
+  idle -> stop; tabs to sleep; CPU level.
+- `unit` the profile's unit `maxxing-br-<install>-<pid>` (user `maxxing-browser`, PrivateNetwork + socat to the
+  proxy socket, MemoryMax 1536M, in `maxxing-turns.slice` when CPU priorities are on); `set_level(pid, live|background)`
+  -> `cpu.set_level` (live while someone watches it or Claude acted in the last 15 s).
+- `live` `Watcher`: one DevTools connection per profile, the screencast for the viewers; a frame is acknowledged to
+  Chromium only when every viewer confirmed it (`delivered`, from the WS `{"t":"got"}`, or 1 s at worst); quality
+  `auto` moves 30..70 by 10 (at most every 3 s) with the slowest viewer's delivery time (> 0.25 s down, < 0.08 s up);
+  frames never larger than the viewer.
+- `tabs` the tabs of a profile, `rules` (sites, Chromium policy, `rules.json` DevTools command rules), `relay`
+  (DevTools between a client and `cdp.sock`, filtered), `view` (which tab each DevTools session drives), `cdm`
+  (chrome-devtools-mcp, trimmed tool list), `asks` (`ask_human` requests: feed `human:<id>`), `replays` (journal),
+  `turns` (turn files, written by the runner).
+State under `<state>/browser/`: `profiles/<pid>/` (Chromium user data), `run/<pid>/` (proxy.sock, cdp.sock, policy.json),
+`tabs/<pid>.json`, `actions/<pid>.jsonl` (500 newest), `asks/<id>.json`, `turns/<sid>.json` + `<sid>.mcp.json`
+(0600, removed with the turn), `exits/<eid>/` (0700: port, tailscaled state + socket, wireproxy.conf 0600, authkey
+0600), `waiting.json` = `[{session, owner, exit, profile, at, resume}]` (50 newest; turns stopped by a down exit:
+`browser_exit` of the session in the sessions list, cleared when the exit is back - `resume` ones get a message
+"[Harness Maxxing] The browser's exit is back online..." through `service.send_message`, source `browser`). Vault:
+`BROWSER_EXIT_<ID>` (proxy password, WireGuard config or Tailscale auth key; `expose: false`). Feed: a down exit posts
+"Browser exit offline" (source `health`, ref `browserexit:<eid>`, actions `retry` = check now, `resume` = every
+waiting turn of that exit goes on; `feed.HANDLERS["browserexit"] = browser.exits`), resolved "Back online".
+Startup (`api.browser.startup`): stop units of a previous run, clear turn files, `migrate()`, pool + exits watchers.
+
 ## maxxing.customs  (owner: core)
 - Customizations = local commits on top of `origin/<branch>` in `config.CODE` (subject `custom: <title>`, trailers
   `Custom-Id`, `Why`, `Saved`). Git is the source of truth; `export()` rewrites `<workspace>/CUSTOMIZATIONS.md` +

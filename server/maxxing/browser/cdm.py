@@ -1,4 +1,4 @@
-"""chrome-devtools-mcp (node, stdio JSON-RPC): the tools Claude gets, one process per running browser.
+"""chrome-devtools-mcp (node, stdio JSON-RPC): the tools Claude gets, one process per turn using a profile.
 
 It reaches the browser through this server's DevTools relay (loopback + a secret of that browser), never directly.
 Its environment holds nothing of this server's (keys, tokens). The tool list is trimmed: no performance traces,

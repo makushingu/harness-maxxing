@@ -41,6 +41,50 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   command line + exec, video render, pressure parsing + alert, unit names, cgroup top, endpoint + setting);
   `test_settings.py::test_get_defaults` has `cpu_priorities`.
 
+- Harness Browser (`maxxing/browser/`, never released before: it lived on a research branch; API.md "Harness
+  Browser", INTERNALS "maxxing.browser", user doc 33). Config `browser_feature` (default false) + `config.json ->
+  browser` = `{ask, wait_min, downloads, idle_min, tab_sleep_min, max_tabs, max_active_profiles (3, 1..8),
+  exit_wait_s (180, 0..900), profiles: [{id, name, exit: "direct"|<exit id>, web: list|public, sites, on_exit_down:
+  wait|vps}] (<= 20, `main` always first, not deletable), exits: [{id, name, type: proxy {url, user} | tailscale
+  {node, login_server} | wireguard {}}] (<= 10)}`; `browser.clean_settings(raw, strict)`. Exit secrets in the vault
+  `BROWSER_EXIT_<ID>` (`expose: false`). Owners: `browser: {enabled?, profile?}` in a project's / topic's
+  `.maxxing.json` (`workspace.folder_browser` / `set_folder_browser`) and agent.json (`agents._clean_browser`,
+  `browser` in `SECURITY_FIELDS`: off is safer, the rest is asked); `browser.resolve` = agent -> topic -> project ->
+  `{enabled: false, profile: main}`, an agent's `enabled` never inherited.
+- Modules: `exits.py` (exits, `Runtime` up/down state + 30 s watcher, `Tailscale` = own userspace `tailscaled`, `WireGuard` =
+  `wireproxy`, units `maxxing-bx-<install>-<eid>`, `test()` via ip-api.com + 2 MB download, `wait_down` / `set_resume` /
+  `_resume_waiters`, `feed_action`), `pool.py` (one Chromium per profile, `max_active_profiles`, `exit_ready`, a
+  chrome-devtools-mcp per turn), `live.py` (frames acknowledged after every viewer's `{"t":"got"}`, adaptive JPEG
+  quality 30..70, `?q=auto|high|low`), `unit.py` (unit `maxxing-br-<install>-<pid>`, `set_level` -> `cpu.set_level`,
+  `cpu.turn_slice_args()`), `proxy.py` (upstream through the exit by checked IP, 502 + marked down when it fails),
+  `tabs.py` (every turn of a profile sees all its tabs; `by` = who opened it), `view.py`, `relay.py`, `rules.py`,
+  `cdm.py`, `asks.py`, `replays.py`, `turns.py`; `browser_mcp.py` (stdlib, per turn) + `runner.browser_args`.
+  Removed v3 notions (research branch only): tab scopes `me` / `topic:` / `project:` / `agent:`, "Share with",
+  filtering by scope in the relay, `profile: keep|fresh`, global `web` / `sites`.
+- State `<state>/browser/`: `profiles/<pid>/`, `run/<pid>/`, `tabs/<pid>.json`, `actions/<pid>.jsonl`,
+  `asks/<id>.json`, `turns/<sid>.json` + `.mcp.json`, `exits/<eid>/`, `waiting.json` (`[{session, owner, exit,
+  profile, at, resume}]`); tools `<state>/tools/tailscale-<v>/`, `wireproxy-<v>/` (pinned sha256). Migration
+  (`browser.migrate()`, at startup and each profile start): `profiles/harness` -> `profiles/main`, `tabs.json` ->
+  `tabs/main.json`; top-level `web` / `sites` -> profile `main`.
+- Routes (`api/browser.py`): `GET /api/browser`, `PUT /settings`, `POST /setup {exits?}`, `/profiles` (POST, GET / PUT
+  / DELETE `{pid}`, `{pid}/open|stop|sleep|forget`, `{pid}/tabs`, `{pid}/tabs/{key}/show`, DELETE `{pid}/tabs/{key}`),
+  `/exits` (POST, PUT / DELETE `{eid}`, `{eid}/test` incl. `direct`, GET / POST `{eid}/tailscale`), GET / PUT
+  `/owner` (`inherit: [...]`), `POST /waiting/{sid} {action: resume|retry|dismiss}`, `/asks`, `/live-token`, WS
+  `/live?t=&profile=&q=`, loopback `POST /mcp/{sid}` and WS `/cdp/{pid}`. Sessions list: `browser_asks`,
+  `browser_exit` (`sessions/service.py`). Feed: ref `browserexit:<eid>` (`feed.HANDLERS`), actions `retry`, `resume`.
+- CLI `cmd_browser.py`: `maxxing browser setup [--exits] | status [--json] | settings [...] [--max-profiles N] |
+  profile add|set|rm | exit test ID|direct | on PATH [--profile] | off | use PATH ID|inherit | show [--json] | forget ID`;
+  `agent_guard.BROWSER_OWNER_ONLY` refuses `on off use profile forget setup settings stop` in agent turns.
+- Web: `features/browser/{BrowserPage, BrowserPanel, BrowserFeature, ProfileSettings, Exits, SessionBrowser,
+  LiveView, BrowserWindow, profiles, open}`; route `/browser` (`?profile=`, `&view=settings`, `?exit=<id>|new|direct`,
+  `?session=`); project and topic menus -> **Browser...** (`Tree.tsx`), agent settings section `browser`; sidebar
+  line in `HealthIndicator.tsx`. i18n group `browser` (`groups.ts`) loaded with `/browser`, elsewhere on its first
+  key (`ON_DEMAND` in `test_web_i18n_groups.py`). Showcase `browser` (Settings -> Features, `data-tour="browser-feature"`).
+- Template: help index row `33-browser.md` (upgrade note `docs/upgrade/2.0.0a150.md` step 2).
+- Tests: `test_browser.py` (settings and migration, profiles, owners and inheritance, exits + vault, proxy through an
+  upstream, waiting for a down exit, live pacing, routes, CLI); `test_settings.py::test_get_defaults` has
+  `browser_feature`.
+
 ## 2.0.0-alpha.149 - 2026-11-13
 
 - Web, file viewer loaders: `features/files/skeletons.tsx` (`FileSkeleton({kind, preview})`: picture, PDF page,

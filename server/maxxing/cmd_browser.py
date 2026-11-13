@@ -15,7 +15,7 @@
     maxxing browser show PATH [--json]          what it gets (and where it is inherited from)
     maxxing browser forget ID                   erase a profile's sign-ins, tabs and journal
 PATH: `<p>`, `<p>/<t>`, `<p>/<t>/<agent>` or the full folder. Settings belong to the owner: refused in an agent turn.
-Exits are added from Settings -> Browser (their passwords go to the vault).
+Exits are added on the Browser page (their passwords go to the vault).
 """
 from __future__ import annotations
 
@@ -51,7 +51,7 @@ def _configure(p) -> None:
         s.add_argument("name" if name == "add" else "id")
         if name == "set":
             s.add_argument("--name")
-        s.add_argument("--exit", help="an exit id (Settings -> Browser), or direct")
+        s.add_argument("--exit", help="an exit id (Browser page -> Exits), or direct")
         g = s.add_mutually_exclusive_group()
         g.add_argument("--sites", help="comma-separated sites it may open (subdomains included)")
         g.add_argument("--public", action="store_true", help="any public site")
@@ -181,9 +181,13 @@ def _handler(a) -> int:
                 print(json.dumps(browser.set_profile(_profile_values(a), a.id)))
             else:
                 browser.delete_profile(a.id)
+                if shutil.which("systemctl"):                # stop its Chromium before its folder goes
+                    import subprocess
+                    from .browser import unit
+                    subprocess.run(["systemctl", "stop", unit.unit_name(a.id)], capture_output=True, timeout=30)
                 shutil.rmtree(browser.profile_dir(a.id), ignore_errors=True)
                 (browser.tabs_dir() / f"{a.id}.json").unlink(missing_ok=True)
-                print(f"profile {a.id} deleted (a running one stops within a minute)")
+                print(f"profile {a.id} deleted")
             return 0
         if cmd == "exit":
             import asyncio

@@ -19,7 +19,7 @@ Signed in:
   GET  /api/browser/exits/{eid}/tailscale     its Tailscale: signed in?, sign-in address, devices offered as exit
   POST /api/browser/exits/{eid}/tailscale     {node} use that device | {action: login|logout}
   GET  /api/browser/owner?path=               a project / topic / agent: its own block, what it gets (inherited)
-  PUT  /api/browser/owner                     {path, enabled?, profile?} (null = inherited)
+  PUT  /api/browser/owner                     {path, enabled?, profile?, inherit?: [enabled|profile]}
   POST /api/browser/waiting/{sid}             {action: resume|retry|dismiss} a turn stopped by a down exit
   GET  /api/browser/asks?session=&path=       pending `ask_human` requests
   POST /api/browser/asks/{id}                 {action: done|skip, note?}
@@ -401,12 +401,9 @@ def _owner_view(owner: str) -> dict:
 def _outside(path: str) -> bool:
     """Does this agent read text from outside (mail, webhook, feed): it should have its own profile."""
     try:
-        a = agents.load(path)
+        return agents.reads_outside(agents.load(path))
     except Exception:  # noqa: BLE001
         return False
-    trig = a.get("triggers") or {}
-    return bool(a.get("mail") or (isinstance(trig, dict) and (trig.get("webhook") or trig.get("feed")))
-                or (isinstance(trig, list) and any((t or {}).get("type") in ("webhook", "feed", "mail") for t in trig)))
 
 
 @router.get("/owner", dependencies=AUTH)

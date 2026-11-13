@@ -3,142 +3,213 @@ section: Using Harness Maxxing
 ---
 # Harness Browser
 
-One Chromium on your server for you, your sessions and your agents: Claude drives it when a site has no API (open
+A Chromium on your server for you, your sessions and your agents: Claude drives it when a site has no API (open
 pages, click, fill forms, read what only shows with JavaScript or after a sign-in), and you use it yourself, for
-example to sign in once for everybody. Claude still reads pages with its usual tools (web fetch, `curl`, an API)
-first: the browser is slower and costs more, it is used only when a page needs it.
+example to sign in once so Claude can work in your account. Claude still reads pages with its usual tools (web fetch,
+`curl`, an API) first: the browser is slower and costs more, it is used only when a page needs it.
 
 It is not an everyday browser: sound is off, videos do not play by themselves, there are no extensions, and every
 tab takes memory on the server.
+
+## Turning it on
 
 It is off everywhere until you turn it on:
 
 1. **Settings -> Features -> Harness Browser**. The first time, **Set up** installs what the server needs
    (Chromium, its own system user, `socat`, the browser tools; a few minutes, once; or `maxxing browser setup` as
    root).
-2. Then let it be used, per place:
-   - a topic: its **...** menu in the sessions list -> **Browser...** -> **Can use the Harness Browser** (every
-     session of the topic);
-   - an agent: its settings -> **Browser**.
+2. Then say who may use it:
+   - a project: its **...** menu in the sessions list -> **Browser...** -> **Can use the Harness Browser** (every
+     topic of the project that does not choose for itself);
+   - a topic: its **...** menu -> **Browser...** (every session of the topic; **Inherited** = what its project says);
+   - an agent: its settings -> **Browser**. An agent is off until you turn it on for it: it never inherits the switch
+     of its topic or project.
 
-The browser itself has a page: **Browser** in the sidebar.
+The browser has its own page: **Browser** in the sidebar.
 
-## Tabs: who sees what
+## Profiles
 
-There is one browser, so one set of sign-ins. Each tab says who sees it, with a small mark on the tab:
+A **profile** is a browser of its own: its own sign-ins (cookies), its own list of sites, its own exit (where its pages
+go out, see below). **Main** always exists and is used by everything that does not choose another one. Make another
+profile for what you want kept apart: a client, a second shop account, an agent that reads e-mail.
 
-| Mark | Who sees the tab |
-|---|---|
-| lock: **Only me** | you only (the default for the tabs you open) |
-| **#** **Topic** `acme/blog` | the sessions of that topic |
-| folder: **Project** `acme` | the sessions of every topic of the project |
-| robot: **Agent** `writer` | that agent only |
+- **New profile**: the **+** of the Browser page -> **New profile**, give it a name (`Shop`, `Client Acme`).
+- **Profile settings** (button above the live view): its name, its **Exit**, **Sites it may open**, **When the exit is
+  down**, who uses it, its memory.
+- **Sites it may open**:
+  - **Only these sites** (the default): type the sites it needs (`shop.example.com`, `example.com`: subdomains are
+    included). Any other page is refused and Claude is told why (and which site to ask you to add). Images and
+    scripts those pages load from elsewhere still come.
+  - **Any public site**: any site on the internet.
 
-- A tab a session opens is shared with **its topic**; a tab an agent opens is **its own** (no other agent and no
-  session sees it). Each tab says who opened it.
-- Click the mark of a tab to change it: **Share with -> Only me / a topic / a project / an agent**. Taking a tab back
-  = **Only me**. To let an agent work in a page you opened (signed in, a form half filled), share that tab with it.
-- A session sees, and drives, only the tabs shared with its topic or its project; an agent only its own tabs. Your
-  **Only me** tabs are never shown to Claude, nor what you do in them. You see every tab.
-- All tabs share the same sign-ins (one browser): an agent signed in to a site is signed in for you too.
-- Two sessions can work at the same time, each in its tabs.
+  In both cases the addresses of your server and of local networks (`localhost`, `127.0.0.1`, `192.168.x.x`, your
+  router, `*.local`...) are always refused, as are `file:` pages and the browser's own settings pages.
+- **Sign-ins** stay in the profile on the server. **Forget sign-ins** erases its cookies, its tabs and the journal of
+  its actions (the values typed are never kept, only their length): you will have to sign in again.
+- **Delete the profile** erases its sign-ins and tabs too. Whatever chose it goes back to what it inherits (in the
+  end, **Main**). **Main** cannot be deleted.
 
-Sign-ins are common to every tab: a session allowed to use the browser can open a site where you are signed in.
-That is the point (you sign in once), and the list of sites below sets where it may go.
+## Who uses which profile
 
-## Which sites
+The **Browser...** window of a project or a topic, and the **Browser** section of an agent's settings, have a
+**Profile** choice. **Inherited** takes the one of the parent: an agent takes its topic's, a topic its project's, a
+project **Main**. So choosing a profile for a project is enough for all its topics and their sessions.
 
-Settings -> Features -> Harness Browser:
+The same window shows the profile's exit and its state, and **Open the browser** on that profile.
 
-- **Only these sites** (the default): type the sites it needs (`shop.example.com`, `example.com`: subdomains are
-  included). Any other page is refused and Claude is told why. Images and scripts those pages load from elsewhere
-  still come.
-- **Any public site**: any site on the internet.
+An agent that reads text from outside (e-mail, a webhook, the feed) should have **its own profile**: on **Main** it
+works with your sign-ins, and a message written by a stranger could try to steer it. Its settings say so with a
+warning until you give it one. Such an agent also asks you before every browser action (unless you trust its outside
+texts), like for its other tools.
 
-In both cases the addresses of your server and of local networks (`localhost`, `127.0.0.1`, `192.168.x.x`, your
-router, `*.local`...) are always refused, as are `file:` pages and the browser's own settings pages. The browser has
-no network of its own: everything goes through a filter of Harness Maxxing that checks each address.
+## Exits: where the pages go out
+
+Sites see the address the pages come from. Your server's is a data-center one: some sites (shops, social networks,
+banks, anything behind a strict anti-bot) ask more checks or refuse it. An **exit** makes a profile's pages, and only
+them, go out somewhere else, by a normal everyday address. Chromium, the pages and Claude stay on your server.
+
+On the Browser page, **Exits** in the second bar lists them, with **Server** (the server's own address, always there)
+last. **+ Add an exit** offers four ways:
+
+| Exit | What the sites see | What you need |
+|---|---|---|
+| **My phone (Tailscale)** (recommended) | your phone's 4G, or your home connection | an Android phone (or a computer) that stays on, a free Tailscale account |
+| **Rented proxy** | an address in the country you choose | a residential or ISP proxy from a provider: its address (`socks5://` or `http://`), a user, a password |
+| **WireGuard** | your home connection, or the VPN's | a WireGuard configuration file from your router (Fritz!Box, OpenWrt...) or a VPN |
+| **My computer** | the computer you work on | soon |
+
+Then pick the exit in a profile's settings (**Exit**). One exit can serve several profiles.
+
+**My phone (Tailscale)**: a wizard that ticks each step itself when it sees it done.
+
+1. **Install Tailscale for the browser** (**Set up**, a minute, once). It is a Tailscale of the browser's own: the
+   rest of the server does not use it.
+2. **Sign in to Tailscale**: the server shows up as `harness-browser` in your account.
+3. **On the phone**: install Tailscale (QR code), sign in with the same account, then **Exit node -> Run as exit
+   node**, and leave it on, charging, on Wi-Fi or 4G (battery optimization off for Tailscale).
+4. **Choose the device** the pages go out by.
+
+**Advanced: Headscale** takes your own Headscale server instead of Tailscale's. **Sign out of Tailscale** unlinks it.
+
+**Rented proxy** and **WireGuard**: a form (address and user, or the configuration to paste). The password and the
+WireGuard file go to **Settings -> Keys** (`BROWSER_EXIT_<ID>`), never into the settings. WireGuard needs a small tool
+(wireproxy), installed by **Set up** on the exit's page.
+
+**Test** shows what the sites see through an exit (the **Server** entry has it too): the address, its country and
+operator, its kind - **Home / ISP**, **Mobile** or **Data center** - the delay and the speed. The kind comes from
+ip-api.com (it sees the address of the exit, nothing else), the speed from a small download. A rented proxy that turns
+out to be a data center is said plainly: it will not help with the sites that block servers.
+
+Safety:
+
+- Only the browser goes out there: your sessions, agents and the rest of the server keep the server's address.
+- Every site name is looked up on your server and checked public before the page goes through the exit: an exit never
+  reaches the network of your home (your router, your NAS, your printer) and never answers for a name itself.
+
+## When an exit is down
+
+A phone switched off, a proxy that stopped: the profile **waits** for its exit, it never goes out by the server's
+address on its own (the sites would see your account move to a data center and could lock it).
+
+- Claude's browser action waits for the exit (3 minutes by default, **Settings -> Features -> Harness Browser -> Wait
+  for a down exit**), then stops using the browser, finishes what it can without it and tells you.
+- You get a notification **Browser exit offline** with **Retry now** and **Go on when it is back**.
+- The session shows a card **The exit ... is down** with **Go on when it is back**, **Retry now** and **Open the
+  exit**. With **Go on when it is back**, Claude goes on by itself as soon as the exit works again.
+- On the Browser page the profile says **paused** and the exit **offline**.
+
+A profile can choose the other way: **When the exit is down -> Go out by the server's address**. Its sites may then
+see a data-center address and ask more checks.
 
 ## Using it, watching Claude
 
-On the **Browser** page (or the window opened from a session), you have the browser in front of you: tabs, `+` for a
-new tab, the address bar, the page live (full screen on a phone). Click or type in the page and it is yours. A new
-tab shows your sites to open in one click.
+The **Browser** page has two parts:
 
-In a session, a line above the message box says when Claude is using the browser, or how many tabs of the topic are
-open. **Watch** opens the browser window on that session's tab; the **x** only hides the line.
+- the second bar: **Profiles** (each with its exit and its state: tabs open, asleep, paused), then **Exits**, and **+**
+  to add a profile or an exit;
+- the profile picked, live: its name, **via** its exit, who uses it, **Profile settings**, **Sleep**; then the browser
+  itself: tabs, `+` for a new tab, the address bar, the page (full screen on a phone). A new tab shows your sites to
+  open in one click.
 
-When Claude is acting on the tab you are looking at, **click the page to take over**. While you have a tab shared
-with Claude, its actions on that tab wait (at most a minute and a half, then it is told the tab is busy); its other
-tabs go on. You give the tab back with **Hand back to Claude**, or by going to another tab (after a minute without
-using it, it goes back by itself).
+In a session, a line above the message box says when Claude is using the browser, or how many tabs of this session
+are open. **Watch** opens the browser window on that session's tab; the **x** only hides the line.
+
+Every tab of a profile is seen by every session and agent that uses that profile; each tab says who opened it (you,
+a session, the agent `writer`). When Claude is acting on the tab you are looking at, **click the page to take
+over**. While you have the tab, Claude's actions on it wait (at most a minute and a half, then it is told the tab is
+busy); its other tabs go on. You give the tab back with **Hand back to Claude**, or by going to another tab (after a
+minute without using it, it goes back by itself).
+
+The live view follows your connection: a slow network gets fewer pictures, never late ones, and the picture quality
+adapts. The gauge button in the bar under the page shows how smooth it is (pictures per second, their size, the delay
+after a click). The view is drawn first while you watch it or Claude acts in it, when the server's processor is busy.
 
 ## When Claude needs you
 
 A captcha, a sign-in, a code sent to your phone: Claude does not try to get past them. It asks you and waits
-(30 minutes by default, **More settings -> Wait for me**):
+(30 minutes by default, **More settings -> Wait for me**; **Ask me when it is stuck** off = it never asks):
 
 - a notification **"... needs you in its browser"** (also on Telegram when it is linked), with **Open the browser**
   and **Skip**;
 - in the session: **Claude needs you**, and the browser window opens by itself on its tab;
-- for an agent: it shows as **waiting for you** like a request to allow (the yellow **!** of the Office, the agents
-  list, the dot under its topic); the **!** opens the browser on its tab.
+- for an agent: it shows as waiting for you like a request to allow (the yellow **!**); the **!** opens the browser
+  on its tab.
 
 What Claude asks shows in a bar under the address. Do the step in the page, then **Hand back to Claude**, with a word
-for Claude if you like. Claude is told which pages you went to in that tab and gets a picture of the page as you
-left it, then goes on. If you drive a tab shared with Claude without being asked, it is told what you did at its next
-browser action. **Skip** tells it to do without that step. With no answer in time, it gives up that step for this
-run.
+for Claude if you like. Claude is told which pages you went to in that tab and gets a picture of the page as you left
+it, then goes on. If you drive one of its tabs without being asked, it is told what you did at its next browser
+action. **Skip** tells it to do without that step. With no answer in time, it gives up that step for this run.
 
 ## Sleep and memory
 
 - A tab unused for 20 minutes **sleeps**: it is closed and kept (italic, moon icon); a click opens it again. Claude
-  sees its sleeping tabs and opens them again when it needs them. At most 12 tabs are awake: above that,
+  sees its sleeping tabs and opens them again when it needs them. At most 12 tabs are awake per profile: above that,
   the oldest one sleeps.
-- With nobody watching, no session using it and no request, the browser **sleeps** after 30 minutes. Its tabs come
-  back, asleep, the next time it starts (when Claude needs it, or when you open the **Browser** page).
-- While it runs, the bottom of the sidebar shows **Browser · 620 MB · 6 tabs open**. When the server runs short of
+- With nobody watching, no session using it and no request, a profile **sleeps** after 30 minutes. Its tabs come
+  back, asleep, the next time it starts (when Claude needs it, or when you open it on the Browser page).
+- Each running profile is its own Chromium. At most 3 run at once: when another one is needed, the one unused the
+  longest sleeps (one busy with Claude or with you is never put to sleep).
+- While one runs, the bottom of the sidebar shows **Browser · 620 MB · 6 tabs open**. When the server runs short of
   memory, the line turns amber with **Sleep** (every tab not shown goes to sleep); when memory is critical, the
   oldest tabs sleep by themselves.
-- These times are in **More settings**: **A tab sleeps after**, **The browser sleeps after**, **Tabs awake at most**.
+- These are in **Settings -> Features -> Harness Browser**: **A tab sleeps after**, **A profile sleeps after**, **Tabs
+  awake at most**, **Profiles running at once**, **Wait for a down exit**, plus **Ask me when it is stuck**, **Wait
+  for me** and **Allow downloads** (off by default; files go to `downloads/browser` in the workspace).
 
 ## Agents
 
-- An agent started by an outside text (an e-mail, a webhook, another agent) asks you before **every** browser action,
-  like for its other tools (unless you trust that agent's outside texts): a message written by a stranger cannot
-  drive your signed-in tabs on its own.
-- An agent never changes the browser settings (`maxxing browser on|off|settings` is refused in its runs).
-- In your conversation with an agent, it can ask for its browser itself: turning it **on** is a request you allow
-  (a card in the conversation), turning it **off** is done at once. Once on, the conversation and the runs of the
-  agent both have it.
-
-## Sign-ins and downloads
-
-- **Keep its sign-ins** (on by default): the browser's profile (cookies, sign-ins) stays on the server. Off: a fresh
-  browser at every start. **Forget sign-ins** erases the profile, the tabs and the journal of its actions (the values
-  typed are never kept, only their length).
-- **Allow downloads** (off by default): files go to `downloads/browser` in the workspace.
+- An agent never changes the browser settings (`maxxing browser` commands that change them are refused in its runs).
+- In your conversation with an agent, it can ask for its browser itself: turning it **on** or choosing a profile is a
+  request you allow (a card in the conversation), turning it **off** is done at once. Once on, the conversation and
+  the runs of the agent both have it.
 
 ## From a terminal
 
 ```
-maxxing browser setup                          install what it needs (root)
-maxxing browser status                         feature, what is missing, settings, tabs, requests waiting
-maxxing browser settings --sites example.com,shop.example.org
-maxxing browser settings --public --tab-sleep 30 --idle 60 --max-tabs 8
-maxxing browser on acme/blog                   the sessions of a topic may use it
-maxxing browser on acme/blog/writer            an agent (project/topic/agent)
-maxxing browser off acme/blog
-maxxing browser show acme/blog                 its switch and the tabs it sees
-maxxing browser forget                         erase the sign-ins, the tabs and the journal
+maxxing browser setup [--exits]                install what it needs (root); --exits: Tailscale and wireproxy too
+maxxing browser status                         feature, what is missing, settings, profiles, exits, requests
+maxxing browser profile add Shop --sites shop.example.com
+maxxing browser profile set shop --exit phone --public
+maxxing browser on acme                        a project (acme/blog = a topic, acme/blog/writer = an agent)
+maxxing browser use acme/blog/writer shop      its profile (inherit = the parent's)
+maxxing browser show acme/blog                 what it gets, and where it is inherited from
+maxxing browser exit test phone                what the sites see through that exit (direct = the server)
+maxxing browser forget shop                    erase a profile's sign-ins, tabs and journal
 ```
+
+Exits are added on the Browser page (their passwords go to the vault). Every command: [CLI reference](17-cli-reference.md#harness-browser).
 
 ## Troubleshooting
 
 - **"The browser is not set up on this server"**: run **Set up** (Settings -> Features) or `maxxing browser setup`
   as root. On Ubuntu 24.04 it also installs an AppArmor profile Chromium needs.
-- **A page is refused**: add its site to the list, or switch to **Any public site**. Addresses of your own server
-  are refused on purpose.
-- **Claude does not see a tab**: share it with its topic or its project, or with the agent (the mark of the tab).
+- **A page is refused**: add its site to the profile's list (**Profile settings**), or switch it to **Any public
+  site**. Addresses of your own server and of local networks are refused on purpose.
+- **A site still blocks the browser**: **Test** its profile's exit. **Data center** = the sites see a server: use a
+  phone, a home connection or an ISP proxy.
+- **"... browser profiles are in use right now"**: every running profile is busy; wait, or raise **Profiles running
+  at once**.
+- **The exit stays offline**: open it on the Browser page. Tailscale: the phone must be on, signed in to the same
+  account, with **Run as exit node** on. Proxy: check its address, user and password, then **Test**.
 - **The server is slow**: put tabs to sleep (status bar of the browser, or the sidebar line), lower **Tabs awake at
-  most**.
+  most** or **Profiles running at once**.

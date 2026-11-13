@@ -809,6 +809,33 @@ def test_a_tool_waits_for_its_exit_then_says_it_is_offline(client, topic, mx, mo
     assert asyncio.run(p.exit_ready({**prof, "on_exit_down": "vps"}, "sess02", f"topic:{T}")) is None
 
 
+def test_a_profile_whose_exit_is_gone_never_goes_out_directly(mx):
+    """config.json edited by hand: the exit a profile names is gone. It is read back as is and treated as down."""
+    import pytest as _pytest
+    from maxxing import browser, config
+    from maxxing.browser import exits, pool as pool_mod
+    cfg = config.load_config()
+    cfg["browser"] = {"profiles": [{"id": "shop", "name": "Shop", "exit": "phone"}]}
+    config.save_config(cfg)
+    prof = browser.profile("shop")
+    assert prof["exit"] == "phone"
+    p = pool_mod.Pool()
+    with _pytest.raises(exits.ExitDown):
+        p._upstream("shop")
+    assert "no longer exists" in asyncio.run(p.exit_ready(prof, "sess01", f"topic:{T}"))
+    assert asyncio.run(p.exit_ready({**prof, "on_exit_down": "vps"}, "s", "x")) is None
+
+
+def test_an_agent_fed_by_notifications_on_the_main_profile_is_warned(client, topic, mx, monkeypatch):
+    from maxxing import agents
+    _agent(client)
+    assert client.put("/api/browser/owner", json={"path": A, "enabled": True}).status_code == 200
+    assert client.get("/api/browser/owner", params={"path": A}).json()["outside_on_main"] is False
+    real = agents.load
+    monkeypatch.setattr(agents, "load", lambda path: {**real(path), "triggers": [{"kind": "feed", "sources": ["github"]}]})
+    assert client.get("/api/browser/owner", params={"path": A}).json()["outside_on_main"] is True
+
+
 def test_exits_come_back_and_resume_the_turns_that_asked(mx, monkeypatch):
     from maxxing.browser import exits
     from maxxing.sessions import service, store

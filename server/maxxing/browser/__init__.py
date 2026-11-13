@@ -95,9 +95,8 @@ def clean_profile(raw: object, strict: bool = False, exits: set[str] | None = No
         _bad(strict, "on_exit_down", "wait or vps")
     ex = str(src.get("exit") or DIRECT)
     if exits is not None and ex != DIRECT and ex not in exits:
-        _bad(strict, "exit", f"no exit {ex!r}")
-        ex = DIRECT
-    out["exit"] = ex
+        _bad(strict, "exit", f"no exit {ex!r}")     # read back as it is: the profile then waits, never goes direct
+    out["exit"] = ex[:40]
     if "sites" in src:
         items = src["sites"] if isinstance(src["sites"], list) else []
         if strict:
