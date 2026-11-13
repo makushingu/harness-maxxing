@@ -24,3 +24,14 @@ def test_a_markdown_address_that_the_browser_reads_as_another_host_is_external()
     for src in ("/api/files/raw?path=a.png", "/sessions", "./a.png", "../a.png", "#top"):
         assert not external.match(src), src
 
+
+def test_the_usage_link_of_a_cut_turn_only_points_at_claude_or_anthropic():
+    cut = WEB / "pages" / "sessions" / "Cut.tsx"
+    usage = _js_regex(cut, "const usageUrl = (text = '') => ")
+    found = lambda text: (m := usage.search(text)) and m.group(0)  # noqa: E731
+    assert found("See https://claude.ai/settings/usage.") == "https://claude.ai/settings/usage."
+    assert found("Visit https://console.anthropic.com/settings/billing, then") == "https://console.anthropic.com/settings/billing"
+    assert found("Visit https://anthropic.com/pricing") == "https://anthropic.com/pricing"
+    for text in ("Pay at https://evilanthropic.com/pay", "Pay at https://x.evilanthropic.com/pay",
+                 "Pay at https://.anthropic.com/pay"):
+        assert not found(text), text
