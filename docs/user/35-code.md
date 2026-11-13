@@ -79,7 +79,9 @@ outside the repository are marked), or from the pull request badge of the Change
     with a **review card**: the summary, the line comments, a verdict you can change, and **Publish on GitHub**. Claude
     never publishes: you read it, then click.
 - A pull request from **someone outside** the repository (not owner, member or collaborator) is marked, and a session
-  on it starts in **plan mode**: read the code before installing it or running its tests.
+  on it starts in **plan mode**: read the code before installing it or running its tests. Its copy, like the copy of
+  any pull request from a fork, does not run the repository's preparation command and gets none of the clone's
+  `.env` files or `.worktreeinclude` files: run them yourself once the code is read.
 
 Approving, merging and closing use a token of **Settings → Keys** that can write to the repository; without one these
 buttons are absent.

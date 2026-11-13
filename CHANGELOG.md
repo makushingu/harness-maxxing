@@ -3,7 +3,7 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
-## Unreleased
+## 2.0.0-alpha.148 - 2026-11-13
 
 New:
 - **Separate copy: one session, one branch, one folder (Code mode).** A new session in a topic with a git repository
@@ -18,8 +18,9 @@ New:
   badge of the Changes view: its conversation, its files with the same diff as the Changes view, comments on lines,
   checks; **Comment**, **Approve**, **Request changes**, **Merge**, **Close**. **Work on this PR** starts a session on a
   separate copy of its branch; **Ask Claude to review** starts one in plan mode that drafts the review as a card you
-  publish yourself. A pull request from outside the repository is marked and its sessions start in plan mode. A PR
-  opened from Harness starts from the repository's pull request template.
+  publish yourself. A pull request from outside the repository is marked and its sessions start in plan mode; the
+  copy of a pull request from a fork or from outside runs nothing by itself (no preparation command, no `.env`
+  copied). A PR opened from Harness starts from the repository's pull request template.
 - **Claude writes the PR and watches it.** **Open a PR** shows a title and a description Claude wrote from the
   conversation, the commits and the diff (you can change them). While the PR is open, a failed check, a conflict or a
   comment from someone of the repository wakes the session up: Claude fixes, pushes and says what it did - once per

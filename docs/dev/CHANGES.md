@@ -5,7 +5,7 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
-## Unreleased
+## 2.0.0-alpha.148 - 2026-11-13
 
 - Copies, review before integration: a pull request from a fork or from outside the repository (`fork` / `outside`)
   gets neither the clone's ignored files (`.env`, `.worktreeinclude`) nor its prepare command (`npm ci` runs the
