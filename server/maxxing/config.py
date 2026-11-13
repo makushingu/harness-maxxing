@@ -126,6 +126,9 @@ DEFAULT_CONFIG: dict[str, Any] = {
     # Memory budget of ALL scheduled jobs running at once (MemoryMax of maxxing-jobs.slice, written by `maxxing init`):
     # several heavy jobs at night share it instead of each taking `unit_memory_max`. "" or "infinity" = none.
     "jobs_memory_max": "75%",
+    # Settings -> System -> CPU priorities (maxxing/cpu.py): when the processor is full, the server (UI) goes first,
+    # then turns, then jobs and `maxxing heavy` (CPUWeight/IOWeight of three slices, never a cap); false = all equal.
+    "cpu_priorities": True,
     # true = programs a scheduled job leaves running in the background outlive it (KillMode=process), as before
     # 2.0.0a70; `maxxing init` writes true on installs that existed before (no silent change), new ones end them.
     "cron_keep_background": False,

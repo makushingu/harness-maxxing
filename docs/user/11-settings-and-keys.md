@@ -31,7 +31,7 @@ two blocks):
 | | **Import** | the memory of another agent (Hermes, OpenClaw, Claude Code, a zip) - see [Import](import); and the way to the other imports: a memory backup (**Backup**), an agent file (Agents page) |
 | | **Backup** | repository, schedule, whitelist, history, restore – see [Backup](backup) |
 | | **Trash** | deleted sessions, topics and files, restore them or empty the trash |
-| **Server** | **System** | health, services (start/stop/restart), logs, and the **address of the server**: public URL and files root (the folder the file viewer can show) |
+| **Server** | **System** | health, **CPU priorities** (see [below](#cpu-priorities)), services (start/stop/restart), logs, and the **address of the server**: public URL and files root (the folder the file viewer can show) |
 | | **Updates** | the installed version, **Check** and **Update** (with the smart update preflight), **Automatic update**, **What's new** (also shown once after each update; the main new features have a **Show me** button that takes you to them and highlights them), then every version of Harness Maxxing, newest first, with a search |
 | | **About** | the version and the useful links (docs, GitHub, community), the optional **Enterprise key** (only for companies that need one: record it, see it, remove it - see [License](license)), **Support**: Harness Maxxing is free, **Donate** opens the donation page of the website in a new tab (nothing is sent from the app); **Hide the Donate buttons** removes them from What's new and the Feedback window, in every browser - see [License](license#donations) |
 
@@ -40,6 +40,28 @@ The community catalogue (widgets, pages, skills shared by other users) is on the
 [harness-maxxing.com/community](https://harness-maxxing.com/community): Widgets, Pages and Skills link to it.
 Old links keep working: `/settings/stats` opens **Usage**, `/settings/license` and `/settings/support` open **About**, `/settings/packs` and `/settings/projects` open **Templates**, `/settings/extensions` opens
 **Widgets**, `/settings/docs` opens the docs.
+
+## CPU priorities
+
+When the processor is full (a video render, a big build, several sessions at once), Linux shares it equally by
+default: a render at 99 % gets as much as the interface you are using. **Settings -> System -> CPU priorities** (on by
+default) gives the processor in this order when it is full:
+
+| Priority | What |
+|---|---|
+| **Live** | the Harness server - the interface you watch |
+| **Normal** | the turns of your sessions and agents |
+| **Background** | scheduled jobs and heavy work started with `maxxing heavy` (e.g. `maxxing heavy ffmpeg -i in.mov out.mp4`; `maxxing video render` does it for Remotion videos) |
+
+These are priorities, never limits: while the processor has room, everything runs at full speed; when it is full,
+background work slows down a little and never stops. The server takes its place at its next restart (an update
+restarts it). Switch it off and every program gets the same share again.
+
+**Who takes the processor**: click the CPU meter at the bottom of the sidebar. It lists the programs using the
+processor most (Harness, a session, an agent, heavy work, a job, the browser, Docker…) with their priority and how
+long programs wait for the processor. A high CPU figure alone is not a problem; when programs wait (more than 20 % of
+the time) the meter turns amber and says **waiting**. If the processor stays full for 10 minutes, a health problem
+(also in Notifications) names the program that takes the most; it clears itself.
 
 ## Features
 

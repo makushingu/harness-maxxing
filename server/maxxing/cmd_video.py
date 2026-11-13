@@ -1,4 +1,4 @@
-"""`maxxing video new DIR` / `maxxing video status` / `maxxing pdf IN.html OUT.pdf`.
+"""`maxxing video new DIR` / `maxxing video render DIR` / `maxxing video status` / `maxxing pdf IN.html OUT.pdf`.
 
 The installer prepares Remotion once in <state>/tools/remotion (node_modules + headless browser,
 ~700 MB); every video project links its node_modules there, so a new project is ready in a second
@@ -101,11 +101,32 @@ def pdf(src: str, out: Path) -> None:
         raise SystemExit("PDF failed: " + (r.stderr or r.stdout).strip()[-400:])
 
 
+def render_cmd(entry: str, comp: str, out: str) -> list[str]:
+    from .sessions.spawn import base_env
+    npx = shutil.which("npx", path=base_env()["PATH"]) or "npx"     # the server's Node, even an isolated one
+    return [npx, "remotion", "render", entry, comp, out]
+
+
+def render(project: Path, comp: str = "Intro", out: str = "out/video.mp4") -> int:
+    """Render a Remotion project through `maxxing heavy`: a render takes every core for minutes, it goes after the UI
+    and the sessions (CPU priorities) and is never slowed while the processor has room."""
+    entry = next((e for e in ("src/index.jsx", "src/index.tsx", "src/index.ts", "src/index.js")
+                  if (project / e).is_file()), None)
+    if entry is None:
+        raise SystemExit(f"{project} is not a video project (no src/index.jsx): `maxxing video new DIR` makes one")
+    from . import cmd_heavy
+    return cmd_heavy.run(render_cmd(entry, comp, out), cwd=project)
+
+
 def _configure_video(p) -> None:
     sub = p.add_subparsers(dest="video_cmd", required=True)
     n = sub.add_parser("new", help="create a Remotion video project (linked to the shared install)")
     n.add_argument("dir", help="folder to create, e.g. projects/acme/topics/blog/videos/launch")
     sub.add_parser("status", help="Node.js / Remotion / headless browser on this server")
+    r = sub.add_parser("render", help="render a video project with the background priority (`maxxing heavy`)")
+    r.add_argument("dir", nargs="?", default=".", help="the video project (default: the current folder)")
+    r.add_argument("--id", default="Intro", help="the composition to render (default: Intro)")
+    r.add_argument("--out", default="out/video.mp4", help="the file to write (default: out/video.mp4)")
 
 
 def _video(a) -> int:
@@ -118,10 +139,12 @@ def _video(a) -> int:
         if not st["remotion"]:
             print(HINT.format(code=config.CODE))
         return 0 if st["remotion"] else 1
+    if a.video_cmd == "render":
+        return render(Path(a.dir).expanduser(), a.id, a.out)
     d = new_project(Path(a.dir).expanduser())
     print(f"Video project ready: {d}")
     print(f"  cd {d} && npm run still     # check one frame (out/still.png)")
-    print(f"  cd {d} && npm run render    # out/video.mp4")
+    print(f"  maxxing video render {d}    # out/video.mp4 (after the UI and the sessions when the CPU is full)")
     return 0
 
 
@@ -138,5 +161,5 @@ def _pdf(a) -> int:
     return 0
 
 
-cli.register("video", "Motion design videos with Remotion (new, status)", _configure_video, _video)
+cli.register("video", "Motion design videos with Remotion (new, render, status)", _configure_video, _video)
 cli.register("pdf", "Print an HTML page to PDF with the headless browser", _configure_pdf, _pdf)

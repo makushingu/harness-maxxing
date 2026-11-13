@@ -5,6 +5,42 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## Unreleased
+
+- CPU priorities (`maxxing/cpu.py`, stdlib only; config `cpu_priorities`, default true; INTERNALS "CPU priorities"):
+  `maxxing-live.slice` (CPUWeight/IOWeight 1000) / `maxxing-turns.slice` (100) / `maxxing-jobs.slice` (30, its text =
+  `jobs_slice_text` = MemoryMax + weights). `cmd_core.ensure_cpu_slices(jobs)` (init, after `ensure_jobs_slice`; PUT
+  /api/settings when `cpu_priorities` changes) writes the two new slices + the server drop-in
+  `claude-maxxing.service.d/30-cpu-priority.conf` (`Slice=maxxing-live.slice`, taken at the next restart, never
+  restarted) atomically when changed, daemon-reload, then `set-property --runtime` on the slices whose cgroup exists;
+  off = weights 100, files kept. Uninstall removes them. Paths: `cpu.SLICE_DIR` (conftest points it to tmp_path for
+  every test), `cpu.CGROUP_ROOT`, `cpu.PRESSURE_PATH`.
+- Turn units: `spawn._start_unit` adds `cpu.turn_slice_args()` (`--slice maxxing-turns.slice` when on and the slice
+  file exists). Claude jobs' turns stay there (not in the jobs slice: its MemoryMax budget is unchanged).
+- `cpu.set_level(unit, "live"|"normal"|"background") -> bool`: `systemctl set-property --runtime <unit> CPUWeight=
+  IOWeight=`, no-op when off / not root / no systemd (for the watched browser).
+- `maxxing heavy CMD…` (`cmd_heavy.py`, registered in `commands.py`): `os.execvp` of `cpu.heavy_argv()` =
+  `systemd-run --scope --quiet --collect --slice=maxxing-jobs.slice --unit=maxxing-heavy-[session-<sid8>-|cron-<id>-]<pid>.scope`
+  (MAXXING_SESSION / MAXXING_CRON_ID), else `nice -n 10 ionice -c3`; 127 when the command is not found.
+  `maxxing video render [DIR] [--id] [--out]` (`cmd_video.render`) = `npx remotion render <entry> <id> <out>` through it.
+- GET `/api/system/cpu` = `cpu.snapshot()` (cached 3 s): PSI `some` + top 6 units by cgroup `cpu.stat` `usage_usec`
+  delta (previous sample kept in memory, 0.5 s sample when none or older than 30 s; Docker containers merged), named
+  by `cpu.describe()` (session title / agent name from the sessions store, job name from crons, heavy scopes,
+  `maxxing-br-*`/`maxxing-pc-*` = browser) with their level. Health payload: `cpu_pressure`, `cpu_waiting`
+  (avg10 >= 20); issue `cpu_pressure` when `cpu.note_pressure` saw avg60 >= 40 for 10 min (reset after a 5 min gap
+  without reading), naming the top unit; it goes to the feed like the others (`health_feed`).
+- Doctor `cpu_priorities`: slice files / drop-in out of date -> WARN `maxxing init`; on but the server not yet in its
+  slice -> INFO (restart).
+- Web: CPU meter of `StatusBlock` = popover `CpuWho` / `CpuPanel` (`useCpu`, every 3 s while open; i18n group
+  `cpuwho`), amber + "waiting" when `cpu_waiting`; RAM / disk stay links. `mood.cpuWaiting` before `mood.cpuHot`,
+  `mood.issue.cpuPressure`; Settings -> System `CpuCard` (switch); showcase `cpu`.
+- Template `CLAUDE.md`: rows `maxxing video … render` and `maxxing heavy` (upgrade note
+  `docs/upgrade/unreleased-cpu-priorities.md`: rename it to the version at release). Skill `video-motion-design` and
+  the Remotion README render with `maxxing video render`.
+- Tests: `test_cpu_priorities.py` (slice texts, init on/off + runtime weights, doctor, turn slice, `set_level`, heavy
+  command line + exec, video render, pressure parsing + alert, unit names, cgroup top, endpoint + setting);
+  `test_settings.py::test_get_defaults` has `cpu_priorities`.
+
 ## 2.0.0-alpha.149 - 2026-11-13
 
 - Web, file viewer loaders: `features/files/skeletons.tsx` (`FileSkeleton({kind, preview})`: picture, PDF page,

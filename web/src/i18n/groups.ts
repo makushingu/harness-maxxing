@@ -44,6 +44,8 @@ export const GROUPS = {
   term: ['term'],
   // the sentences of the status line (components/shell/mood.ts): fetched once the shell shows, not before it
   mood: ['mood'],
+  // who takes the processor (the CPU meter's window, components/shell/HealthIndicator.tsx): loaded when it opens
+  cpuwho: ['cpuwho'],
 } as const satisfies Record<string, readonly string[]>
 
 export type Group = keyof typeof GROUPS

@@ -3,6 +3,17 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## Unreleased
+
+New:
+- **CPU priorities: what you watch goes first.** When the processor is full (a video render, a big build, several
+  sessions), the interface comes first, then your sessions and agents, then scheduled jobs and heavy work - which
+  slows down a little, never stops. On by default (Settings -> System); nothing changes while the processor has room.
+  Click the CPU meter at the bottom of the sidebar to see who takes the processor; it turns amber and says "waiting"
+  when programs wait for it, and a processor full for 10 minutes becomes a health alert. [Show me](#show:cpu)
+- **`maxxing heavy <command>` and `maxxing video render`.** Long renders, encodes and builds started this way run
+  with the background priority, with the same output and exit code; Remotion videos render this way.
+
 ## 2.0.0-alpha.149 - 2026-11-13
 
 Changed:

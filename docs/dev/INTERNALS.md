@@ -493,6 +493,23 @@ either a text key or a file, never both (`name_taken`; `vault.put` refuses a nam
   `""`/`infinity` = no line) = the memory budget of all jobs running at once; written only when the text changed
   (then daemon-reload); skipped without systemd and with MAXXING_SPAWN=direct. Claude jobs run their turn in a turn
   unit (outside the slice; capped by `unit_memory_max`), only the waiting `cron run` process is in the slice.
+- **CPU priorities** (`maxxing/cpu.py`, config `cpu_priorities`, default true): three slices with weights, never caps -
+  `maxxing-live.slice` (CPUWeight/IOWeight 1000: the server, via the drop-in `claude-maxxing.service.d/30-cpu-priority.conf`
+  `Slice=maxxing-live.slice`, taken at its next restart), `maxxing-turns.slice` (100: turn units, `spawn._start_unit`
+  adds `cpu.turn_slice_args()` = `--slice maxxing-turns.slice` when the setting is on and the file exists),
+  `maxxing-jobs.slice` (30: job units and `maxxing heavy`; its text = `jobs_slice_text`, MemoryMax + weights). The dash
+  makes them children of `maxxing.slice` (a sibling of system.slice: against Docker and other services the whole of
+  Harness keeps an equal share). Claude jobs' turns stay turn units (normal). `cmd_core.ensure_cpu_slices()` (every
+  `maxxing init`, and PUT /api/settings when `cpu_priorities` changes) writes the files atomically when their text
+  changed, daemon-reloads, then `systemctl set-property --runtime <slice> CPUWeight= IOWeight=` for the slices whose
+  cgroup exists; setting off = weights 100 in the same files. Doctor `cpu_priorities` (files out of date -> `maxxing
+  init`; server not yet in its slice -> info). `cpu.set_level(unit, "live"|"normal"|"background")` = runtime weight of a
+  running unit (no-op off / not root / no systemd), for the watched browser. `maxxing heavy CMD…` (`cmd_heavy.py`)
+  execs `systemd-run --scope --slice=maxxing-jobs.slice --unit=maxxing-heavy-[session-<sid8>|cron-<id>]-<pid>.scope`
+  (foreground, same output and exit code), else `nice -n 10 ionice -c3`; `maxxing video render DIR` uses it.
+  `cpu.snapshot()` (GET /api/system/cpu): PSI `some` + top 6 units (cgroup `cpu.stat` `usage_usec` deltas between
+  calls, 0.5 s sample on the first / after 30 s) named by `describe()` (sessions store, crons). Health: `cpu_pressure`,
+  `cpu_waiting` in the payload; issue `cpu_pressure` when `note_pressure` saw `avg60 >= 40` for 10 min.
 - Shell jobs: `bash -lc` in the workspace, env = os.environ + exposed vault + MAXXING_CRON_ID/NAME; exit 124 on timeout.
   Timeout (`_kill_group`): SIGTERM to the job's process group, then after `KILL_GRACE_S` (5 s) SIGKILL to the whole
   group unconditionally (bash may have exited while a child ignoring SIGTERM lives on; the group id cannot be reused
