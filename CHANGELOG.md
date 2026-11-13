@@ -3,7 +3,7 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
-## Unreleased
+## 2.0.0-alpha.150 - 2026-11-13
 
 New:
 - **Files: Word, Excel, PowerPoint and OpenDocument files open in the viewer.** A `.docx`, `.pptx`, `.odt` or `.odp`

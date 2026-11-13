@@ -5,7 +5,7 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
-## Unreleased
+## 2.0.0-alpha.150 - 2026-11-13
 
 - Documents: `maxxing/documents.py` (stdlib only: zipfile + ElementTree) reads OOXML and ODF: `read(path)` ->
   `{type: text|slides, markdown}` or `{type: sheets, sheets: [{name, rows, truncated}]}`, `media(path, name)` for a
