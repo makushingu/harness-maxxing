@@ -308,6 +308,7 @@ export const en = {
   'sessions.msg.from': 'Sent by Claude from the session {title}',
   'slash.label': 'Commands',
   'slash.group.session': 'This session',
+  'slash.group.chat': 'This conversation',
   'slash.group.here': 'Skills of this project',
   'slash.group.other': 'Other skills',
   'slash.more': '+ {count} more',
@@ -4314,9 +4315,9 @@ export const en = {
   'pr.published': "Published on GitHub",
   // Terminal (features/terminal)
   'term.setting': "Code mode",
-  'term.settingDesc': "For working on code with Claude: a terminal under the conversation (Ctrl+J, /terminal), opened in the session's git repositories. The changes of each answer (diff, commit, push, pull request) show without it. Never for agents. Asks for your password to turn on.",
+  'term.settingDesc': "For working on code with Claude: a separate copy per session (its own branch and folder, ended by a pull request that Claude writes and watches), and a terminal under the conversation (Ctrl+J, /terminal) opened in the session's git repositories. The changes of each answer (diff, commit, push, pull request) and the pull request view show without it. Never for agents. Asks for your password to turn on.",
   'term.enableTitle': "Turn code mode on",
-  'term.enableDesc': "Code mode adds a terminal, which runs any command on this server with its rights. Type your password to confirm.",
+  'term.enableDesc': "Code mode adds a terminal, which runs any command on this server with its rights, and separate copies of a repository for sessions. Type your password to confirm.",
   'term.password': "Password",
   'term.badPassword': "Wrong password",
   'term.enable': "Turn on",
@@ -4335,5 +4336,5 @@ export const en = {
   'slash.terminal': "Open the terminal",
   'sessions.options.terminal': "Open a terminal",
   'show.code.title': "Code in a session",
-  'show.code.body': "When Claude changes a git repository, a button under its answer shows the changes: review the diff, undo a file, commit, push or open a pull request. Right click your message to go back to before it. Here, under Sessions, Code mode adds a terminal under the conversation (Ctrl+J).",
+  'show.code.body': "When Claude changes a git repository, a button under its answer shows the changes: review the diff, undo a file, commit, push or open a pull request. Right click your message to go back to before it. Here, under Sessions, Code mode adds a separate copy per session (its own branch, ended by a pull request) and a terminal under the conversation (Ctrl+J).",
 }

@@ -1002,7 +1002,8 @@ function Composer({ agent: a, replyTo, onCancelReply, onSend, ref }: { agent: Ag
   const [picked, setModel] = React.useState<string | null>(null)
   const [pickedEffort, setEffort] = React.useState<Effort | ''>('')
   React.useEffect(() => setModel(null), [setting])
-  const model = chat ? chat.model || setting : (picked ?? setting)
+  // "" = the agent's model (the runner falls back to it), shown as "Default" with that model beside it
+  const model = chat ? chat.model || '' : (picked ?? '')
   const effort = chat ? chat.effort || '' : pickedEffort
   const onModel = (m: string) => (chat ? patchSession.mutate({ id: chat.id, model: m }) : setModel(m))
   const onEffort = (e: Effort | '') => (chat ? patchSession.mutate({ id: chat.id, effort: e }) : setEffort(e))
@@ -1020,6 +1021,7 @@ function Composer({ agent: a, replyTo, onCancelReply, onSend, ref }: { agent: Ag
       : undefined,
     onNew: a.chat_session ? () => fresh.mutate({ path: a.path }) : undefined,
     newChat: true,
+    defaultModel: setting || undefined,
   })
   const key = agentDraftKey('agent', a.path)
   const { text, setText } = useDraftText(key)
@@ -1195,7 +1197,7 @@ function Composer({ agent: a, replyTo, onCancelReply, onSend, ref }: { agent: Ag
       </div>
       {a.enabled && !replyTo && (
         <div className="mx-auto mt-1 flex max-w-3xl items-center gap-2 px-1" data-testid="agent-chat-bar">
-          <ModelPicker chosen={model} real={chat?.real_model} contextTokens={chat?.context_tokens} onChange={onModel} effort={effort} onEffort={onEffort} />
+          <ModelPicker chosen={model} defaultModel={setting || undefined} real={chat?.real_model} contextTokens={chat?.context_tokens} onChange={onModel} effort={effort} onEffort={onEffort} />
           {a.chat_session && (
             <Tooltip content={t('agents.chat.newHint')}>
               <Button variant="ghost" size="sm" className="ml-auto h-7 text-xs text-muted-foreground" onClick={() => fresh.mutate({ path: a.path })} loading={fresh.isPending} data-testid="agent-new-chat">

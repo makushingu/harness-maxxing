@@ -97,6 +97,6 @@ export function useSlashMenu({
     }
     return true
   }
-  const node = menu ? <SlashMenu items={menu.items} active={active} stage={menu.stage} onPick={(i) => pick(i)} onHover={setAt} /> : null
+  const node = menu ? <SlashMenu items={menu.items} active={active} stage={menu.stage} onPick={(i) => pick(i)} onHover={setAt} chat /> : null
   return { node, onKeyDown, runTyped }
 }

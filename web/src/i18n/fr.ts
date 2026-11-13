@@ -306,6 +306,7 @@ export const fr: Record<keyof typeof en, string> = {
   'sessions.msg.from': 'Envoyé par Claude depuis la session {title}',
   'slash.label': 'Commandes',
   'slash.group.session': 'Cette session',
+  'slash.group.chat': 'Cette conversation',
   'slash.group.here': 'Skills de ce projet',
   'slash.group.other': 'Autres skills',
   'slash.more': '+ {count} autres',
@@ -4296,9 +4297,9 @@ export const fr: Record<keyof typeof en, string> = {
   'pr.published': "Publiée sur GitHub",
   // Terminal (features/terminal)
   'term.setting': "Mode code",
-  'term.settingDesc': "Pour coder avec Claude : un terminal sous la conversation (Ctrl+J, /terminal), ouvert dans les dépôts git de la session. Les changements de chaque réponse (diff, commit, push, PR) s'affichent même sans ce mode. Jamais pour les agents. Demande votre mot de passe pour l'activer.",
+  'term.settingDesc': "Pour coder avec Claude : une copie à part par session (sa branche, son dossier, terminée par une PR que Claude écrit et surveille) et un terminal sous la conversation (Ctrl+J, /terminal), ouvert dans les dépôts git de la session. Les changements de chaque réponse (diff, commit, push, PR) et la vue des PR s'affichent même sans ce mode. Jamais pour les agents. Demande votre mot de passe pour l'activer.",
   'term.enableTitle': "Activer le mode code",
-  'term.enableDesc': "Le mode code ajoute un terminal, qui lance n'importe quelle commande sur ce serveur avec ses droits. Tapez votre mot de passe pour confirmer.",
+  'term.enableDesc': "Le mode code ajoute un terminal, qui lance n'importe quelle commande sur ce serveur avec ses droits, et des copies à part d'un dépôt pour les sessions. Tapez votre mot de passe pour confirmer.",
   'term.password': "Mot de passe",
   'term.badPassword': "Mot de passe incorrect",
   'term.enable': "Activer",
@@ -4317,5 +4318,5 @@ export const fr: Record<keyof typeof en, string> = {
   'slash.terminal': "Ouvrir le terminal",
   'sessions.options.terminal': "Ouvrir un terminal",
   'show.code.title': "Le code dans la session",
-  'show.code.body': "Quand Claude modifie un dépôt git, un bouton sous sa réponse montre les changements : relire le diff, annuler un fichier, commit, push ou ouvrir une PR. Clic droit sur votre message pour revenir avant lui. Ici, sous Sessions, le mode code ajoute un terminal sous la conversation (Ctrl+J).",
+  'show.code.body': "Quand Claude modifie un dépôt git, un bouton sous sa réponse montre les changements : relire le diff, annuler un fichier, commit, push ou ouvrir une PR. Clic droit sur votre message pour revenir avant lui. Ici, sous Sessions, le mode code ajoute une copie à part par session (sa branche, terminée par une PR) et un terminal sous la conversation (Ctrl+J).",
 }

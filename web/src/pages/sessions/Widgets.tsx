@@ -57,6 +57,7 @@ export function ModelPicker({
   compact,
   effort,
   onEffort,
+  defaultModel,
 }: {
   /** Model chosen for the next turns ("" = default). */
   chosen: string
@@ -70,11 +71,13 @@ export function ModelPicker({
   /** Intelligence (`claude --effort`) of the next turns, "" = Claude Code's default; shown with `onEffort` only. */
   effort?: Effort | ''
   onEffort?: (effort: Effort | '') => void
+  /** What "Default" runs when it is not the server's default model (an agent's conversation: the agent's model). */
+  defaultModel?: string
 }) {
   const t = useT()
   const { data } = useClaudeStatus()
   const models = data?.models || []
-  const def = data?.default_model || ''
+  const def = defaultModel || data?.default_model || ''
   const next = chosen || def
   const shown = real || next
   const differs = !!real && !!next && !matchesModel(real, next)

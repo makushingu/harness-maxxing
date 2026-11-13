@@ -72,9 +72,9 @@ export function slashAction(text: string, commands: SlashCommand[]): { cmd: Slas
   return cmd?.run ? { cmd, arg: (m[2] || '').trim() } : null
 }
 
-function groupTitle(g: string, t: ReturnType<typeof useT>): string {
+function groupTitle(g: string, t: ReturnType<typeof useT>, chat?: boolean): string {
   const titles: Record<string, string> = {
-    session: t('slash.group.session'),
+    session: t(chat ? 'slash.group.chat' : 'slash.group.session'),
     here: t('slash.group.here'),
     other: t('slash.group.other'),
     '@session': t('mention.group.session'),
@@ -84,7 +84,7 @@ function groupTitle(g: string, t: ReturnType<typeof useT>): string {
   return titles[g] || g
 }
 
-export function SlashMenu({ items, active, onPick, onHover, stage, label, keys }: { items: MenuRow[]; active: number; onPick: (i: number) => void; onHover: (i: number) => void; stage: 'name' | 'arg'; label?: string; keys?: string }) {
+export function SlashMenu({ items, active, onPick, onHover, stage, label, keys, chat }: { items: MenuRow[]; active: number; onPick: (i: number) => void; onHover: (i: number) => void; stage: 'name' | 'arg'; label?: string; keys?: string; /** An agent's conversation: its commands are "This conversation"'s. */ chat?: boolean }) {
   const t = useT()
   const list = React.useRef<HTMLDivElement>(null)
   React.useEffect(() => {
@@ -102,7 +102,7 @@ export function SlashMenu({ items, active, onPick, onHover, stage, label, keys }
           <React.Fragment key={it.key}>
           {it.group && it.group !== items[i - 1]?.group && (
             <div className={cn('px-2.5 pt-1.5 pb-0.5 text-[10px] font-medium tracking-wide text-muted-foreground uppercase', i > 0 && 'mt-1 border-t pt-2')}>
-              {groupTitle(it.group, t)}
+              {groupTitle(it.group, t, chat)}
             </div>
           )}
           <div

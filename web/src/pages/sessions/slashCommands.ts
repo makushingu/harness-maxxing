@@ -18,6 +18,8 @@ export type SlashActions = {
   onNew?: () => void
   /** `/new` starts a new conversation of an agent (not a session of the topic) */
   newChat?: boolean
+  /** What "Default" runs when it is not the server's default model (an agent's conversation: the agent's model). */
+  defaultModel?: string
   onRename?: (title: string) => void
   /** The terminal drawer (Settings -> Features -> Sessions -> Code mode on, not an agent). */
   onTerminal?: () => void
@@ -30,7 +32,7 @@ export function useSlashCommands(path: string, a: SlashActions): SlashCommand[] 
   const live = React.useRef(a)
   live.current = a
   const models = claude?.models
-  const def = claude?.default_model || ''
+  const def = a.defaultModel || claude?.default_model || ''
   return React.useMemo(() => {
     const out: SlashCommand[] = [
       {
@@ -83,5 +85,5 @@ export function useSlashCommands(path: string, a: SlashActions): SlashCommand[] 
       out.push({ name: s.name, kind: 'skill', group: rank(s) < 2 ? 'here' : 'other', description: s.description })
     }
     return out
-  }, [t, models, def, skills, a.model, a.effort, a.plan, !!a.onPlan, !!a.onCompact, !!a.onHandoff, !!a.onNew, !!a.newChat, !!a.onRename, !!a.onTerminal]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [t, models, def, skills, a.model, a.effort, a.plan, !!a.onPlan, !!a.onCompact, !!a.onHandoff, !!a.onNew, !!a.newChat, !!a.onRename, !!a.onTerminal, a.defaultModel]) // eslint-disable-line react-hooks/exhaustive-deps
 }
