@@ -21,7 +21,7 @@ import sys
 import time
 from pathlib import Path
 
-from .. import config
+from .. import config, cpu
 
 log = logging.getLogger("maxxing.browser")
 
@@ -266,7 +266,8 @@ async def start(slug: str, profile: Path, run: Path, policy: dict, downloads: Pa
     props += [f"BindReadOnlyPaths={run / 'policy.json'}:{d}/harness.json" for d in POLICY_DIRS]
     if downloads is not None:
         props.append(f"BindPaths={downloads}:/mxdownloads")
-    cmd = ["systemd-run", "--quiet", "--collect", "--unit", unit_name(slug), "--description",
+    # in the turns' slice (CPU priorities on): its weight then counts against turns, never against the web server
+    cmd = ["systemd-run", "--quiet", "--collect", "--unit", unit_name(slug), *cpu.turn_slice_args(), "--description",
            f"Harness Maxxing: Harness Browser ({slug})"]
     for p in props:
         cmd += ["-p", p]
@@ -278,20 +279,12 @@ async def start(slug: str, profile: Path, run: Path, policy: dict, downloads: Pa
     return None
 
 
-LEVELS = {"live": 1000, "normal": 100, "background": 30}
-
-
 def set_level(slug: str, level: str, proc: asyncio.subprocess.Process | None = None) -> None:
-    """CPU / disk priority of a profile's unit (Settings -> System -> CPU priorities): `live` while someone watches it
-    or Claude acts in it, `background` while it waits. Weights only matter when the processor is full."""
-    if proc is not None or _direct() or not config.load_config().get("cpu_priorities", True):
+    """CPU / disk priority of a profile's unit (cpu.py, Settings -> System -> CPU priorities): `live` while someone
+    watches it or Claude acts in it, `background` while it waits. Weights only matter when the processor is full."""
+    if proc is not None or _direct():
         return
-    w = LEVELS.get(level, 100)
-    try:
-        subprocess.run(["systemctl", "set-property", "--runtime", unit_name(slug), f"CPUWeight={w}", f"IOWeight={w}"],
-                       capture_output=True, timeout=10)
-    except (OSError, subprocess.SubprocessError):
-        pass
+    cpu.set_level(unit_name(slug), level)
 
 
 async def http_get(sock: Path, path: str, timeout: float = 5.0) -> dict:

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, seg } from '../api'
-import type { Changelog, Health, LogsPayload, MemoryInfo, Ok, Preflight, Service, ServiceAction, Session, TokenStats, UpdateReport, UsagePayload, VersionInfo } from '../types'
+import type { Changelog, CpuSnapshot, Health, LogsPayload, MemoryInfo, Ok, Preflight, Service, ServiceAction, Session, TokenStats, UpdateReport, UsagePayload, VersionInfo } from '../types'
 import { qk } from './keys'
 import { useMut } from './util'
 
@@ -23,6 +23,15 @@ export function useMarkHealthSeen() {
     },
     onSuccess: (h) => qc.setQueryData(qk.health, h),
     onError: () => void qc.invalidateQueries({ queryKey: qk.health }),
+  })
+}
+/** Who uses the processor (the CPU meter's window): every 3 s while it is open. */
+export function useCpu(enabled = true) {
+  return useQuery({
+    queryKey: qk.system.cpu,
+    queryFn: () => api.get<CpuSnapshot>('/api/system/cpu'),
+    refetchInterval: enabled ? 3_000 : false,
+    enabled,
   })
 }
 export const servicesQuery = () => ({ queryKey: qk.system.services, queryFn: () => api.get<Service[]>('/api/system/services') })

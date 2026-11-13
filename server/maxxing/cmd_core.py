@@ -480,10 +480,13 @@ _SLICE_MEMORY_RE = re.compile(r"^\d+(\.\d+)?[%KMGT]?$")
 
 
 def jobs_slice_text(cfg: dict | None = None) -> str:
-    cap = str((cfg if cfg is not None else config.load_config()).get("jobs_memory_max") or "").strip()
+    """The jobs slice: the memory budget of the jobs running at once and the background CPU weight (`maxxing heavy`
+    runs there too; maxxing/cpu.py)."""
+    from . import cpu
+    cfg = cfg if cfg is not None else config.load_config()
+    cap = str(cfg.get("jobs_memory_max") or "").strip()
     limit = f"MemoryMax={cap}\n" if cap and cap.lower() != "infinity" and _SLICE_MEMORY_RE.match(cap) else ""
-    return ("# Harness Maxxing - every scheduled job unit runs in this slice (config `jobs_memory_max`, then `maxxing init`)\n"
-            "[Unit]\nDescription=Harness Maxxing scheduled jobs\n\n[Slice]\n" + limit)
+    return cpu.slice_text(cpu.BACKGROUND, cfg, extra=limit)
 
 
 def ensure_jobs_slice() -> str:
@@ -503,6 +506,87 @@ def ensure_jobs_slice() -> str:
         return f"not written: {e}"
     systemctl("daemon-reload")
     return "written"
+
+
+# ---- CPU priorities (maxxing/cpu.py) -------------------------------------------------------
+SERVICE_CPU_NAME = "30-cpu-priority.conf"
+
+
+def service_cpu_path() -> Path:
+    return UNIT_PATH.with_name(UNIT_PATH.name + ".d") / SERVICE_CPU_NAME
+
+
+def service_cpu_text() -> str:
+    from . import cpu
+    return ("# Harness Maxxing - CPU priorities: the web server (the UI) goes first when the processor is full\n"
+            "# (weight of the slice: config `cpu_priorities`, Settings -> System; taken at the next restart)\n"
+            f"[Service]\nSlice={cpu.SLICES[cpu.LIVE]}\n")
+
+
+def cpu_files(cfg: dict | None = None) -> dict[Path, str]:
+    """Every file of the CPU priorities and its text: the live and turns slices, the server's drop-in (the jobs slice
+    is written by ensure_jobs_slice). Setting off = the same files with weight 100 (nothing deleted)."""
+    from . import cpu
+    cfg = cfg if cfg is not None else config.load_config()
+    return {cpu.SLICE_DIR / cpu.SLICES[cpu.LIVE]: cpu.slice_text(cpu.LIVE, cfg),
+            cpu.SLICE_DIR / cpu.SLICES[cpu.NORMAL]: cpu.slice_text(cpu.NORMAL, cfg),
+            service_cpu_path(): service_cpu_text()}
+
+
+def _write_if_changed(path: Path, text: str) -> bool:
+    if path.is_file() and path.read_text() == text:
+        return False
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(text)
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, path)
+    return True
+
+
+def ensure_cpu_slices(jobs: str | None = None, apply_now: bool = True) -> str:
+    """Write the slices of the CPU priorities (+ the jobs slice) when they changed, then daemon-reload and give the
+    running slices their new weight at once (`set-property --runtime`). The server moves into the live slice at its
+    next restart (never restarted here). Skipped without systemd and in tests/dev (MAXXING_SPAWN=direct)."""
+    if os.environ.get("MAXXING_SPAWN") == "direct" or not SYSTEMD_DIR.is_dir():
+        return "skipped (no systemd)"
+    from . import cpu
+    cfg = config.load_config()
+    jobs = ensure_jobs_slice() if jobs is None else jobs     # `maxxing init` wrote it just before
+    try:
+        changed = [p for p, text in cpu_files(cfg).items() if _write_if_changed(p, text)]
+    except OSError as e:
+        return f"not written: {e}"
+    if changed:
+        systemctl("daemon-reload")
+    if (changed or jobs == "written") and apply_now:
+        for level, name in cpu.SLICES.items():
+            if (cpu.CGROUP_ROOT / "maxxing.slice" / name).is_dir():      # running: its weight now, not after a reboot
+                w = cpu.weight(level, cfg)
+                systemctl("set-property", "--runtime", name, f"CPUWeight={w}", f"IOWeight={w}", timeout=15)
+    if not changed and jobs != "written":
+        return "unchanged"
+    return "written (" + ("on" if cpu.enabled(cfg) else "off: equal weights") + ")"
+
+
+def check_cpu_priorities() -> Check | None:
+    """The slice files match the setting (a restored config, an install older than the feature)."""
+    if os.environ.get("MAXXING_SPAWN") == "direct" or not SYSTEMD_DIR.is_dir():
+        return None
+    from . import cpu
+    cfg = config.load_config()
+    files = {JOBS_SLICE_PATH: jobs_slice_text(cfg), **cpu_files(cfg)}
+    wrong = [p.name for p, text in files.items() if not p.is_file() or p.read_text(errors="replace") != text]
+    state = "on" if cpu.enabled(cfg) else "off"
+    if wrong:
+        return _c("cpu_priorities", WARN, f"CPU priorities ({state}): {len(wrong)} file(s) missing or out of date",
+                  ", ".join(wrong), "maxxing init")
+    if cpu.enabled(cfg) and UNIT_PATH.is_file():
+        code, out = systemctl("show", "-p", "Slice", "--value", SERVICE, timeout=10)
+        if code == 0 and out.strip() and out.strip() != cpu.SLICES[cpu.LIVE]:
+            return _c("cpu_priorities", INFO, "CPU priorities on, the server joins its slice at its next restart",
+                      f"now in {out.strip()}", f"systemctl restart {SERVICE}  (a few seconds without the UI)")
+    return _c("cpu_priorities", OK, f"CPU priorities {state}" + ("" if state == "on" else " (equal weights)"))
 
 
 # ---- init ----------------------------------------------------------------------------------
@@ -589,6 +673,7 @@ def do_init(a: argparse.Namespace) -> dict:
     report["claude_settings"] = "defaults set (transcripts kept, no AI credit in commits)" if claude_settings_defaults() else "unchanged"
     report["crons"] = "skipped (--no-crons)" if a.no_crons else ensure_default_crons()
     report["jobs_slice"] = ensure_jobs_slice()
+    report["cpu_priorities"] = ensure_cpu_slices(report["jobs_slice"])
     report["service_memory"] = ensure_service_memory()
     cr = _optional("crons")
     try:
@@ -1560,7 +1645,7 @@ def collect_checks(live: bool = False, fetch: bool = True, deps: bool = False) -
         check_python, check_uv, check_claude_cli, lambda: check_claude_version(fetch), lambda: check_claude_auth(live),
         lambda: check_skill_listing(cfg), check_setup,
         check_service, check_hardening, lambda: check_caddy_site(cfg), check_infra_paths, lambda: check_bind(cfg), lambda: check_http(cfg), lambda: check_public_url(cfg),
-        lambda: check_caddy(cfg), check_crontab, lambda: check_timezone(cfg), lambda: check_telegram(cfg), lambda: check_backup(cfg), check_voice, check_tools, check_stale_units, check_agent_sandbox, check_browser, check_managed_deps, check_security, check_state_files,
+        lambda: check_caddy(cfg), check_crontab, lambda: check_timezone(cfg), lambda: check_telegram(cfg), lambda: check_backup(cfg), check_voice, check_tools, check_stale_units, check_cpu_priorities, check_agent_sandbox, check_browser, check_managed_deps, check_security, check_state_files,
         lambda: check_disk(cfg), check_memory, lambda: check_workspace(cfg), check_skills, check_web,
         check_license, lambda: check_git(fetch), check_update_signature,
     ] + ([check_deps] if deps else [])
@@ -2679,6 +2764,10 @@ def cmd_uninstall(a) -> int:
             pass
     if JOBS_SLICE_PATH.is_file():
         JOBS_SLICE_PATH.unlink()
+    from . import cpu
+    for p in (cpu.SLICE_DIR / cpu.SLICES[cpu.LIVE], cpu.SLICE_DIR / cpu.SLICES[cpu.NORMAL], service_cpu_path()):
+        if p.is_file():
+            p.unlink()
     if UNIT_PATH.exists():
         UNIT_PATH.unlink()
         systemctl("daemon-reload")

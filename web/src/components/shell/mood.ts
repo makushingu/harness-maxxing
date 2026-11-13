@@ -60,6 +60,7 @@ const ISSUE_MOOD: Record<string, TKey> = {
   backup_never: 'mood.issue.backupNever',
   backup_old: 'mood.issue.backupOld',
   backup_failed: 'mood.issue.backupFailed',
+  cpu_pressure: 'mood.issue.cpuPressure',
 }
 
 /** The one thing worth saying now, most pressing first: health problems, quota out, a busy server (CPU, memory),
@@ -85,6 +86,8 @@ export function pickMood(f: MoodFacts): Mood {
 
   const system = '/settings/system'
   const cpu = Math.round(h.cpu_pct)
+  // programs waiting for the processor (pressure), not a high figure alone: 99 % with nothing waiting is fine
+  if (h.cpu_waiting) return { key: 'mood.cpuWaiting', level: 'note', to: system }
   if (cpu >= 85) return { key: 'mood.cpuHot', vars: { pct: cpu }, level: 'note', to: system }
   const mem = h.mem.total ? Math.round(((h.mem.total - h.mem.avail) / h.mem.total) * 100) : 0
   if (mem >= 90) return { key: 'mood.memHigh', vars: { pct: mem }, level: 'note', to: system }

@@ -52,6 +52,7 @@ export const qk = {
   health: ['health'] as const,
   system: {
     services: ['system', 'services'] as const,
+    cpu: ['system', 'cpu'] as const,
     logs: (unit: string, lines: number) => ['system', 'logs', unit, lines] as const,
     version: ['system', 'version'] as const,
     usage: ['system', 'usage'] as const,

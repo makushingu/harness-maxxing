@@ -33,8 +33,10 @@ shared one. If `maxxing video new` says Remotion is not prepared: `maxxing deps 
 ## 3. Check, then render
 ```bash
 cd <project> && npx remotion still src/index.jsx <Id> out/check.png --frame=<n>   # look at key frames
-cd <project> && npx remotion render src/index.jsx <Id> out/<name>.mp4
+maxxing video render <project> --id <Id> --out out/<name>.mp4    # = npx remotion render, through `maxxing heavy`
 ```
+`maxxing video render` (and `maxxing heavy <command>` for an ffmpeg pass) runs with the background priority: when
+the processor is full the interface and the sessions go first, the render slows down a little and never stops.
 Look at 2-3 stills (Read the PNG) before the full render and fix what is off. Rendering takes
 roughly real time to a few times real time on a small server. Give the user the path of the MP4
 (and a still as preview). Keep the project: changing a text later = edit + render again.

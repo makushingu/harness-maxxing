@@ -104,7 +104,8 @@ UI; the server CLI is `maxxing`:
 | `maxxing team send NAME "message" [--file PATH]` / `team list` | write to a Team contact or group (Settings -> Features -> Team) by their name, as the user: only when the user asks for it |
 | `maxxing sessions send SESSION "message"` / `sessions new PROJECT/TOPIC "message"` / `sessions list` | write to another session (id or title), as a message typed in it, or start a new one in a topic: when the user asks for it (an `@` mention tells you which) |
 | `maxxing agents list\|run\|send\|on\|off` | agents (Settings -> Features -> Agents): start one, hand work from one agent to another (`send`), switch on / off |
-| `maxxing video new DIR` / `video status` | Remotion video project linked to the shared install / tools check |
+| `maxxing video new DIR` / `video render DIR` / `video status` | Remotion video project linked to the shared install / render it (background priority) / tools check |
+| `maxxing heavy COMMAND…` | run a long CPU-hungry command (ffmpeg, a build, a compression) after the UI and the sessions when the processor is full; same output and exit code |
 | `maxxing pdf IN.html OUT.pdf` | print an HTML page (or URL) to PDF |
 | `maxxing setup-link` / `maxxing password` | first sign-in link / change the UI password |
 

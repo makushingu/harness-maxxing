@@ -820,6 +820,8 @@ export type Settings = {
   maxxing_mode?: boolean
   /** Settings -> Features: the E-mail page (/mail) and its sidebar entry */
   mail_page?: boolean
+  /** Settings -> System: CPU priorities (the UI first, then turns, then jobs and `maxxing heavy`), default on */
+  cpu_priorities?: boolean
   /** Sidebar pages in the order the user dragged them (routes, e.g. "/sessions"); empty = the default order. */
   sidebar_order?: string[]
   /** Settings -> Features: the Harness Browser (each topic / agent may then be let use it) */
@@ -862,6 +864,10 @@ export type Health = {
   ok: boolean
   issues: HealthIssue[]
   cpu_pct: number
+  /** `some` line of /proc/pressure/cpu: share of time programs waited for the processor (null without PSI) */
+  cpu_pressure?: CpuPressure | null
+  /** pressure avg10 >= 20 %: the CPU meter says "waiting" */
+  cpu_waiting?: boolean
   load: number[]
   mem: { total: number; avail: number }
   disk: { total: number; free: number; pct: number }
@@ -871,6 +877,17 @@ export type Health = {
   claude_checked_at?: number | null
   backup_age_h: number | null
   failed_logins_1h: number
+  at: number
+}
+export type CpuPressure = { avg10: number; avg60: number; avg300: number }
+export type CpuLevel = 'live' | 'normal' | 'background' | 'other'
+export type CpuKind = 'harness' | 'session' | 'agent' | 'heavy' | 'job' | 'browser' | 'docker' | 'other'
+/** GET /api/system/cpu: CPU priorities and the units that use the processor most (`maxxing/cpu.py`). */
+export type CpuSnapshot = {
+  enabled: boolean
+  pressure: CpuPressure | null
+  waiting: boolean
+  top: { unit: string; kind: CpuKind; name: string; label: string; level: CpuLevel; pct: number }[]
   at: number
 }
 export type Service = { name: string; label: string; active: boolean; enabled: boolean; since: number | null; state: string }

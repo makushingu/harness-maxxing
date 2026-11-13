@@ -38,6 +38,13 @@ class SeenBody(BaseModel):
     seen: bool = True
 
 
+@router.get("/system/cpu")
+async def get_cpu(force: bool = False):
+    """CPU pressure and the units that use the processor most (the "Who takes the processor" window)."""
+    from .. import cpu
+    return await asyncio.to_thread(cpu.snapshot, force)
+
+
 @router.post("/system/health/seen")
 async def health_seen(body: SeenBody):
     """Mark a health issue as seen: it stops counting in the sidebar until it changes or for 24 h."""

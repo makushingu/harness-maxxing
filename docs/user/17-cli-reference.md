@@ -25,6 +25,8 @@ existing values and files are kept unless you pass a flag.
 Workspace templates (default projects `general`, `system`, `tutorial`) are copied only when
 missing, and a default project or topic you deleted is never re-created. Default jobs are created
 once each (Memory compaction, Check for updates, Morning tasks and Renewal reminder disabled).
+As root on systemd it also writes the slices of the [CPU priorities](settings-and-keys#cpu-priorities)
+(`maxxing-live.slice`, `maxxing-turns.slice`, `maxxing-jobs.slice`; the server joins its slice at its next restart).
 
 | Option | Effect |
 |---|---|
@@ -93,11 +95,20 @@ See [License](license).
 | Command | Effect |
 |---|---|
 | `maxxing video new DIR` | create a Remotion project in DIR (node_modules linked to the shared install) |
+| `maxxing video render [DIR] [--id Intro] [--out out/video.mp4]` | render a Remotion project with the background priority (through `maxxing heavy`) |
 | `maxxing video status` | Node.js, Remotion and the headless browser on this server (exit 1 if not ready) |
 | `maxxing pdf IN.html OUT.pdf` | print an HTML file or an `https://` URL to PDF (A4, backgrounds) |
 | `scrapling extract get\|fetch\|stealthy-fetch URL OUT.md` | fetch a page (HTTP / browser / stealthy browser) to Markdown, text or HTML |
 | `scrapling-python SCRIPT.py` | run a scraping script with Scrapling and its browser |
 | `bash /opt/claude-maxxing/install.sh --tools` | (re)install Node.js, Chromium, Remotion and Scrapling (= `maxxing deps update`) |
+
+## maxxing heavy
+
+| Command | Effect |
+|---|---|
+| `maxxing heavy COMMAND [ARGS…]` | run a long, CPU-hungry command (render, encode, build, compression) with the background priority: when the processor is full it goes after the interface and the sessions, and is never slowed otherwise. Same terminal, same output, same exit code. Runs in a scope of `maxxing-jobs.slice` (named after the session or job that started it); without systemd or as a normal user, under `nice -n 10` and `ionice -c3` |
+
+See [CPU priorities](settings-and-keys#cpu-priorities).
 
 ## maxxing import
 
