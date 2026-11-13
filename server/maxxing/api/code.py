@@ -416,3 +416,66 @@ async def copy_prepare_log(sid: str):
     except OSError:
         text = ""
     return {"log": text}
+
+
+# ---- a session on a pull request: work on it, or have Claude review it -----------------------------------------
+
+TOPIC_RE = re.compile(r"\A(projects/[^/]+(?:/topics/[^/]+)?)(?:/|\Z)")
+
+
+def _topic_of(clone: Path) -> str | None:
+    """The topic (or project) folder holding a clone, as a workspace path."""
+    from .. import workspace
+    try:
+        rel = clone.resolve().relative_to(workspace.root().resolve()).as_posix()
+    except ValueError:
+        return None
+    m = TOPIC_RE.match(rel)
+    return m.group(1) if m else None
+
+
+class PrSessionIn(BaseModel):
+    repo: str                              # github:owner/name
+    number: int
+    review: bool = False                   # Claude reviews (plan mode) instead of working on it
+    message: Optional[str] = None          # the first message (written by the UI in the user's language)
+    clone: Optional[str] = None            # which local clone, when there are several
+
+
+def _pr_session(body: PrSessionIn) -> dict:
+    from .. import worktrees
+    from ..sessions import service
+    if not body.repo.startswith("github:"):
+        raise GitError(400, "not_github", "pull requests need github:owner/name")
+    worktrees._need_enabled()
+    full = gitview._full(body.repo[7:])
+    p = gitview._gh_repo(full, f"/repos/{full}/pulls/{gitview._number(body.number)}")
+    head = p.get("head") or {}
+    head_repo = (head.get("repo") or {}).get("full_name") or ""
+    clones = [Path(r["path"]) for r in gitview.local_repos() if (r.get("github") or "").lower() == full.lower()]
+    if body.clone:
+        clones = [c for c in clones if str(c) == body.clone]
+    placed = [(c, t) for c in clones if (t := _topic_of(c)) is not None]
+    if not placed:
+        raise GitError(400, "no_clone", f"clone {full} into a topic first: the session works in that topic")
+    clone, topic = placed[0]
+    outside = (p.get("author_association") or "") not in gitview.OWN_ROLES
+    pr = {"number": p.get("number"), "ref": head.get("ref"), "base": (p.get("base") or {}).get("ref"),
+          "fork": bool(head_repo) and head_repo.lower() != full.lower(), "outside": outside, "full": full,
+          "url": p.get("html_url")}
+    title = f"PR #{p.get('number')} {p.get('title') or ''}".strip()[:120]
+    s = service.create_session(topic, message=(body.message or "").strip() or None, title=title, source="web",
+                               plan_mode=body.review or outside, worktree={"repo": str(clone), "pr": pr})
+    return s
+
+
+@router.post("/api/code/pr-session")
+async def pr_session(body: PrSessionIn):
+    from ..sessions.service import SessionError
+
+    def run():
+        try:
+            return _pr_session(body)
+        except SessionError as e:
+            raise GitError(e.status, e.code, e.message) from None
+    return await _call(run)

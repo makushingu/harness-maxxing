@@ -226,6 +226,11 @@ def diff(repo: Path, a: str, b: str, path: str, old: str | None = None, full: bo
     """One file's diff between two tree-ish, as hunks of lines [{t: ' '|'+'|'-', o, n, s}]."""
     raw = _git(repo, "diff", "--no-color", "--no-ext-diff", "--no-textconv", "-M", "-U3", a, b, "--",
                *([old] if old and old != path else []), path)
+    return {"path": path, **parse_patch(raw, full)}
+
+
+def parse_patch(raw: str, full: bool = False) -> dict:
+    """A unified diff (git's, or a GitHub pull request file's `patch`) -> {hunks, binary, cut, lines}."""
     hunks: list[dict] = []
     total = 0
     cut = False
@@ -254,7 +259,7 @@ def diff(repo: Path, a: str, b: str, path: str, old: str | None = None, full: bo
             o += 1
         if t != "-":
             n += 1
-    return {"path": path, "hunks": hunks, "binary": binary, "cut": cut, "lines": total}
+    return {"hunks": hunks, "binary": binary, "cut": cut, "lines": total}
 
 
 def repo_head(repo: Path) -> dict:

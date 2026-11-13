@@ -52,7 +52,8 @@ TEXT_EXT = {".md", ".markdown", ".txt", ".rst", ".org", ".py", ".js", ".mjs", ".
             ".kt", ".swift", ".c", ".h", ".cpp", ".cs", ".sh", ".bash", ".zsh", ".sql", ".yaml", ".yml", ".toml",
             ".ini", ".cfg", ".conf", ".env.example", ".tex"}   # not .json/.csv/.tsv/.xml/.svg: data, not text to search
 SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", "venv", ".cache", ".next", "dist", "build",
-             ".mypy_cache", ".pytest_cache", "attachments", ".nuxt", ".svelte-kit", "vendor", "coverage"}
+             ".mypy_cache", ".pytest_cache", "attachments", ".nuxt", ".svelte-kit", "vendor", "coverage",
+             "worktrees"}                  # the separate copies of Code mode (worktrees.py): the clone is indexed
 SKIP_FILES = {"tasks.json", "package-lock.json", "yarn.lock", "pnpm-lock.yaml", "uv.lock", "poetry.lock"}
 MEMORY_NAMES = {"memory.md", "claude.md"}
 MAX_FILE_BYTES = 256 * 1024          # bigger text files are skipped (generated data, dumps)

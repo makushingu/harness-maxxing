@@ -712,12 +712,34 @@ def github_commit(full_name: str, sha: str) -> dict:
             "files": files[:300], "files_total": len(files), "url": c.get("html_url")}
 
 
-def github_pulls(full_name: str) -> list[dict]:
+OWN_ROLES = ("OWNER", "MEMBER", "COLLABORATOR")
+
+
+def _my_logins() -> set[str]:
+    """The GitHub logins behind the server's tokens (a pull request "waits for my review" when one is asked)."""
+    try:
+        accs = github_repos().get("accounts") or []
+    except GitError:
+        return set()
+    return {str(a.get("login")).lower() for a in accs if isinstance(a, dict) and a.get("login")}
+
+
+def github_pulls(full_name: str, state: str = "open") -> list[dict]:
     full = _full(full_name)
-    return [{"number": p["number"], "title": p["title"], "author": (p.get("user") or {}).get("login"),
-             "head": (p.get("head") or {}).get("ref"), "base": (p.get("base") or {}).get("ref"),
-             "draft": bool(p.get("draft")), "url": p.get("html_url"), "updated": _ts(p.get("updated_at"))}
-            for p in _gh_repo(full, f"/repos/{full}/pulls", {"state": "open", "per_page": 30})]
+    if state not in ("open", "closed", "all"):
+        raise GitError(400, "bad_state", "state: open | closed | all")
+    mine = _my_logins()
+    out = []
+    for p in _gh_repo(full, f"/repos/{full}/pulls", {"state": state, "per_page": 30, "sort": "updated",
+                                                     "direction": "desc"}):
+        asked = {str(u.get("login")).lower() for u in p.get("requested_reviewers") or [] if isinstance(u, dict)}
+        out.append({"number": p["number"], "title": p["title"], "author": (p.get("user") or {}).get("login"),
+                    "head": (p.get("head") or {}).get("ref"), "base": (p.get("base") or {}).get("ref"),
+                    "draft": bool(p.get("draft")), "url": p.get("html_url"), "updated": _ts(p.get("updated_at")),
+                    "state": "merged" if p.get("merged_at") else p.get("state"),
+                    "outside": (p.get("author_association") or "") not in OWN_ROLES,
+                    "review_me": bool(asked & mine)})
+    return out
 
 
 # ---- one entry point for the UI and the extension -----------------------------------------
@@ -749,8 +771,9 @@ def overview(refresh: bool = False) -> dict:
 
 # ---- Changes view (codediff): the pull request of a branch, and opening one ------------------------------------
 
-def _gh_send(full: str, path: str, body: dict) -> Any:
-    """POST to a repository URL with the first token GitHub accepts for it (a read-only token gets 403/404)."""
+def _gh_send(full: str, path: str, body: dict, method: str = "POST") -> Any:
+    """POST (PUT, PATCH) to a repository URL with the first token GitHub accepts for it (a read-only token gets
+    403/404)."""
     toks = _repo_tokens(_full(full))
     if not toks:
         raise GitError(400, "no_token", "add a GitHub token as GITHUB_TOKEN in Settings -> Keys")
@@ -759,7 +782,7 @@ def _gh_send(full: str, path: str, body: dict) -> Any:
         headers = {"Authorization": f"Bearer {tok}", "Accept": "application/vnd.github+json",
                    "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "harness-maxxing"}
         try:
-            r = _client().post(github_api() + path, headers=headers, json=body)
+            r = _client().request(method, github_api() + path, headers=headers, json=body)
         except httpx.HTTPError as e:
             raise GitError(502, "github_unreachable", f"GitHub unreachable: {type(e).__name__}") from None
         if r.status_code in (200, 201):
@@ -773,6 +796,8 @@ def _gh_send(full: str, path: str, body: dict) -> Any:
         if r.status_code in (401, 403, 404):
             last = GitError(403, "no_write", "no GitHub token can write to this repository (Settings -> Keys)")
             continue
+        if r.status_code in (405, 409):                 # merge refused (checks, conflict) / head moved
+            raise GitError(409, "refused", f"GitHub: {text or r.status_code}"[:400])
         raise GitError(400 if r.status_code == 422 else 502, "github_error", f"GitHub {r.status_code}: {text}"[:400])
     raise last  # type: ignore[misc]
 
@@ -804,3 +829,133 @@ def branch_status(full: str, branch: str, sha: str | None) -> dict:
                                                                        "action_required"))
             checks = {"total": len(items), "ok": ok, "failed": failed, "pending": len(items) - ok - failed}
     return {"pr": pr, "checks": checks}
+
+
+# ---- one pull request, read and acted on in Harness (the PR view) ----------------------------------------------
+
+MAX_PR_FILES = 300
+MERGE_METHODS = ("merge", "squash", "rebase")
+
+
+def _number(n: int) -> int:
+    if not isinstance(n, int) or n < 1 or n > 10**9:
+        raise GitError(400, "bad_number", "invalid pull request number")
+    return n
+
+
+def _who(u: dict | None) -> dict:
+    u = u or {}
+    return {"login": u.get("login") or "", "avatar": u.get("avatar_url") or ""}
+
+
+def _checks(full: str, sha: str | None) -> list[dict]:
+    if not sha or not SHA_RE.match(sha):
+        return []
+    runs = _gh_repo(full, f"/repos/{full}/commits/{sha}/check-runs", {"per_page": 100})
+    items = (runs or {}).get("check_runs") or [] if isinstance(runs, dict) else []
+    out = [{"name": c.get("name") or "", "status": c.get("status"), "conclusion": c.get("conclusion"),
+            "url": c.get("html_url")} for c in items if isinstance(c, dict)]
+    st = _gh_repo(full, f"/repos/{full}/commits/{sha}/status")
+    for c in (st or {}).get("statuses") or [] if isinstance(st, dict) else []:
+        state = c.get("state")
+        out.append({"name": c.get("context") or "", "status": "completed" if state != "pending" else "in_progress",
+                    "conclusion": {"success": "success", "failure": "failure", "error": "failure"}.get(state),
+                    "url": c.get("target_url")})
+    return out
+
+
+def github_pull(full_name: str, number: int) -> dict:
+    """Everything the PR view shows: header, description, checks, files (with their diff), conversation."""
+    full, n = _full(full_name), _number(number)
+    p = _gh_repo(full, f"/repos/{full}/pulls/{n}")
+    repo = _gh_repo(full, f"/repos/{full}")
+    head = p.get("head") or {}
+    files = []
+    for page in range(1, 4):
+        batch = _gh_repo(full, f"/repos/{full}/pulls/{n}/files", {"per_page": 100, "page": page})
+        if not isinstance(batch, list):
+            break
+        files += batch
+        if len(batch) < 100:
+            break
+    from .codediff import parse_patch
+    flist = []
+    for f in files[:MAX_PR_FILES]:
+        patch = f.get("patch")
+        d = parse_patch(patch or "") if patch else {"hunks": [], "binary": f.get("status") != "renamed",
+                                                    "cut": False, "lines": 0}
+        flist.append({"path": f.get("filename") or "", "old": f.get("previous_filename"),
+                      "status": {"added": "A", "removed": "D", "renamed": "R", "copied": "C"}.get(f.get("status"), "M"),
+                      "add": f.get("additions") or 0, "del": f.get("deletions") or 0, **d})
+    conv: list[dict] = []
+    for c in _gh_repo(full, f"/repos/{full}/issues/{n}/comments", {"per_page": 100}) or []:
+        conv.append({"kind": "comment", "id": c.get("id"), "author": _who(c.get("user")), "body": c.get("body") or "",
+                     "at": _ts(c.get("created_at")), "url": c.get("html_url")})
+    for r in _gh_repo(full, f"/repos/{full}/pulls/{n}/reviews", {"per_page": 100}) or []:
+        if r.get("state") == "COMMENTED" and not (r.get("body") or "").strip():
+            continue                                    # the envelope of line comments: they are listed below
+        conv.append({"kind": "review", "id": r.get("id"), "author": _who(r.get("user")), "body": r.get("body") or "",
+                     "state": r.get("state"), "at": _ts(r.get("submitted_at")), "url": r.get("html_url")})
+    lines = []
+    for c in _gh_repo(full, f"/repos/{full}/pulls/{n}/comments", {"per_page": 100}) or []:
+        lines.append({"id": c.get("id"), "path": c.get("path"), "line": c.get("line") or c.get("original_line"),
+                      "side": c.get("side") or "RIGHT", "author": _who(c.get("user")), "body": c.get("body") or "",
+                      "at": _ts(c.get("created_at")), "reply_to": c.get("in_reply_to_id"),
+                      "outdated": c.get("line") is None})
+    conv.sort(key=lambda x: x["at"])
+    perms = repo.get("permissions") or {}
+    methods = [m for m, k in (("squash", "allow_squash_merge"), ("merge", "allow_merge_commit"),
+                              ("rebase", "allow_rebase_merge")) if repo.get(k, True)]
+    head_repo = (head.get("repo") or {}).get("full_name") or ""
+    return {"full": full, "number": n, "title": p.get("title") or "", "body": p.get("body") or "",
+            "author": _who(p.get("user")), "association": p.get("author_association") or "",
+            "outside": (p.get("author_association") or "") not in OWN_ROLES,
+            "state": "merged" if p.get("merged") else p.get("state"), "draft": bool(p.get("draft")),
+            "mergeable": p.get("mergeable"), "mergeable_state": p.get("mergeable_state"),
+            "head": head.get("ref"), "head_sha": head.get("sha"), "head_repo": head_repo,
+            "fork": bool(head_repo) and head_repo.lower() != full.lower(),
+            "base": (p.get("base") or {}).get("ref"), "url": p.get("html_url"),
+            "created": _ts(p.get("created_at")), "updated": _ts(p.get("updated_at")),
+            "commits": p.get("commits") or 0, "add": p.get("additions") or 0, "del": p.get("deletions") or 0,
+            "files": flist, "files_total": len(files), "conversation": conv, "line_comments": lines,
+            "checks": _checks(full, head.get("sha")), "methods": methods,
+            "can_write": bool(perms.get("push") or perms.get("maintain") or perms.get("admin")),
+            "local_paths": [r["path"] for r in local_repos() if (r.get("github") or "").lower() == full.lower()]}
+
+
+def pull_comment(full: str, number: int, body: str) -> dict:
+    full, n = _full(full), _number(number)
+    if not (body or "").strip():
+        raise GitError(400, "empty", "write something first")
+    c = _gh_send(full, f"/repos/{full}/issues/{n}/comments", {"body": body[:60000]})
+    return {"id": c.get("id"), "url": c.get("html_url")}
+
+
+def pull_review(full: str, number: int, event: str, body: str = "", comments: list[dict] | None = None) -> dict:
+    """A review: APPROVE | REQUEST_CHANGES | COMMENT, with optional line comments [{path, line, side, body}]."""
+    full, n = _full(full), _number(number)
+    if event not in ("APPROVE", "REQUEST_CHANGES", "COMMENT"):
+        raise GitError(400, "bad_event", "event: APPROVE | REQUEST_CHANGES | COMMENT")
+    lines = [{"path": str(c["path"]), "line": int(c["line"]), "side": c.get("side") or "RIGHT",
+              "body": str(c["body"])[:60000]} for c in (comments or [])[:100]
+             if c.get("path") and c.get("line") and str(c.get("body") or "").strip()]
+    if event != "APPROVE" and not (body or "").strip() and not lines:
+        raise GitError(400, "empty", "write something first")
+    r = _gh_send(full, f"/repos/{full}/pulls/{n}/reviews",
+                 {"event": event, "body": (body or "")[:60000], **({"comments": lines} if lines else {})})
+    return {"id": r.get("id"), "state": r.get("state"), "url": r.get("html_url")}
+
+
+def pull_merge(full: str, number: int, method: str = "squash", sha: str | None = None) -> dict:
+    full, n = _full(full), _number(number)
+    if method not in MERGE_METHODS:
+        raise GitError(400, "bad_method", "method: merge | squash | rebase")
+    r = _gh_send(full, f"/repos/{full}/pulls/{n}/merge",
+                 {"merge_method": method, **({"sha": sha} if sha and SHA_RE.match(sha) else {})}, method="PUT")
+    return {"merged": bool(r.get("merged")), "sha": r.get("sha"), "message": r.get("message")}
+
+
+def pull_close(full: str, number: int) -> dict:
+    full, n = _full(full), _number(number)
+    p = _gh_send(full, f"/repos/{full}/pulls/{n}", {"state": "closed"}, method="PATCH")
+    return {"state": p.get("state")}

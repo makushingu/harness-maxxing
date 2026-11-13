@@ -61,7 +61,7 @@ AUTHOR = ("Harness Maxxing", "backup@localhost")
 
 # Directories never descended into, files never copied (matched on the base name, case-insensitive).
 PRUNE_DIRS = {".git", "node_modules", "attachments", ".venv", "venv", "__pycache__", ".cache", ".trash",
-              ".ssh", ".gnupg", META_DIR}
+              ".ssh", ".gnupg", META_DIR, "worktrees"}     # worktrees: copies of Code mode
 DENY_FILES = [r"secrets\.json", r"keys\.json", r"\.env", r".*\.env", r"\.env\..*", r".*\.pem", r".*\.key",
               r".*\.p12", r".*\.pfx", r"id_(rsa|dsa|ecdsa|ed25519).*", r".*credentials.*", r".*\.log",
               r".*\.jsonl", r".*\.sqlite3?", r".*\.db", r"\.netrc", r"\.git-credentials", r".*\.kdbx"]
