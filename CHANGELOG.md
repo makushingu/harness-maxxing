@@ -35,6 +35,9 @@ New:
 - **Claude knows the code tools of a session.** Asked for a terminal, it points to Code mode (Ctrl+J, `/terminal`)
   instead of offering SSH; asked to undo a turn, to "Revert to before this message" and the Changes view. The help
   topic knows Tabs and Zones, the intelligence of a session, `/` commands, `@` and `maxxing team send`.
+- **Session shortcuts list the new keys.** The shortcuts window of Sessions now shows `/` (commands at the start of
+  a message), `@` (name a session, an agent or a contact), Ctrl/⌘+Shift+V (paste as text) and, with Code mode on,
+  Ctrl+J (open or close the terminal).
 
 Security:
 - **Changes view: a diff no longer runs a program named by the repository.** A repository whose `.git/config`

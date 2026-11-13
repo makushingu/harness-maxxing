@@ -7,6 +7,9 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Web, session shortcuts window (`ShortcutsHelp` in `pages/sessions/index.tsx`): rows `/` (slash menu), `@`
+  (mentions), Mod+Shift+V (plain paste, `plainPaste` of `Composer.tsx`) and Ctrl+J only when `settings.code_mode`
+  (the key is caught by `Column.tsx`, Ctrl on macOS too); i18n `sessions.shortcuts.{slash,mention,plainPaste,terminal}`.
 - Security: `codediff.diff()` and `raw_diff()` pass `--no-textconv` (a `diff.<name>.textconv` from `.git/config`
   bound by `.git/info/attributes` ran with the server's rights: `GIT_ATTR_SOURCE` only covers the worktree's
   `.gitattributes`, `--no-ext-diff` only `diff.external`); test `test_a_diff_never_runs_the_repository_textconv`.

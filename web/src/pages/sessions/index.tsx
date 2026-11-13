@@ -846,12 +846,17 @@ function HudView() {
 function ShortcutsHelp({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const t = useT()
   const maxxing = useMaxxingEnabled()
+  const codeMode = !!useSettings().data?.code_mode
   const rows: [string[], string][] = [
     [['Enter'], t('sessions.shortcuts.send')],
     [['Shift', 'Enter'], t('sessions.shortcuts.newline')],
     [[MOD, 'Enter'], t('sessions.shortcuts.send')],
     [['Esc'], t('sessions.shortcuts.blur')],
     [['/'], t('sessions.shortcuts.focus')],
+    [['/'], t('sessions.shortcuts.slash')],
+    [['@'], t('sessions.shortcuts.mention')],
+    [[MOD, 'Shift', 'V'], t('sessions.shortcuts.plainPaste')],
+    ...(codeMode ? [[['Ctrl', 'J'], t('sessions.shortcuts.terminal')] as [string[], string]] : []),
     [['Alt', 'N'], t('sessions.shortcuts.new')],
     [['Alt', '←'], t('sessions.shortcuts.prev')],
     [['Alt', '→'], t('sessions.shortcuts.next')],
