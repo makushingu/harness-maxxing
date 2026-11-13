@@ -25,6 +25,7 @@ export const SHOWCASES: Record<string, TourStep[]> = {
   git: [{ id: 'git', targets: [], title: 'show.git.title', body: 'show.git.body', route: (c) => (c.pathname === '/git' ? null : '/git') }],
   team: [{ id: 'team', targets: [], title: 'show.team.title', body: 'show.team.body', route: (c) => (c.pathname === '/settings/features' ? null : '/settings/features') }],
   agents: [{ id: 'agents', targets: [], title: 'show.agents.title', body: 'show.agents.body', route: (c) => (c.pathname === '/settings/features' ? null : '/settings/features') }],
+  browser: [{ id: 'browser', targets: ['browser-feature'], title: 'show.browser.title', body: 'show.browser.body', route: (c) => (c.pathname === '/settings/features' ? null : '/settings/features') }],
   'agent-groups': [{ id: 'agent-groups', targets: ['group-new'], title: 'show.agentGroups.title', body: 'show.agentGroups.body', route: (c) => (c.pathname === '/agents' ? null : '/agents') }],
   code: [{ id: 'code', targets: [], title: 'show.code.title', body: 'show.code.body', route: (c) => (c.pathname === '/settings/features' ? null : '/settings/features') }],
   infra: [{ id: 'infra', targets: [], title: 'show.infra.title', body: 'show.infra.body', route: (c) => (c.pathname === '/settings/features' ? null : '/settings/features') }],

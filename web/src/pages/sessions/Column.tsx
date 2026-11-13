@@ -75,6 +75,7 @@ import { TaskBar } from './Tasks'
 import { endingCut, forgetLog, getLog, loadEarlier, loadLog, seedEmptyLog, useLogSelect, useSessionLog, useSessionStream } from './log'
 import { PlanChip, PlanNotice } from './Plan'
 import { ApprovalCards } from './Approvals'
+import { SessionBrowserBar } from '@/features/browser/SessionBrowser'
 import { MaxxingControls, MaxxingMeter } from './MaxxingMeter'
 import { notifySendFailed, notifySent, useMaxxingEnabled } from './maxxing'
 import { MobileTabsSlot, TabsToggle } from './Tabs'
@@ -828,6 +829,7 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
         )}
         {!notFound && aside.aside && <AsidePanel aside={aside.aside} onClose={aside.close} />}
         {!notFound && <ApprovalCards session={session} />}
+        {!notFound && <SessionBrowserBar session={session} />}
         {!notFound && <TaskBar sid={sid} running={running} />}
         {!notFound && termOpen && (
           <React.Suspense fallback={null}>

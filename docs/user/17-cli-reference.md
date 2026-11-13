@@ -249,6 +249,19 @@ OAuth sign-ins (state "To connect") are done in Settings -> MCP -> **Connect**. 
 
 `ACCOUNT` = id or address (default: the first mailbox). See [E-mail](32-mail.md).
 
+## Harness Browser
+
+| Command | Purpose |
+|---|---|
+| `maxxing browser setup` | install what it needs on this server (root): Chromium, its user, `socat`, AppArmor profile, browser tools |
+| `maxxing browser status [--json]` | feature on or off, what is missing, its settings, its tabs, requests waiting for you |
+| `maxxing browser settings [--sites a.com,b.com \| --public] [--fresh \| --keep] [--ask \| --no-ask] [--wait MIN] [--downloads \| --no-downloads] [--idle MIN] [--tab-sleep MIN] [--max-tabs N]` | the browser's settings (refused in an agent's runs) |
+| `maxxing browser on PATH` / `off PATH` | let the sessions of a topic (`acme/blog`) or an agent (`acme/blog/writer`) use it, or not |
+| `maxxing browser show PATH [--json]` | its switch and the tabs it sees |
+| `maxxing browser forget` | erase the sign-ins, the tabs and the journal |
+
+See [Harness Browser](33-browser.md).
+
 ## Memory and sessions
 
 | Command | Purpose |

@@ -34,7 +34,11 @@ const DESC: Record<PageSetting, TKey> = {
   mail_page: 'features.page.mail',
   infra_page: 'features.page.infra',
   git_page: 'features.page.git',
+  browser_feature: 'browser.feature.desc',
 }
+
+/** Pages with a card of their own in Settings -> Features (its switch, its setup and settings): not in this list. */
+const OWN_CARD: PageSetting[] = ['browser_feature']
 
 /** A small "This browser" mark for the settings kept in this browser only. */
 export function BrowserBadge() {
@@ -47,7 +51,9 @@ export function FeaturePages({ compact, core, sub }: { compact?: boolean; core?:
   const { data: s } = useSettings()
   const save = useSaveSettings()
   if (!s) return <Skeleton className="h-72" />
-  const pages = orderNav(NAV, s.sidebar_order).filter((n) => n.group === 'main' && (n.setting || (core && CORE_DESC[n.to])))
+  const pages = orderNav(NAV, s.sidebar_order).filter(
+    (n) => n.group === 'main' && !(n.setting && OWN_CARD.includes(n.setting)) && (n.setting || (core && CORE_DESC[n.to])),
+  )
   return (
     <ul className="divide-y">
       {pages.map((n) => {

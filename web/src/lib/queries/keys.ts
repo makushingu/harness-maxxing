@@ -111,6 +111,8 @@ export const BUS_KEYS: Record<BusTopic, readonly (readonly unknown[])[]> = {
   approvals: [['approvals']],
   // the sessions open on screen, shared by the user's browsers (pages/sessions/openSync.ts)
   open_sessions: [qk.openSessions],
+  // a browser started / stopped / moved to another page, an ask_human request came or was answered
+  browser: [['browser']],
 }
 
 /** Query keys of one bus topic: `agents:<path>` = that agent's thread or unread changed (a message, a feed event

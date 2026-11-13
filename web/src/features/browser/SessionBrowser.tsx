@@ -1,0 +1,90 @@
+// The Harness Browser in a session: a line above the composer while this session uses it ("Claude is using the
+// browser") or while its topic has tabs open ("2 tabs of this topic open", Watch, x to hide the line), and while Claude
+// waits for the user in it (its request, Open, Skip). Watch opens the browser window (BrowserWindow) on this session's
+// tab, as does a new request or ?browser=1 (the notification's link).
+import * as React from 'react'
+import { Globe, Hand, SkipForward, X } from 'lucide-react'
+import { useT } from '@/i18n'
+import { useAnswerAsk, useBrowserStatus, useSessionBrowserAsks, useSettings } from '@/lib/queries'
+import type { Session } from '@/lib/types'
+import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui'
+import { openBrowserOf, useBrowserWanted } from './open'
+import { BrowserWindow } from './BrowserWindow'
+import { scopeCovers, tabOfSession } from './scope'
+
+/** A topic or an agent folder: the folders that may use the browser. */
+const BROWSER_PATH = /^projects\/[^/]+\/topics\/[^/]+(\/agents\/[^/]+)?$/
+
+/** Requests already shown once: a new one opens the window by itself, never again after the user closed it. */
+const opened = new Set<string>()
+/** Sessions whose line the user hid (until Claude uses the browser again). */
+const hidden = new Set<string>()
+
+/** Above the composer: nothing unless the browser feature is on and the session is in a topic or an agent. */
+export function SessionBrowserBar({ session }: { session: Session | undefined }) {
+  const { data: s } = useSettings()
+  if (!s?.browser_feature || !session || !BROWSER_PATH.test(session.path || '')) return null
+  return <Bar session={session} />
+}
+
+function Bar({ session }: { session: Session }) {
+  const t = useT()
+  const { data: st } = useBrowserStatus()
+  const { data: asks } = useSessionBrowserAsks(session.id, !!session.browser_asks)
+  const answer = useAnswerAsk()
+  const open = useBrowserWanted(session.id)
+  const [, redraw] = React.useReducer((n: number) => n + 1, 0)
+  const b = st?.browser
+  const running = b?.state === 'running'
+  const waiting = asks || []
+  const using = !!b?.turns.some((x) => x.session === session.id)
+  const tabs = running ? (b?.tabs || []).filter((x) => !x.asleep && scopeCovers(x.scope, session.path)) : []
+  const tab = running ? tabOfSession(b?.tabs || [], session.id, session.path) : undefined
+  if (using) hidden.delete(session.id)
+
+  // A new request opens the window (once: closing it is respected).
+  const fresh = waiting.find((a) => !opened.has(a.id))
+  React.useEffect(() => {
+    if (!fresh) return
+    opened.add(fresh.id)
+    openBrowserOf(session.id)
+  }, [fresh, session.id])
+
+  const line = running && (using || tabs.length > 0) && !hidden.has(session.id)
+  if (!line && !waiting.length && !open) return null
+  return (
+    <div className="mx-auto grid w-full max-w-(--mx-read,860px) shrink-0 gap-1.5 px-3 pb-2" data-testid="session-browser">
+      {waiting.map((a) => (
+        <div key={a.id} className="mx-rise flex min-w-0 flex-wrap items-center gap-2 rounded-lg border border-warning/50 bg-warning/8 px-2.5 py-1.5 text-[13px]" data-testid="session-browser-ask">
+          <Hand className="size-3.5 shrink-0 text-warning" />
+          <span className="min-w-0 flex-1">
+            <span className="font-medium">{t('browser.ask.title')}</span> {a.reason}
+          </span>
+          <Button size="sm" className="h-6 px-2.5 text-xs" onClick={() => openBrowserOf(session.id)}>
+            {t('browser.openWindow')}
+          </Button>
+          <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => answer.mutate({ id: a.id, action: 'skip' })}>
+            <SkipForward className="size-3.5" /> {t('browser.ask.skip')}
+          </Button>
+        </div>
+      ))}
+      {line && !waiting.length && (
+        <div className="flex min-w-0 items-center gap-2 rounded-lg border bg-card/60 py-1 pr-1 pl-2.5 text-[13px]">
+          <Globe className={cn('size-3.5 shrink-0 text-primary', using && 'animate-pulse')} />
+          <span className="min-w-0 flex-1 truncate">
+            <span className="font-medium">{using ? t('browser.bar.on') : t('browser.bar.tabs', { count: tabs.length })}</span>{' '}
+            <span className="font-mono text-[12px] text-muted-foreground">{tab && tab.url !== 'about:blank' ? tab.url : ''}</span>
+          </span>
+          <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => openBrowserOf(session.id)} data-testid="session-browser-watch">
+            {t('browser.bar.watch')}
+          </Button>
+          <Button size="icon-sm" variant="ghost" className="size-6" onClick={() => (hidden.add(session.id), redraw())} title={t('browser.bar.hide')} aria-label={t('browser.bar.hide')} data-testid="session-browser-close">
+            <X className="size-3.5" />
+          </Button>
+        </div>
+      )}
+      <BrowserWindow context={session.path} session={session.id} open={open} onOpenChange={(v) => openBrowserOf(v ? session.id : null)} start />
+    </div>
+  )
+}

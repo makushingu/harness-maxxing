@@ -55,6 +55,7 @@ export const routes: RouteObject[] = [
           { path: 'team', lazy: page(() => import('./features/team/TeamPage'), ['team']) },
           { path: 'infra', lazy: page(() => import('./features/infra/InfraPage'), ['infra']) },
           { path: 'mail', lazy: page(() => import('./features/mail/MailPage'), ['mail']) },
+          { path: 'browser', lazy: page(() => import('./features/browser/BrowserPage'), ['browser']) },
           // Settings & docs
           { path: 'settings', element: <Navigate to="/settings/general" replace /> },
           { path: 'settings/:section', lazy: page(() => import('./pages/settings'), ['settings', 'auth', 'show', 'tasks', 'team']) },

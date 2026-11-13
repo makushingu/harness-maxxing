@@ -13,7 +13,7 @@ import * as React from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
 import {
   AlertCircle, AlertTriangle, ArrowLeft, Bot, Brain, Check, CheckCircle2, ChevronRight, Clock, ExternalLink, Info, KeyRound, Layers, Loader2, Lock, Mail, Maximize2, MessageSquare, MessageSquarePlus, Pencil, PlayCircle, Reply, Send, Settings2, ShieldCheck, Square, SquareTerminal, StickyNote, UsersRound, X, XCircle, Zap,
-  PencilLine,
+  PencilLine, Globe, Hand,
 } from 'lucide-react'
 import { useLang, useT, type TFn } from '@/i18n'
 import { errorMessage } from '@/lib/api'
@@ -38,7 +38,8 @@ import { AgentSettings, readsOutside, type SectionId } from './AgentSettings'
 import { ProfileHead } from './Appearance'
 import { AgentsOff, ContinueButton, costLine, reasonText, useAgentsOn } from './parts'
 import { CutNote, WaitingNote } from './CutNote'
-import { ApprovalLine, ThreadApprovalBody, useThreadApprovals } from './approvals'
+import { ApprovalLine, ThreadApprovalBody, useAgentBrowserAsks, useThreadApprovals } from './approvals'
+import { BrowserWindow } from '@/features/browser/BrowserWindow'
 import { AttachButton, AttachList, bringBackDraft, insertAtCaret, useAttachments, useDraftText, withQuote } from './attach'
 import { agentDraftKey } from '@/lib/drafts'
 import { VoiceButton } from '@/features/voice/VoiceButton'
@@ -874,6 +875,9 @@ function LiveTurn({ agent: a, sid, chat, onWrite }: { agent: AgentDetail; sid: s
   const log = useSessionLog(sid)
   const stop = useStopSession()
   const waiting = (a.waiting || 0) > 0
+  // its browser waits for the owner (ask_human: a captcha, a sign-in...): said first, with the browser's window
+  const browserAsk = useAgentBrowserAsks(a.path).some((x) => x.session === sid)
+  const [win, setWin] = React.useState(false)
   const { steps, text } = React.useMemo(() => {
     let from = 0
     for (let i = log.items.length - 1; i >= 0; i--)
@@ -895,9 +899,13 @@ function LiveTurn({ agent: a, sid, chat, onWrite }: { agent: AgentDetail; sid: s
     <AgentBubble
       agent={a}
       testid="agent-live"
-      className={cn(waiting && 'border-warning/40')}
+      className={cn((waiting || browserAsk) && 'border-warning/40')}
       head={
-        waiting ? (
+        browserAsk ? (
+          <span className="inline-flex items-center gap-1 text-warning" data-testid="agent-live-browser">
+            <Hand className="size-3" /> {t('browser.agentAsks', { name: a.display_name })}
+          </span>
+        ) : waiting ? (
           <span className="inline-flex items-center gap-1 text-warning">
             <ShieldCheck className="size-3" /> {t('agents.thread.approval')}
           </span>
@@ -921,12 +929,18 @@ function LiveTurn({ agent: a, sid, chat, onWrite }: { agent: AgentDetail; sid: s
         <button type="button" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive disabled:opacity-50 pointer-coarse:min-h-10" onClick={() => stop.mutate(sid)} disabled={stop.isPending} data-testid="agent-stop">
           <Square className="size-3" /> {t('agents.flow.stop')}
         </button>
+        {browserAsk && (
+          <button type="button" className="inline-flex items-center gap-1 text-xs text-primary hover:underline pointer-coarse:min-h-10" onClick={() => setWin(true)} data-testid="agent-live-browser-open">
+            <Globe className="size-3" /> {t('browser.openWindow')}
+          </button>
+        )}
         {!chat && (
           <Link to={agentRunRoute(a.path, sid)} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary hover:underline pointer-coarse:min-h-10" data-testid="agent-follow">
             <PlayCircle className="size-3" /> {t('agents.thread.openRun')}
           </Link>
         )}
       </div>
+      {browserAsk && <BrowserWindow context={a.path} session={sid} who={a.display_name} open={win} onOpenChange={setWin} start />}
     </AgentBubble>
   )
 }
@@ -1232,7 +1246,7 @@ function Profile({ agent: a }: { agent: AgentDetail }) {
   const want = params.get('settings')
   React.useEffect(() => {
     if (!want) return
-    setAdvanced(want === 'mail' ? 'mail' : true)
+    setAdvanced(want === 'mail' || want === 'browser' ? want : true)
     const p = new URLSearchParams(params)
     p.delete('settings')
     setParams(p, { replace: true })

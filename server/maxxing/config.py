@@ -97,6 +97,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "donation_hidden": False,          # Settings -> About: hide the donation links shown elsewhere in the app
     "mail_page": False,                # Settings -> Features: the E-mail page (IMAP/SMTP mailboxes)
     "sidebar_order": [],               # sidebar: the pages in the order the user dragged them (routes; empty = default)
+    "browser_feature": False,          # Settings -> Features: the Harness Browser (one Chromium for the user, sessions, agents)
+    "browser": {},                     # its settings (maxxing/browser DEFAULTS: sites, sign-ins, asks, sleep)
     "dashboard": {"order": [], "hidden": []},
     "extensions": {"disabled": [], "pinned": []},
     "telegram": {

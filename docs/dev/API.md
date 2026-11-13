@@ -552,6 +552,51 @@ Approval { id: string (16 hex), session: string, agent_path: string, tool: strin
 | GET | `/api/approvals?session=<sid>` | – | `{approvals: [Approval]}` waiting ones, oldest first |
 | POST | `/api/approvals/{id}` | `{decision: "allow"\|"deny", message?}` | `Approval` (`404 not_found`, `409 not_pending` when answered, timed out or expired) |
 
+## Harness Browser
+
+`maxxing/browser/` (CHANGES.md 2.0.0-alpha.127, plan v3). Off unless `browser_feature` (Settings). One browser per
+server; its settings are global (config `browser`). A topic (`.maxxing.json` `browser`) or an agent (agent.json
+`browser`) only has `{enabled}`: may its turns use it. Each tab has a scope: `me`, `topic:projects/<p>/topics/<t>`,
+`project:projects/<p>`, `agent:projects/<p>/topics/<t>/agents/<a>`; a turn sees only the tabs whose scope covers its
+folder (an agent folder: only `agent:<its path>`; a topic folder: its `topic:` and `project:`). Bus topic `browser` on every start /
+stop / tab change / request.
+
+```
+BrowserSettings { web: "list"|"public", sites: [string] (<= 50, "example.com", subdomains included),
+                  profile: "keep"|"fresh", ask: bool (true), wait_min: int (30, 1..1440), downloads: bool,
+                  idle_min: int (30, 5..1440), tab_sleep_min: int (20, 2..720), max_tabs: int (12, 2..30) }
+BrowserTab      { key, url, title, scope, by: {kind: "you"|"session"|"agent", sid?, name?, path?}, asleep: bool,
+                  front: bool (shown in the live view), used }
+BrowserState    { name, state: "starting"|"running"|"stopped", started, last_use, stops_at, tabs: [BrowserTab],
+                  front: key|null, page: {url, title}|null, control: bool (the person has the tab shown), control_by,
+                  busy: bool (a turn acted on the tab shown in the last 15 s), turns: [{session, path, kind}],
+                  session, mem: {browser, cap, server_used, server_total, level: "ok"|"warn"|"critical"}, bytes,
+                  blocked: [host] }
+BrowserAsk      { id (16 hex), session, owner, reason, what: "captcha"|"sign_in"|"code"|"payment"|"consent"|"other",
+                  at, expires, status: "pending"|"done"|"skip"|"timeout"|"expired", note?, decided_at?, decided_by? }
+BrowserAction   { at, session, tool, args (values typed -> "<n chars>", urls without query), ok, ms?, page?, refused? }
+```
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | `/api/browser` | – | `{feature, settings: BrowserSettings, available: {ok, missing}, setup: {running, log, error}, browser: BrowserState, profile: bool, actions: [BrowserAction] (30 newest), asks: [BrowserAsk]}` |
+| PUT | `/api/browser/settings` | `Partial<BrowserSettings>` | `BrowserSettings` (`400 bad_browser`); a change of `web`, `sites`, `profile` or `downloads` restarts the browser when nobody uses it |
+| POST | `/api/browser/setup` | – | `{running: true}`; installs in the background (root), see `setup` in GET |
+| GET | `/api/browser/owner?path=` | – | `{owner, path, settings: {enabled}, feature, scope (of the tabs it opens), running, tabs: [BrowserTab] (the ones it sees), asks}` (`400 bad_path`, `404 not_found`) |
+| PUT | `/api/browser/owner` | `{path, enabled}` (older `{path, settings: {enabled}}`) | same as GET (`400 bad_browser`) |
+| POST | `/api/browser/open` | `{session?}` | `BrowserState`; starts it for the person (its last tab, else the first site of the list); `session`: shows that session's tab (`409 off`, `503 unavailable`) |
+| POST | `/api/browser/stop` \| `sleep` \| `forget` | – | `BrowserState` (`sleep`: + `slept`, every tab not shown sleeps; `forget`: profile, tabs and journal erased) |
+| POST | `/api/browser/tabs` | `{url?, scope?}` | `BrowserState`; a new tab (scope `me` by default; `400 bad_scope`, `400 refused` for a page the list refuses) |
+| POST | `/api/browser/tabs/{key}/show` | – | `BrowserState`; shows it, wakes an asleep one (`404 no_tab`) |
+| PUT | `/api/browser/tabs/{key}` | `{scope}` | `BrowserState` (`400 bad_scope`, `404 no_tab`); the turns that saw it / now see it get their tools again |
+| DELETE | `/api/browser/tabs/{key}` | – | `BrowserState` |
+| GET | `/api/browser/asks?session=&path=` | – | `{asks: [BrowserAsk]}` pending |
+| POST | `/api/browser/asks/{id}` | `{action: "done"\|"skip", note?}` | `BrowserAsk` (`409 decided`); the person's hand is released. `done` stores the hand-back in the request file (never in the response): `trail` (pages the person went to in that session's tab, without query), `page`, `picture` (base64 JPEG): `ask_human` returns them to Claude (text + an image block) |
+| POST | `/api/browser/live-token` | – | `{token}` one use, 30 s |
+| WS | `/api/browser/live?t=<token>&q=high\|low` | signed-in cookie + token | server -> binary JPEG frames of the tab shown, text `{"t":"state", browser: BrowserState, me, asks}` / `{"t":"error", text}`; client -> `{"t":"mouse", type: down\|up\|move, x, y (0..1), button?, clicks?, alt?, ctrl?, meta?, shift?}`, `{"t":"wheel", x, y, dx, dy}`, `{"t":"key", type: down\|up, key, code, keyCode, text?}`, `{"t":"text", text}`, `{"t":"nav", url}`, `{"t":"back"\|"forward"\|"reload"}` (each one gives the person the tab shown), `{"t":"take"}`, `{"t":"release", done?: true\|"skip", note?}`, `{"t":"quality", q}`, `{"t":"size", w, h}` (CSS px of the view: the page in front is laid out for it, clamped 360x320..2560x1600; back to 1280x800 when nobody watches). A slow connection gets fewer frames, never late ones (newest frame only) |
+| POST | `/api/browser/mcp/{sid}` | JSON-RPC `tools/list` \| `tools/call` | loopback + `Authorization: Bearer <turn token>` only (`browser_mcp.py`); refusals come back as `isError` tool results |
+| WS | `/api/browser/cdp/harness` | – | loopback + `X-Browser-Secret` (one per turn) only: that turn's chrome-devtools-mcp, filtered by `rules.json` and by its view (view.py: only its tabs) |
+
 ## Docs
 | GET | `/api/docs` | – | `[{slug, title, section, order}]`; `?full=1` adds `markdown` to every page (full-text search, one request) |
 | GET | `/api/docs/{slug}` | – | `{slug, title, markdown}` |

@@ -157,6 +157,8 @@ export type Agent = {
   triggers: AgentTrigger[]
   /** mailboxes of the E-mail page it may use (none by default) */
   mail?: MailGrant[]
+  /** May it use the Harness Browser (maxxing/browser): off unless turned on. */
+  browser?: BrowserSwitch
   created: number
   session_count: number
   archived_count: number
@@ -319,6 +321,7 @@ export type AgentInput = {
   limits?: Partial<AgentLimits>
   triggers?: AgentTriggerInput[]
   mail?: MailGrantInput[]
+  browser?: BrowserSwitch
 }
 export type AgentRunResult = { started: boolean; /** the new session (its id in older answers) */ session?: Session | string; reason?: string; /** a reply: the session of that message went on */ continued?: boolean }
 export type AgentWebhookKind = 'generic' | 'stripe' | 'shopify' | 'github'
@@ -371,6 +374,8 @@ export type Session = {
   code_repos?: string[]
   /** Its separate copy (Code mode): its own folder and branch of the topic's repository. */
   worktree?: SessionCopy | null
+  /** `ask_human` requests of its browser waiting for the user (GET /api/browser/asks?session=). */
+  browser_asks?: number
 }
 /** A session's separate copy (server: maxxing/worktrees.py). */
 export type SessionCopy = {
@@ -482,7 +487,7 @@ export type SessionEventsBackPage = {
 export type SessionStreamEvents = { events: SessionEvent[]; next: number }
 
 /* ---------------------------------------------------------------- Global bus */
-export type BusTopic = 'agents' | 'agents_layout' | 'agent-groups' | 'sessions' | 'workspace' | 'tasks' | 'crons' | 'telegram' | 'backup' | 'health' | 'extensions' | 'trash' | 'feed' | 'profile' | 'register' | 'license' | 'infra' | 'mcp' | 'team' | 'team_live' | 'approvals' | 'open_sessions'
+export type BusTopic = 'agents' | 'agents_layout' | 'agent-groups' | 'sessions' | 'workspace' | 'tasks' | 'crons' | 'telegram' | 'backup' | 'health' | 'extensions' | 'trash' | 'feed' | 'profile' | 'register' | 'license' | 'infra' | 'mcp' | 'team' | 'team_live' | 'approvals' | 'open_sessions' | 'browser'
 
 /* ---------------------------------------------------------------- MCP servers (Settings -> MCP) */
 export type McpState = 'connected' | 'needs_auth' | 'failed' | 'pending' | 'unknown'
@@ -815,6 +820,8 @@ export type Settings = {
   mail_page?: boolean
   /** Sidebar pages in the order the user dragged them (routes, e.g. "/sessions"); empty = the default order. */
   sidebar_order?: string[]
+  /** Settings -> Features: the Harness Browser (each topic / agent may then be let use it) */
+  browser_feature?: boolean
   /** memory-compaction line limit per memory.md (0 = none). */
   memory_max_lines: number
   /** Parts of the line under each answer that are hidden (every browser of the installation). */
@@ -1333,3 +1340,104 @@ export type MailDraft = {
 }
 export type MailSent = { ok: boolean; message_id: string; recipients: number; refused: string[]; sent_folder: string | null }
 export type MailAction = 'seen' | 'unseen' | 'flag' | 'unflag' | 'move' | 'archive' | 'trash' | 'junk' | 'inbox' | 'delete'
+
+// ---- the Harness Browser (api/browser.py) ---------------------------------------------------------------------------
+/** The switch of a topic's sessions (.maxxing.json) or of an agent (agent.json): may its turns use the browser. */
+export type BrowserSwitch = { enabled: boolean }
+/** The browser's own settings (one browser per server: config.json -> browser). */
+export type BrowserSettings = {
+  /** list: only `sites` (and their subdomains); public: any public site */
+  web: 'list' | 'public'
+  sites: string[]
+  /** keep: its sign-ins stay; fresh: a new profile at every start */
+  profile: 'keep' | 'fresh'
+  /** ask_human: Claude may ask the user to take over (captcha, sign-in); waits `wait_min` minutes */
+  ask: boolean
+  wait_min: number
+  downloads: boolean
+  /** minutes without use before the browser sleeps / a tab sleeps; tabs awake at most */
+  idle_min: number
+  tab_sleep_min: number
+  max_tabs: number
+}
+/** Who sees a tab: `me` (the user only), `topic:projects/<p>/topics/<t>`, `project:projects/<p>`. */
+export type BrowserScope = string
+export type BrowserTab = {
+  key: string
+  url: string
+  title: string
+  scope: BrowserScope
+  /** who opened it */
+  by: { kind: 'you' | 'session' | 'agent'; sid?: string; name?: string; path?: string }
+  asleep: boolean
+  /** shown in the live view */
+  front: boolean
+  used: number
+}
+export type BrowserMemory = { browser: number; cap: number; server_used: number; server_total: number; level: 'ok' | 'warn' | 'critical' }
+export type BrowserState = {
+  name: string
+  state: 'starting' | 'running' | 'stopped'
+  started: number | null
+  last_use: number | null
+  /** when it sleeps if nothing uses it (Unix seconds) */
+  stops_at: number | null
+  tabs: BrowserTab[]
+  /** the key of the tab shown */
+  front: string | null
+  page: { url: string; title: string } | null
+  /** the person has the tab shown */
+  control: boolean
+  control_by: string | null
+  /** Claude acted on the tab shown a moment ago */
+  busy: boolean
+  /** turns using it now */
+  turns: { session: string; path: string; kind: 'session' | 'agent' }[]
+  session: string | null
+  mem: BrowserMemory
+  bytes: number
+  /** hosts the proxy refused lately */
+  blocked: string[]
+}
+export type BrowserAsk = {
+  id: string
+  session: string
+  owner: string
+  reason: string
+  what: 'captcha' | 'sign_in' | 'code' | 'payment' | 'consent' | 'other'
+  at: number
+  expires: number
+  status: 'pending' | 'done' | 'skip' | 'timeout' | 'expired'
+}
+export type BrowserAction = {
+  at: number
+  session: string
+  tool: string
+  args: Record<string, unknown>
+  ok: boolean
+  ms?: number
+  page?: string
+  refused?: string
+}
+export type BrowserStatus = {
+  feature: boolean
+  settings: BrowserSettings
+  available: { ok: boolean; missing: string[] }
+  setup: { running: boolean; log: string[]; error: string | null }
+  browser: BrowserState
+  /** a profile exists (sign-ins may be saved) */
+  profile: boolean
+  actions: BrowserAction[]
+  asks: BrowserAsk[]
+}
+/** A topic / an agent and the browser: its switch, the scope of the tabs it opens, the tabs it sees. */
+export type BrowserOwner = {
+  owner: string
+  path: string
+  settings: BrowserSwitch
+  feature: boolean
+  scope: BrowserScope
+  running: boolean
+  tabs: BrowserTab[]
+  asks: BrowserAsk[]
+}

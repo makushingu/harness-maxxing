@@ -1291,6 +1291,19 @@ def check_agent_sandbox() -> Check | None:
               ", ".join(boxed[:5]), "maxxing agents sandbox-setup   (as root)")
 
 
+def check_browser() -> Check | None:
+    """Only when the Harness Browser is on (Settings -> Features): what Chromium needs on this server."""
+    from . import browser
+    if not browser.feature_on():
+        return None
+    from .browser import unit
+    st = unit.available(fresh=True)
+    if st["ok"]:
+        return _c("browser", OK, "Harness Browser ready", "")
+    return _c("browser", FAIL, f"Harness Browser not set up: {', '.join(st['missing'])} - its tools fail", "",
+              "maxxing browser setup   (as root)")
+
+
 def check_tools() -> Check:
     """Node.js + Remotion (videos) + headless browser (PDF) + Scrapling: optional, never a failure."""
     from . import cmd_video
@@ -1547,7 +1560,7 @@ def collect_checks(live: bool = False, fetch: bool = True, deps: bool = False) -
         check_python, check_uv, check_claude_cli, lambda: check_claude_version(fetch), lambda: check_claude_auth(live),
         lambda: check_skill_listing(cfg), check_setup,
         check_service, check_hardening, lambda: check_caddy_site(cfg), check_infra_paths, lambda: check_bind(cfg), lambda: check_http(cfg), lambda: check_public_url(cfg),
-        lambda: check_caddy(cfg), check_crontab, lambda: check_timezone(cfg), lambda: check_telegram(cfg), lambda: check_backup(cfg), check_voice, check_tools, check_stale_units, check_agent_sandbox, check_managed_deps, check_security, check_state_files,
+        lambda: check_caddy(cfg), check_crontab, lambda: check_timezone(cfg), lambda: check_telegram(cfg), lambda: check_backup(cfg), check_voice, check_tools, check_stale_units, check_agent_sandbox, check_browser, check_managed_deps, check_security, check_state_files,
         lambda: check_disk(cfg), check_memory, lambda: check_workspace(cfg), check_skills, check_web,
         check_license, lambda: check_git(fetch), check_update_signature,
     ] + ([check_deps] if deps else [])

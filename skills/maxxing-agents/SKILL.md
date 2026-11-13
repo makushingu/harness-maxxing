@@ -110,6 +110,15 @@ field), or add a trigger with the commands above.
   (`[{"tool": "Bash", "match": "sendmail", "reason": "write a draft instead"}]`: refused before running, reason shown
   to Claude), `subagent` (callable as a Claude Code subagent from the topic's sessions). A run that fails with
   "sandbox cannot run on this server" -> `maxxing agents sandbox-setup` as root (or `maxxing doctor`).
+- `browser` (the Harness Browser: one Chromium on the server shared with the owner and their sessions, for sites
+  without an API; off by default; needs Settings -> Features -> Harness Browser): `{"enabled": true}`. It sees only
+  its own tabs and the ones the owner shares with it; sites, sign-ins, asking the owner (`ask_human`) are the
+  browser's own settings (`maxxing browser settings --sites a.com,b.com`). Set it with `maxxing browser on
+  <p>/<t>/<agent>` (owner only, refused in its runs); the agent's own conversation asks with `maxxing agents set
+  <itself> browser.enabled=true` (a request the owner allows; off applies at once). Its conversation and its runs
+  both get it. Its tools are `mcp__maxxing-browser__*` +
+  `ask_human`; it still reads pages with WebFetch / `curl` / an API first. Started by an outside text, it asks
+  before every browser action (unless `trust_outside`). Docs: `33-browser.md`.
 - Claude Code agent files: `maxxing agents export <agent> [-o FILE]` / `maxxing agents import FILE --topic P/T
   [--name N]` (free, no trigger; fields Harness has no equivalent for are listed as ignored).
 - A finished run can be taken over by hand: agent page -> the run -> **Continue in Sessions** (a normal session of

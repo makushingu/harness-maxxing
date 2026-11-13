@@ -105,7 +105,7 @@ LEAKS: list[tuple[str, re.Pattern[bytes]]] = [(k, re.compile(p.encode())) for k,
 
 # Config keys restored from a backup (paths, network and Telegram ids are server-specific).
 RESTORABLE_CONFIG = ("timezone", "language", "default_model", "permission_mode", "dashboard", "extensions",
-                     "usage_widget", "tasks_page", "git_page", "infra_page", "team_page", "agents_page", "mail_page", "maxxing_mode", "sidebar_order")
+                     "usage_widget", "tasks_page", "git_page", "infra_page", "team_page", "agents_page", "mail_page", "browser_feature", "maxxing_mode", "sidebar_order")
 
 
 class BackupError(Exception):
