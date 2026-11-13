@@ -740,18 +740,24 @@ def find_recipient(to: str) -> dict:
 def _attach(paths: list[str]) -> list[dict]:
     """Files of the server, copied into the team folder (only files there are sent)."""
     import shutil
-    out = []
-    for raw in (paths or [])[:FILES_MAX]:
-        src = Path(raw).expanduser()
+    srcs = [Path(raw).expanduser() for raw in (paths or [])[:FILES_MAX]]
+    for raw, src in zip(paths or [], srcs):        # every file checked before the first copy
         if not src.is_file():
             raise TeamError(400, "bad_file", f"No such file: {raw}")
-        dest = files_dir() / _safe_name(src.name)
-        n = 1
-        while dest.exists():
-            dest = dest.with_name(f"{Path(_safe_name(src.name)).stem}-{n}{src.suffix}")
-            n += 1
-        shutil.copyfile(src, dest)
-        out.append({"path": str(dest)})
+    out: list[dict] = []
+    try:
+        for src in srcs:
+            dest = files_dir() / _safe_name(src.name)
+            n = 1
+            while dest.exists():
+                dest = dest.with_name(f"{Path(_safe_name(src.name)).stem}-{n}{src.suffix}")
+                n += 1
+            shutil.copyfile(src, dest)
+            out.append({"path": str(dest)})
+    except BaseException:                          # a copy failed: the ones already made go away
+        for f in out:
+            Path(f["path"]).unlink(missing_ok=True)
+        raise
     return out
 
 

@@ -563,6 +563,16 @@ def test_cli_send_refuses_a_too_long_text(client, sent, capsys, tmp_path):
     assert str(team.TEXT_MAX) in capsys.readouterr().err and len(sent) == n
 
 
+def test_cli_send_keeps_no_copy_when_a_file_is_missing(client, sent, capsys, tmp_path):
+    from maxxing import cli
+    n = len(sent)
+    f = tmp_path / "a.txt"
+    f.write_text("a")
+    before = set(team.files_dir().iterdir()) if team.files_dir().exists() else set()
+    assert cli.main(["team", "send", "lea", "x", "--file", str(f), "--file", str(tmp_path / "nope")]) == 2
+    assert set(team.files_dir().iterdir()) == before and len(sent) == n
+
+
 def test_a_write_from_another_process_refreshes_the_pages(sent, monkeypatch):
     from maxxing import bus
     seen = []
