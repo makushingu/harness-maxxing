@@ -122,6 +122,23 @@ LOCAL_PAGE = ("Addresses of this server or of a local network (localhost, 127.0.
               "opened in the browser: only sites on the internet.")
 
 
+SEARCH = "https://www.google.com/search?q="
+HOST_LIKE = re.compile(r"^[^\s/?#]+\.[^\s/?#]{2,}([/?#]\S*)?$|^localhost(:\d+)?([/?#]\S*)?$", re.I)
+
+
+def address(text: object) -> str:
+    """What the address bar opens for what was typed: an address as is (https:// added), anything else a search."""
+    t = str(text or "").strip()
+    if not t:
+        return ""
+    if re.match(r"^[a-z][a-z0-9+.-]*:", t, re.I) and ("://" in t or t.lower().startswith(("about:", "data:"))):
+        return t
+    if HOST_LIKE.match(t):
+        return "https://" + t
+    from urllib.parse import quote_plus
+    return SEARCH + quote_plus(t)
+
+
 def page_refusal(url: object, sites: list[str] | None = None) -> str | None:
     """Why `url` cannot be opened (None = it can). sites: the owner's list ("list" mode), None = the public web."""
     if url is None:
@@ -168,6 +185,8 @@ def check_command(raw: str | bytes) -> tuple[str | None, dict | None]:
     if not isinstance(c, dict) or not isinstance(c.get("method"), str) or not c["method"]:
         return "not a DevTools command", c if isinstance(c, dict) else None
     method = c["method"]
+    if method in UPLOAD_METHODS and _uploads_only(c):
+        return None, c
     if method in r["blocked_methods"] or method.split(".", 1)[0] in r["blocked_domains"]:
         return f"{method} is not allowed in the Harness Browser", c
     p = c.get("params") if isinstance(c.get("params"), dict) else {}
@@ -178,6 +197,22 @@ def check_command(raw: str | bytes) -> tuple[str | None, dict | None]:
     if data.get("files"):
         return "files cannot be given to pages", c
     return None, c
+
+
+# Files a page may get: only ones copied into a profile's uploads folder (pool.upload, the live view's file chooser).
+# Chromium sees that folder as /mxrun/uploads (its unit); a browser started without a unit (tests) adds its own.
+UPLOAD_ROOTS: list[str] = ["/mxrun/uploads/"]
+UPLOAD_METHODS = {"DOM.setFileInputFiles", "Page.setInterceptFileChooserDialog"}
+
+
+def _uploads_only(c: dict) -> bool:
+    if c["method"] == "Page.setInterceptFileChooserDialog":
+        return True                                  # no native dialog: the files still come through the check below
+    files = (c.get("params") or {}).get("files") if isinstance(c.get("params"), dict) else None
+    if not isinstance(files, list) or not files or len(files) > 20:
+        return False
+    return all(isinstance(f, str) and "/../" not in f and not f.endswith("/..") and "\0" not in f
+               and any(f.startswith(root) for root in UPLOAD_ROOTS) for f in files)
 
 
 def _bad_scheme(url: str) -> bool:

@@ -20,7 +20,10 @@ import asyncio
 import base64
 import contextlib
 import logging
+import os
+import re
 import secrets
+import shutil
 import time
 from pathlib import Path
 
@@ -43,7 +46,8 @@ EXIT_POLL = 10.0                       # a tool waiting for its exit checks it t
 TRAIL_MAX = 30                         # pages a person went to in a tab of a turn (told to Claude after)
 PICTURE_MAX = 400_000                  # bytes of the picture given back to Claude with a hand-back
 MEM_WARN, MEM_CRITICAL = 0.85, 0.92    # share of the server's memory (or of a browser's cap)
-POLICY_KEYS = ("web", "sites")         # set at a profile's start: a change restarts it (when unused)
+POLICY_KEYS = ("web", "sites")
+UPLOAD_MAX = 50 * 1024 * 1024          # one file given to a page (by Claude or by the person)         # set at a profile's start: a change restarts it (when unused)
 
 
 class Turn:
@@ -187,6 +191,10 @@ class Pool:
         b.proxy = Proxy(b.run / "proxy.sock", ids[1] if ids and not unit._direct() else None,
                         upstream=lambda: self._upstream(b.pid))
         await b.proxy.start()
+        if unit._direct():                          # no unit: Chromium sees the real folder
+            root = str(b.run / "uploads") + "/"
+            if root not in rules.UPLOAD_ROOTS:
+                rules.UPLOAD_ROOTS.append(root)
         b.proc = await unit.start(b.slug, b.data, b.run, rules.policy(b.sites(), s["downloads"]), downloads)
         b.ws_path = await unit.ready(b.run, b.proc, b.slug)
         b.watcher = Watcher(b.run / "cdp.sock", b.ws_path, b.sites, b.tabs)
@@ -399,6 +407,11 @@ class Pool:
             log.warning("the browser did not start for %s: %s", sid, e)
             return _error(f"The browser did not start: {e}")
         b.last_use = t.last_call = time.time()
+        if name == "upload_file" and isinstance(args.get("filePath"), str):
+            try:
+                args = {**args, "filePath": await asyncio.to_thread(claude_file, b, t.path, args["filePath"])}
+            except browser.BrowserError as e:
+                return _error(e.message)
         told = trail_text(self._untold(b, t))
         ok = False
         try:
@@ -738,6 +751,7 @@ class Pool:
                 "tabs": [tab_public(t, front) for t in tabs.ordered()],
                 "front": next((t["key"] for t in tabs.awake() if t["target"] == front), None),
                 "page": b.watcher.front_page() if b and b.watcher else None,
+                **(b.watcher.asking() if b and b.watcher else {"dialog": None, "chooser": None}),
                 "control": bool(b and b.control), "control_by": (b.control or {}).get("name") if b else None,
                 "busy": bool(b and self.busy(b, front)),
                 "turns": [{"session": t.sid, "path": t.path, "kind": t.by["kind"]} for t in (b.turns.values() if b else [])],
@@ -781,6 +795,44 @@ def _explain(res: dict, b: Browser | None = None) -> dict:
 def trail_text(trail: list[dict]) -> str:
     """"A (title) -> B (title)" of the pages a person went to; "" for none."""
     return " -> ".join(f"{x['url']}" + (f" ({x['title']})" if x.get("title") else "") for x in trail)
+
+
+# ---- files given to a page ---------------------------------------------------------------------------------------
+def stage(b: Browser, name: str, data: bytes | None = None, src: Path | None = None) -> str:
+    """Copy a file into the profile's uploads folder (emptied at each start); returns its path as Chromium sees it."""
+    ids = unit.user_ids()
+    root = b.run / "uploads"
+    d = root / secrets.token_hex(6)
+    d.mkdir(parents=True, exist_ok=True)
+    safe = re.sub(r"[^\w.\- ]", "_", Path(name).name).strip(" .")[:120] or "file"
+    f = d / safe
+    if src is not None:
+        shutil.copyfile(src, f)
+    else:
+        f.write_bytes(data or b"")
+    for x, mode in ((root, 0o750), (d, 0o750), (f, 0o640)):
+        os.chmod(x, mode)
+        if ids and not unit._direct():
+            os.chown(x, ids[0], ids[1])
+    return str(f) if unit._direct() else f"/mxrun/uploads/{d.name}/{safe}"
+
+
+def claude_file(b: Browser, owner_path: str, raw: str) -> str:
+    """A file Claude gives to a page (upload_file): one of its folder (the topic, or the project), at most UPLOAD_MAX."""
+    rel = browser.topic_of(owner_path) or browser.project_of(owner_path)
+    if not rel:
+        raise browser.BrowserError(403, "upload", "Files can only be given to a page from a project or topic folder.")
+    root = (config.workspace() / rel).resolve()
+    p = Path(raw).expanduser()
+    p = (p if p.is_absolute() else (config.workspace() / owner_path / p)).resolve()
+    if not p.is_relative_to(root):
+        raise browser.BrowserError(403, "upload", f"Only files of this folder ({root}) can be given to a page: copy the "
+                                                  "file there first.")
+    if not p.is_file():
+        raise browser.BrowserError(404, "upload", f"No such file: {p}")
+    if p.stat().st_size > UPLOAD_MAX:
+        raise browser.BrowserError(413, "upload", f"{p.name} is larger than {UPLOAD_MAX // 1024 // 1024} MB.")
+    return stage(b, p.name, src=p)
 
 
 def _error(text: str) -> dict:

@@ -201,6 +201,30 @@ def chrome_major(chrome: Path) -> str:
 _major: dict[str, str] = {}
 
 
+LOCALES = {"en": "en-US", "fr": "fr-FR", "es": "es-ES", "de": "de-DE", "it": "it-IT", "pt": "pt-PT", "nl": "nl-NL",
+           "ja": "ja-JP", "zh": "zh-CN", "ko": "ko-KR", "ru": "ru-RU", "pl": "pl-PL"}
+
+
+def locale() -> tuple[str, str]:
+    """(the browser's language, Accept-Language) from the interface's language: sites answer in the user's language."""
+    lang = str(config.load_config().get("language") or "en").split("-")[0].lower()
+    loc = LOCALES.get(lang, "en-US")
+    base = loc.split("-")[0]
+    return loc, ",".join(dict.fromkeys([loc, base, "en-US", "en"]))
+
+
+def timezone() -> str:
+    """The Harness time zone (Settings): pages see the user's time, not the server's (a phone exit far from the
+    server with the server's clock looks like a robot)."""
+    tz = str(config.load_config().get("timezone") or "UTC")
+    try:
+        from zoneinfo import ZoneInfo
+        ZoneInfo(tz)
+        return tz
+    except Exception:  # noqa: BLE001
+        return "UTC"
+
+
 def chrome_args(chrome: Path, width: int = 1280, height: int = 800) -> list[str]:
     major = _major.get(str(chrome))
     if major is None:
@@ -212,7 +236,7 @@ def chrome_args(chrome: Path, width: int = 1280, height: int = 800) -> list[str]
             "--force-webrtc-ip-handling-policy=disable_non_proxied_udp", "--renderer-process-limit=2",
             "--password-store=basic", "--mute-audio", "--autoplay-policy=user-gesture-required",
             f"--window-size={width},{height}", f"--user-agent={UA.format(v=major)}",
-            "--lang=en-US", "about:blank"]
+            f"--lang={locale()[0]}", f"--accept-lang={locale()[1]}", "about:blank"]
 
 
 def _free_port() -> int:
@@ -239,6 +263,7 @@ def prepare_dirs(profile: Path, run: Path, downloads: Path | None) -> None:
             os.chown(downloads, ids[0], ids[1])
     for f in ("cdp.sock", "proxy.sock"):
         (run / f).unlink(missing_ok=True)
+    shutil.rmtree(run / "uploads", ignore_errors=True)   # files given to pages last time
 
 
 async def start(slug: str, profile: Path, run: Path, policy: dict, downloads: Path | None) -> asyncio.subprocess.Process | None:
@@ -249,7 +274,7 @@ async def start(slug: str, profile: Path, run: Path, policy: dict, downloads: Pa
     config.write_json(run / "policy.json", policy, mode=0o644)
     args = chrome_args(chrome)
     if _direct():
-        env = {**{k: v for k, v in os.environ.items() if k in ("PATH", "LANG", "TZ")}, "HOME": str(run),
+        env = {**{k: v for k, v in os.environ.items() if k in ("PATH", "LANG")}, "TZ": timezone(), "HOME": str(run),
                "MX_RUN": str(run), "MX_CHROME": str(chrome), "MX_PROXY_PORT": str(_free_port()),
                "MX_CDP_PORT": str(_free_port())}
         args = [a.replace("{profile}", str(profile)) for a in args]
@@ -262,7 +287,8 @@ async def start(slug: str, profile: Path, run: Path, policy: dict, downloads: Pa
              "RestrictSUIDSGID=yes", "LockPersonality=yes", "UMask=0077",
              f"BindReadOnlyPaths={chrome.parent}:/opt/mxchrome", f"BindPaths={profile}:/mxprofile",
              f"BindPaths={run}:/mxrun", f"BindReadOnlyPaths={HOST_SH.resolve()}:/mxhost.sh",
-             "Environment=HOME=/tmp", "Environment=LANG=en_US.UTF-8"]
+             "Environment=HOME=/tmp", f"Environment=LANG={locale()[0].replace('-', '_')}.UTF-8",
+             f"Environment=LANGUAGE={locale()[0].replace('-', '_')}", f"Environment=TZ={timezone()}"]
     props += [f"BindReadOnlyPaths={run / 'policy.json'}:{d}/harness.json" for d in POLICY_DIRS]
     if downloads is not None:
         props.append(f"BindPaths={downloads}:/mxdownloads")

@@ -38,6 +38,11 @@ INTERNAL = ("chrome://", "chrome-untrusted://", "devtools://", "chrome-extension
 def _shown(t: dict) -> bool:
     return t.get("type") == "page" and not str(t.get("url") or "").startswith(INTERNAL)
 MODS = {"alt": 1, "ctrl": 2, "meta": 4, "shift": 8}
+COPY_JS = "(() => { const e = document.activeElement; if (e && (e.tagName === 'TEXTAREA' || (e.tagName === 'INPUT' && " \
+          "typeof e.selectionStart === 'number'))) return e.value.slice(e.selectionStart, e.selectionEnd); " \
+          "return String(getSelection ? getSelection() : ''); })()"
+SEARCH_REFUSED = ("This browser only opens the sites of its list: add google.com to the profile's sites to search from "
+                  "the address bar, or type the address of a site.")
 
 
 class Watcher:
@@ -67,6 +72,8 @@ class Watcher:
         self.q = QUALITY["auto"][0]                   # the quality now ("auto" moves it)
         self.trip: dict[int, float] = {}              # viewer -> smoothed time a picture takes to reach it
         self.adapted = time.monotonic()
+        self.dialog: dict | None = None               # an alert / confirm / prompt open on a page {tid, type, message, default}
+        self.chooser: dict | None = None              # a page asked for files {tid, node, multiple}
         self.frames = 0                               # pictures made (stats)
         self.frame_bytes = 0
 
@@ -129,6 +136,10 @@ class Watcher:
                 await self._state()
         elif method == "Target.targetDestroyed":
             tid = p.get("targetId")
+            if self.dialog and self.dialog["tid"] == tid:
+                self.dialog = None
+            if self.chooser and self.chooser["tid"] == tid:
+                self.chooser = None
             if self.registry is not None:
                 self.registry.gone(tid, keep=tid in self.sleeping)
             self.sleeping.discard(tid)
@@ -165,6 +176,24 @@ class Watcher:
                         self.casting = None
         elif method == "Page.screencastFrame":
             await self._frame(m.get("sessionId"), p)
+        elif method == "Page.javascriptDialogOpening":
+            tid = self._tid_of(m.get("sessionId"))
+            if tid:
+                self.dialog = {"tid": tid, "type": str(p.get("type") or "alert"), "message": str(p.get("message") or "")[:1000],
+                               "default": str(p.get("defaultPrompt") or "")[:500]}
+                await self._state()
+        elif method == "Page.javascriptDialogClosed":
+            if self.dialog and self.dialog["tid"] == self._tid_of(m.get("sessionId")):
+                self.dialog = None
+                await self._state()
+        elif method == "Page.fileChooserOpened":
+            tid = self._tid_of(m.get("sessionId"))
+            if tid and p.get("backendNodeId"):
+                self.chooser = {"tid": tid, "node": int(p["backendNodeId"]), "multiple": p.get("mode") == "selectMultiple"}
+                await self._state()
+
+    def _tid_of(self, session: object) -> str | None:
+        return next((k for k, v in self.sessions.items() if v == session), None)
 
     async def _session(self, tid: str) -> str:
         if tid in self.sessions:
@@ -173,6 +202,8 @@ class Watcher:
         s = (await self.cdp.call("Target.attachToTarget", {"targetId": tid, "flatten": True}))["sessionId"]
         self.sessions[tid] = s
         await self.cdp.call("Page.enable", session=s)
+        with contextlib.suppress(Exception):           # a file input clicked by the person: we hand it the files
+            await self.cdp.call("Page.setInterceptFileChooserDialog", {"enabled": True}, session=s)
         return s
 
     async def _show(self, tid: str | None) -> None:
@@ -401,8 +432,9 @@ class Watcher:
                 log.exception("browser state")
 
     # ---- the person who took over ----------------------------------------------------------------------------
-    async def input(self, ev: dict) -> str | None:
-        """One input event from the viewer in control. Coordinates are 0..1 of the picture. Returns an error text."""
+    async def input(self, ev: dict) -> str | dict | None:
+        """One input event from the viewer in control. Coordinates are 0..1 of the picture. Returns an error text, or
+        a message for that viewer ({"t": "copied", "text"})."""
         if not self.cdp or not self.front:
             return "no page"
         s = await self._session(self.front)
@@ -445,13 +477,32 @@ class Watcher:
             if text:
                 await self.cdp.call("Input.insertText", {"text": text}, session=s)
         elif t == "nav":
-            url = str(ev.get("url") or "").strip()
-            if url and "://" not in url:
-                url = "https://" + url
+            url = rules.address(ev.get("url"))
+            if not url:
+                return None
             why = rules.page_refusal(url, self.sites())
             if why:
-                return why
+                return (SEARCH_REFUSED if url.startswith(rules.SEARCH) else why)
             await self.cdp.call("Page.navigate", {"url": url}, session=s)
+        elif t == "copy":
+            r = await self.cdp.call("Runtime.evaluate", {"expression": COPY_JS, "returnByValue": True}, session=s, timeout=5)
+            text = str(((r.get("result") or {}).get("value")) or "")[:100_000]
+            return {"t": "copied", "text": text}
+        elif t == "dialog":
+            d = self.dialog
+            if not d:
+                return None
+            ds = await self._session(d["tid"])
+            params: dict = {"accept": bool(ev.get("accept"))}
+            if d["type"] == "prompt" and ev.get("accept"):
+                params["promptText"] = str(ev.get("text") or "")[:2000]
+            self.dialog = None
+            with contextlib.suppress(RuntimeError):     # already closed by the page or by Claude
+                await self.cdp.call("Page.handleJavaScriptDialog", params, session=ds)
+            await self._state()
+        elif t == "chooser":                            # the person closed the file window without a file
+            self.chooser = None
+            await self._state()
         elif t in ("back", "forward"):
             h = await self.cdp.call("Page.getNavigationHistory", session=s)
             i = int(h.get("currentIndex", 0)) + (-1 if t == "back" else 1)
@@ -463,6 +514,23 @@ class Watcher:
         else:
             return "unknown event"
         return None
+
+    async def give_files(self, paths: list[str]) -> None:
+        """The files the person picked for the page that asked (paths as Chromium sees them: its uploads folder)."""
+        c = self.chooser
+        if not c or not self.cdp:
+            raise RuntimeError("no page is asking for a file")
+        s = await self._session(c["tid"])
+        self.chooser = None
+        await self.cdp.call("DOM.setFileInputFiles", {"files": paths[: (20 if c["multiple"] else 1)],
+                                                      "backendNodeId": c["node"]}, session=s, timeout=15)
+        await self._state()
+
+    def asking(self) -> dict:
+        """What a page waits for from the person: its dialog, its file window (the live view's state)."""
+        d, c = self.dialog, self.chooser
+        return {"dialog": {k: d[k] for k in ("type", "message", "default")} if d else None,
+                "chooser": {"multiple": c["multiple"]} if c else None}
 
     async def picture(self, quality: int = 50, width: int = 960, tid: str | None = None) -> bytes | None:
         """A small picture of a page (the one shown by default)."""

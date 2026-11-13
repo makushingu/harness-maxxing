@@ -1003,3 +1003,53 @@ def test_the_unit_script_sets_its_own_home():
     sh = unit.HOST_SH.read_text()
     assert '[ -z "$MX_RUN" ] && export HOME=/tmp' in sh
     assert sh.index("export HOME=/tmp") < sh.index("exec ")
+
+
+def test_the_address_bar_searches_what_is_not_an_address():
+    from maxxing.browser import rules
+    assert rules.address("example.com") == "https://example.com"
+    assert rules.address("fr.wikipedia.org/wiki/Paris") == "https://fr.wikipedia.org/wiki/Paris"
+    assert rules.address("https://shop.example.com/a?b=1") == "https://shop.example.com/a?b=1"
+    assert rules.address("about:blank") == "about:blank"
+    assert rules.address("chat gpt") == "https://www.google.com/search?q=chat+gpt"
+    assert rules.address("météo paris") == "https://www.google.com/search?q=m%C3%A9t%C3%A9o+paris"
+    assert rules.address("python") == "https://www.google.com/search?q=python"
+    assert rules.address("  ") == ""
+
+
+def test_files_reach_a_page_only_from_the_uploads_folder():
+    """DOM.setFileInputFiles stays refused, except for files copied into a profile's uploads folder."""
+    import json
+    from maxxing.browser import rules
+
+    def why(files):
+        return rules.check_command(json.dumps({"id": 1, "method": "DOM.setFileInputFiles",
+                                               "params": {"files": files, "backendNodeId": 3}}))[0]
+    assert why(["/mxrun/uploads/ab12/cv.pdf"]) is None
+    for bad in (["/etc/passwd"], ["/mxrun/uploads/../cdp.sock"], ["/mxprofile/Default/Cookies"], [],
+                ["/mxrun/uploads/a/x.pdf", "/root/.ssh/id_ed25519"]):
+        assert why(bad), bad
+    assert rules.check_command(json.dumps({"id": 2, "method": "Page.setInterceptFileChooserDialog",
+                                           "params": {"enabled": True}}))[0] is None
+
+
+def test_claude_gives_a_page_only_files_of_its_folder(tmp_path, monkeypatch):
+    from maxxing import browser, config
+    from maxxing.browser import pool as pool_mod
+    monkeypatch.setenv("MAXXING_BROWSER_LAUNCH", "direct")
+    ws = tmp_path / "ws"
+    topic = ws / "projects" / "acme" / "topics" / "blog"
+    (topic / "attachments").mkdir(parents=True)
+    (topic / "attachments" / "cv.pdf").write_bytes(b"%PDF-1.4")
+    (ws / "projects" / "acme" / "topics" / "other").mkdir(parents=True)
+    (ws / "projects" / "acme" / "topics" / "other" / "secret.txt").write_text("no")
+    monkeypatch.setattr(config, "workspace", lambda: ws)
+
+    class B:
+        run = tmp_path / "run" / "main"
+    out = pool_mod.claude_file(B(), "projects/acme/topics/blog", "attachments/cv.pdf")
+    assert out.startswith(str(B.run / "uploads")) and Path(out).read_bytes() == b"%PDF-1.4"
+    assert pool_mod.claude_file(B(), "projects/acme/topics/blog/agents/writer", str(topic / "attachments" / "cv.pdf"))
+    for bad in ("../other/secret.txt", str(ws / "projects/acme/topics/other/secret.txt"), "/etc/passwd", "nope.pdf"):
+        with pytest.raises(browser.BrowserError):
+            pool_mod.claude_file(B(), "projects/acme/topics/blog", bad)

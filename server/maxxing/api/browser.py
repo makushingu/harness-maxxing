@@ -38,7 +38,7 @@ import threading
 import time
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, WebSocket
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from starlette.websockets import WebSocketDisconnect
@@ -263,6 +263,29 @@ async def new_tab(pid: str, body: TabIn) -> dict:
         await p.new_tab(pid, (body.url or "").strip())
     except browser.BrowserError as e:
         raise _err(e) from None
+    return p.public(pid)
+
+
+@router.post("/profiles/{pid}/files", dependencies=AUTH)
+async def give_files(pid: str, files: list[UploadFile] = File(...)) -> dict:
+    """The files the person picked for the page of this profile that asked for some (its file input)."""
+    _profile(pid)
+    p = pool_mod.pool()
+    b = p.get(pid)
+    if not b or not b.watcher or not b.watcher.chooser:
+        raise HTTPException(409, detail={"error": "no_chooser", "message": "No page is asking for a file"})
+    paths = []
+    for f in files[:20]:
+        data = await f.read(pool_mod.UPLOAD_MAX + 1)
+        if len(data) > pool_mod.UPLOAD_MAX:
+            raise HTTPException(413, detail={"error": "too_large",
+                                             "message": f"{f.filename} is larger than {pool_mod.UPLOAD_MAX // 1024 // 1024} MB"})
+        paths.append(await asyncio.to_thread(pool_mod.stage, b, f.filename or "file", data))
+    try:
+        await b.watcher.give_files(paths)
+    except (RuntimeError, PermissionError) as e:
+        raise HTTPException(409, detail={"error": "no_chooser", "message": str(e)}) from None
+    b.last_use = time.time()
     return p.public(pid)
 
 
@@ -632,7 +655,9 @@ async def live(ws: WebSocket):
                 except Exception as e:  # noqa: BLE001 - a page that went away
                     why = str(e)[:200]
                 b.last_use = time.time()
-                if why:
+                if isinstance(why, dict):
+                    await send_json(why)
+                elif why:
                     await send_json({"t": "error", "text": why})
     except (WebSocketDisconnect, RuntimeError):
         pass
