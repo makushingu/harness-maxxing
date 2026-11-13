@@ -48,6 +48,10 @@ Fixed:
   session, or during the first turn after its context was compacted, a side question was refused with "this session
   has not answered once", even with a whole conversation above. It is now answered from what the session has done
   so far.
+- **Small fixes.** The icons of the sidebar's last line are bigger to the finger; a long chat name no longer pushes
+  the Team message popup off screen; a WebFetch approval with a malformed address no longer breaks the list of
+  approvals; `maxxing agents show` reads a role file that is not UTF-8, and `maxxing agents set` with a too deeply
+  nested value says so instead of crashing.
 
 Security:
 - **Changes view: a diff no longer runs a program named by the repository.** A repository whose `.git/config`

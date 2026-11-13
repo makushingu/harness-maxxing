@@ -221,3 +221,19 @@ def test_agents_off_on_a_broken_agent_returns_2(client, topic, capsys):
         assert cli.main(["agents", cmd, "w"]) == 2, cmd
         err = capsys.readouterr().err
         assert err.strip() and "Traceback" not in err
+
+
+def test_set_with_a_too_deep_json_value_says_it(client, topic, capsys):
+    _two_agents(client)
+    deep = "[" * 100000 + "]" * 100000
+    for args in (["--json", deep], [f"model={deep}"], [f"limits.usd_per_day={deep}"]):
+        assert cli.main(["agents", "set", "writer", *args]) == 2, args[0][:20]
+        err = capsys.readouterr().err
+        assert "nested too deeply" in err and "Traceback" not in err
+
+
+def test_show_reads_a_role_that_is_not_utf8(client, topic, capsys):
+    _two_agents(client)
+    (agents.folder(A) / "CLAUDE.md").write_bytes(b"# Writer\n\nwrites \xff posts\n")
+    assert cli.main(["agents", "show", "writer"]) == 0
+    assert "writes \ufffd posts" in json.loads(capsys.readouterr().out)["claude_md"]

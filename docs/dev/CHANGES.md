@@ -7,6 +7,11 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## 2.0.0-alpha.147 - 2026-11-13
 
+- Audit fixes (straight to `main`, merged here): `approvals.py` survives a WebFetch request whose URL does not
+  parse; `sessions/opened.py` refuses an id with a final newline (`$` -> `\Z`); `cmd_agents.py` `show` reads the role
+  file with `errors="replace"`, `set` catches `RecursionError` on a too deeply nested JSON value; `iconBtn`
+  `pointer-coarse:size-10`; `MessagePopup` truncates a long chat name. Tests in `test_approvals.py`,
+  `test_sessions.py`, `test_agents_cli.py`.
 - Side questions: `aside.ask` no longer refuses a thread whose `fresh` flag is still set when the session is
   `running` (`fresh` is cleared only when a turn ends, so the whole first turn of a thread - new session, or the
   thread after a compaction - answered 409 `no_thread`). The fork is tried; if Claude has not written the thread yet

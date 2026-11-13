@@ -476,7 +476,10 @@ def _values(a) -> dict:
     """`set` FIELD=VALUE words (+ --json) -> agent.json fields; a.b=VALUE goes in the object a (limits.usd_per_day)."""
     out: dict = {}
     if a.fields:
-        d = json.loads(a.fields)
+        try:
+            d = json.loads(a.fields)
+        except RecursionError:
+            raise ValueError("--json: nested too deeply") from None
         if not isinstance(d, dict):
             raise ValueError("--json: a JSON object")
         out.update(d)
@@ -488,6 +491,8 @@ def _values(a) -> dict:
             val = json.loads(v)
         except ValueError:
             val = v
+        except RecursionError:
+            raise ValueError(f"{k.strip()}: nested too deeply") from None
         k = k.strip()
         if "." in k:
             top, sub = k.split(".", 1)
@@ -614,7 +619,7 @@ def _handler(a) -> int:
             return 2
         d = agents.get(path)
         try:
-            role = (agents.folder(path) / "CLAUDE.md").read_text(encoding="utf-8")
+            role = (agents.folder(path) / "CLAUDE.md").read_text(encoding="utf-8", errors="replace")
         except OSError:
             role = ""
         print(json.dumps({**{k: d.get(k) for k in ("path", "display_name", "enabled", "model", "permission_mode",
