@@ -1378,6 +1378,8 @@ export type BrowserSettings = {
   max_active_profiles: number
   /** seconds a tool waits for a down exit before saying so */
   exit_wait_s: number
+  /** the address bar's search engine */
+  search: 'google' | 'duckduckgo' | 'bing'
 }
 /** A profile: its own Chromium (sign-ins), its sites, its exit. `main` always exists (name "" = "Main"). */
 export type BrowserProfile = {

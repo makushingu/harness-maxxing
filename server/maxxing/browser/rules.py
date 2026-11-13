@@ -122,11 +122,15 @@ LOCAL_PAGE = ("Addresses of this server or of a local network (localhost, 127.0.
               "opened in the browser: only sites on the internet.")
 
 
-SEARCH = "https://www.google.com/search?q="
+# the address bar's search engine (browser settings `search`); Google spots a browser driven over DevTools now and
+# then and asks its own check: DuckDuckGo and Bing do not
+SEARCH_ENGINES = {"google": "https://www.google.com/search?q=", "duckduckgo": "https://duckduckgo.com/?q=",
+                  "bing": "https://www.bing.com/search?q="}
+SEARCH = SEARCH_ENGINES["google"]
 HOST_LIKE = re.compile(r"^[^\s/?#]+\.[^\s/?#]{2,}([/?#]\S*)?$|^localhost(:\d+)?([/?#]\S*)?$", re.I)
 
 
-def address(text: object) -> str:
+def address(text: object, engine: str = "google") -> str:
     """What the address bar opens for what was typed: an address as is (https:// added), anything else a search."""
     t = str(text or "").strip()
     if not t:
@@ -136,7 +140,7 @@ def address(text: object) -> str:
     if HOST_LIKE.match(t):
         return "https://" + t
     from urllib.parse import quote_plus
-    return SEARCH + quote_plus(t)
+    return SEARCH_ENGINES.get(engine, SEARCH) + quote_plus(t)
 
 
 def page_refusal(url: object, sites: list[str] | None = None) -> str | None:

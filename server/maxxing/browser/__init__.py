@@ -35,7 +35,7 @@ NAME = "Harness Browser"
 MAIN = "main"
 DIRECT = "direct"
 DEFAULTS = {"ask": True, "wait_min": 30, "downloads": False, "idle_min": 30, "tab_sleep_min": 20, "max_tabs": 12,
-            "max_active_profiles": 3, "exit_wait_s": 180}
+            "max_active_profiles": 3, "exit_wait_s": 180, "search": "google"}
 NUMBERS = {"wait_min": (1, 1440), "idle_min": (5, 1440), "tab_sleep_min": (2, 720), "max_tabs": (2, 30),
            "max_active_profiles": (1, 8), "exit_wait_s": (0, 900)}
 PROFILE_DEFAULTS = {"name": "", "exit": DIRECT, "web": "list", "sites": [], "on_exit_down": "wait", "agent": ""}
@@ -127,6 +127,11 @@ def clean_settings(raw: object, strict: bool = False) -> dict:
                 out[key] = src[key]
             else:
                 _bad(strict, key, "true or false")
+    if "search" in src:
+        if src["search"] in rules.SEARCH_ENGINES:
+            out["search"] = src["search"]
+        else:
+            _bad(strict, "search", " or ".join(rules.SEARCH_ENGINES))
     for key, (lo, hi) in NUMBERS.items():
         if key in src and src[key] is not None:
             try:

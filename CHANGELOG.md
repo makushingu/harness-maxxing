@@ -22,7 +22,7 @@ New:
   profile's pages out by your phone (Tailscale), a rented proxy or a WireGuard box instead of the server's
   data-center address, which some sites block; **Test** shows the address the sites see and its kind. When an exit is
   down, the profile waits and you get a notification - never the server's address behind your back - and Claude goes
-  on once it is back. The address bar searches Google for what is not an address; copy, paste, the page's messages
+  on once it is back. The address bar searches (Google, DuckDuckGo or Bing) what is not an address; copy, paste, the page's messages
   and its file buttons work from the live view; the browser speaks your language and keeps your time zone. The live
   view keeps up with a slow connection. [Show me](#show:browser)
 

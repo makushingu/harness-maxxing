@@ -41,8 +41,9 @@ MODS = {"alt": 1, "ctrl": 2, "meta": 4, "shift": 8}
 COPY_JS = "(() => { const e = document.activeElement; if (e && (e.tagName === 'TEXTAREA' || (e.tagName === 'INPUT' && " \
           "typeof e.selectionStart === 'number'))) return e.value.slice(e.selectionStart, e.selectionEnd); " \
           "return String(getSelection ? getSelection() : ''); })()"
-SEARCH_REFUSED = ("This browser only opens the sites of its list: add google.com to the profile's sites to search from "
-                  "the address bar, or type the address of a site.")
+SEARCH_REFUSED = ("This browser only opens the sites of its list: add the search engine's site (google.com, "
+                  "duckduckgo.com or bing.com) to the profile's sites to search from the address bar, or type the "
+                  "address of a site.")
 
 
 class Watcher:
@@ -451,14 +452,14 @@ class Watcher:
             if not kind:
                 return "bad mouse event"
             x, y = xy()
-            await self.cdp.call("Input.dispatchMouseEvent", {
+            await self.cdp.send_nowait("Input.dispatchMouseEvent", {
                 "type": kind, "x": x, "y": y, "modifiers": mods,
                 "button": ev.get("button") if ev.get("button") in ("left", "middle", "right") else (
                     "none" if kind == "mouseMoved" else "left"),
                 "clickCount": int(ev.get("clicks") or (0 if kind == "mouseMoved" else 1))}, session=s)
         elif t == "wheel":
             x, y = xy()
-            await self.cdp.call("Input.dispatchMouseEvent", {
+            await self.cdp.send_nowait("Input.dispatchMouseEvent", {
                 "type": "mouseWheel", "x": x, "y": y, "modifiers": mods,
                 "deltaX": float(ev.get("dx") or 0), "deltaY": float(ev.get("dy") or 0)}, session=s)
         elif t == "key":
@@ -471,19 +472,21 @@ class Watcher:
             text = str(ev.get("text") or "")
             if kind == "keyDown" and len(text) == 1 and not (mods & 6):
                 params["text"] = text
-            await self.cdp.call("Input.dispatchKeyEvent", params, session=s)
+            await self.cdp.send_nowait("Input.dispatchKeyEvent", params, s)
         elif t == "text":
             text = str(ev.get("text") or "")[:2000]
             if text:
-                await self.cdp.call("Input.insertText", {"text": text}, session=s)
+                await self.cdp.send_nowait("Input.insertText", {"text": text}, s)
         elif t == "nav":
-            url = rules.address(ev.get("url"))
+            from .. import browser
+            engine = browser.settings()["search"]
+            url = rules.address(ev.get("url"), engine)
             if not url:
                 return None
             why = rules.page_refusal(url, self.sites())
             if why:
-                return (SEARCH_REFUSED if url.startswith(rules.SEARCH) else why)
-            await self.cdp.call("Page.navigate", {"url": url}, session=s)
+                return SEARCH_REFUSED if url.startswith(rules.SEARCH_ENGINES[engine]) else why
+            await self.cdp.send_nowait("Page.navigate", {"url": url}, s)   # a "leave this page?" may hold it
         elif t == "copy":
             r = await self.cdp.call("Runtime.evaluate", {"expression": COPY_JS, "returnByValue": True}, session=s, timeout=5)
             text = str(((r.get("result") or {}).get("value")) or "")[:100_000]
@@ -508,9 +511,9 @@ class Watcher:
             i = int(h.get("currentIndex", 0)) + (-1 if t == "back" else 1)
             entries = h.get("entries") or []
             if 0 <= i < len(entries):
-                await self.cdp.call("Page.navigateToHistoryEntry", {"entryId": entries[i]["id"]}, session=s)
+                await self.cdp.send_nowait("Page.navigateToHistoryEntry", {"entryId": entries[i]["id"]}, s)
         elif t == "reload":
-            await self.cdp.call("Page.reload", session=s)
+            await self.cdp.send_nowait("Page.reload", None, s)
         else:
             return "unknown event"
         return None

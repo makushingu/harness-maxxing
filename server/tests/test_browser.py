@@ -1021,6 +1021,13 @@ def test_the_address_bar_searches_what_is_not_an_address():
     assert rules.address("météo paris") == "https://www.google.com/search?q=m%C3%A9t%C3%A9o+paris"
     assert rules.address("python") == "https://www.google.com/search?q=python"
     assert rules.address("  ") == ""
+    assert rules.address("chat gpt", "duckduckgo") == "https://duckduckgo.com/?q=chat+gpt"
+    assert rules.address("chat gpt", "bing") == "https://www.bing.com/search?q=chat+gpt"
+    from maxxing import browser
+    assert browser.clean_settings({})["search"] == "google"
+    assert browser.clean_settings({"search": "bing"})["search"] == "bing"
+    with pytest.raises(browser.BrowserError):
+        browser.clean_settings({"search": "altavista"}, strict=True)
 
 
 def test_files_reach_a_page_only_from_the_uploads_folder():

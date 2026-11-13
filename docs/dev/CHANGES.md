@@ -44,7 +44,7 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 - Harness Browser (`maxxing/browser/`, never released before: it lived on a research branch; API.md "Harness
   Browser", INTERNALS "maxxing.browser", user doc 33). Config `browser_feature` (default false) + `config.json ->
   browser` = `{ask, wait_min, downloads, idle_min, tab_sleep_min, max_tabs, max_active_profiles (3, 1..8),
-  exit_wait_s (180, 0..900), profiles: [{id, name, exit: "direct"|<exit id>, web: list|public, sites, on_exit_down:
+  exit_wait_s (180, 0..900), search (google|duckduckgo|bing), profiles: [{id, name, exit: "direct"|<exit id>, web: list|public, sites, on_exit_down:
   wait|vps, agent: "" | <agent path>}] (<= 20, `main` always first, not deletable; `agent` = that agent's own browser), exits: [{id, name, type: proxy {url, user} | tailscale
   {node, login_server} | wireguard {}}] (<= 10)}`; `browser.clean_settings(raw, strict)`. Exit secrets in the vault
   `BROWSER_EXIT_<ID>` (`expose: false`). Owners: `browser: {enabled?, profile?}` in a project's / topic's
@@ -65,7 +65,8 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   `maxxing-br-<install>-<pid>`, `set_level` -> `cpu.set_level`, `cpu.turn_slice_args()`, `--lang` /
   `--accept-lang` from `config.language`, `TZ` from `config.timezone`; `run/<pid>/uploads` emptied at each start), `proxy.py` (upstream through the exit by checked IP, 502 + marked down when it fails),
   `tabs.py` (every turn of a profile sees all its tabs; `by` = who opened it), `view.py`, `relay.py`, `rules.py`
-  (`address(text)`: an address or `https://www.google.com/search?q=`; `DOM.setFileInputFiles` allowed only for files
+  (`address(text, engine)`: an address or a search, `SEARCH_ENGINES` google | duckduckgo | bing = settings `search`,
+  default google; `DOM.setFileInputFiles` allowed only for files
   under `rules.UPLOAD_ROOTS` = `/mxrun/uploads/` (+ the real folder in direct mode),
   `Page.setInterceptFileChooserDialog` allowed),
   `cdm.py`, `asks.py`, `replays.py`, `turns.py`; `browser_mcp.py` (stdlib, per turn) + `runner.browser_args`.

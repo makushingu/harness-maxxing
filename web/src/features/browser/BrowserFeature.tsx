@@ -131,6 +131,19 @@ export function BrowserSettingsForm() {
             <SettingRow label={t('browser.feature.max_tabs')} description={t('browser.feature.maxTabsDesc')}>
               {pick('max_tabs', (n) => String(n))}
             </SettingRow>
+            <SettingRow label={t('browser.feature.search')} description={t('browser.feature.searchDesc')} htmlFor="br-search">
+              <Select
+                id="br-search"
+                className="w-40"
+                value={s.search}
+                onValueChange={(v) => set({ search: v as typeof s.search })}
+                options={[
+                  { value: 'google', label: 'Google' },
+                  { value: 'duckduckgo', label: 'DuckDuckGo' },
+                  { value: 'bing', label: 'Bing' },
+                ]}
+              />
+            </SettingRow>
             <SettingRow label={t('browser.downloads')} description={t('browser.downloadsDesc')} htmlFor="br-dl">
               <Switch id="br-dl" checked={s.downloads} onCheckedChange={(v) => set({ downloads: v })} />
             </SettingRow>

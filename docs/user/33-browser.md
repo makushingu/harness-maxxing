@@ -126,8 +126,10 @@ see a data-center address and ask more checks.
 
 ## Using it, watching Claude
 
-The address bar opens what you type: an address (`example.com`), or a **Google search** for anything else (a profile
-limited to a list of sites needs `google.com` in it to search). A new tab has the same search box in its middle.
+The address bar opens what you type: an address (`example.com`), or a **search** for anything else - Google by
+default, or DuckDuckGo or Bing (**Settings -> Features -> Harness Browser -> Search engine**; Google sometimes asks a
+browser driven by Claude to prove it is not a robot, the other two do not). A profile limited to a list of sites needs
+the engine's site in it to search. A new tab has the same search box in its middle.
 
 - **Copy and paste**: Ctrl+C (⌘C) on the page copies its selected text to your clipboard; Ctrl+V pastes yours into
   the page.
@@ -188,8 +190,8 @@ action. **Skip** tells it to do without that step. With no answer in time, it gi
   memory, the line turns amber with **Sleep** (every tab not shown goes to sleep); when memory is critical, the
   oldest tabs sleep by themselves.
 - These are in **Settings -> Features -> Harness Browser**: **A tab sleeps after**, **A profile sleeps after**, **Tabs
-  awake at most**, **Profiles running at once**, **Wait for a down exit**, plus **Ask me when it is stuck**, **Wait
-  for me** and **Allow downloads** (off by default; files go to `downloads/browser` in the workspace).
+  awake at most**, **Profiles running at once**, **Wait for a down exit**, **Search engine**, plus **Ask me when it
+  is stuck**, **Wait for me** and **Allow downloads** (off by default; files go to `downloads/browser` in the workspace).
 
 ## Agents
 
