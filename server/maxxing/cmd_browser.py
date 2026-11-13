@@ -1,19 +1,23 @@
 """`maxxing browser` - the Harness Browser (maxxing/browser) from a terminal.
+Claude browses with its tools (one set per turn), never with this command: it says who may use the browser and how.
+
+    maxxing browser status [--json]             feature, what is missing, settings, browsers, exits, requests waiting
+    maxxing browser show PATH [--json]          what a project / topic / agent gets (and where it is inherited from)
+    maxxing browser set PATH on|off|inherit [--profile ID|own|inherit]
+                                                may its sessions use it, with which browser (an agent turned on gets
+                                                its own; `--profile main` shares main's sign-ins; `inherit` = its
+                                                parent's, not for an agent's switch)
     maxxing browser setup [--exits]             install what it needs on this server (root): socat, Chromium, its
                                                 user, its AppArmor profile, chrome-devtools-mcp (+ Tailscale and
                                                 wireproxy for the exits)
-    maxxing browser status [--json]             feature, what is missing, settings, profiles, exits, requests waiting
+    maxxing browser forget ID                   erase a browser's sign-ins, tabs and journal
+    maxxing browser exit test ID|direct         the address the sites see through it, its kind, delay, speed
+Advanced:
     maxxing browser settings [--ask | --no-ask] [--wait MIN] [--downloads | --no-downloads] [--idle MIN]
                              [--tab-sleep MIN] [--max-tabs N] [--max-profiles N]
     maxxing browser profile add NAME [--exit ID] [--sites a.com,b.com | --public] [--fallback-vps]
     maxxing browser profile set ID [--name N] [--exit ID] [--sites ... | --public] [--fallback-vps | --wait-exit]
-    maxxing browser profile rm ID               its sign-ins too
-    maxxing browser exit test ID|direct         the address the sites see through it, its kind, delay, speed
-    maxxing browser on PATH [--profile ID]      the sessions of a project, a topic or an agent may use it
-    maxxing browser off PATH
-    maxxing browser use PATH ID|inherit         the profile of a project, a topic or an agent
-    maxxing browser show PATH [--json]          what it gets (and where it is inherited from)
-    maxxing browser forget ID                   erase a profile's sign-ins, tabs and journal
+    maxxing browser profile rm ID               its sign-ins too (agents that had it as their own have none then)
 PATH: `<p>`, `<p>/<t>`, `<p>/<t>/<agent>` or the full folder. Settings belong to the owner: refused in an agent turn.
 Exits are added on the Browser page (their passwords go to the vault).
 """
@@ -63,14 +67,10 @@ def _configure(p) -> None:
     ex = sub.add_parser("exit", help="test an exit").add_subparsers(dest="exit_cmd", required=True)
     s = ex.add_parser("test")
     s.add_argument("id")
-    s = sub.add_parser("on", help="the sessions of a project, a topic or an agent may use the browser")
+    s = sub.add_parser("set", help="may a project / topic / agent use the browser, and which one")
     s.add_argument("path")
-    s.add_argument("--profile")
-    s = sub.add_parser("off", help="they may not")
-    s.add_argument("path")
-    s = sub.add_parser("use", help="the profile of a project, a topic or an agent")
-    s.add_argument("path")
-    s.add_argument("profile", help="a profile id, or inherit")
+    s.add_argument("state", choices=("on", "off", "inherit"), help="inherit: its parent's switch (not an agent)")
+    s.add_argument("--profile", help="a browser id, own (an agent's own browser) or inherit")
     s = sub.add_parser("show", help="what a project / topic / agent gets, and from where")
     s.add_argument("path")
     s.add_argument("--json", action="store_true")
@@ -204,26 +204,29 @@ def _handler(a) -> int:
             return 0
         owner = _path(a.path)
         path = browser.owner_path(owner)
-        if cmd in ("on", "off"):
-            change: dict = {"enabled": cmd == "on"}
-            if cmd == "on" and a.profile:
-                if browser.profile(a.profile) is None:
-                    raise browser.BrowserError(404, "no_profile", f"No profile {a.profile}")
-                change["profile"] = a.profile
-            _save(owner, change)
-            print(f"Harness Browser {'on' if cmd == 'on' else 'off'} for {path}"
-                  + ("" if browser.feature_on() or cmd == "off" else ". The feature is off: Settings -> Features."))
-            return 0
-        if cmd == "use":
-            if a.profile == "inherit":
-                _save(owner, {}, ("profile",))
-            else:
-                if browser.profile(a.profile) is None:
-                    raise browser.BrowserError(404, "no_profile", f"No profile {a.profile}")
-                _save(owner, {"profile": a.profile})
+        if cmd == "set":
+            agent = owner.startswith("agent:")
+            if a.state == "inherit" and agent:
+                raise browser.BrowserError(400, "bad_browser", "An agent's switch is its own: on or off")
+            change: dict = {} if a.state == "inherit" else {"enabled": a.state == "on"}
+            inherit = ["enabled"] if a.state == "inherit" else []
+            prof = a.profile
+            if prof == browser.OWN and not agent:
+                raise browser.BrowserError(400, "bad_browser", "Only an agent has a browser of its own")
+            if prof == "inherit":
+                inherit.append("profile")
+            elif prof and prof != browser.OWN and browser.profile(prof) is None:
+                raise browser.BrowserError(404, "no_profile", f"No browser {prof}")
+            elif prof:
+                change["profile"] = prof
+            elif a.state == "on" and agent and browser.resolve(path).get("gone"):
+                change["profile"] = browser.OWN           # its own was deleted: a new one
+            _save(owner, change, tuple(inherit))
             r = browser.resolve(path)
-            print(f"{path}: profile {r['profile']}" + (f" (inherited from {browser.owner_path(r['from']['profile'])})"
-                                                      if r["from"]["profile"] and r["from"]["profile"] != owner else ""))
+            print(f"{path}: {'may use the Harness Browser' if r['enabled'] else 'no browser'}; browser {r['profile']}"
+                  + (f" (inherited from {browser.owner_path(r['from']['profile'])})"
+                     if r["from"]["profile"] and r["from"]["profile"] != owner else "")
+                  + ("" if browser.feature_on() or not r["enabled"] else ". The feature is off: Settings -> Features."))
             return 0
         if cmd == "show":
             r = browser.resolve(path)

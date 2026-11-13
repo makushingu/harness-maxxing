@@ -435,29 +435,31 @@ def test_the_manager_asks_for_its_browser_and_turns_it_off_at_once(client, topic
 def test_an_agent_turn_cannot_change_its_browser(monkeypatch):
     from maxxing import agent_guard
     monkeypatch.setattr(agent_guard, "agent_turn", lambda: {"path": A, "tampered": False})
-    assert "not allowed" in agent_guard.check_cli(["browser", "on", A, "--public"])
+    assert "not allowed" in agent_guard.check_cli(["browser", "set", A, "on"])
     assert agent_guard.check_cli(["browser", "status"]) is None
 
 
-def test_cli_on_off_use_show(mx, capsys):
+def test_cli_set_show(mx, capsys):
     from maxxing import browser, cli
     (mx["ws"] / T).mkdir(parents=True)
-    assert cli.main(["browser", "on", "acme/blog"]) == 0
+    assert cli.main(["browser", "set", "acme/blog", "on"]) == 0
     assert browser.own_block(f"topic:{T}") == {"enabled": True}
     assert cli.main(["browser", "profile", "add", "Shop", "--sites", "example.com,shop.example.org"]) == 0
     assert browser.profile("shop")["sites"] == ["example.com", "shop.example.org"]
-    assert cli.main(["browser", "use", "acme", "shop"]) == 0                    # the project's: its topics inherit
+    assert cli.main(["browser", "set", "acme", "inherit", "--profile", "shop"]) == 0   # the project's: topics inherit
     assert browser.resolve(T)["profile"] == "shop" and browser.resolve(T)["from"]["profile"] == "project:projects/acme"
     assert cli.main(["browser", "settings", "--tab-sleep", "30"]) == 0 and browser.settings()["tab_sleep_min"] == 30
     assert cli.main(["browser", "show", "acme/blog", "--json"]) == 0
-    assert cli.main(["browser", "use", "acme", "inherit"]) == 0 and browser.resolve(T)["profile"] == "main"
-    assert cli.main(["browser", "off", "acme/blog"]) == 0
+    assert cli.main(["browser", "set", "acme", "inherit", "--profile", "inherit"]) == 0
+    assert browser.resolve(T)["profile"] == "main"
+    assert cli.main(["browser", "set", "acme/blog", "on", "--profile", "own"]) == 1   # only an agent has its own
+    assert cli.main(["browser", "set", "acme/blog", "off"]) == 0
     assert browser.own_block(f"topic:{T}")["enabled"] is False
     assert cli.main(["browser", "settings", "--max-tabs", "99"]) == 1          # out of range
     assert cli.main(["browser", "profile", "rm", "main"]) == 1                 # main stays
     assert cli.main(["browser", "profile", "rm", "shop"]) == 0 and browser.profile("shop") is None
     with pytest.raises(SystemExit):
-        cli.main(["browser", "on", "acme/nope"])
+        cli.main(["browser", "set", "acme/nope", "on"])
 
 
 def test_a_page_blocked_by_the_list_is_explained():
