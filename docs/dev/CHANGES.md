@@ -41,6 +41,11 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   `isolate` row) next to its bar and FLIPs both; `navRow(active)` no longer paints a background. `Segmented`: one
   absolute highlight placed from the chosen option's offsets (ResizeObserver: options may wrap), FLIP translate +
   scaleX on change; no animation with reduced motion.
+- UI kit twins (rule a69): `ui-callout` fill = `--fill-1`, `ui-tile` = `--sunken` (hover `--accent`); Glass material
+  = the app's liquid glass on `ui-card`, `ui-tile`, `ui-btn.ui-secondary/.ui-outline` (`html[data-material='glass']`:
+  the app's `<html>` for page extensions; the widget frame's `<html>`, set by the bridge from `material` in the
+  fragment and the `theme` message). `HtmlWidget` also sends `--fill-1`, `--sunken` and the `--lg-*` variables, and
+  re-sends on a material change.
 - Web, entrance order (top to bottom): boot `--bd` = height under the logo (index.html, no longer the radial
   distance) and also set on `.mx-rise` / `.mx-unfold` / `.mx-fade` (they played hidden under the loader before);
   session tree `--i` = running row index (`rowAt`, was `pi * 2 + ti + 1`: a project's 3rd topic rose with the next

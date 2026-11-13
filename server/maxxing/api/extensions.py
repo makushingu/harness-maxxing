@@ -202,7 +202,7 @@ WIDGET_BRIDGE = """<!doctype html><meta charset="utf-8"><script>(function(){
 var init={};try{init=JSON.parse(decodeURIComponent(location.hash.slice(1))||'{}')}catch(_){}
 var seq=0,pending={},cbs=[],dcbs=[],root=document.documentElement;
 root.setAttribute('data-mx-kit','');
-function apply(v){for(var k in v||{})root.style.setProperty(k,v[k]);root.dataset.theme=window.maxxing.theme;root.style.colorScheme=window.maxxing.theme}
+function apply(v,mat){for(var k in v||{})root.style.setProperty(k,v[k]);root.dataset.theme=window.maxxing.theme;root.dataset.material=mat||'solid';root.style.colorScheme=window.maxxing.theme}
 window.maxxing={theme:init.theme||'dark',
  api:function(path,o){o=o||{};return ask({mx:'api',path:String(path||''),method:o.method||'GET',body:o.body,query:o.query})},
  app:function(path,o){o=o||{};return ask({mx:'app',path:String(path||''),query:o.query})},
@@ -213,9 +213,9 @@ window.maxxing={theme:init.theme||'dark',
 function ask(m){return new Promise(function(res,rej){var s=++seq;pending[s]=[res,rej];m.seq=s;parent.postMessage(m,'*')})}
 addEventListener('message',function(e){if(e.source!==parent)return;var m=e.data||{};
  if(m.mx==='reply'){var p=pending[m.seq];if(p){delete pending[m.seq];m.ok?p[0](m.data):p[1](new Error(m.error||'request failed'))}}
- if(m.mx==='theme'){window.maxxing.theme=m.theme;apply(m.vars);cbs.forEach(function(f){try{f(m.theme)}catch(_){}})}
+ if(m.mx==='theme'){window.maxxing.theme=m.theme;apply(m.vars,m.material);cbs.forEach(function(f){try{f(m.theme)}catch(_){}})}
  if(m.mx==='data'){window.maxxing.data=m.data;dcbs.forEach(function(f){try{f(m.data)}catch(_){}})}});
-apply(init.vars);})();</script>
+apply(init.vars,init.material);})();</script>
 <style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0;background:transparent;color:var(--mx-fg);font:13px/1.45 Inter,system-ui,sans-serif}</style>
 """
 WIDGET_FRAME_CSP = "sandbox allow-scripts allow-pointer-lock; frame-ancestors 'self'"

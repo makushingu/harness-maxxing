@@ -31,7 +31,9 @@ const VARS: [string, string][] = [
   ...[
     'background', 'foreground', 'card', 'card-foreground', 'muted', 'muted-foreground', 'accent', 'accent-foreground',
     'primary', 'primary-foreground', 'secondary', 'secondary-foreground', 'destructive', 'destructive-foreground',
-    'success', 'warning', 'border', 'input', 'ring', 'radius', 'row-h', 'pad-card',
+    'success', 'warning', 'border', 'input', 'ring', 'radius', 'row-h', 'pad-card', 'fill-1', 'sunken',
+    // the Glass material's liquid glass (empty in Solid)
+    'lg-fill', 'lg-sheen', 'lg-rim-hi', 'lg-rim-lo', 'lg-rim-mid', 'lg-spec', 'lg-drop',
   ].map((n): [string, string] => [`--${n}`, `--${n}`]),
 ]
 
@@ -108,14 +110,14 @@ export function HtmlWidget({
   const hostRef = React.useRef(host)
   hostRef.current = host
   const theme = resolveTheme(useUI((s) => s.theme))
-  const look = useUI((s) => `${s.accent}.${s.tint}.${s.density}`)
+  const look = useUI((s) => `${s.accent}.${s.tint}.${s.density}.${s.material}`)
   const frame = React.useRef<HTMLIFrameElement>(null)
   const [loaded, setLoaded] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   const [h, setH] = React.useState(height)
   // The frame URL is fixed at mount (theme changes go by message): a new fragment would not reload it anyway.
   const [frameSrc] = React.useState(
-    () => `${frameUrl || src.replace(/widget\.html$/, 'widget-frame')}#${encodeURIComponent(JSON.stringify({ theme: resolveTheme(useUI.getState().theme), vars: themeVars() }))}`,
+    () => `${frameUrl || src.replace(/widget\.html$/, 'widget-frame')}#${encodeURIComponent(JSON.stringify({ theme: resolveTheme(useUI.getState().theme), material: useUI.getState().material, vars: themeVars() }))}`,
   )
 
   // A missing or disabled widget: say so instead of an empty frame (HEAD: the frame downloads the page itself).
@@ -182,7 +184,7 @@ export function HtmlWidget({
 
   React.useEffect(() => {
     // after the <html> attributes changed (accent, tint, density set them in an effect too)
-    const r = requestAnimationFrame(() => frame.current?.contentWindow?.postMessage({ mx: 'theme', theme, vars: themeVars() }, '*'))
+    const r = requestAnimationFrame(() => frame.current?.contentWindow?.postMessage({ mx: 'theme', theme, material: useUI.getState().material, vars: themeVars() }, '*'))
     return () => cancelAnimationFrame(r)
   }, [theme, look])
 

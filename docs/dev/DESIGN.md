@@ -215,7 +215,9 @@ ui-ghost ui-danger ui-sm ui-icon-only`), `ui-field ui-input ui-select ui-textare
 (+ `ui-success ui-warning ui-error ui-primary`), `ui-list ui-table ui-table-wrap ui-stat ui-progress ui-steps ui-callout ui-empty
 ui-skeleton ui-code ui-kbd ui-link`. Scoped to `.mx-ext` (the page host) and `[data-mx-kit]` (`<html>` of a widget frame),
 inside `:where()` so an extension's own CSS always wins; every colour is a theme variable (the widget frame receives
-them all by message). `ctx.icon(name)` gives pages the curated icons of `NamedIcon`; Card list items take `icon` too.
+them all by message, and its `<html>` gets `data-material`); in the Glass material `ui-card`, `ui-tile` and
+`ui-btn.ui-secondary/.ui-outline` take the app's liquid glass (`--lg-*`), `ui-callout` / `ui-tile` use the quiet fills
+`--fill-1` / `--sunken`. `ctx.icon(name)` gives pages the curated icons of `NamedIcon`; Card list items take `icon` too.
 When a component of `components/ui` changes its look, change its `ui-*` twin. No emoji in built-in cards, packs or
 the default extensions: icons.
 

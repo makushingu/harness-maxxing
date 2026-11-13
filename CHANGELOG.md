@@ -25,6 +25,8 @@ Added:
   over the page is no longer see-through, the phone menu shows the backdrop too, and no accent outline around the
   message box. Solid stays the default.
 - The highlight of the current page in the sidebar and of the chosen option in switches glides to the one you click.
+- Extensions (pages and HTML widgets) follow the Glass material too: their cards, tiles and secondary buttons
+  become liquid glass like the app's.
 - The interface and the pages now appear top to bottom, in order: at startup, in the sessions list, in Settings and
   on the dashboard (a card's content after the card).
 

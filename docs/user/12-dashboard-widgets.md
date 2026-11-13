@@ -200,7 +200,7 @@ through a small bridge that is injected for you:
 | `maxxing.resize(400)` | sets the frame height in px (the manifest `height`, 120-800, is the default) |
 | `maxxing.theme` · `maxxing.onTheme(fn)` | `"dark"` or `"light"`, and a callback when it changes |
 | `class="ui-card"`, `ui-btn`, `ui-input`, `ui-badge`, `ui-stat`... | the app's **UI kit** (see [Page extensions](page-extensions#styling)), already loaded in the frame |
-| `var(--card)` `--foreground` `--muted-foreground` `--border` `--primary`... (and the older `--mx-fg` `--mx-muted` `--mx-border` `--mx-accent` `--mx-card` `--mx-bg`) | the app's colors, updated with the theme and the accent color |
+| `var(--card)` `--foreground` `--muted-foreground` `--border` `--primary`... (and the older `--mx-fg` `--mx-muted` `--mx-border` `--mx-accent` `--mx-card` `--mx-bg`) | the app's colors, updated with the theme and the accent color (also `--fill-1`, `--sunken`; `<html data-material="glass">` when the Glass material is on) |
 
 Rules: one file only (no other file of the folder is served to the frame - inline everything, or
 load libraries from a CDN `<script src="https://...">`); no `localStorage`/cookies (the sandbox has

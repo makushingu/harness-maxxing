@@ -146,7 +146,8 @@ export function mount(el, ctx) {
 ### Styling
 
 The page gets the app's **UI kit**: CSS classes that look exactly like the rest of the app and follow the theme,
-the accent color and the density by themselves. Prefer them to hand-written styles:
+the accent color, the density and the material by themselves (with **Glass**, in Settings -> Appearance, cards,
+tiles and secondary / outline buttons become liquid glass like the app's). Prefer them to hand-written styles:
 
 | Classes | |
 |---|---|
@@ -164,8 +165,9 @@ the accent color and the density by themselves. Prefer them to hand-written styl
 
 Icons come from `ctx.icon(name)`; use them instead of emoji. Your own CSS always wins over the kit, and the app's
 CSS variables are there for the rest: `--background`, `--foreground`, `--card`, `--border`, `--muted`,
-`--muted-foreground`, `--primary`, `--primary-foreground`, `--success`, `--warning`, `--destructive`. HTML widgets
-get the same kit. Inputs of the kit are 16 px on phones (no zoom on iPhone).
+`--muted-foreground`, `--primary`, `--primary-foreground`, `--success`, `--warning`, `--destructive`, the quiet fills
+`--fill-1` (a soft background) and `--sunken` (a recessed zone). HTML widgets get the same kit; their `<html>` carries
+`data-theme` and `data-material` (`solid` or `glass`). Inputs of the kit are 16 px on phones (no zoom on iPhone).
 
 ## 4. Test and load
 
