@@ -6,6 +6,12 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 ## Unreleased
 
 New:
+- **The sidebar says how the server is doing.** "All good" at the bottom of the sidebar (and of the phone menu) is
+  now one short sentence in your language, about the most pressing thing only: a problem in plain words ("The backup
+  is gathering dust."), "Running hot! CPU at 92%.", memory or disk filling up, more than ten unread notifications,
+  finished sessions waiting, agents with news, sessions at work. For the Claude plan, a light forecast: at the pace
+  of the current window, the quota runs out before its reset ("At this pace, 5-hour quota out by 16:40 (resets
+  18:00)."), or it will hold. Two lines at most; a click leads where it is dealt with.
 - **Sessions: Tabs or Zones.** Two modes, one switch at the top right (Alt+T): **Tabs** shows one session at a
   time with the open ones as tabs above, **Zones** puts them side by side. The switch is one icon left of
   **New session**, no text, in the colour of the other icons of the bar: it draws the mode in use, and its bars move from one picture to the other when

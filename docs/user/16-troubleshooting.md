@@ -6,7 +6,13 @@ section: Reference
 
 ## The dot at the bottom of the sidebar
 
-It turns orange or red when something needs you (disk, memory, a failed scheduled job, a stopped service, Claude
+Next to it, one short sentence says how the server is doing, in your language: a problem in plain words ("The
+backup is gathering dust."), "Running hot! CPU at 92%.", a disk that fills up, more than ten unread notifications,
+sessions at work... or "All good". For the Claude plan it draws a light forecast: at the pace of the current window,
+will the quota run out before its reset ("At this pace, 5-hour quota out by 16:40 (resets 18:00).") or hold until
+then. Only the most pressing thing is said, in two lines at most; click it to go where it is dealt with.
+
+The dot turns orange or red when something needs you (disk, memory, a failed scheduled job, a stopped service, Claude
 not connected, an old backup). Click it for the list of issues ("Nothing to report" when all is well); CPU, RAM and
 disk show right under it and open Settings -> System, the Claude plan below opens Settings -> Usage. **Seen** on an issue stops it from counting in the dot (it
 stays in the list, greyed): it comes back by itself when it changes - another job failing, for example - or after

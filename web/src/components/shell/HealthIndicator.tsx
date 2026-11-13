@@ -8,10 +8,10 @@ import { useLang, useT } from '@/i18n'
 import type { Health, HealthIssue } from '@/lib/types'
 import { resolveTheme, useUI } from '@/stores/ui'
 import { Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, ProgressBar, Sensitive, Skeleton, Tooltip } from '@/components/ui'
-import { useTween } from '@/lib/useTween'
 import { iconBtn } from './nav'
 import { MeterBar, MeterIcon, MeterValue, MiniMeter, type MeterTone } from './Meter'
-import { ClaudeStatus, usePlanPct } from './UsageIndicator'
+import { ClaudeStatus } from './UsageIndicator'
+import { useMood } from './mood'
 
 /** Issues not marked as seen: the ones the dot and the count are about. */
 export function openIssues(h: Health): Health['issues'] {
@@ -113,17 +113,12 @@ function Metric({ label, value, pct }: { label: string; value: string; pct: numb
   )
 }
 
-/** The status line's text: "All good · Claude 47 %", the issue count instead of "All good" when something needs
- *  attention, no Claude part without plan usage. */
-export function useStatusLine(visible?: boolean) {
-  const t = useT()
-  const { data: h } = useHealth()
-  const tone = healthTone(h)
-  const raw = usePlanPct(visible)
-  const tween = Math.round(useTween(raw ?? NaN)) // counts up / down like the panel's figures (not from nothing on load)
-  const pct = raw === null ? null : tween
-  const health = !h ? t('health.checking') : tone === 'ok' ? t('shell.allGood') : t('health.issues', { count: openIssues(h).length })
-  return { tone, health, plan: pct === null ? null : t('shell.claudePct', { pct }), label: pct === null ? health : `${health} · ${t('shell.claudePct', { pct })}` }
+/** The status line: one short sentence about the server (`mood.ts`: a problem, the quota that will not last until its
+ *  reset, a busy CPU, things left unread... or that all is well), its dot, and where it leads. */
+export function useStatusLine() {
+  const m = useMood()
+  const tone = m.level === 'note' ? 'warn' : m.level
+  return { tone, health: m.text, alert: m.level === 'error' || m.level === 'warn' ? m.level : null, issues: !!m.issues, to: m.to, figures: !!(m.vars || m.when) } as const
 }
 
 /** CPU / RAM / disk as the meters need them (null while the health loads). */
@@ -147,7 +142,8 @@ const alertHover = {
 
 /** The bottom of the sidebar: CPU / RAM / disk, then the Claude quota under them.
  *  - Folded bar: three tiny meters (icon + short bar) and the health dot, then the Claude ring (the sparkle as a faint watermark inside).
- *  - Unfolded / pinned: the health line ("All good" with its dot, or "2 problems" in its alert colour) over CPU / RAM /
+ *  - Unfolded / pinned: the status line (a short sentence with its dot, `mood.ts`: "All good", "Running hot! CPU at
+ *    92%", a problem in its alert colour; two lines at most) over CPU / RAM /
  *    disk in three columns, then the ring with "Claude quota · Max" and "5 h 47 % · Week 12 %".
  *  Each part keeps the same height folded or not, so nothing above it moves when the bar unfolds. The health line (folded:
  *  the dot) leads to the whole Notifications feed (or Settings -> System when health problems stay out of the feed); while
@@ -158,12 +154,13 @@ export function StatusBlock({ collapsed, lead, tail }: { collapsed?: boolean; /*
   const t = useT()
   const s = useStatusLine()
   const rows = useHealthRows()
-  const alert = s.tone === 'error' || s.tone === 'warn' ? s.tone : null
-  // the health line leads to the whole Notifications feed (a failed job sits under Crons, not Health), else Settings -> System
+  const alert = s.alert
+  // the line leads to what it talks about, else to the whole Notifications feed (a failed job sits under Crons, not Health) or Settings -> System
   const { data: feedSettings } = useFeedSettings()
-  const issuesTo = feedSettings?.health ? '/feed' : '/settings/system'
+  const issuesTo = s.to ?? (feedSettings?.health ? '/feed' : '/settings/system')
   // a problem open: the health line (folded: the dot) opens the problems window instead of leaving the page
   const [open, setOpen] = React.useState(false)
+  const present = useUI((u) => u.presentation)
   const lang = useLang()
   const pct = (n: number) => (lang === 'en' ? `${Math.round(n)}%` : `${Math.round(n)} %`)
   const metersLabel = [t('health.details'), ...(rows || []).map((r) => `${r.label} ${pct(r.pct)}`)].join(' · ')
@@ -195,13 +192,19 @@ export function StatusBlock({ collapsed, lead, tail }: { collapsed?: boolean; /*
               </Link>
             </Tooltip>
             <span className="flex size-3 items-center justify-center">
-              {alert && (
+              {s.issues ? (
                 <Tooltip content={s.health} side="right">
                   <button type="button" onClick={() => setOpen(true)} aria-label={s.health} data-testid="status-issues" className={cn(link, 'flex size-3 items-center justify-center rounded-full')}>
                     <LiveDot tone={s.tone} />
                   </button>
                 </Tooltip>
-              )}
+              ) : s.tone === 'warn' ? (
+                <Tooltip content={s.health} side="right">
+                  <Link to={issuesTo} aria-label={s.health} data-testid="status-issues" className={cn(link, 'flex size-3 items-center justify-center rounded-full')}>
+                    <LiveDot tone={s.tone} />
+                  </Link>
+                </Tooltip>
+              ) : null}
             </span>
           </>
         ) : (
@@ -210,7 +213,7 @@ export function StatusBlock({ collapsed, lead, tail }: { collapsed?: boolean; /*
             {(() => {
               const cls = cn(
                 link,
-                'mx-side-reveal flex h-7 w-full min-w-0 items-center gap-2 rounded-md px-1.5 text-left text-xs font-medium transition-colors duration-500',
+                'mx-side-reveal flex h-8 w-full min-w-0 items-center gap-2 rounded-md px-1.5 text-left text-xs leading-4 font-medium transition-colors duration-500',
                 alert ? cn(alertBg[alert], alertHover[alert]) : 'text-muted-foreground hover:bg-accent hover:text-foreground',
               )
               const inner = (
@@ -218,11 +221,13 @@ export function StatusBlock({ collapsed, lead, tail }: { collapsed?: boolean; /*
                   <span className="flex size-4 shrink-0 items-center justify-center">
                     <LiveDot tone={s.tone} />
                   </span>
-                  <span className="min-w-0 flex-1 truncate">{s.health}</span>
-                  <ChevronRight className="size-3.5 shrink-0 opacity-70" />
+                  {/* a sentence: two lines at most, the whole of it on hover */}
+                  <span data-testid="status-mood" title={present ? undefined : s.health} className="line-clamp-2 min-w-0 flex-1">
+                    {s.figures ? <Sensitive length={14}>{s.health}</Sensitive> : s.health}
+                  </span>
                 </>
               )
-              return alert ? (
+              return s.issues ? (
                 <button type="button" onClick={() => setOpen(true)} data-testid="status-issues" className={cls}>
                   {inner}
                 </button>

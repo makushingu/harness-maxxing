@@ -7,6 +7,21 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Web, sidebar status line: `components/shell/mood.ts`. `pickMood(facts)` (pure) returns ONE sentence (`key`, `vars`,
+  `when` = times formatted by the hook, `level` ok / note / warn / error / idle, `to`, `issues`), most pressing first:
+  open health problems (one sentence per issue `code`, `ISSUE_MOOD`; several = their count; an unknown code keeps
+  `health.issues`), quota at 100 %, CPU >= 85 %, RAM >= 90 %, quota forecast, quota >= 90 %, disk >= 80 %, feed unread
+  > 10, sessions unread >= 5, agents attention, Team unread >= 5, then the calm ones (just restarted, sessions
+  running, 5-hour quota that will hold, night, 30 days up, `shell.allGood`). `forecast(window, length, now)`: the
+  usage so far as a straight line to `resets_at` (window start = reset - 5 h / 7 d); says nothing before 15 % of the
+  window or under 20 % used. `useMood()` gathers the queries the shell already runs (Team / Agents only when their
+  page is on) and `useStatusLine()` (HealthIndicator.tsx) maps it to the line: `note` = amber dot without the alert
+  background, the line is a link to `to` unless `issues` (problems window); two lines (`line-clamp-2`, whole text in
+  `title`), masked in presentation mode when it holds figures; no chevron any more. Texts: `mood.*`, a
+  dictionary group of their own (`mood` in i18n/groups.ts, fetched by `useMood` once the shell shows: the core dictionary
+  is at its first-load budget, test_web_first_load); "Checking…" while they download.
+  `shell.claudePct` and `usePlanPct` removed (unused). Bench: one capture per case with `page.route` on
+  /api/system/health, /api/usage, /api/feed, /api/workspace/tree.
 - Sessions: `ViewSwitch` (computer: one button left of New session, after the layouts button which comes and goes with the
   mode; its icon = four square bars whose shape follows `data-kind`, moved by the transitions of `.mx-view-glyph` in
   globals.css, so nothing plays at page load; `currentColor`, the colour of the ghost icon buttons beside it) and `TabsToggle` (phone) in `pages/sessions/Tabs.tsx`; the store's `tabs` defaults to true and `merge` sets
