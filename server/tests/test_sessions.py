@@ -598,6 +598,28 @@ def test_side_question_answers_without_touching_the_session(client, topic, mx):
     assert client.post(f"/api/sessions/{sid}/ask", json={"question": " "}).status_code == 400
 
 
+def test_side_question_during_the_first_turn_of_a_thread(client, topic, mx):
+    """`fresh` is cleared when a turn ends: a session at work on its first turn (or on the first turn after a
+    compaction) can already be asked about; before its thread exists the answer is "starting", not "never
+    answered"."""
+    from maxxing.sessions import store
+    sid = client.post("/api/sessions", json={"path": topic, "message": "build the thing SLOW"}).json()["id"]
+    wait_for(lambda: any("SLOW" in c["prompt"] for c in calls(mx)), 20)
+    m = store.read(sid)
+    assert m["state"] == "running" and m["fresh"] is True
+    r = client.post(f"/api/sessions/{sid}/ask", json={"question": "where are you at?"})
+    assert r.status_code == 200, r.text
+    assert r.json()["answer"].startswith("Echo: [Side question")
+    argv = calls(mx)[-1]["argv"]
+    assert argv[argv.index("--resume") + 1] == sid and "--fork-session" in argv
+    store.update(sid, csid="0" * 8 + "-0000-4000-8000-" + "0" * 12)       # a thread Claude has not written yet
+    r = client.post(f"/api/sessions/{sid}/ask", json={"question": "and now?"})
+    assert r.status_code == 409 and r.json()["error"] == "no_thread" and "starting" in r.json()["message"]
+    store.update(sid, csid=sid)
+    client.post(f"/api/sessions/{sid}/stop")
+    wait_idle(client, sid, 20)
+
+
 @pytest.mark.parametrize("out,status", [("[1]", 502), ("123", 502),
                                         (json.dumps({"result": "hi", "total_cost_usd": "n/a", "duration_ms": "x"}), 200)])
 def test_side_question_with_an_odd_answer_line(client, tmp_path, monkeypatch, out, status):

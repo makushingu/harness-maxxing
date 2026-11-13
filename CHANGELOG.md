@@ -36,6 +36,12 @@ New:
   instead of offering SSH; asked to undo a turn, to "Revert to before this message" and the Changes view. The help
   topic knows Tabs and Zones, the intelligence of a session, `/` commands, `@` and `maxxing team send`.
 
+Fixed:
+- **Sessions: a side question works while the session is on its first turn.** Asked during the first turn of a
+  session, or during the first turn after its context was compacted, a side question was refused with "this session
+  has not answered once", even with a whole conversation above. It is now answered from what the session has done
+  so far.
+
 Security:
 - **Changes view: a diff no longer runs a program named by the repository.** A repository whose `.git/config`
   declares a `textconv` converter (with `.git/info/attributes`) had it run by the server when you opened a file's
