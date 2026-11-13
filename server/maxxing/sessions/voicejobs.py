@@ -85,6 +85,12 @@ def _run(sid: str, jid: str, path: str) -> None:
             jobs[jid].update(res, at=time.time())
     if res.get("text"):
         titles.first_message(sid, res["text"])    # a session started by a voice message gets its title from it
+    if "/agents/" in str(m.get("path") or ""):
+        try:                                       # an agent's conversation: its thread shows the words too
+            from .. import agents
+            agents.voice_heard(str(m["path"]), path, res)
+        except Exception:  # noqa: BLE001 - the session has the transcript whatever happens here
+            log.exception("voice job %s/%s: agent thread", sid, jid)
     bus.invalidate("sessions")
 
 

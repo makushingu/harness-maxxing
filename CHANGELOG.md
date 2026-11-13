@@ -6,6 +6,17 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 ## Unreleased
 
 Changed:
+- **`maxxing sessions new`: start a session from the command line.** `maxxing sessions new acme/blog "Write the
+  newsletter"` starts a session in that topic with a first message (`--title`, `--model`, `--effort`, `--file`).
+  Claude can use it from a session or from an agent that is not in its sandbox, like `maxxing sessions send`: the
+  message says which session started it, and sends in a row stay limited to 3. Agents keep `maxxing agents create`,
+  `run` and `send`, which a session can already use.
+- **Agents: the message box works like a session's.** The microphone sends a voice message directly (Settings ->
+  Voice -> Send voice messages right away, on by default): the recording shows at once in the conversation and its
+  words under it once the server has transcribed them, instead of waiting for the transcript before sending. The
+  model and the intelligence are picked under the box and change the current conversation (before, a model picked
+  there only counted for the next new conversation). `/` opens the same menu as in a session: `/model`, `/effort`,
+  `/new` (new conversation), `/compact` and the skills of the topic.
 - **Sessions: compaction follows the model's context window.** The thresholds of Settings -> Claude (automatic
   compaction 300k, compact when you come back 200k, smart resume 100k) were the same for every model: on a model
   with a 200k window they were out of reach, so a long session was never summarized by Harness between two messages

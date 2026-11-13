@@ -143,7 +143,12 @@ between days).
   everything you said and what it already read or did, so it answers faster and costs less. **New conversation**
   (under the box) starts a fresh one; a new one also starts by itself after 6 hours without a message (**New
   conversation after**, in Settings -> Limits; 0 = never) or when the last one failed. A new conversation gets the
-  agent's last results as context, so "and the second point?" still makes sense. The model is picked under the box.
+  agent's last results as context, so "and the second point?" still makes sense.
+- **The box works like a session's**: the model and the intelligence are picked under it (they change the next turns
+  of the conversation, or start the next one with them), `/` opens the same menu (`/model`, `/effort`, `/new`,
+  `/compact` and the skills of its topic), and the microphone sends a **voice message** directly when **Send voice
+  messages right away** is on (Settings -> Voice, the default): the recording shows at once, its words appear under it
+  once transcribed. Off, the words are put in the box for you to check first.
 - **In the conversation, the agent manages itself** (see [Who changes an agent](#who-changes-an-agent)): ask it to
   remember something, rewrite its role, add a schedule or stop a webhook, and it does it; what it changed of itself
   shows in green (**Memory updated**, **Changed its role**). A change of its safety settings shows up as a card to

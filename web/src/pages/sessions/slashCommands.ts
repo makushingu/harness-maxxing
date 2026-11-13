@@ -16,6 +16,8 @@ export type SlashActions = {
   onCompact?: () => void
   onHandoff?: () => void
   onNew?: () => void
+  /** `/new` starts a new conversation of an agent (not a session of the topic) */
+  newChat?: boolean
   onRename?: (title: string) => void
   /** The terminal drawer (Settings -> Features -> Sessions -> Code mode on, not an agent). */
   onTerminal?: () => void
@@ -67,7 +69,7 @@ export function useSlashCommands(path: string, a: SlashActions): SlashCommand[] 
       out.push({ name: 'plan', kind: 'action', description: t(a.plan ? 'slash.planOff' : 'slash.planOn'), run: () => live.current.onPlan?.() })
     if (a.onCompact) out.push({ name: 'compact', kind: 'action', description: t('slash.compact'), run: () => live.current.onCompact?.() })
     if (a.onHandoff) out.push({ name: 'handoff', kind: 'action', description: t('slash.handoff'), run: () => live.current.onHandoff?.() })
-    if (a.onNew) out.push({ name: 'new', kind: 'action', description: t('slash.new'), run: () => live.current.onNew?.() })
+    if (a.onNew) out.push({ name: 'new', kind: 'action', description: t(a.newChat ? 'slash.newChat' : 'slash.new'), run: () => live.current.onNew?.() })
     if (a.onTerminal) out.push({ name: 'terminal', kind: 'action', description: t('slash.terminal'), run: () => live.current.onTerminal?.() })
     if (a.onRename)
       out.push({ name: 'rename', kind: 'action', freeArg: true, description: t('slash.rename'), run: (arg) => arg && live.current.onRename?.(arg) })
@@ -81,5 +83,5 @@ export function useSlashCommands(path: string, a: SlashActions): SlashCommand[] 
       out.push({ name: s.name, kind: 'skill', group: rank(s) < 2 ? 'here' : 'other', description: s.description })
     }
     return out
-  }, [t, models, def, skills, a.model, a.effort, a.plan, !!a.onPlan, !!a.onCompact, !!a.onHandoff, !!a.onNew, !!a.onRename, !!a.onTerminal]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [t, models, def, skills, a.model, a.effort, a.plan, !!a.onPlan, !!a.onCompact, !!a.onHandoff, !!a.onNew, !!a.newChat, !!a.onRename, !!a.onTerminal]) // eslint-disable-line react-hooks/exhaustive-deps
 }

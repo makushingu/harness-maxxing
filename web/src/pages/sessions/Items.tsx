@@ -384,7 +384,7 @@ export function UserMessage({
 }
 
 /** A voice message sent directly: the recording, then its transcript (what Claude got) - or "Transcribing…". */
-function VoiceNote({ paths, heard, pending }: { paths: string[]; heard?: { text: string; error: string | null; stopped?: boolean }; pending?: boolean }) {
+export function VoiceNote({ paths, heard, pending }: { paths: string[]; heard?: { text: string; error: string | null; stopped?: boolean }; pending?: boolean }) {
   // One bubble like a typed message: a mic button (tap = listen to the recording, again = pause) and the transcript.
   const t = useT()
   const audio = React.useRef<HTMLAudioElement>(null)

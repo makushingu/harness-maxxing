@@ -102,7 +102,7 @@ UI; the server CLI is `maxxing`:
 | `maxxing infra status\|list\|site\|db\|bucket\|server` | where every site / database / bucket / domain / server is; create them on this server the standard way |
 | `maxxing mcp list\|add\|remove` | MCP servers of Claude Code (every session or one topic), as in Settings -> MCP |
 | `maxxing team send NAME "message" [--file PATH]` / `team list` | write to a Team contact or group (Settings -> Features -> Team) by their name, as the user: only when the user asks for it |
-| `maxxing sessions send SESSION "message"` / `sessions list` | write to another session (id or title), as a message typed in it: when the user asks for it (an `@` mention tells you which) |
+| `maxxing sessions send SESSION "message"` / `sessions new PROJECT/TOPIC "message"` / `sessions list` | write to another session (id or title), as a message typed in it, or start a new one in a topic: when the user asks for it (an `@` mention tells you which) |
 | `maxxing agents list\|run\|send\|on\|off` | agents (Settings -> Features -> Agents): start one, hand work from one agent to another (`send`), switch on / off |
 | `maxxing video new DIR` / `video status` | Remotion video project linked to the shared install / tools check |
 | `maxxing pdf IN.html OUT.pdf` | print an HTML page (or URL) to PDF |
