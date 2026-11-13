@@ -225,6 +225,7 @@ export function SessionTree({ onOpenSession, onNewSession, activePath, openIds, 
     }
     return projects.map((p) => ({ p, topics: p.topics.map((tp) => ({ tp, sessions: byPath.get(tp.path) || [] })) }))
   }, [projects, byPath, narrowing, shows])
+  const rowAt = filtered.reduce<number[]>((at, _x, i) => [...at, i ? at[i - 1] + 1 + filtered[i - 1].topics.length : 0], [])
 
   const header = (
     <ListHeader
@@ -314,18 +315,19 @@ export function SessionTree({ onOpenSession, onNewSession, activePath, openIds, 
               </p>
             )}
             {filtered.map(({ p, topics }, pi) => (
+              // a running row index (a project, then its topics), so the rows rise strictly top to bottom
               <ProjectNode
                 key={p.name}
                 project={p}
                 forceOpen={narrowed}
                 onDialog={setDialog}
-                stagger={Math.min(pi * 2, 10)}
+                stagger={Math.min(rowAt[pi], 10)}
                 onMove={narrowed ? undefined : (dragged, before) => reorderProjects.mutate(moveName(projects.map((x) => x.name), dragged, p.name, before))}
               >
                 {topics.map(({ tp, sessions }, ti) => (
                   <TopicNode
                     key={tp.path}
-                    stagger={Math.min(pi * 2 + ti + 1, 10)}
+                    stagger={Math.min(rowAt[pi] + ti + 1, 10)}
                     topic={tp}
                     sessions={sessions}
                     archived={narrowed ? [] : archivedByPath.get(tp.path) || []}

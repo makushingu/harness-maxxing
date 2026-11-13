@@ -41,6 +41,11 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   `isolate` row) next to its bar and FLIPs both; `navRow(active)` no longer paints a background. `Segmented`: one
   absolute highlight placed from the chosen option's offsets (ResizeObserver: options may wrap), FLIP translate +
   scaleX on change; no animation with reduced motion.
+- Web, entrance order (top to bottom): boot `--bd` = height under the logo (index.html, no longer the radial
+  distance) and also set on `.mx-rise` / `.mx-unfold` / `.mx-fade` (they played hidden under the loader before);
+  session tree `--i` = running row index (`rowAt`, was `pi * 2 + ti + 1`: a project's 3rd topic rose with the next
+  project); `SectionStack` cards after the section title; `.mx-card-in` sets `--cd` and its rows / fades / chart /
+  end dot wait for it (the dot's `[animation-delay:720ms]` was overridden by `.mx-pop` and played at once).
 
 ## 2.0.0-alpha.149 - 2026-11-13
 

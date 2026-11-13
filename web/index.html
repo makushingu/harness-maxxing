@@ -131,7 +131,7 @@
       // light sweeps across while it waits. Step 3 schedules the whole end at once, as compositor animations with
       // delays: the last pixels, the merge, the flight onto the first visible [data-boot-logo] (sidebar or sign-in page;
       // a fade when there is none) and the interface opening around it (html[data-boot='reveal'], globals.css: each
-      // block waits --bd, the flight's start plus its distance from the logo). Nothing then waits for a free main thread.
+      // block waits --bd, the flight's start plus its height under the logo: the interface opens top to bottom). Nothing then waits for a free main thread.
       (function () {
         var d = document, R = d.documentElement, box = d.getElementById('mxl'), ov = d.getElementById('mxb'), cells = [], h = '', u = 112 / 512,
           X = [110, 154, 190, 234, 270, 314, 350, 394], Y = [96, 136, 178, 209, 240, 288, 336],
@@ -215,13 +215,14 @@
         function finish() {
           // Read everything first (one layout), then only write and schedule.
           var left = 0, el = rm ? null : target(), z = el && el.getBoundingClientRect(), a = box.getBoundingClientRect(),
-            ox = z ? z.left + z.width / 2 : 0, oy = z ? z.top + z.height / 2 : 0, els = d.querySelectorAll('.mx-boot-item,.mx-card-in,[data-boot-rv]'), bd = [],
+            ox = z ? z.left + z.width / 2 : 0, oy = z ? z.top + z.height / 2 : 0, els = d.querySelectorAll('.mx-boot-item,.mx-card-in,[data-boot-rv],.mx-rise,.mx-unfold,.mx-fade'), bd = [],
             M, F, i;
           cells.forEach(function (c) { left = Math.max(left, c.t - now()); });
           M = rm ? 0 : Math.max(left + LAND - 200, 0); F = rm ? 0 : M + 60;
           for (i = 0; i < els.length; i++) {
             var b = els[i].getBoundingClientRect();
-            bd.push(Math.min(150, Math.round(20 + Math.hypot(Math.max(b.left - ox, 0, ox - b.right), Math.max(b.top - oy, 0, oy - b.bottom)) / 6)));
+            // top to bottom (a row, then the one below it, sidebar and page alike), left to right only a little
+            bd.push(b.top > innerHeight ? 240 : Math.min(240, Math.round(20 + Math.max(b.top - oy, 0) / 4 + Math.max(b.left - ox, 0) / 40)));
           }
           // The glow and the sweep fade, the pixels merge, the face appears.
           anim(hw, [{ opacity: 1 }, { opacity: 0 }], { duration: Math.max(M + 100, 250) });

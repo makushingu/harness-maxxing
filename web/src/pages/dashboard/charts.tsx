@@ -145,7 +145,7 @@ export function Chart({ kind, series, unit, height = 140 }: { kind: 'bar' | 'lin
                       )}
                       {/* the line draws itself left to right, then its last point pops in */}
                       <path d={line} pathLength={1} fill="none" stroke={color(si)} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" className="mx-draw" />
-                      <circle cx={last[0]} cy={last[1]} r={4} fill={color(si)} stroke="var(--color-card)" strokeWidth={2} className="mx-pop [animation-delay:720ms] [transform-box:fill-box] [transform-origin:center]" />
+                      <circle cx={last[0]} cy={last[1]} r={4} fill={color(si)} stroke="var(--color-card)" strokeWidth={2} className="mx-pop [transform-box:fill-box] [transform-origin:center]" />
                       {hover != null && <circle cx={pts[hover][0]} cy={pts[hover][1]} r={4} fill={color(si)} stroke="var(--color-card)" strokeWidth={2} />}
                     </g>
                   )

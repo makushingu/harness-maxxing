@@ -318,9 +318,13 @@ group of the user menu, the palette and Settings › General. The closing card l
   boot step (`mxStep(1)` HTML parsed, `(2)` in `main.tsx`, `(3)` from `lib/bootLoader.ts`: `AppShell` once its
   first queries have answered, at most 4 s; sign-in, setup, onboarding and error screens at once; forced after
   8 s / 30 s). Step 3 flies the logo onto the first visible `[data-boot-logo]` (`LogoMark boot`) and sets
-  `html[data-boot='reveal']`: the interface opens around it, each `.mx-boot-item`, `.mx-card-in` and
-  `[data-boot-rv]` waiting `--bd` (distance to the logo / 3.2 + 60 ms), inherited by its charts and gauges;
+  `html[data-boot='reveal']`: the interface opens top to bottom, each `.mx-boot-item`, `.mx-card-in`,
+  `[data-boot-rv]`, `.mx-rise`, `.mx-unfold` and `.mx-fade` waiting `--bd` (20 ms + its height under the logo / 4
+  + its offset to the right / 40, at most 240 ms), inherited by its charts and gauges;
   while `'load'`, the animations of `#main` wait paused. Reduced motion: a 160 ms fade.
+- **Entrances go top to bottom.** A list's `--i` is its row's place on screen (the session tree counts projects and
+  their topics in one run; a settings section's cards come after its title); what sits inside a dashboard card
+  (rows, chart, end dot) waits for the card (`--cd`, the card's delay, inherited already resolved).
 - Never use `backdrop-filter` / `backdrop-blur` by default: it is expensive on Windows and integrated GPUs and
   makes text look soft. Use an opaque or near-opaque background. Only exception: the Glass material (opt-in), in
   `globals.css` under `html[data-material='glass']`, on `.mx-bar` and `.mx-glass` only (small layers over moving
