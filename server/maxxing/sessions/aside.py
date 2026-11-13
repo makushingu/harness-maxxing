@@ -16,7 +16,7 @@ import time
 
 from .. import config
 from . import spawn, store
-from .runner import Runner
+from .runner import RESUME_LOST, Runner
 from .service import SessionError, _require
 
 ASK_TIMEOUT_S = 240
@@ -34,13 +34,17 @@ _busy: set[str] = set()
 
 def ask(sid: str, question: str) -> dict:
     """-> {answer, cost_usd, duration_ms}. 409 when the session has no Claude thread yet or is already
-    answering a side question, 429 when two side questions are running."""
+    answering a side question, 429 when two side questions are running.
+
+    `fresh` is only cleared when a turn ends: while the first turn of a thread runs (a new session, or the thread
+    that follows a compaction) the thread is already on disk and can be asked about."""
     m = _require(sid)
     question = (question or "").strip()[:QUESTION_MAX]
     if not question:
         raise SessionError(400, "empty", "Empty question")
     csid = m.get("csid")
-    if not csid or m.get("fresh", True):
+    first = bool(m.get("fresh", True))                  # no turn of this thread has ended yet
+    if not csid or (first and m.get("state") != "running"):
         raise SessionError(409, "no_thread", "Nothing to ask about yet: this session has not answered once.")
     cfg = config.load_config()
     cwd = Runner._cwd(cfg, m)
@@ -53,7 +57,7 @@ def ask(sid: str, question: str) -> dict:
             raise SessionError(429, "throttled", "Two side questions are already running - try again in a moment.")
         _busy.add(sid)
     try:
-        out = _run(m, csid, cwd, cfg, question)
+        out = _run(m, csid, cwd, cfg, question, first)
         try:
             store.update(sid, cache_at=time.time())      # the fork read the thread: its prompt cache is warm again
         except KeyError:                                 # the session was deleted while Claude answered
@@ -64,7 +68,7 @@ def ask(sid: str, question: str) -> dict:
             _busy.discard(sid)
 
 
-def _run(m: dict, csid: str, cwd: str, cfg: dict, question: str) -> dict:
+def _run(m: dict, csid: str, cwd: str, cfg: dict, question: str, first: bool = False) -> dict:
     model = (m.get("model") or cfg.get("default_model") or "").strip()
     args = [spawn.claude_bin(), "-p", "--output-format", "json", *spawn.permission_args("plan")[0],
             "--resume", csid, "--fork-session", "--no-session-persistence", *spawn.settings_args(cfg)] + (["--model", model] if model else [])
@@ -86,6 +90,8 @@ def _run(m: dict, csid: str, cwd: str, cfg: dict, question: str) -> dict:
     answer = str(res.get("result") or "").strip()
     if p.returncode != 0 or res.get("is_error") or not answer:
         detail = answer or (p.stderr or "").strip()[-300:] or f"exit code {p.returncode}"
+        if first and RESUME_LOST.search(detail):        # the first turn has not written its thread yet
+            raise SessionError(409, "no_thread", "This session is only starting: ask again in a few seconds.")
         raise SessionError(502, "ask_failed", f"The side question failed: {detail}")
     # the fork starts from the thread's running total: only the increase is this question's cost
     try:

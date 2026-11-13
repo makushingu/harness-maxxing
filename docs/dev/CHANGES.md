@@ -7,6 +7,12 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Side questions: `aside.ask` no longer refuses a thread whose `fresh` flag is still set when the session is
+  `running` (`fresh` is cleared only when a turn ends, so the whole first turn of a thread - new session, or the
+  thread after a compaction - answered 409 `no_thread`). The fork is tried; if Claude has not written the thread yet
+  (`RESUME_LOST` on a first turn) the answer is 409 `no_thread` "This session is only starting". Checked with the
+  real CLI: `--resume <csid> --fork-session` finds a thread 2 s into its first turn. Test:
+  `test_sessions.py::test_side_question_during_the_first_turn_of_a_thread`.
 - Agents: `agent_templates.fields()` sets `sandbox: True` for every template that reads outside text: a webhook, a
   mailbox (as before) or a web tool pre-allowed in `allowed_tools` (`reads_web()`: `Bash(curl…)`, `WebFetch`,
   `WebSearch`), i.e. `sales`, `orders`, `watch`, `writer`, `uptime` too. Without it `Bash(curl:*)` ran unsandboxed

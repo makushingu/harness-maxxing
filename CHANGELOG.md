@@ -18,6 +18,10 @@ Fixed:
   the conversation now goes back to the bottom when you send.
 - **Team: a message shows the moment you send it.** It waited for the server's answer and for the chat to be read
   again (slow on a phone connection); it is now in the chat at once, and goes back to the box if the send fails.
+- **Sessions: a side question works while the session is on its first turn.** Asked during the first turn of a
+  session, or during the first turn after its context was compacted, a side question was refused with "this session
+  has not answered once", even with a whole conversation above. It is now answered from what the session has done
+  so far.
 
 Security:
 - **Agents: the ready-made jobs that read the web start Protected.** Sales of the day, Orders to handle, Watch, Blog
