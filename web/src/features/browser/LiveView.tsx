@@ -8,11 +8,11 @@
 // at once by what was scrolled (the real one follows).
 import * as React from 'react'
 import {
-  ArrowLeft, ArrowRight, Gauge, Globe, Hand, Keyboard, Loader2, Lock, Minus, Moon, MousePointerClick,
-  Plus, RotateCw, SkipForward, Square, X,
+  ArrowLeft, ArrowRight, Gauge, Globe, Hand, Keyboard, Loader2, Lock, MessageSquareWarning, Minus, Moon, MousePointerClick,
+  Paperclip, Plus, RotateCw, Search, SkipForward, Square, X,
 } from 'lucide-react'
 import { useT } from '@/i18n'
-import { browserLiveToken, useAnswerAsk, useBrowserProfile, useBrowserTab, useProfileAction } from '@/lib/queries'
+import { browserLiveToken, giveBrowserFiles, useAnswerAsk, useBrowserProfile, useBrowserTab, useProfileAction } from '@/lib/queries'
 import type { BrowserAsk, BrowserState, BrowserTab } from '@/lib/types'
 import { fmtBytes } from '@/lib/format'
 import { useCompact } from '@/stores/media'
@@ -65,6 +65,8 @@ function useLive(active: boolean, profile: string, onFrame?: () => void) {
             const d = JSON.parse(m.data)
             if (d.t === 'state') setState({ browser: d.browser, me: !!d.me, asks: d.asks || [] })
             else if (d.t === 'error') setError(String(d.text || ''))
+            // the text selected on the page (Ctrl/⌘+C on the picture): into the person's clipboard
+            else if (d.t === 'copied' && d.text) navigator.clipboard?.writeText(String(d.text)).catch(() => {})
           } catch {
             /* not ours */
           }
@@ -188,6 +190,10 @@ export function LiveView({ profile, context, session, who, start, onMinimize, cl
   const [editing, setEditing] = React.useState(false)
   const [typing, setTyping] = React.useState('')
   const [note, setNote] = React.useState('')
+  const [search, setSearch] = React.useState('')
+  const [prompt, setPrompt] = React.useState('')
+  const [sending, setSending] = React.useState(false)
+  const filePick = React.useRef<HTMLInputElement>(null)
   const pane = React.useRef<HTMLDivElement>(null)
   const lastMove = React.useRef(0)
   const started = React.useRef(false)
@@ -379,12 +385,23 @@ export function LiveView({ profile, context, session, who, start, onMinimize, cl
         className={cn('group relative grid min-h-48 flex-1 items-start justify-items-center overflow-hidden bg-muted/30 outline-none', me && shared && 'ring-2 ring-primary/60 ring-inset')}
         onKeyDown={(e) => {
           if (!running || veil || e.nativeEvent.isComposing) return
+          const cmd = e.ctrlKey || e.metaKey
+          // paste: let the browser give us the clipboard (onPaste), the page gets it as typed text
+          if (cmd && !e.altKey && e.key.toLowerCase() === 'v') return
+          if (cmd && !e.altKey && ['c', 'x'].includes(e.key.toLowerCase())) send({ t: 'copy' })
           e.preventDefault()
           const text = e.key.length === 1 ? e.key : e.key === 'Enter' ? '\r' : ''
           send({ t: 'key', type: 'down', key: e.key, code: e.code, keyCode: e.keyCode, text, ...mods(e) })
         }}
+        onPaste={(e) => {
+          if (!running || veil) return
+          const text = e.clipboardData.getData('text/plain')
+          e.preventDefault()
+          if (text) send({ t: 'text', text: text.slice(0, 2000) })
+        }}
         onKeyUp={(e) => {
           if (!running || veil) return
+          if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') return
           e.preventDefault()
           send({ t: 'key', type: 'up', key: e.key, code: e.code, keyCode: e.keyCode, ...mods(e) })
         }}
@@ -453,8 +470,85 @@ export function LiveView({ profile, context, session, who, start, onMinimize, cl
                   ))}
                 </div>
               )}
-              <p className="text-[12px] text-muted-foreground">{t('browser.ntp.type')}</p>
+              <form
+                className="flex h-10 w-full max-w-md items-center gap-2 rounded-full border bg-card px-4 focus-within:ring-2 focus-within:ring-ring"
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  if (search.trim()) drive({ t: 'nav', url: search.trim() })
+                  setSearch('')
+                }}
+              >
+                <Search className="size-4 shrink-0 text-muted-foreground" />
+                <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('browser.addressHint')} aria-label={t('browser.addressHint')} className="h-full min-w-0 flex-1 bg-transparent text-[14px] outline-none" data-testid="browser-ntp-search" />
+              </form>
             </div>
+          </div>
+        )}
+
+        {/* the page opened an alert / confirm / prompt: the person answers it here */}
+        {running && b?.dialog && (
+          <div className="absolute inset-0 z-10 grid place-items-start justify-items-center bg-background/40 pt-10" data-testid="browser-dialog">
+            <form
+              className="grid w-[min(28rem,calc(100%-2rem))] gap-3 rounded-xl border bg-popover p-4 text-[13px] shadow-pop"
+              onSubmit={(e) => {
+                e.preventDefault()
+                send({ t: 'dialog', accept: true, text: prompt })
+                setPrompt('')
+              }}
+            >
+              <div className="flex items-start gap-2">
+                <MessageSquareWarning className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                <div className="grid min-w-0 gap-1">
+                  <p className="font-medium">{t(b.dialog.type === 'beforeunload' ? 'browser.dialog.leave' : 'browser.dialog.title')}</p>
+                  {b.dialog.message && <p className="whitespace-pre-wrap break-words text-muted-foreground">{b.dialog.message}</p>}
+                </div>
+              </div>
+              {b.dialog.type === 'prompt' && (
+                <Input autoFocus value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder={b.dialog.default} className="h-8 text-[13px]" data-testid="browser-dialog-text" />
+              )}
+              <div className="flex justify-end gap-2">
+                {b.dialog.type !== 'alert' && (
+                  <Button size="sm" type="button" variant="outline" onClick={() => send({ t: 'dialog', accept: false })} data-testid="browser-dialog-cancel">
+                    {t('common.cancel')}
+                  </Button>
+                )}
+                <Button size="sm" type="submit" autoFocus={b.dialog.type !== 'prompt'} data-testid="browser-dialog-ok">
+                  {b.dialog.type === 'beforeunload' ? t('browser.dialog.leaveOk') : t('common.ok')}
+                </Button>
+              </div>
+            </form>
+          </div>
+        )}
+        {/* a file input was clicked: the person picks the files on their device */}
+        {running && b?.chooser && !b?.dialog && (
+          <div className="absolute inset-x-0 top-0 z-10 flex flex-wrap items-center gap-2 border-b bg-popover px-3 py-2 text-[13px] shadow-xs" data-testid="browser-chooser">
+            <Paperclip className="size-4 shrink-0 text-primary" />
+            <span className="min-w-0 flex-1">{t(b.chooser.multiple ? 'browser.chooser.many' : 'browser.chooser.one')}</span>
+            <input
+              ref={filePick}
+              type="file"
+              multiple={b.chooser.multiple}
+              className="hidden"
+              onChange={async (e) => {
+                const files = Array.from(e.target.files || [])
+                e.target.value = ''
+                if (!files.length) return
+                setSending(true)
+                try {
+                  await giveBrowserFiles(profile, files)
+                } catch (err) {
+                  setError((err as Error).message || t('browser.chooser.failed'))
+                } finally {
+                  setSending(false)
+                }
+              }}
+            />
+            <Button size="sm" className="h-7" disabled={sending} onClick={() => filePick.current?.click()} data-testid="browser-chooser-pick">
+              {sending ? <Loader2 className="animate-spin" /> : <Paperclip />} {t('browser.chooser.pick')}
+            </Button>
+            <Button size="sm" variant="ghost" className="h-7" onClick={() => send({ t: 'chooser' })}>
+              {t('common.cancel')}
+            </Button>
           </div>
         )}
 

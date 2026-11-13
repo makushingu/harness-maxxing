@@ -161,3 +161,9 @@ export function useBrowserSetup() {
 
 /** A one-use token for the live view's WebSocket (30 s). */
 export const browserLiveToken = () => api.post<{ token: string }>('/api/browser/live-token', {})
+/** The files the person picked for the page that asked for some. */
+export function giveBrowserFiles(profile: string, files: File[]) {
+  const form = new FormData()
+  for (const f of files) form.append('files', f)
+  return api.post<BrowserState>(`/api/browser/profiles/${seg(profile)}/files`, form)
+}

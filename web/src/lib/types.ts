@@ -1482,6 +1482,10 @@ export type BrowserState = {
   bytes: number
   /** hosts the proxy refused lately */
   blocked: string[]
+  /** an alert / confirm / prompt open on the page shown: the person answers it */
+  dialog: { type: 'alert' | 'confirm' | 'prompt' | 'beforeunload'; message: string; default: string } | null
+  /** the page asked for files (a file input was clicked) */
+  chooser: { multiple: boolean } | null
 }
 export type BrowserAsk = {
   id: string
