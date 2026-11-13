@@ -18,17 +18,31 @@
 :root {
   --radius: 0.625rem;
 
-  --background: oklch(1 0 0);
+  /* Surface levels: one lightness step per level, from the frame (furthest) to what floats (nearest). The hue and
+     chroma come from --sf-h / --sf-c: neutral greys, or a shade of the accent ([data-tint='tinted']). In dark mode a
+     nearer level is lighter; in light mode the frame is grey and the content near white. Documented in DESIGN.md. */
+  --sf-h: 286;
+  --sf-c: 0.004;
+  --l-frame: 0.952;
+  --l-list: 0.972;
+  --l-content: 0.992;
+  --l-card: 1;
+  --l-float: 1;
+  --l-muted: 0.958;
+  --l-accent: 0.94;
+  --sidebar: oklch(var(--l-frame) var(--sf-c) var(--sf-h));
+  --list: oklch(var(--l-list) var(--sf-c) var(--sf-h));
+  --background: oklch(var(--l-content) var(--sf-c) var(--sf-h));
+  --card: oklch(var(--l-card) calc(var(--sf-c) * 0.6) var(--sf-h));
+  --popover: oklch(var(--l-float) calc(var(--sf-c) * 0.6) var(--sf-h));
+  --muted: oklch(var(--l-muted) calc(var(--sf-c) * 1.2) var(--sf-h));
+  --secondary: oklch(var(--l-accent) calc(var(--sf-c) * 1.3) var(--sf-h));
+  --accent: oklch(var(--l-accent) calc(var(--sf-c) * 1.3) var(--sf-h));
   --foreground: oklch(0.141 0.005 285.823);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.141 0.005 285.823);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.141 0.005 285.823);
-  --secondary: oklch(0.967 0.001 286.375);
+  --card-foreground: var(--foreground);
+  --popover-foreground: var(--foreground);
   --secondary-foreground: oklch(0.21 0.006 285.885);
-  --muted: oklch(0.967 0.001 286.375);
   --muted-foreground: oklch(0.552 0.016 285.938);
-  --accent: oklch(0.967 0.001 286.375);
   --accent-foreground: oklch(0.21 0.006 285.885);
   --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: oklch(0.985 0 0);
@@ -36,9 +50,12 @@
   --warning: oklch(0.72 0.16 70);
   --border: oklch(0.92 0.004 286.32);
   --input: oklch(0.92 0.004 286.32);
-  --sidebar: oklch(0.985 0 0);
   --sidebar-border: oklch(0.92 0.004 286.32);
   --overlay: oklch(0 0 0 / 0.45);
+  /* the content panel beside the bars (desktop) */
+  --shadow-panel: 0 1px 2px rgb(0 0 0 / 0.05), 0 0 0 1px rgb(0 0 0 / 0.02);
+  /* top edge light of a glass surface */
+  --glass-edge: oklch(1 0 0 / 0.7);
 
   /* accent (overridden per data-accent) */
   --primary: oklch(0.58 0.2 258);
@@ -84,17 +101,17 @@ html[data-kbd] [data-col]:has([data-kbd-box]:focus-within) [data-kbd-hide] {
 }
 
 .dark {
-  --background: oklch(0.141 0.005 285.823);
+  --sf-c: 0.006;
+  --l-frame: 0.118;
+  --l-list: 0.148;
+  --l-content: 0.172;
+  --l-card: 0.204;
+  --l-float: 0.228;
+  --l-muted: 0.25;
+  --l-accent: 0.285;
   --foreground: oklch(0.985 0 0);
-  --card: oklch(0.178 0.006 285.885);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.19 0.006 285.885);
-  --popover-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.274 0.006 286.033);
   --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.235 0.006 286.033);
   --muted-foreground: oklch(0.705 0.015 286.067);
-  --accent: oklch(0.274 0.006 286.033);
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.637 0.208 25.331);
   --destructive-foreground: oklch(0.985 0 0);
@@ -102,9 +119,10 @@ html[data-kbd] [data-col]:has([data-kbd-box]:focus-within) [data-kbd-hide] {
   --warning: oklch(0.8 0.15 80);
   --border: oklch(1 0 0 / 9%);
   --input: oklch(1 0 0 / 13%);
-  --sidebar: oklch(0.16 0.005 285.823);
   --sidebar-border: oklch(1 0 0 / 7%);
   --overlay: oklch(0 0 0 / 0.6);
+  --shadow-panel: 0 1px 3px rgb(0 0 0 / 0.35), 0 0 0 1px oklch(1 0 0 / 0.06);
+  --glass-edge: oklch(1 0 0 / 0.12);
   --shadow-pop: 0 10px 38px -10px rgb(0 0 0 / 0.7), 0 10px 20px -15px rgb(0 0 0 / 0.5);
 }
 
@@ -124,40 +142,90 @@ html[data-kbd] [data-col]:has([data-kbd-box]:focus-within) [data-kbd-hide] {
 
 /* Tinted background (Settings > General > Background): neutral surfaces take a shade of the accent hue. */
 [data-tint='tinted'] {
-  --background: oklch(0.985 0.012 var(--accent-h));
+  --sf-h: var(--accent-h);
+  --sf-c: 0.018;
   --foreground: oklch(0.16 0.02 var(--accent-h));
-  --card: oklch(0.995 0.007 var(--accent-h));
-  --card-foreground: oklch(0.16 0.02 var(--accent-h));
-  --popover: oklch(0.995 0.007 var(--accent-h));
-  --popover-foreground: oklch(0.16 0.02 var(--accent-h));
-  --secondary: oklch(0.95 0.02 var(--accent-h));
   --secondary-foreground: oklch(0.22 0.03 var(--accent-h));
-  --muted: oklch(0.955 0.018 var(--accent-h));
   --muted-foreground: oklch(0.52 0.035 var(--accent-h));
-  --accent: oklch(0.945 0.024 var(--accent-h));
   --accent-foreground: oklch(0.22 0.03 var(--accent-h));
   --border: oklch(0.9 0.025 var(--accent-h));
   --input: oklch(0.9 0.025 var(--accent-h));
-  --sidebar: oklch(0.965 0.02 var(--accent-h));
   --sidebar-border: oklch(0.9 0.025 var(--accent-h));
 }
 .dark[data-tint='tinted'] {
-  --background: oklch(0.16 0.024 var(--accent-h));
+  --sf-c: 0.027;
   --foreground: oklch(0.975 0.008 var(--accent-h));
-  --card: oklch(0.195 0.028 var(--accent-h));
-  --card-foreground: oklch(0.975 0.008 var(--accent-h));
-  --popover: oklch(0.21 0.03 var(--accent-h));
-  --popover-foreground: oklch(0.975 0.008 var(--accent-h));
-  --secondary: oklch(0.285 0.035 var(--accent-h));
   --secondary-foreground: oklch(0.975 0.008 var(--accent-h));
-  --muted: oklch(0.25 0.032 var(--accent-h));
   --muted-foreground: oklch(0.72 0.03 var(--accent-h));
-  --accent: oklch(0.285 0.035 var(--accent-h));
   --accent-foreground: oklch(0.975 0.008 var(--accent-h));
   --border: oklch(0.85 0.06 var(--accent-h) / 11%);
   --input: oklch(0.85 0.06 var(--accent-h) / 15%);
-  --sidebar: oklch(0.175 0.026 var(--accent-h));
   --sidebar-border: oklch(0.85 0.06 var(--accent-h) / 8%);
+}
+
+/* ------------------------------------------------------------------------------------------
+ * Shell surfaces (DESIGN.md "Surface levels"): the frame (sidebar, gaps), the list (second bar), the content panel.
+ * Material (Settings > Appearance): solid by default; html[data-material='glass'] = a soft wallpaper of the accent
+ * behind the frame, the bars and floating layers (menus, dialogs, palette) translucent and blurred, a light top edge.
+ * Every value comes from the tokens above, so theme, accent and tint all apply. Off when the OS asks for less
+ * transparency.
+ * ---------------------------------------------------------------------------------------- */
+.mx-shell { background: var(--sidebar); }
+.mx-frame { background: var(--sidebar); }
+.mx-list { background: var(--list); }
+/* light mode: on the grey bars, the hovered / selected row rises to white instead of darkening */
+html:not(.dark) :is(.mx-frame, .mx-list) { --accent: oklch(0.997 calc(var(--sf-c) * 0.5) var(--sf-h)); }
+html:not([data-compact]) .mx-content {
+  margin: 0.5rem;
+  border-radius: calc(var(--radius) + 4px);
+  box-shadow: var(--shadow-panel);
+  background: var(--background);
+}
+html[data-compact] .mx-shell { background: var(--background); }
+
+html[data-material='glass'] {
+  --glass-blur: 22px;
+  --wall-a: color-mix(in oklch, var(--primary) 34%, transparent);
+  --wall-b: color-mix(in oklch, oklch(0.75 0.16 calc(var(--accent-h, 256) + 60)) 28%, transparent);
+}
+html.dark[data-material='glass'] {
+  --wall-a: color-mix(in oklch, var(--primary) 38%, transparent);
+  --wall-b: color-mix(in oklch, oklch(0.6 0.18 calc(var(--accent-h, 256) + 60)) 30%, transparent);
+}
+html[data-material='glass'] .mx-shell {
+  background:
+    radial-gradient(60rem 40rem at 0% 0%, var(--wall-a), transparent 70%),
+    radial-gradient(50rem 36rem at 100% 100%, var(--wall-b), transparent 70%),
+    radial-gradient(40rem 30rem at 70% 10%, color-mix(in oklch, var(--primary) 8%, transparent), transparent 70%),
+    var(--sidebar);
+  background-attachment: fixed;
+}
+html[data-material='glass'] .mx-frame { background: transparent; }
+html[data-material='glass'] .mx-list {
+  background: color-mix(in oklch, var(--list) 45%, transparent);
+}
+html[data-material='glass']:not([data-compact]) .mx-content {
+  background: color-mix(in oklch, var(--background) 74%, transparent);
+  box-shadow: inset 0 1px 0 var(--glass-edge), var(--shadow-panel);
+}
+html[data-material='glass'][data-compact] .mx-content { background: color-mix(in oklch, var(--background) 88%, transparent); }
+/* The only blurs of the app (DESIGN.md: never by default): small layers over moving content. The bars and the panel
+   sit on a still gradient, so a blur would cost GPU time for nothing there. */
+/* sticky bars over scrolling content (page headers, session headers) */
+html[data-material='glass'] .mx-bar {
+  background: color-mix(in oklch, var(--background) 62%, transparent);
+  backdrop-filter: blur(18px) saturate(1.5);
+}
+/* floating layers: menus, selects, popovers, dialogs, sheets, the palette, the / menu */
+html[data-material='glass'] .mx-glass {
+  background: color-mix(in oklch, var(--popover) 66%, transparent);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.7);
+  box-shadow: inset 0 1px 0 var(--glass-edge), var(--shadow-pop);
+}
+@media (prefers-reduced-transparency: reduce) {
+  html[data-material='glass'] .mx-shell { background: var(--sidebar); }
+  html[data-material='glass'] :is(.mx-bar, .mx-glass) { backdrop-filter: none; }
+  html[data-material='glass'] .mx-glass { background: var(--popover); }
 }
 
 @theme inline {
@@ -187,6 +255,7 @@ html[data-kbd] [data-col]:has([data-kbd-box]:focus-within) [data-kbd-hide] {
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-sidebar: var(--sidebar);
+  --color-list: var(--list);
   --color-sidebar-border: var(--sidebar-border);
   --color-overlay: var(--overlay);
 

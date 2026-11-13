@@ -34,6 +34,7 @@
           var a = hex.dark[s.accent] ? s.accent : 'blue';
           r.dataset.accent = a;
           r.dataset.tint = s.tint === 'tinted' ? 'tinted' : 'neutral';
+          r.dataset.material = s.material === 'glass' ? 'glass' : 'solid';
           // Logo in the accent color (copy of src/lib/accent.ts applyAppIcons): tab icon, installed app
           // (manifest icons and launch screen) and the iOS home-screen icon.
           var icon = document.querySelector('link[rel="icon"]');

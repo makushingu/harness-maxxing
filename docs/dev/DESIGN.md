@@ -48,11 +48,19 @@ exceptions are chart series (`--series-1..6`) and brand-neutral swatches in the 
 | `secondary` | secondary buttons, segmented/tab active background |
 | `destructive`, `success`, `warning` | status (use at /10–/15 opacity for fills, solid for dots & text) |
 | `border`, `input`, `ring` | hairlines, input borders, focus |
-| `sidebar`, `sidebar-border`, `overlay` | shell & modal backdrop |
+| `sidebar`, `list`, `sidebar-border`, `overlay` | shell (sidebar = frame, list = second bar) & modal backdrop |
+
+**Surface levels** (one step of lightness each, `--l-*` in `globals.css`; nearer = lighter in dark mode): frame
+(`sidebar`: the sidebar and the gaps around the page) → list (`list`: the second bar) → content (`background`: the
+page, an inset panel with rounded corners on a computer) → `card` → float (`popover`: menus, dialogs). `muted` and
+`accent` are fills on top. Use the token of the level, never an ad hoc `bg-black/xx` or `bg-muted/37`; the shell
+classes `mx-shell mx-frame mx-list mx-content` carry the levels, `mx-bar` a sticky header, `mx-glass` a floating layer
+(they also give the Glass material its translucency).
 
 - **Neutrals = zinc.** Dark is the default (`.dark` on `<html>`), light and system are available.
 - **Accent**: one of `blue` (default) · `clay` (shown as Orange) · `violet` (Purple) · `green` · `amber` (Yellow) · `rose` (Red), each on the hue of its colored logo (`data-accent` on `<html>`, a light and a dark step each; stored per browser, an unknown value falls back to `blue`). The logo follows it: `public/icons/logo-<accent>-{64,128}.png` (sidebar, sign-in, splash, browser tab; `logoSrc()` in `lib/accent.ts`).
 - **Background**: `data-tint` on `<html>` = `neutral` (default, zinc greys) or `tinted` (surfaces, borders and muted text take a low-chroma shade of `--accent-h`, the hue set by each `[data-accent]` rule; light and dark overrides in `globals.css`).
+- **Material**: `data-material` on `<html>` = `solid` (default) or `glass` (accent wallpaper behind the frame, `.mx-list` / `.mx-content` / `.mx-bar` / `.mx-glass` translucent with `backdrop-filter`; off under `prefers-reduced-transparency`). Per browser, not in the shared look.
 - **Fonts**: 23 interface fonts in groups (`FONT_GROUPS`: modern, character, rounded, serif, readable, mono, system; default `inter`) and 11 code fonts (default `system`) (`lib/fonts.ts`, mirrored in the `index.html` inline script, all bundled with `@fontsource-variable`; only Inter is in the entry CSS, the others are loaded on demand by `loadFont`, applied as `--mx-font-sans` / `--mx-font-mono` on `<html>`).
 - **Radius**: `--radius` 10 px → `rounded-sm/md/lg/xl`. Cards `rounded-xl`, controls `rounded-md`.
 - **Spacing**: Tailwind's 4-px scale only (`gap-2` = 8 px…). Card padding = `var(--pad-card)` (20 px comfortable,
@@ -313,8 +321,10 @@ group of the user menu, the palette and Settings › General. The closing card l
   `html[data-boot='reveal']`: the interface opens around it, each `.mx-boot-item`, `.mx-card-in` and
   `[data-boot-rv]` waiting `--bd` (distance to the logo / 3.2 + 60 ms), inherited by its charts and gauges;
   while `'load'`, the animations of `#main` wait paused. Reduced motion: a 160 ms fade.
-- Never use `backdrop-filter` / `backdrop-blur` anywhere: it is expensive on Windows and integrated GPUs and
-  makes text look soft. Use an opaque or near-opaque background.
+- Never use `backdrop-filter` / `backdrop-blur` by default: it is expensive on Windows and integrated GPUs and
+  makes text look soft. Use an opaque or near-opaque background. Only exception: the Glass material (opt-in), in
+  `globals.css` under `html[data-material='glass']`, on `.mx-bar` and `.mx-glass` only (small layers over moving
+  content; never on the bars or the content panel).
 - Entrance animations run once: the session tree animates only nodes mounted during its first reveal
   (`TreeIntro`), on the first visit of the tab only; folders opened later only unfold. Switching the list Projects / Sessions replays that intro
   for the new view. Never stack two entrance animations on one element.

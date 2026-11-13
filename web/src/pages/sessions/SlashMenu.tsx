@@ -95,7 +95,7 @@ export function SlashMenu({ items, active, onPick, onHover, stage, label, keys, 
       role="listbox"
       aria-label={label || t('slash.label')}
       data-testid="slash-menu"
-      className="absolute inset-x-0 bottom-full z-30 mb-1.5 overflow-hidden rounded-xl border bg-popover text-popover-foreground shadow-lg"
+      className="mx-glass absolute inset-x-0 bottom-full z-30 mb-1.5 overflow-hidden rounded-xl border bg-popover text-popover-foreground shadow-lg"
     >
       <div ref={list} className="max-h-72 overflow-y-auto overscroll-contain p-1 [scrollbar-width:thin]">
         {items.map((it, i) => (

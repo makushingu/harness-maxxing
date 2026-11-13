@@ -3,6 +3,18 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## Unreleased
+
+Changed:
+- **Clearer backgrounds: you see at a glance what you are looking at.** The sidebar, the list beside it and the page
+  no longer share the same background: the sidebar is the darkest (the lightest grey in light mode), the list is one
+  step lighter, and the page sits in a panel with rounded corners; cards, menus and dialogs each come one step
+  nearer. The same steps apply everywhere, with the neutral or tinted background and every accent color.
+
+Added:
+- **Glass material** (Settings -> Appearance -> Material): the bars, menus, dialogs and the search window become
+  see-through and blurred over a soft backdrop in your accent color, in dark and light mode. Solid stays the default.
+
 ## 2.0.0-alpha.149 - 2026-11-13
 
 Changed:

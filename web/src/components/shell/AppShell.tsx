@@ -217,7 +217,7 @@ export function AppShell() {
   const teamBubbles = useTeamBubbles(touch)
   const teamOn = useTeamOn()
   return (
-    <div className="flex h-dvh w-full overflow-hidden bg-background">
+    <div className="mx-shell flex h-dvh w-full overflow-hidden">
       <RouteProgress />
       <ConnectionBanner status={bus} />
       <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:rounded-md focus:bg-popover focus:px-3 focus:py-2 focus:shadow-pop">
@@ -228,7 +228,7 @@ export function AppShell() {
         id="main"
         ref={main}
         tabIndex={-1}
-        className="relative flex min-w-0 flex-1 flex-col overflow-y-auto pr-[var(--safe-right)] outline-none [scrollbar-gutter:stable] max-md:pb-[var(--safe-bottom-ui)] max-md:pl-[var(--safe-left)]"
+        className="mx-content relative flex min-w-0 flex-1 flex-col overflow-y-auto pr-[var(--safe-right)] outline-none [scrollbar-gutter:stable] max-md:pb-[var(--safe-bottom-ui)] max-md:pl-[var(--safe-left)]"
       >
         {goSessions ? <Navigate to="/sessions" replace /> : <Outlet />}
       </main>

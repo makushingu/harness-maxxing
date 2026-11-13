@@ -11,7 +11,7 @@ export const DropdownMenuSub = DM.Sub
 export const DropdownMenuRadioGroup = DM.RadioGroup
 
 const panel =
-  'z-50 min-w-[10rem] overflow-hidden rounded-lg border bg-popover p-1 text-popover-foreground shadow-pop data-[state=open]:animate-in data-[state=closed]:animate-out'
+  'mx-glass z-50 min-w-[10rem] overflow-hidden rounded-lg border bg-popover p-1 text-popover-foreground shadow-pop data-[state=open]:animate-in data-[state=closed]:animate-out'
 
 /** Anchored menu; on phones a bottom sheet (`.mx-sheet`, swipe down to close). */
 export function DropdownMenuContent({ className, sideOffset = 6, ref, ...props }: React.ComponentProps<typeof DM.Content>) {

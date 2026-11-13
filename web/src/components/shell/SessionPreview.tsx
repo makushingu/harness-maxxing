@@ -207,7 +207,7 @@ export function PreviewShell({
         transition: reducedMotion() ? undefined : 'top 120ms ease-out',
       }}
     >
-      <div className="flex flex-col overflow-hidden rounded-lg border bg-popover text-popover-foreground shadow-pop" style={{ maxHeight: `min(${maxHeight}px, calc(100vh - 16px))` }}>
+      <div className="mx-glass flex flex-col overflow-hidden rounded-lg border bg-popover text-popover-foreground shadow-pop" style={{ maxHeight: `min(${maxHeight}px, calc(100vh - 16px))` }}>
         <div ref={body} className="flex min-h-0 flex-col">
           {children}
         </div>

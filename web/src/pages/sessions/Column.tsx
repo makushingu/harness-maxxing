@@ -1015,7 +1015,7 @@ function ColumnHeader({
       </header>
     )
   return (
-    <header {...headProps} ref={headRef} data-col-head data-kbd-short-hide="" className={cn('shrink-0 border-b bg-background/95 px-3', slim ? 'py-0.5' : 'py-1.5', variant !== 'column' && 'pt-[calc(0.375rem+var(--safe-top))]')}>
+    <header {...headProps} ref={headRef} data-col-head data-kbd-short-hide="" className={cn('mx-bar shrink-0 border-b bg-background/95 px-3', slim ? 'py-0.5' : 'py-1.5', variant !== 'column' && 'pt-[calc(0.375rem+var(--safe-top))]')}>
       <div className="flex h-9 min-w-0 items-center gap-1 pointer-coarse:h-10">
         {variant === 'column' && <DragGrip colKey={col.key} />}
         {session ? <InlineTitle value={session.title} onSave={onRename} /> : <Skeleton className="h-4 w-40" />}

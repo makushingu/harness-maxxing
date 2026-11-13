@@ -34,7 +34,7 @@ export function SelectContent({ className, children, position = 'popper', ref, .
         position={position}
         sideOffset={4}
         className={cn(
-          'relative z-50 max-h-[min(var(--radix-select-content-available-height),360px)] min-w-[8rem] overflow-hidden rounded-lg border bg-popover text-popover-foreground shadow-pop data-[state=open]:animate-in data-[state=closed]:animate-out',
+          'mx-glass relative z-50 max-h-[min(var(--radix-select-content-available-height),360px)] min-w-[8rem] overflow-hidden rounded-lg border bg-popover text-popover-foreground shadow-pop data-[state=open]:animate-in data-[state=closed]:animate-out',
           position === 'popper' && 'mx-sheet',
           position === 'popper' && 'w-full min-w-[var(--radix-select-trigger-width)]',
           className,

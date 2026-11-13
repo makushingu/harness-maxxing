@@ -35,7 +35,7 @@ export function PageHeader({
   return (
     <header
       className={cn(
-        'sticky top-0 z-20 flex shrink-0 items-center gap-3 border-b bg-background/95 px-4 max-md:gap-2 max-md:px-3 md:px-6',
+        'mx-bar sticky top-0 z-20 flex shrink-0 items-center gap-3 border-b bg-background/95 px-4 max-md:gap-2 max-md:px-3 md:px-6',
         'min-h-[calc(var(--header-h)+var(--safe-top))] pt-[var(--safe-top)]',
         className,
       )}

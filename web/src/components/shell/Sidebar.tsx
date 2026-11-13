@@ -275,7 +275,7 @@ export const Sidebar = React.memo(function Sidebar({ drawer }: { /** touch layou
           data-testid="sidebar"
           data-unfold={pinned ? 'pinned' : 'folded'}
           data-side-expanded={collapsed ? 'false' : 'true'}
-          className={cn('mx-side relative flex min-h-0 w-full flex-col overflow-x-clip overflow-y-auto overscroll-contain [scrollbar-width:none] border-r border-sidebar-border bg-sidebar pt-[var(--safe-top)] pl-[var(--safe-left)]', drawer && 'border-r-0 pt-0 pl-0')}
+          className={cn('mx-side relative flex min-h-0 w-full flex-col overflow-x-clip overflow-y-auto overscroll-contain [scrollbar-width:none] mx-frame pt-[var(--safe-top)] pl-[var(--safe-left)]', drawer && 'pt-0 pl-0')}
           aria-label={t('shell.navigation')}
         >
           <KeepTooltipShape.Provider value>

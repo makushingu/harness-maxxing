@@ -5,6 +5,21 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## Unreleased
+
+- Web, surface levels (`styles/globals.css`): the surfaces come from one lightness scale per theme (`--l-frame`
+  `--l-list` `--l-content` `--l-card` `--l-float` `--l-muted` `--l-accent`) and a hue/chroma pair (`--sf-h`, `--sf-c`;
+  `[data-tint='tinted']` only changes the pair). New token `list` (`bg-list`, second bar). Shell classes: `mx-shell`
+  (AppShell root = frame), `mx-frame` (sidebar), `mx-list` (second bar), `mx-content` (`#main`: inset panel, 8 px
+  margin, `--shadow-panel`, desktop only), `mx-bar` (sticky headers), `mx-glass` (floating layers: popover, dropdown,
+  select, dialog, alert dialog, sheet, palette, `/` menu, session preview). Light mode: hover/selected rows on the bars
+  rise to white (`--accent` redefined under `.mx-frame, .mx-list`). Sidebar and second bar lost their right border.
+- Web, material: `useUI().material` = `solid | glass` (localStorage `mx-ui`, mirrored by the `index.html` first-paint
+  script as `html[data-material]`), Settings -> Appearance row. Glass = accent wallpaper on `.mx-shell`
+  (`--wall-a/-b`), translucent `color-mix` on the classes above, `backdrop-filter` only on `.mx-bar` and `.mx-glass`
+  (DESIGN.md rule relaxed for this opt-in; `test_no_backdrop_blur` skips the glass rules of `globals.css`),
+  `--glass-edge` inset highlight; disabled under `prefers-reduced-transparency`. Not part of the server-shared look (`/api/settings/look`).
+
 ## 2.0.0-alpha.149 - 2026-11-13
 
 - Web, file viewer loaders: `features/files/skeletons.tsx` (`FileSkeleton({kind, preview})`: picture, PDF page,

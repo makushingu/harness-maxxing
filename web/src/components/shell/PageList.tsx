@@ -156,7 +156,7 @@ export function SecondBar({ left }: { left: number }) {
     <div
       ref={ref}
       className={cn(
-        'border-r border-sidebar-border bg-sidebar text-sidebar-foreground',
+        'mx-list border-x border-sidebar-border text-sidebar-foreground',
         !list ? 'hidden' : over ? 'mx-list-peek absolute inset-y-0' : 'relative shrink-0',
       )}
       style={{ width, left: over ? left : undefined }}

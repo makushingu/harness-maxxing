@@ -28,7 +28,7 @@ export function DialogContent({ className, children, hideClose, ref, ...props }:
       <DialogPrimitive.Content
         ref={refs}
         className={cn(
-          'fixed z-50 flex flex-col gap-4 border bg-popover text-popover-foreground shadow-pop outline-none',
+          'mx-glass fixed z-50 flex flex-col gap-4 border bg-popover text-popover-foreground shadow-pop outline-none',
           // mobile: bottom sheet
           'inset-x-0 bottom-[var(--kbd-inset)] max-h-[calc(var(--vvh,100dvh)*0.92)] overflow-y-auto overscroll-contain rounded-t-2xl p-5 pb-[calc(1.25rem+var(--safe-bottom))] data-[state=closed]:animate-sheet-down data-[state=open]:animate-sheet-up',
           // desktop: centered
