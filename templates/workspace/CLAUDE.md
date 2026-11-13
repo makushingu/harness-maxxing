@@ -140,7 +140,9 @@ one click, then use it, rather than building a substitute.
 In a session: a shell the user types in themselves -> the terminal of Code mode (Ctrl+J, `/terminal`, or the
 session's ⋯ menu; only the user can open it; off by default, Settings -> Features -> Sessions, password asked);
 undo what a turn changed -> "Revert to before this message" (menu of the message) or the Changes view (button
-under the answer: diff, Undo a file, commit, push, pull request).
+under the answer: diff, Undo a file, commit, push, pull request); a branch and a folder for one session -> a
+"Separate copy" when the session is created (Code mode); read, comment, approve or merge a pull request -> the PR view
+(Git page, or the PR badge of the Changes view).
 
 ## Safety with shared code and data
 

@@ -1,8 +1,12 @@
 <<<<<<<< HEAD:web/dist/assets/showcases-CYpZBOOT.js
+<<<<<<<< HEAD:web/dist/assets/showcases-CYpZBOOT.js
 import{y as e}from"./index-BtnOolK1.js";import{i as t}from"./diagram-BYeYYIup.js";import{n}from"./steps-CFAWxNh1.js";var r=`flowchart LR
 ========
 import{y as e}from"./index-6LHMKuLV.js";import{i as t}from"./diagram-CMYfcIdG.js";import{n}from"./steps-CSmfOHSt.js";var r=`flowchart LR
 >>>>>>>> c6a7a4ce8 (Web: separate copies (new session, copy bar, finish), the PR view, PRs and copies on the Git page, Claude's review block):web/dist/assets/showcases-D1jazrD0.js
+========
+import{y as e}from"./index-4hfG5oWh.js";import{i as t}from"./diagram-BYV08-Xd.js";import{n}from"./steps-DcEbfrJy.js";var r=`flowchart LR
+>>>>>>>> ebb3c1a81 (Docs: separate copies and pull requests in Harness (user page, API, changelogs, workspace hints)):web/dist/assets/showcases-DKKnaYvm.js
   A[Question] --> B{Claude}
   B -->|reads| C[Files]
   B -->|runs| D[Tools]

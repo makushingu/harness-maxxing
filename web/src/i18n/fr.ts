@@ -1471,6 +1471,8 @@ export const fr: Record<keyof typeof en, string> = {
   'git.merged': "fusionnée",
   'git.outside': "extérieur",
   'git.reviewMe': "à vous de relire",
+  'git.copyDirty': '{count} non commités',
+  'git.copyDirty#one': '{count} non commité',
   'git.copies': "Copies à part",
   'git.draft': 'brouillon',
   'git.mergeOf': 'fusion de {count} branches',

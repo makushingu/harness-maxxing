@@ -58,6 +58,53 @@ At the bottom of each repository block:
 
 Claude never commits or pushes through these buttons: they only run when you click them.
 
+## Pull requests in Harness
+
+With a GitHub token (**Settings → Keys**), a pull request opens **in Harness**, in the same panel as the changes:
+from the Git page (a repository, or a clone of a GitHub repository: **Open / To review / Closed**, the ones from
+outside the repository are marked), or from the pull request badge of the Changes view.
+
+- **Conversation**: the description, the comments and the reviews. **Files**: the same list and the same diff as the
+  Changes view; click a line number (Shift for several) to comment on those lines: your comments wait (**pending**)
+  until you send them with your review. **Checks**: what passed, failed or still runs.
+- At the bottom: **Comment**, **Approve**, **Request changes**, **Merge** (squash, merge or rebase, as the repository
+  allows; refused for a draft or a conflict; a warning when checks failed). ⋯ **Close the pull request**. GitHub stays
+  one click away (↗).
+- **With Claude** (Code mode, the repository cloned in a topic):
+  - **Work on this PR**: a session on a separate copy of the pull request's branch, in the clone's topic. A pull
+    request from a fork is fetched as `pr/<number>`: it cannot be pushed back.
+  - **Ask Claude to review**: a session in plan mode (it changes nothing) that reads the branch and ends its answer
+    with a **review card**: the summary, the line comments, a verdict you can change, and **Publish on GitHub**. Claude
+    never publishes: you read it, then click.
+- A pull request from **someone outside** the repository (not owner, member or collaborator) is marked, and a session
+  on it starts in **plan mode**: read the code before installing it or running its tests.
+
+Approving, merging and closing use a token of **Settings → Keys** that can write to the repository; without one these
+buttons are absent.
+
+## Separate copy (Code mode)
+
+With **Code mode** on, a new session in a topic that holds a git repository offers **Separate copy**: the session gets
+its own folder and its own branch, so two sessions on the same repository never step on each other.
+
+- **Where**: in the topic, `worktrees/<name>` beside the clone (visible in **Files**; `.worktrees/` when the topic
+  folder is itself the repository, so that its tests and tools do not walk into it). Claude works there and still
+  reads the topic's `CLAUDE.md` and memory. The search and the memory backup skip these folders.
+- **Branch**: `session/<title>`, started from the default branch (or the one you pick). It follows the session's title
+  until it is pushed. The prefix can be changed per repository.
+- **Prepare the copy**: a copy has no `node_modules` or `.venv` (they are not in git). Give a command (`npm ci`,
+  `uv sync`…) run once in each new copy, and tick **Copy the .env files** if the project needs them; both are kept for
+  the repository. A failed preparation shows in the bar: one click asks Claude to look at its log.
+- **The bar above the composer**: the branch, `← main`, the commits of the branch, what is not committed; one main
+  button: **Open a PR** on a GitHub repository, **Merge into main** otherwise. ⋯ **Bring in main** (asks Claude to
+  merge the latest main and settle the conflicts), **Discard the copy**.
+- **Finish** (the main button or ⋯): open a pull request, merge into the base on this server, or discard. Files not
+  committed are committed first with a message Claude proposes. A merge brings the base into the branch first, in the
+  copy: on a conflict nothing changes and Claude is asked to settle it. After a merge the copy and its branch go away;
+  discarding deletes them too, with their commits (the window says what would be lost).
+- The session stays: after the copy is gone it works in the topic folder again.
+- A session on a copy cannot move to another topic. Agents never get a copy.
+
 ## Terminal
 
 **Settings → Features → Sessions → Code mode** (off by default; your password is asked to turn it on, because a terminal runs any

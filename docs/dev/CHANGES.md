@@ -5,6 +5,27 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## Unreleased
+
+- Separate copies (`maxxing/worktrees.py`, plan `code-worktree-pr`): session meta `worktree`, `runner._cwd` runs the turn
+  in the copy and `_copy_note` adds a line to `--append-system-prompt`; `titles.refine` / `update_session` rename the
+  branch (`worktrees.rename_for_title`) until it has an upstream; `move_session` refuses (`409 has_copy`); routes
+  `/api/code/copy-repos`, `/api/code/copy-prefs`, `/api/sessions/{id}/copy{,/merge,/remove,/prepare-log}`,
+  `/api/code/copies`, `/api/code/pr-session`; `<state>/worktrees.json` (per repository `prefix`, `prepare`,
+  `copy_env`), `<state>/worktrees/<sid8>.log`. `search.SKIP_DIRS` and `backup.PRUNE_DIRS` skip `worktrees`.
+- Pull requests: `gitview.github_pull`, `pull_comment`, `pull_review`, `pull_merge`, `pull_close`; `_gh_send` takes a
+  method (PUT merge, PATCH close; 405/409 -> `409 refused`); `github_pulls(full, state)` adds `state`, `outside`,
+  `review_me` (requested reviewer among the server's accounts); `codediff.parse_patch` shared by `codediff.diff` and
+  the PR files. Routes `/api/git/pull`, `/api/git/pull/{comment,review,merge,close}`, `/api/git/pulls?state=`.
+- Web: `features/code/{copyApi,prApi}.ts`, `NewCopy.tsx` (new session), `CopyBar.tsx` (bar + end window + header
+  mark), `PrPane.tsx` (viewer paths `mx-pr:<owner/name>|<n>[|files|checks|file|<path>]`, one pane per PR), `DiffRows.tsx`
+  (diff rows shared with `ChangesPane`), `PrReviewBlock.tsx` (` ```pr-review ` in `markdown.tsx`; PR text is rendered
+  with plain code blocks). Git page: `PullList` (filters, opens the PR view, also on a clone of a GitHub repository),
+  `CopyList`. i18n namespaces `copy`, `pr` in the `code` group. Tests `test_worktrees.py`, `test_pulls.py`
+  (`_conn_helpers._Server` answers PATCH).
+- Workspace template: `CLAUDE.md` (separate copy, PR view) and the help index line `35-code.md`: carried over by the
+  upgrade note of the next version.
+
 ## 2.0.0-alpha.147 - 2026-11-13
 
 - Audit fixes (straight to `main`, merged here): `approvals.py` survives a WebFetch request whose URL does not

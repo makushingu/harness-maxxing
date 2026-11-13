@@ -3,6 +3,21 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## Unreleased
+
+New:
+- **Separate copy: one session, one branch, one folder (Code mode).** A new session in a topic with a git repository
+  can work on a **separate copy**: its own folder (`worktrees/` in the topic) and its own branch (`session/<title>`),
+  so two sessions on the same repository never step on each other. A command per repository prepares each new copy
+  (`npm ci`, `uv sync`…), the `.env` files can be copied. A bar above the composer shows the branch against `main` and
+  ends it in one click: **Open a PR** on GitHub, **Merge into main** otherwise, or **Discard**; files left are committed
+  first with a message Claude proposes, and a conflict is handed to Claude in the session.
+- **Pull requests in Harness.** A pull request opens in Harness from the Git page (Open / To review / Closed) or from the
+  badge of the Changes view: its conversation, its files with the same diff as the Changes view, comments on lines,
+  checks; **Comment**, **Approve**, **Request changes**, **Merge**, **Close**. **Work on this PR** starts a session on a
+  separate copy of its branch; **Ask Claude to review** starts one in plan mode that drafts the review as a card you
+  publish yourself. A pull request from outside the repository is marked and its sessions start in plan mode.
+
 ## 2.0.0-alpha.147 - 2026-11-13
 
 New:

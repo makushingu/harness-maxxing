@@ -553,7 +553,7 @@ function CopyList({ clone }: { clone: string }) {
                 <span className="truncate">
                   {c.branch} ← {c.base}
                   {c.ahead ? ` · ↑${c.ahead}` : ''}
-                  {c.dirty ? ` · ${t('copy.dirty', { count: c.dirty })}` : ''}
+                  {c.dirty ? ` · ${t('git.copyDirty', { count: c.dirty })}` : ''}
                 </span>
               </span>
             </button>

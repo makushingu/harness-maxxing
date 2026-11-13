@@ -600,6 +600,50 @@ not_github|no_base`, `403 no_write`, `409 running`.
 | POST | `/api/code/pr` | `{repo, title?, body?, base?, draft}` | `{number, url, title, state, draft}` — pushes first if needed; title = the only commit's subject (else the newest), body = the commits; a token that can write to the repository |
 | POST | `/api/code/message` | `{repo, a=HEAD, b=now}` | `{message}` — proposed by a small `claude -p` call (Haiku) from the diff (40 kB) and the 10 last subjects; `Co-Authored-By` lines dropped |
 
+### Separate copies (worktrees)
+
+`maxxing/worktrees.py`. Code mode only (`403 code_mode_off`). A session created with `worktree` gets a `git worktree`
+of a clone of its topic in `<topic>/worktrees/<slug>` (`.worktrees/` when the topic folder is inside the repository;
+then added to `.git/info/exclude`) on a new branch `<prefix>/<slug of the title>` (prefix `session` by default, per
+repository) from `base` (default: origin's default branch). Its turns run there (`runner._cwd`), with a line of
+`--append-system-prompt` naming the copy. The branch is renamed after the session's (short) title until it has an
+upstream. Session meta `worktree = {path, repo, branch, base, base_ref, created, named, pr?, prepare?, env_copied?,
+removed?, kept_branch?}`; `Session.worktree` = `{path, repo, branch, base, pr, kept_branch, removed, preparing}`.
+Per-repository preferences `{prefix, prepare, copy_env}` in `<state>/worktrees.json`; the preparation runs once in a
+thread (15 min max), log `<state>/worktrees/<sid8>.log`. Errors: `400 not_here|bad_base|bad_prefix|is_pr|
+no_local_base`, `404 no_copy`, `409 uncommitted|conflict|base_busy|branch_in_use|running|has_copy` (moving the
+session).
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | `/api/code/copy-repos?path=` | – | `{enabled, repos:[{root, name, branch, branches, default_base, github, prefs:{prefix, prepare, copy_env}}]}` — the clones of the topic (or the repository holding it) |
+| PUT | `/api/code/copy-prefs` | `{repo, prefix?, prepare?, copy_env?}` | the preferences |
+| POST | `/api/sessions` | `{…, worktree:{repo, base?, prepare?, copy_env?, remember?}}` | Session (the copy is made before the first turn) |
+| GET | `/api/sessions/{id}/copy` | – | `{path, repo, branch, base, pr, prepare, exists, removed, ahead, behind (against the base), dirty, upstream, pushed_ahead, github, fork}` |
+| POST | `/api/sessions/{id}/copy/merge` | `{message?}` | `{merged, base, sha, removed, kept_branch}` — commits first with `message`; merges the base into the branch in the copy (aborted on a conflict: `409 conflict`), then moves the base forward (fast-forward only) and removes the copy |
+| POST | `/api/sessions/{id}/copy/remove` | `{force}` | `{removed, kept_branch}` — `force` = discard (uncommitted files and the branch go); else refused with uncommitted files, and the branch is kept unless merged |
+| GET | `/api/sessions/{id}/copy/prepare-log` | – | `{log}` |
+| GET | `/api/code/copies` | – | the copies still on disk: `[{sid, title, path, archived, …status}]` |
+| POST | `/api/code/pr-session` | `{repo: "github:owner/name", number, review, message?, clone?}` | Session — in the topic of a local clone, on a copy of the PR's branch (a fork: `pr/<n>` from `refs/pull/<n>/head`); plan mode when `review` or when the author is outside (`author_association` not OWNER / MEMBER / COLLABORATOR). `400 no_clone` |
+
+### Pull requests (GitHub)
+
+`gitview.github_pull` and the actions. `repo` = `github:owner/name`; the token used is the first of the vault that
+GitHub accepts (writes: one that can write, else `403 no_write`; GitHub refusing a merge: `409 refused`).
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | `/api/git/pulls?repo=&state=open` | – | `[{number, title, author, head, base, draft, url, updated, state: open\|closed\|merged, outside, review_me}]` (`state` open \| closed \| all, 30 most recently updated) |
+| GET | `/api/git/pull?repo=&number=` | – | `{full, number, title, body, author:{login, avatar}, association, outside, state, draft, mergeable, mergeable_state, head, head_sha, head_repo, fork, base, url, created, updated, commits, add, del, files:[{path, old, status, add, del, hunks, binary, cut, lines}] (≤ 300), files_total, conversation:[{kind: comment\|review, id, author, body, state?, at, url}], line_comments:[{id, path, line, side, author, body, at, reply_to, outdated}], checks:[{name, status, conclusion, url}], methods, can_write, local_paths}` |
+| POST | `/api/git/pull/comment` | `{repo, number, body}` | `{id, url}` |
+| POST | `/api/git/pull/review` | `{repo, number, event: APPROVE\|REQUEST_CHANGES\|COMMENT, body, comments:[{path, line, side, body}]}` | `{id, state, url}` |
+| POST | `/api/git/pull/merge` | `{repo, number, method: squash\|merge\|rebase, sha?}` | `{merged, sha, message}` |
+| POST | `/api/git/pull/close` | `{repo, number}` | `{state}` |
+
+A ` ```pr-review ` block in a message (`{"repo", "number", "event", "summary", "comments":[{path, line, body}]}`) is
+drawn as a review card with **Publish on GitHub** (the review `POST` above, on the user's click). Text from GitHub
+shown in the PR view never turns into such a card.
+
 ## Terminal
 
 `maxxing/terminal.py` + `maxxing/api/term.py`. Config `code_mode` (default false; shown read-only by

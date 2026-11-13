@@ -1486,6 +1486,8 @@ export const en = {
   'git.merged': "merged",
   'git.outside': "outside",
   'git.reviewMe': "your review",
+  'git.copyDirty': '{count} not committed',
+  'git.copyDirty#one': '{count} not committed',
   'git.copies': "Separate copies",
   'git.draft': 'draft',
   'git.mergeOf': 'merge of {count} branches',
