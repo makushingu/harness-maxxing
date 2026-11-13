@@ -339,29 +339,43 @@ def _safe_paths(repo: Path, paths: list[str]) -> list[str]:
     return out
 
 
+def _disk_names(repo: Path, a: str, b: str) -> dict[str, str]:
+    """Names git gives with U+FFFD for bytes that are not UTF-8 -> the names on disk (os.fsdecode keeps those
+    bytes, so unlink and git arguments find the file)."""
+    try:
+        r = subprocess.run(["git", *SAFE_GIT, *_filter_overrides(repo), "-C", str(repo), "diff", "--no-color",
+                            "--no-ext-diff", "-M", "--name-status", "-z", a, b],
+                           capture_output=True, timeout=GIT_TIMEOUT, env=_env())
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        return {}
+    return {n.decode("utf-8", "replace"): os.fsdecode(n) for n in r.stdout.split(b"\0") if not n.isascii()}
+
 
 def restore(repo: Path, source: str, paths: list[str] | None = None) -> dict:
     """Put files back as they are in `source` (a photo or commit): the given paths, or every file that differs.
     A photo of the current state is taken first, so `restore(repo, undo)` puts everything back."""
     undo = snapshot(repo, f"{REF_ROOT}/undo/{int(time.time() * 1000)}")
     changed = numstat(repo, source, undo, _safe_paths(repo, paths) if paths else None)
-    restored, removed = [], []
+    disk = _disk_names(repo, source, undo) if any("\ufffd" in f["path"] + (f.get("old") or "")
+                                                   for f in changed) else {}
+    restored, removed, back = [], [], []            # back: the names on disk of `restored`
     for f in changed:
         if f["status"] == "A":                       # absent from the source: the file goes away
-            target = repo / f["path"]
+            target = repo / disk.get(f["path"], f["path"])
             if target.is_file() or target.is_symlink():
                 target.unlink()
                 removed.append(f["path"])
         else:
             if f["status"] == "R" and f.get("old"):
-                old = repo / f["path"]
+                old = repo / disk.get(f["path"], f["path"])
                 if old.exists():
                     old.unlink()
                 restored.append(f["old"])
             else:
                 restored.append(f["path"])
-    if restored:
-        _git(repo, "restore", f"--source={source}", "--worktree", "--", *restored, timeout=WRITE_TIMEOUT)
+            back.append(disk.get(restored[-1], restored[-1]))
+    if back:
+        _git(repo, "restore", f"--source={source}", "--worktree", "--", *back, timeout=WRITE_TIMEOUT)
     return {"undo": undo, "restored": restored, "removed": removed}
 
 

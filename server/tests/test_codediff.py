@@ -1,5 +1,6 @@
 """codediff: photos before / after a turn, views, restore, commit, push - never touching the user's index or HEAD."""
 import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -127,6 +128,24 @@ def test_restore_everything_removes_new_files(repo):
     res = codediff.restore(repo, pre)
     assert not (repo / "made.txt").exists() and (repo / "keep.txt").read_text() == "k\n"
     assert set(res["removed"]) == {"made.txt"}
+
+
+def test_restore_everything_finds_names_that_are_not_utf8(repo):
+    pre = codediff.snapshot(repo)
+    bad = repo / os.fsdecode(b"bad\xffname.txt")
+    bad.write_text("x\n")
+    (repo / os.fsdecode(b"keep\xfe.txt")).write_text("y\n")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-qm", "two odd names")
+    mid = codediff.snapshot(repo)
+    bad.unlink()
+    (repo / os.fsdecode(b"keep\xfe.txt")).write_text("changed\n")
+    res = codediff.restore(repo, mid)
+    assert bad.read_text() == "x\n" and (repo / os.fsdecode(b"keep\xfe.txt")).read_text() == "y\n"
+    assert all("\ufffd" in p for p in res["restored"])      # shown names stay valid text
+    res = codediff.restore(repo, pre)
+    assert not bad.exists() and not (repo / os.fsdecode(b"keep\xfe.txt")).exists()
+    assert len(res["removed"]) == 2
 
 
 def test_a_base_branch_is_never_an_option(repo, tmp_path):
