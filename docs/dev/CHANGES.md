@@ -7,6 +7,12 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Workspace template: `templates/workspace/CLAUDE.md` gets a paragraph under "Use what Harness already has" (the
+  Code mode terminal, opened only by the user: a terminal opened through `POST /api/term` is not in the drawer, whose
+  tabs are per browser in `mx-terminals`; Revert / Changes view) and Hermes, OpenClaw on the `maxxing import` line;
+  the help topic index: line `04-sessions.md` (Tabs or Zones, intelligence, `/`, `@`), line `29-team.md`
+  (`maxxing team send`). Templates are copied only when missing: the upgrade note of the next version must carry
+  these three edits over (check: the paragraph is absent; do: insert it from the shipped template).
 - Web, sidebar last line: Settings is an `iconBtn` like the three others (`Sidebar.tsx`, `lead` of `StatusBlock`:
   tooltip + `aria-label`, `data-tour` kept), `SidebarLook` centres the four (`justify-center gap-2`); folded bar unchanged.
 - Web, sidebar status line: `components/shell/mood.ts`. `pickMood(facts)` (pure) returns ONE sentence (`key`, `vars`,

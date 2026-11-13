@@ -32,6 +32,9 @@ New:
   `memories/MEMORY.md` and `USER.md` go to the root memory, and a new project or topic keeps its description.
   `maxxing import ZIP` prints the last step (the message that lets a session create the tasks, propose the scheduled
   jobs and list the keys).
+- **Claude knows the code tools of a session.** Asked for a terminal, it points to Code mode (Ctrl+J, `/terminal`)
+  instead of offering SSH; asked to undo a turn, to "Revert to before this message" and the Changes view. The help
+  topic knows Tabs and Zones, the intelligence of a session, `/` commands, `@` and `maxxing team send`.
 
 ## 2.0.0-alpha.146 - 2026-11-13
 
