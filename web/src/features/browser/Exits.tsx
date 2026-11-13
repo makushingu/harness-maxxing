@@ -1,5 +1,5 @@
 // Exits of the Harness Browser (Browser page -> an exit): where a profile's pages go out. Adding one = 4 choices
-// explained (an Android phone, a rented proxy, a box / router with WireGuard, my computer later); each has its own
+// explained (a phone: iPhone or Android, a rented proxy, a box / router with WireGuard, my computer later); each has its own
 // page: a wizard for the phone (each step ticks itself when Harness sees it done), a form for the proxy and the box.
 // "Test" says what the sites see: the address, its country and operator, its kind (internet provider, mobile network or
 // datacenter - a rented proxy that is in fact a datacenter is said plainly), the delay and the speed.
@@ -10,12 +10,18 @@ import { useT } from '@/i18n'
 import { useBrowserSetup, useBrowserStatus, useSaveExit, useTailscale, useTailscaleSet, useTestExit, type ExitInput } from '@/lib/queries'
 import type { BrowserExit, BrowserExitKind, BrowserExitTest } from '@/lib/types'
 import { cn } from '@/lib/utils'
-import { Badge, Button, confirm, Input, Label, SecretInput, Textarea } from '@/components/ui'
+import { Badge, Button, confirm, Input, Label, SecretInput, Segmented, Textarea } from '@/components/ui'
 import { QRCode } from '@/components/ui/qr-code'
 import { Callout } from '@/features/common'
 import { exitLine, exitTone } from './profiles'
 
-const PLAY_TAILSCALE = 'https://play.google.com/store/apps/details?id=com.tailscale.ipn'
+// The Tailscale app of each phone: both can be an exit node (Exit Node -> Run as Exit Node).
+const STORES = {
+  ios: { url: 'https://apps.apple.com/app/tailscale/id1470499037', shown: 'apps.apple.com › Tailscale' },
+  android: { url: 'https://play.google.com/store/apps/details?id=com.tailscale.ipn', shown: 'play.google.com › Tailscale' },
+}
+type Store = keyof typeof STORES
+const guessStore = (): Store => (/android/i.test(navigator.userAgent) ? 'android' : 'ios')
 
 /** "Add an exit": the four ways, with what each needs, costs and shows to the sites. */
 export function AddExit() {
@@ -247,6 +253,7 @@ function TailscaleWizard({ exit }: { exit: BrowserExit }) {
   const set = useTailscaleSet()
   const test = useTestExit()
   const [advanced, setAdvanced] = React.useState(!!exit.login_server)
+  const [store, setStore] = React.useState<Store>(guessStore)
   const save = useSaveExit()
   const [server, setServer] = React.useState(exit.login_server || '')
   const linked = !!ts && !['needs_setup', 'needs_login', 'starting'].includes(ts.state)
@@ -331,14 +338,24 @@ function TailscaleWizard({ exit }: { exit: BrowserExit }) {
       </ol>
       <div className="grid content-start gap-3">
         <div className="grid justify-items-center gap-2 rounded-xl border bg-card p-4 text-center text-[12px]">
-          <QRCode value={PLAY_TAILSCALE} className="size-32" label={t('browser.ts.qr')} />
-          <span className="font-medium">{t('browser.ts.qr')}</span>
-          <span className="text-muted-foreground">play.google.com › Tailscale</span>
+          <Segmented
+            size="sm"
+            value={store}
+            onChange={setStore}
+            aria-label={t('browser.ts.phone')}
+            options={[
+              { value: 'ios', label: 'iPhone' },
+              { value: 'android', label: 'Android' },
+            ]}
+          />
+          <QRCode value={STORES[store].url} className="size-32" label={t(`browser.ts.qr.${store}`)} />
+          <span className="font-medium">{t(`browser.ts.qr.${store}`)}</span>
+          <span className="text-muted-foreground">{STORES[store].shown}</span>
         </div>
         <div className="grid gap-1.5 rounded-xl border bg-card p-4 text-[12px]">
           <span className="font-medium">{t('browser.ts.good')}</span>
           <span className="text-muted-foreground">{t('browser.ts.good1')}</span>
-          <span className="text-muted-foreground">{t('browser.ts.good2')}</span>
+          <span className="text-muted-foreground">{t(`browser.ts.good2.${store}`)}</span>
           <span className="text-muted-foreground">{t('browser.ts.good3')}</span>
         </div>
         {advanced ? (

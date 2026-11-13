@@ -73,7 +73,7 @@ last. **+ Add an exit** offers four ways:
 
 | Exit | What the sites see | What you need |
 |---|---|---|
-| **My phone (Tailscale)** (recommended) | your phone's 4G, or your home connection | an Android phone (or a computer) that stays on, a free Tailscale account |
+| **My phone (Tailscale)** (recommended) | your phone's 4G, or your home connection | an iPhone, an Android phone or a computer that stays on, a free Tailscale account |
 | **Rented proxy** | an address in the country you choose | a residential or ISP proxy from a provider: its address (`socks5://` or `http://`), a user, a password |
 | **WireGuard** | your home connection, or the VPN's | a WireGuard configuration file from your router (Fritz!Box, OpenWrt...) or a VPN |
 | **My computer** | the computer you work on | soon |
@@ -85,8 +85,9 @@ Then pick the exit in a profile's settings (**Exit**). One exit can serve severa
 1. **Install Tailscale for the browser** (**Set up**, a minute, once). It is a Tailscale of the browser's own: the
    rest of the server does not use it.
 2. **Sign in to Tailscale**: the server shows up as `harness-browser` in your account.
-3. **On the phone**: install Tailscale (QR code), sign in with the same account, then **Exit node -> Run as exit
-   node**, and leave it on, charging, on Wi-Fi or 4G (battery optimization off for Tailscale).
+3. **On the phone** (iPhone or Android): install Tailscale (QR code for the App Store or Google Play), sign in with
+   the same account, then **Exit node -> Run as exit node**, and leave it on, charging, on Wi-Fi or 4G (on Android,
+   battery optimization off for Tailscale; on an iPhone, do not swipe the app away).
 4. **Choose the device** the pages go out by.
 
 **Advanced: Headscale** takes your own Headscale server instead of Tailscale's. **Sign out of Tailscale** unlinks it.
