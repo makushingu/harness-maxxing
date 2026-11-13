@@ -70,3 +70,11 @@ def test_the_eye_of_a_multiline_secret_is_big_enough_to_tap():
     src = (WEB / "components" / "ui" / "secret-input.tsx").read_text()
     multi = re.search(r"multi \? '([^']*)'", src)
     assert multi and "pointer-coarse:h-11" in multi[1].split()
+
+
+def test_retry_of_a_part_that_failed_is_big_enough_to_tap():
+    # the inline "This part could not be shown" line offered Retry in a 43x20 px button on phones and tablets
+    src = (WEB / "components" / "ui" / "error-boundary.tsx").read_text()
+    inline = src[src.index('data-testid="part-error"'):]
+    button = re.search(r'<button[^>]*className="([^"]*)"', inline)
+    assert button and "pointer-coarse:min-h-10" in button[1].split()
