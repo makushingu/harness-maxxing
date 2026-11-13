@@ -614,7 +614,9 @@ BrowserAction   { at, session, tool, args (values typed -> "<n chars>", urls wit
 | PUT | `/api/browser/profiles/{pid}` | same as POST, every key optional | `BrowserProfile` (`400`, `404 no_profile`); a change of `web` / `sites` restarts a running profile once nobody uses it |
 | DELETE | `/api/browser/profiles/{pid}` | – | `{ok}`; stops it, erases its folder, tabs and journal (`404`, `409 main`) |
 | POST | `/api/browser/profiles/{pid}/open` | `{session?}` | `BrowserState`; starts it for the person (its last tab, else the first site of its list); `session`: shows that session's last tab (`409 off`, `409 too_many_profiles`, `503 unavailable`, `404`) |
-| POST | `/api/browser/profiles/{pid}/stop` \| `sleep` \| `forget` | – | `BrowserState` (`sleep`: + `slept`, every tab not shown sleeps; `forget`: stopped, sign-ins, tabs and journal erased) |
+| POST | `/api/browser/profiles/{pid}/stop` | – | `BrowserState`; the profile sleeps (its tabs are kept, asleep) |
+| POST | `/api/browser/profiles/{pid}/sleep` | – | `BrowserState` + `slept`: every tab not shown sleeps |
+| POST | `/api/browser/profiles/{pid}/forget` | – | `BrowserState`; stopped, sign-ins, tabs and journal erased |
 | POST | `/api/browser/profiles/{pid}/tabs` | `{url?}` | `BrowserState`; a new tab of the person (`400 refused` for a page its rules refuse) |
 | POST | `/api/browser/profiles/{pid}/tabs/{key}/show` | – | `BrowserState`; shows it, wakes an asleep one (`404 no_tab`) |
 | DELETE | `/api/browser/profiles/{pid}/tabs/{key}` | – | `BrowserState` |
