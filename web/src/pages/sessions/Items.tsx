@@ -285,7 +285,7 @@ export function UserMessage({
   source?: string
   /** Sent by another session's turn (maxxing sessions send): a link to it. */
   from?: { session: string; title: string }
-  /** Added to a running turn (Add now). */
+  /** Added to a running turn (Add to plan). */
   injected?: boolean
   pending?: boolean
   queued?: boolean

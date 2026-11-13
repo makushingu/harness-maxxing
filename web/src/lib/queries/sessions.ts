@@ -179,7 +179,7 @@ export function useSteerSession() {
     invalidate: invSessions,
   })
 }
-/** Add now: the queued messages go into the running turn without interrupting it (Claude reads them at its next
+/** Add to plan: the queued messages go into the running turn without interrupting it (Claude reads them at its next
  *  step). `reason` when nothing was done: idle | unsupported | summary | voice | plan. */
 export function useInjectSession() {
   const set = useSetSessionCache()

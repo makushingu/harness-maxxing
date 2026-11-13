@@ -636,7 +636,7 @@ def _merged(mine: list[dict], **extra: Any) -> dict:
 
 
 def inject(sid: str) -> dict:
-    """Add now, without interrupting: the messages waiting in the queue become ONE message written into the turn
+    """Add to plan, without interrupting: the messages waiting in the queue become ONE message written into the turn
     that runs (SIGUSR2: the runner writes it to Claude's stream-json stdin). Claude Code reads it at its next step,
     between two tool calls - nothing is cut short, unlike a steer; if the turn was already ending, it answers it
     right after, in the same process. When the runner cannot write it (no stream-json input, the turn just ended),

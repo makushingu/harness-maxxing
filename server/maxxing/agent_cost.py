@@ -71,7 +71,7 @@ def last_turn(lines, at: float | None = None) -> tuple[dict | None, dict, float]
     for raw in lines:
         if '"mx_user"' in raw[:40]:
             if '"injected"' in raw and _injected(raw):
-                continue                                # added to the running turn (Add now): the same turn goes on
+                continue                                # added to the running turn (Add to plan): the same turn goes on
             if mine:
                 break                                   # the next message's turn: the one at `at` is over
             msgs, done, result = {}, None, False

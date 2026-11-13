@@ -50,7 +50,7 @@ def test_last_turn_prices_a_turn_without_result():
 
 
 def test_last_turn_keeps_the_tokens_before_a_message_added_to_the_turn():
-    """Add now writes an `mx_user` marked injected in the middle of the turn: it does not start a new turn."""
+    """Add to plan writes an `mx_user` marked injected in the middle of the turn: it does not start a new turn."""
     turn = [json.dumps({"type": "mx_user", "text": "go"}), _asst("m1", "claude-opus-5-5", 0, out=1_000_000),
             json.dumps({"type": "mx_user", "text": "more", "kind": "user", "injected": True}),
             _asst("m2", "claude-opus-5-5", 0, out=1_000_000),

@@ -42,7 +42,7 @@ missing and never re-create a project or topic you deleted.
 ## What you can do
 
 - **Sessions**: several conversations side by side, live streaming, attachments, message queue
-  (steer, edit, or ask a side question without interrupting), plan mode (validate before any change),
+  (steer, add to the plan, edit, or ask a side question without interrupting), plan mode (validate before any change),
   HUD mode, model choice per session, stop, compact, hand off, archive, full-text search, move a
   session to another topic.
 - **Code**: when Claude changes a git repository, a button under its answer opens the diff; undo a file, revert to
