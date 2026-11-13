@@ -8,7 +8,7 @@ import { useT, useLang } from '@/i18n'
 import { fmtDate, fmtNumber } from '@/lib/format'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Sensitive, Spinner, Tooltip, usePresentation } from '@/components/ui'
 import { Markdown } from '@/components/ui/markdown'
-import { filePreviewUrl, fileRawUrl, fileThumbUrl, knownFileStamp, prefetchImage, PREVIEW_W } from '@/lib/queries/files'
+import { filePreviewUrl, fileRawUrl, fileStamp, fileThumbUrl, prefetchImage, PREVIEW_W } from '@/lib/queries/files'
 import { Thumb } from '@/features/files/Thumb'
 import type { ChangesEvent, ClaudeModel, ResultField } from '@/lib/types'
 import { costTip, ResultLineMenu, useCostIsBilled, useResultLine } from './resultLine'
@@ -43,8 +43,9 @@ export type ItemCtx = {
 }
 /** Hover / focus on a media thumbnail: start loading what the viewer will show (light preview, video poster). */
 function prefetchMedia(p: string) {
-  if (isImage(p)) prefetchImage(filePreviewUrl(p, PREVIEW_W, knownFileStamp(p)))
-  else if (isVideo(p)) prefetchImage(fileThumbUrl(p, 1280, knownFileStamp(p)))
+  // with the file's stamp, asked when not known yet: the very URL the viewer will ask for
+  if (isImage(p)) void fileStamp(p).then((v) => prefetchImage(filePreviewUrl(p, PREVIEW_W, v)))
+  else if (isVideo(p)) void fileStamp(p).then((v) => prefetchImage(fileThumbUrl(p, 1280, v)))
 }
 
 export const ItemContext = React.createContext<ItemCtx>({ filesRoot: null, models: undefined, running: false })

@@ -20,6 +20,18 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   `navigator.pdfViewerEnabled` and the pointer is fine, else `features/files/pdfPages.tsx` (pages near the screen
   only, zoom 1-4 by pinch / double tap / Ctrl + wheel, the picture asked again at the zoom once the fingers are up,
   `data-zoomed` holds the viewer's swipe); a 415 falls back to the iframe.
+- Web, file viewer speed: the viewer's chunk is loaded by `features/files/viewerLoad.ts` (`loadFileViewer`, with
+  the `files` words) and mounted by `AppShell` WITHOUT Suspense: React keeps a fallback it has shown for 300 ms
+  (even `null`), which delayed every first opening. It is warmed by the last step of `startIdlePrefetch` and by a
+  delegated `pointerover` on `[data-mx-file]` / `#mx-file=` links (the chunk only, no request about the path).
+  `warmLazy()` (`viewers.tsx`) does the same for CodeMirror and Markdown: warmed when the file opens
+  (`warmCodeEditor`, `warmMarkdown`), rendered directly once loaded. `ViewerPane`: a name with a known extension
+  (`kind !== 'binary'`) no longer waits for the probe (`eager`): `/read`, `/stat`, `/doc`, `/pdf` leave with the
+  listings, and the first answer shows the file (the probe still decides when it says folder or missing). The
+  probe's listings seed the stamps (`seedFileStamps`), a stamp asked `within` a folder also seeds the plain one,
+  `prefetchMedia` (thumbnail hover) asks the stamp first (`fileStamp`) so it loads the URL the viewer uses.
+  `ImageView` fetches the original after the preview only when `canPrefetch()`. `PdfPages` starts from the
+  screen's width (it asked the first pages at 2048 then again at 1280 on a phone). Not changed: video Auto quality.
 
 ## 2.0.0-alpha.149 - 2026-11-13
 

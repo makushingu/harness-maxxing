@@ -17,6 +17,14 @@ New:
   **− / +** zoom, pages load as you scroll and the bar shows the page you are on. On a computer the browser's own
   reader stays.
 
+Changed:
+- **Files: the viewer opens faster.** A file clicked in a conversation used to wait three times before anything
+  showed: for the viewer itself, for a look at its folder, then for its date. The viewer is now ready before the
+  click, and a file with a known extension asks for its content at once: on a connection of 8 Mbit/s, an image, a
+  video, a Word or Excel file, a PDF or a file of code shows two to four times sooner (0.2 to 0.5 s instead of 0.5
+  to 0.9 s). A big image no longer downloads its original on a light connection before you zoom, and a PDF read page
+  by page asks each page once instead of twice.
+
 ## 2.0.0-alpha.149 - 2026-11-13
 
 Changed:

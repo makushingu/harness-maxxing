@@ -10,18 +10,18 @@ import { ChevronLeft, ChevronRight, Code2, Download, Eye, FileQuestion, Folder, 
 import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, EmptyState, Segmented, Sensitive, Tooltip } from '@/components/ui'
 import { isApiError } from '@/lib/api'
 import { api } from '@/lib/api'
-import { fileDocQuery, filePreviewUrl, fileStamp, fileThumbUrl, prefetchImage, PREVIEW_W, useFileContent, useFileKind, useFileStamp } from '@/lib/queries/files'
+import { fileDocQuery, filePdfQuery, filePreviewUrl, fileStamp, fileThumbUrl, prefetchImage, PREVIEW_W, useFileContent, useFileKind, useFileStamp } from '@/lib/queries/files'
 import { qk } from '@/lib/queries/keys'
 import type { FileContent, FileEntry, FileList } from '@/lib/types'
 import { fmtBytes } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
-import { useIsMobile } from '@/stores/media'
-import { basename, dirname, iconFor, isRendered, isTextDoc, isTextual, kindOf } from './kinds'
+import { useIsMobile, useMediaQuery } from '@/stores/media'
+import { basename, dirname, iconFor, isRendered, isTextDoc, isTextual, kindOf, type FileKind } from './kinds'
 import { PreviewBody } from './FilePreview'
 import { TextZoomControl, zoomsText } from './textZoom'
 import { FolderView } from './rich'
-import { DiagramView } from './viewers'
+import { DiagramView, warmCodeEditor, warmMarkdown } from './viewers'
 import { FileSkeleton } from './skeletons'
 import { videoInfoQuery } from './videoQuality'
 import { CodeBlock, CopyButton } from '@/components/ui/code-block'
@@ -100,9 +100,16 @@ function ViewerPane({ path, index, count, fullscreen, canFull, onFull }: { path:
   const name = basename(path) || '/'
   const kind = kindOf(name)
   const [view, setView] = React.useState<'preview' | 'source'>('preview')
-  const content = useFileContent(path, probe.data === 'file' && isTextual(kind) && !(kind === 'html' && view === 'preview'))
+  // The probe (the parent folder's listing) tells a file from a folder or a missing path. A name with a known
+  // extension does not wait for it: its text and its stamp are asked at the same time, and the first to answer
+  // shows the file; the probe still decides when it says otherwise.
+  const eager = kind !== 'binary' && probe.isPending
+  const maybeFile = probe.data === 'file' || eager
+  const content = useFileContent(path, maybeFile && isTextual(kind) && !(kind === 'html' && view === 'preview'))
   // Media: the file's current mtime goes in the URLs (a file rewritten under the same name shows its new version).
-  const stamp = useFileStamp(probe.data === 'file' && STAMPED.has(kind) ? path : null)
+  const stamp = useFileStamp(maybeFile && (STAMPED.has(kind) || eager) ? path : null)
+  const isFile = probe.data === 'file' || (eager && (stamp.version != null || content.data !== undefined))
+  useWarmKind(path, kind, eager)
   const Icon = isDir ? Folder : iconFor('file', name)
   const multi = count > 1
   const parent = dirname(path)
@@ -117,7 +124,7 @@ function ViewerPane({ path, index, count, fullscreen, canFull, onFull }: { path:
   }
   const up = () => setList([parent], 0)
   /** Text files: "Edit" opens the Files page in edit mode - a new tab on desktop, in place on a phone (PWA). */
-  const editable = !isDir && probe.data === 'file' && isTextual(kind) && kind !== 'binary' && content.data?.editable !== false
+  const editable = isFile && isTextual(kind) && kind !== 'binary' && content.data?.editable !== false
   const editUrl = `/files?path=${encodeURIComponent(path)}&edit=1`
   const root = qc.getQueryData<FileList>(qk.files.list(''))?.root
   /** The file in its folder's listing, when the page has it: size and version for the download. */
@@ -276,7 +283,13 @@ function ViewerPane({ path, index, count, fullscreen, canFull, onFull }: { path:
         </DialogPrimitive.Close>
       </div>
       <div className="relative flex min-h-0 flex-1 flex-col" {...swipe}>
-        {probe.isPending ? (
+        {isFile ? (
+          STAMPED.has(kind) && !stamp.ready ? (
+            <FileSkeleton kind={kind} preview={view === 'preview'} name={name} />
+          ) : (
+            <PreviewBody path={path} kind={kind} view={view} content={content} version={STAMPED.has(kind) ? stamp.version : undefined} />
+          )
+        ) : probe.isPending ? (
           <FileSkeleton kind={kind} preview={view === 'preview'} name={name} />
         ) : probe.isError || probe.data === 'missing' ? (
           // Never a skeleton forever: a path that does not exist (or is outside the files root) says so.
@@ -286,7 +299,7 @@ function ViewerPane({ path, index, count, fullscreen, canFull, onFull }: { path:
             description={isApiError(probe.error) && probe.error.status === 403 ? t('viewer.outsideDesc') : t('files.notFoundDesc')}
             className="flex-1"
           />
-        ) : isDir ? (
+        ) : (
           <FolderView
             path={path}
             onOpen={openEntry}
@@ -295,10 +308,6 @@ function ViewerPane({ path, index, count, fullscreen, canFull, onFull }: { path:
               navigate(`/files?path=${encodeURIComponent(e.path)}`)
             }}
           />
-        ) : !stamp.ready ? (
-          <FileSkeleton kind={kind} preview={view === 'preview'} name={name} />
-        ) : (
-          <PreviewBody path={path} kind={kind} view={view} content={content} version={stamp.version} />
         )}
       </div>
     </>
@@ -306,6 +315,21 @@ function ViewerPane({ path, index, count, fullscreen, canFull, onFull }: { path:
 }
 
 const STAMPED = new Set(['image', 'video', 'audio', 'font'])
+
+/** What a file needs besides its bytes, asked while the probe is still out: the document as the server reads it,
+ *  the pages of a PDF, the chunk that draws it (code editor, Markdown). */
+function useWarmKind(path: string, kind: FileKind, eager: boolean) {
+  const qc = useQueryClient()
+  const paged = useMediaQuery('(pointer: coarse)') || !navigator.pdfViewerEnabled
+  React.useEffect(() => {
+    if (kind === 'markdown') warmMarkdown()
+    else if (isTextual(kind)) warmCodeEditor()
+    if (!eager) return
+    if (kind === 'document') void qc.prefetchQuery(fileDocQuery(path))
+    else if (kind === 'pdf' && paged) void qc.prefetchQuery(filePdfQuery(path))
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per file opened
+  }, [path])
+}
 
 const isDiagram = (p: string) => p.startsWith(DIAGRAM_PREFIX)
 

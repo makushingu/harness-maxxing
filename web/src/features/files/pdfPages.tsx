@@ -116,7 +116,8 @@ export function PdfPages({
   /** The zoom the pictures are asked for: follows `zoom` once the fingers are up (no reload at every frame of a pinch). */
   const [sharp, setSharp] = React.useState(1)
   const [page, setPage] = React.useState(1)
-  const [width, setWidth] = React.useState(PDF_PAGE_WIDTHS[1])
+  // before the box is measured: the screen's width (what a phone shows), so the first pages are asked once
+  const [width, setWidth] = React.useState(() => Math.min(window.innerWidth, PAGE_MAX))
   const anchor = React.useRef<{ px: number; py: number; fx: number; fy: number } | null>(null)
   const from = React.useRef(1)
 

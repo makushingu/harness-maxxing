@@ -10,6 +10,7 @@ import { fmtBytes } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
 import { useMediaQuery } from '@/stores/media'
+import { canPrefetch } from '@/lib/prefetchIdle'
 import { useHotkey } from '@/commands/shortcuts'
 import { useTouchZoom, type Pt } from '@/lib/touch-zoom'
 import { useDiagramSvg } from '@/components/ui/diagram'
@@ -20,8 +21,38 @@ import { downloadProps, inIosApp, openRawProps } from './download'
 import { CodeSkeleton, PageSkeleton, ProseSkeleton } from './skeletons'
 import { PdfPages } from './pdfPages'
 
-const CodeEditorChunk = React.lazy(() => import('./CodeEditor'))
-const MarkdownChunk = React.lazy(() => import('@/components/ui/markdown').then((m) => ({ default: m.Markdown })))
+/** A lazy component that can be warmed before it shows, and that renders at once when its chunk is there: even
+ *  then a Suspense pass costs time (React keeps a fallback it has shown for 300 ms). */
+function warmLazy<P extends object>(load: () => Promise<{ default: React.ComponentType<P> }>) {
+  let ready: React.ComponentType<P> | null = null
+  let pending: Promise<{ default: React.ComponentType<P> }> | null = null
+  const get = () =>
+    (pending ??= load().then(
+      (m) => {
+        ready = m.default
+        return m
+      },
+      (e) => {
+        pending = null
+        throw e
+      },
+    ))
+  const Lazy = React.lazy(get)
+  /** Decided once per mount: switching from the lazy component to the loaded one would mount it again. */
+  function Chunk(props: P) {
+    const [now] = React.useState(() => ready)
+    return React.createElement((now ?? Lazy) as React.ComponentType<P>, props)
+  }
+  return { Chunk, warm: () => void get().catch(() => undefined) }
+}
+
+const codeEditor = warmLazy<CodeEditorProps>(() => import('./CodeEditor'))
+const markdown = warmLazy<React.ComponentProps<typeof import('@/components/ui/markdown').Markdown>>(() => import('@/components/ui/markdown').then((m) => ({ default: m.Markdown })))
+const CodeEditorChunk = codeEditor.Chunk
+const MarkdownChunk = markdown.Chunk
+/** Start loading the chunk a file will be drawn with, while its content is still on its way. */
+export const warmCodeEditor = codeEditor.warm
+export const warmMarkdown = markdown.warm
 
 /** CodeMirror, loaded on demand. Fills its parent (give the parent a height). */
 export function LazyCodeEditor(props: CodeEditorProps) {
@@ -369,7 +400,8 @@ export function ImageView({ path, version, onPrev, onNext, position, className }
   // The original is fetched quietly once the preview is on screen, so zooming is instant (as before) while
   // opening stays fast. It replaces the preview without any visible change.
   React.useEffect(() => {
-    if (!loaded || previewFull || full) return
+    // not on a light connection (Save-Data, 2G / 3G): there the original comes with the first zoom
+    if (!loaded || previewFull || full || !canPrefetch()) return
     const id = setTimeout(() => setFull(true), 150)
     return () => clearTimeout(id)
   }, [loaded, previewFull, full])
