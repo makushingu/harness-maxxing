@@ -3,7 +3,7 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
-## Unreleased
+## 2.0.0-alpha.149 - 2026-11-13
 
 Changed:
 - **Files: the preview loads in the shape of the file.** While a file opens (a path clicked in a conversation, the
