@@ -76,7 +76,7 @@ export function SecretInput({ className, autoComplete = 'off', onValueChange, ..
         aria-pressed={show}
         className={cn(
           'absolute right-0 flex w-10 pointer-coarse:w-11 items-center justify-center rounded-r-md text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
-          multi ? 'top-0 h-9' : 'inset-y-0',
+          multi ? 'top-0 h-9 pointer-coarse:h-11' : 'inset-y-0',
         )}
       >
         {show ? <EyeOff className="size-4" /> : <Eye className="size-4" />}

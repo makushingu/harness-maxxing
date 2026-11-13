@@ -63,3 +63,10 @@ def test_a_tap_in_a_context_menu_opened_by_a_long_press_reaches_its_item():
     menu = (WEB / "components" / "ui" / "context-menu.tsx").read_text()
     for ev in ("onTouchStart", "onTouchMove", "onTouchEnd", "onTouchCancel"):
         assert f"{ev}={{stop}}" in menu, ev
+
+
+def test_the_eye_of_a_multiline_secret_is_big_enough_to_tap():
+    # a key pasted on several lines turns the field into a textarea: its show/hide button kept h-9 (44x36 px) on touch
+    src = (WEB / "components" / "ui" / "secret-input.tsx").read_text()
+    multi = re.search(r"multi \? '([^']*)'", src)
+    assert multi and "pointer-coarse:h-11" in multi[1].split()
