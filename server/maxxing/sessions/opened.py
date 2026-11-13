@@ -14,7 +14,7 @@ from pathlib import Path
 from .. import bus, config
 
 MAX_OPEN = 60                       # more than a screen ever holds: the oldest ones go
-_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+_ID = re.compile(r"\A[A-Za-z0-9_-]{1,64}\Z")
 _lock = threading.Lock()
 
 

@@ -941,6 +941,7 @@ def test_the_open_sessions_are_shared_between_the_browsers(client, topic):
     # the same list again changes nothing (no event, no new rev): two browsers cannot answer each other for ever
     assert client.post("/api/sessions/open", json={"open": ["b"]}).json()["rev"] == 1
     assert client.post("/api/sessions/open", json={"open": ["d", "bad id!"], "close": ["a"]}).json() == {"ids": ["b", "c", "d"], "rev": 2}
+    assert client.post("/api/sessions/open", json={"open": ["d\n", "e\n"]}).json()["ids"] == ["b", "c", "d"]
     # an order names what it knows; the rest keeps its place, after
     assert client.post("/api/sessions/open", json={"order": ["d", "b"]}).json()["ids"] == ["d", "b", "c"]
     # a deleted session is open nowhere
