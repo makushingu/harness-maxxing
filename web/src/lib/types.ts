@@ -1549,5 +1549,9 @@ export type BrowserOwner = {
   exit: BrowserExit | null
   /** an agent reading outside text on the main profile: advise its own profile */
   outside_on_main: boolean
+  /** the agent's own browser (a profile made for it), when it has one */
+  own_profile: string | null
+  /** its own browser was deleted: it has none until turned on again */
+  gone: boolean
   asks: BrowserAsk[]
 }

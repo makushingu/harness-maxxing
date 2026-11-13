@@ -1077,6 +1077,11 @@ def test_an_agent_has_its_own_browser_or_shares_one_and_never_falls_back_to_main
     assert client.delete("/api/browser/profiles/writer").status_code == 200
     r = client.get("/api/browser/owner", params={"path": A}).json()
     assert r["enabled"] is False and r["gone"] is True and browser.active_for(A) is None
-    # its manager asks for its own browser (a change card, applied through agents.update): made again
+    # turned on again: a new browser of its own
+    r = client.put("/api/browser/owner", json={"path": A, "enabled": True}).json()
+    assert r["enabled"] is True and r["profile"] == "writer" and not r["gone"]
+    # its manager asks for another's, then its own (a change card, applied through agents.update)
+    agents.update(A, {"browser": {"profile": "main"}})
+    assert browser.resolve(A)["profile"] == "main"
     agents.update(A, {"browser": {"profile": "own"}})
     assert browser.resolve(A)["profile"] == "writer" and browser.active_for(A)[1]["id"] == "writer"

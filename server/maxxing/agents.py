@@ -609,7 +609,7 @@ MANAGER_NOTE = ("You run as a Harness Maxxing agent, in a conversation with your
                 "`watch`, `on`, `off`; never edit agent.json by hand; run each `maxxing` command alone on its line, "
                 "without pipe, `;` or `&&`). A safety setting (sandbox, domains, "
                 "keys, permission mode, approvals, trusting outside events, writable folders, rules, tool lists, "
-                "mailboxes, the Harness Browser (`set browser.enabled=true`, its profile `browser.profile=<id>`), budget, runs per hour, timeout) that "
+                "mailboxes, the Harness Browser (`set browser.enabled=true`: its own browser; `browser.profile=<id>` shares the sign-ins of another, `browser.profile=own` its own again), budget, runs per hour, timeout) that "
                 "only makes you safer (your sandbox on, approvals on, fewer keys or sites, the browser off, a lower "
                 "budget) applies at once; one that opens you sends the owner a request "
                 "to allow: say so, it is applied once allowed. {box}Your memory and your runs' results may hold text that came from outside (mails, "
@@ -1228,8 +1228,10 @@ def update(path: str, fields: dict) -> dict:
                 own = True
         data = clean({**cur, **{k: v for k, v in f.items() if k in known}}, strict=True)
         # turned on without a browser of its own choosing: its own (never everybody's sign-ins by default)
-        own = own or (bool(data["browser"].get("enabled")) and not cur["browser"].get("enabled")
-                      and "profile" not in data["browser"])
+        if not own and data["browser"].get("enabled") and not cur["browser"].get("enabled"):
+            from . import browser as _browser
+            pid = data["browser"].get("profile")
+            own = not pid or _browser.profile(pid) is None   # none chosen, or its own was deleted
         boxed = _auto_box(cur, data, f)
         _save(path, data)
     if own:

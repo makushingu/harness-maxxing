@@ -458,6 +458,8 @@ async def put_owner(body: OwnerIn) -> dict:
             block["enabled"] = body.enabled
         if body.profile:
             block["profile"] = body.profile
+        elif body.enabled and owner.startswith("agent:") and browser.resolve(path).get("gone"):
+            block["profile"] = browser.OWN               # turned on again after its browser was deleted: a new one
         for k in body.inherit:
             block.pop(k, None)
         block = browser.clean(block, strict=True)

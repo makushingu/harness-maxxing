@@ -13,6 +13,7 @@ import { BrowserWindow } from './BrowserWindow'
 import { exitLine, exitName, exitTone, ownerParts, profileName } from './profiles'
 
 const INHERIT = '__inherit'
+const OWN = 'own'
 
 export function BrowserPanel({ path, live = true, who }: { path: string; live?: boolean; who?: string }) {
   const t = useT()
@@ -27,7 +28,7 @@ export function BrowserPanel({ path, live = true, who }: { path: string; live?: 
   const inh = o.inherited
   const switchValue = agent || o.own.enabled !== undefined ? (o.own.enabled ? 'on' : 'off') : INHERIT
   const profiles = st?.profiles || []
-  const profileValue = o.own.profile ? o.own.profile : INHERIT
+  const profileValue = agent && o.own_profile && o.own.profile === o.own_profile ? OWN : o.own.profile ? o.own.profile : INHERIT
   const inheritedProfile = inh ? profiles.find((p) => p.id === inh.profile) : profiles.find((p) => p.id === 'main')
   const current = profiles.find((p) => p.id === o.profile)
 
@@ -62,21 +63,33 @@ export function BrowserPanel({ path, live = true, who }: { path: string; live?: 
             />
           </SettingRow>
         )}
-        <SettingRow label={t('browser.profile.label')} description={t('browser.profile.ownerDesc')} htmlFor="br-profile">
+        <SettingRow
+          label={t(agent ? 'browser.signins.label' : 'browser.profile.label')}
+          description={t(agent ? 'browser.signins.desc' : 'browser.profile.ownerDesc')}
+          htmlFor="br-profile"
+        >
           <Select
             id="br-profile"
-            className="w-48"
+            className="w-56"
             value={profileValue}
             onValueChange={(v) => save.mutate(v === INHERIT ? { path, inherit: ['profile'] } : { path, profile: v })}
             options={[
-              { value: INHERIT, label: t('browser.inheritProfile', { name: profileName(inheritedProfile || { id: inh?.profile || 'main', name: '' }, t) }) },
-              ...profiles.map((p) => ({ value: p.id, label: profileName(p, t) })),
+              ...(agent ? [{ value: OWN, label: t('browser.signins.own') }] : []),
+              { value: INHERIT, label: t(agent ? 'browser.signins.inherit' : 'browser.inheritProfile', { name: profileName(inheritedProfile || { id: inh?.profile || 'main', name: '' }, t) }) },
+              ...profiles
+                .filter((p) => !(agent && p.id === o.own_profile))
+                .map((p) => ({ value: p.id, label: agent ? t('browser.signins.of', { name: profileName(p, t) }) : profileName(p, t) })),
             ]}
             data-testid="browser-profile"
           />
         </SettingRow>
       </div>
 
+      {o.gone && (
+        <Callout tone="warning" icon={TriangleAlert}>
+          {t('browser.signins.gone')}
+        </Callout>
+      )}
       {o.outside_on_main && (
         <Callout tone="warning" icon={TriangleAlert}>
           {t('browser.outsideOnMain')}
