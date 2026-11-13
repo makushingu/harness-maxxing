@@ -95,6 +95,30 @@ def test_folder_limit_idle_and_turning_off(on, term_env, tmp_path):
     assert on.post("/api/term", json={"cwd": str(term_env["files"])}).status_code == 403
 
 
+def test_opens_at_the_same_time_keep_the_limit(on, term_env, monkeypatch):
+    import threading
+    real = terminal.subprocess.Popen
+
+    def slow(*a, **kw):                               # every open is inside the start at the same time
+        time.sleep(0.3)
+        return real(*a, **kw)
+    monkeypatch.setattr(terminal.subprocess, "Popen", slow)
+    res: list = []
+
+    def one():
+        try:
+            res.append(terminal.open_term(str(term_env["files"])))
+        except terminal.TermError as e:
+            res.append(e.status)
+    th = [threading.Thread(target=one) for _ in range(12)]
+    for t in th:
+        t.start()
+    for t in th:
+        t.join()
+    assert len([t for t in res if isinstance(t, terminal.Term)]) == terminal.MAX_TERMS
+    assert sorted(t for t in res if isinstance(t, int)) == [409] * (12 - terminal.MAX_TERMS)
+
+
 def test_doctor_lists_programs_started_by_hand_and_forgotten():
     from maxxing.cmd_core import stale_units
     now = 1_800_000_000

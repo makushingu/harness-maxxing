@@ -63,6 +63,7 @@ class Term:
 
 _terms: dict[str, Term] = {}
 _lock = threading.Lock()
+_opening = 0                                  # terminals being started: they count against MAX_TERMS too
 _loop: asyncio.AbstractEventLoop | None = None
 
 
@@ -104,10 +105,20 @@ def open_term(cwd: str, cols: int = 100, rows: int = 30) -> Term:
         raise TermError(400, "bad_cwd", "no such folder") from None
     if not p.is_dir() or not _inside_root(p):
         raise TermError(400, "bad_cwd", "the folder must be inside the files root")
-    with _lock:
+    global _opening
+    with _lock:                                   # the place is taken before the shell starts: opens at once
         live = [t for t in _terms.values() if t.exit is None]
-        if len(live) >= MAX_TERMS:
+        if len(live) + _opening >= MAX_TERMS:
             raise TermError(409, "too_many", f"{MAX_TERMS} terminals are open: close one first")
+        _opening += 1
+    try:
+        return _start(p, cols, rows)
+    finally:
+        with _lock:
+            _opening -= 1
+
+
+def _start(p: Path, cols: int, rows: int) -> Term:
     # A login shell, leader of its own session with the pty as its controlling terminal (job control, Ctrl+C):
     # `setsid -c` (util-linux). subprocess forks in C: no Python code runs in the child of this threaded server.
     fd, slave = pty.openpty()
