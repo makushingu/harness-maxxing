@@ -364,7 +364,13 @@ def create_session(path: str, message: str | None = None, title: str | None = No
             raise SessionError(e.status, e.code, e.message) from None
     if automatic and not has_text:
         meta["title_auto"] = meta["title"]       # short title on the first message (titles.first_message)
-    store.create(meta)
+    try:
+        store.create(meta)
+    except BaseException:
+        if meta.get("worktree"):
+            from .. import worktrees
+            worktrees.undo(meta["id"], meta["worktree"])
+        raise
     first = _item((message or "").strip(), files, source, **_client_ids(client_id),
                   **({"silent_ok": True} if silent_ok else {}), **({"refs": [str(ref)]} if ref else {}))
     if audio:

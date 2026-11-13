@@ -252,19 +252,34 @@ def create(topic_path: str, repo: str, base: str | None, title: str, sid: str, *
           "base_ref": base_name, "created": time.time(), "named": bool(pr)}
     if pr:
         wt["pr"] = {k: pr.get(k) for k in ("number", "url", "fork", "full") if pr.get(k) is not None}
-    if copy_env if copy_env is not None else p["copy_env"]:
-        wt["env_copied"] = _copy_env(r, folder)
-    included = _copy_included(r, folder)
-    if included:
-        wt["included"] = len(included)
-    with _lock:
-        wt["port"] = _free_ports(sid)
-    cmd = (prepare if prepare is not None else p["prepare"]).strip()
+    # a pull request from a fork or from someone outside the repository: its code is read before anything of it
+    # runs, so no prepare command (`npm ci` runs its scripts) and none of the clone's ignored files (.env...)
+    untrusted = bool(pr and (pr.get("fork") or pr.get("outside")))
+    try:
+        if not untrusted and (copy_env if copy_env is not None else p["copy_env"]):
+            wt["env_copied"] = _copy_env(r, folder)
+        included = [] if untrusted else _copy_included(r, folder)
+        if included:
+            wt["included"] = len(included)
+        with _lock:
+            wt["port"] = _free_ports(sid)
+    except BaseException:
+        undo(sid, wt)
+        raise
+    cmd = "" if untrusted else (prepare if prepare is not None else p["prepare"]).strip()
     if cmd:
         wt["prepare"] = {"cmd": cmd, "state": "running", "started": time.time()}
         threading.Thread(target=_prepare, args=(sid, folder, cmd, copy_env_vars(wt)), name=f"wt-prep-{sid[:8]}",
                          daemon=True).start()
     return wt
+
+
+def undo(sid: str, wt: dict) -> None:
+    """A copy whose session could not be made: its folder goes, and its branch unless it is a pull request's."""
+    try:
+        remove({"id": sid, "worktree": wt}, force=True)
+    except Exception:  # noqa: BLE001 - best effort: the error that brought us here is the one to report
+        log.warning("copy %s of %s not cleaned up", wt.get("path"), sid[:8])
 
 
 def _pr_branch(repo: Path, pr: dict) -> tuple[str, str, str | None]:

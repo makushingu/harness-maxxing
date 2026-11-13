@@ -4,6 +4,7 @@ model and effort for a new conversation (mocked engine, fake claude)."""
 from __future__ import annotations
 
 import shutil
+from pathlib import Path
 import time
 
 import pytest
@@ -72,3 +73,18 @@ def test_a_voice_message_nobody_heard_says_so_and_a_recording_from_elsewhere_is_
     elsewhere = str(make_audio(outside / "v.webm", 1, ["-c:a", "libopus"]))
     r = client.post(RUN, json={"voice": elsewhere})
     assert r.status_code == 400 and r.json()["error"] == "bad_attachment"
+
+
+def test_the_words_find_their_message_when_the_workspace_sits_behind_a_link(client, topic, mx, tmp_path):
+    # the session holds the resolved path of the recording, the thread the one uploaded (through the link)
+    from maxxing import agents
+    _on(client)
+    _create(client, sandbox=False)
+    real = Path(_audio(mx))
+    link = tmp_path / "ws-link"
+    link.symlink_to(mx["ws"])
+    through = str(link / real.relative_to(mx["ws"]))
+    m = agents.post(A, "run", "", voice=[through], owner=True)
+    agents.voice_heard(A, str(real.resolve()), {"state": "done", "text": "salut"})
+    got = next(x for x in _thread(client) if x["id"] == m["id"])
+    assert got["text"] == "salut"

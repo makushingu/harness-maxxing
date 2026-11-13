@@ -248,3 +248,52 @@ def test_the_preparation_knows_its_ports(client, code):
     wait_for(lambda: (store.read(s["id"])["worktree"].get("prepare") or {}).get("state") == "done")
     port = store.read(s["id"])["worktree"]["port"]
     assert (folder / "p.txt").read_text().split() == [str(port), str(folder)]
+
+
+def _with_pull(clone: Path, tmp: Path, n: int = 7) -> None:
+    """An origin for `clone` with the head of pull request `n` (refs/pull/<n>/head, branch `theirs`), like GitHub's."""
+    origin = tmp / "origin.git"
+    subprocess.run(["git", "clone", "-q", "--bare", str(clone), str(origin)], check=True, env={**ENV, "HOME": str(tmp)})
+    _git(clone, "remote", "add", "origin", str(origin))
+    _git(clone, "checkout", "-qb", "theirs")
+    (clone / "package.json").write_text('{"scripts": {"postinstall": "touch pwned"}}\n')
+    _git(clone, "add", ".")
+    _git(clone, "commit", "-qm", "theirs")
+    _git(clone, "push", "-q", "origin", f"theirs:refs/pull/{n}/head", "theirs:refs/heads/theirs")
+    _git(clone, "checkout", "-q", "main")
+    _git(clone, "branch", "-qD", "theirs")
+
+
+@pytest.mark.parametrize("who", [{"fork": True}, {"outside": True, "ref": "theirs"}])
+def test_a_strangers_pull_request_runs_nothing_before_it_is_read(client, code, mx, who):
+    # the repository's prepare command (`npm ci` runs the PR's scripts) and the clone's .env stay out of it
+    from maxxing.sessions import service
+    topic, clone = code
+    _with_pull(clone, Path(mx["tmp"]))
+    (clone / ".env").write_text("SECRET=1\n")
+    s = service.create_session(topic, title="PR #7", worktree={
+        "repo": str(clone), "pr": {"number": 7, "base": "main", **who},
+        "prepare": "echo ran > ran.txt", "copy_env": True})
+    wt = store.read(s["id"])["worktree"]
+    folder = Path(wt["path"])
+    assert (folder / "package.json").exists()                  # the PR's code is there, to be read
+    assert not (folder / ".env").exists() and "env_copied" not in wt
+    assert "prepare" not in wt
+    time.sleep(0.3)
+    assert not (folder / "ran.txt").exists()
+    assert store.read(s["id"])["plan_mode"] if who.get("outside") else True
+
+
+def test_a_copy_that_fails_halfway_leaves_no_folder_nor_branch(client, code, monkeypatch):
+    from maxxing.sessions import service
+    topic, clone = code
+    (clone / ".env").write_text("A=1\n")
+
+    def broken(*a, **k):
+        raise OSError("disk full")
+    monkeypatch.setattr(worktrees, "_copy_env", broken)
+    with pytest.raises(OSError):
+        service.create_session(topic, title="half", worktree={"repo": str(clone), "copy_env": True})
+    assert "session/" not in _git(clone, "branch", "--list")
+    assert len(_git(clone, "worktree", "list").splitlines()) == 1
+    assert not any((Path(clone).parent / "worktrees").glob("half*"))

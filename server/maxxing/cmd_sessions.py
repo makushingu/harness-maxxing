@@ -106,6 +106,7 @@ def _new(a) -> int:
         # sends in a row stay capped (MAX_HOPS) - a session that starts sessions never loops forever
         hops = turn["depth"] + 1
         service.check_hops(hops)                         # refused before anything is created
+        service._check_attachments(files)               # a missing --file too
         s = service.create_session(path, title=a.title or (titles.provisional(text) if text else None),
                                    model=a.model or None, effort=a.effort or None,
                                    source="session" if meta else "cli", auto_title=not a.title and bool(text))

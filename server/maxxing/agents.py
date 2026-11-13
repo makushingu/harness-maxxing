@@ -2247,16 +2247,19 @@ def voice_heard(path: str, audio: str, job: dict) -> None:
     server): its words fill its message of the thread (found by the recording's path, unique to each upload)."""
     if not is_agent_path(path) or not exists(path):
         return
-    for m in reversed(_thread_all(path)[-200:]):
-        if m.get("kind") == "run" and audio in (m.get("voice") or []):
-            heard = str(job.get("text") or "").strip()
-            if job.get("state") == "done" and heard:
-                _set_msg(path, str(m.get("id") or ""), text=heard[:CHAT_TEXT_MAX], voice_error=None,
-                         cut=len(heard) if len(heard) > CHAT_TEXT_MAX else None)
-            else:
-                _set_msg(path, str(m.get("id") or ""),
-                         voice_error=str(job.get("error") or "nothing was heard in the recording")[:300])
-            return
+    # the session holds the resolved path, the thread the uploaded one (the workspace may sit behind a link)
+    same = os.path.realpath(audio)
+    with _lock:                    # after the message is in: a transcript faster than _fire's post waits for it
+        for m in reversed(_thread_all(path)[-200:]):
+            if m.get("kind") == "run" and any(os.path.realpath(v) == same for v in (m.get("voice") or [])):
+                heard = str(job.get("text") or "").strip()
+                if job.get("state") == "done" and heard:
+                    _set_msg(path, str(m.get("id") or ""), text=heard[:CHAT_TEXT_MAX], voice_error=None,
+                             cut=len(heard) if len(heard) > CHAT_TEXT_MAX else None)
+                else:
+                    _set_msg(path, str(m.get("id") or ""),
+                             voice_error=str(job.get("error") or "nothing was heard in the recording")[:300])
+                return
 
 
 def _group_of(sid: str) -> str:

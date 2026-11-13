@@ -7,6 +7,15 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Copies, review before integration: a pull request from a fork or from outside the repository (`fork` / `outside`)
+  gets neither the clone's ignored files (`.env`, `.worktreeinclude`) nor its prepare command (`npm ci` runs the
+  PR's scripts with the server's rights); a copy whose session could not be made (`_copy_env` error,
+  `store.create` failure) is removed with its branch (`worktrees.undo`). `maxxing sessions new --file` checks the
+  files before the session exists. `agents.voice_heard` compares real paths (workspace behind a link) and runs
+  under the agents lock (a transcript faster than `_fire`'s post waits for it). Agents' `/` menu: "This
+  conversation"; "Default" in an agent's model picker shows the agent's model (`defaultModel`). Tests:
+  `test_worktrees.py::test_a_strangers_pull_request_runs_nothing_before_it_is_read`,
+  `::test_a_copy_that_fails_halfway_leaves_no_folder_nor_branch`, `test_mentions.py`, `test_agent_voice.py`.
 - `maxxing sessions new TOPIC [TEXT...]` (`cmd_sessions._new`): `<project>/<topic>` or a full path, an agent path
   refused (`agents run`); `service.check_hops` (split from `relay_message`) refuses before anything is created, then
   `create_session` (title = `titles.provisional` of the text unless `--title`, `auto_title`) and the first message goes
