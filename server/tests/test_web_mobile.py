@@ -63,3 +63,26 @@ def test_a_tap_in_a_context_menu_opened_by_a_long_press_reaches_its_item():
     menu = (WEB / "components" / "ui" / "context-menu.tsx").read_text()
     for ev in ("onTouchStart", "onTouchMove", "onTouchEnd", "onTouchCancel"):
         assert f"{ev}={{stop}}" in menu, ev
+
+
+def test_the_eye_of_a_multiline_secret_is_big_enough_to_tap():
+    # a key pasted on several lines turns the field into a textarea: its show/hide button kept h-9 (44x36 px) on touch
+    src = (WEB / "components" / "ui" / "secret-input.tsx").read_text()
+    multi = re.search(r"multi \? '([^']*)'", src)
+    assert multi and "pointer-coarse:h-11" in multi[1].split()
+
+
+def test_retry_of_a_part_that_failed_is_big_enough_to_tap():
+    # the inline "This part could not be shown" line offered Retry in a 43x20 px button on phones and tablets
+    src = (WEB / "components" / "ui" / "error-boundary.tsx").read_text()
+    inline = src[src.index('data-testid="part-error"'):]
+    button = re.search(r'<button[^>]*className="([^"]*)"', inline)
+    assert button and "pointer-coarse:min-h-10" in button[1].split()
+
+
+def test_a_sheet_that_refuses_to_close_springs_back_after_a_swipe():
+    # a dialog busy saving ignores the close: the sheet stayed where the finger left it, nearly off the screen
+    src = (WEB / "components" / "ui" / "sheet-drag.ts").read_text()
+    after = src[src.index("dismiss.current()"):]
+    after = after[:after.index("} else set(0, true)")]
+    assert "setTimeout" in after and "data-state" in after and "set(0, true)" in after

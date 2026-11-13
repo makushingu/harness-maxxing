@@ -328,6 +328,13 @@ def create(project: str, name: str, fields: dict | None = None) -> dict:
 def update(path: str, fields: dict) -> dict:
     if not exists(path):
         raise GroupError(404, "not_found", f"Group {path!r} not found")
+    with _lock:                                         # read-merge-write: two edits at once must both land
+        dropped = _update(path, fields)
+    _invalidate(path)
+    return {**get(path), **({"dropped": dropped} if dropped else {})}
+
+
+def _update(path: str, fields: dict) -> list[str]:
     project = parse(path)[0]
     f = dict(fields or {})
     cur = load(path)
@@ -366,8 +373,7 @@ def update(path: str, fields: dict) -> dict:
             if (st.get("current") or {}).get("path") in gone:   # its answer is not posted (on_turn_end)
                 st["current"] = None
             _write_state(path, st)
-    _invalidate(path)
-    return {**get(path), **({"dropped": dropped} if dropped else {})}
+    return dropped
 
 
 def delete(path: str, keep_files: bool = False) -> None:

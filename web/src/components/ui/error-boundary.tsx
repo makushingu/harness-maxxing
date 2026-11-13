@@ -55,7 +55,7 @@ function Fallback({ error, variant, className, onRetry }: { error: Error; varian
       <span className="min-w-0 flex-1 truncate" title={error.message}>
         {chunk ? t('error.updated') : t('error.part')}
       </span>
-      <button type="button" onClick={action} className="shrink-0 rounded px-1.5 py-0.5 font-medium text-foreground hover:bg-accent">
+      <button type="button" onClick={action} className="shrink-0 rounded px-1.5 py-0.5 font-medium text-foreground hover:bg-accent pointer-coarse:min-h-10 pointer-coarse:px-3">
         {label}
       </button>
     </div>

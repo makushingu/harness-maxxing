@@ -92,6 +92,11 @@ export function useSheetDrag(onDismiss: () => void, active: () => boolean, overl
           if (overlay?.current) overlay.current.style.transition = 'none'
           if (navigator.vibrate) navigator.vibrate(8)
           dismiss.current()
+          // The owner may refuse to close (a dialog busy saving): once React has rendered, a sheet still open
+          // springs back instead of staying where the finger left it, half off the screen.
+          setTimeout(() => {
+            if (node.isConnected && node.getAttribute('data-state') !== 'closed') set(0, true)
+          }, 50)
         } else set(0, true)
       }
       node.addEventListener('touchstart', start, { passive: true })
