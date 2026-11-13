@@ -23,7 +23,7 @@ type Kind = 'limit' | 'busy' | 'error'
 const kindOf = (cut: Cut): Kind => (cut.api === 'rate_limit' ? 'limit' : cut.api === 'server_error' || cut.api === 'overloaded' ? 'busy' : 'error')
 const ICON = { limit: Hourglass, busy: ServerCrash, error: CircleAlert }
 /** The page Claude Code points at to manage the usage (only a claude.ai / anthropic.com address becomes a link). */
-const usageUrl = (text = '') => /https:\/\/(?:claude\.ai|[a-z.]*anthropic\.com)\/[^\s,)]*/.exec(text)?.[0] || null
+const usageUrl = (text = '') => /https:\/\/(?:claude\.ai|(?:[a-z0-9-]+\.)*anthropic\.com)\/[^\s,)]*/.exec(text)?.[0] || null
 const bare = (detail = '') => detail.replace(/^Turn failed: /, '')
 
 export function CutCard({ cut, last, children }: { cut: Cut; /** The thread ends on this turn. */ last: boolean; /** The result line of the turn, if it has one. */ children?: React.ReactNode }) {
