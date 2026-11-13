@@ -29,8 +29,9 @@ def test_network_error_is_translated():
         assert "'common.networkError'" in (WEB / "i18n" / f"{lang}.ts").read_text(encoding="utf-8")
 
 
-# groups loaded by their own trigger (a paste, a drag, a hover...), not with a page
-ON_DEMAND = {"paste", "drag", "where", "media", "skw", "tour", "maxxing", "feedback", "composer", "cut"}
+# groups loaded by their own trigger (a paste, a drag, a hover...), not with a page; browser: off by default, its
+# texts outside its page (a topic's menu, an agent's settings, a session's line) load on their first key
+ON_DEMAND = {"paste", "drag", "where", "media", "skw", "tour", "maxxing", "feedback", "composer", "cut", "browser"}
 
 # (route, group) pairs knowingly left undeclared, with the reason
 KNOWN = {

@@ -1,19 +1,20 @@
-// Settings -> Features: the Harness Browser. Off by default; once on, each topic (its menu -> Browser) and each agent
-// (its settings -> Browser) may be let use it. Here: what this server lacks (Set up) and the browser's own settings
-// (one browser for the server): which sites, sign-ins kept, asking the user, downloads, when tabs / the browser sleep.
+// Settings -> Features: the Harness Browser. Off by default; once on, a project or a topic (its menu -> Browser) and
+// an agent (its settings -> Browser) may be let use it. Here: what this server lacks (Set up) and the settings shared
+// by every profile (asking the user, downloads, sleep, profiles at once, waiting for an exit). Profiles (sign-ins,
+// sites, exit) and exits are on the Browser page.
 import * as React from 'react'
 import { Link } from 'react-router'
-import { ChevronDown, Eraser, MonitorPlay, Wrench } from 'lucide-react'
+import { ChevronDown, MonitorPlay, Wrench } from 'lucide-react'
 import { useT } from '@/i18n'
-import { useBrowserAction, useBrowserSetup, useBrowserStatus, useSaveBrowserSettings, useSaveSettings, useSettings } from '@/lib/queries'
+import { useBrowserSetup, useBrowserStatus, useSaveBrowserSettings, useSaveSettings, useSettings } from '@/lib/queries'
 import type { BrowserSettings } from '@/lib/types'
-import { Button, confirm, Segmented, Select, Switch } from '@/components/ui'
+import { Button, Select, Switch } from '@/components/ui'
 import { Callout, SettingRow } from '@/features/common'
-import { ListEditor } from '@/features/agents/AgentSettings'
+import { exitTone, profileName } from './profiles'
 import { SettingsCard } from '@/pages/settings/sections/ui'
 
 const WAITS = [10, 30, 60, 120, 240, 1440]
-const CHOICES = { idle_min: [15, 30, 60, 120, 240], tab_sleep_min: [10, 20, 30, 60, 120], max_tabs: [4, 8, 12, 20] }
+const CHOICES = { idle_min: [15, 30, 60, 120, 240], tab_sleep_min: [10, 20, 30, 60, 120], max_tabs: [4, 8, 12, 20], max_active_profiles: [1, 2, 3, 4, 6], exit_wait_s: [60, 180, 300, 600] }
 
 export function BrowserFeature() {
   const t = useT()
@@ -52,18 +53,15 @@ export function BrowserFeature() {
   )
 }
 
-/** The browser's own settings; every change saves at once (the server restarts it when nobody uses it if needed). */
+/** Settings shared by every profile; every change saves at once. */
 export function BrowserSettingsForm() {
   const t = useT()
   const { data: st } = useBrowserStatus()
   const save = useSaveBrowserSettings()
-  const action = useBrowserAction()
   const [more, setMore] = React.useState(false)
-  const [siteError, setSiteError] = React.useState<string | null>(null)
   if (!st) return null
   const s = st.settings
-  const set = (v: Partial<BrowserSettings>, done?: () => void) =>
-    save.mutate(v, { onSuccess: () => (setSiteError(null), done?.()), onError: (e) => setSiteError(String((e as Error).message)) })
+  const set = (v: Partial<BrowserSettings>) => save.mutate(v)
   const pick = (k: keyof typeof CHOICES, label: (n: number) => string) => (
     <Select
       className="h-8 w-36"
@@ -84,29 +82,24 @@ export function BrowserSettingsForm() {
         </Button>
         <span className="text-[12px] text-muted-foreground">{t('browser.openPageHint')}</span>
       </div>
-      <div className="grid gap-2">
-        <p className="text-sm font-medium">{t('browser.sites')}</p>
-        <Segmented
-          aria-label={t('browser.sites')}
-          value={s.web}
-          onChange={(v) => set({ web: v })}
-          options={[
-            { value: 'list', label: t('browser.web.list') },
-            { value: 'public', label: t('browser.web.public') },
-          ]}
-        />
-        {s.web === 'list' ? (
-          <ListEditor value={s.sites} onChange={(l, saved) => set({ sites: l }, saved)} placeholder={t('browser.sitesPlaceholder')} empty={t('browser.sitesEmpty')} error={siteError} testid="browser-sites" />
-        ) : (
-          <p className="text-[13px] text-muted-foreground">{t('browser.web.publicDesc')}</p>
-        )}
+      <div className="grid gap-1" data-testid="browser-feature-profiles">
+        {st.profiles.map((p) => {
+          const e = st.exits.find((x) => x.id === p.exit)
+          return (
+            <Link key={p.id} to={`/browser?profile=${encodeURIComponent(p.id)}&view=settings`} className="flex items-center gap-2 rounded-md px-1 py-1 text-[13px] hover:bg-accent/50">
+              <span className={`size-1.5 shrink-0 rounded-full ${exitTone(e)}`} />
+              <span className="font-medium">{profileName(p, t)}</span>
+              <span className="truncate text-muted-foreground">· {p.exit === 'direct' ? t('browser.exit.direct') : e?.name || p.exit}</span>
+            </Link>
+          )
+        })}
       </div>
       <div className="divide-y">
-        <SettingRow label={t('browser.keep')} description={t('browser.keepDesc')} htmlFor="br-keep">
-          <Switch id="br-keep" checked={s.profile === 'keep'} onCheckedChange={(v) => set({ profile: v ? 'keep' : 'fresh' })} />
-        </SettingRow>
         <SettingRow label={t('browser.ask')} description={t('browser.askDesc')} htmlFor="br-ask">
           <Switch id="br-ask" checked={s.ask} onCheckedChange={(v) => set({ ask: v })} />
+        </SettingRow>
+        <SettingRow label={t('browser.feature.exit_wait_s')} description={t('browser.feature.exitWaitDesc')}>
+          {pick('exit_wait_s', (n) => minutes(Math.round(n / 60)))}
         </SettingRow>
       </div>
       <div>
@@ -126,6 +119,9 @@ export function BrowserSettingsForm() {
                 />
               </SettingRow>
             )}
+            <SettingRow label={t('browser.feature.max_active_profiles')} description={t('browser.feature.maxProfilesDesc')}>
+              {pick('max_active_profiles', (n) => String(n))}
+            </SettingRow>
             <SettingRow label={t('browser.feature.tab_sleep_min')} description={t('browser.feature.tabSleepDesc')}>
               {pick('tab_sleep_min', minutes)}
             </SettingRow>
@@ -137,21 +133,6 @@ export function BrowserSettingsForm() {
             </SettingRow>
             <SettingRow label={t('browser.downloads')} description={t('browser.downloadsDesc')} htmlFor="br-dl">
               <Switch id="br-dl" checked={s.downloads} onCheckedChange={(v) => set({ downloads: v })} />
-            </SettingRow>
-            <SettingRow label={t('browser.forget')} description={t('browser.forgetDesc')}>
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={!st.profile && !st.browser.tabs.length}
-                loading={action.isPending && action.variables?.action === 'forget'}
-                onClick={async () => {
-                  if (await confirm({ title: t('browser.forgetTitle'), description: t('browser.forgetConfirm'), destructive: true, confirmText: t('browser.forget') }))
-                    action.mutate({ action: 'forget' })
-                }}
-                data-testid="browser-forget"
-              >
-                <Eraser /> {t('browser.forget')}
-              </Button>
             </SettingRow>
           </div>
         )}

@@ -1,28 +1,31 @@
-// The live view of the Harness Browser (WS /api/browser/live), drawn as a browser window: its tabs (each with who sees
-// it: only me, a topic, a project), a toolbar with the address, the page as pictures (JPEG frames) and a status bar
-// (memory, Stop). The person drives the tab shown as soon as they click or type; on a tab Claude is using right now,
-// a first click takes over (Claude's commands on that tab then wait). What Claude asked shows as an info bar with
+// The live view of one profile of the Harness Browser (WS /api/browser/live?profile=), drawn as a browser window: its
+// tabs (a dot on the ones Claude opened), a toolbar with the address, the page as pictures (JPEG frames) and a status
+// bar (memory, Stop). The person drives the tab shown as soon as they click or type; on a tab Claude is using right
+// now, a first click takes over (Claude's commands on that tab then wait). What Claude asked shows as an info bar with
 // "Hand back to Claude". Coordinates are sent as 0..1 of the picture: the server maps them to the page's size.
+// Pace: each picture is confirmed ({"t":"got"}) once drawn, and the server sends the next one only then (a slow network
+// gets fewer pictures, never late ones). The wheel is summed and sent at most once per picture; the picture moves
+// at once by what was scrolled (the real one follows).
 import * as React from 'react'
 import {
-  ArrowLeft, ArrowRight, Check, ChevronDown, Globe, Hand, Keyboard, Loader2, Lock, Minus, Moon, MousePointerClick,
-  Plus, RotateCw, SkipForward, Square, TriangleAlert, X,
+  ArrowLeft, ArrowRight, Gauge, Globe, Hand, Keyboard, Loader2, Lock, Minus, Moon, MousePointerClick,
+  Plus, RotateCw, SkipForward, Square, X,
 } from 'lucide-react'
 import { useT } from '@/i18n'
-import { browserLiveToken, useAnswerAsk, useBrowserAction, useBrowserStatus, useBrowserTab, useWorkspace } from '@/lib/queries'
+import { browserLiveToken, useAnswerAsk, useBrowserProfile, useBrowserTab, useProfileAction } from '@/lib/queries'
 import type { BrowserAsk, BrowserState, BrowserTab } from '@/lib/types'
 import { fmtBytes } from '@/lib/format'
 import { useCompact } from '@/stores/media'
 import { cn } from '@/lib/utils'
-import {
-  Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger, Input,
-} from '@/components/ui'
-import { ME, ScopeIcon, agentScope, projectScope, scopeKind, scopeName, scopeTopic, tabOfSession, topicScope } from './scope'
+import { Button, Input } from '@/components/ui'
+import { tabOfSession } from './profiles'
 
 type LiveState = { browser: BrowserState | null; me: boolean; asks: BrowserAsk[] }
+/** What the pictures cost, measured here (the "speed" button of the status bar). */
+type Pace = { fps: number; kb: number; delay: number | null }
 
 /** The WebSocket of the live view: pictures + state; reconnects while mounted. */
-function useLive(active: boolean) {
+function useLive(active: boolean, profile: string, onFrame?: () => void) {
   const compact = useCompact()
   const [frame, setFrame] = React.useState(false)
   const img = React.useRef<HTMLImageElement | null>(null)
@@ -31,6 +34,10 @@ function useLive(active: boolean) {
   const [connected, setConnected] = React.useState(false)
   const ws = React.useRef<WebSocket | null>(null)
   const url = React.useRef<string | null>(null)
+  const frameCb = React.useRef(onFrame)
+  frameCb.current = onFrame
+  // the pace, for the status bar: pictures in the last 2 s, their mean size, the delay after an input
+  const pace = React.useRef({ times: [] as number[], bytes: [] as number[], inputAt: 0, delay: null as number | null })
 
   React.useEffect(() => {
     if (!active) return
@@ -48,7 +55,7 @@ function useLive(active: boolean) {
       }
       if (stop) return
       const proto = location.protocol === 'https:' ? 'wss' : 'ws'
-      const s = new WebSocket(`${proto}://${location.host}/api/browser/live?t=${encodeURIComponent(token)}&q=${compact ? 'low' : 'high'}`)
+      const s = new WebSocket(`${proto}://${location.host}/api/browser/live?t=${encodeURIComponent(token)}&profile=${encodeURIComponent(profile)}&q=${compact ? 'low' : 'auto'}`)
       s.binaryType = 'blob'
       ws.current = s
       s.onopen = () => ((retry = 0), setConnected(true))
@@ -63,11 +70,29 @@ function useLive(active: boolean) {
           }
           return
         }
-        // pictures go straight to the <img> (no render per picture); the state only says there is one
-        const next = URL.createObjectURL(m.data as Blob)
+        // pictures go straight to the <img> (no render per picture); the state only says there is one. Once drawn,
+        // the server may send the next one.
+        const blob = m.data as Blob
+        const next = URL.createObjectURL(blob)
+        const p = pace.current
+        const now = performance.now()
+        p.times = [...p.times.filter((x) => now - x < 2000), now]
+        p.bytes = [...p.bytes.slice(-19), blob.size]
+        if (p.inputAt) {
+          p.delay = Math.round(now - p.inputAt)
+          p.inputAt = 0
+        }
+        const done = () => {
+          if (s.readyState === WebSocket.OPEN) s.send('{"t":"got"}')
+          frameCb.current?.()
+        }
         if (url.current) URL.revokeObjectURL(url.current)
         url.current = next
-        if (img.current) img.current.src = next
+        if (img.current) {
+          img.current.onload = done
+          img.current.onerror = done
+          img.current.src = next
+        } else done()
         setFrame(true)
       }
       s.onclose = () => {
@@ -86,23 +111,32 @@ function useLive(active: boolean) {
       url.current = null
       setFrame(false)
     }
-  }, [active, compact])
+  }, [active, compact, profile])
 
   const send = React.useCallback((d: Record<string, unknown>) => {
-    if (ws.current?.readyState === WebSocket.OPEN) ws.current.send(JSON.stringify(d))
+    if (ws.current?.readyState !== WebSocket.OPEN) return
+    if (d.t !== 'size' && d.t !== 'quality' && !(d.t === 'mouse' && d.type === 'move')) pace.current.inputAt ||= performance.now()
+    ws.current.send(JSON.stringify(d))
+  }, [])
+  const readPace = React.useCallback((): Pace => {
+    const p = pace.current
+    const now = performance.now()
+    const n = p.times.filter((x) => now - x < 2000).length
+    return { fps: n / 2, kb: p.bytes.length ? Math.round(p.bytes.reduce((a, b) => a + b, 0) / p.bytes.length / 1024) : 0, delay: p.delay }
   }, [])
   // the <img> of the page: shows the latest picture as soon as it is mounted
   const imgRef = React.useCallback((el: HTMLImageElement | null) => {
     img.current = el
     if (el && url.current) el.src = url.current
   }, [])
-  return { frame, imgRef, state, error, setError, connected, send }
+  return { frame, imgRef, state, error, setError, connected, send, readPace }
 }
 
-/** The live view. `context` = the topic / agent folder it is opened from (its share shortcuts, its requests first);
- *  `session` = show the tab of that session; `start` = start a stopped browser with the view; `who` = who asks (an
+/** The live view of a profile. `context` = the project / topic / agent folder it is opened from (its requests first);
+ *  `session` = show the tab of that session; `start` = start a stopped profile with the view; `who` = who asks (an
  *  agent's name); `onMinimize` = the window's "minimize" (hides it, the browser keeps running). */
-export function LiveView({ context, session, who, start, onMinimize, className }: {
+export function LiveView({ profile, context, session, who, start, onMinimize, className }: {
+  profile: string
   context?: string
   session?: string
   who?: string
@@ -111,17 +145,42 @@ export function LiveView({ context, session, who, start, onMinimize, className }
   className?: string
 }) {
   const t = useT()
-  const { frame, imgRef, state, error, setError, connected, send } = useLive(true)
-  const action = useBrowserAction()
+  const scroll = React.useRef({ dx: 0, dy: 0, x: 0.5, y: 0.5, flying: false, shown: 0, raf: 0 })
+  const imgEl = React.useRef<HTMLImageElement | null>(null)
+  // a picture arrived: the scroll shown ahead of it is now in it; send what was scrolled since
+  const onFrame = React.useCallback(() => {
+    const w = scroll.current
+    w.flying = false
+    w.shown = 0
+    if (imgEl.current) imgEl.current.style.transform = ''
+    if (w.dx || w.dy) flushRef.current()
+  }, [])
+  const { frame, imgRef, state, error, setError, connected, send, readPace } = useLive(true, profile, onFrame)
+  const flushRef = React.useRef(() => {})
+  flushRef.current = () => {
+    const w = scroll.current
+    if (w.flying || (!w.dx && !w.dy)) return
+    send({ t: 'wheel', x: w.x, y: w.y, dx: w.dx, dy: w.dy })
+    w.dx = w.dy = 0
+    w.flying = true
+  }
+  const action = useProfileAction()
   const tabOp = useBrowserTab()
   const answer = useAnswerAsk()
-  const status = useBrowserStatus()
+  const view = useBrowserProfile(profile)
+  const [showPace, setShowPace] = React.useState(false)
+  const [, tick] = React.useReducer((n: number) => n + 1, 0)
+  React.useEffect(() => {
+    if (!showPace) return
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [showPace])
   const b = state?.browser || null
   const me = !!state?.me
   const running = b?.state === 'running'
   const tabs = b?.tabs || []
   const front = tabs.find((x) => x.front)
-  const shared = !!front && front.scope !== ME
+  const shared = !!front && front.by.kind !== 'you'
   // its own requests first (the session's, then the folder's), else any
   const asks = state?.asks || []
   const ask = asks.find((a) => a.session === session) || asks.find((a) => context && a.owner.endsWith(context)) || asks[0]
@@ -148,7 +207,7 @@ export function LiveView({ context, session, who, start, onMinimize, className }
 
   const startIt = () => {
     started.current = true
-    action.mutate({ action: 'open', ...(session ? { session } : {}) })
+    action.mutate({ profile, action: 'open', ...(session ? { session } : {}) })
   }
   // "Open the browser" / a session's "Watch": a stopped browser starts with the view, on that session's tab
   React.useEffect(() => {
@@ -159,8 +218,8 @@ export function LiveView({ context, session, who, start, onMinimize, className }
     if (focused.current || !running || !session) return
     focused.current = true
     const tab = tabOfSession(tabs, session, context)
-    if (tab && !tab.front) tabOp.mutate({ op: 'show', key: tab.key })
-  }, [running, session, context, tabs, tabOp])
+    if (tab && !tab.front) tabOp.mutate({ profile, op: 'show', key: tab.key })
+  }, [running, session, context, tabs, tabOp, profile])
 
   // the page is laid out for the size of this view, like a browser window (sent again on reconnect / start)
   React.useEffect(() => {
@@ -198,7 +257,25 @@ export function LiveView({ context, session, who, start, onMinimize, className }
   const blank = running && !!front && !front.asleep && (front.url === 'about:blank' || front.url === '')
   const secure = (b?.page?.url || '').startsWith('https://')
   const drive = (d: Record<string, unknown>) => running && send(d)
-  const mem = b?.mem
+  const mem = b?.mem || 0
+  const sites = view.data?.profile.web === 'list' ? view.data.profile.sites : []
+  const pace = showPace ? readPace() : null
+  // the picture follows the wheel at once (clamped to a third of its height), until the real one comes
+  const wheel = (e: React.WheelEvent<HTMLImageElement>) => {
+    const w = scroll.current
+    const p = xy(e)
+    w.x = p.x
+    w.y = p.y
+    const k = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? e.currentTarget.clientHeight : 1
+    w.dx += e.deltaX * k
+    w.dy += e.deltaY * k
+    const r = e.currentTarget.getBoundingClientRect()
+    const scale = r.height / (e.currentTarget.naturalHeight || r.height)
+    w.shown = Math.max(-r.height / 3, Math.min(r.height / 3, w.shown + e.deltaY * k * scale))
+    e.currentTarget.style.transform = `translateY(${-w.shown}px)`
+    cancelAnimationFrame(w.raf)
+    w.raf = requestAnimationFrame(() => flushRef.current())
+  }
 
   return (
     <div className={cn('flex min-h-0 min-w-0 flex-col overflow-hidden bg-background', className)} data-testid="browser-live">
@@ -206,9 +283,9 @@ export function LiveView({ context, session, who, start, onMinimize, className }
       <div className="flex h-10 shrink-0 items-end gap-1 bg-muted/70 pr-1.5 pl-2">
         <div className="flex min-w-0 flex-1 items-end gap-0.5 overflow-x-auto" role="tablist" aria-label={t('browser.tabs')}>
           {tabs.map((tab) => (
-            <TabButton key={tab.key} tab={tab} context={context} onShow={() => tabOp.mutate({ op: 'show', key: tab.key })} onClose={() => tabOp.mutate({ op: 'close', key: tab.key })} onScope={(scope) => tabOp.mutate({ op: 'scope', key: tab.key, scope })} />
+            <TabButton key={tab.key} tab={tab} onShow={() => tabOp.mutate({ profile, op: 'show', key: tab.key })} onClose={() => tabOp.mutate({ profile, op: 'close', key: tab.key })} />
           ))}
-          <Button variant="ghost" size="icon-sm" className="mb-1 shrink-0" onClick={() => tabOp.mutate({ op: 'new' })} title={t('browser.newTab')} aria-label={t('browser.newTab')} data-testid="browser-new-tab">
+          <Button variant="ghost" size="icon-sm" className="mb-1 shrink-0" onClick={() => tabOp.mutate({ profile, op: 'new' })} title={t('browser.newTab')} aria-label={t('browser.newTab')} data-testid="browser-new-tab">
             <Plus />
           </Button>
         </div>
@@ -314,7 +391,10 @@ export function LiveView({ context, session, who, start, onMinimize, className }
       >
         {frame && running && !front?.asleep ? (
           <img
-            ref={imgRef}
+            ref={(el) => {
+              imgEl.current = el
+              imgRef(el)
+            }}
             alt={b?.page?.title || t('browser.page')}
             draggable={false}
             className="block h-auto max-h-full w-auto max-w-full cursor-default touch-none select-none"
@@ -331,7 +411,7 @@ export function LiveView({ context, session, who, start, onMinimize, className }
               lastMove.current = now
               send({ t: 'mouse', type: 'move', ...xy(e), ...mods(e) })
             }}
-            onWheel={(e) => send({ t: 'wheel', ...xy(e), dx: e.deltaX, dy: e.deltaY })}
+            onWheel={wheel}
             onContextMenu={(e) => e.preventDefault()}
           />
         ) : (
@@ -364,9 +444,9 @@ export function LiveView({ context, session, who, start, onMinimize, className }
                 <p className="text-base font-semibold">{t('browser.name')}</p>
                 <p className="text-[13px] text-muted-foreground">{t('browser.ntp.desc')}</p>
               </div>
-              {(status.data?.settings.web === 'list' ? status.data.settings.sites : []).length > 0 && (
+              {sites.length > 0 && (
                 <div className="flex flex-wrap justify-center gap-2">
-                  {status.data!.settings.sites.slice(0, 12).map((site) => (
+                  {sites.slice(0, 12).map((site) => (
                     <button key={site} type="button" onClick={() => drive({ t: 'nav', url: `https://${site}/` })} className="inline-flex h-9 items-center gap-1.5 rounded-lg border bg-card px-3 text-[13px] hover:bg-accent">
                       <Globe className="size-3.5 text-muted-foreground" /> {site}
                     </button>
@@ -384,8 +464,8 @@ export function LiveView({ context, session, who, start, onMinimize, className }
             type="button"
             onClick={() => send({ t: 'take' })}
             className={cn(
-              'absolute inset-0 grid cursor-pointer place-items-center bg-background/40 backdrop-blur-[1px] transition-opacity focus-visible:outline-none',
-              ask ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 pointer-coarse:bg-transparent pointer-coarse:backdrop-blur-none',
+              'absolute inset-0 grid cursor-pointer place-items-center bg-background/60 transition-opacity focus-visible:outline-none',
+              ask ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 pointer-coarse:bg-transparent',
             )}
             data-testid="browser-take"
           >
@@ -426,24 +506,33 @@ export function LiveView({ context, session, who, start, onMinimize, className }
         <span className="min-w-0 flex-1 truncate">
           {error ? (
             <span className="text-warning">{error}</span>
+          ) : pace ? (
+            <span className="font-mono" data-testid="browser-pace">
+              {t('browser.pace', { fps: pace.fps.toFixed(1), kb: pace.kb })}
+              {pace.delay != null ? ` · ${t('browser.paceDelay', { ms: pace.delay })}` : ''}
+            </span>
           ) : running && b?.blocked?.length ? (
             <span title={b.blocked.join(', ')}>{t('browser.blocked', { count: b.blocked.length })}</span>
           ) : null}
         </span>
-        {running && mem && (
-          <span className={cn('inline-flex shrink-0 items-center gap-1', mem.level !== 'ok' && 'text-warning')} title={t('browser.memTitle')} data-testid="browser-mem">
-            {mem.level !== 'ok' && <TriangleAlert className="size-3" />}
-            {mem.browser ? `${fmtBytes(mem.browser)} · ` : ''}
+        {running && (
+          <button type="button" className={cn('inline-flex shrink-0 items-center gap-1 hover:text-foreground', showPace && 'text-foreground')} onClick={() => setShowPace((v) => !v)} title={t('browser.paceTitle')} aria-pressed={showPace} data-testid="browser-pace-toggle">
+            <Gauge className="size-3" />
+          </button>
+        )}
+        {running && (
+          <span className="inline-flex shrink-0 items-center gap-1" title={t('browser.memTitle')} data-testid="browser-mem">
+            {mem ? `${fmtBytes(mem)} · ` : ''}
             {t('browser.tabsAwake', { count: tabs.filter((x) => !x.asleep).length })}
           </span>
         )}
         {running && tabs.filter((x) => !x.asleep).length > 1 && (
-          <button type="button" className="inline-flex shrink-0 items-center gap-1 hover:text-foreground" onClick={() => action.mutate({ action: 'sleep' })} data-testid="browser-sleep">
+          <button type="button" className="inline-flex shrink-0 items-center gap-1 hover:text-foreground" onClick={() => action.mutate({ profile, action: 'sleep' })} data-testid="browser-sleep">
             <Moon className="size-3" /> {t('browser.sleepTabs')}
           </button>
         )}
         {running && (
-          <button type="button" className="inline-flex shrink-0 items-center gap-1 hover:text-foreground" onClick={() => action.mutate({ action: 'stop' })} data-testid="browser-stop">
+          <button type="button" className="inline-flex shrink-0 items-center gap-1 hover:text-foreground" onClick={() => action.mutate({ profile, action: 'stop' })} data-testid="browser-stop">
             <Square className="size-3" /> {t('browser.stop')}
           </button>
         )}
@@ -452,19 +541,11 @@ export function LiveView({ context, session, who, start, onMinimize, className }
   )
 }
 
-/** One tab: its scope (lock / topic / project), its title, asleep or not; the shown one has a menu "Share with". */
-function TabButton({ tab, context, onShow, onClose, onScope }: {
-  tab: BrowserTab
-  context?: string
-  onShow: () => void
-  onClose: () => void
-  onScope: (scope: string) => void
-}) {
+/** One tab: its title, asleep or not, a dot when Claude (a session or an agent) opened it. */
+function TabButton({ tab, onShow, onClose }: { tab: BrowserTab; onShow: () => void; onClose: () => void }) {
   const t = useT()
-  const Icon = ScopeIcon(tab.scope)
   const label = tab.title || (tab.url && tab.url !== 'about:blank' ? tab.url : t('browser.newTab'))
   const by = tab.by.kind === 'agent' ? t('browser.by.agent', { name: tab.by.name || '' }) : tab.by.kind === 'session' ? t('browser.by.session') : t('browser.by.you')
-  const where = scopeKind(tab.scope) === 'me' ? t('browser.scope.me') : t(`browser.scope.${scopeKind(tab.scope)}`, { name: scopeName(tab.scope), topic: scopeTopic(tab.scope) })
   return (
     <div
       role="tab"
@@ -474,58 +555,17 @@ function TabButton({ tab, context, onShow, onClose, onScope }: {
         tab.front ? 'bg-background text-foreground' : 'text-muted-foreground hover:bg-background/50',
         tab.asleep && 'italic opacity-70',
       )}
-      title={`${tab.url}\n${where} · ${by}${tab.asleep ? `\n${t('browser.asleep')}` : ''}`}
+      title={`${tab.url}\n${by}${tab.asleep ? `\n${t('browser.asleep')}` : ''}`}
       data-testid="browser-tab"
-      data-scope={tab.scope}
+      data-by={tab.by.kind}
     >
       <button type="button" onClick={onShow} className="flex min-w-0 flex-1 items-center gap-1.5 text-left">
         {tab.asleep ? <Moon className="size-3.5 shrink-0 opacity-70" /> : tab.by.kind !== 'you' ? <span className="size-1.5 shrink-0 rounded-full bg-primary" aria-hidden /> : null}
         <span className="truncate">{label}</span>
       </button>
-      <ShareMenu tab={tab} context={context} onScope={onScope}>
-        <button type="button" className={cn('inline-flex h-5 shrink-0 items-center gap-0.5 rounded px-1 text-[10px] hover:bg-muted', tab.scope !== ME && 'bg-primary/10 text-primary')} aria-label={t('browser.share')} data-testid="browser-tab-share">
-          <Icon className="size-3" />
-          {tab.scope !== ME && <span className="max-w-24 truncate not-italic">{scopeName(tab.scope)}</span>}
-          <ChevronDown className="size-2.5 opacity-60" />
-        </button>
-      </ShareMenu>
       <button type="button" onClick={onClose} className="inline-flex size-5 shrink-0 items-center justify-center rounded opacity-60 hover:bg-muted hover:opacity-100" aria-label={t('browser.closeTab')} data-testid="browser-tab-close">
         <X className="size-3" />
       </button>
     </div>
-  )
-}
-
-/** "Share with": only me, the topic / project / agent it was opened from (and that topic's agents), then every project,
- *  topic and agent. An agent only sees the tabs shared with it, never the topic's. */
-function ShareMenu({ tab, context, onScope, children }: { tab: BrowserTab; context?: string; onScope: (scope: string) => void; children: React.ReactNode }) {
-  const t = useT()
-  const ws = useWorkspace()
-  const item = (scope: string, label: string) => (
-    <DropdownMenuItem key={scope} onSelect={() => onScope(scope)} data-testid={`browser-scope-${scopeKind(scope)}`}>
-      <span className="flex size-4 items-center justify-center">{tab.scope === scope && <Check className="size-3.5" />}</span>
-      <span className="min-w-0 truncate">{label}</span>
-    </DropdownMenuItem>
-  )
-  const topics = (ws.data?.projects || []).flatMap((p) => p.topics)
-  const agentsOf = (scope: string) => (topics.find((x) => `topic:${x.path}` === scope)?.agents || []).map((a) => `agent:${a.path}`)
-  const here = context ? topicScope(context) : ME
-  const near = context ? [...new Set([agentScope(context), here, projectScope(context), ...agentsOf(here)])].filter((s) => s !== ME) : []
-  const others = (ws.data?.projects || [])
-    .flatMap((p) => [`project:${p.path}`, ...p.topics.flatMap((x) => [`topic:${x.path}`, ...agentsOf(`topic:${x.path}`)])])
-    .filter((s) => !near.includes(s))
-  const name = (s: string) => t(`browser.scope.${scopeKind(s)}`, { name: scopeName(s), topic: scopeTopic(s) })
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="max-h-80 w-64 overflow-y-auto">
-        <DropdownMenuLabel className="text-[11px] font-normal text-muted-foreground">{t('browser.shareHint')}</DropdownMenuLabel>
-        {item(ME, t('browser.scope.me'))}
-        {near.length > 0 && <DropdownMenuSeparator />}
-        {near.map((s) => item(s, name(s)))}
-        {others.length > 0 && <DropdownMenuSeparator />}
-        {others.map((s) => item(s, name(s)))}
-      </DropdownMenuContent>
-    </DropdownMenu>
   )
 }

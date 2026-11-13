@@ -171,7 +171,7 @@ export function WaitingBubble({ agent: a, className, style, children }: { agent:
         </Dialog>
         {win && (
           <React.Suspense fallback={null}>
-            <BrowserWindow context={a.path} session={asks[0]?.session} who={a.display_name} open={win} onOpenChange={setWin} start />
+            <BrowserWindow context={a.path} profile={asks[0]?.profile} session={asks[0]?.session} who={a.display_name} open={win} onOpenChange={setWin} start />
           </React.Suspense>
         )}
       </span>

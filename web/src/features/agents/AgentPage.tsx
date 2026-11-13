@@ -876,7 +876,8 @@ function LiveTurn({ agent: a, sid, chat, onWrite }: { agent: AgentDetail; sid: s
   const stop = useStopSession()
   const waiting = (a.waiting || 0) > 0
   // its browser waits for the owner (ask_human: a captcha, a sign-in...): said first, with the browser's window
-  const browserAsk = useAgentBrowserAsks(a.path).some((x) => x.session === sid)
+  const browserAskOf = useAgentBrowserAsks(a.path).find((x) => x.session === sid)
+  const browserAsk = !!browserAskOf
   const [win, setWin] = React.useState(false)
   const { steps, text } = React.useMemo(() => {
     let from = 0
@@ -940,7 +941,7 @@ function LiveTurn({ agent: a, sid, chat, onWrite }: { agent: AgentDetail; sid: s
           </Link>
         )}
       </div>
-      {browserAsk && <BrowserWindow context={a.path} session={sid} who={a.display_name} open={win} onOpenChange={setWin} start />}
+      {browserAsk && <BrowserWindow context={a.path} profile={browserAskOf?.profile} session={sid} who={a.display_name} open={win} onOpenChange={setWin} start />}
     </AgentBubble>
   )
 }

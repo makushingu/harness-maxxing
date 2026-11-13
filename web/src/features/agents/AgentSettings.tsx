@@ -1,7 +1,7 @@
 // An agent's settings (the sheet opened from its profile), in four sections (five with the browser) with a small nav on top:
 //   Essentials (on, silent, look, model, daily budget) · Protection (Free = like a session / Protected = its sandbox,
 //   with its sites and folders; approvals, keys) · E-mail (only once it has a mailbox or one is asked for,
-//   AgentMail.tsx) · Browser (only once the Harness Browser is on: may its turns use it, its tabs; features/browser,
+//   AgentMail.tsx) · Browser (only once the Harness Browser is on: may its turns use it, which profile; features/browser,
 //   its conversation gets it like its runs) · Advanced, folded
 //   (permission mode, outside events, subagent, tools, rules, the other limits, export), then the danger zone.
 //   `section` = the one shown first (?settings=mail|browser on the agent's page).
@@ -12,7 +12,7 @@ import { useNavigate } from 'react-router'
 import { AlertTriangle, ChevronRight, Download, Lock, Mail, Pencil, Plus, Trash2, Unlock, X } from 'lucide-react'
 import { useT } from '@/i18n'
 import { errorMessage, isApiError } from '@/lib/api'
-import { agentExportUrl, useDeleteAgent, usePatchAgent, useSettings } from '@/lib/queries'
+import { agentExportUrl, usePatchAgent, useSettings } from '@/lib/queries'
 import type { AgentDetail, AgentLimits, AgentRule, AgentRuleTool, PermissionMode } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { Button, FormField, Input, Select, Sensitive, Switch, Textarea, toast } from '@/components/ui'

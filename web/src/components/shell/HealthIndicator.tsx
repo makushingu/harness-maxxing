@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { Link } from 'react-router'
 import { AlertTriangle, Check, CheckCircle2, ChevronRight, CircleAlert, Cpu, Eye, EyeOff, Globe, HardDrive, Info, MemoryStick, Moon, Sun, TriangleAlert, Undo2 } from 'lucide-react'
-import { useBrowserAction, useBrowserStatus, useFeedSettings, useHealth, useMarkHealthSeen, useSettings } from '@/lib/queries'
+import { useBrowserStatus, useProfileAction, useFeedSettings, useHealth, useMarkHealthSeen, useSettings } from '@/lib/queries'
 import { fmtBytes, fmtDuration } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useLang, useT } from '@/i18n'
@@ -316,12 +316,17 @@ function BrowserLine({ collapsed, className }: { collapsed?: boolean; className?
   const t = useT()
   const { data: s } = useSettings()
   const { data: st } = useBrowserStatus(!!s?.browser_feature, 30_000)
-  const action = useBrowserAction()
-  const b = st?.browser
-  if (!s?.browser_feature || !b || b.state !== 'running') return null
-  const warn = b.mem.level !== 'ok'
-  const awake = b.tabs.filter((x) => !x.asleep).length
-  const text = `${t('nav.browser')} · ${b.mem.browser ? `${fmtBytes(b.mem.browser)} · ` : ''}${t('browser.tabsAwake', { count: awake })}`
+  const action = useProfileAction()
+  const b = st?.summary
+  if (!s?.browser_feature || !b || !b.running.length) return null
+  const warn = b.level !== 'ok'
+  const awake = b.running.reduce((n, pid) => n + (b.tabs[pid] || 0), 0)
+  const text = [
+    t('nav.browser'),
+    b.running.length > 1 ? t('browser.profilesOn', { count: b.running.length }) : '',
+    b.mem ? fmtBytes(b.mem) : '',
+    t('browser.tabsAwake', { count: awake }),
+  ].filter(Boolean).join(' · ')
   return (
     <Tooltip content={warn ? t('browser.memWarn') : collapsed ? text : null} side="right">
       <div className={cn('flex h-8 items-center gap-2 rounded-md px-1.5 text-xs', collapsed && 'w-11 justify-center px-0', warn ? 'text-warning' : 'text-muted-foreground', className)} data-testid="sidebar-browser">
@@ -330,7 +335,7 @@ function BrowserLine({ collapsed, className }: { collapsed?: boolean; className?
           {!collapsed && <span className="truncate">{text}</span>}
         </Link>
         {warn && !collapsed && (
-          <button type="button" className="shrink-0 underline-offset-2 hover:underline" onClick={() => action.mutate({ action: 'sleep' })} data-testid="sidebar-browser-sleep">
+          <button type="button" className="shrink-0 underline-offset-2 hover:underline" onClick={() => b.running.forEach((pid) => action.mutate({ profile: pid, action: 'sleep' }))} data-testid="sidebar-browser-sleep">
             {t('browser.sleepShort')}
           </button>
         )}

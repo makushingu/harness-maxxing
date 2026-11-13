@@ -103,7 +103,7 @@ import {
 import { SlugPreview } from '@/features/workspace/CreateProjectTopic'
 import { forgetLog } from './log'
 
-// the browser settings of a topic (Settings -> Features -> browser on): loaded when its dialog opens
+// the browser settings of a project or a topic (Settings -> Features -> browser on): loaded when its dialog opens
 const BrowserPanel = React.lazy(() => import('@/features/browser/BrowserPanel').then((m) => ({ default: m.BrowserPanel })))
 import { FLAT_SORTS, RECENT_COUNTS, saveDraft, saveQuotes, TREE_MODES, useSessionsUI, type FlatSort, type ListBy, type TreeMode } from './store'
 import { absTopicDir, modelLabel, topicLabel } from './util'
@@ -1165,6 +1165,7 @@ function RowMenu({ open, onOpenChange, label, children }: { open: boolean; onOpe
 /* ---------------------------------------------------------------- menus shared by the tree and drill-down */
 function ProjectMenuItems({ project, onDialog }: { project: Project; onDialog: (d: DialogState) => void }) {
   const t = useT()
+  const { data: settings } = useSettings()
   return (
     <>
       <DropdownMenuItem onSelect={() => onDialog({ kind: 'topic', project: project.name })}>
@@ -1176,6 +1177,11 @@ function ProjectMenuItems({ project, onDialog }: { project: Project; onDialog: (
       <DropdownMenuItem onSelect={() => onDialog({ kind: 'emoji-project', project })} data-testid="project-emoji">
         <Smile /> {project.emoji ? t('sessions.emoji.change') : t('sessions.emoji.set')}
       </DropdownMenuItem>
+      {settings?.browser_feature && (
+        <DropdownMenuItem onSelect={() => onDialog({ kind: 'browser-project', project })} data-testid="project-browser">
+          <Globe /> {t('browser.menu')}
+        </DropdownMenuItem>
+      )}
       <DropdownMenuSeparator />
       <DropdownMenuItem destructive onSelect={() => onDialog({ kind: 'delete-project', project })}>
         <Trash2 /> {t('sessions.tree.delete')}
@@ -1647,6 +1653,7 @@ type DialogState =
   | { kind: 'rename-topic'; topic: Topic }
   | { kind: 'permission-topic'; topic: Topic }
   | { kind: 'browser-topic'; topic: Topic }
+  | { kind: 'browser-project'; project: Project }
   | { kind: 'delete-project'; project: Project }
   | { kind: 'delete-topic'; topic: Topic }
 
@@ -1691,6 +1698,20 @@ function TreeDialogs({ state, onClose, onTopicCreated }: { state: DialogState; o
           await patchProject.mutateAsync({ project: state.project.name, emoji })
         }}
       />
+    )
+  if (state.kind === 'browser-project')
+    return (
+      <Dialog open onOpenChange={(o) => !o && onClose()}>
+        <DialogContent className="md:max-w-3xl" data-testid="project-browser-dialog">
+          <DialogHeader>
+            <DialogTitle>{t('browser.projectTitle', { name: state.project.name })}</DialogTitle>
+            <DialogDescription>{t('browser.projectDesc')}</DialogDescription>
+          </DialogHeader>
+          <React.Suspense fallback={<Skeleton className="h-24" />}>
+            <BrowserPanel path={`projects/${state.project.name}`} live={false} />
+          </React.Suspense>
+        </DialogContent>
+      </Dialog>
     )
   if (state.kind === 'browser-topic')
     return (

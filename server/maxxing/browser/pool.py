@@ -746,6 +746,7 @@ class Pool:
         used, total = self.server_mem
         running = self.running()
         return {"running": [b.pid for b in running], "mem": sum(b.mem for b in running),
+                "turns": {sid: b.pid for b in running for sid in b.turns},
                 "tabs": {pid: len([t for t in self.tabs(pid).awake()]) for pid in [b.pid for b in running]},
                 "cap": unit.MEMORY_MAX_BYTES, "server_used": used, "server_total": total, "level": self.mem_level()}
 
@@ -762,7 +763,7 @@ def pool() -> Pool:
 
 BLOCKED_HINT = ("[Harness Maxxing] ERR_BLOCKED_BY_ADMINISTRATOR = this page, or the page it redirected to (a sign-in "
                 "on another domain, for example), is not one of the sites this browser profile may open. Tell the user "
-                "which site to add to the profile's sites (Settings -> Browser); do not try to get around it.")
+                "which site to add to the profile's sites (Browser page -> the profile -> Profile settings); do not try to get around it.")
 
 
 def _explain(res: dict, b: Browser | None = None) -> dict:
