@@ -1441,6 +1441,8 @@ export type TailscaleStatus = {
   account?: string
   nodes?: TailscaleNode[]
   node?: TailscaleNode | null
+  /** online in the account but not offered as an exit (not approved in the Tailscale console yet) */
+  unapproved?: { name: string; os: string }[]
   error?: string
 }
 export type BrowserTab = {

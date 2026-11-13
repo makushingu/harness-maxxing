@@ -87,7 +87,10 @@ Then pick the exit in a profile's settings (**Exit**). One exit can serve severa
 2. **Sign in to Tailscale**: the server shows up as `harness-browser` in your account.
 3. **On the phone** (iPhone or Android): install Tailscale (QR code for the App Store or Google Play), sign in with
    the same account, then **Exit node -> Run as exit node**, and leave it on, charging, on Wi-Fi or 4G (on Android,
-   battery optimization off for Tailscale; on an iPhone, do not swipe the app away).
+   battery optimization off for Tailscale; on an iPhone, do not swipe the app away). Tailscale then wants the exit
+   approved once in its console: [login.tailscale.com](https://login.tailscale.com/admin/machines) -> **Machines**,
+   **... -> Edit route settings -> Use as exit node**. Until then, the wizard names the devices it sees online that
+   are not an exit yet, with a button to the console.
 4. **Choose the device** the pages go out by.
 
 **Advanced: Headscale** takes your own Headscale server instead of Tailscale's. **Sign out of Tailscale** unlinks it.

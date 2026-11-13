@@ -430,7 +430,10 @@ class Tailscale:
 
     @classmethod
     def status(cls, e: dict) -> dict:
-        """{state: needs_setup|needs_login|no_node|node_offline|up|starting, auth_url, account, nodes, node}."""
+        """{state: needs_setup|needs_login|no_node|node_offline|up|starting, auth_url, account, nodes, node, unapproved}.
+
+        unapproved: phones / computers online in the account that are not offered as exit nodes: "Run as exit node"
+        not switched on yet, or (most often) switched on but not approved in the Tailscale admin console."""
         eid = e["id"]
         if not tailscale_bins():
             return {"state": "needs_setup"}
@@ -443,8 +446,10 @@ class Tailscale:
         backend = st.get("BackendState")
         out: dict = {"backend": backend, "auth_url": st.get("AuthURL") or "",
                      "account": ((st.get("User") or {}).get(str((st.get("Self") or {}).get("UserID") or "")) or {})
-                     .get("LoginName", ""), "nodes": []}
+                     .get("LoginName", ""), "nodes": [], "unapproved": []}
         for p in (st.get("Peer") or {}).values():
+            if not p.get("ExitNodeOption") and p.get("Online") and (p.get("OS") or "").lower() != "linux":
+                out["unapproved"].append({"name": p.get("HostName") or "", "os": p.get("OS") or ""})
             if p.get("ExitNodeOption"):
                 out["nodes"].append({"id": (p.get("TailscaleIPs") or [""])[0], "name": p.get("HostName") or "",
                                      "dns": (p.get("DNSName") or "").rstrip("."), "os": p.get("OS") or "",

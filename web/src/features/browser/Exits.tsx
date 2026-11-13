@@ -21,6 +21,8 @@ const STORES = {
   android: { url: 'https://play.google.com/store/apps/details?id=com.tailscale.ipn', shown: 'play.google.com › Tailscale' },
 }
 type Store = keyof typeof STORES
+// An exit node is offered only once approved here (Machines -> ... -> Edit route settings -> Use as exit node).
+const TS_MACHINES = 'https://login.tailscale.com/admin/machines'
 const guessStore = (): Store => (/android/i.test(navigator.userAgent) ? 'android' : 'ios')
 
 /** "Add an exit": the four ways, with what each needs, costs and shows to the sites. */
@@ -295,6 +297,21 @@ function TailscaleWizard({ exit }: { exit: BrowserExit }) {
             <span>{t('browser.ts.s3b')}</span>
             <span>{t('browser.ts.s3c')}</span>
             <span>{t('browser.ts.s3d')}</span>
+            {!exit.login_server && <span>{t('browser.ts.s3e')}</span>}
+            {step === 3 && !!ts?.unapproved?.length && (
+              <div className="mt-1 grid gap-2 rounded-md border border-warning/40 bg-warning/8 px-2.5 py-2" data-testid="browser-ts-unapproved">
+                <span>{t('browser.ts.unapproved', { names: ts.unapproved.map((n) => (n.name === 'localhost' ? n.os : n.name)).join(', ') })}</span>
+                {!exit.login_server && (
+                  <div>
+                    <Button size="sm" variant="outline" asChild>
+                      <a href={TS_MACHINES} target="_blank" rel="noreferrer">
+                        {t('browser.ts.approve')} <ExternalLink />
+                      </a>
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
             {step === 3 && (
               <span className="mt-1 inline-flex items-center gap-2 rounded-md border bg-card/60 px-2.5 py-1.5 text-muted-foreground">
                 <span className="size-1.5 animate-pulse rounded-full bg-warning" /> {t('browser.ts.waitingPhone')}

@@ -923,3 +923,21 @@ def test_a_picture_is_acknowledged_only_once_every_viewer_got_it():
         await w.unwatch(1)
         await w.unwatch(2)
     asyncio.run(run())
+
+
+def test_tailscale_names_the_devices_online_but_not_approved_as_exit(monkeypatch):
+    """A phone with "Run as exit node" on is no exit until approved in the Tailscale console: the wizard says so."""
+    from maxxing.browser import exits
+    st = {"BackendState": "Running", "Self": {"UserID": 1}, "User": {"1": {"LoginName": "me@example.com"}},
+          "Peer": {"a": {"HostName": "localhost", "OS": "iOS", "Online": True, "TailscaleIPs": ["100.1.1.1"]},
+                   "b": {"HostName": "box", "OS": "linux", "Online": True, "TailscaleIPs": ["100.1.1.2"]},
+                   "c": {"HostName": "pixel", "OS": "android", "Online": True, "ExitNodeOption": True,
+                         "TailscaleIPs": ["100.1.1.3"]}}}
+    monkeypatch.setattr(exits, "tailscale_bins", lambda: ("tailscaled", "tailscale"))
+    monkeypatch.setattr(exits.Tailscale, "ensure", classmethod(lambda cls, e: 0))
+    monkeypatch.setattr(exits.Tailscale, "cli", classmethod(
+        lambda cls, eid, *a, timeout=20: subprocess.CompletedProcess(a, 0, json.dumps(st), "")))
+    out = exits.Tailscale.status({"id": "phone"})
+    assert out["state"] == "no_node"
+    assert out["unapproved"] == [{"name": "localhost", "os": "iOS"}]
+    assert [n["name"] for n in out["nodes"]] == ["pixel"]
