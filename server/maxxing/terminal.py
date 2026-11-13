@@ -101,7 +101,7 @@ def open_term(cwd: str, cols: int = 100, rows: int = 30) -> Term:
     p = Path(cwd or config.files_root()).expanduser()
     try:
         p = p.resolve(strict=True)
-    except OSError:
+    except (OSError, ValueError):                 # a NUL byte or a lone surrogate in the name
         raise TermError(400, "bad_cwd", "no such folder") from None
     if not p.is_dir() or not _inside_root(p):
         raise TermError(400, "bad_cwd", "the folder must be inside the files root")

@@ -119,6 +119,12 @@ def test_opens_at_the_same_time_keep_the_limit(on, term_env, monkeypatch):
     assert sorted(t for t in res if isinstance(t, int)) == [409] * (12 - terminal.MAX_TERMS)
 
 
+def test_a_folder_name_with_nul_or_a_surrogate_is_a_400(on, term_env):
+    for cwd in (str(term_env["files"]) + "/a\x00b", str(term_env["files"]) + "/\ud800"):
+        r = on.post("/api/term", content=json.dumps({"cwd": cwd}), headers={"content-type": "application/json"})
+        assert r.status_code == 400 and r.json()["error"] == "bad_cwd", cwd
+
+
 def test_doctor_lists_programs_started_by_hand_and_forgotten():
     from maxxing.cmd_core import stale_units
     now = 1_800_000_000
