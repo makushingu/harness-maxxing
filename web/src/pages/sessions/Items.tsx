@@ -10,7 +10,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Markdown } from '@/components/ui/markdown'
 import { filePreviewUrl, fileRawUrl, fileStamp, fileThumbUrl, prefetchImage, PREVIEW_W } from '@/lib/queries/files'
 import { Thumb } from '@/features/files/Thumb'
-import type { ChangesEvent, ClaudeModel, ResultField } from '@/lib/types'
+import type { ChangesEvent, ClaudeModel, ResultField, SentMention } from '@/lib/types'
+import { ChipText } from './mentions'
 import { costTip, ResultLineMenu, useCostIsBilled, useResultLine } from './resultLine'
 import { isShownTask, taskStatus, type Item } from './log'
 import { TaskDetails, TaskElapsed, TaskStatusIcon, useOpenTaskLine } from './Tasks'
@@ -83,6 +84,7 @@ export const ItemRow = React.memo(function ItemRow({
           at={at}
           source={item.ev.source}
           from={item.ev.from}
+          mentions={item.ev.mentions}
           injected={item.ev.injected}
           onFork={onFork && (() => onFork(seed()))}
           onEdit={onHide && onEdit && (() => onEdit(item.key, at, seed()))}
@@ -280,6 +282,7 @@ export function UserMessage({
   at,
   source,
   from,
+  mentions,
   injected,
   pending,
   queued,
@@ -296,6 +299,8 @@ export function UserMessage({
   source?: string
   /** Sent by another session's turn (maxxing sessions send): a link to it. */
   from?: { session: string; title: string }
+  /** The @ it names: drawn as chips (with the "/" command it starts with). */
+  mentions?: SentMention[]
   /** Added to a running turn (Add to plan). */
   injected?: boolean
   pending?: boolean
@@ -329,7 +334,7 @@ export function UserMessage({
                 </blockquote>
               ),
             )}
-            {quotes.length ? rest : text}
+            <ChipText text={quotes.length ? rest : text} mentions={mentions} />
           </Sensitive>
         </div>
       )}

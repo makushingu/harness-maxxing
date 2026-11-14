@@ -414,6 +414,8 @@ export type SendMessageResult = { queued: boolean; session: Session }
 /** Who the composer's @ can name (GET /api/sessions/{id}/mentions). */
 export type MentionKind = 'session' | 'agent' | 'team'
 export type Mention = { kind: MentionKind; ref: string }
+/** A name of a sent message (log line `mentions`). */
+export type SentMention = Mention & { label: string; group?: boolean; avatar?: Partial<AgentAvatar> | null }
 export type MentionTarget = Mention & { label: string; hint: string; state?: string; avatar?: string | null; group?: boolean }
 export type SessionSearchHit = { id: string; title: string; path: string; snippet: string; at: number }
 export type SearchKind = 'session' | 'file' | 'memory' | 'task' | 'group'
@@ -425,7 +427,7 @@ export type UploadResult = { files: Upload[] }
 
 export type Usage = { input: number; output: number; cache_read: number; cache_write: number }
 export type SessionEvent =
-  | { type: 'user'; text: string; attachments: string[]; at: number; source: SessionSource; /** Audio of a voice message sent directly. */ voice?: string[]; /** The web pages' ids of the message(s) it carries (SendMessageBody.client_id). */ client_ids?: string[]; /** Added to a running turn (Add to plan): read at Claude's next step. */ injected?: boolean; /** Sent by another session's turn (`maxxing sessions send`). */ from?: { session: string; title: string } }
+  | { type: 'user'; text: string; attachments: string[]; at: number; source: SessionSource; /** Audio of a voice message sent directly. */ voice?: string[]; /** The web pages' ids of the message(s) it carries (SendMessageBody.client_id). */ client_ids?: string[]; /** Added to a running turn (Add to plan): read at Claude's next step. */ injected?: boolean; /** Sent by another session's turn (`maxxing sessions send`). */ from?: { session: string; title: string }; /** The @ it names (composer menu): drawn as chips. */ mentions?: SentMention[] }
   /** Transcript of the voice message just above (or why it failed). */
   | { type: 'voice_text'; text: string; error: string | null; stopped?: boolean; at: number }
   | { type: 'assistant'; text: string; at: number; /** Written by Claude Code in place of an answer, the API refused the call: why (rate_limit, server_error…). */ error?: string }

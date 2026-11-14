@@ -7,6 +7,15 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Chips: one component `web/src/features/chips/Chip.tsx` (`Chip`, `ChipData` kinds session/agent/team/group/all/
+  command, `findNames`, `findCommand`, `withChips`, `ChipBackdrop`). In a textarea the chip is a backdrop: the same
+  text, transparent, with a tint under each span, mirrored from the textarea's computed font/padding/width and scroll;
+  the textarea keeps drawing text, caret and selection. Used by the sessions composer (`/` command + picked `@`), the
+  agent conversation box (`/`) and the group box (`@handle`, `features/agents/mentions.tsx` now builds on it).
+- The `mx_user` log line keeps the resolved mentions (`runner._mentions_shown`: kind, ref, label, group, avatar; never
+  the command); the `user` event carries them as `mentions` (`SentMention`), drawn by `ChipText` in `UserMessage`.
+  `mentions.resolve` adds the agent's `avatar`.
+
 - Memory: `memory.files()` adds `heavy` (bytes > `max_bytes(limit)` = limit x 1024 / `LINES_PER_KB`, 1 KB for 10
   lines) and `over` is now "too many lines OR too heavy"; `/api/memory` and `maxxing memory --json` add `max_bytes`;
   `compact_prompt` names both limits; skills `memory` (one or two lines per bullet) and `memory-compaction` (weight,

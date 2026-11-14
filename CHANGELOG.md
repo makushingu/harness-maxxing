@@ -5,6 +5,12 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 
 ## Unreleased
 
+New:
+- **Chips for names and commands.** When you pick someone from the `@` menu (a session, an agent, a Team contact or
+  group), the name becomes a chip right in the box, and stays one in the sent message: a click opens that session or
+  agent. A `/command` or skill at the start of a message is a chip too, in sessions and in an agent's conversation.
+  The `@` of an agent group use the same chip.
+
 Fixed:
 - **Memory: a heavy memory.md no longer goes unnoticed, and sessions stop being summarized after almost every
   message because of it.** A `memory.md` is part of the instructions of every session of its folder, and Claude

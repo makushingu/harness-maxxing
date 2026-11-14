@@ -74,7 +74,8 @@ def resolve(items: list[dict] | None, sender: str = "") -> list[dict]:
             if agents.is_agent_path(ref) and agents.exists(ref):
                 a = agents.load(ref)
                 out.append({"kind": kind, "ref": ref, "label": a["name"] or agents.parse(ref)[2],
-                            "where": _topic(ref), "command": f"maxxing agents send {ref}"})
+                            "where": _topic(ref), "command": f"maxxing agents send {ref}",
+                            **({"avatar": a["avatar"]} if a.get("avatar") else {})})
         else:
             if team_rows is None:
                 from . import team

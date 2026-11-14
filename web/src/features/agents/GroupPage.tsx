@@ -36,7 +36,8 @@ import { GroupFace } from './AgentsList'
 import { GroupForm, claudeTopic } from './GroupForm'
 import { draftUrl } from './EditWithClaude'
 import { AgentsOff, reasonText, useAgentsOn } from './parts'
-import { MentionChip, mentionComponents, mentionNodes, namedIn, useMentionMap, type MentionMap } from './mentions'
+import { MentionChip, mentionComponents, mentionNodes, mentionSpans, namedIn, useMentionMap, type MentionMap } from './mentions'
+import { ChipBackdrop } from '@/features/chips/Chip'
 import { AttachButton, AttachList, bringBackDraft, insertAtCaret, useAttachments, useDraftText, withQuote } from './attach'
 import { QuotePill } from '@/pages/sessions/Quote'
 import { agentDraftKey } from '@/lib/drafts'
@@ -769,6 +770,7 @@ function Composer({ group: g, ref, first }: { group: AgentGroup; ref?: React.Ref
           <AttachList atts={files.atts} onRemove={files.remove} />
           <div className="flex items-end gap-1">
             <AttachButton onFiles={files.add} />
+            <ChipBackdrop text={text} spans={mentionSpans(text, names, '')} target={input.current} />
             <Textarea
               ref={input}
               value={text}
@@ -789,7 +791,7 @@ function Composer({ group: g, ref, first }: { group: AgentGroup; ref?: React.Ref
               aria-label={t('groups.placeholder')}
               aria-expanded={popup}
               aria-autocomplete="list"
-              className="min-h-8 flex-1 resize-none border-0 bg-transparent px-1.5 py-1.5 text-[14px] shadow-none focus-visible:ring-0 dark:bg-transparent"
+              className="relative min-h-8 flex-1 resize-none border-0 bg-transparent px-1.5 py-1.5 text-[14px] shadow-none focus-visible:ring-0 dark:bg-transparent"
               data-testid="group-text"
             />
             <VoiceButton onTranscript={onTranscript} />

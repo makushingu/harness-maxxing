@@ -148,7 +148,8 @@ on its first message. A title you typed, a Telegram thread you named, or a renam
 - **Name someone (`@`)**: type `@` anywhere in the message: a menu lists, under a title each, your other sessions
   (the running ones first), your agents and, when Team is on, your Team contacts and groups (a long list shows its
   first ones and **+ N more**); type to filter, **Enter** or **Tab**
-  writes `@Name`. Nothing goes out by itself: Claude is told how to write to each one named, and does it when your
+  writes `@Name`, shown as a chip in the box and in the sent message (a click opens that session or agent). A
+  `/command` at the start of a message is a chip too. Nothing goes out by itself: Claude is told how to write to each one named, and does it when your
   message asks for it - "summarize this and send it to @Shop opening", "ask @Lea if the site works for her",
   "hand this to @Writer". A session receives it as a message (marked **↩ the sending session**, a click opens it),
   an agent as work handed over, a Team contact as a message in your name. Claude says in its answer what it sent.

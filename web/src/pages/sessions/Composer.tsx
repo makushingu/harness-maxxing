@@ -16,7 +16,8 @@ import { QuotedFile } from './QuotedFile'
 import { pastedFile, pastedName } from './pasteAsFile'
 import { VoiceButton } from '@/features/voice/VoiceButton'
 import { SlashMenu, slashAction, slashItems, type MenuRow, type SlashCommand } from './SlashMenu'
-import { mentionAt, mentionRows, usedMentions } from './mentions'
+import { mentionAt, mentionRows, targetChip, usedMentions } from './mentions'
+import { ChipBackdrop, findCommand, findNames } from '@/features/chips/Chip'
 
 const NO_ITEMS: QueueItem[] = []
 
@@ -435,6 +436,13 @@ export const Composer = React.forwardRef<ComposerHandle, {
   const at = !menu && props.mentionsFor && slashOff !== text ? mentionAt(text, caret) : null
   const { data: targets } = useMentionTargets(props.mentionsFor || '', !!props.mentionsFor && text.includes('@'))
   const atRows = at && targets ? mentionRows(at.q, targets, t, expanded) : []
+  // What the text names, drawn as chips behind it: the "/" command it starts with, the @ picked from the menu.
+  const commands = props.commands
+  const chipSpans = React.useMemo(() => {
+    const cmd = commands ? findCommand(text, (n) => commands.some((c) => c.name === n)) : null
+    const names = findNames(text, picked.map((x) => ({ raw: `@${x.label}`, chip: targetChip(x) })))
+    return cmd ? [cmd, ...names.filter((n) => n.start >= cmd.end)] : names
+  }, [text, picked, commands])
   const rows: MenuRow[] = menu ? menu.items : atRows
   const [slashAt, setSlashAt] = React.useState(0)
   const menuKey = menu ? `${menu.stage}:${menu.items.map((i) => i.key).join('|')}` : atRows.length ? `@${atRows.map((i) => i.key).join('|')}` : ''
@@ -574,9 +582,11 @@ export const Composer = React.forwardRef<ComposerHandle, {
     )
   }
 
+  const [taEl, setTaEl] = React.useState<HTMLTextAreaElement | null>(null)
   const setRef = React.useCallback(
     (el: HTMLTextAreaElement | null) => {
       ta.current = el
+      setTaEl(el)
       registerComposer(colKey, el)
     },
     [colKey],
@@ -810,6 +820,7 @@ export const Composer = React.forwardRef<ComposerHandle, {
               ))}
             </div>
           )}
+          <ChipBackdrop text={text} spans={chipSpans} target={taEl} />
           <Textarea
             ref={setRef}
             value={text}
@@ -825,7 +836,7 @@ export const Composer = React.forwardRef<ComposerHandle, {
             placeholder={placeholder || t('sessions.composer.placeholder')}
             aria-label={t('sessions.composer.label')}
             data-kbd-cap=""
-            className="border-0 bg-transparent px-3.5 pt-3 pb-1 shadow-none focus-visible:ring-0 dark:bg-transparent"
+            className="relative border-0 bg-transparent px-3.5 pt-3 pb-1 shadow-none focus-visible:ring-0 dark:bg-transparent"
           />
           <div className="@container flex min-w-0 items-center gap-1 px-1.5 pb-1.5">
             <input
