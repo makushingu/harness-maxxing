@@ -267,3 +267,12 @@ def test_pdf_pages_without_the_tools(client, tree, monkeypatch):  # noqa: F811
     """No poppler-utils: the viewer is told (415) and keeps the browser's own PDF viewer."""
     monkeypatch.setattr(shutil, "which", lambda name, *a, **k: None)
     assert client.get("/api/files/pdf", params={"path": str(pdf(tree / "a.pdf", 1))}).status_code == 415
+
+
+def test_the_time_limit_is_checked_while_nothing_is_written(tmp_path, monkeypatch):
+    """Empty paragraphs or empty cells by the million write no text: the deadline is still checked."""
+    monkeypatch.setattr(documents, "TIME_S", -1.0)
+    r = documents.read(docx(tmp_path / "empty.docx", "<w:p/>" * 500))
+    assert r["truncated"]
+    r = documents.read(xlsx(tmp_path / "empty.xlsx", '<row r="1">' + "<c/>" * 500 + "</row>"))
+    assert r["truncated"]
