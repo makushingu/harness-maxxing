@@ -509,14 +509,20 @@ class Pool:
         return t
 
     async def create(self, b: Browser, by: dict, url: str, nav: str, key: str | None = None) -> str:
-        """A new tab (a window of its own) in a navigator. One at a time per profile: the page Chromium announces
-        next is this one (tabs.resolve takes the claim), whoever hears of it first (the watcher, a turn's relay)."""
+        """A new tab in a navigator (in its window). One at a time per profile: the page Chromium announces next is
+        this one (tabs.resolve: its opener, a page of that navigator, else the claim), whoever hears of it first (the
+        watcher, a turn's relay)."""
         assert b.watcher
         async with b.create_lock:
-            b.tabs.claim(by, nav, key)
-            tid = await b.watcher.open_tab(url or "about:blank", nav)
+            c = b.tabs.claim(by, nav, key)
+            try:
+                tid = await b.watcher.open_tab(url or "about:blank", nav)
+                if tid and b.tabs.of_target(tid) is None:      # answered before Chromium told about the page
+                    b.tabs.resolve({"targetId": tid, "type": "page", "url": url or "about:blank"})
+            finally:
+                b.tabs.unclaim(c)
             if tid:
-                b.tabs.assign(tid, by, nav)
+                b.tabs.assign(tid, by, nav, key)
         b.last_use = time.time()
         return tid
 

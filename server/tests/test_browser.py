@@ -1155,3 +1155,100 @@ def test_a_profile_picture_is_empty_while_it_sleeps(client, mx):
     assert client.get("/api/browser/profiles/main/picture").status_code == 204
     assert client.get("/api/browser/profiles/nope/picture").status_code == 404
     assert client.post("/api/browser/profiles/main/files", files={"files": ("a.txt", b"x")}).status_code == 409
+
+
+# ---- navigators ----------------------------------------------------------------------------------------------------
+def test_the_person_has_navigators_of_their_own_on_any_profile(mx):
+    """"me" always exists (on main); more can be made, renamed, moved to another profile, deleted (not "me"); a
+    profile deleted sends its navigators back to main."""
+    from maxxing import browser
+    from maxxing.browser import navs
+    assert [n["id"] for n in navs.person()] == ["me"] and navs.profile_of("me") == "main"
+    browser.set_profile({"name": "Shop"})
+    n = navs.create("shop", "Boutique")
+    assert n["id"] == "me-2" and navs.profile_of("me-2") == "shop" and navs.kind("me-2") == "person"
+    row, old = navs.update("me-2", profile="main", name="Perso")
+    assert old == "shop" and row["profile"] == "main" and navs.get_person("me-2")["name"] == "Perso"
+    navs.update("me-2", profile="shop")
+    navs.on_profile_deleted("shop")
+    assert navs.profile_of("me-2") == "main"
+    with pytest.raises(browser.BrowserError):
+        navs.delete("me")
+    navs.delete("me-2")
+    assert [n["id"] for n in navs.person()] == ["me"]
+    assert navs.valid("agent:projects/acme/topics/blog/agents/writer") and navs.valid("session:abcdef12")
+    assert not navs.valid("agent:../x y") and not navs.valid("you")
+    assert navs.of_turn("s1", f"topic:{T}") == "session:s1"
+    assert navs.of_turn("s1", "agent:projects/acme/topics/blog/agents/writer") == "agent:projects/acme/topics/blog/agents/writer"
+
+
+def test_a_tab_belongs_to_the_navigator_that_opened_it(mx):
+    """A claimed page lands in the claim's navigator; a popup in its opener's; an unknown one in the person's first;
+    a tab woken up keeps its key; old saved tabs learn their navigator from who opened them."""
+    from maxxing.browser.tabs import Tabs, _clean
+    t = Tabs("main")
+    c = t.claim({"kind": "session", "sid": "s1"}, "session:s1")
+    assert t.resolve({"targetId": "p1", "type": "page", "url": "about:blank"})["nav"] == "session:s1"
+    t.unclaim(c)
+    assert t.resolve({"targetId": "p2", "type": "page", "url": "https://a.example/", "openerId": "p1"})["nav"] == "session:s1"
+    assert t.resolve({"targetId": "p3", "type": "page", "url": "https://b.example/"})["nav"] == "me"
+    t.assign("p3", {"kind": "you"}, "me-2")
+    assert t.nav_of("p3") == "me-2" and [x["key"] for x in t.of_nav("session:s1")] == [t.of_target("p1")["key"],
+                                                                                          t.of_target("p2")["key"]]
+    t.gone("p2", keep=True)
+    key = next(x["key"] for x in t.asleep("session:s1"))
+    t.resolve({"targetId": "p4", "type": "page", "url": "https://a.example/", "openerId": "p1"})
+    t.assign("p4", {"kind": "session", "sid": "s1"}, "session:s1", key)
+    assert t.of_target("p4")["key"] == key and not t.asleep("session:s1")
+    assert _clean({"key": "k", "url": "https://x/", "by": {"kind": "agent", "path": "projects/acme/topics/blog/agents/w"}})["nav"] \
+        == "agent:projects/acme/topics/blog/agents/w"
+    moved = t.take([key])
+    other = Tabs("shop")
+    other.put(moved)
+    assert other.asleep("session:s1")[0]["key"] == key and key not in t.items
+
+
+def test_new_tabs_are_made_one_at_a_time_in_their_navigator(mx):
+    """pool.create holds the profile's lock: the page Chromium announces is the one asked for, in its navigator,
+    even when the answer comes before the announcement."""
+    from maxxing.browser import pool as pool_mod
+    p, b = _browser()
+
+    class FakeWatcher:
+        n = 0
+
+        async def open_tab(self, url, nav):
+            FakeWatcher.n += 1
+            await asyncio.sleep(0.01)
+            return f"new{FakeWatcher.n}"
+    b.watcher = FakeWatcher()
+
+    async def run():
+        a, c = await asyncio.gather(p.create(b, {"kind": "agent", "path": "projects/acme/topics/blog/agents/w"}, "",
+                                             "agent:projects/acme/topics/blog/agents/w"),
+                                    p.create(b, {"kind": "you"}, "https://a.example/", "me"))
+        assert b.tabs.nav_of(a) == "agent:projects/acme/topics/blog/agents/w" and b.tabs.nav_of(c) == "me"
+        assert b.tabs.claims == []
+    asyncio.run(run())
+    assert pool_mod.Turn("s9", "agent:projects/acme/topics/blog/agents/w").nav == "agent:projects/acme/topics/blog/agents/w"
+
+
+def test_the_api_lists_and_manages_the_navigators(client, mx):
+    from maxxing import browser
+    from maxxing.browser import pool as pool_mod
+    st = client.get("/api/browser").json()
+    assert [n["id"] for n in st["navigators"] if n["kind"] == "person"] == ["me"]
+    r = client.post("/api/browser/navigators", json={"name": "Work"})
+    assert r.status_code == 200 and r.json()["id"] == "me-2"
+    assert client.put("/api/browser/navigators/me-2", json={"profile": "nope"}).status_code == 404
+    assert client.delete("/api/browser/navigators/me").status_code == 400
+    pool_mod.pool().tabs("main").claim({"kind": "you"}, "me-2")
+    pool_mod.pool().tabs("main").resolve({"targetId": "x1", "type": "page", "url": "https://a.example/"})
+    pool_mod.pool().tabs("main").gone("x1", keep=True)
+    browser.set_profile({"name": "Shop"})
+    assert client.put("/api/browser/navigators/me-2", json={"profile": "shop"}).status_code == 200
+    assert pool_mod.pool().tabs("shop").asleep("me-2") and not pool_mod.pool().tabs("main").of_nav("me-2")
+    assert client.delete("/api/browser/navigators/me-2").json() == {"ok": True}
+    assert not pool_mod.pool().tabs("shop").of_nav("me-2")
+    assert client.get("/api/browser/profiles/main/picture?nav=../x").status_code == 400
+    assert client.get("/api/browser/profiles/main/picture?nav=me-9").status_code == 404

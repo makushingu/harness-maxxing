@@ -84,16 +84,29 @@ class Tabs:
         return t["nav"] if t else None
 
     # ---- new pages ---------------------------------------------------------------------------------------------
-    def claim(self, by: dict, nav: str | None = None, key: str | None = None) -> None:
+    def claim(self, by: dict, nav: str | None = None, key: str | None = None) -> dict:
         """Someone is about to open a page (a turn's new tab, a person's, a tab woken up): it is theirs, in `nav`."""
         now = time.time()
-        self.claims = [c for c in self.claims if now - c["at"] < CLAIM_S] + \
-            [{"by": by, "nav": nav or of_by(by), "key": key, "at": now}]
+        c = {"by": by, "nav": nav or of_by(by), "key": key, "at": now}
+        self.claims = [x for x in self.claims if now - x["at"] < CLAIM_S] + [c]
+        return c
 
-    def assign(self, target: str, by: dict, nav: str) -> None:
-        """A page we just made (pool.create): whatever its event said first, it is `nav`'s."""
+    def unclaim(self, c: dict) -> None:
+        """A claim not needed (its page was known by its opener)."""
+        self.claims = [x for x in self.claims if x is not c]
+
+    def assign(self, target: str, by: dict, nav: str, key: str | None = None) -> None:
+        """A page we just made (pool.create): whatever its event said first, it is `nav`'s, opened by `by` (and the
+        tab `key` woken up, when it was one)."""
+        if key and key in self.items and self.by_target.get(target) != key:
+            t = self.of_target(target)
+            if t is not None:
+                self.items.pop(t["key"], None)
+            self.items[key].update(target=target, asleep=False, used=time.time())
+            self.by_target[target] = key
+            self.dirty = True
         t = self.of_target(target)
-        if t is not None and t["nav"] != nav:
+        if t is not None and (t["nav"] != nav or t["by"] != by):
             t.update(nav=nav, by=by)
             self.dirty = True
 

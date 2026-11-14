@@ -2,9 +2,11 @@
 the people watching it, their mouse and keyboard, and the person's tab actions (open, wake, close). Every page it hears
 of goes through the tabs registry (tabs.py: its navigator and who opened it).
 
-One DevTools connection for the browser (our own, through `relay.Cdp`: the same command rules). Each tab is its own
-window (Target.createTarget newWindow): every navigator's tab in front paints at once, at its own size, and a tab put in
-front is made the active one of its window (a tab left behind paints nothing). Pictures are only produced while someone
+One DevTools connection for the browser (our own, through `relay.Cdp`: the same command rules). Each navigator is a
+window of its own: its first tab opens a new window (Target.createTarget newWindow), the next ones are opened from a
+page of that window (window.open, noopener + noreferrer, from an isolated world so the page cannot change it), and land
+in it. Every navigator's tab in front paints at once, at its own size; a tab put in front is made the active one of its
+window (a tab left behind paints nothing). Pictures are only produced while someone
 watches a navigator (and the picture given to Claude with a hand-back, the agent's card).
 
 Smoothness: Chromium makes the next picture only once the last one is acknowledged. We acknowledge it at once while
@@ -106,6 +108,7 @@ class Watcher:
         self.extra: tuple[int, int] = (0, 0)          # window size - page size (headless still counts a toolbar)
         self.dialogs: dict[str, dict] = {}            # targetId -> its alert / confirm / prompt {type, message, default}
         self.choosers: dict[str, dict] = {}           # targetId -> its file request {node, multiple}
+        self._opened: dict[str, asyncio.Future] = {}  # targetId of a page asked to open a tab -> that tab's targetId
 
     on_state: Callable[[], Any] | None = None
     on_move: Callable[[str, str, str], None] | None = None     # (targetId, url, title) of a page that changed
@@ -187,6 +190,9 @@ class Watcher:
                     await self._event({"method": "Target.targetDestroyed", "params": {"targetId": t["targetId"]}})
                 return
             tid = t["targetId"]
+            waiting = self._opened.get(str(t.get("openerId") or "")) if method == "Target.targetCreated" else None
+            if waiting is not None and not waiting.done():
+                waiting.set_result(tid)
             old = self.pages.get(tid, {})
             moved = old.get("url") != t.get("url")
             self.pages[tid] = {"url": t.get("url") or "", "title": t.get("title") or "",
@@ -500,12 +506,46 @@ class Watcher:
 
     # ---- tabs ------------------------------------------------------------------------------------------------
     async def open_tab(self, url: str = "about:blank", nav: str | None = None) -> str:
-        """A new page in a window of its own (the caller claimed it first: tabs.claim). Returns its targetId."""
+        """A new page in the navigator's window (a new window for its first tab). The caller claimed it first
+        (tabs.claim) and holds the profile's creation lock. Returns its targetId."""
         assert self.cdp
+        url = url or "about:blank"
+        src = self._window_page(nav) if nav else None
+        if src:
+            with contextlib.suppress(Exception):
+                tid = await self._open_from(src, url)
+                if tid:
+                    return tid
         size = self.screen(nav).size if nav else SIZE
-        r = await self.cdp.call("Target.createTarget", {"url": url or "about:blank", "newWindow": True,
+        r = await self.cdp.call("Target.createTarget", {"url": url, "newWindow": True,
                                                         "width": size[0], "height": size[1] + self.extra[1]})
         return str(r.get("targetId") or "")
+
+    def _window_page(self, nav: str) -> str | None:
+        """A page of the navigator's window to open its next tab from: the one in front, else its newest."""
+        front = self.front(nav)
+        if front in self.pages and front not in self.dialogs:
+            return front
+        mine = [k for k in self.pages if self.nav_of(k) == nav and k not in self.dialogs]
+        return max(mine, key=lambda k: self.pages[k]["at"]) if mine else None
+
+    async def _open_from(self, src: str, url: str) -> str | None:
+        """window.open from a page (its window gets the tab): in an isolated world, so a page cannot replace
+        window.open; noopener + noreferrer, so the new page knows nothing of it."""
+        assert self.cdp
+        s = await self._session(src)
+        tree = await self.cdp.call("Page.getFrameTree", session=s, timeout=3)
+        frame = ((tree.get("frameTree") or {}).get("frame") or {}).get("id")
+        ctx = (await self.cdp.call("Page.createIsolatedWorld", {"frameId": frame, "worldName": "maxxing"},
+                                   session=s, timeout=3)).get("executionContextId")
+        fut = self._opened[src] = asyncio.get_running_loop().create_future()
+        try:
+            await self.cdp.call("Runtime.evaluate", {
+                "expression": f"window.open({json.dumps(url)}, '_blank', 'noopener,noreferrer'), 1",
+                "contextId": ctx, "userGesture": True, "returnByValue": True}, session=s, timeout=3)
+            return await asyncio.wait_for(fut, 3)
+        finally:
+            self._opened.pop(src, None)
 
     async def close_tab(self, tid: str, sleep: bool = False) -> None:
         if not self.cdp:
