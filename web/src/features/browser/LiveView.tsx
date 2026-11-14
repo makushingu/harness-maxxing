@@ -275,11 +275,11 @@ export function LiveView({ profile, nav, session, who, start, onMinimize, classN
     return () => (clearTimeout(timer), ro.disconnect())
   }, [connected, running, send])
 
-  const xy = (e: React.PointerEvent | React.WheelEvent) => {
+  const xy = (e: React.PointerEvent) => {
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
     return { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height }
   }
-  const mods = (e: React.KeyboardEvent | React.PointerEvent | React.WheelEvent) => ({ alt: e.altKey, ctrl: e.ctrlKey, meta: e.metaKey, shift: e.shiftKey })
+  const mods = (e: React.KeyboardEvent | React.PointerEvent) => ({ alt: e.altKey, ctrl: e.ctrlKey, meta: e.metaKey, shift: e.shiftKey })
   const button = (n: number) => (n === 1 ? 'middle' : n === 2 ? 'right' : 'left')
 
   // Handing back while Claude waits answers its request ("done"), with the person's word for it.
@@ -297,21 +297,32 @@ export function LiveView({ profile, nav, session, who, start, onMinimize, classN
   const sites = view.data?.profile.web === 'list' ? view.data.profile.sites : []
   const pace = showPace ? readPace() : null
   // the picture follows the wheel at once (clamped to a third of its height), until the real one comes
-  const wheel = (e: React.WheelEvent<HTMLImageElement>) => {
+  // Listened to natively (React's wheel is passive): the wheel scrolls the page in the browser, never Harness around it.
+  const wheelRef = React.useRef((_e: WheelEvent) => {})
+  wheelRef.current = (e: WheelEvent) => {
+    const img = imgEl.current
+    if (!img || e.target !== img || !running || veil) return
+    e.preventDefault()
     const w = scroll.current
-    const p = xy(e)
-    w.x = p.x
-    w.y = p.y
-    const k = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? e.currentTarget.clientHeight : 1
+    const r = img.getBoundingClientRect()
+    w.x = (e.clientX - r.left) / r.width
+    w.y = (e.clientY - r.top) / r.height
+    const k = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? img.clientHeight : 1
     w.dx += e.deltaX * k
     w.dy += e.deltaY * k
-    const r = e.currentTarget.getBoundingClientRect()
-    const scale = r.height / (e.currentTarget.naturalHeight || r.height)
+    const scale = r.height / (img.naturalHeight || r.height)
     w.shown = Math.max(-r.height / 3, Math.min(r.height / 3, w.shown + e.deltaY * k * scale))
-    e.currentTarget.style.transform = `translateY(${-w.shown}px)`
+    img.style.transform = `translateY(${-w.shown}px)`
     cancelAnimationFrame(w.raf)
     w.raf = requestAnimationFrame(() => flushRef.current())
   }
+  React.useEffect(() => {
+    const el = pane.current
+    if (!el) return
+    const on = (e: WheelEvent) => wheelRef.current(e)
+    el.addEventListener('wheel', on, { passive: false })
+    return () => el.removeEventListener('wheel', on)
+  }, [])
 
   return (
     <div className={cn('flex min-h-0 min-w-0 flex-col overflow-hidden bg-background', className)} data-testid="browser-live">
@@ -459,7 +470,6 @@ export function LiveView({ profile, nav, session, who, start, onMinimize, classN
               lastMove.current = now
               send({ t: 'mouse', type: 'move', ...xy(e), ...mods(e) })
             }}
-            onWheel={wheel}
             onContextMenu={(e) => e.preventDefault()}
           />
         ) : (
@@ -671,9 +681,16 @@ function TabButton({ tab, onShow, onClose }: { tab: BrowserTab; onShow: () => vo
   const t = useT()
   const el = React.useRef<HTMLDivElement>(null)
   // the tab shown stays in sight (a new one is added at the end of a long row)
+  const front = tab.front
   React.useEffect(() => {
-    if (tab.front) el.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
-  }, [tab.front])
+    // only the row of tabs moves (scrollIntoView would scroll every box around it, Harness too)
+    const row = el.current?.parentElement
+    if (!el.current || !row || !front) return
+    const me = el.current.getBoundingClientRect()
+    const box = row.getBoundingClientRect()
+    if (me.left < box.left) row.scrollLeft -= box.left - me.left
+    else if (me.right > box.right) row.scrollLeft += me.right - box.right
+  }, [front])
   const label = tab.title || (tab.url && tab.url !== 'about:blank' ? tab.url : t('browser.newTab'))
   const by = tab.by.kind === 'agent' ? t('browser.by.agent', { name: tab.by.name || '' }) : tab.by.kind === 'session' ? t('browser.by.session') : t('browser.by.you')
   return (

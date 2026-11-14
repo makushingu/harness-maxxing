@@ -234,7 +234,7 @@ def chrome_args(chrome: Path, width: int = 1280, height: int = 800) -> list[str]
             "--disable-sync", "--disable-default-apps", "--no-first-run", "--no-default-browser-check",
             "--disable-features=AutofillServerCommunication,MediaRouter,OptimizationHints,Translate",
             "--force-webrtc-ip-handling-policy=disable_non_proxied_udp", "--renderer-process-limit=2",
-            "--password-store=basic", "--mute-audio", "--autoplay-policy=user-gesture-required",
+            "--password-store=basic", "--mute-audio", "--disable-smooth-scrolling", "--autoplay-policy=user-gesture-required",
             f"--window-size={width},{height}", f"--user-agent={UA.format(v=major)}",
             f"--lang={locale()[0]}", f"--accept-lang={locale()[1]}", "about:blank"]
 
