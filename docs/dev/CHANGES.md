@@ -56,8 +56,8 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   {node, login_server} | wireguard {}}] (<= 10)}`; `browser.clean_settings(raw, strict)`. Exit secrets in the vault
   `BROWSER_EXIT_<ID>` (`expose: false`). Owners: `browser: {enabled?, profile?}` in a project's / topic's
   `.maxxing.json` (`workspace.folder_browser` / `set_folder_browser`) and agent.json (`agents._clean_browser`,
-  `browser` in `SECURITY_FIELDS`: off is safer, the rest is asked); `browser.resolve` = `enabled` agent -> topic ->
-  project -> false (an agent's never inherited), `profile` = an agent's own choice when it exists, else its project's.
+  `browser` in `SECURITY_FIELDS`: off is safer, the rest is asked); `browser.resolve` = `enabled` topic ->
+  project -> true (`SESSIONS_DEFAULT`; an agent's never inherited, false unless set), `profile` = an agent's own choice when it exists, else its project's.
   **One profile per project** (`project` field): `ensure_project_profile` (from `main`'s exit/on_exit_down,
   named after the project) at the first `active_for`, at `GET /owner` of an enabled folder, and for every project with
   an agent at `GET /api/browser`; `DELETE` refused (`409 project`) while the project exists; `GET /profiles/{pid}` = `{profile, browser, gone, agents, person, temporary (replays.sessions: actions with a `nav` "session:*"), actions, asks}`; ProfileRow adds `gone`, `agents`; `profile: "own"` and a

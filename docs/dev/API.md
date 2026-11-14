@@ -569,8 +569,8 @@ traffic leaves; `direct` = this server, always there, not stored). **One profile
 after the project, the first time a turn of the project gets the browser (`active_for`), when an owner view of an
 enabled folder is asked, and for every project that has an agent when `GET /api/browser` runs; it cannot be deleted
 while its project exists (`409 project`). Who may use it: a `browser` block `{enabled?}` in the `.maxxing.json` of a
-project or a topic (topic -> project -> `false`) and `{enabled?, profile?}` in an agent's agent.json (its `enabled` is
-never inherited). Which profile: a session = its project's; an agent = its `profile` if that profile exists, else its
+project or a topic (topic -> project -> `true`, `browser.SESSIONS_DEFAULT`) and `{enabled?, profile?}` in an agent's agent.json (its
+`enabled` is never inherited: `false` unless set). Which profile: a session = its project's; an agent = its `profile` if that profile exists, else its
 project's (`profile: "own"` of before = its project's; a project's / topic's `profile` is ignored). **Navigators**
 (`navs.py`): a window of tabs in a profile's Chromium; several may share a profile (its sign-ins), each sees only its
 tabs: the person's one `me` (its profile stored in `<state>/browser/navigators.json`), `agent:<path>` (every run of an

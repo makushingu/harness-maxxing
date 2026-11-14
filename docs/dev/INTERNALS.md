@@ -695,7 +695,8 @@ on_exit_down, named after the project; `ensure_projects_with_agents()` from `GET
 `delete_profile` refuses a project's while its folder exists). Who may use it: `{enabled?}` in a project's / topic's
 `.maxxing.json` (`workspace.folder_browser` / `set_folder_browser`) and `{enabled?, profile?}` in agent.json
 `browser`; `browser.resolve(path, s, create=False)` = `{enabled, profile, project, from}`: `enabled` walks
-`chain(path)` (nearest wins, an agent's stops at the agent); `profile` = the agent's own choice when it exists, else
+`chain(path)` (nearest wins, an agent's stops at the agent; nothing set = `SESSIONS_DEFAULT` (true) for a project /
+topic, false for an agent); `profile` = the agent's own choice when it exists, else
 the project's ("" while not made; `create` makes it). `active_for(path)` = (owner, profile, settings) when turns
 there get the tools (makes the project's profile). `agent_profile(path, block, s)` = an agent's profile from its block
 already read (`navs.agents_on(s)`: the Browser page reads each agent once).

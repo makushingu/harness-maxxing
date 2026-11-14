@@ -381,7 +381,11 @@ def test_a_turn_gets_the_browser_only_when_it_is_on(client, topic, mx):
     assert spec["env"]["MAXXING_BROWSER_PROFILE"] == "acme"            # its project's profile
     forced = {"args": [], "approvals_forced": True}
     assert "--allowedTools" not in runner.browser_args("sess02", A, forced)
-    assert runner.browser_args("sess03", T, {}) == []          # its topic: off
+    assert runner.browser_args("sess03", T, {})[0] == "--mcp-config"   # its topic says nothing: on
+    client.put("/api/browser/owner", json={"path": T, "enabled": False})
+    assert runner.browser_args("sess04", T, {}) == []                    # turned off
+    client.put("/api/browser/owner", json={"path": A, "inherit": ["enabled"]})
+    assert runner.browser_args("sess05", A, {}) == []                    # an agent that says nothing: off
     runner.browser_done("sess01")
     assert not Path(args[1]).exists()
 

@@ -13,7 +13,7 @@ global ones (sleep, asks, downloads) plus
   back to the server's address (unless the profile says `on_exit_down: vps`).
 
 Who may use it: a `browser` block {enabled?} in the .maxxing.json of a project or a topic and {enabled?, profile?} in
-an agent's agent.json; `enabled` is inherited (topic -> project -> off), an agent's is its own (never inherited: its
+an agent's agent.json; `enabled` is inherited (topic -> project -> on), an agent's is its own (never inherited, off until its
 owner turns it on). Which profile: a session's is its project's; an agent's is its project's unless it chose another
 (`profile`; a chosen profile that was deleted = its project's again).
 
@@ -48,6 +48,7 @@ NUMBERS = {"wait_min": (1, 1440), "idle_min": (5, 1440), "tab_sleep_min": (2, 72
 PROFILE_DEFAULTS = {"name": "", "exit": DIRECT, "on_exit_down": "wait", "project": ""}
 OWN = "own"                                    # of before the profiles per project: read as "its project's"
 OWNER_DEFAULTS = {"enabled": False, "profile": MAIN}
+SESSIONS_DEFAULT = True     # a project / topic that says nothing: its sessions have the browser (an agent: off)
 PROJECT_RE = re.compile(r"projects/[^/\s]{1,80}")
 EXIT_DOWN = ("wait", "vps")
 EXIT_TYPES = ("proxy", "tailscale", "wireguard")
@@ -370,12 +371,14 @@ def agent_profile(path: str, block: dict, s: dict) -> str | None:
 
 def resolve(path: str, s: dict | None = None, create: bool = False) -> dict:
     """{enabled, profile, project, from: {enabled, profile}} for a folder. `enabled`: its own block, else its topic's,
-    else its project's (an agent's is never inherited). `profile`: the one an agent chose, else its project's ("" while
-    the project's was never made; `create` makes it). `from`: the owner that set it ("" = the default)."""
+    else its project's, else on (an agent's is never inherited: off unless it says on). `profile`: the one an agent
+    chose, else its project's ("" while the project's was never made; `create` makes it). `from`: the owner that set it ("" = the default)."""
     s = s or settings()
     owners = chain(path)
     project = project_of(path) or ""
     out = {**OWNER_DEFAULTS, "profile": "", "project": project, "from": {"enabled": "", "profile": ""}}
+    if not (owners and owners[0].startswith("agent:")):
+        out["enabled"] = SESSIONS_DEFAULT
     for o in owners:
         if owners[0].startswith("agent:") and o != owners[0]:
             break

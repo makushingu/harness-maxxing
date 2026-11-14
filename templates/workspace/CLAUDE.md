@@ -106,6 +106,7 @@ UI; the server CLI is `maxxing`:
 | `maxxing agents list\|run\|send\|on\|off` | agents (Settings -> Features -> Agents): start one, hand work from one agent to another (`send`), switch on / off |
 | `maxxing video new DIR` / `video render DIR` / `video status` | Remotion video project linked to the shared install / render it (background priority) / tools check |
 | `maxxing heavy COMMAND…` | run a long CPU-hungry command (ffmpeg, a build, a compression) after the UI and the sessions when the processor is full; same output and exit code |
+| `maxxing browser status\|show PATH\|set PATH on\|off` | the Harness Browser (Settings -> Features): a Chromium on this server for pages without an API (sign-ins, forms, clicks); on for every project's sessions unless turned off, an agent only once its owner turns it on; its tools come at the next message |
 | `maxxing pdf IN.html OUT.pdf` | print an HTML page (or URL) to PDF |
 | `maxxing setup-link` / `maxxing password` | first sign-in link / change the UI password |
 
@@ -133,7 +134,8 @@ this server - the public product is not theirs to change, and they do not need i
 Before building something, check whether Harness Maxxing already does it: a to-do list -> Tasks; a lasting
 role or a bot -> an agent (skill `maxxing-agents`); something at set times -> a cron; "tell me when…" ->
 the Notifications feed (`maxxing-feed`); e-mail -> the E-mail page (`maxxing-mail`); sites, databases,
-servers -> Infra (`maxxing-infra`); repositories -> Git; a chat with other people -> Team; a card on the
+servers -> Infra (`maxxing-infra`); a site with no API, a sign-in or a form to fill in -> the Harness Browser
+(`maxxing browser`); repositories -> Git; a chat with other people -> Team; a card on the
 dashboard or a page of its own -> an extension. Some pages are optional: `maxxing status` (line `Pages`)
 says which are on. When the right one is off, say it exists and that Settings -> Features turns it on in
 one click, then use it, rather than building a substitute.

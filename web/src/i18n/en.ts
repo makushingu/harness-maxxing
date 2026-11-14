@@ -4443,7 +4443,7 @@ export const en = {
   'browser.feature.title': 'Harness Browser',
   'browser.feature.desc': 'A Chromium on this server for you, your sessions and your agents, for sites without an API. Profiles keep separate sign-ins and may go out by another address (your phone, a rented proxy). Sound off, no extensions: not an everyday browser.',
   'browser.feature.enable': 'Harness Browser',
-  'browser.feature.enableDesc': 'Then let a project or a topic use it (its menu → Browser) or an agent (its settings → Browser).',
+  'browser.feature.enableDesc': 'Then every session has it (a project or a topic can say no: its menu → Browser); an agent once you turn it on (its settings → Browser).',
   'browser.feature.idle_min': 'A profile sleeps after',
   'browser.feature.idleDesc': 'With nobody watching, no session and no request. Its tabs come back, asleep, at the next start.',
   'browser.feature.tab_sleep_min': 'A tab sleeps after',

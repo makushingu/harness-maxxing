@@ -4425,7 +4425,7 @@ export const fr: Record<keyof typeof en, string> = {
   'browser.feature.title': 'Harness Browser',
   'browser.feature.desc': 'Un Chromium sur ce serveur pour vous, vos sessions et vos agents, pour les sites sans API. Les profils gardent des connexions séparées et peuvent sortir par une autre adresse (votre téléphone, un proxy loué). Son coupé, sans extensions : pas un navigateur de tous les jours.',
   'browser.feature.enable': 'Harness Browser',
-  'browser.feature.enableDesc': 'Puis autorisez un projet ou un topic (son menu → Navigateur) ou un agent (ses réglages → Navigateur).',
+  'browser.feature.enableDesc': 'Ensuite toutes les sessions l’ont (un projet ou un topic peut refuser : son menu → Navigateur) ; un agent quand vous l’activez (ses réglages → Navigateur).',
   'browser.feature.idle_min': 'Un profil se met en veille après',
   'browser.feature.idleDesc': 'Sans personne qui regarde, sans session ni demande. Ses onglets reviennent, en veille, au démarrage suivant.',
   'browser.feature.tab_sleep_min': "Un onglet s'endort après",

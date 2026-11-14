@@ -13,12 +13,13 @@ tab takes memory on the server.
 
 ## Turning it on
 
-It is off everywhere until you turn it on:
+It is off until you turn the feature on; then every session may use it, agents only once you say so:
 
 1. **Settings -> Features -> Harness Browser**. The first time, **Set up** installs what the server needs
    (Chromium, its own system user, `socat`, the browser tools; a few minutes, once; or `maxxing browser setup` as
    root).
-2. Then say who may use it:
+2. Every project's sessions have it from then on (Claude only starts the browser when a page needs it). To change
+   that:
    - a project: its **...** menu in the sessions list -> **Browser...** -> **Can use the Harness Browser** (every
      topic of the project that does not choose for itself);
    - a topic: its **...** menu -> **Browser...** (every session of the topic; **Inherited** = what its project says);

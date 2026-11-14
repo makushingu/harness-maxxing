@@ -15,8 +15,8 @@ New:
   with the background priority, with the same output and exit code; Remotion videos render this way.
 - **Harness Browser: a browser on your server for Claude and you.** For sites without an API, Claude opens pages,
   clicks and fills forms in a Chromium of your server, and you watch it live, take over for a captcha or a sign-in
-  and hand back. Off until you turn it on (Settings -> Features -> Harness Browser), then let a project, a topic
-  (its menu -> **Browser...**) or an agent (its settings) use it. The Browser page has three parts: **your browser**,
+  and hand back. Off until you turn it on (Settings -> Features -> Harness Browser); then every session has it (a project
+  or a topic can say no: its menu -> **Browser...**) and an agent once you turn it on in its settings. The Browser page has three parts: **your browser**,
   the **profiles** and the **connections**. **Each project has its own profile** (sign-ins, connection), made by
   itself: its sessions and its agents share it, so you sign in once for all of them; add more profiles to keep an
   agent apart. A profile's page shows its agents' browsers live (**Persistent**) and a journal of the browsers its
