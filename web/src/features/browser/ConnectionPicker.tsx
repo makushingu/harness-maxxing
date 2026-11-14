@@ -18,6 +18,7 @@ export function ConnectionPicker({ pid, className, note, wide }: { pid: string; 
   if (!st || !p) return null
   const e = st.exits.find((x) => x.id === p.exit)
   const test = p.exit === 'direct' ? st.direct.test : e?.test
+  const checking = p.exit === 'direct' ? st.direct.checking : e?.checking
   const options = [
     { value: 'direct', label: <Option tone="bg-success" name={t('browser.exit.direct')} line={testWhere(st.direct.test)} /> },
     ...st.exits.map((x) => ({ value: x.id, label: <Option tone={exitTone(x)} name={x.name} line={exitLine(x, t)} /> })),
@@ -46,7 +47,7 @@ export function ConnectionPicker({ pid, className, note, wide }: { pid: string; 
               <span className="text-muted-foreground">{[testWhere(test), test.city].filter(Boolean).join(' · ')}</span>
             </>
           ) : (
-            <span className="text-muted-foreground">{t('browser.connection.untested')}</span>
+            <span className="text-muted-foreground">{t(checking ? 'browser.connection.checking' : 'browser.connection.untested')}</span>
           )}
           {note && <span className="border-t pt-1.5 text-[12px] text-muted-foreground">{t('browser.connection.shared')}</span>}
           <button type="button" className="justify-self-start text-[12px] text-primary hover:underline" onClick={() => go(`/settings/browser?exit=${encodeURIComponent(p.exit)}`)}>

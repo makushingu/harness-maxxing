@@ -594,7 +594,7 @@ BrowserExit     { id, name, type: "proxy"|"tailscale"|"wireguard",
                   wireguard: - }                                                     (<= 10 exits)
                   secret (proxy password | WireGuard config | Tailscale auth key) = vault key BROWSER_EXIT_<ID>
                   (`-` -> `_`, upper case, not exposed to turns), never in config.json
-ExitView        = BrowserExit + { state: "up"|"down"|"unknown", since, error, latency_ms, test: ExitTest|null,
+ExitView        = BrowserExit + { state: "up"|"down"|"unknown", since, error, latency_ms, test: ExitTest|null, checking: bool,
                   secret: bool (one is in the vault) }
 ExitTest        { ok, at, error?, ip, country, country_code, city, operator, asn, kind: "isp"|"mobile"|"hosting",
                   latency_ms, mbps? }        (ip-api.com through the exit; kind "hosting" also when ip-api says proxy;
@@ -633,7 +633,7 @@ BrowserAction   { at, session, nav, tool, args (values typed -> "<n chars>", url
 
 | Method | Path | Body | Response |
 |---|---|---|---|
-| GET | `/api/browser` | – | the feature on: every project with an agent gets its profile first; `{feature, navigators: [Navigator], settings: BrowserSettings, available: {ok, missing}, tools: {tailscale, wireguard} (installed), setup: {running, log, error}, profiles: [ProfileRow], exits: [ExitView], direct: {test: ExitTest\|null}, summary: Summary, asks: [BrowserAsk], waiting: [Waiting]}` |
+| GET | `/api/browser` | – | the feature on: every project with an agent gets its profile first; `{feature, navigators: [Navigator], settings: BrowserSettings, available: {ok, missing}, tools: {tailscale, wireguard} (installed), setup: {running, log, error}, profiles: [ProfileRow], exits: [ExitView], direct: {test: ExitTest\|null, checking}, summary: Summary, asks: [BrowserAsk], waiting: [Waiting]}`; also checks in the background the exits not checked for 60 s and tests again (no speed) an up exit whose last good test is over 1 h old (`ExitView.checking` meanwhile) |
 | PUT | `/api/browser/settings` | `Partial<BrowserSettings>` (other keys ignored) | same as GET (`400 bad_browser`) |
 | POST | `/api/browser/setup` | `{exits?: bool}` | `{running: true}`; installs in the background (root): Chromium & co, `exits` = also Tailscale + wireproxy (pinned versions, checked hashes) into `<state>/tools/`; see `setup` in GET |
 | POST | `/api/browser/profiles` | `{name, exit?, on_exit_down?}` | `BrowserProfile` (`400 bad_browser` no name / bad value / unknown exit, `409 too_many`) |

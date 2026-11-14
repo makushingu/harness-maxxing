@@ -1444,6 +1444,8 @@ export type BrowserExit = {
   error: string
   latency_ms: number | null
   test: BrowserExitTest | null
+  /** being checked in the background right now (someone is looking at it) */
+  checking?: boolean
   /** its password / config / auth key is in the vault */
   secret: boolean
 }
@@ -1558,7 +1560,7 @@ export type BrowserStatus = {
   setup: { running: boolean; log: string[]; error: string | null }
   profiles: BrowserProfileRow[]
   exits: BrowserExit[]
-  direct: { test: BrowserExitTest | null }
+  direct: { test: BrowserExitTest | null; checking?: boolean }
   /** turns: session id -> the profile it uses now */
   summary: { running: string[]; mem: number; turns: Record<string, string>; tabs: Record<string, number>; cap: number; server_used: number; server_total: number; level: 'ok' | 'warn' | 'critical' }
   asks: BrowserAsk[]

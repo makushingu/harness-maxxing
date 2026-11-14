@@ -12,6 +12,7 @@ import os
 import subprocess
 import sys
 import time
+import threading
 from pathlib import Path
 
 import pytest
@@ -1024,6 +1025,49 @@ def test_a_tool_waits_for_its_exit_then_says_it_is_offline(client, topic, mx, mo
     assert asyncio.run(check("phone")) is True
     # a profile that may fall back never waits
     assert asyncio.run(p.exit_ready({**prof, "on_exit_down": "vps"}, "sess02", f"topic:{T}")) is None
+
+
+def test_a_connection_looked_at_is_checked_and_tested_by_itself(mx, monkeypatch):
+    """Settings -> Browser read: an exit never checked (a restart) is checked and its address tested in the
+    background, without the 2 MB speed test; the last test is kept on disk; looking again a moment later does nothing."""
+    from maxxing import bus
+    from maxxing.browser import exits
+    exits.set_exit({"name": "Phone", "type": "proxy", "url": "socks5://127.0.0.1:9"})
+    rt = exits.Runtime()
+    calls = []
+
+    async def check(eid):
+        calls.append(("check", eid))
+        rt.mark(eid, True, "", 30)
+        return True
+
+    async def test(eid, speed=True):
+        calls.append(("test", eid, speed))
+        rt._keep_test(eid or "direct", {"ok": True, "ip": "203.0.113.7", "at": time.time()})
+        return rt.tests[eid or "direct"]
+    monkeypatch.setattr(rt, "check", check)
+    monkeypatch.setattr(rt, "test", test)
+    loop = asyncio.new_event_loop()
+    t = threading.Thread(target=loop.run_forever, daemon=True)
+    t.start()
+    monkeypatch.setattr(bus, "_loop", loop)
+    try:
+        rt.refresh_seen(exits.exits())
+        deadline = time.time() + 3
+        while (rt._refreshing or len(calls) < 3) and time.time() < deadline:
+            time.sleep(0.02)
+        assert ("check", "phone") in calls and ("test", "phone", False) in calls and ("test", None, False) in calls
+        assert rt.public(exits.get("phone"))["state"] == "up"
+        n = len(calls)
+        rt.refresh_seen(exits.exits())                               # fresh: nothing to do
+        time.sleep(0.1)
+        assert len(calls) == n
+    finally:
+        loop.call_soon_threadsafe(loop.stop)
+    assert exits.Runtime().tests["phone"]["ip"] == "203.0.113.7"   # kept through a restart
+    rt._keep_test("phone", {"ok": True, "ip": "x", "mbps": 12.5, "at": 1})
+    rt._keep_test("phone", {"ok": True, "ip": "y", "at": 2})          # a quick test keeps the last speed
+    assert rt.tests["phone"]["mbps"] == 12.5
 
 
 def test_a_profile_whose_exit_is_gone_never_goes_out_directly(mx):

@@ -142,6 +142,7 @@ def _status() -> dict:
         browser.ensure_projects_with_agents()
     s = browser.settings()
     rt = exits.runtime()
+    rt.refresh_seen(s["exits"])                         # a connection that is up reads up, no Test needed
     navigators = pool_mod.pool().navigators()            # once: the profiles count their agents from it
     return {"feature": browser.feature_on(),
             "settings": {k: v for k, v in s.items() if k not in ("profiles", "exits")},
@@ -150,7 +151,7 @@ def _status() -> dict:
             "setup": {k: _setup[k] for k in ("running", "log", "error")},
             "profiles": _profiles_view(s, navigators), "navigators": navigators,
             "exits": [rt.public(e) for e in s["exits"]],
-            "direct": {"test": rt.tests.get(browser.DIRECT)},
+            "direct": {"test": rt.tests.get(browser.DIRECT), "checking": browser.DIRECT in rt._refreshing},
             "summary": pool_mod.pool().summary(), "asks": asks.pending(),
             "waiting": exits._waiters()}
 

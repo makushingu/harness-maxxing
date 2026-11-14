@@ -115,6 +115,10 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 - `pool.public` adds `dialog {type, message, default}` and `chooser {multiple}`. Claude's `upload_file`:
   `pool.claude_file` (a file of the turn's topic / project folder, <= 50 MB) copied by `pool.stage` into the uploads
   folder, `filePath` rewritten.
+- Exits are checked by themselves while looked at: `GET /api/browser` calls `Runtime.refresh_seen(exits)` - in the
+  background, one at a time per exit, an exit not checked for `SEEN_FRESH` (60 s) gets `check()`, and when it is up
+  with no good test younger than `RETEST_EVERY` (1 h; a failed one: 60 s) `test(eid, speed=False)` (no 2 MB
+  download); `direct` too. Tests persist in `<state>/browser/exit-tests.json`; `exits[].checking` / `direct.checking`.
 - CLI `cmd_browser.py`: `maxxing browser enable|disable` (`browser_feature`; `enable` runs `unit.setup` first when
   something is missing, exit 1 and stays off if it still is) | `setup [--exits] | status [--json] | settings [...] [--max-profiles N] |
   profile add|set|rm | exit test ID|direct | set PATH on|off|inherit [--profile ID|own|inherit] | show [--json] |

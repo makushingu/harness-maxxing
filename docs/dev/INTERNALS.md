@@ -766,7 +766,7 @@ Modules:
   `turns` (turn files, written by the runner).
 State under `<state>/browser/`: `profiles/<pid>/` (Chromium user data), `run/<pid>/` (proxy.sock, cdp.sock, policy.json),
 `tabs/<pid>.json`, `actions/<pid>.jsonl` (500 newest), `asks/<id>.json`, `turns/<sid>.json` + `<sid>.mcp.json`
-(0600, removed with the turn), `exits/<eid>/` (0700: port, tailscaled state + socket, wireproxy.conf 0600, authkey
+(0600, removed with the turn), `exit-tests.json` (the last test of each exit and of `direct`, kept through a restart; a quick test keeps the speed of the last full one), `exits/<eid>/` (0700: port, tailscaled state + socket, wireproxy.conf 0600, authkey
 0600), `waiting.json` = `[{session, owner, exit, profile, at, resume}]` (50 newest; turns stopped by a down exit:
 `browser_exit` of the session in the sessions list, cleared when the exit is back - `resume` ones get a message
 "[Harness Maxxing] The browser's exit is back online..." through `service.send_message`, source `browser`). Vault:

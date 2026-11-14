@@ -49,6 +49,8 @@ HOSTNAME = "harness-browser"                      # the name of this server in t
 UNIT_PREFIX = "maxxing-bx-"
 CHECK_HOST = ("1.1.1.1", 443)                     # a quick "does the exit carry traffic" (TCP only)
 CHECK_EVERY = 30.0
+SEEN_FRESH = 60.0                                  # an exit looked at (Settings -> Browser) is checked again after this
+RETEST_EVERY = 3600.0                              # ... and its address tested again after this (no speed: no 2 MB)
 UPSTREAM_KEEP = 20.0
 CONNECT_TIMEOUT = 15.0
 TEST_IP_URL = "http://ip-api.com/json/?fields=status,message,country,countryCode,city,isp,org,as,mobile,proxy,hosting,query"
@@ -549,14 +551,53 @@ class Runtime:
 
     def __init__(self) -> None:
         self.state: dict[str, dict] = {}
-        self.tests: dict[str, dict] = {}
+        self.tests: dict[str, dict] = _load_tests()     # the last test of each exit survives a restart
         self._up: dict[str, tuple[float, Upstream]] = {}
         self._task: asyncio.Task | None = None
+        self._refreshing: set[str] = set()
 
     def forget(self, eid: str) -> None:
         self.state.pop(eid, None)
-        self.tests.pop(eid, None)
+        if self.tests.pop(eid, None) is not None:
+            _save_tests(self.tests)
         self._up.pop(eid, None)
+
+    def _keep_test(self, eid: str, out: dict) -> None:
+        old = self.tests.get(eid) or {}
+        if out.get("ok") and "mbps" not in out and old.get("ok") and old.get("mbps") is not None:
+            out = {**out, "mbps": old["mbps"]}         # a quick test keeps the speed of the last full one
+        self.tests[eid] = out
+        _save_tests(self.tests)
+        bus.invalidate("browser")
+
+    def refresh_seen(self, exits: list[dict]) -> None:
+        """Someone is looking at these exits: check the ones not checked for SEEN_FRESH s, and test again the address
+        of those whose last test is missing, failed or older than RETEST_EVERY s - in the background, once at a time,
+        so a connection that is up reads up without pressing Test. Never raises; no event loop = nothing."""
+        loop = bus._loop
+        if loop is None:
+            return
+        now = time.time()
+        for eid in [browser.DIRECT] + [e["id"] for e in exits]:
+            st, tst = self.state.get(eid) or {}, self.tests.get(eid) or {}
+            age = now - float(tst.get("at") or 0)
+            stale_test = age > (RETEST_EVERY if tst.get("ok") else SEEN_FRESH)
+            stale_state = eid != browser.DIRECT and now - float(st.get("at") or 0) >= SEEN_FRESH
+            if eid in self._refreshing or not (stale_state or stale_test):
+                continue
+            self._refreshing.add(eid)
+            asyncio.run_coroutine_threadsafe(self._refresh(eid, stale_test), loop)
+
+    async def _refresh(self, eid: str, stale_test: bool) -> None:
+        try:
+            if eid == browser.DIRECT:
+                await self.test(None, speed=False)
+            elif await self.check(eid) and stale_test:
+                await self.test(eid, speed=False)
+        except Exception:  # noqa: BLE001 - a background check
+            log.exception("browser exit refresh")
+        finally:
+            self._refreshing.discard(eid)
 
     def upstream(self, e: dict) -> Upstream:
         """The exit as an upstream proxy (starts its runtime; kept UPSTREAM_KEEP s while it works: the proxy asks for
@@ -618,10 +659,10 @@ class Runtime:
         st = self.state.get(e["id"]) or {}
         out = {**e, "state": "up" if st.get("ok") else ("down" if st else "unknown"), "since": st.get("since"),
                "error": st.get("error") or "", "latency_ms": st.get("latency_ms"), "test": self.tests.get(e["id"]),
-               "secret": bool(_has_secret(e["id"]))}
+               "secret": bool(_has_secret(e["id"])), "checking": e["id"] in self._refreshing}
         return out
 
-    async def test(self, eid: str | None) -> dict:
+    async def test(self, eid: str | None, speed: bool = True) -> dict:
         """The address the sites see through this exit (None / "direct": the server's own), its country, operator and
         kind (an internet provider, a mobile network or a datacenter: ip-api.com), the delay and a download speed."""
         e = get(eid) if eid and eid != browser.DIRECT else None
@@ -633,10 +674,10 @@ class Runtime:
             if e:
                 self.mark(e["id"], False, str(ex))
             out = {"ok": False, "error": str(ex), "at": time.time()}
-            self.tests[eid or browser.DIRECT] = out
+            self._keep_test(eid or browser.DIRECT, out)
             return out
-        out = await asyncio.to_thread(_test_sync, up)
-        self.tests[eid or browser.DIRECT] = out
+        out = await asyncio.to_thread(_test_sync, up, speed)
+        self._keep_test(eid or browser.DIRECT, out)
         if e and self.mark(e["id"], out["ok"], out.get("error") or "", out.get("latency_ms")) and out["ok"]:
             await asyncio.to_thread(_resume_waiters, e["id"])
         return out
@@ -680,7 +721,24 @@ def _in_use() -> list[str]:
     return out
 
 
-def _test_sync(up: Upstream | None) -> dict:
+def _tests_file() -> Path:
+    return browser.home() / "exit-tests.json"
+
+
+def _load_tests() -> dict:
+    with contextlib.suppress(Exception):
+        d = json.loads(_tests_file().read_text())
+        if isinstance(d, dict):
+            return {k: v for k, v in d.items() if isinstance(v, dict)}
+    return {}
+
+
+def _save_tests(tests: dict) -> None:
+    with contextlib.suppress(Exception):
+        config.write_json(_tests_file(), tests)
+
+
+def _test_sync(up: Upstream | None, speed: bool = True) -> dict:
     t0 = time.monotonic()
     out: dict = {"ok": False, "at": time.time()}
     try:
@@ -698,6 +756,8 @@ def _test_sync(up: Upstream | None) -> dict:
                    kind="mobile" if d.get("mobile") else "hosting" if d.get("hosting") or d.get("proxy") else "isp")
     except (OSError, ValueError, ConnectionError) as ex:
         out["error"] = str(ex) or type(ex).__name__
+        return out
+    if not speed:
         return out
     try:                                              # the speed: 2 MB from a CDN, over TLS
         host, path = TEST_SPEED

@@ -118,6 +118,10 @@ operator, its kind - **Home / ISP**, **Mobile** or **Data center** - the delay a
 ip-api.com (it sees the address of the exit, nothing else), the speed from a small download. A rented proxy that turns
 out to be a data center is said plainly: it will not help with the sites that block servers.
 
+You do not need to press **Test** to know a connection works: while Settings -> Browser is open, each connection is
+checked by itself every minute (green = up, red = down, *checking...* meanwhile), and the address the sites see is
+measured again every hour, without the speed. The last result stays after a restart. **Test** measures the speed too.
+
 Safety:
 
 - Only the browser goes out there: your sessions, agents and the rest of the server keep the server's address.

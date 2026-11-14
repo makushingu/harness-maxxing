@@ -15,7 +15,7 @@ export function exitLine(e: BrowserExit | undefined, t: T, now = Date.now() / 10
   if (e.state === 'down') return e.since ? t('browser.exit.downSince', { min: Math.max(1, Math.round((now - e.since) / 60)) }) : t('browser.exit.down')
   const where = testWhere(e.test)
   const ms = e.latency_ms ?? e.test?.latency_ms
-  return [where, ms != null ? `${ms} ms` : '', e.state === 'unknown' && !where ? t('browser.exit.untested') : ''].filter(Boolean).join(' · ')
+  return [where, ms != null ? `${ms} ms` : '', e.state === 'unknown' && !where ? t(e.checking ? 'browser.exit.checking' : 'browser.exit.untested') : ''].filter(Boolean).join(' · ')
 }
 
 /** "Orange, France" from a test. */
