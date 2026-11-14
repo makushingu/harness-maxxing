@@ -352,6 +352,22 @@ def chain(path: str) -> list[str]:
     return out
 
 
+def chosen_profile(block: dict, s: dict) -> str:
+    """The profile an agent's block chose, when it still exists ("" = its project's)."""
+    chosen = block.get("profile")
+    return chosen if chosen and chosen != OWN and profile(chosen, s) is not None else ""
+
+
+def agent_profile(path: str, block: dict, s: dict) -> str | None:
+    """The profile an agent's browser uses, from its block already read (resolve without reading it again)."""
+    mine = chosen_profile(block, s)
+    if mine:
+        return mine
+    project = project_of(path)
+    p = project_profile(project, s) if project else None
+    return p["id"] if p else None
+
+
 def resolve(path: str, s: dict | None = None, create: bool = False) -> dict:
     """{enabled, profile, project, from: {enabled, profile}} for a folder. `enabled`: its own block, else its topic's,
     else its project's (an agent's is never inherited). `profile`: the one an agent chose, else its project's ("" while
@@ -368,8 +384,8 @@ def resolve(path: str, s: dict | None = None, create: bool = False) -> dict:
             out["enabled"], out["from"]["enabled"] = v, o
             break
     if owners and owners[0].startswith("agent:"):
-        chosen = own_block(owners[0]).get("profile")
-        if chosen and chosen != OWN and profile(chosen, s) is not None:
+        chosen = chosen_profile(own_block(owners[0]), s)
+        if chosen:
             out["profile"], out["from"]["profile"] = chosen, owners[0]
             return out
     if project:
@@ -398,26 +414,6 @@ def active_for(path: str) -> tuple[str, dict, dict] | None:
         s = settings()
     p = profile(r["profile"], s)
     return (owners[0], p, s) if p else None
-
-
-def agents_of(pid: str) -> list[str]:
-    """The agents whose browser is on and runs on this profile (their project's, or chosen): their paths."""
-    from .. import agents
-    out: list[str] = []
-    root = config.workspace() / "projects"
-    if not root.is_dir():
-        return out
-    s = settings()
-    for a in sorted(root.glob("*/topics/*/agents/*/agent.json")):
-        ap = str(a.parent.relative_to(config.workspace()))
-        try:
-            if not agents.exists(ap) or not clean(agents.load(ap).get("browser")).get("enabled"):
-                continue
-        except Exception:  # noqa: BLE001
-            continue
-        if resolve(ap, s)["profile"] == pid:
-            out.append(ap)
-    return out
 
 
 # ---- folders -------------------------------------------------------------------------------------------------------

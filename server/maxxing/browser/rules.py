@@ -24,7 +24,6 @@ LOCAL_SUFFIXES = (".localhost", ".local", ".lan", ".home", ".internal", ".intran
 LOOPBACK_DNS = ("nip.io", "sslip.io", "xip.io", "localtest.me", "lvh.me", "vcap.me", "traefik.me", "local.gd",
                 "localhost.direct", "lacolhost.com")
 SITE_RE = re.compile(r"^(\*\.)?[a-z0-9]([a-z0-9-]{0,62}\.)+[a-z0-9-]{2,63}\Z")
-MAX_SITES = 50
 # a site covers a domain and its subdomains, never a whole extension ("com", "co.uk")
 TOO_WIDE = {"co.uk", "org.uk", "ac.uk", "gov.uk", "me.uk", "com.au", "net.au", "org.au", "co.nz", "co.jp", "com.br",
             "com.cn", "com.tr", "co.in", "co.za", "github.io", "pages.dev", "workers.dev", "vercel.app",
@@ -54,15 +53,6 @@ def clean_site(raw: object) -> str | None:
     if not SITE_RE.match(s) or len(s) > 253 or s in TOO_WIDE or local_host(s):
         return None
     return s
-
-
-def clean_sites(raw: object) -> list[str]:
-    out: list[str] = []
-    for item in raw if isinstance(raw, list) else []:
-        s = clean_site(item)
-        if s and s not in out:
-            out.append(s)
-    return out[:MAX_SITES]
 
 
 def site_allowed(host: str, sites: list[str]) -> bool:

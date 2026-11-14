@@ -122,9 +122,9 @@ def _run_setup(with_exits: bool) -> None:
 
 
 # ---- signed in ---------------------------------------------------------------------------------------------------
-def _profiles_view(s: dict) -> list[dict]:
+def _profiles_view(s: dict, navigators: list[dict] | None = None) -> list[dict]:
     p = pool_mod.pool()
-    agents_on = [n for n in p.navigators() if n["kind"] == "agent"]
+    agents_on = [n for n in (navigators if navigators is not None else p.navigators()) if n["kind"] == "agent"]
     out = []
     for prof in s["profiles"]:
         b = p.browsers.get(prof["id"])
@@ -142,12 +142,13 @@ def _status() -> dict:
         browser.ensure_projects_with_agents()
     s = browser.settings()
     rt = exits.runtime()
+    navigators = pool_mod.pool().navigators()            # once: the profiles count their agents from it
     return {"feature": browser.feature_on(),
             "settings": {k: v for k, v in s.items() if k not in ("profiles", "exits")},
             "available": unit.available(),
             "tools": {"tailscale": bool(exits.tailscale_bins()), "wireguard": bool(exits.wireproxy_bin())},
             "setup": {k: _setup[k] for k in ("running", "log", "error")},
-            "profiles": _profiles_view(s), "navigators": pool_mod.pool().navigators(),
+            "profiles": _profiles_view(s, navigators), "navigators": navigators,
             "exits": [rt.public(e) for e in s["exits"]],
             "direct": {"test": rt.tests.get(browser.DIRECT)},
             "summary": pool_mod.pool().summary(), "asks": asks.pending(),

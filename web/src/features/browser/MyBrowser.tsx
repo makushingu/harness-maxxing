@@ -36,8 +36,12 @@ export function MyBrowser({ st, pid, onOpen, onAgent }: { st: BrowserStatus; pid
             data-testid="browser-mine-picture"
           >
             <div className="relative grid aspect-[16/10] place-items-center overflow-hidden bg-fill-1">
-              {running && src ? (
-                <img src={src} alt={page?.title || t('browser.page')} className="size-full object-cover object-top" draggable={false} />
+              {running && page && src ? (
+                <img src={src} alt={page.title || t('browser.page')} className="size-full object-cover object-top" draggable={false} />
+              ) : running ? (
+                <span className="grid justify-items-center gap-2 text-[13px] text-muted-foreground">
+                  <Globe className="size-8 opacity-50" /> {t('browser.mine.ready')}
+                </span>
               ) : (
                 <AsleepScene project="" label={t('browser.mine.asleep')} size="lg" />
               )}
@@ -68,7 +72,7 @@ export function MyBrowser({ st, pid, onOpen, onAgent }: { st: BrowserStatus; pid
             </label>
             <div className="grid gap-1.5">
               <span className="text-[12px] font-medium">{t('browser.mine.connection')}</span>
-              <ConnectionPicker pid={pid} note className="w-full" />
+              <ConnectionPicker pid={pid} note wide className="w-full" />
               <span className="text-[12px] text-muted-foreground">{t('browser.mine.connectionHint')}</span>
             </div>
             <Button className="justify-self-start" onClick={onOpen} data-testid="browser-mine-open">
@@ -79,7 +83,7 @@ export function MyBrowser({ st, pid, onOpen, onAgent }: { st: BrowserStatus; pid
         <section className="grid gap-3" data-testid="browser-mine-agents">
           <div className="grid gap-0.5">
             <h2 className="text-sm font-semibold">{t('browser.mine.agents')}</h2>
-            <p className="text-[12px] text-muted-foreground">{t('browser.persistentDesc')}</p>
+            <p className="text-[12px] text-muted-foreground">{t('browser.mine.agentsDesc')}</p>
           </div>
           {agents.length ? (
             <div className="grid grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] gap-3">

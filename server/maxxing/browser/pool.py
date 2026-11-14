@@ -918,8 +918,8 @@ class Pool:
                         "used": max((t["used"] for t in rows), default=0)})
         for n in navs.person():
             add(n["id"], n["profile"])
-        for a in navs.agents_on():
-            add(a, navs.profile_of(a))
+        for a, pid in navs.agents_on():
+            add(a, pid)
         for b in self.running():
             for t in b.turns.values():
                 add(t.nav, b.pid)

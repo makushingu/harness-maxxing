@@ -31,8 +31,9 @@ The browser has its own page: **Browser** in the sidebar.
 
 The second bar of the **Browser** page has three parts:
 
-- **Browser**: your browser. Open it to browse yourself (to sign in to a site for Claude, say). At the top, pick its
-  **Profile** and that profile's **Connection**.
+- **My browser**: your browser, a Chromium that runs on your server (not on your computer). The page shows its
+  picture (or "asleep"), its **Profile** and that profile's **Connection**; **Open my browser** (or a click on the
+  picture) starts it to browse yourself (to sign in to a site for Claude, say). Under it, the agents' browsers.
 - **Profiles**: the sign-ins (cookies) and the connection the browsers use. **+ Add a profile** makes one
   more.
 - **Connections**: where the pages go out (the server's IP, your phone, your home box, a proxy). **+ Add a connection**
@@ -138,10 +139,16 @@ A browser opens **any public site**. The addresses of your server and of local n
 `192.168.x.x`, your router, `*.local`...) are always refused, as are `file:` pages and the browser's own settings
 pages.
 
-An agent **in its sandbox** (its page -> **Protection**) opens only **its domains**: the same list as its commands and
-WebFetch (`example.com` includes its subdomains). Any other page is refused and Claude is told which site to ask you
-to add; a tab that gets there anyway (a link, a redirect) is emptied. Its browser card says **Limited to its domains**.
-Sessions and free agents have no list: you decide what they do.
+The **runs** of an agent **in its sandbox** (its page -> **Protection**: schedules, webhooks, e-mail, notifications,
+**Run now**) open only **its domains**: the same list as its commands and WebFetch (`example.com` includes its
+subdomains). Any other page is refused, and a tab that gets there anyway (a link, a redirect) is emptied; you get a
+notification "*agent*: *site* is not one of its domains" with **Add this domain**, for its next runs. Its browser card
+says **Limited to its domains**. When **you talk with the agent**, it is not limited (like its commands), and neither
+are sessions and free agents.
+
+In the live view of such an agent's browser you go where you want, but a bar warns when the page is outside its
+domains (a sign-in page of another site, for example), since its next step would empty that tab: **Add to its
+domains** keeps it.
 
 ## Using it, watching Claude
 

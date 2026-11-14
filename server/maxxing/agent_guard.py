@@ -667,7 +667,7 @@ def in_the_sandbox() -> bool:
     return not (config.STATE / "config.json").exists()
 
 
-BROWSER_OWNER_ONLY = {"set", "profile", "forget", "setup", "settings", "stop"}
+BROWSER_OWNER_ONLY = {"set", "profile", "forget", "setup", "settings"}
 
 
 def check_cli(argv: list[str]) -> str | None:

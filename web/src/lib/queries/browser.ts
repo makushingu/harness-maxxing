@@ -168,8 +168,6 @@ export function giveBrowserFiles(profile: string, nav: string, files: File[]) {
   return api.post<BrowserState>(`/api/browser/profiles/${seg(profile)}/files?nav=${encodeURIComponent(nav)}`, form)
 }
 
-/** The person's navigators: a new one (on a profile), rename / move to another profile (its tabs follow, asleep),
- *  close one (its tabs closed; never "me"). */
 /** The person's browser on another profile (its tabs move there, asleep). */
 export function useBrowserNavigator() {
   return useMut(({ profile }: { profile: string }): Promise<unknown> => api.put('/api/browser/navigators/me', { profile }), {

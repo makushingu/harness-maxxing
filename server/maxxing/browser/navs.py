@@ -1,6 +1,6 @@
 """The navigators of the Harness Browser: what a person opens and what a turn drives, each with its own tabs.
 
-A profile is sign-ins (cookies, saved logins), an exit and a site list: one Chromium. A navigator is a window of tabs
+A profile is sign-ins (cookies, saved logins) and an exit: one Chromium. A navigator is a window of tabs
 in a profile's Chromium. Several navigators may use the same profile (the same sign-ins); each one sees only its tabs:
 
     me                    the person's one navigator (Browser page; <state>/browser/navigators.json: its profile)
@@ -22,9 +22,8 @@ from .. import browser, config
 
 ME = "me"
 SEG = r"(?!\.\.?/)[^\s:/]{1,80}"            # a folder name (never "." or "..")
-NAV_RE = re.compile(rf"^(me(-[0-9]{{1,3}})?|agent:projects/{SEG}/topics/{SEG}/agents/(?!\.\.?\Z)[^\s:/]{{1,80}}"
+NAV_RE = re.compile(rf"^(me|agent:projects/{SEG}/topics/{SEG}/agents/(?!\.\.?\Z)[^\s:/]{{1,80}}"
                     r"|session:[A-Za-z0-9_-]{6,80})\Z")
-PERSON_RE = re.compile(r"^me\Z")
 _lock = threading.Lock()                # navigators.json: read, change, write (routes run in threads)
 
 
@@ -78,7 +77,7 @@ def get_person(nav: str) -> dict | None:
     return next((n for n in person() if n["id"] == nav), None)
 
 
-def update(nav: str, profile: str | None = None) -> tuple[dict, str]:
+def update(nav: str, profile: str) -> tuple[dict, str]:
     """Put the person's navigator on another profile: (the navigator, the profile it had)."""
     with _lock:
         rows = person()
@@ -86,10 +85,9 @@ def update(nav: str, profile: str | None = None) -> tuple[dict, str]:
         if row is None:
             raise browser.BrowserError(404, "no_navigator", "No such browser")
         old = row["profile"]
-        if profile is not None:
-            if browser.profile(profile) is None:
-                raise browser.BrowserError(404, "no_profile", "No such browser profile")
-            row["profile"] = profile
+        if browser.profile(profile) is None:
+            raise browser.BrowserError(404, "no_profile", "No such browser profile")
+        row["profile"] = profile
         _save(rows)
         return row, old
 
@@ -140,13 +138,24 @@ def label(nav: str) -> dict:
     return {"kind": k, "name": title, "session": sid, "path": path}
 
 
-def agents_on() -> list[str]:
-    """The agents whose browser is on (their navigator exists even before their first tab)."""
+def agents_on(s: dict | None = None) -> list[tuple[str, str | None]]:
+    """The agents whose browser is on (their navigator exists even before their first tab), with the profile each
+    uses (None: its profile is gone). One read of each agent, the settings read once (the Browser page lists them all)."""
     from .. import agents
-    out: list[str] = []
+    out: list[tuple[str, str | None]] = []
     root = config.workspace() / "projects"
     if not root.is_dir():
         return out
+    s = s or browser.settings()
+    for a in sorted(root.glob("*/topics/*/agents/*/agent.json")):
+        ap = str(a.parent.relative_to(config.workspace()))
+        try:
+            block = browser.clean(agents.load(ap).get("browser"))
+        except Exception:  # noqa: BLE001
+            continue
+        if block.get("enabled"):
+            out.append((f"agent:{ap}", browser.agent_profile(ap, block, s)))
+    return out
     for a in sorted(root.glob("*/topics/*/agents/*/agent.json")):
         ap = str(a.parent.relative_to(config.workspace()))
         try:

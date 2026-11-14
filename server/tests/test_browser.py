@@ -36,8 +36,9 @@ def test_pages_that_can_never_be_opened():
 
 def test_a_list_of_domains_allows_only_its_sites_and_their_subdomains():
     from maxxing.browser import rules
-    sites = rules.clean_sites(["Example.com", "https://shop.acme.io/path", "*.blog.dev", "co.uk", "bad site", "x"])
+    sites = [rules.clean_site(x) for x in ["Example.com", "https://shop.acme.io/path", "*.blog.dev"]]
     assert sites == ["example.com", "shop.acme.io", "blog.dev"]
+    assert [rules.clean_site(x) for x in ["co.uk", "bad site", "x"]] == [None, None, None]
     assert rules.page_refusal("https://www.example.com/", sites) is None
     assert rules.page_refusal("https://a.blog.dev/", sites) is None
     assert "not one of this agent's domains" in rules.page_refusal("https://example.org/", sites)
@@ -232,7 +233,7 @@ def test_ask_human_waits_for_the_person(tmp_path, mx, monkeypatch):
             "params": {"name": "ask_human", "arguments": {"reason": "Solve the captcha", "what": "captcha"}}})
     req = wait_for(lambda: _files(folder))[0]
     assert req["status"] == "pending" and req["what"] == "captcha" and req["owner"] == f"agent:{A}"
-    assert asks.pending_for(f"agent:{A}") and asks.pending(session="sess01")[0]["reason"] == "Solve the captcha"
+    assert asks.pending(owner=f"agent:{A}") and asks.pending(session="sess01")[0]["reason"] == "Solve the captcha"
     asks.decide(req["id"], "done", note="signed in")
     text = m.recv()["result"]["content"][0]["text"]
     assert "handed the browser back" in text and "signed in" in text
@@ -674,9 +675,8 @@ def test_a_folder_uses_its_project_profile_and_an_agent_may_choose_another(mx):
     assert not r["enabled"] and r["profile"] == "acme"            # its switch is its own, its profile its project's
     agents.update(A, {"browser": {"enabled": True, "profile": "support"}})
     assert browser.resolve(A)["profile"] == "support" and browser.resolve(A)["from"]["profile"] == f"agent:{A}"
-    assert browser.agents_of("support") == [A] and browser.agents_of("acme") == []
     browser.delete_profile("support")                              # gone: its project's again
-    assert browser.resolve(A)["profile"] == "acme" and browser.agents_of("acme") == [A]
+    assert browser.resolve(A)["profile"] == "acme"
     agents.update(A, {"browser": {"profile": "own"}})              # of before: its project's
     assert "profile" not in agents.load(A)["browser"]
     # a second profile naming the same project is just a profile
@@ -1260,8 +1260,8 @@ def test_a_tab_belongs_to_the_navigator_that_opened_it(mx):
     t.unclaim(c)
     assert t.resolve({"targetId": "p2", "type": "page", "url": "https://a.example/", "openerId": "p1"})["nav"] == "session:s1"
     assert t.resolve({"targetId": "p3", "type": "page", "url": "https://b.example/"})["nav"] == "me"
-    t.assign("p3", {"kind": "you"}, "me-2")
-    assert t.nav_of("p3") == "me-2" and [x["key"] for x in t.of_nav("session:s1")] == [t.of_target("p1")["key"],
+    t.assign("p3", {"kind": "agent", "path": "projects/acme/topics/blog/agents/writer"}, "agent:projects/acme/topics/blog/agents/writer")
+    assert t.nav_of("p3") == "agent:projects/acme/topics/blog/agents/writer" and [x["key"] for x in t.of_nav("session:s1")] == [t.of_target("p1")["key"],
                                                                                           t.of_target("p2")["key"]]
     t.gone("p2", keep=True)
     key = next(x["key"] for x in t.asleep("session:s1"))
@@ -1303,7 +1303,7 @@ def test_new_tabs_are_made_one_at_a_time_in_their_navigator(mx):
 
 def test_a_navigator_id_names_an_agent_folder_or_nothing():
     from maxxing.browser import navs
-    assert navs.valid("agent:projects/acme/topics/blog/agents/writer") and navs.valid("me-2")
+    assert navs.valid("agent:projects/acme/topics/blog/agents/writer") and navs.valid("me") and not navs.valid("me-2")
     for bad in ("agent:projects/../topics/x/agents/y", "agent:projects/a/topics/b/agents/..",
                 "agent:projects/a/topics/b", "agent:projects/a/topics/b/agents/w/x", "me-x", "session:a b"):
         assert not navs.valid(bad), bad
@@ -1323,7 +1323,7 @@ def test_the_api_moves_the_person_navigator(client, mx):
     assert client.put("/api/browser/navigators/me", json={"profile": "shop"}).status_code == 200
     assert pool_mod.pool().tabs("shop").asleep("me") and not pool_mod.pool().tabs("main").of_nav("me")
     assert client.get("/api/browser/profiles/main/picture?nav=../x").status_code == 400
-    assert client.get("/api/browser/profiles/main/picture?nav=me-9").status_code == 404
+    assert client.get("/api/browser/profiles/main/picture?nav=me-9").status_code == 400   # only one: me
 
 
 def test_a_session_navigator_is_temporary_and_journaled(client, mx):

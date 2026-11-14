@@ -1367,8 +1367,8 @@ export type MailSent = { ok: boolean; message_id: string; recipients: number; re
 export type MailAction = 'seen' | 'unseen' | 'flag' | 'unflag' | 'move' | 'archive' | 'trash' | 'junk' | 'inbox' | 'delete'
 
 // ---- the Harness Browser (api/browser.py) ---------------------------------------------------------------------------
-/** A project's / topic's (.maxxing.json) or an agent's (agent.json) own `browser` block: a missing key is inherited
- *  (agent -> topic -> project -> off / `main`; an agent's `enabled` is never inherited). */
+/** A project's / topic's (.maxxing.json) or an agent's (agent.json) own `browser` block: `enabled` is inherited
+ *  topic -> project (an agent's never is); `profile` is an agent's choice only (else its project's). */
 export type BrowserSwitch = { enabled?: boolean; profile?: string }
 /** Global settings (config.json -> browser; profiles and exits apart). */
 export type BrowserSettings = {
@@ -1387,7 +1387,7 @@ export type BrowserSettings = {
   /** the address bar's search engine */
   search: 'google' | 'duckduckgo' | 'bing'
 }
-/** A profile: its own Chromium (sign-ins), its sites, its exit. `main` always exists (name "" = "Personal");
+/** A profile: its own Chromium (sign-ins) and its exit. `main` always exists (name "" = "Personal");
  *  one per project (made at its first use, or when the project has agents). */
 export type BrowserProfile = {
   id: string
@@ -1468,7 +1468,7 @@ export type BrowserTab = {
   /** shown in the live view */
   front: boolean
   used: number
-  /** the navigator it belongs to (me, me-2, agent:<path>, session:<sid>) */
+  /** the navigator it belongs to (me, agent:<path>, session:<sid>) */
   nav: string
 }
 /** One profile's browser (running or not), or one navigator of it (`nav`: then only its tabs, its page...). */

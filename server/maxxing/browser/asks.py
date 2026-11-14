@@ -61,16 +61,8 @@ def pending(owner: str | None = None, session: str | None = None) -> list[dict]:
             and (owner is None or d.get("owner") == owner) and (session is None or d.get("session") == session)]
 
 
-def pending_for(owner: str) -> bool:
-    return any(d.get("owner") == owner and d.get("status") == "pending" for d in _all())
-
-
 def pending_for_profile(pid: str) -> bool:
     return any((d.get("profile") or browser.MAIN) == pid and d.get("status") == "pending" for d in _all())
-
-
-def pending_for_any() -> bool:
-    return any(d.get("status") == "pending" for d in _all())
 
 
 def waiting(sid: str) -> int:

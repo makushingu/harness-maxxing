@@ -1,7 +1,7 @@
 // /browser?profile=<id>: a profile (one per project, `main` = the person's, more added by hand). At the top its name
 // (renamed in place) and its connection (with the address sites see). Then its persistent browsers (one per agent on
-// it, a live picture each), the journal of its temporary ones (the sessions': text only), and its settings (sites,
-// what to do when the connection is down, memory, forget its sign-ins, delete).
+// it, a live picture each), the journal of its temporary ones (the sessions': text only), and its settings (what to
+// do when the connection is down, memory, forget its sign-ins, delete).
 import * as React from 'react'
 import { Link } from 'react-router'
 import { Bot, Globe, MessageSquare, User } from 'lucide-react'

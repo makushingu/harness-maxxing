@@ -7,7 +7,7 @@ of its navigator. `by` says who opened it (the person may open tabs in an agent'
 `key` is ours and stays the same while a tab sleeps and wakes; `target` (Chromium's id) is only known while the tab is
 awake (not saved). A page Chromium opens learns its navigator and opener the first time anyone sees it (`resolve`):
 the tab that opened it (a popup), else the claim waiting (pool.create: one at a time per profile), else the person's
-first navigator.
+navigator (`me`).
 """
 from __future__ import annotations
 

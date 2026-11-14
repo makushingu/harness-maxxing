@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils'
 import { Button, Popover, PopoverContent, PopoverTrigger, Select } from '@/components/ui'
 import { exitLine, exitTone, testWhere } from './profiles'
 
-export function ConnectionPicker({ pid, className, note }: { pid: string; className?: string; note?: boolean }) {
+export function ConnectionPicker({ pid, className, note, wide }: { pid: string; className?: string; note?: boolean; wide?: boolean }) {
   const t = useT()
   const go = useNavigate()
   const { data: st } = useBrowserStatus()
@@ -25,9 +25,9 @@ export function ConnectionPicker({ pid, className, note }: { pid: string; classN
   ]
   return (
     <span className={cn('inline-flex min-w-0 items-center gap-1', className)} data-testid="browser-connection">
-      <span className="hidden text-[12px] text-muted-foreground sm:inline">{t('browser.connection')}</span>
+      {!wide && <span className="hidden text-[12px] text-muted-foreground sm:inline">{t('browser.connection')}</span>}
       <Select
-        className="h-8 w-52 max-w-[50vw] text-[13px]"
+        className={wide ? 'h-9 min-w-0 flex-1 text-[13px]' : 'h-8 w-52 max-w-[50vw] text-[13px]'}
         aria-label={t('browser.connection')}
         value={p.exit}
         onValueChange={(x) => (x === '__new' ? go('/browser?exit=new') : x !== p.exit && save.mutate({ id: pid, exit: x }))}

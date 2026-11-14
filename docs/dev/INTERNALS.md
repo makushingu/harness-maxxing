@@ -697,11 +697,15 @@ on_exit_down, named after the project; `ensure_projects_with_agents()` from `GET
 `browser`; `browser.resolve(path, s, create=False)` = `{enabled, profile, project, from}`: `enabled` walks
 `chain(path)` (nearest wins, an agent's stops at the agent); `profile` = the agent's own choice when it exists, else
 the project's ("" while not made; `create` makes it). `active_for(path)` = (owner, profile, settings) when turns
-there get the tools (makes the project's profile). `agents_of(pid)` = the agents on, on that profile.
-Sites: any public site for every turn and the person, except a sandboxed agent: `agent_sites(owner)` = its `domains`
-(`rules.clean_site`; `[]` = nothing, an unreadable agent too; None = any public site), checked on a tool's `url`
-(`Pool.call`), on every DevTools command that opens a page (the `/cdp` relay of its turn) and after each tool call
-(`Pool._keep_to`: a tab of its navigator outside them goes back to `about:blank`, Claude is told). Never opened by
+there get the tools (makes the project's profile). `agent_profile(path, block, s)` = an agent's profile from its block
+already read (`navs.agents_on(s)`: the Browser page reads each agent once).
+Sites: any public site for every turn and the person, except a sandboxed agent's run (its owner's conversation is not
+sandboxed): `agent_sites(owner)` = its `domains` (`rules.clean_site`; `[]` = nothing, an unreadable agent too; None =
+any public site), read once when the turn starts (runner `browser_args` -> `turns/<sid>.json` `sites`,
+`turns.sites_of`, `Turn.sites`), checked on a tool's `url` (`Pool.call`), on every DevTools command that opens a page
+(the `/cdp` relay of its turn) and after each tool call (`Pool._keep_to`: a tab of its navigator outside them goes
+back to `about:blank`, Claude is told). A page refused for the list only (`rules.off_domains`) -> `domains.blocked`:
+a feed event (ref `browsersite:<agent>|<host>`, button `add` -> `domains.add`, once a day per agent and host). Never opened by
 anyone (`rules.page_refusal` without a list, the proxy, the Chromium policy): this server, local networks, raw IPs,
 `file:`, the browser's own pages.
 Modules:

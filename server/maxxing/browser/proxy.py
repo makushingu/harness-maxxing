@@ -3,8 +3,9 @@ inside it forwards 127.0.0.1:3128 here).
 
 Every host is resolved here and refused unless all its addresses are on the public internet; the connection goes to
 the address that was checked (no DNS rebinding). Names that point at a local network (localhost, *.local, nip.io...)
-and raw IP addresses are refused before any lookup. Which pages may be opened ("list" mode) is the Chromium policy's
-job: through this proxy pass the images, scripts and API calls of those pages, from any public site.
+and raw IP addresses are refused before any lookup. Which pages may be opened (a sandboxed agent's domains) is checked
+on the DevTools commands (rules.page_refusal): through this proxy pass the images, scripts and API calls of those
+pages, from any public site.
 
 A profile with an exit (exits.py) sends the connection to the checked address through it (`upstream`): the house's
 network behind a phone or a box is never reached, a name is never resolved there. An exit that is down gets a 502

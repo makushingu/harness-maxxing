@@ -160,7 +160,7 @@ function useLive(active: boolean, profile: string, nav: string, quality: Quality
   return { frame, imgRef, state, error, setError, connected, send, readPace }
 }
 
-/** The live view of a navigator (`nav`: me, me-2, agent:<path>, session:<sid>) in the Chromium of `profile`. `session`
+/** The live view of a navigator (`nav`: me, agent:<path>, session:<sid>) in the Chromium of `profile`. `session`
  *  = its requests first; `start` = start a stopped profile with the view; `who` = who asks (an agent's name);
  *  `onMinimize` = the window's "minimize" (hides it, the browser keeps running). */
 export function LiveView({ profile, nav, session, who, start, onMinimize, className }: {

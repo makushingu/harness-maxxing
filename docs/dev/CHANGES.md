@@ -63,11 +63,18 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   an agent at `GET /api/browser`; `DELETE` refused (`409 project`) while the project exists; `GET /profiles/{pid}` = `{profile, browser, gone, agents, person, temporary (replays.sessions: actions with a `nav` "session:*"), actions, asks}`; ProfileRow adds `gone`, `agents`; `profile: "own"` and a
   project's / topic's `profile` are read as "its project's". `GET /owner` adds `project`, `project_profile`, `sites`.
   **Sites**: a profile has no list (a profile's `web` / `sites` of before are dropped; Chromium policy without
-  `URLAllowlist`, no restart on a change). Any public site for every turn and the person, except a sandboxed agent:
-  `browser.agent_sites(owner)` = its `domains` (None = any public site, `[]` = nothing), checked on a tool's `url`
-  (`Pool.call`), in its `/cdp` relay (`Page.navigate` / `Target.createTarget`) and after each tool call
-  (`Pool._keep_to`: a tab of its navigator outside them -> `about:blank`, Claude told; `Watcher.cdp_navigate`).
-  `rules.page_refusal` keeps refusing this server, local networks, raw IPs, `file:` and browser pages for all.
+  `URLAllowlist`, no restart on a change). Any public site for every turn and the person, except a sandboxed agent's
+  run (not its owner's conversation, which is not sandboxed): `browser.agent_sites(owner)` = its `domains` (None = any
+  public site, `[]` = nothing), read once by the runner (`browser_args`, `agent["sandbox"]`) into the turn file
+  (`turns/<sid>.json` `sites`; `turns.sites_of`, a file without it reads the agent), then `Turn.sites`: checked on a
+  tool's `url` (`Pool.call`), in its `/cdp` relay (`Page.navigate` / `Target.createTarget`) and after each tool call
+  (`Pool._keep_to`: a tab of its navigator outside them -> `about:blank`, Claude told; `Watcher.cdp_navigate`). A
+  refusal for the list only (`rules.off_domains`) posts a feed event (`browser/domains.py`: source `agents`, ref
+  `browsersite:<agent>|<host>`, action `add` -> `domains.add`, dedupe per agent, host and day). Live view:
+  `DomainBar` (PATCH the agent's `domains`). `rules.page_refusal` keeps refusing this server, local networks, raw IPs,
+  `file:` and browser pages for all. `GET /api/browser`: `navigators()` once, `navs.agents_on(s)` reads each agent
+  once (`browser.agent_profile`). Navigator ids: `me`, `agent:<path>`, `session:<sid>` (an old `me-N` tab falls back
+  to `me`). Web: `MyBrowser.tsx` (the page without `?live=1`), `EmptyCard`.
 - Modules: `exits.py` (exits, `Runtime` up/down state + 30 s watcher, `Tailscale` = own userspace `tailscaled`, `WireGuard` =
   `wireproxy`, units `maxxing-bx-<install>-<eid>`, `test()` via ip-api.com + 2 MB download, `wait_down` / `set_resume` /
   `_resume_waiters`, `feed_action`), `pool.py` (one Chromium per profile, `max_active_profiles`, `exit_ready`, a
