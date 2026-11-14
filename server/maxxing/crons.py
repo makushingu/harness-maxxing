@@ -266,7 +266,8 @@ def parse_once(value: str, zone: ZoneInfo | None = None) -> str:
             d = d.astimezone(zone or tz()).replace(tzinfo=None)   # year 1 / 9999 with an offset: out of range
         return d.strftime("%Y-%m-%dT%H:%M")
     except (ValueError, OverflowError):
-        raise CronError(f"once_at: '{value}' is not a date and time (YYYY-MM-DDTHH:MM)", "invalid_once") from None
+        shown = str(value).encode("utf-8", "replace").decode()   # a lone surrogate: the JSON error could not hold it
+        raise CronError(f"once_at: '{shown}' is not a date and time (YYYY-MM-DDTHH:MM)", "invalid_once") from None
 
 
 def once_ts(value: str, zone: ZoneInfo | None = None) -> float | None:

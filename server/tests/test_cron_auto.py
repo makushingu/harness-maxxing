@@ -313,6 +313,12 @@ def test_once_at_is_normalised_in_the_configured_zone(org):
     assert e.value.code == "invalid_once"
 
 
+def test_once_at_with_a_lone_surrogate_is_a_clean_error(org, client):
+    body = '{"name": "n", "command": "true", "once_at": "\\ud800"}'
+    r = client.post("/api/crons", content=body, headers={"content-type": "application/json"})
+    assert r.status_code == 400 and r.json()["error"] == "invalid_once"
+
+
 def test_once_at_out_of_range_is_a_clean_error(org, client):
     for v in ("9999-12-31T23:30-10:00", "0001-01-01T00:10+05:00"):          # past year 9999 / before year 1
         with pytest.raises(crons.CronError) as e:
