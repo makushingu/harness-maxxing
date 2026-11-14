@@ -484,6 +484,13 @@ def _utf8(s: str) -> str:
     return s.encode("utf-8", "replace").decode("utf-8")
 
 
+def _need_text(**fields: Any) -> None:
+    """A prompt or a match that UTF-8 cannot store (a lone surrogate, from bytes that were not UTF-8) is refused."""
+    for name, v in fields.items():
+        if isinstance(v, str) and _utf8(v) != v:
+            raise AgentError(400, "bad_text", f"{name} is not valid text")
+
+
 def clean(data: Any, strict: bool = False) -> dict:
     """agent.json with every field present and valid. strict: refuse bad values instead of dropping them."""
     d = data if isinstance(data, dict) else {}
@@ -2721,6 +2728,7 @@ def add_webhook(path: str, kind: str = "generic", prompt: str = "", levels: list
     from . import feed, feedhooks
     if not exists(path):
         raise AgentError(404, "not_found", f"Agent {path!r} not found")
+    _need_text(prompt=prompt, match=match)
     with _lock:                                         # a PATCH of the agent at the same moment keeps both changes
         a = load(path)
         _not_broken(path, a)
@@ -2766,6 +2774,7 @@ def add_trigger(path: str, trigger: dict) -> dict:
     """Append one trigger: read and saved under the lock, so a trigger added at the same moment is kept."""
     if not exists(path):
         raise AgentError(404, "not_found", f"Agent {path!r} not found")
+    _need_text(**{k: v for k, v in trigger.items() if isinstance(k, str)})
     with _lock:
         return update(path, {"triggers": [*load(path)["triggers"], trigger]})
 

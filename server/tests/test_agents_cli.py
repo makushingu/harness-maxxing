@@ -237,3 +237,14 @@ def test_show_reads_a_role_that_is_not_utf8(client, topic, capsys):
     (agents.folder(A) / "CLAUDE.md").write_bytes(b"# Writer\n\nwrites \xff posts\n")
     assert cli.main(["agents", "show", "writer"]) == 0
     assert "writes \ufffd posts" in json.loads(capsys.readouterr().out)["claude_md"]
+
+
+def test_webhook_and_watch_refuse_text_that_is_not_utf8(client, topic, capsys):
+    _two_agents(client)
+    for args in (["webhook", "writer", "--prompt", "\udcff"], ["watch", "writer", "--source", "shop", "--match", "\udcff"],
+                 ["watch", "writer", "--source", "shop", "--prompt", "a\udcffb"]):
+        assert cli.main(["agents", *args]) == 2, args
+        err = capsys.readouterr().err
+        assert "not valid text" in err and "Traceback" not in err
+    assert agents.load(A)["triggers"] == []
+
