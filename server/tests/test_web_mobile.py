@@ -143,3 +143,9 @@ def test_the_name_of_a_source_keeps_room_next_to_its_buttons():
     src = (WEB / "features" / "infra" / "Overview.tsx").read_text()
     block = re.search(r'<div className="([^"]*)">\s*<span className="truncate text-\[13px\] font-medium">\{title\}', src)
     assert block and "basis-40" in block[1].split()
+
+
+def test_the_counts_of_the_infra_matrix_are_big_enough_to_tap():
+    src = (WEB / "features" / "infra" / "InfraPage.tsx").read_text()
+    count = re.search(r'onClick=\{\(\) => onPlace\(x, p\.key\)\}\s+className="([^"]*)"', src)
+    assert count and "pointer-coarse:min-h-10" in count[1].split()
