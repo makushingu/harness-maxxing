@@ -156,12 +156,3 @@ def agents_on(s: dict | None = None) -> list[tuple[str, str | None]]:
         if block.get("enabled"):
             out.append((f"agent:{ap}", browser.agent_profile(ap, block, s)))
     return out
-    for a in sorted(root.glob("*/topics/*/agents/*/agent.json")):
-        ap = str(a.parent.relative_to(config.workspace()))
-        try:
-            block = browser.clean(agents.load(ap).get("browser"))
-        except Exception:  # noqa: BLE001
-            continue
-        if block.get("enabled"):
-            out.append(f"agent:{ap}")
-    return out
