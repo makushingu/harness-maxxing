@@ -116,5 +116,9 @@ export function inputInZone(ts: number, tz?: string): string {
 
 /** Default time of a new one-time job: the next whole hour, at least 30 minutes from now. */
 export function defaultOnceAt(tz?: string, now = Date.now() / 1000): string {
-  return inputInZone(Math.ceil((now + 1800) / 3600) * 3600, tz)
+  // rounded in `tz`, not in UTC: an hour in Asia/Kolkata starts at :30 UTC
+  const soon = now + 1800
+  const minute = Number(inputInZone(soon, tz).slice(14, 16))
+  const start = Math.floor(soon / 60) * 60
+  return inputInZone(minute === 0 && start === soon ? soon : start + (60 - minute) * 60, tz)
 }

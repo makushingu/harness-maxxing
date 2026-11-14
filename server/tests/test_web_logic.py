@@ -35,3 +35,12 @@ def test_a_cron_step_that_does_not_divide_the_hour_or_the_day_is_custom(tmp_path
     kinds = _run_ts(tmp_path, SCHEDULE, """return ['*/45 * * * *', '*/7 * * * *', '0 */7 * * *', '0 */5 * * *',
         '*/15 * * * *', '*/20 * * * *', '30 */6 * * *', '0 */12 * * *'].map((e) => m.toPreset(e).kind)""")
     assert kinds == ["custom"] * 4 + ["minutes", "minutes", "hours", "hours"]
+
+
+def test_the_default_one_time_date_is_a_whole_hour_in_the_configured_zone(tmp_path):
+    out = _run_ts(tmp_path, SCHEDULE, """const t = Date.UTC(2026, 10, 14, 10, 0) / 1000
+        return ['Asia/Kolkata', 'Asia/Kathmandu', 'Australia/Adelaide', 'UTC', 'Europe/Paris']
+          .map((z) => [m.defaultOnceAt(z, t), m.defaultOnceAt(z, t + 1)])""")
+    assert out == [["2026-11-14T16:00", "2026-11-14T17:00"], ["2026-11-14T17:00", "2026-11-14T17:00"],
+                   ["2026-11-14T21:00", "2026-11-14T22:00"], ["2026-11-14T11:00", "2026-11-14T11:00"],
+                   ["2026-11-14T12:00", "2026-11-14T12:00"]]
