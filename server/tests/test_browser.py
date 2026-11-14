@@ -1092,6 +1092,18 @@ def test_a_profile_whose_exit_is_gone_never_goes_out_directly(mx):
         p._upstream("shop")
     assert "no longer exists" in asyncio.run(p.exit_ready(prof, "sess01", f"topic:{T}"))
     assert asyncio.run(p.exit_ready({**prof, "on_exit_down": "vps"}, "s", "x")) is None
+    # and it never stops a save of anything else: settings, another profile, a project's profile made on first use
+    assert browser.set_settings({"ask": False})["ask"] is False
+    assert browser.set_profile({"name": "New"})["name"] == "New"
+    assert browser.profile("shop")["exit"] == "phone"            # still waiting for its connection, never direct
+    assert browser.ensure_project_profile("projects/acme")
+    # `main` itself on a gone connection: a project's profile made from it waits for that connection too
+    cfg = config.load_config()
+    cfg["browser"]["profiles"][0]["exit"] = "phone"
+    config.save_config(cfg)
+    assert browser.profile(browser.ensure_project_profile("projects/blog"))["exit"] == "phone"
+    with _pytest.raises(browser.BrowserError):                   # a new value naming no connection: refused
+        browser.set_profile({"exit": "nowhere"}, "shop")
 
 
 def test_exits_come_back_and_resume_the_turns_that_asked(mx, monkeypatch):

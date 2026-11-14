@@ -7,6 +7,13 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Harness Browser: `rules.json` blocks the `DOMStorage` and `Storage` domains (a turn could read or write any
+  site's local storage of the shared profile by origin, without opening it; `IndexedDB` / `CacheStorage` were already
+  blocked).
+- Harness Browser: a profile naming a gone connection no longer makes every `browser._save` fail (`clean_profile`
+  no longer checks `exit`; `set_profile(..., new_exit=True)` checks a new value; `ensure_project_profile` copies
+  `main`'s as it is, `new_exit=False`). Before, settings, profiles and a project's first profile all failed with 400
+  and turns started without the browser.
 - Compaction of agents: `store.unattended(m)` = `cron` flag and not a conversation (`env.MAXXING_AGENT_CHAT == "1"` or
   `env.MAXXING_AGENT_GROUP`); `runner._auto_compact`, `runner._idle_compact` and `resume.candidate` use it instead of
   `m["cron"]`. The owner's conversation and a member's group session are created with `cron=True` (no Telegram

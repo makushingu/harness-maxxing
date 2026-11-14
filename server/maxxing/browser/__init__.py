@@ -91,7 +91,7 @@ def new_id(name: str, taken: set[str]) -> str:
     return out
 
 
-def clean_profile(raw: object, strict: bool = False, exits: set[str] | None = None) -> dict | None:
+def clean_profile(raw: object, strict: bool = False) -> dict | None:
     """A profile, complete and valid; None when it has no valid id."""
     src = raw if isinstance(raw, dict) else {}
     pid = str(src.get("id") or "")
@@ -103,10 +103,9 @@ def clean_profile(raw: object, strict: bool = False, exits: set[str] | None = No
         out["on_exit_down"] = src["on_exit_down"]
     elif "on_exit_down" in src:
         _bad(strict, "on_exit_down", "wait or vps")
-    ex = str(src.get("exit") or DIRECT)
-    if exits is not None and ex != DIRECT and ex not in exits:
-        _bad(strict, "exit", f"no exit {ex!r}")     # read back as it is: the profile then waits, never goes direct
-    out["exit"] = ex[:40]
+    # a connection that is gone stays as it is (the profile then waits, never goes direct), and never stops a save
+    # of other settings: a new value is checked by set_profile
+    out["exit"] = str(src.get("exit") or DIRECT)[:40]
     project = str(src.get("project") or "")
     if project and PROJECT_RE.fullmatch(project) and project not in SHARED_PROJECTS:
         out["project"] = project                   # the project this profile is for
@@ -145,13 +144,12 @@ def clean_settings(raw: object, strict: bool = False) -> dict:
         if c and c["id"] not in {x["id"] for x in ex_list}:
             ex_list.append(c)
     out["exits"] = ex_list
-    ids = {x["id"] for x in ex_list}
     profiles: list[dict] = []
     raw_profiles = src.get("profiles") if isinstance(src.get("profiles"), list) else None
     if raw_profiles is None:                         # settings of before the profiles
         raw_profiles = [{"id": MAIN}]
     for p in raw_profiles[:MAX_PROFILES]:
-        c = clean_profile(p, strict, ids)
+        c = clean_profile(p, strict)
         if c and c["id"] not in {x["id"] for x in profiles}:
             if c["project"] and any(x["project"] == c["project"] for x in profiles):
                 c["project"] = ""                    # one profile per project: a second one is just a profile
@@ -188,10 +186,14 @@ def profile(pid: str, s: dict | None = None) -> dict | None:
     return next((p for p in (s or settings())["profiles"] if p["id"] == pid), None)
 
 
-def set_profile(values: dict, pid: str | None = None) -> dict:
-    """Create (pid None) or change a profile; returns it."""
+def set_profile(values: dict, pid: str | None = None, *, new_exit: bool = True) -> dict:
+    """Create (pid None) or change a profile; returns it. new_exit: `exit` is a choice of now (it must exist), not one
+    copied from another profile (kept as it is, even gone: that profile waits too)."""
     s = settings()
     values = {k: v for k, v in (values or {}).items() if k in PROFILE_DEFAULTS}
+    ex = values.get("exit")
+    if new_exit and ex is not None and str(ex) != DIRECT and str(ex) not in {e["id"] for e in s["exits"]}:
+        raise BrowserError(400, "bad_browser", f"browser.exit: no exit {str(ex)[:40]!r}")
     if pid is None:
         if len(s["profiles"]) >= MAX_PROFILES:
             raise BrowserError(409, "too_many", f"At most {MAX_PROFILES} profiles")
@@ -226,7 +228,7 @@ def ensure_project_profile(project: str) -> str:
             return mine["id"]
         main = profile(MAIN) or {}
         keep = {k: main[k] for k in ("exit", "on_exit_down") if k in main}
-        return set_profile({**keep, "name": project.split("/", 1)[1], "project": project})["id"]
+        return set_profile({**keep, "name": project.split("/", 1)[1], "project": project}, new_exit=False)["id"]
 
 
 def ensure_projects_with_agents() -> None:
