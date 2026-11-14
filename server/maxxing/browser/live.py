@@ -212,6 +212,10 @@ class Watcher:
         async with self._lock:
             if tid != self.front:
                 self.front = tid
+            if tid and self.cdp:
+                # a tab left behind is hidden for Chromium: it paints nothing (no pictures) until it is the active one
+                with contextlib.suppress(Exception):
+                    await self.cdp.call("Target.activateTarget", {"targetId": tid}, timeout=5)
             if self.viewers:
                 await self._cast()
         await self._state()
