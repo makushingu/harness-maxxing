@@ -121,3 +121,11 @@ def test_a_pull_request_on_a_phone_never_scrolls_sideways():
     assert '<span className="min-w-0 truncate"><Sensitive>{c.name}</Sensitive></span>' in checks
     link = re.search(r'<a href=\{c\.url\}[^>]*className="([^"]*)"', checks)
     assert link and "shrink-0" in link[1].split()
+
+
+def test_a_file_and_the_link_of_a_check_are_big_enough_to_tap():
+    src = (WEB / "features" / "code" / "PrPane.tsx").read_text()
+    row = re.search(r'onClick=\{\(\) => onFile\(f\)\} className="([^"]*)"', src)
+    assert row and "pointer-coarse:min-h-10" in row[1].split()
+    link = re.search(r'<a href=\{c\.url\}[^>]*className="([^"]*)"', src)
+    assert link and "pointer-coarse:size-10" in link[1].split()
