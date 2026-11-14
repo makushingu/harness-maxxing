@@ -137,3 +137,9 @@ def test_the_links_of_a_cut_turn_are_big_enough_to_tap():
     assert usage and "pointer-coarse:h-10" in usage[1].split()
     details = re.search(r'aria-expanded=\{open\}\s+onClick=\{\(\) => setOpen\(\(o\) => !o\)\}\s+className="([^"]*)"', src)
     assert details and "pointer-coarse:h-10" in details[1].split()
+
+
+def test_the_name_of_a_source_keeps_room_next_to_its_buttons():
+    src = (WEB / "features" / "infra" / "Overview.tsx").read_text()
+    block = re.search(r'<div className="([^"]*)">\s*<span className="truncate text-\[13px\] font-medium">\{title\}', src)
+    assert block and "basis-40" in block[1].split()

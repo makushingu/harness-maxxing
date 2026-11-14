@@ -70,7 +70,7 @@ function SourceRow({ tone, title, what, children, muted }: { tone: 'ok' | 'warn'
   return (
     <li className={cn('flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border px-3 py-2.5', muted ? 'border-dashed' : 'bg-card')}>
       <StatusDot tone={tone} />
-      <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)] gap-0.5">
+      <div className="grid min-w-0 flex-1 basis-40 grid-cols-[minmax(0,1fr)] gap-0.5">
         <span className="truncate text-[13px] font-medium">{title}</span>
         <span className="text-xs text-muted-foreground">{what}</span>
       </div>
