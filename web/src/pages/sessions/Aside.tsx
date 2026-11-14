@@ -56,7 +56,7 @@ export function AsidePanel({ aside, onClose }: { aside: Aside; onClose: () => vo
                   type="button"
                   aria-label={t('common.copy')}
                   onClick={() => void copyText(aside.answer!).then((ok) => ok && toast.success(t('aside.copied')))}
-                  className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                  className="flex size-7 items-center justify-center rounded-md text-muted-foreground pointer-coarse:size-10 hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                 >
                   <Copy className="size-3.5" />
                 </button>
@@ -67,7 +67,7 @@ export function AsidePanel({ aside, onClose }: { aside: Aside; onClose: () => vo
                 type="button"
                 aria-label={t('aside.close')}
                 onClick={onClose}
-                className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                className="flex size-7 items-center justify-center rounded-md text-muted-foreground pointer-coarse:size-10 hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
               >
                 <X className="size-4" />
               </button>

@@ -409,6 +409,7 @@ class _Docx:
 
     def blocks(self, parent: ET.Element) -> None:
         for el in parent:
+            self.pack.tick()                              # empty paragraphs by the million write nothing
             if el.tag == "p":
                 self.para(el)
             elif el.tag == "tbl":
@@ -871,6 +872,7 @@ class _Xlsx:
                     continue
                 parts = []
                 for c in el:
+                    self.pack.tick()
                     tag = _local(c.tag)
                     if tag == "t":
                         parts.append(c.text or "")
@@ -949,6 +951,7 @@ class _Xlsx:
                     continue
                 vals: list[str] = []
                 for c in el:
+                    self.pack.tick()                      # a row of empty cells by the million writes nothing
                     if _local(c.tag) != "c":
                         continue
                     ref = c.get("r")

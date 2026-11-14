@@ -459,7 +459,7 @@ export const Composer = React.forwardRef<ComposerHandle, {
     const target = row.target
     if (!target) return
     const name = `@${target.label} `
-    const next = text.slice(0, at.start) + name + text.slice(caret).replace(/^\S*\s?/, '')
+    const next = text.slice(0, at.start) + name + text.slice(caret).replace(/^\S* ?/, '')
     const pos = at.start + name.length
     setText(next)
     setCaret(pos)

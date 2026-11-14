@@ -86,3 +86,46 @@ def test_a_sheet_that_refuses_to_close_springs_back_after_a_swipe():
     after = src[src.index("dismiss.current()"):]
     after = after[:after.index("} else set(0, true)")]
     assert "setTimeout" in after and "data-state" in after and "set(0, true)" in after
+
+
+def test_search_in_the_touch_drawer_opens_the_search():
+    # the drawer's "Search…" called openPalette directly: the drawer closed on the tap and the palette never showed
+    src = (WEB / "components" / "shell" / "Sidebar.tsx").read_text()
+    assert src.count("onClick={drawer ? searchNow : openPalette}") == 2
+
+
+
+def test_the_effort_levels_are_big_enough_to_tap():
+    # max-md: missed tablets: the effort buttons of the model menu were 36 px high at 820 px on touch
+    src = (WEB / "pages" / "sessions" / "Widgets.tsx").read_text()
+    row = src[src.index("function EffortRow"):]
+    cls = re.search(r"'(h-7 [^']*)'", row)
+    assert cls and "pointer-coarse:h-10" in cls[1].split()
+
+
+def test_the_side_question_buttons_are_big_enough_to_tap():
+    # Copy and Close of the side question panel were 28x28 px on phones and tablets
+    src = (WEB / "pages" / "sessions" / "Aside.tsx").read_text()
+    for label in ("t('common.copy')", "t('aside.close')"):
+        part = src[src.index(f"aria-label={{{label}}}"):]
+        cls = re.search(r'className="([^"]*)"', part)
+        assert cls and "pointer-coarse:size-10" in cls[1].split(), label
+
+
+def test_a_pull_request_on_a_phone_never_scrolls_sideways():
+    # a long branch (dependabot/…) or check name widened the pane: the GitHub link of the check went off the screen
+    src = (WEB / "features" / "code" / "PrPane.tsx").read_text()
+    head = src[src.index("<GitBranch"):]
+    assert re.match(r'<GitBranch[^>]*/><span className="min-w-0 truncate"><Sensitive>\{`\$\{pr\.head\}', head)
+    checks = src[src.index("function Checks"):]
+    assert '<span className="min-w-0 truncate"><Sensitive>{c.name}</Sensitive></span>' in checks
+    link = re.search(r'<a href=\{c\.url\}[^>]*className="([^"]*)"', checks)
+    assert link and "shrink-0" in link[1].split()
+
+
+def test_a_file_and_the_link_of_a_check_are_big_enough_to_tap():
+    src = (WEB / "features" / "code" / "PrPane.tsx").read_text()
+    row = re.search(r'onClick=\{\(\) => onFile\(f\)\} className="([^"]*)"', src)
+    assert row and "pointer-coarse:min-h-10" in row[1].split()
+    link = re.search(r'<a href=\{c\.url\}[^>]*className="([^"]*)"', src)
+    assert link and "pointer-coarse:size-10" in link[1].split()

@@ -35,7 +35,7 @@ function EffortRow({ effort, onEffort }: { effort: Effort | ''; onEffort: (effor
               aria-checked={effort === e}
               onClick={() => onEffort(e)}
               className={cn(
-                'h-7 rounded px-0.5 text-[11px] font-medium text-muted-foreground transition hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none max-md:h-9',
+                'h-7 rounded px-0.5 text-[11px] font-medium text-muted-foreground transition hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none max-md:h-9 pointer-coarse:h-10',
                 effort === e && 'bg-background text-foreground shadow-sm',
               )}
             >

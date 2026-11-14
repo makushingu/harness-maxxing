@@ -64,12 +64,15 @@ export function slashItems(text: string, commands: SlashCommand[], expanded: str
   return items.length ? { stage: 'arg', items } : null
 }
 
-/** The session command typed in full ("/model opus"), if any: it runs instead of being sent. */
+/** The session command typed in full ("/model opus"), if any: it runs instead of being sent. Text after a command
+ *  that takes no value, or on a next line, is a message: it is sent, never swallowed by the command. */
 export function slashAction(text: string, commands: SlashCommand[]): { cmd: SlashCommand; arg: string } | null {
-  const m = /^\/(\S+)(?:\s+([\s\S]*))?$/.exec(text.trim())
+  const m = /^\/(\S+)(?:[^\S\n]+([^\n]*))?$/.exec(text.trim())
   if (!m) return null
   const cmd = commands.find((c) => c.kind === 'action' && c.name === m[1])
-  return cmd?.run ? { cmd, arg: (m[2] || '').trim() } : null
+  const arg = (m[2] || '').trim()
+  if (arg && !cmd?.args?.length && !cmd?.freeArg) return null
+  return cmd?.run ? { cmd, arg } : null
 }
 
 function groupTitle(g: string, t: ReturnType<typeof useT>, chat?: boolean): string {

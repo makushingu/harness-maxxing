@@ -17,6 +17,7 @@ import { StatusBlock } from './HealthIndicator'
 import { HelpMenu } from './HelpMenu'
 import { UpdateIndicator } from './UpdateIndicator'
 import { useDragOrder } from './dragOrder'
+import { searchNow } from './TouchNav'
 import { useShowSessions } from '@/features/notify/showSessions'
 import { usePrefetchLink } from '@/pages/pageData'
 
@@ -304,7 +305,7 @@ export const Sidebar = React.memo(function Sidebar({ drawer }: { /** touch layou
             <div data-boot-rv className={cn('flex items-center gap-1.5 px-3 pt-2', collapsed && 'px-2.5')}>
               {collapsed && (
                 <Tooltip content={<>{t('palette.search')} <Kbd className="border-background/20 bg-background/15 text-background">{MOD} K</Kbd></>} side="right">
-                  <button type="button" onClick={openPalette} data-tour="palette" aria-label={t('palette.open')} className={navRow(true)}>
+                  <button type="button" onClick={drawer ? searchNow : openPalette} data-tour="palette" aria-label={t('palette.open')} className={navRow(true)}>
                     <Search className="size-[18px] shrink-0" strokeWidth={1.7} />
                   </button>
                 </Tooltip>
@@ -312,7 +313,7 @@ export const Sidebar = React.memo(function Sidebar({ drawer }: { /** touch layou
               {!collapsed && (
                 <button
                   type="button"
-                  onClick={openPalette}
+                  onClick={drawer ? searchNow : openPalette}
                   data-tour="palette"
                   className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-md border bg-fill-1 px-2.5 text-sm text-muted-foreground shadow-xs transition hover:border-ring/40 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none dark:bg-input/20"
                   aria-label={t('palette.open')}

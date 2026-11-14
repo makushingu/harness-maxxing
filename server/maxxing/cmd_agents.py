@@ -518,16 +518,34 @@ def _set(path: str, a) -> int:
     if turn.get("manager") and turn["path"] == path:
         r = agents.request_change(path, fields, session=turn["session"])
     else:                                              # the owner (shell, session): everything at once
+        before = agents.load(path)
         u = agents.update(path, fields)
-        r = {"applied": sorted({*fields, *(["sandbox"] if u.get("sandbox_auto") else [])}), "asked": [], "request": "",
-             "sandbox_auto": u.get("sandbox_auto")}
+        after = agents.load(path)
+        taken = {k for k, v in fields.items() if _taken(before, after, k, v)}
+        r = {"applied": sorted({*taken, *(["sandbox"] if u.get("sandbox_auto") else [])}), "asked": [], "request": "",
+             "sandbox_auto": u.get("sandbox_auto"), "ignored": sorted(set(fields) - taken)}
     if r["applied"]:
         print("changed: " + ", ".join(r["applied"]))
     if r["asked"]:
         print("waiting for the owner's OK (safety settings, applied once allowed): " + ", ".join(r["asked"]))
+    if r.get("ignored"):
+        print("ignored (unknown field or wrong type): " + ", ".join(r["ignored"]), file=sys.stderr)
     if r.get("sandbox_auto"):
         print(agents.SANDBOX_AUTO_NOTE)
-    return 0
+    return 0 if r["applied"] or r["asked"] else 2
+
+
+def _taken(before: dict, after: dict, key: str, value) -> bool:
+    """Did `set` really apply this field? Changed by the update, or already at the value asked."""
+    if key == "description":                           # kept in CLAUDE.md, not in agent.json
+        return isinstance(value, str)
+    if key not in after:
+        return False
+    if after[key] != before.get(key):
+        return True
+    if isinstance(value, dict) and isinstance(after[key], dict):
+        return all(after[key].get(k) == v for k, v in value.items())
+    return after[key] == value
 
 
 def _zone() -> str:

@@ -205,9 +205,9 @@ function Conversation({ pr }: { pr: Pull }) {
       {pr.outside && <p className="rounded-lg border border-warning/30 bg-warning/8 px-3 py-2 text-[13px]">{t('pr.outsideBanner')}</p>}
       <article className="rounded-lg border">
         <header className="flex items-center gap-2 border-b bg-fill-1 px-3 py-1.5 text-xs text-muted-foreground">
-          <Sensitive><span className="font-medium text-foreground">{pr.author.login}</span></Sensitive>
-          <span>{fmtRelative(pr.created, lang)}</span>
-          <span className="ml-auto inline-flex items-center gap-1 font-mono text-[11px]"><GitBranch className="size-3" /><Sensitive>{`${pr.head} → ${pr.base}`}</Sensitive></span>
+          <Sensitive><span className="shrink-0 font-medium text-foreground">{pr.author.login}</span></Sensitive>
+          <span className="shrink-0">{fmtRelative(pr.created, lang)}</span>
+          <span className="ml-auto inline-flex min-w-0 items-center gap-1 font-mono text-[11px]"><GitBranch className="size-3 shrink-0" /><span className="min-w-0 truncate"><Sensitive>{`${pr.head} → ${pr.base}`}</Sensitive></span></span>
         </header>
         <div className="px-3 py-2 text-[13px]">
           {pr.body.trim() ? <Markdown localImage={() => null} components={PLAIN}>{pr.body}</Markdown> : <span className="text-muted-foreground">{t('pr.noBody')}</span>}
@@ -247,7 +247,7 @@ function FileList({ pr, onFile }: { pr: Pull; onFile: (f: PrFile) => void }) {
       <ul className="py-1">
         {pr.files.map((f) => (
           <li key={f.path} className="px-1.5">
-            <button type="button" onClick={() => onFile(f)} className="flex w-full min-w-0 items-center gap-2 rounded-md px-1.5 py-1 text-left text-[13px] outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring max-md:py-2">
+            <button type="button" onClick={() => onFile(f)} className="flex w-full min-w-0 items-center gap-2 rounded-md px-1.5 py-1 text-left text-[13px] outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring max-md:py-2 pointer-coarse:min-h-10">
               <span className={cn('w-3 shrink-0 font-mono text-[11px] font-semibold', STATUS_TONE[f.status] ?? 'text-warning')}>{f.status}</span>
               <span className="min-w-0 truncate">
                 <Sensitive>
@@ -282,11 +282,11 @@ function Checks({ pr }: { pr: Pull }) {
         const failed = ['failure', 'timed_out', 'cancelled', 'action_required'].includes(c.conclusion || '')
         const done = c.status === 'completed' || c.conclusion != null
         return (
-          <li key={i} className="flex items-center gap-2 rounded-md px-2 py-1 text-[13px]">
-            {failed ? <CircleAlert className="size-4 text-destructive" /> : !done ? <Loader2 className="size-4 animate-spin text-warning" /> : <Check className="size-4 text-success" />}
-            <Sensitive>{c.name}</Sensitive>
+          <li key={i} className="flex min-w-0 items-center gap-2 rounded-md px-2 py-1 text-[13px]">
+            {failed ? <CircleAlert className="size-4 shrink-0 text-destructive" /> : !done ? <Loader2 className="size-4 shrink-0 animate-spin text-warning" /> : <Check className="size-4 shrink-0 text-success" />}
+            <span className="min-w-0 truncate"><Sensitive>{c.name}</Sensitive></span>
             {c.url && (
-              <a href={c.url} target="_blank" rel="noopener noreferrer" className="ml-auto text-muted-foreground hover:text-foreground" aria-label={t('pr.onGithub')}>
+              <a href={c.url} target="_blank" rel="noopener noreferrer" className="ml-auto flex shrink-0 items-center justify-center text-muted-foreground hover:text-foreground pointer-coarse:size-10" aria-label={t('pr.onGithub')}>
                 <ExternalLink className="size-3.5" />
               </a>
             )}

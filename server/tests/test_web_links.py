@@ -35,3 +35,42 @@ def test_the_usage_link_of_a_cut_turn_only_points_at_claude_or_anthropic():
     for text in ("Pay at https://evilanthropic.com/pay", "Pay at https://x.evilanthropic.com/pay",
                  "Pay at https://.anthropic.com/pay"):
         assert not found(text), text
+
+
+def test_a_command_followed_by_a_message_sends_the_message():
+    # "/plan" then a message (same line or the next one) ran /plan and the draft was cleared without being sent
+    src = (WEB / "pages" / "sessions" / "SlashMenu.tsx").read_text()
+    action = _js_regex(WEB / "pages" / "sessions" / "SlashMenu.tsx", "const m = ")
+    assert action.match("/model opus")[2] == "opus"
+    assert action.match("/plan")
+    assert not action.match("/plan\nfix the login page")
+    body = src[src.index("export function slashAction"):]
+    assert "if (arg && !cmd?.args?.length && !cmd?.freeArg) return null" in body
+
+
+def test_picking_a_mention_keeps_the_line_break_that_follows():
+    src = (WEB / "pages" / "sessions" / "Composer.tsx").read_text()
+    m = re.search(r"text\.slice\(caret\)\.replace\(/((?:\\.|[^/\\\n])+)/, ''\)", src)
+    assert m
+    rest = re.compile(m[1])
+    assert rest.sub("", "Le\nnext line", count=1) == "\nnext line"
+    assert rest.sub("", "Le next", count=1) == "next"
+
+
+def test_a_mention_is_only_kept_when_its_whole_name_is_written():
+    # "@Leah" typed after picking Lea still mentioned Lea
+    src = (WEB / "pages" / "sessions" / "mentions.tsx").read_text()
+    assert "(?![\\\\p{L}\\\\p{N}_-])" in src and "written(text, x.label)" in src
+
+
+def test_an_icon_name_is_never_read_from_the_object_prototype():
+    # a page manifest with the icon "constructor" rendered Object as a component: Settings > Pages crashed
+    src = (WEB / "components" / "ui" / "icon.tsx").read_text()
+    assert "Object.hasOwn(ICONS, key)" in src
+
+
+
+def test_a_dragged_text_is_never_cut_in_the_middle_of_an_emoji():
+    # cut at 20 000 between the two halves of an emoji: the message was refused (422)
+    src = (WEB / "pages" / "sessions" / "contentDrag.ts").read_text()
+    assert "/[\\ud800-\\udbff]/.test(t[MAX_TEXT - 1]) ? MAX_TEXT - 1 : MAX_TEXT" in src
