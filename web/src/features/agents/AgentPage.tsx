@@ -465,7 +465,7 @@ function Flow({ agent: a, onReply, onSuggest, ref }: { agent: AgentDetail; onRep
       .finally(() => setLoadingOlder(false))
   }, [a.path, msgs, more, loadingOlder])
 
-  const rows: { key: string; session?: string; node: React.ReactNode }[] = []
+  const rows: { key: string; session?: string; ask?: boolean; node: React.ReactNode }[] = []
   let day = ''
   let talked = false
   for (const m of msgs) {
@@ -497,18 +497,25 @@ function Flow({ agent: a, onReply, onSuggest, ref }: { agent: AgentDetail; onRep
           decided={m.kind === 'approval' && m.approval ? asks.decided.get(m.approval) : undefined}
         />
       )
-    rows.push({ key: m.id, session: m.session, node })
+    rows.push({ key: m.id, session: m.session, ask: m.kind === 'approval' && !!m.approval && asks.live.has(m.approval), node })
   }
-  // A turn going on now: right under the last message of its session (the owner's message, what started the run).
+  // A turn going on now: right under the last message of its session (the owner's message, what started the run),
+  // and above a request of that turn still waiting: Allow / Deny stay the last thing of the thread, the one a phone
+  // shows (under the turn and its steps, they were pushed off screen).
   for (const s of running) {
     let at = -1
-    for (let i = rows.length - 1; i >= 0; i--)
-      if (rows[i].session === s.id) {
-        at = i
-        break
+    let ask = -1
+    for (let i = rows.length - 1; i >= 0; i--) {
+      if (rows[i].session !== s.id) continue
+      if (rows[i].ask) {
+        ask = i
+        continue
       }
+      at = i
+      break
+    }
     const node = <LiveTurn agent={a} sid={s.id} chat={own.has(s.id)} onWrite={follow} />
-    rows.splice(at < 0 ? rows.length : at + 1, 0, { key: `live:${s.id}`, node })
+    rows.splice(ask >= 0 ? ask : at < 0 ? rows.length : at + 1, 0, { key: `live:${s.id}`, node })
   }
 
   return (
