@@ -86,3 +86,10 @@ def test_a_sheet_that_refuses_to_close_springs_back_after_a_swipe():
     after = src[src.index("dismiss.current()"):]
     after = after[:after.index("} else set(0, true)")]
     assert "setTimeout" in after and "data-state" in after and "set(0, true)" in after
+
+
+def test_search_in_the_touch_drawer_opens_the_search():
+    # the drawer's "Search…" called openPalette directly: the drawer closed on the tap and the palette never showed
+    src = (WEB / "components" / "shell" / "Sidebar.tsx").read_text()
+    assert src.count("onClick={drawer ? searchNow : openPalette}") == 2
+
