@@ -6,6 +6,15 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 ## Unreleased
 
 Fixed:
+- **Memory: a heavy memory.md no longer goes unnoticed, and sessions stop being summarized after almost every
+  message because of it.** A `memory.md` is part of the instructions of every session of its folder, and Claude
+  sends it again in full each time it changes. The nightly clean only counted lines: a file of 100 lines made of
+  very long bullets (70 KB, about 30,000 tokens) stayed "under the limit", was added to the conversation again at
+  each note written, and the session reached the automatic summary every two or three messages. The limit of
+  Settings -> Memory now also weighs the file (1 KB for 10 lines: 200 lines = 20 KB): heavier files are shown in
+  red, `maxxing memory` flags them, and the nightly clean (or **Clean now**) shortens their bullets. Claude is
+  also told to write one or two lines per note. Nothing to do: tonight's clean shortens the files that are too
+  heavy; **Clean now** does it right away.
 - **Sessions: background tasks no longer look stopped when you send a message.** A message sent once the answer is
   written, while commands or agents still work in the background, goes to the same Claude: they keep running. The
   conversation showed them as "interrupted" all the same and took away the "N running in the background" bar. They

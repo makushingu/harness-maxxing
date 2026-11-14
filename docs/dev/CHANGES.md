@@ -7,6 +7,14 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Memory: `memory.files()` adds `heavy` (bytes > `max_bytes(limit)` = limit x 1024 / `LINES_PER_KB`, 1 KB for 10
+  lines) and `over` is now "too many lines OR too heavy"; `/api/memory` and `maxxing memory --json` add `max_bytes`;
+  `compact_prompt` names both limits; skills `memory` (one or two lines per bullet) and `memory-compaction` (weight,
+  how to shorten a heavy file). No new setting. Why: Claude Code re-reads the instruction files at each process
+  start (`--resume`, attachment `instructions` with `changed: true`, reason `session_start`) and attaches every
+  changed file IN FULL; a turn is a new process unless it joins a live one, so each edit of an imported `memory.md`
+  costs its whole size in every session of the folder at their next turn. Measured here: 71 KB = +32k tokens per
+  edit, three edits between two automatic compactions (130k on a 200k window). No switch for this in the CLI.
 - Sessions: the `init` event carries `same: true` when its turn runs in a Claude process that already ran one
   (`runner.py` stamps the raw line `mx_same_proc`, after `clip_event`, from `_Proc.inits`). The page (`log.ts`
   `fold`) marked every running task `interrupted` at each `user` event (true before stream-json input, when a turn

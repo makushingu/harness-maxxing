@@ -849,8 +849,8 @@ Built-in card links are SPA routes: `/sessions/<id>`, `/sessions`, `/tasks?task=
 
 | Method | Path | Body | Response |
 |---|---|---|---|
-| GET | `/api/memory` | – | `{max_lines, files:[{path (workspace-relative), level:"global"\|"project"\|"topic", lines, bytes, over:bool}]}` |
-| POST | `/api/memory/compact` | – | `{session: Session}` — a session at the workspace root runs the memory-compaction skill now with the line limit |
+| GET | `/api/memory` | – | `{max_lines, max_bytes (the weight that goes with the line limit: 1 KB for 10 lines, 0 = no limit), files:[{path (workspace-relative), level:"global"\|"project"\|"topic"\|"agent", lines, bytes, over:bool (above the limit, in lines or in weight), heavy:bool (in weight)}]}` |
+| POST | `/api/memory/compact` | – | `{session: Session}` — a session at the workspace root runs the memory-compaction skill now with the limit (lines and weight) |
 
 ## Stats
 
