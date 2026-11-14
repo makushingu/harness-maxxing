@@ -248,10 +248,12 @@ export function LiveView({ profile, nav, session, who, start, onMinimize, classN
     started.current = true
     action.mutate({ profile, action: 'open', nav })
   }
-  // "Open the browser" / a session's "Watch": a stopped browser starts with the view
+  // "Open the browser" / a session's "Watch": a stopped browser starts with the view. A running one whose tabs of
+  // this navigator all sleep wakes its last one (the person came to look at it).
+  const awake = tabs.filter((x) => !x.asleep).length
   React.useEffect(() => {
-    if (started.current || !state) return
-    if (!running && b?.state !== 'starting' && start) startIt()
+    if (started.current || !state || b?.state === 'starting') return
+    if ((!running && start) || (running && !awake && tabs.length > 0)) startIt()
   })
 
   // the page is laid out for the size of this view, like a browser window (sent again on reconnect / start)
@@ -465,7 +467,7 @@ export function LiveView({ profile, nav, session, who, start, onMinimize, classN
               <span className="inline-flex items-center gap-2">
                 <Loader2 className="size-4 animate-spin" /> {t('browser.starting')}
               </span>
-            ) : running ? (
+            ) : running && awake > 0 ? (
               <span className="inline-flex items-center gap-2">
                 <Loader2 className="size-4 animate-spin" /> {t('browser.loading')}
               </span>
