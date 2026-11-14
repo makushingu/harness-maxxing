@@ -101,3 +101,12 @@ def test_the_effort_levels_are_big_enough_to_tap():
     row = src[src.index("function EffortRow"):]
     cls = re.search(r"'(h-7 [^']*)'", row)
     assert cls and "pointer-coarse:h-10" in cls[1].split()
+
+
+def test_the_side_question_buttons_are_big_enough_to_tap():
+    # Copy and Close of the side question panel were 28x28 px on phones and tablets
+    src = (WEB / "pages" / "sessions" / "Aside.tsx").read_text()
+    for label in ("t('common.copy')", "t('aside.close')"):
+        part = src[src.index(f"aria-label={{{label}}}"):]
+        cls = re.search(r'className="([^"]*)"', part)
+        assert cls and "pointer-coarse:size-10" in cls[1].split(), label
