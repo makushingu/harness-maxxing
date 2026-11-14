@@ -586,7 +586,8 @@ function ColumnAdd({ onAdd }: { onAdd: (text: string) => Promise<unknown> }) {
       <Input
         autoFocus
         value={text}
-        disabled={busy}
+        readOnly={busy} // not disabled: a disabled field drops the focus, and the next task typed would go nowhere
+        aria-busy={busy}
         onChange={(e) => setText(e.target.value)}
         onBlur={() => !text.trim() && setOpen(false)}
         onKeyDown={(e) => {

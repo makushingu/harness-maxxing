@@ -55,3 +55,10 @@ def test_a_task_whose_project_is_gone_is_listed_where_it_is_counted(tmp_path):
         return [m.projectStats(tasks, projects, '2026-11-14').get('')?.total,
                 tasks.filter((x) => m.matches(x, none, '2026-11-14')).map((x) => x.id), tasks[1].project_id]""")
     assert out == [2, ["t1", "t3"], "p_a"]
+
+
+def test_the_quick_add_of_a_board_column_keeps_the_focus_while_it_adds():
+    src = (WEB / "features" / "tasks" / "Board.tsx").read_text(encoding="utf-8")
+    end = src.index("placeholder={t('tasks.quickAddPlaceholder')}")
+    field = src[src.rindex("<Input", 0, end):end]
+    assert "readOnly={busy}" in field and "disabled=" not in field
