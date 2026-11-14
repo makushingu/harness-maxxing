@@ -832,6 +832,13 @@ def test_cookies_are_never_read_over_devtools():
     # a profile's sign-ins are never read or set over DevTools (the user's accounts are in it)
     for m in ("Network.getCookies", "Network.setCookie", "Storage.getCookies", "Target.sendMessageToTarget"):
         assert rules.check_command(json.dumps({"id": 3, "method": m, "params": {}}))[0] is not None, m
+    # nor any site's storage, which holds sign-in tokens too: read or written by origin, without opening the site
+    bank = {"storageId": {"securityOrigin": "https://bank.example", "isLocalStorage": True}}
+    for m, params in (("DOMStorage.getDOMStorageItems", bank), ("DOMStorage.setDOMStorageItem", {**bank, "key": "a", "value": "b"}),
+                      ("Storage.getSharedStorageEntries", {"ownerOrigin": "https://bank.example"}),
+                      ("Storage.clearDataForStorageKey", {"storageKey": "https://bank.example/", "storageTypes": "all"}),
+                      ("IndexedDB.requestData", {"securityOrigin": "https://bank.example"})):
+        assert rules.check_command(json.dumps({"id": 4, "method": m, "params": params}))[0] is not None, m
 
 
 def test_the_live_view_lays_the_page_out_for_its_own_size():
