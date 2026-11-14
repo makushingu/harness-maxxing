@@ -35,3 +35,14 @@ def test_the_usage_link_of_a_cut_turn_only_points_at_claude_or_anthropic():
     for text in ("Pay at https://evilanthropic.com/pay", "Pay at https://x.evilanthropic.com/pay",
                  "Pay at https://.anthropic.com/pay"):
         assert not found(text), text
+
+
+def test_a_command_followed_by_a_message_sends_the_message():
+    # "/plan" then a message (same line or the next one) ran /plan and the draft was cleared without being sent
+    src = (WEB / "pages" / "sessions" / "SlashMenu.tsx").read_text()
+    action = _js_regex(WEB / "pages" / "sessions" / "SlashMenu.tsx", "const m = ")
+    assert action.match("/model opus")[2] == "opus"
+    assert action.match("/plan")
+    assert not action.match("/plan\nfix the login page")
+    body = src[src.index("export function slashAction"):]
+    assert "if (arg && !cmd?.args?.length && !cmd?.freeArg) return null" in body
