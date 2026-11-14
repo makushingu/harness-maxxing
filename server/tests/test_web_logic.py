@@ -44,3 +44,14 @@ def test_the_default_one_time_date_is_a_whole_hour_in_the_configured_zone(tmp_pa
     assert out == [["2026-11-14T16:00", "2026-11-14T17:00"], ["2026-11-14T17:00", "2026-11-14T17:00"],
                    ["2026-11-14T21:00", "2026-11-14T22:00"], ["2026-11-14T11:00", "2026-11-14T11:00"],
                    ["2026-11-14T12:00", "2026-11-14T12:00"]]
+
+
+def test_a_task_whose_project_is_gone_is_listed_where_it_is_counted(tmp_path):
+    out = _run_ts(tmp_path, WEB / "features" / "tasks" / "model.ts", """
+        const task = (id, project_id) => ({ id, title: id, notes: '', status: 'todo', priority: 0, project_id, labels: [], due: null })
+        const projects = [{ id: 'p_a', name: 'A' }]
+        const tasks = m.withKnownProjects([task('t1', 'p_gone'), task('t2', 'p_a'), task('t3', null)], projects)
+        const none = { ...m.EMPTY_FILTERS, project: 'none' }
+        return [m.projectStats(tasks, projects, '2026-11-14').get('')?.total,
+                tasks.filter((x) => m.matches(x, none, '2026-11-14')).map((x) => x.id), tasks[1].project_id]""")
+    assert out == [2, ["t1", "t3"], "p_a"]

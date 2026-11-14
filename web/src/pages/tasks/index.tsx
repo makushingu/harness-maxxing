@@ -38,6 +38,7 @@ import {
   projectStats,
   statsOf,
   todayISO,
+  withKnownProjects,
   type QuickParse,
   type SortKey,
   type TaskFilters,
@@ -99,7 +100,7 @@ export default function TasksPage() {
 
   const data = q.data
   const corrupt = isApiError(q.error, 'corrupt_file') ? q.error : null
-  const tasks = React.useMemo(() => data?.tasks ?? [], [data])
+  const tasks = React.useMemo(() => withKnownProjects(data?.tasks ?? [], data?.projects ?? []), [data])
   const wsOrder = React.useMemo(() => ws.data?.projects.map((p) => p.name) ?? [], [ws.data])
   const emojis = React.useMemo(() => new Map((ws.data?.projects ?? []).filter((p) => p.emoji).map((p) => [p.name, p.emoji])), [ws.data])
   const projects = React.useMemo(() => orderProjects(data?.projects ?? [], wsOrder), [data, wsOrder])
@@ -444,7 +445,7 @@ export default function TasksPage() {
         </div>
       </div>
       {data && <BulkBar tasks={tasks} visible={visible} projects={projects} labels={labels} today={today} />}
-      <TaskSheet id={openId} tasks={data?.tasks} projects={projects} loading={q.isPending} onClose={closeTask} onManageProjects={() => setProjectsOpen(true)} />
+      <TaskSheet id={openId} tasks={data ? tasks : undefined} projects={projects} loading={q.isPending} onClose={closeTask} onManageProjects={() => setProjectsOpen(true)} />
       <ProjectsDialog open={projectsOpen} onOpenChange={setProjectsOpen} projects={projects} tasks={tasks} />
     </Page>
   )
