@@ -32,6 +32,9 @@ Changed:
   reads the vault, and a change of its safety settings still waits for your OK.
 
 Fixed:
+- **Code mode: closing a terminal right after opening it no longer risks stopping Harness.** In the first
+  instant of a terminal, its shell is not yet apart from the server: closing or resizing it then could send the
+  stop signal to the server too. It now goes to the shell alone until the terminal has its own group.
 - **Git: test repositories no longer fill "On this server".** A repository left in a `tmp`, `temp` or `scratch`
   folder (the trial clones a session or an audit makes) was listed like a project, at the top when it was the most
   recent: names like `r3` on `master` nobody recognised. They are no longer listed (a graph of such a

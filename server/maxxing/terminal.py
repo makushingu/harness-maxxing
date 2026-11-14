@@ -233,10 +233,20 @@ def write(t: Term, data: bytes) -> None:
             return
 
 
+def _signal(t: Term, sig: int) -> None:
+    """The terminal's process group - or the shell alone while `setsid` has not made that group yet: right after the
+    start, the child is still in the server's own group, and killpg would stop the server (and its tests)."""
+    pg = os.getpgid(t.pid)
+    if pg == os.getpgrp():
+        os.kill(t.pid, sig)
+    else:
+        os.killpg(pg, sig)
+
+
 def resize(t: Term, cols: int, rows: int) -> None:
     try:
         _set_size(t.fd, cols, rows)
-        os.killpg(os.getpgid(t.pid), signal.SIGWINCH)
+        _signal(t, signal.SIGWINCH)
     except (OSError, ValueError, TypeError, OverflowError, ProcessLookupError):   # [Infinity, 1]: no resize
         pass
 
@@ -252,7 +262,7 @@ def close(tid: str) -> bool:
 def _kill(t: Term) -> None:
     for sig in (signal.SIGHUP, signal.SIGTERM):
         try:
-            os.killpg(os.getpgid(t.pid), sig)
+            _signal(t, sig)
         except (ProcessLookupError, PermissionError, OSError):
             break
     # the reader sees the end of file and cleans up; without a loop (tests, shutdown) do it here

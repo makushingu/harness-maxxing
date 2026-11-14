@@ -7,6 +7,10 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Terminal (`maxxing/terminal.py`): `_signal()` used by `resize` and `_kill`: `os.kill(pid)` while
+  `getpgid(pid) == getpgrp()` (`setsid -c` has not run yet: the child is still in the server's group), `killpg`
+  after. Before, a terminal closed in its first milliseconds sent SIGHUP + SIGTERM to the server's whole group (seen
+  as a full test suite ending silently in `test_terminal.py`).
 - Git page: `GitNav` (second sidebar) lists the repositories under each source again (`RepoRow`, a `<Link>` so the
   peeked list and the touch drawer close on a pick); a source head is a plain button that folds its section
   (`mx-git-folded` in localStorage), not a page: `SourceCards` / `LocalRow` / `GithubRow` and `?source=` / `?account=`

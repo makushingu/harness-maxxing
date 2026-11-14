@@ -1,6 +1,7 @@
 """Terminals of the web app: off by default, password to turn on, websocket auth, limits, idle close."""
 import json
 import time
+import types
 
 import pytest
 from starlette.websockets import WebSocketDisconnect
@@ -145,3 +146,20 @@ def test_doctor_lists_programs_started_by_hand_and_forgotten():
         f"Id=old-dovecot.service\nTransient=yes\nActiveEnterTimestamp=@{now - 8 * 86400}",
     ])
     assert stale_units(show, now) == [("pm-preview.service", 20), ("old-dovecot.service", 8)]
+
+
+def test_a_signal_never_reaches_the_servers_own_process_group(monkeypatch):
+    """Closed or resized right after it started, the shell may still be in the server's group (`setsid` has not run
+    yet): it gets the signal alone, never the whole group (the server, or pytest and its runner)."""
+    import signal as _signal
+    from maxxing import terminal
+    sent = []
+    monkeypatch.setattr(terminal.os, "getpgid", lambda pid: terminal.os.getpgrp())
+    monkeypatch.setattr(terminal.os, "kill", lambda pid, sig: sent.append(("kill", pid, sig)))
+    monkeypatch.setattr(terminal.os, "killpg", lambda pg, sig: sent.append(("killpg", pg, sig)))
+    t = types.SimpleNamespace(pid=424242, fd=-1)
+    terminal._signal(t, _signal.SIGTERM)
+    assert sent == [("kill", 424242, _signal.SIGTERM)]
+    monkeypatch.setattr(terminal.os, "getpgid", lambda pid: 777)
+    terminal._signal(t, _signal.SIGHUP)
+    assert sent[-1] == ("killpg", 777, _signal.SIGHUP)
