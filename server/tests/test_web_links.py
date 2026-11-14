@@ -46,3 +46,12 @@ def test_a_command_followed_by_a_message_sends_the_message():
     assert not action.match("/plan\nfix the login page")
     body = src[src.index("export function slashAction"):]
     assert "if (arg && !cmd?.args?.length && !cmd?.freeArg) return null" in body
+
+
+def test_picking_a_mention_keeps_the_line_break_that_follows():
+    src = (WEB / "pages" / "sessions" / "Composer.tsx").read_text()
+    m = re.search(r"text\.slice\(caret\)\.replace\(/((?:\\.|[^/\\\n])+)/, ''\)", src)
+    assert m
+    rest = re.compile(m[1])
+    assert rest.sub("", "Le\nnext line", count=1) == "\nnext line"
+    assert rest.sub("", "Le next", count=1) == "next"
