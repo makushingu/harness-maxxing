@@ -4,7 +4,7 @@
 // what to do when the connection is down, memory, forget its sign-ins, delete).
 import * as React from 'react'
 import { Link } from 'react-router'
-import { Bot, Globe, User } from 'lucide-react'
+import { Bot, Globe, MessageSquare, User } from 'lucide-react'
 import { useLang, useT } from '@/i18n'
 import { useBrowserProfile, useBrowserStatus, useSaveBrowserProfile } from '@/lib/queries'
 import type { BrowserNavigator, BrowserSessionLine } from '@/lib/types'
@@ -64,7 +64,11 @@ export function ProfilePage({ pid }: { pid: string }) {
               ))}
             </div>
           ) : (
-            <p className="text-[13px] text-muted-foreground">{t('browser.persistentEmpty')}</p>
+            <EmptyCard icon={Bot} title={t('browser.persistentNone')} text={t('browser.persistentEmpty')}>
+              <Button asChild size="sm" variant="outline">
+                <Link to="/agents">{t('browser.mine.toAgents')}</Link>
+              </Button>
+            </EmptyCard>
           )}
         </section>
         <section className="grid gap-3" data-testid="browser-temporary">
@@ -72,7 +76,7 @@ export function ProfilePage({ pid }: { pid: string }) {
           {v.temporary.length ? (
             <Journal rows={v.temporary} onWatch={(r) => setWin({ nav: `session:${r.session}`, who: r.title })} />
           ) : (
-            <p className="text-[13px] text-muted-foreground">{t('browser.temporaryEmpty')}</p>
+            <EmptyCard icon={MessageSquare} title={t('browser.temporaryNone')} text={t('browser.temporaryEmpty')} />
           )}
         </section>
         <section className="grid gap-3 border-t pt-6">
@@ -87,6 +91,22 @@ export function ProfilePage({ pid }: { pid: string }) {
   )
 }
 
+/** Nothing here yet: what would be here and how it comes (a dashed card, an action under it). */
+export function EmptyCard({ icon: Icon, title, text, children }: { icon: React.ComponentType<{ className?: string }>; title: string; text: string; children?: React.ReactNode }) {
+  return (
+    <div className="flex items-start gap-3 rounded-xl border border-dashed p-4" data-testid="browser-empty">
+      <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
+        <Icon className="size-4.5" />
+      </span>
+      <div className="grid min-w-0 gap-1">
+        <p className="text-[13px] font-medium">{title}</p>
+        <p className="text-[12px] leading-relaxed text-muted-foreground">{text}</p>
+        {children && <div className="mt-1.5 flex flex-wrap gap-2">{children}</div>}
+      </div>
+    </div>
+  )
+}
+
 function Heading({ title, desc }: { title: string; desc?: string }) {
   return (
     <div className="grid gap-0.5">
@@ -97,7 +117,7 @@ function Heading({ title, desc }: { title: string; desc?: string }) {
 }
 
 /** An agent's persistent browser: a live picture while it runs, its page, "Claude is acting". */
-function AgentCard({ n, pid, onOpen }: { n: BrowserNavigator; pid: string; onOpen: () => void }) {
+export function AgentCard({ n, pid, onOpen }: { n: BrowserNavigator; pid: string; onOpen: () => void }) {
   const t = useT()
   const src = useNavPicture(pid, n.id, n.running && n.awake > 0, 3000, 480)
   const where = n.path ? ownerParts(n.path).where : ''

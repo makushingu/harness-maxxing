@@ -171,8 +171,20 @@ def page_refusal(url: object, sites: list[str] | None = None) -> str | None:
         return "Open sites by their name, not by an IP address."
     if sites is not None and not site_allowed(host, sites):
         return (f"{host} is not one of this agent's domains ({', '.join(sites) or 'none yet'}): in its sandbox, its "
-                "browser opens only those. Ask the user to add it (the agent's page -> Protection), or use another way.")
+                "browser opens only those. The owner got a notification to add it for the next runs: go on another "
+                "way, or end the run and say what you needed it for.")
     return None
+
+
+def off_domains(url: object, sites: list[str]) -> str | None:
+    """The host of `url` when its only refusal is that it is not one of `sites` (a domain the owner could add)."""
+    if page_refusal(url, None) is not None:
+        return None
+    try:
+        host = (urlsplit(str(url).strip()).hostname or "").lower().rstrip(".")
+    except ValueError:
+        return None
+    return host if host and not site_allowed(host, sites) else None
 
 
 # ---- DevTools commands ---------------------------------------------------------------------------------------------

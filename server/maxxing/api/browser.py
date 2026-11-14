@@ -795,7 +795,7 @@ async def cdp(ws: WebSocket, pid: str):
         except (WebSocketDisconnect, RuntimeError):
             return None
     try:
-        await relay.pump(b.run / "cdp.sock", b.ws_path, lambda: browser.agent_sites(turn.owner), recv, ws.send_text, view=p.view_for(b, turn),
+        await relay.pump(b.run / "cdp.sock", b.ws_path, lambda: turn.sites, recv, ws.send_text, view=p.view_for(b, turn),
                          wait_tab=lambda target: p.wait_tab(b, target))
     except Exception as e:  # noqa: BLE001
         log.info("browser devtools relay: %s", e)

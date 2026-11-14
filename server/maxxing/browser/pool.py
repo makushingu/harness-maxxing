@@ -31,11 +31,11 @@ import time
 from pathlib import Path
 
 from .. import browser, bus, config
-from . import cdm, exits, navs, replays, rules, unit
+from . import cdm, domains, exits, navs, replays, rules, unit
 from .live import Watcher
 from .proxy import Proxy
 from .tabs import Tabs, public as tab_public
-from .turns import check_turn, clear_turns, end_turn, read_turn, turn_alive, write_turn  # noqa: F401 - used by the API
+from .turns import check_turn, clear_turns, end_turn, read_turn, sites_of, turn_alive, write_turn  # noqa: F401 - used by the API
 from .view import View
 
 log = logging.getLogger("maxxing.browser")
@@ -59,6 +59,7 @@ class Turn:
         self.sid, self.owner = sid, owner
         self.path = browser.owner_path(owner)
         self.secret = secrets.token_urlsafe(24)
+        self.sites: list[str] | None = None             # what it may open (its turn file: _turn)
         self.child: cdm.Child | None = None
         self.lock = asyncio.Lock()
         self.last_call = time.time()
@@ -405,9 +406,10 @@ class Pool:
         if p is None:
             return _error("The browser profile of this turn was deleted.")
         args = cdm.clean_args(args)
-        sites = await asyncio.to_thread(browser.agent_sites, owner)
+        sites = sites_of(turn)
         why = rules.page_refusal(args.get("url"), sites) if isinstance(args.get("url"), str) else None
         if why:
+            await asyncio.to_thread(domains.blocked, owner, args.get("url"), sites)   # its owner may add it
             await asyncio.to_thread(replays.log_action, pid,
                                     {"at": time.time(), "session": sid, "nav": navs.of_turn(sid, owner), "tool": name,
                                      "args": replays.summary(name, args), "ok": False, "refused": why[:200]})
@@ -418,7 +420,7 @@ class Pool:
         t0 = time.time()
         try:
             b = await self.ensure(pid)
-            t = await self._turn(b, sid, owner)
+            t = await self._turn(b, sid, owner, sites)
         except browser.BrowserError:
             raise
         except (RuntimeError, OSError, asyncio.TimeoutError) as e:
@@ -441,7 +443,7 @@ class Pool:
                     if t.child and t.child.alive:
                         raise
                     await t.stop()
-                    t = await self._turn(b, sid, owner)
+                    t = await self._turn(b, sid, owner, sites)
                     res = await t.child.call("tools/call", {"name": name, "arguments": args})  # type: ignore[union-attr]
             ok = not res.get("isError")
             res = _explain(res, b, sites)
@@ -486,6 +488,7 @@ class Pool:
             except Exception as e:  # noqa: BLE001
                 log.info("Harness Browser %s: page outside the domains not left: %s", b.pid, e)
                 await b.watcher.close_tab(tab["target"])
+            await asyncio.to_thread(domains.blocked, t.owner, url, sites)
             out.append(f"[Harness Maxxing] A tab of yours reached {replays.page(url)}, outside this agent's domains: "
                        "it was emptied. " + DOMAINS_HINT.split("] ", 1)[1].format(sites=", ".join(sites) or "none yet"))
         return out
@@ -521,7 +524,7 @@ class Pool:
                 "and tell the user it is waiting for its exit; they can go on from the card in this session once it "
                 "is back.")
 
-    async def _turn(self, b: Browser, sid: str, owner: str) -> Turn:
+    async def _turn(self, b: Browser, sid: str, owner: str, sites: list[str] | None) -> Turn:
         """The turn's tools, started if needed, with at least one tab in its navigator."""
         t = b.turns.get(sid)
         if t is None or t.owner != owner:
@@ -529,6 +532,7 @@ class Pool:
                 await t.stop()
             t = b.turns[sid] = Turn(sid, owner)
             self._changed()
+        t.sites = sites
         if t.child is not None and t.child.alive:
             return t
         await t.stop()
@@ -951,7 +955,8 @@ BLOCKED_HINT = ("[Harness Maxxing] ERR_BLOCKED_BY_ADMINISTRATOR = this page, or 
                 "opened by this browser: a page of this server or of a local network, a file, or a page of the browser "
                 "itself. Do not try to get around it.")
 DOMAINS_HINT = ("[Harness Maxxing] This agent runs in its sandbox: its browser opens only its domains ({sites}). "
-                "Ask the user to add the site to the agent's domains (its page -> Protection), or use another way.")
+                "The owner got a notification to add the site for the next runs: go on another way, or end the run "
+                "and say what you needed it for.")
 
 
 def _explain(res: dict, b: Browser | None = None, sites: list[str] | None = None) -> dict:

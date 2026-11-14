@@ -47,3 +47,9 @@ export function navName(n: Pick<BrowserNavigator, 'id' | 'kind' | 'name'> | unde
   if (n.kind === 'person') return t('browser.nav.me')
   return n.kind === 'session' ? t('browser.nav.session') : n.id
 }
+
+/** Profiles in the order of the sidebar: the person's, then the projects' (by name), then the others. */
+export function orderedProfiles<P extends BrowserProfile & { project?: string | null; gone?: boolean }>(rows: P[], t: T): P[] {
+  const rank = (p: P) => (p.id === 'main' ? 0 : p.project && !p.gone ? 1 : 2)
+  return [...rows].sort((a, b) => rank(a) - rank(b) || profileName(a, t).localeCompare(profileName(b, t)))
+}

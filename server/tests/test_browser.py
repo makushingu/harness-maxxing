@@ -566,6 +566,44 @@ def test_a_sandboxed_agent_browses_only_its_domains(client, topic, mx):
     assert browser.agent_sites(f"agent:{A}") == []                            # no domain: no page
 
 
+def test_the_sites_of_a_turn_are_fixed_when_it_starts(client, topic, mx):
+    """A sandboxed run: its domains, written in its turn file (no agent read per page); the owner's conversation
+    (not sandboxed) and sessions: any public site."""
+    from maxxing import agents
+    from maxxing.browser import turns
+    from maxxing.sessions import runner
+    _agent(client)
+    client.put("/api/settings", json={"browser_feature": True})
+    client.put("/api/browser/owner", json={"path": A, "enabled": True})
+    agents._save(A, {**agents.load(A), "sandbox": True, "domains": ["example.com"]})
+    runner.browser_args("run0001", A, {"args": [], "sandbox": True})
+    runner.browser_args("chat0001", A, {"args": [], "sandbox": False, "manager": True})
+    assert turns.sites_of(turns.read_turn("run0001")) == ["example.com"]
+    assert turns.sites_of(turns.read_turn("chat0001")) is None
+    agents._save(A, {**agents.load(A), "domains": ["example.com", "example.org"]})
+    assert turns.sites_of(turns.read_turn("run0001")) == ["example.com"]        # the next run gets the new list
+    assert turns.sites_of({"owner": f"agent:{A}", "token": "x"}) == ["example.com", "example.org"]   # a file of before
+
+
+def test_a_run_stopped_at_another_site_offers_to_add_it(client, topic, mx):
+    from maxxing import agents, feed
+    from maxxing.browser import domains, rules
+    _agent(client)
+    agents._save(A, {**agents.load(A), "sandbox": True, "domains": ["example.com"]})
+    assert rules.off_domains("https://accounts.example.org/login", ["example.com"]) == "accounts.example.org"
+    assert rules.off_domains("https://www.example.com/", ["example.com"]) is None        # allowed
+    assert rules.off_domains("http://127.0.0.1/", ["example.com"]) is None               # never: not a domain to add
+    assert rules.off_domains("file:///etc/passwd", ["example.com"]) is None
+    assert domains.blocked(f"session:x", "https://example.org/", None) is None            # a session: free
+    assert domains.blocked(f"agent:{A}", "https://example.org/a", ["example.com"]) == "example.org"
+    domains.blocked(f"agent:{A}", "https://example.org/b", ["example.com"])                # once a day
+    evs = [e for e in feed.list_events(None, False, None, 50)["events"] if e.get("ref") == f"browsersite:{A}|example.org"]
+    assert len(evs) == 1 and evs[0]["actions"][0]["id"] == "add" and evs[0]["agent"] == A
+    done = feed.act(evs[0]["id"], "add")
+    assert agents.load(A)["domains"] == ["example.com", "example.org"]
+    assert done["resolution"] == "example.org added" and done["actions"] == []
+
+
 def test_a_tab_of_a_sandboxed_agent_that_left_its_domains_is_emptied(mx):
     from maxxing.browser import pool as pool_mod
 
@@ -581,7 +619,7 @@ def test_a_tab_of_a_sandboxed_agent_that_left_its_domains_is_emptied(mx):
             return [{"target": "t1"}, {"target": "t2"}]
 
     b = type("B", (), {"watcher": W(), "tabs": Tabs(), "pid": "acme"})()
-    t = type("T", (), {"nav": f"agent:{A}"})()
+    t = type("T", (), {"nav": f"agent:{A}", "owner": f"agent:{A}"})()
     notes = asyncio.run(pool_mod.Pool()._keep_to(b, t, ["example.com"]))
     assert W.went == [("t2", "about:blank")] and len(notes) == 1 and "evil.example.org" in notes[0]
 

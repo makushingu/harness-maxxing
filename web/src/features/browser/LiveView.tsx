@@ -21,6 +21,7 @@ import { useCompact } from '@/stores/media'
 import { cn } from '@/lib/utils'
 import { Button, Input } from '@/components/ui'
 import { AsleepScene } from './AsleepScene'
+import { DomainBar } from './DomainBar'
 import { QuickMenu, type Quality } from './QuickMenu'
 
 const QUALITY_KEY = 'mx.browser.quality'
@@ -418,6 +419,9 @@ export function LiveView({ profile, nav, session, who, start, onMinimize, classN
           )}
         </div>
       )}
+
+      {/* a sandboxed agent's browser on a site outside its domains: add it, or its next step empties the tab */}
+      {b?.page?.url && <DomainBar nav={nav} url={b.page.url} who={who} />}
 
       {/* the page */}
       <div

@@ -1,9 +1,11 @@
 """The browser of a turn: its token file and its MCP config (written by the runner, so: no heavy imports here).
 
-    <state>/browser/turns/<session>.json    {owner, profile, token, at}   (0600; removed when the turn ends)
+    <state>/browser/turns/<session>.json    {owner, profile, token, at, sites}   (0600; removed when the turn ends)
     <state>/browser/turns/<session>.mcp.json                     (the --mcp-config of the turn, 0600)
 
 The server trusts the owner and the profile of that file, never ones sent by the turn (POST /api/browser/mcp/<session>, Bearer token).
+`sites`: what the turn may open, fixed when it starts (browser.agent_sites: a sandboxed agent's run -> its domains;
+null = any public site), so the checks of each page never read the agent again.
 """
 from __future__ import annotations
 
@@ -26,11 +28,11 @@ def turn_file(sid: str) -> Path:
     return browser.turns_dir() / f"{sid}.json"
 
 
-def write_turn(sid: str, owner: str, profile: str = browser.MAIN) -> str:
+def write_turn(sid: str, owner: str, profile: str = browser.MAIN, sites: list[str] | None = None) -> str:
     token = secrets.token_urlsafe(32)
     browser.turns_dir().mkdir(parents=True, exist_ok=True, mode=0o700)
-    config.write_json(turn_file(sid), {"owner": owner, "profile": profile, "token": token, "at": time.time()},
-                      mode=0o600)
+    config.write_json(turn_file(sid), {"owner": owner, "profile": profile, "token": token, "at": time.time(),
+                                       "sites": sites}, mode=0o600)
     return token
 
 
@@ -49,6 +51,14 @@ def read_turn(sid: str) -> dict | None:
         return d if isinstance(d, dict) and d.get("owner") and d.get("token") else None
     except (OSError, ValueError):
         return None
+
+
+def sites_of(turn: dict) -> list[str] | None:
+    """The sites of a turn's file (a file written before `sites` existed: read from its agent)."""
+    if "sites" in turn:
+        v = turn["sites"]
+        return [str(x) for x in v] if isinstance(v, list) else None
+    return browser.agent_sites(str(turn.get("owner") or ""))
 
 
 def check_turn(sid: str, token: str) -> dict | None:
@@ -84,10 +94,10 @@ def clear_turns() -> None:
             f.unlink(missing_ok=True)
 
 
-def mcp_args(sid: str, owner: str, profile: str, settings: dict) -> list[str]:
+def mcp_args(sid: str, owner: str, profile: str, settings: dict, sites: list[str] | None = None) -> list[str]:
     """`--mcp-config <file>` giving the turn the browser tools + ask_human (browser_mcp.py, stdio)."""
     from .. import browser_mcp, pcbridge
-    token = write_turn(sid, owner, profile)
+    token = write_turn(sid, owner, profile, sites)
     wait = int(settings.get("wait_min") or 30) * 60 if settings.get("ask", True) else 0
     env = {"MAXXING_BROWSER_URL": f"http://{pcbridge.local_host()}:{pcbridge.local_port()}/api/browser/mcp/{sid}",
            "MAXXING_BROWSER_TOKEN": token, "MAXXING_SESSION": sid, "MAXXING_BROWSER_OWNER": owner,

@@ -9,16 +9,17 @@ import { Link, useSearchParams } from 'react-router'
 import { Bot, Globe, MessageSquare, Plus } from 'lucide-react'
 import { useT } from '@/i18n'
 import { useBrowserNavigator, useBrowserStatus, useSaveBrowserProfile, useSettings } from '@/lib/queries'
-import type { BrowserNavigator, BrowserProfileRow, BrowserStatus } from '@/lib/types'
+import type { BrowserNavigator, BrowserStatus } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, Input, Select, Skeleton } from '@/components/ui'
 import { PageList } from '@/components/shell/PageList'
 import { Callout } from '@/features/common'
 import { LiveView } from './LiveView'
+import { MyBrowser } from './MyBrowser'
 import { ProfilePage } from './ProfilePage'
 import { ConnectionPicker } from './ConnectionPicker'
 import { AddExit, DirectPanel, ExitPanel } from './Exits'
-import { exitLine, exitName, exitTone, navName, ownerParts, profileName, testWhere } from './profiles'
+import { exitLine, exitName, exitTone, navName, orderedProfiles, ownerParts, profileName, testWhere } from './profiles'
 
 /** The navigator a session's link means: its agent's for an agent run, else the session's own. */
 function navOfSession(st: BrowserStatus | undefined, session: string): string {
@@ -66,8 +67,10 @@ export default function BrowserPage() {
         </Section>
       ) : pid ? (
         <ProfilePage key={pid} pid={pid} />
+      ) : navId === 'me' && !session && params.get('live') !== '1' && st ? (
+        <MyBrowser st={st} pid={navProfile || 'main'} onOpen={() => setParams({ live: '1' })} onAgent={(nav) => setParams({ nav })} />
       ) : navProfile ? (
-        <Live key={`${navId}:${navProfile}`} nav={n || { id: navId, kind: navId.startsWith('agent:') ? 'agent' : navId.startsWith('session:') ? 'session' : 'person', name: '' }} pid={navProfile} st={st} session={session} />
+        <Live key={`${navId}:${navProfile}`} nav={n || { id: navId, kind: navId.startsWith('agent:') ? 'agent' : navId.startsWith('session:') ? 'session' : 'person', name: '' }} pid={navProfile} st={st} session={session} onBack={() => setParams({})} />
       ) : (
         <Skeleton className="m-4 h-80" />
       )}
@@ -88,15 +91,9 @@ function Section({ title, actions, children }: { title: string; actions?: React.
   )
 }
 
-/** Profiles in the order of the sidebar: the person's, then the projects' (by name), then the others. */
-function ordered(rows: BrowserProfileRow[], t: ReturnType<typeof useT>): BrowserProfileRow[] {
-  const rank = (p: BrowserProfileRow) => (p.id === 'main' ? 0 : p.project && !p.gone ? 1 : 2)
-  return [...rows].sort((a, b) => rank(a) - rank(b) || profileName(a, t).localeCompare(profileName(b, t)))
-}
-
 /** A navigator live. The person's Browser: pick its profile and that profile's connection here. An agent's or a
  *  session's: its name, where it is, its profile. */
-function Live({ nav, pid, st, session }: { nav: Pick<BrowserNavigator, 'id' | 'kind' | 'name'> & Partial<BrowserNavigator>; pid: string; st?: BrowserStatus; session?: string }) {
+function Live({ nav, pid, st, session, onBack }: { nav: Pick<BrowserNavigator, 'id' | 'kind' | 'name'> & Partial<BrowserNavigator>; pid: string; st?: BrowserStatus; session?: string; onBack?: () => void }) {
   const t = useT()
   const move = useBrowserNavigator()
   const row = st?.profiles.find((p) => p.id === pid)
@@ -117,7 +114,7 @@ function Live({ nav, pid, st, session }: { nav: Pick<BrowserNavigator, 'id' | 'k
               aria-label={t('browser.menu.signins')}
               value={pid}
               onValueChange={(x) => x !== pid && move.mutate({ profile: x })}
-              options={ordered(st?.profiles || [], t).map((p) => ({ value: p.id, label: profileName(p, t) }))}
+              options={orderedProfiles(st?.profiles || [], t).map((p) => ({ value: p.id, label: profileName(p, t) }))}
               data-testid="browser-nav-profile"
             />
           </span>
@@ -128,7 +125,7 @@ function Live({ nav, pid, st, session }: { nav: Pick<BrowserNavigator, 'id' | 'k
         )}
         <ConnectionPicker pid={pid} note />
       </div>
-      <LiveView profile={pid} nav={nav.id} session={session} start={!!session} className="min-h-0 flex-1" />
+      <LiveView profile={pid} nav={nav.id} session={session} start={!!session || person} onMinimize={person ? onBack : undefined} className="min-h-0 flex-1" />
     </div>
   )
 }
@@ -167,7 +164,7 @@ function SideList({ navId, pid, exitId, onAddProfile }: { navId: string | null; 
       </div>
       <div className="grid gap-0.5" data-testid="browser-side-profiles">
         {heading(t('browser.profiles'))}
-        {ordered(st.profiles, t).map((p) => {
+        {orderedProfiles(st.profiles, t).map((p) => {
           const e = st.exits.find((x) => x.id === p.exit)
           const down = e?.state === 'down'
           const tone = down ? 'bg-destructive' : p.state === 'running' ? 'bg-success' : 'bg-muted-foreground/50'

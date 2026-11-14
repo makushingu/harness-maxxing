@@ -1334,7 +1334,9 @@ def browser_args(sid: str, path: str, agent: dict) -> list[str]:
         if not on:
             return []
         from maxxing.browser import turns
-        args = turns.mcp_args(sid, on[0], on[1]["id"], on[2])
+        # a sandboxed run: only its domains (read once here); the owner's conversation and sessions: any public site
+        sites = browser.agent_sites(on[0]) if agent.get("sandbox") else None
+        args = turns.mcp_args(sid, on[0], on[1]["id"], on[2], sites)
     except Exception:  # noqa: BLE001 - a turn must never fail because of the browser
         return []
     if agent.get("approvals_forced"):
