@@ -271,7 +271,7 @@ def test_a_request_is_announced_once_and_resolved(client, topic, mx):
     assert asks.scan() is True and asks.scan() is False
     evs = [e for e in feed.list_events()["events"] if e.get("ref") == f"human:{rid}"]
     assert len(evs) == 1 and [a["id"] for a in evs[0]["actions"]] == ["open", "skip"]
-    assert evs[0]["url"] == "/browser?session=nosuchsession"
+    assert evs[0]["url"] == "/settings/browser?session=nosuchsession"
     feed.act(evs[0]["id"], "skip", by="web")
     assert json.loads((folder / f"{rid}.json").read_text())["status"] == "skip"
     ev = feed.get(evs[0]["id"])

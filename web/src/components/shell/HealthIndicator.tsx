@@ -12,6 +12,7 @@ import { iconBtn } from './nav'
 import { MeterBar, MeterIcon, MeterValue, MiniMeter, type MeterTone } from './Meter'
 import { ClaudeStatus } from './UsageIndicator'
 import { useMood } from './mood'
+import { openMyBrowser } from '@/features/browser/open'
 
 /** Issues not marked as seen: the ones the dot and the count are about. */
 export function openIssues(h: Health): Health['issues'] {
@@ -346,29 +347,30 @@ function SidebarLook({ collapsed, lead, tail }: { collapsed?: boolean; lead?: Re
   )
 }
 
-/** The Harness Browser while it runs: its memory and tabs; amber with a "sleep" button when memory runs short. */
+/** The Harness Browser (once on): a click opens my browser's window; while it runs, its memory and tabs; amber with a
+ *  "sleep" button when memory runs short. */
 function BrowserLine({ collapsed, className }: { collapsed?: boolean; className?: string }) {
   const t = useT()
   const { data: s } = useSettings()
   const { data: st } = useBrowserStatus(!!s?.browser_feature, 30_000)
   const action = useProfileAction()
   const b = st?.summary
-  if (!s?.browser_feature || !b || !b.running.length) return null
+  if (!s?.browser_feature || !b) return null
   const warn = b.level !== 'ok'
   const awake = b.running.reduce((n, pid) => n + (b.tabs[pid] || 0), 0)
   const text = [
     t('nav.browser'),
     b.running.length > 1 ? t('browser.profilesOn', { count: b.running.length }) : '',
     b.mem ? fmtBytes(b.mem) : '',
-    t('browser.tabsAwake', { count: awake }),
+    b.running.length ? t('browser.tabsAwake', { count: awake }) : '',
   ].filter(Boolean).join(' · ')
   return (
     <Tooltip content={warn ? t('browser.memWarn') : collapsed ? text : null} side="right">
       <div className={cn('flex h-8 items-center gap-2 rounded-md px-1.5 text-xs', collapsed && 'w-11 justify-center px-0', warn ? 'text-warning' : 'text-muted-foreground', className)} data-testid="sidebar-browser">
-        <Link to="/browser" className="flex min-w-0 flex-1 items-center gap-2 hover:text-foreground" aria-label={text}>
+        <button type="button" onClick={() => openMyBrowser()} className="flex min-w-0 flex-1 items-center gap-2 text-left hover:text-foreground" aria-label={text} data-testid="sidebar-browser-open">
           {warn ? <TriangleAlert className="size-3.5 shrink-0" /> : <Globe className="size-3.5 shrink-0" />}
           {!collapsed && <span className="truncate">{text}</span>}
-        </Link>
+        </button>
         {warn && !collapsed && (
           <button type="button" className="shrink-0 underline-offset-2 hover:underline" onClick={() => b.running.forEach((pid) => action.mutate({ profile: pid, action: 'sleep' }))} data-testid="sidebar-browser-sleep">
             {t('browser.sleepShort')}

@@ -276,7 +276,7 @@ OAuth sign-ins (state "To connect") are done in Settings -> MCP -> **Connect**. 
 | `maxxing browser forget ID` | erase a profile's sign-ins, tabs and journal |
 
 `PATH` = `<project>`, `<project>/<topic>`, `<project>/<topic>/<agent>` or the full folder. `on`, `off`, `use`,
-`profile`, `forget`, `setup` and `settings` are refused in an agent's runs. Exits are added on the Browser page
+`profile`, `forget`, `setup` and `settings` are refused in an agent's runs. Exits are added in Settings -> Browser
 (their passwords go to Settings -> Keys).
 
 See [Harness Browser](33-browser.md).

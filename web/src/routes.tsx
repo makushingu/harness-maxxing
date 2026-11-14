@@ -55,7 +55,7 @@ export const routes: RouteObject[] = [
           { path: 'team', lazy: page(() => import('./features/team/TeamPage'), ['team']) },
           { path: 'infra', lazy: page(() => import('./features/infra/InfraPage'), ['infra']) },
           { path: 'mail', lazy: page(() => import('./features/mail/MailPage'), ['mail']) },
-          { path: 'browser', lazy: page(() => import('./features/browser/BrowserPage'), ['browser']) },
+          { path: 'browser', element: <BrowserMoved /> },
           // Settings & docs
           { path: 'settings', element: <Navigate to="/settings/general" replace /> },
           { path: 'settings/:section', lazy: page(() => import('./pages/settings'), ['settings', 'auth', 'show', 'tasks', 'team']) },
@@ -71,6 +71,12 @@ export const routes: RouteObject[] = [
     ],
   },
 ]
+
+/** /browser?… (before the Browser moved into Settings) -> /settings/browser?… (notifications, links of before). */
+function BrowserMoved() {
+  const { search } = useLocation()
+  return <Navigate to={`/settings/browser${search}`} replace />
+}
 
 /** /crons?job=<id> (before Crons moved into Settings) -> /settings/crons?job=<id>. */
 function CronsMoved() {

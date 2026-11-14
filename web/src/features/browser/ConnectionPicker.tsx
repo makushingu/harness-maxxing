@@ -30,7 +30,7 @@ export function ConnectionPicker({ pid, className, note, wide }: { pid: string; 
         className={wide ? 'h-9 min-w-0 flex-1 text-[13px]' : 'h-8 w-52 max-w-[50vw] text-[13px]'}
         aria-label={t('browser.connection')}
         value={p.exit}
-        onValueChange={(x) => (x === '__new' ? go('/browser?exit=new') : x !== p.exit && save.mutate({ id: pid, exit: x }))}
+        onValueChange={(x) => (x === '__new' ? go('/settings/browser?exit=new') : x !== p.exit && save.mutate({ id: pid, exit: x }))}
         options={options}
       />
       <Popover>
@@ -49,7 +49,7 @@ export function ConnectionPicker({ pid, className, note, wide }: { pid: string; 
             <span className="text-muted-foreground">{t('browser.connection.untested')}</span>
           )}
           {note && <span className="border-t pt-1.5 text-[12px] text-muted-foreground">{t('browser.connection.shared')}</span>}
-          <button type="button" className="justify-self-start text-[12px] text-primary hover:underline" onClick={() => go(`/browser?exit=${encodeURIComponent(p.exit)}`)}>
+          <button type="button" className="justify-self-start text-[12px] text-primary hover:underline" onClick={() => go(`/settings/browser?exit=${encodeURIComponent(p.exit)}`)}>
             {t('browser.down.open')}
           </button>
         </PopoverContent>

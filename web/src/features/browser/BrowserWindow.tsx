@@ -45,7 +45,7 @@ export function BrowserWindow({ open, onOpenChange, who, start, session, context
       <DialogContent
         hideClose
         onOpenAutoFocus={(e) => e.preventDefault()}
-        className="gap-0 overflow-hidden p-0 md:p-0 max-md:inset-0 max-md:max-h-none max-md:rounded-none max-md:pt-(--safe-top) max-md:pb-(--safe-bottom) md:h-[min(88dvh,900px)] md:max-h-none md:max-w-6xl [&>div[aria-hidden]:first-child]:hidden"
+        className="gap-0 overflow-hidden p-0 md:p-0 max-md:inset-0 max-md:max-h-none max-md:rounded-none max-md:pt-(--safe-top) max-md:pb-(--safe-bottom) md:h-[min(92dvh,1200px)] md:max-h-none md:w-[min(96vw,1800px)] md:max-w-none [&>div[aria-hidden]:first-child]:hidden"
         data-testid="browser-window"
       >
         <DialogTitle className="sr-only">{who ? t('browser.topicTitle', { name: who }) : t('browser.name')}</DialogTitle>

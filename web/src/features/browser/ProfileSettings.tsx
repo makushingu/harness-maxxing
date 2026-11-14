@@ -30,7 +30,7 @@ export function ProfileSettings({ pid }: { pid: string }) {
   }
   const remove = async () => {
     if (!(await confirm({ title: t('browser.profile.deleteTitle', { name: profileName(p, t) }), description: t('browser.profile.deleteDesc'), destructive: true }))) return
-    save.mutate({ id: p.id, remove: true }, { onSuccess: () => nav('/browser') })
+    save.mutate({ id: p.id, remove: true }, { onSuccess: () => nav('/settings/browser') })
   }
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]" data-testid="browser-profile-settings">

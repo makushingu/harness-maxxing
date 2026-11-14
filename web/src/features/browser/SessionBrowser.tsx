@@ -117,7 +117,7 @@ function ExitDown({ session, exitId, name, resume }: { session: string; exitId: 
         {t('browser.down.retry')}
       </Button>
       <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" asChild>
-        <Link to={`/browser?exit=${encodeURIComponent(exitId)}`}>{t('browser.down.open')}</Link>
+        <Link to={`/settings/browser?exit=${encodeURIComponent(exitId)}`}>{t('browser.down.open')}</Link>
       </Button>
       <Button size="icon-sm" variant="ghost" className="size-6" onClick={() => act.mutate({ session, action: 'dismiss' })} title={t('browser.bar.hide')} aria-label={t('browser.bar.hide')}>
         <X className="size-3.5" />

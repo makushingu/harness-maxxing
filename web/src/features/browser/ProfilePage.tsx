@@ -1,4 +1,4 @@
-// /browser?profile=<id>: a profile (one per project, `main` = the person's, more added by hand). At the top its name
+// Settings -> Browser, ?profile=<id>: a profile (one per project, `main` = the person's, more added by hand). At the top its name
 // (renamed in place) and its connection (with the address sites see). Then its persistent browsers (one per agent on
 // it, a live picture each), the journal of its temporary ones (the sessions': text only), and its settings (what to
 // do when the connection is down, memory, forget its sign-ins, delete).
@@ -11,6 +11,7 @@ import type { BrowserNavigator, BrowserSessionLine } from '@/lib/types'
 import { fmtRelative } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { Button, Skeleton } from '@/components/ui'
+import { openMyBrowser } from './open'
 import { AsleepScene } from './AsleepScene'
 import { BrowserWindow } from './BrowserWindow'
 import { ConnectionPicker } from './ConnectionPicker'
@@ -31,8 +32,8 @@ export function ProfilePage({ pid }: { pid: string }) {
   const where = p.id === 'main' ? t('browser.profile.yours') : p.project ? (v.gone ? t('browser.profile.projectGone') : t('browser.profile.ofProject', { name: p.project.slice(9) })) : ''
   const me = v.person[0]
   return (
-    <div className="flex min-h-0 flex-1 flex-col" data-testid="browser-profile-page">
-      <div className="flex min-h-12 shrink-0 flex-wrap items-center gap-2 border-b px-4 py-1.5">
+    <div className="grid content-start gap-6" data-testid="browser-profile-page">
+      <div className="flex flex-wrap items-center gap-2">
         <input
           value={name}
           placeholder={profileName({ id: p.id, name: '' }, t)}
@@ -49,13 +50,13 @@ export function ProfilePage({ pid }: { pid: string }) {
         <span className="flex-1" />
         <ConnectionPicker pid={p.id} note />
       </div>
-      <div className="grid min-h-0 flex-1 content-start gap-8 overflow-y-auto p-4">
+      <div className="grid content-start gap-8">
         <section className="grid gap-3" data-testid="browser-persistent">
           <Heading title={t('browser.persistent')} desc={t('browser.persistentDesc')} />
           {me && (
-            <Link to="/browser" className="inline-flex items-center gap-1.5 justify-self-start text-[12px] text-muted-foreground hover:text-foreground">
+            <button type="button" onClick={() => openMyBrowser()} className="inline-flex items-center gap-1.5 justify-self-start text-[12px] text-muted-foreground hover:text-foreground">
               <User className="size-3.5" /> {t('browser.persistentYou')}
-            </Link>
+            </button>
           )}
           {v.agents.length ? (
             <div className="grid grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] gap-3">

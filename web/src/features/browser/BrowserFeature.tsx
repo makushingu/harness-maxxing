@@ -1,7 +1,8 @@
-// Settings -> Features: the Harness Browser. Off by default; once on, a project or a topic (its menu -> Browser) and
-// an agent (its settings -> Browser) may be let use it. Here: what this server lacks (Set up) and the settings shared
-// by every profile (asking the user, downloads, sleep, profiles at once, waiting for an exit). Profiles (sign-ins,
-// sites, exit) and exits are on the Browser page.
+// The Harness Browser's switch: off by default; once on, every session has it (a project or a topic can say no: its
+// menu -> Browser) and an agent once turned on (its settings -> Browser). Here: the switch and what this server lacks
+// (Set up), at the top of Settings -> Browser and in Settings -> Features (with a link to Settings -> Browser).
+// BrowserSettingsForm: the settings shared by every profile (asking the user, downloads, sleep, profiles at once,
+// waiting for a connection), a card of Settings -> Browser.
 import * as React from 'react'
 import { Link } from 'react-router'
 import { ChevronDown, MonitorPlay, Wrench } from 'lucide-react'
@@ -10,13 +11,12 @@ import { useBrowserSetup, useBrowserStatus, useSaveBrowserSettings, useSaveSetti
 import type { BrowserSettings } from '@/lib/types'
 import { Button, Select, Switch } from '@/components/ui'
 import { Callout, SettingRow } from '@/features/common'
-import { exitTone, profileName } from './profiles'
 import { SettingsCard } from '@/pages/settings/sections/ui'
 
 const WAITS = [10, 30, 60, 120, 240, 1440]
 const CHOICES = { idle_min: [15, 30, 60, 120, 240], tab_sleep_min: [10, 20, 30, 60, 120], max_tabs: [4, 8, 12, 20], max_active_profiles: [1, 2, 3, 4, 6], exit_wait_s: [60, 180, 300, 600] }
 
-export function BrowserFeature() {
+export function BrowserFeature({ link }: { link?: boolean }) {
   const t = useT()
   const { data: s } = useSettings()
   const save = useSaveSettings()
@@ -47,7 +47,16 @@ export function BrowserFeature() {
             </Callout>
           </div>
         )}
-        {on && st && <BrowserSettingsForm />}
+        {on && link && (
+          <div className="flex flex-wrap items-center gap-2 py-3">
+            <Button size="sm" variant="outline" asChild>
+              <Link to="/settings/browser" data-testid="browser-open-page">
+                <MonitorPlay /> {t('browser.openPage')}
+              </Link>
+            </Button>
+            <span className="text-[12px] text-muted-foreground">{t('browser.openPageHint')}</span>
+          </div>
+        )}
       </div>
     </SettingsCard>
   )
@@ -73,27 +82,7 @@ export function BrowserSettingsForm() {
   )
   const minutes = (n: number) => (n >= 60 ? t('browser.hours', { count: n / 60 }) : t('browser.minutes', { count: n }))
   return (
-    <div className="grid gap-4 py-3" data-testid="browser-settings">
-      <div className="flex flex-wrap items-center gap-2">
-        <Button size="sm" variant="outline" asChild>
-          <Link to="/browser" data-testid="browser-open-page">
-            <MonitorPlay /> {t('browser.openPage')}
-          </Link>
-        </Button>
-        <span className="text-[12px] text-muted-foreground">{t('browser.openPageHint')}</span>
-      </div>
-      <div className="grid gap-1" data-testid="browser-feature-profiles">
-        {st.profiles.map((p) => {
-          const e = st.exits.find((x) => x.id === p.exit)
-          return (
-            <Link key={p.id} to={`/browser?profile=${encodeURIComponent(p.id)}`} className="flex items-center gap-2 rounded-md px-1 py-1 text-[13px] hover:bg-accent">
-              <span className={`size-1.5 shrink-0 rounded-full ${exitTone(e)}`} />
-              <span className="font-medium">{profileName(p, t)}</span>
-              <span className="truncate text-muted-foreground">· {p.exit === 'direct' ? t('browser.exit.direct') : e?.name || p.exit}</span>
-            </Link>
-          )
-        })}
-      </div>
+    <div className="grid gap-4" data-testid="browser-settings">
       <div className="divide-y">
         <SettingRow label={t('browser.ask')} description={t('browser.askDesc')} htmlFor="br-ask">
           <Switch id="br-ask" checked={s.ask} onCheckedChange={(v) => set({ ask: v })} />

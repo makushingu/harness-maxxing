@@ -2,9 +2,10 @@ import * as React from 'react'
 import { useNavigate } from 'react-router'
 import { Command as Cmdk, defaultFilter } from 'cmdk'
 import * as DialogPrimitive from '@radix-ui/react-dialog'
-import { Blocks, Bot, Brain, BookOpen, Compass, CornerDownLeft, Download, Eye, File, FileText, Folder, GraduationCap, Hash, Keyboard, ListChecks, LogOut, MessageSquarePlus, MessagesSquare, Moon, Search, Sun, UsersRound } from 'lucide-react'
+import { Blocks, Bot, Brain, BookOpen, Compass, CornerDownLeft, Download, Eye, File, FileText, Folder, Globe, GraduationCap, Hash, Keyboard, ListChecks, LogOut, MessageSquarePlus, MessagesSquare, Moon, Search, Sun, UsersRound } from 'lucide-react'
 import { api } from '@/lib/api'
 import { AGENT_PATH_RE, GROUP_PATH_RE, agentRoute, agentRunRoute, groupRoute, useAgentGroups, useAgents, useDocs, useLogout, useSessions, useSettings, useWorkspace } from '@/lib/queries'
+import { openMyBrowser } from '@/features/browser/open'
 import type { FileSearchHit, SearchHit, SearchResult } from '@/lib/types'
 import { useUI, resolveTheme } from '@/stores/ui'
 import { useCompact } from '@/stores/media'
@@ -52,6 +53,7 @@ export function CommandPalette() {
   // Agents on: every agent and every group can be opened from here (lists loaded once the palette opens)
   const { data: st } = useSettings()
   const agentsOn = !!st?.agents_page
+  const browserOn = !!st?.browser_feature
   const { data: agentList } = useAgents(open && agentsOn)
   const { data: groupList } = useAgentGroups(open && agentsOn)
   const touch = useCompact()
@@ -194,6 +196,9 @@ export function CommandPalette() {
       })),
       { id: 'nav:docs', title: t('nav.docs'), group: nav, icon: BookOpen, perform: ({ navigate }) => navigate('/docs') },
       // Settings -> Pages: every extension page, pinned or not (the sidebar's Extensions folder shows the pinned ones)
+      ...(browserOn
+        ? [{ id: 'act:browser', title: t('browser.mine.open') || t('nav.browser'), group: actions, icon: Globe, keywords: ['browser', 'chromium', 'navigateur', 'web'], perform: () => openMyBrowser() } satisfies Command]
+        : []),
       { id: 'nav:x', title: t('ext.hubTitle'), group: nav, icon: Blocks, keywords: ['extensions', 'pages', 'plugins'], perform: ({ navigate }) => navigate('/settings/pages') },
       {
         id: 'act:theme',
@@ -278,7 +283,7 @@ export function CommandPalette() {
     for (const d of docs || [])
       list.push({ id: `doc:${d.slug}`, title: d.title, hint: d.section, group: docsG, icon: BookOpen, perform: ({ navigate }) => navigate(`/docs/${d.slug}`) })
     return list
-  }, [t, theme, presentation, ws, docs, setTheme, setPresentation, openShortcuts, logout, install, tutorialPath, navItems, agentsOn, agentList, groupList, open])
+  }, [t, theme, presentation, ws, docs, setTheme, setPresentation, openShortcuts, logout, install, tutorialPath, navItems, agentsOn, agentList, groupList, open, browserOn])
 
   const pageCmds = Object.values(sources).flat()
   const all = [...pageCmds, ...staticCmds]

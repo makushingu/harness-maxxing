@@ -1,12 +1,12 @@
 // Settings sub-navigation (route /settings/:section). Lightweight on purpose: also used by the palette.
 // Sections are grouped under headings in the left column (and in the phone tabs, in the same order).
 // Old ids keep working: SECTION_MOVED sends them to the section that took their content.
-import { UserRound, BarChart3, Bell, FileInput, History, Info, LayoutGrid, LayoutTemplate, ToggleRight, Bot, Brain, Clock, DatabaseBackup, KeyRound, Mic, Palette, PanelsTopLeft, Plug, Send, Server, Shield, SlidersHorizontal, Sparkles, Trash2, type LucideIcon } from 'lucide-react'
+import { UserRound, BarChart3, Globe, Bell, FileInput, History, Info, LayoutGrid, LayoutTemplate, ToggleRight, Bot, Brain, Clock, DatabaseBackup, KeyRound, Mic, Palette, PanelsTopLeft, Plug, Send, Server, Shield, SlidersHorizontal, Sparkles, Trash2, type LucideIcon } from 'lucide-react'
 import type { TKey } from '@/i18n'
 
 export type SettingsSectionId =
   | 'general' | 'appearance' | 'profile' | 'security' | 'features'
-  | 'claude' | 'memory' | 'skills' | 'mcp' | 'keys' | 'usage'
+  | 'claude' | 'memory' | 'skills' | 'mcp' | 'keys' | 'browser' | 'usage'
   | 'crons' | 'notifications' | 'telegram' | 'voice'
   | 'widgets' | 'pages'
   | 'templates' | 'import' | 'backup' | 'trash'
@@ -34,6 +34,7 @@ export const SETTINGS_SECTIONS: { id: SettingsSectionId; group: SettingsGroupId;
   { id: 'skills', group: 'claude', label: 'settings.skills', description: 'settings.skills.desc', icon: Sparkles, keywords: 'skills skill.md recipes commands slash abilities' },
   { id: 'mcp', group: 'claude', label: 'settings.mcp', description: 'settings.mcp.desc', icon: Plug, keywords: 'mcp servers tools connectors oauth model context protocol' },
   { id: 'keys', group: 'claude', label: 'settings.keys', description: 'settings.keys.desc', icon: KeyRound, keywords: 'secrets vault env api keys' },
+  { id: 'browser', group: 'claude', label: 'nav.browser', description: 'browser.settingsDesc', icon: Globe, keywords: 'browser chromium harness browser web pages sign in login captcha profiles connections proxy tailscale phone exit navigateur' },
   { id: 'usage', group: 'claude', label: 'settings.usage', description: 'settings.usage.desc', icon: BarChart3, keywords: 'stats usage quota tokens statistics plan limit cost' },
   { id: 'crons', group: 'automate', label: 'nav.crons', description: 'crons.description', icon: Clock, keywords: 'cron jobs schedule scheduled tasks timer recurring once history run' },
   { id: 'notifications', group: 'automate', label: 'settings.notifications', description: 'settings.notifications.desc', icon: Bell, keywords: 'notification alert sound badge pulse finished done feed' },

@@ -26,25 +26,30 @@ It is off until you turn the feature on; then every session may use it, agents o
    - an agent: its settings -> **Browser**. An agent is off until you turn it on for it: it never inherits the switch
      of its topic or project.
 
-The browser has its own page: **Browser** in the sidebar.
+Everything else is in **Settings -> Browser**.
 
-## The Browser page
+## Settings -> Browser
 
-The second bar of the **Browser** page has three parts:
+Under the switch and **Set up**:
 
-- **My browser**: your browser, a Chromium that runs on your server (not on your computer). The page shows its
-  picture (or "asleep"), its **Profile** and that profile's **Connection**; **Open my browser** (or a click on the
-  picture) starts it to browse yourself (to sign in to a site for Claude, say). Under it, the agents' browsers.
+- **My browser**: your browser, a Chromium that runs on your server (not on your computer): its picture (or
+  "asleep"), its **Profile** and that profile's **Connection**; **Open my browser** (or a click on the picture) opens
+  it in a window to browse yourself (to sign in to a site for Claude, say). Under it, the agents' browsers. The
+  **Browser** line at the bottom of the sidebar and **Open my browser** in Ctrl+K open the same window from any page.
 - **Profiles**: the sign-ins (cookies) and the connection the browsers use. **+ Add a profile** makes one
   more.
 - **Connections**: where the pages go out (the server's IP, your phone, your home box, a proxy). **+ Add a connection**
   adds one.
+- **How it works**: the settings shared by every profile (asking you, waiting, sleep, search engine, downloads).
+
+A browser is always shown in a window over the page you are on: yours, an agent's (its card) or a session's
+(**Watch**). **–** hides the window; the browser keeps running.
 
 ## Profiles: one per project
 
 A **profile** is a set of sign-ins of its own (cookies) and its own connection. **General** is
 yours, and the profile of the projects **general** and **system**. **Each other project has its own profile**, named after it: it is made by itself the first time a session or an agent
-of the project uses the browser (and, for every project that has agents, when you open the Browser page). It starts
+of the project uses the browser (and, for every project that has agents, when you open Settings -> Browser). It starts
 with the connection of General.
 
 Everything of a project shares its profile: its sessions, its agents and your browser when you put it on that profile
@@ -77,7 +82,7 @@ Sites see the address the pages come from. Your server's is a data-center one: s
 banks, anything behind a strict anti-bot) ask more checks or refuse it. A **connection** makes a profile's pages, and
 only them, go out somewhere else, by a normal everyday address. Chromium, the pages and Claude stay on your server.
 
-On the Browser page, **Connections** in the second bar lists them: **Server's IP** (always there) first. **+ Add a
+In Settings -> Browser, **Connections** lists them: **Server's IP** (always there) first. **+ Add a
 connection** offers four ways:
 
 | Connection | What the sites see | What you need |
@@ -129,7 +134,7 @@ address on its own (the sites would see your account move to a data center and c
 - You get a notification **Browser exit offline** with **Retry now** and **Go on when it is back**.
 - The session shows a card **The connection ... is down** with **Go on when it is back**, **Retry now** and **Open the
   connection**. With **Go on when it is back**, Claude goes on by itself as soon as the connection works again.
-- On the Browser page the profile says **paused** and the connection **offline**.
+- In Settings -> Browser the profile says **paused** and the connection **offline**.
 
 A profile can choose the other way: **When the exit is down -> Go out by the server's address**. Its sites may then
 see a data-center address and ask more checks.
@@ -205,7 +210,7 @@ action. **Skip** tells it to do without that step. With no answer in time, it gi
   sees its sleeping tabs and opens them again when it needs them. At most 12 tabs are awake per profile: above that,
   the oldest one sleeps.
 - With nobody watching, no session using it and no request, a profile **sleeps** after 30 minutes. Its tabs come
-  back, asleep, the next time it starts (when Claude needs it, or when you open it on the Browser page).
+  back, asleep, the next time it starts (when Claude needs it, or when you open it).
 - Each running profile is its own Chromium. At most 3 run at once: when another one is needed, the one unused the
   longest sleeps (one busy with Claude or with you is never put to sleep).
 - While one runs, the bottom of the sidebar shows **Browser · 620 MB · 6 tabs open**. When the server runs short of
@@ -247,7 +252,7 @@ maxxing browser exit test phone                what the sites see through that e
 maxxing browser forget shop                    erase a profile's sign-ins, tabs and journal
 ```
 
-Connections are added on the Browser page (their passwords go to the vault). Every command: [CLI reference](17-cli-reference.md#harness-browser).
+Connections are added in Settings -> Browser (their passwords go to the vault). Every command: [CLI reference](17-cli-reference.md#harness-browser).
 
 ## Troubleshooting
 
@@ -259,7 +264,7 @@ Connections are added on the Browser page (their passwords go to the vault). Eve
   phone, a home connection or an ISP proxy.
 - **"... browser profiles are in use right now"**: every running profile is busy; wait, or raise **Profiles running
   at once**.
-- **The connection stays offline**: open it on the Browser page. Tailscale: the phone must be on, signed in to the same
+- **The connection stays offline**: open it in Settings -> Browser. Tailscale: the phone must be on, signed in to the same
   account, with **Run as exit node** on. Proxy: check its address, user and password, then **Test**.
 - **The server is slow**: put tabs to sleep (status bar of the browser, or the sidebar line), lower **Tabs awake at
   most** or **Profiles running at once**.

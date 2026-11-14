@@ -60,7 +60,7 @@ export function QuickMenu({ profile, nav, quality, onQuality }: {
       <DropdownMenuContent align="end" className="w-72">
         <DropdownMenuLabel className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">{t('browser.menu.signins')}</DropdownMenuLabel>
         {kind === 'session' ? (
-          <DropdownMenuItem onSelect={() => go(`/browser?profile=${encodeURIComponent(profile)}`)}>
+          <DropdownMenuItem onSelect={() => go(`/settings/browser?profile=${encodeURIComponent(profile)}`)}>
             <KeyRound /> <span className="min-w-0 flex-1 truncate">{profileName(p || { id: profile, name: '' }, t)}</span>
             <span className="text-[11px] text-muted-foreground">{t('browser.menu.ofFolder')}</span>
           </DropdownMenuItem>
@@ -78,7 +78,7 @@ export function QuickMenu({ profile, nav, quality, onQuality }: {
                 ))}
               </DropdownMenuRadioGroup>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={() => go('/browser?new=profile')}>{t('browser.profile.add')}</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => go('/settings/browser?new=profile')}>{t('browser.profile.add')}</DropdownMenuItem>
             </DropdownMenuSubContent>
           </DropdownMenuSub>
         )}
@@ -102,7 +102,7 @@ export function QuickMenu({ profile, nav, quality, onQuality }: {
               ))}
             </DropdownMenuRadioGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={() => go('/browser?exit=new')}>{t('browser.exit.add')}</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => go('/settings/browser?exit=new')}>{t('browser.exit.add')}</DropdownMenuItem>
           </DropdownMenuSubContent>
         </DropdownMenuSub>
 
@@ -141,7 +141,7 @@ export function QuickMenu({ profile, nav, quality, onQuality }: {
         </DropdownMenuSub>
 
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={() => go(`/browser?profile=${encodeURIComponent(profile)}`)}>
+        <DropdownMenuItem onSelect={() => go(`/settings/browser?profile=${encodeURIComponent(profile)}`)}>
           <Settings2 /> {t('browser.menu.manage')}
         </DropdownMenuItem>
         <DropdownMenuItem destructive onSelect={forget} data-testid="browser-menu-forget">

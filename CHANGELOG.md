@@ -16,8 +16,8 @@ New:
 - **Harness Browser: a browser on your server for Claude and you.** For sites without an API, Claude opens pages,
   clicks and fills forms in a Chromium of your server, and you watch it live, take over for a captcha or a sign-in
   and hand back. Off until you turn it on (Settings -> Features -> Harness Browser); then every session has it (a project
-  or a topic can say no: its menu -> **Browser...**) and an agent once you turn it on in its settings. The Browser page has three parts: **your browser**,
-  the **profiles** and the **connections**. **Each project has its own profile** (sign-ins, connection), made by
+  or a topic can say no: its menu -> **Browser...**) and an agent once you turn it on in its settings. **Settings -> Browser** has **your browser** (also
+  opened from the sidebar's Browser line or Ctrl+K, in a window over any page), the **profiles** and the **connections**. **Each project has its own profile** (sign-ins, connection), made by
   itself: its sessions and its agents share it, so you sign in once for all of them; add more profiles to keep an
   agent apart. A profile's page shows its agents' browsers live (**Persistent**) and a journal of the browsers its
   sessions opened (**Temporary**, closed once the session no longer uses them); an agent's info panel shows its

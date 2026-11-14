@@ -81,7 +81,7 @@ export function FeaturesSection() {
         <FeaturePages core sub={{ '/sessions': sessionOptions, '/agents': agentsOptions, '/team': teamOptions }} />
       </SettingsCard>
 
-      <BrowserFeature />
+      <BrowserFeature link />
     </SectionStack>
   )
 }

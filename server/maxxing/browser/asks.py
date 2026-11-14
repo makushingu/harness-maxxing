@@ -123,7 +123,7 @@ def _where(d: dict) -> tuple[str, str]:
             name = agents.load(path).get("name") or name
         except Exception:  # noqa: BLE001
             pass
-        return name, (f"/browser?session={d.get('session')}" if d.get("session") else "/browser")
+        return name, (f"/settings/browser?session={d.get('session')}" if d.get("session") else "/settings/browser")
     name = "A session"
     try:
         from ..sessions import store
@@ -131,7 +131,7 @@ def _where(d: dict) -> tuple[str, str]:
         name = (m or {}).get("title") or name
     except Exception:  # noqa: BLE001
         pass
-    return name, f"/browser?session={d.get('session')}" if d.get("session") else "/browser"
+    return name, f"/settings/browser?session={d.get('session')}" if d.get("session") else "/settings/browser"
 
 
 def _new(d: dict) -> None:

@@ -794,7 +794,7 @@ def wait_down(sid: str, owner: str, e: dict, profile: dict) -> None:
         from .. import feed
         feed.post(f"Browser exit offline: {e['name']}",
                   f"Profile {profile['name'] or profile['id']} waits for it ({who}). The browser never switches to "
-                  "this server's address on its own.", "warning", "health", "/browser",
+                  "this server's address on its own.", "warning", "health", "/settings/browser",
                   dedupe=f"browserexit:{e['id']}:{int(runtime().state.get(e['id'], {}).get('since') or 0)}",
                   ref=f"browserexit:{e['id']}",
                   agent=browser.owner_path(owner) if owner.startswith("agent:") else None,

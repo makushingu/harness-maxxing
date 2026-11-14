@@ -16,3 +16,20 @@ export function useBrowserWanted(sid: string): boolean {
     () => wanted === sid,
   )
 }
+
+// "Open my browser": the person's browser in its window, over any page (the sidebar's browser line, Ctrl+K,
+// Settings -> Browser). One window for the whole app (MyBrowserWindow, in the shell).
+let mine = false
+const mineSubs = new Set<() => void>()
+
+export function openMyBrowser(open = true) {
+  mine = open
+  mineSubs.forEach((f) => f())
+}
+
+export function useMyBrowserOpen(): boolean {
+  return useSyncExternalStore(
+    (f) => (mineSubs.add(f), () => mineSubs.delete(f)),
+    () => mine,
+  )
+}

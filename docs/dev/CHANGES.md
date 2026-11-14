@@ -118,13 +118,16 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 - CLI `cmd_browser.py`: `maxxing browser setup [--exits] | status [--json] | settings [...] [--max-profiles N] |
   profile add|set|rm | exit test ID|direct | set PATH on|off|inherit [--profile ID|own|inherit] | show [--json] |
   forget ID`; `agent_guard.BROWSER_OWNER_ONLY` refuses `set profile forget setup settings stop` in agent turns.
-- Web: `features/browser/{BrowserPage, BrowserPanel, BrowserFeature, ProfileSettings, Exits, SessionBrowser,
-  LiveView, QuickMenu, BrowserWindow, AgentBrowserCard, profiles, open}` (Browser page: `?nav=`, `?profile=` =
-  settings, `?exit=`, `?session=`, `?new=profile`; `QuickMenu` = the ⋮ of the live view; picture choice in
+- Web: Settings section `browser` (`features/browser/BrowserSettings.tsx`, lazy with its i18n group; `?profile=`,
+  `?exit=<id>|new|direct`, `?new=profile`; `?live=1` / `?nav=` / `?session=` = the live view in a window over it);
+  `/browser?…` redirects there (`BrowserMoved`, also the links of notifications). My browser = one window for the app
+  (`open.ts` `openMyBrowser` / `useMyBrowserOpen`, `MyBrowserWindow` mounted by `AppShell` once asked): the sidebar's
+  browser line (shown whenever the feature is on), Ctrl+K `act:browser`, Settings -> Browser. `BrowserWindow` up to
+  96vw x 92dvh. No sidebar page any more (`nav.ts`). Files: `features/browser/{BrowserSettings, BrowserPanel, BrowserFeature, ProfileSettings, Exits, SessionBrowser,
+  LiveView, QuickMenu, BrowserWindow, MyBrowserWindow, AgentBrowserCard, profiles, open}` (`QuickMenu` = the ⋮ of the live view; picture choice in
   `localStorage` `mx.browser.quality`) (`AgentBrowserCard` in the agent's info panel: a
-  picture every 2 s while visible and running); route `/browser` (`?profile=`, `&view=settings`, `?exit=<id>|new|direct`,
-  `?session=`); project and topic menus -> **Browser...** (`Tree.tsx`), agent settings section `browser`; sidebar
-  line in `HealthIndicator.tsx`. i18n group `browser` (`groups.ts`) loaded with `/browser`, elsewhere on its first
+  picture every 2 s while visible and running); project and topic menus -> **Browser...** (`Tree.tsx`), agent settings section `browser`; sidebar
+  line in `HealthIndicator.tsx`. i18n group `browser` (`groups.ts`) loaded with Settings -> Browser, elsewhere on its first
   key (`ON_DEMAND` in `test_web_i18n_groups.py`). Showcase `browser` (Settings -> Features, `data-tour="browser-feature"`).
 - Template: help index row `33-browser.md` (upgrade note `docs/upgrade/2.0.0a150.md` step 2).
 - Tests: `test_browser.py` (settings and migration, profiles, owners and inheritance, exits + vault, proxy through an

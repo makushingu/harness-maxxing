@@ -699,7 +699,7 @@ on_exit_down, named after the project; `ensure_projects_with_agents()` from `GET
 topic, false for an agent); `profile` = the agent's own choice when it exists, else
 the project's ("" while not made; `create` makes it). `active_for(path)` = (owner, profile, settings) when turns
 there get the tools (makes the project's profile). `agent_profile(path, block, s)` = an agent's profile from its block
-already read (`navs.agents_on(s)`: the Browser page reads each agent once).
+already read (`navs.agents_on(s)`: Settings -> Browser reads each agent once).
 Sites: any public site for every turn and the person, except a sandboxed agent's run (its owner's conversation is not
 sandboxed): `agent_sites(owner)` = its `domains` (`rules.clean_site`; `[]` = nothing, an unreadable agent too; None =
 any public site), read once when the turn starts (runner `browser_args` -> `turns/<sid>.json` `sites`,
@@ -734,7 +734,7 @@ Modules:
   start -> call (`upload_file`: `claude_file` copies a file of the turn's topic / project into `run/<pid>/uploads/`
   with `stage`, the path given to Chromium is `/mxrun/uploads/...`; `rules.check_command` lets
   `DOM.setFileInputFiles` through only for those). `thumb(pid, nav)` = a picture for the agent's card. `control[nav]` = the person's hand per navigator; `navigators()`
-  the list of the Browser page; `move_nav` / `drop_nav` (the person's navigator changes profile / a session's is closed). `_tidy` every 15 s: dead / off / deleted /
+  the list of Settings -> Browser; `move_nav` / `drop_nav` (the person's navigator changes profile / a session's is closed). `_tidy` every 15 s: dead / off / deleted /
   idle -> stop; tabs to sleep; CPU level.
 - `unit` the profile's unit `maxxing-br-<install>-<pid>` (user `maxxing-browser`, PrivateNetwork + socat to the
   proxy socket, MemoryMax 1536M, in `maxxing-turns.slice` when CPU priorities are on); `set_level(pid, live|background)`

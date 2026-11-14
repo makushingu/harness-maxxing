@@ -1,6 +1,6 @@
-// The person's browser at rest (the Browser page without ?live): its picture (live while it runs, else asleep),
-// what it is (a Chromium of the server), its profile and its connection, and "Open my browser"; under it the agents'
-// browsers. Opening it is a click, never the page itself: the live view starts Chromium.
+// The person's browser at rest (Settings -> Browser): its picture (live while it runs, else asleep), what it is (a
+// Chromium of the server), its profile and its connection, and "Open my browser" (its window); under it the agents'
+// browsers. Opening it is a click, never the settings themselves: the live view starts Chromium.
 import { Link } from 'react-router'
 import { Bot, Globe, Monitor } from 'lucide-react'
 import { useT } from '@/i18n'
@@ -22,12 +22,8 @@ export function MyBrowser({ st, pid, onOpen, onAgent }: { st: BrowserStatus; pid
   const agents = st.navigators.filter((n) => n.kind === 'agent')
   const page = me?.page && me.page.url !== 'about:blank' ? me.page : null
   return (
-    <div className="flex min-h-0 flex-1 flex-col" data-testid="browser-mine">
-      <div className="flex min-h-12 shrink-0 items-center gap-2 border-b px-4">
-        <Globe className="size-4 shrink-0 text-muted-foreground" />
-        <h1 className="min-w-0 flex-1 truncate text-sm font-semibold">{t('browser.side.browser')}</h1>
-      </div>
-      <div className="grid min-h-0 flex-1 content-start gap-8 overflow-y-auto p-4">
+    <div className="grid content-start gap-8" data-testid="browser-mine">
+      <div className="contents">
         <section className="grid gap-5 md:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] md:items-start">
           <button
             type="button"

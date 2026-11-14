@@ -31,7 +31,7 @@ export function AddExit() {
   const nav = useNavigate()
   const save = useSaveExit()
   const add = (type: BrowserExitKind) =>
-    save.mutate({ type, name: t(`browser.exit.kind.${type}`) }, { onSuccess: (e) => 'id' in e && nav(`/browser?exit=${encodeURIComponent(e.id)}`) })
+    save.mutate({ type, name: t(`browser.exit.kind.${type}`) }, { onSuccess: (e) => 'id' in e && nav(`/settings/browser?exit=${encodeURIComponent(e.id)}`) })
   const card = (key: BrowserExitKind | 'pc', Icon: typeof Globe, recommended = false) => (
     <button
       key={key}
@@ -116,7 +116,7 @@ export function DirectPanel() {
     <div className="grid max-w-2xl gap-4" data-testid="browser-exit-direct">
       <Callout tone="warning">
         {t('browser.directWarn')}{' '}
-        <Link to="/browser?exit=new" className="text-primary underline">
+        <Link to="/settings/browser?exit=new" className="text-primary underline">
           {t('browser.exit.add')}
         </Link>
       </Callout>
@@ -135,7 +135,7 @@ export function ExitPanel({ exit }: { exit: BrowserExit }) {
   const users = (st?.profiles || []).filter((p) => p.exit === exit.id)
   const remove = async () => {
     if (!(await confirm({ title: t('browser.exit.deleteTitle', { name: exit.name }), description: t('browser.exit.deleteDesc'), destructive: true }))) return
-    save.mutate({ id: exit.id, remove: true }, { onSuccess: () => nav('/browser') })
+    save.mutate({ id: exit.id, remove: true }, { onSuccess: () => nav('/settings/browser') })
   }
   return (
     <div className="grid max-w-3xl gap-5" data-testid="browser-exit">
