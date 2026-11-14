@@ -2,7 +2,8 @@
 
 Every command going to the browser passes `rules.check_command` (rules.json) and, when it opens a page, the allowed
 sites (`rules.page_refusal`): a refused one gets a DevTools error answer, the browser never sees it. A turn's tools
-are followed by a view (view.py: which tab each command is on), and wait while the person has that tab.
+see only their navigator's tabs (view.py: what is dropped, refused, made by the server), and wait while the person has
+the tab they act on.
 """
 from __future__ import annotations
 
@@ -43,7 +44,8 @@ async def pump(sock: Path, path: str, sites: Callable[[], list[str] | None],
                recv: Callable[[], Awaitable[str | None]], send: Callable[[str], Awaitable[None]],
                view=None, wait_tab: Callable[[str], Awaitable[str | None]] | None = None) -> None:
     """Relay one client (recv/send: its side) to the browser until either side closes. view (view.View): what a
-    turn's tools may see; wait_tab(targetId): waits while the person has that tab, returns why it gave up (or None)."""
+    turn's tools may see (their navigator's tabs); wait_tab(targetId): waits while the person has that tab, returns
+    why it gave up (or None)."""
     up = await connect(sock, path)
 
     async def down() -> None:
@@ -56,7 +58,13 @@ async def pump(sock: Path, path: str, sites: Callable[[], list[str] | None],
                     except ValueError:
                         m = None
                     if isinstance(m, dict):
-                        view.message(m)
+                        out, extra = await view.incoming(m)
+                        for c in extra:
+                            await up.send(json.dumps(c))
+                        if out is None:
+                            continue
+                        if out is not m:
+                            text = json.dumps(out)
                 await send(text)
         except ConnectionClosed:
             pass
@@ -73,8 +81,11 @@ async def pump(sock: Path, path: str, sites: Callable[[], list[str] | None],
                 except ValueError:
                     cmd = {}
                 why = None if isinstance(cmd, dict) else "not a DevTools command"
+                if why is None and cmd.get("method") == "Target.createTarget" and not cmd.get("sessionId"):
+                    await send(json.dumps(await view.new_tab(cmd)))
+                    continue
                 if why is None:
-                    view.command(cmd)
+                    why = view.outgoing(cmd)
                 if why is None and wait_tab is not None and cmd.get("sessionId"):
                     target = view.page(str(cmd["sessionId"]))
                     if target:

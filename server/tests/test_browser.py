@@ -482,20 +482,21 @@ def _browser(pid="main"):
 
 
 def test_claude_is_told_what_the_person_did_in_a_tab_of_its_own(mx):
-    from maxxing.browser import pool as pool_mod
+    from maxxing.browser import navs, pool as pool_mod
     p, b = _browser()
     t = pool_mod.Turn("s1", f"topic:{T}")
     b.tabs.claim(t.by)
     b.tabs.resolve({"targetId": "t1", "type": "page", "url": "about:blank"})       # the turn's tab
     b.tabs.resolve({"targetId": "t2", "type": "page", "url": "about:blank"})       # the person's own tab
+    assert b.tabs.nav_of("t1") == "session:s1" and b.tabs.nav_of("t2") == navs.ME
     p._moved(b, "t1", "https://shop.example.com/login?token=secret", "Sign in")  # nobody took over: not a person's move
     assert b.trail == {}
-    b.control = {"tab": "t1", "vid": 1, "at": time.time()}
+    b.control = {t.nav: {"tab": "t1", "vid": 1, "at": time.time()}}
     p._moved(b, "t1", "https://shop.example.com/login?token=secret", "")
     p._moved(b, "t1", "https://shop.example.com/login?token=secret", "Sign in")    # its title came later: same entry
     p._moved(b, "t1", "https://shop.example.com/account", "My account")
     assert [x["url"] for x in b.trail["t1"]] == ["https://shop.example.com/login", "https://shop.example.com/account"]
-    b.control = {"tab": "t2", "vid": 1, "at": time.time()}
+    b.control = {navs.ME: {"tab": "t2", "vid": 1, "at": time.time()}}
     p._moved(b, "t2", "https://bank.example.com/", "My bank")                      # a tab of the person only: never told
     assert "t2" not in b.trail
     t.told_at = 0
@@ -504,10 +505,10 @@ def test_claude_is_told_what_the_person_did_in_a_tab_of_its_own(mx):
     assert p._untold(b, t) == []                    # told once
     other = pool_mod.Turn("s2", "topic:projects/acme/topics/shop")
     other.told_at = 0
-    assert p._untold(b, other) == []                # another turn's tab: not told to it
-    note = p._tabs_note(b, t)[0]["text"]
-    assert "Tabs you opened: about:blank" in note and "The person is using the tab" in note
-
+    assert p._untold(b, other) == []                # another session's browser: not told to it
+    assert p._tabs_note(b, t) == []                 # the person is busy in their own browser, not in this one
+    b.control[t.nav] = {"tab": "t1", "vid": 1, "at": time.time()}
+    assert "The person is using the tab" in p._tabs_note(b, t)[0]["text"]
 
 def test_a_hand_back_gives_the_pages_and_a_picture(tmp_path, mx, monkeypatch):
     from maxxing import browser_mcp
@@ -632,25 +633,60 @@ def test_a_new_page_belongs_to_who_asked(mx):
     assert Tabs("other").file() != t2.file()
 
 
-def test_the_view_follows_which_tab_a_command_is_on(mx):
-    from maxxing.browser.view import View
-    used, created = [], []
-    holder = {"tab1": "page1"}
-    v = View(lambda: created.append(1), used.append, holder.get)
-    v.message({"method": "Target.attachedToTarget", "params": {"sessionId": "S1", "targetInfo": {
-        "targetId": "tab1", "type": "tab"}}})
-    v.message({"method": "Target.attachedToTarget", "sessionId": "S1", "params": {"sessionId": "S2", "targetInfo": {
-        "targetId": "page1", "type": "page"}}})
-    v.command({"id": 1, "method": "Page.navigate", "sessionId": "S2", "params": {"url": "https://a.example"}})
-    assert used == ["page1"] and v.page("S1") == "page1"
-    v.command({"id": 2, "method": "Target.attachToTarget", "params": {"targetId": "page2"}})
-    v.message({"id": 2, "result": {"sessionId": "S3"}})
-    assert v.page("S3") == "page2"
-    v.command({"id": 3, "method": "Target.createTarget", "params": {"url": "about:blank"}})
-    assert created == [1]
-    v.message({"method": "Target.detachedFromTarget", "params": {"sessionId": "S3"}})
-    assert v.page("S3") == ""
+def test_a_turn_sees_only_the_tabs_of_its_own_browser(mx):
+    """The relay between a turn's tools and Chromium hides the other navigators' tabs: their events are dropped, an
+    auto-attach to one is detached at once (its messages dropped), they are not listed, commands naming them are
+    refused; a new tab is made by the server in the turn's navigator. It still follows which page a session drives."""
+    from maxxing.browser.view import OWN_IDS, View
+    own = {"page1": "session:s1", "page2": "me"}
+    tab_page = {"tab1": "page1", "tab2": "page2"}
+    used, made = [], []
 
+    async def page_of(tab, wait):
+        return tab_page.get(tab)
+
+    async def create(params):
+        made.append(params.get("url"))
+        own["page3"] = "session:s1"
+        return "page3"
+
+    async def run():
+        v = View("session:s1", lambda info: own.get(info.get("targetId")), page_of, create, used.append)
+        mine = {"method": "Target.targetCreated", "params": {"targetInfo": {"targetId": "page1", "type": "page"}}}
+        other = {"method": "Target.targetCreated", "params": {"targetInfo": {"targetId": "page2", "type": "page"}}}
+        assert (await v.incoming(mine))[0] is mine and (await v.incoming(other))[0] is None
+        frame = {"method": "Target.targetCreated", "params": {"targetInfo": {"targetId": "f1", "type": "iframe"}}}
+        assert (await v.incoming(frame))[0] is None                     # frames: only through a page of its own
+        # auto-attach to another navigator's tab: let it run, detach it, drop everything of that session
+        out, extra = await v.incoming({"method": "Target.attachedToTarget", "params": {"sessionId": "S9", "targetInfo": {
+            "targetId": "tab2", "type": "tab"}}})
+        assert out is None and [c["method"] for c in extra] == ["Runtime.runIfWaitingForDebugger",
+                                                               "Target.detachFromTarget"]
+        assert all(c["id"] > OWN_IDS for c in extra)
+        assert (await v.incoming({"id": extra[0]["id"], "result": {}}))[0] is None   # answers to the relay itself
+        assert (await v.incoming({"method": "Page.frameNavigated", "sessionId": "S9", "params": {}}))[0] is None
+        assert v.outgoing({"id": 5, "method": "Runtime.evaluate", "sessionId": "S9", "params": {}})
+        assert v.outgoing({"id": 6, "method": "Target.attachToTarget", "params": {"targetId": "page2"}})
+        assert v.outgoing({"id": 7, "method": "Target.closeTarget", "params": {"targetId": "page2"}})
+        # its own tab: attached, followed
+        await v.incoming({"method": "Target.attachedToTarget", "params": {"sessionId": "S1", "targetInfo": {
+            "targetId": "tab1", "type": "tab"}}})
+        await v.incoming({"method": "Target.attachedToTarget", "sessionId": "S1", "params": {"sessionId": "S2",
+                                                                                           "targetInfo": {
+            "targetId": "page1", "type": "page"}}})
+        assert v.outgoing({"id": 8, "method": "Page.navigate", "sessionId": "S2", "params": {"url": "https://a.example"}}) is None
+        assert used == ["page1"] and v.page("S2") == "page1"
+        assert v.outgoing({"id": 9, "method": "Target.getTargets", "params": {}}) is None
+        listed, _ = await v.incoming({"id": 9, "result": {"targetInfos": [
+            {"targetId": "page1", "type": "page"}, {"targetId": "page2", "type": "page"},
+            {"targetId": "tab2", "type": "tab"}, {"targetId": "b", "type": "browser"}]}})
+        assert [i["targetId"] for i in listed["result"]["targetInfos"]] == ["page1", "b"]
+        answer = await v.new_tab({"id": 10, "method": "Target.createTarget", "params": {"url": "https://b.example"}})
+        assert answer == {"id": 10, "result": {"targetId": "page3"}} and made == ["https://b.example"]
+        assert v.outgoing({"id": 11, "method": "Target.activateTarget", "params": {"targetId": "page3"}}) is None
+        await v.incoming({"method": "Target.detachedFromTarget", "params": {"sessionId": "S2"}})
+        assert v.page("S2") == ""
+    asyncio.run(run())
 
 def test_claude_waits_while_the_person_has_its_tab(mx, monkeypatch):
     from maxxing.browser import pool as pool_mod
@@ -660,7 +696,7 @@ def test_claude_waits_while_the_person_has_its_tab(mx, monkeypatch):
     async def run():
         b.released = asyncio.Event()
         b.state = "running"
-        b.control = {"tab": "t1", "vid": 1, "name": "web", "at": time.time()}
+        b.control = {"me": {"tab": "t1", "vid": 1, "name": "web", "at": time.time()}}
         b.released.clear()
         assert await p.wait_tab(b, "t2") is None                     # another tab: no wait
         assert "using this tab" in (await p.wait_tab(b, "t1"))       # gave up
@@ -696,16 +732,20 @@ def test_the_live_view_lays_the_page_out_for_its_own_size():
 
     async def run():
         w = live.Watcher(None, "", lambda: None)
-        w.cdp, w.front, w.casting = FakeCdp(), "T1", "T1"
-        await w.resize(1000, 600)
-        await w.resize("x", None)                     # ignored
-        w._learn({"deviceWidth": 1000, "deviceHeight": 457})
+        w.cdp = FakeCdp()
+        sc = w.screen("me")
+        sc.front = sc.casting = "T1"
+        w.viewer_nav[1] = "me"
+        await w.resize(1, 1000, 600)
+        await w.resize(1, "x", None)                  # ignored
+        await w.resize(2, 500, 500)                   # not a viewer: ignored
+        w._learn(sc, {"deviceWidth": 1000, "deviceHeight": 457})
         await asyncio.sleep(0.01)
-        await w.resize(100, 99999)
+        await w.resize(1, 100, 99999)
         assert w.cdp.bounds == [(1000, 600), (1000, 743), (360, 1743)]
-        w.viewers[1] = lambda d: None
+        sc.viewers[1] = lambda d: None
         await w.unwatch(1)
-        assert w.size == live.SIZE and w.cdp.bounds[-1] == (1280, 943)
+        assert sc.size == live.SIZE and w.cdp.bounds[-1] == (1280, 943)
 
     asyncio.run(run())
 
@@ -937,9 +977,11 @@ def test_too_many_profiles_put_the_oldest_unused_one_to_sleep(mx, monkeypatch):
 
 
 # ---- the live view's pace ------------------------------------------------------------------------------------------
-def test_a_picture_is_acknowledged_only_once_every_viewer_got_it():
-    """Chromium makes the next picture only after our ack: one picture in flight, so a slow viewer gets fewer pictures,
-    never late ones; slow ones lower the quality ("auto")."""
+def test_pictures_flow_while_every_viewer_has_room_and_wait_for_the_slowest():
+    """Chromium makes the next picture only after our ack. We ack at once while every viewer has fewer than INFLIGHT
+    pictures on their way (a far viewer gets several per round trip); a viewer at its limit holds the next ack until
+    it confirms one, and gets no picture meanwhile. Pictures that queue lower the quality ("auto"); distance alone
+    (the fastest round trip) does not."""
     from maxxing.browser import live
 
     class FakeCdp:
@@ -955,34 +997,45 @@ def test_a_picture_is_acknowledged_only_once_every_viewer_got_it():
 
     async def run():
         w = live.Watcher(None, "", lambda: None)
-        w.cdp, w.front, w.casting = FakeCdp(), "T1", "T1"
+        w.cdp = FakeCdp()
+        sc = w.screen("me")
+        sc.front = sc.casting = "T1"
         w.sessions["T1"] = "S1"
-        got = []
+        got = {1: 0, 2: 0}
 
-        async def send(data):
-            got.append(data)
-        await w.watch(1, send)
-        await w.watch(2, send)
-        w.cdp.sent.clear()
-        await w._frame("S1", {"sessionId": 7, "data": "aGk=", "metadata": {}})
-        assert got[-2:] == [b"hi", b"hi"] and w.cdp.sent == []          # not acknowledged yet
-        w.delivered(1, 2, 0.01)
+        def sender(vid):
+            async def send(data):
+                got[vid] += 1
+            return send
+        await w.watch(1, "me", sender(1))
+        await w.watch(2, "me", sender(2))
+        acks = lambda: [x for x in w.cdp.sent if x[0] == "Page.screencastFrameAck"]
+        for n in range(live.INFLIGHT):
+            await w._frame("S1", {"sessionId": 10 + n, "data": "aGk=", "metadata": {}})
+        assert got == {1: live.INFLIGHT, 2: live.INFLIGHT}
+        assert [a[1] for a in acks()] == [10, 11]                 # the third one waits: no room left
+        w.delivered(1, 2, 0.30)
         await asyncio.sleep(0)
-        assert w.cdp.sent == []
-        w.delivered(2, 2, 0.02)
+        assert len(acks()) == 2                                    # viewer 2 is still full
+        w.delivered(2, 2, 0.31)
         await asyncio.sleep(0.01)
-        assert w.cdp.sent == [("Page.screencastFrameAck", 7)]
-        # a slow viewer: the quality goes down (at most once per ADAPT_EVERY)
-        w.adapted = 0
-        q = w.q
-        w.delivered(2, 2, 2.0)
-        w.delivered(2, 2, 2.0)
-        assert w.q == q - live.Q_STEP
-        assert w._want()[0] == w.q
+        assert [a[1] for a in acks()] == [10, 11, 12]
+        await w._frame("S1", {"sessionId": 13, "data": "aGk=", "metadata": {}})
+        assert got == {1: live.INFLIGHT + 1, 2: live.INFLIGHT + 1}
+        # far but flowing (0.3 s each, never more): the quality does not go down (it may go up)
+        sc.adapted = 0
+        q = sc.q
+        w.delivered(1, 2, 0.30)
+        assert sc.q >= q
+        # queueing (round trips much above the fastest one): it goes down
+        sc.adapted = 0
+        q = sc.q
+        w.delivered(2, 2, 3.0)
+        assert sc.q == q - live.Q_STEP and sc.want()[0] == sc.q
         await w.unwatch(1)
         await w.unwatch(2)
+        assert w.watched() is False
     asyncio.run(run())
-
 
 def test_tailscale_names_the_devices_online_but_not_approved_as_exit(monkeypatch):
     """A phone with "Run as exit node" on is no exit until approved in the Tailscale console: the wizard says so."""

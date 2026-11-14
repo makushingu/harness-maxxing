@@ -1,14 +1,17 @@
 """The running profiles of the Harness Browser: one Chromium per profile, started when someone needs it, asleep when
 nobody does (`max_active_profiles` at once: the oldest unused one sleeps to make room).
 
-A turn reaches its profile with a token (`turns/<session>.json`, written by the runner, removed when the turn ends):
-its folder and profile come from that file, never from the request. Each turn gets its own chrome-devtools-mcp
-(started on its first call, stopped when the turn ends or after CHILD_IDLE). It sees every tab of its profile; the
-ones it opened are marked as its own.
+Inside a profile's Chromium, tabs belong to navigators (navs.py): the person's, an agent's (all its runs), a
+session's. A turn reaches its profile with a token (`turns/<session>.json`, written by the runner, removed when the
+turn ends): its folder and profile come from that file, never from the request. Each turn gets its own
+chrome-devtools-mcp (started on its first call, stopped when the turn ends or after CHILD_IDLE); it sees only the tabs
+of its navigator (view.py). New tabs are made here, one at a time per profile (`create`), so each one lands in the
+navigator that asked for it.
 
-The person in the live view drives the tab shown; while they have a tab, Claude's commands on that tab wait (the other
-tabs go on). Tabs unused for `tab_sleep_min` sleep (closed, kept in tabs/<profile>.json, woken by a click); a profile
-stops after `idle_min` with nobody watching, no turn and no request, and its tabs come back asleep at the next start.
+The person watching a navigator drives its tab shown; while they have a tab, Claude's commands on that tab wait (the
+other tabs go on). Tabs unused for `tab_sleep_min` sleep (closed, kept in tabs/<profile>.json, woken by a click); a
+profile stops after `idle_min` with nobody watching, no turn and no request, and its tabs come back asleep at the next
+start.
 
 A profile whose exit is down (exits.py): a tool call waits `exit_wait_s` for it, then answers that the exit is offline
 (the session gets a card, the user a notification); it never goes out by this server's address unless the profile
@@ -28,10 +31,10 @@ import time
 from pathlib import Path
 
 from .. import browser, bus, config
-from . import cdm, exits, replays, rules, unit
+from . import cdm, exits, navs, replays, rules, unit
 from .live import Watcher
 from .proxy import Proxy
-from .tabs import Tabs, mine, public as tab_public
+from .tabs import Tabs, public as tab_public
 from .turns import check_turn, clear_turns, end_turn, read_turn, turn_alive, write_turn  # noqa: F401 - used by the API
 from .view import View
 
@@ -62,6 +65,7 @@ class Turn:
         self.last_call = time.time()
         self.told_at = time.time()
         self.last_target: str | None = None
+        self.nav = navs.of_turn(sid, owner)
         kind = "agent" if owner.startswith("agent:") else "session"
         self.by = {"kind": kind, "sid": sid, "path": self.path}
         if kind == "agent":
@@ -89,13 +93,14 @@ class Browser:
         self.last_use = time.time()
         self.state = "starting"
         self.turns: dict[str, Turn] = {}
-        self.control: dict | None = None            # {tab: targetId, vid, name, at}: the person's hand
+        self.control: dict[str, dict] = {}          # navigator -> {tab: targetId, vid, name, at}: the person's hand
         self.released = asyncio.Event()
         self.released.set()
         self.claude_at: dict[str, float] = {}       # targetId -> last command of a turn on it
         self.trail: dict[str, list[dict]] = {}      # targetId -> pages the person went to
         self.mem = 0
-        self.last_input = 0.0
+        self.last_input: dict[str, float] = {}      # navigator -> the person's last input in it
+        self.create_lock = asyncio.Lock()           # one new tab at a time: each lands in its navigator
         self.level = ""                             # CPU priority given to its unit (unit.set_level)
 
     @property
@@ -116,7 +121,7 @@ class Browser:
 
     def busy(self) -> bool:
         """Someone uses it now: a turn, a viewer, the person's hand."""
-        return bool(self.turns or (self.watcher and self.watcher.viewers) or self.control)
+        return bool(self.turns or (self.watcher and self.watcher.watched()) or self.control)
 
 
 class Pool:
@@ -274,7 +279,7 @@ class Pool:
         """CPU priority of its unit: first while someone watches it or Claude acts in it, last while nobody does."""
         if b.state != "running":
             return
-        watched = bool(b.watcher and b.watcher.viewers) or b.control is not None
+        watched = bool(b.watcher and b.watcher.watched()) or bool(b.control)
         acting = any(t.lock.locked() or time.time() - t.last_call < CLAUDE_BUSY for t in b.turns.values())
         level = "live" if watched or acting else "background"
         if level != b.level:
@@ -323,10 +328,11 @@ class Pool:
                 await t.stop()
                 b.turns.pop(sid, None)
                 self._changed()
-        if b.control and now - b.control["at"] > CONTROL_IDLE:
-            self._release(b)
+        for nav, c in list(b.control.items()):
+            if now - c["at"] > CONTROL_IDLE:
+                self._release(b, nav)
         busy_turns = bool(b.turns) or asks.pending_for_profile(b.pid)
-        viewers = bool(b.watcher and b.watcher.viewers)
+        viewers = bool(b.watcher and b.watcher.watched())
         if any(b.profile.get(k) != p.get(k) for k in POLICY_KEYS) and not busy_turns and not b.control:
             return await self.stop(b.pid, "its sites changed")      # the policy is set at start
         if not busy_turns and not viewers and not b.control and now - b.last_use > s["idle_min"] * 60:
@@ -346,9 +352,7 @@ class Pool:
         """Tabs unused for tab_sleep_min, above max_tabs, or (memory critical / force) the oldest ones, go to sleep."""
         if not b.watcher:
             return 0
-        keep = {b.watcher.front} if b.watcher.viewers else set()
-        if b.control:
-            keep.add(b.control["tab"])
+        keep = b.watcher.shown() | {c["tab"] for c in b.control.values()}
         tabs = b.tabs
         candidates = [t for t in tabs.awake() if t["target"] not in keep
                       and now - b.claude_at.get(t["target"], 0) > CLAUDE_BUSY]
@@ -482,7 +486,7 @@ class Pool:
                 "is back.")
 
     async def _turn(self, b: Browser, sid: str, owner: str) -> Turn:
-        """The turn's tools, started if needed, on a profile where the turn has at least one tab."""
+        """The turn's tools, started if needed, with at least one tab in its navigator."""
         t = b.turns.get(sid)
         if t is None or t.owner != owner:
             if t is not None:
@@ -492,9 +496,11 @@ class Pool:
         if t.child is not None and t.child.alive:
             return t
         await t.stop()
-        if not any(x.get("target") for x in b.tabs.items.values()) and b.watcher:
-            b.tabs.claim(t.by)                                       # a first tab of its own
-            tid = await b.watcher.open_tab("about:blank")
+        if not b.tabs.awake(t.nav) and b.watcher:
+            asleep = b.tabs.asleep(t.nav)                            # its last tab again, else an empty one
+            tid = await self.create(b, asleep[-1]["by"] if asleep else t.by,
+                                    asleep[-1]["url"] if asleep else "about:blank", t.nav,
+                                    key=asleep[-1]["key"] if asleep else None)
             t.last_target = tid or t.last_target
         from ..pcbridge import local_host, local_port
         t.child = await cdm.Child.start(f"ws://{local_host()}:{local_port()}/api/browser/cdp/{b.slug}", t.secret)
@@ -502,30 +508,50 @@ class Pool:
             await asyncio.to_thread(cdm.remember_tools, t.child.tools)
         return t
 
+    async def create(self, b: Browser, by: dict, url: str, nav: str, key: str | None = None) -> str:
+        """A new tab (a window of its own) in a navigator. One at a time per profile: the page Chromium announces
+        next is this one (tabs.resolve takes the claim), whoever hears of it first (the watcher, a turn's relay)."""
+        assert b.watcher
+        async with b.create_lock:
+            b.tabs.claim(by, nav, key)
+            tid = await b.watcher.open_tab(url or "about:blank", nav)
+            if tid:
+                b.tabs.assign(tid, by, nav)
+        b.last_use = time.time()
+        return tid
+
     async def _drop_blank(self, b: Browser, t: Turn) -> None:
         """The empty tab a turn got at its start, once it opened a page of its own."""
-        for tab in b.tabs.awake():
-            if tab["by"].get("sid") == t.sid and tab["url"] in ("", "about:blank") and tab["target"] != t.last_target \
+        for tab in b.tabs.awake(t.nav):
+            if tab["url"] in ("", "about:blank") and tab["target"] != t.last_target \
                     and b.watcher:
                 await b.watcher.close_tab(tab["target"])
 
     def view_for(self, b: Browser, t: Turn) -> View:
-        def on_create() -> None:
-            b.tabs.claim(t.by)
+        """What this turn's tools see: the tabs of its navigator."""
+        def nav_of(info: dict) -> str | None:
+            if info.get("type") == "page":
+                tab = b.tabs.resolve(info)
+                return tab["nav"] if tab else None
+            return b.tabs.nav_of(str(info.get("targetId") or ""))
+
+        async def page_of(tab: str, wait: float) -> str | None:
+            return await b.watcher.page_of(tab, wait) if b.watcher else None
+
+        async def create(params: dict) -> str:
+            url = params.get("url") if isinstance(params.get("url"), str) else ""
+            return await self.create(b, t.by, url or "about:blank", t.nav)
 
         def on_use(target: str) -> None:
             b.claude_at[target] = time.time()
             t.last_target = target
             b.tabs.used(target)
-
-        def page_now(tab: str) -> str | None:
-            return b.watcher.tab_page.get(tab) if b.watcher else None
-        return View(on_create, on_use, page_now)
+        return View(t.nav, nav_of, page_of, create, on_use)
 
     async def wait_tab(self, b: Browser, target: str) -> str | None:
         """Claude's command on a tab the person has: wait until they let it go (or give up)."""
         deadline = time.monotonic() + TAB_WAIT
-        while b.control and b.control.get("tab") == target and b.state == "running":
+        while any(c["tab"] == target for c in b.control.values()) and b.state == "running":
             left = deadline - time.monotonic()
             if left <= 0:
                 return "The person is using this tab right now: try again later, use another tab, or call ask_human."
@@ -535,18 +561,19 @@ class Pool:
         return None
 
     def _tabs_note(self, b: Browser, t: Turn) -> list[dict]:
-        """With list_pages: which tabs are the turn's own, which ones the person is using, the asleep ones."""
+        """With list_pages: the tabs the person opened in this browser, the one they are using, the asleep ones."""
         notes = []
-        ours = [x for x in b.tabs.awake() if mine(x, t.sid, t.path if t.by["kind"] == "agent" else "")]
-        if ours:
-            notes.append("Tabs you opened: " + "; ".join(replays.page(x["url"]) or "about:blank" for x in ours)
-                         + ". The others belong to the user or to other sessions of this profile: read them if "
-                           "useful, do not close or reuse them without a reason.")
-        if b.control:
-            page = b.watcher.pages.get(b.control["tab"], {}) if b.watcher else {}
+        theirs = [x for x in b.tabs.awake(t.nav) if x["by"].get("kind") == "you"]
+        if theirs:
+            notes.append("Tabs the person opened in your browser: " + "; ".join(
+                replays.page(x["url"]) or "about:blank" for x in theirs) + " (read them if useful, do not close them "
+                "without a reason).")
+        c = b.control.get(t.nav)
+        if c:
+            page = b.watcher.pages.get(c["tab"], {}) if b.watcher else {}
             notes.append(f"The person is using the tab {replays.page(page.get('url', ''))} right now: commands on it "
                          "wait until they let it go.")
-        sleeping = b.tabs.asleep()
+        sleeping = b.tabs.asleep(t.nav)
         if sleeping:
             notes.append("Asleep tabs (open one again with new_page and its address if you need it): " + "; ".join(
                 f"{x['title'] or x['url']} ({replays.page(x['url'])})" for x in sleeping[-10:]))
@@ -556,7 +583,7 @@ class Pool:
         out: list[dict] = []
         for target, entries in b.trail.items():
             tab = b.tabs.of_target(target)
-            if (tab and mine(tab, t.sid, t.path if t.by["kind"] == "agent" else "")) or target == t.last_target:
+            if (tab and tab["nav"] == t.nav) or target == t.last_target:
                 out += [e for e in entries if e["at"] > t.told_at]
         t.told_at = time.time()
         return sorted(out, key=lambda e: e["at"])
@@ -566,14 +593,14 @@ class Pool:
 
     # ---- people ----------------------------------------------------------------------------------------------
     def _may_follow(self, b: Browser, target: str) -> bool:
-        """Show a page Claude opened / moved to the viewers only when the person is not busy in another tab."""
-        if b.control:
-            return False
+        """Show a page Claude opened / moved to the people watching its navigator, unless the person is busy in it."""
         tab = b.tabs.of_target(target)
-        return bool(tab and tab["by"].get("kind") != "you") and time.time() - b.last_input > 30
+        if not tab or tab["by"].get("kind") == "you" or b.control.get(tab["nav"]):
+            return False
+        return time.time() - b.last_input.get(tab["nav"], 0) > 30
 
     def _moved(self, b: Browser, target: str, url: str, title: str) -> None:
-        if not b.control or b.control.get("tab") != target:
+        if not any(c["tab"] == target for c in b.control.values()):
             return
         tab = b.tabs.of_target(target)
         if not tab or tab["by"].get("kind") == "you":
@@ -588,31 +615,39 @@ class Pool:
         lst.append({"url": url, "title": (title or "")[:120], "at": time.time()})
         b.trail[target] = lst[-TRAIL_MAX:]
 
-    def input(self, b: Browser, vid: int, name: str = "web") -> None:
-        """The person used the tab shown: it is theirs until they let it go (or CONTROL_IDLE)."""
-        if not b.watcher or not b.watcher.front:
+    def input(self, b: Browser, vid: int, nav: str, name: str = "web") -> None:
+        """The person used the tab shown in a navigator: it is theirs until they let it go (or CONTROL_IDLE)."""
+        front = b.watcher.front(nav) if b.watcher else None
+        if not front:
             return
         now = time.time()
-        b.last_input = b.last_use = now
-        front = b.watcher.front
-        if not b.control or b.control["tab"] != front or b.control["vid"] != vid:
-            b.control = {"tab": front, "vid": vid, "name": name, "at": now}
+        b.last_input[nav] = b.last_use = now
+        c = b.control.get(nav)
+        if not c or c["tab"] != front or c["vid"] != vid:
+            b.control[nav] = {"tab": front, "vid": vid, "name": name, "at": now}
             b.released.clear()
             b.tabs.used(front)
             self._changed()
         else:
-            b.control["at"] = now
+            c["at"] = now
 
-    def _release(self, b: Browser) -> None:
-        if b.control:
-            b.control = None
+    def _release(self, b: Browser, nav: str | None = None) -> None:
+        if nav is None:
+            gone = bool(b.control)
+            b.control = {}
+        else:
+            gone = b.control.pop(nav, None) is not None
+        if gone:
             b.released.set()
             self._changed()
 
-    async def release(self, pid: str | None = None, vid: int | None = None) -> None:
+    async def release(self, pid: str | None = None, vid: int | None = None, nav: str | None = None) -> None:
         for b in ([self.browsers.get(pid)] if pid else list(self.browsers.values())):
-            if b and b.control and (vid is None or b.control["vid"] == vid):
-                self._release(b)
+            if not b:
+                continue
+            for n, c in list(b.control.items()):
+                if (vid is None or c["vid"] == vid) and (nav is None or n == nav):
+                    self._release(b, n)
 
     def busy(self, b: Browser, target: str | None) -> bool:
         """Is Claude using this tab (a command a moment ago)?"""
@@ -625,14 +660,15 @@ class Pool:
             return str(turn["profile"])
         return next((b.pid for b in self.browsers.values() if sid in b.turns), None)
 
-    async def hand_back(self, sid: str | None) -> dict:
+    async def hand_back(self, sid: str | None, owner: str = "") -> dict:
         """What Claude gets with a hand-back: the pages the person went to, the page now and a picture of it."""
         pid = self.profile_of(sid)
         b = self.get(pid) if pid else None
         if not b or not b.watcher:
             return {}
         t = b.turns.get(sid or "")
-        target = (t.last_target if t else None) or b.watcher.front
+        nav = t.nav if t else navs.of_turn(sid or "", owner)
+        target = (t.last_target if t else None) or b.watcher.front(nav)
         entries = b.trail.get(target or "", [])
         since = t.told_at if t else 0
         out: dict = {"trail": [e for e in entries if e["at"] > since][-15:]}
@@ -648,43 +684,36 @@ class Pool:
             out["picture"] = base64.b64encode(jpeg).decode()
         return out
 
-    async def focus_session(self, b: Browser, sid: str) -> None:
-        """Show the tab a session used last (the window opened for that session or its request)."""
-        t = b.turns.get(sid)
-        if b.watcher and t and t.last_target in b.watcher.pages:
-            await b.watcher.show(t.last_target)
-
     # ---- tabs of the person ----------------------------------------------------------------------------------
-    async def open_for_person(self, pid: str) -> Browser:
-        """Start a profile for the person (the live view): its last tab, else the first site of its list."""
+    async def open_for_person(self, pid: str, nav: str = navs.ME) -> Browser:
+        """Start a navigator for the person (the live view): its tab in front, else its last one asleep, else the
+        first site of the profile's list (an empty tab without one)."""
         if not browser.feature_on():
             raise browser.BrowserError(409, "off", "The browser is off (Settings -> Features)")
         p = browser.profile(pid)
         if p is None:
             raise browser.BrowserError(404, "no_profile", "No such browser profile")
         b = await self.ensure(pid)
-        if b.watcher and not any(str(t["url"]).startswith(("http://", "https://")) for t in b.tabs.awake()):
-            sleeping = b.tabs.asleep()
+        if b.watcher and not b.tabs.awake(nav):
+            sleeping = b.tabs.asleep(nav)
             if sleeping:
                 await self.wake(pid, sleeping[-1]["key"])
             else:
                 first = (browser.sites_of(p) or [None])[0]
-                front = b.watcher.front
-                if first and front and b.watcher.pages.get(front, {}).get("url") in ("", "about:blank"):
-                    with contextlib.suppress(Exception):
-                        await b.watcher.input({"t": "nav", "url": f"https://{first}/"})
+                tid = await self.create(b, {"kind": "you"}, f"https://{first}/" if first else "about:blank", nav)
+                if tid:
+                    await b.watcher.show(tid)
         b.last_use = time.time()
         return b
 
-    async def new_tab(self, pid: str, url: str = "") -> None:
+    async def new_tab(self, pid: str, url: str = "", nav: str = navs.ME) -> None:
         b = await self.ensure(pid)
         if url:
             url = url if "://" in url else "https://" + url
             why = rules.page_refusal(url, b.sites())
             if why:
                 raise browser.BrowserError(400, "refused", why)
-        b.tabs.claim({"kind": "you"})
-        tid = await b.watcher.open_tab(url or "about:blank")  # type: ignore[union-attr]
+        tid = await self.create(b, {"kind": "you"}, url or "about:blank", nav)
         if tid and b.watcher:
             await b.watcher.show(tid)
         await self._sleep_tabs(b, browser.settings(), time.time())
@@ -695,16 +724,17 @@ class Pool:
         if not t:
             raise browser.BrowserError(404, "no_tab", "No such tab")
         b = await self.ensure(pid)
+        nav = t["nav"]
+        c = b.control.get(nav)
         if t.get("target") and b.watcher:
             await b.watcher.show(t["target"])
-            if b.control and b.control["tab"] != t["target"]:
-                self._release(b)                       # the hand goes with the tab shown
+            if c and c["tab"] != t["target"]:
+                self._release(b, nav)                  # the hand goes with the tab shown
             return
-        b.tabs.claim(t["by"], key=key)
-        tid = await b.watcher.open_tab(t["url"])  # type: ignore[union-attr]
+        tid = await self.create(b, t["by"], t["url"], nav, key=key)
         if tid and b.watcher:
             await b.watcher.show(tid)
-        self._release(b)
+        self._release(b, nav)
         await self._sleep_tabs(b, browser.settings(), time.time())
 
     async def close_tab(self, pid: str, key: str) -> None:
@@ -719,7 +749,7 @@ class Pool:
         self._changed()
 
     async def sleep_now(self, pid: str) -> int:
-        """The person asks: every tab of the profile not shown goes to sleep."""
+        """The person asks: every tab of the profile not shown to someone goes to sleep."""
         b = self.get(pid)
         if not b:
             return 0
@@ -738,39 +768,125 @@ class Pool:
         await asyncio.to_thread(replays.forget, pid)
         self._changed()
 
-    async def thumb(self, pid: str, path: str = "", width: int = 480) -> bytes | None:
-        """A small picture for a card (the agent's panel): the tab this folder used last, else the one shown. Only
-        while the profile runs (never starts it)."""
+    async def thumb(self, pid: str, nav: str, width: int = 480) -> bytes | None:
+        """A small picture for a card (the agent's panel): the tab in front of a navigator, else its tab used last.
+        Only while the profile runs (never starts it)."""
         b = self.get(pid)
         if not b or not b.watcher:
             return None
-        tid = None
-        if path:
-            mine_ = [t for t in b.tabs.awake() if (t.get("by") or {}).get("path") == path]
-            if mine_:
-                tid = max(mine_, key=lambda t: t.get("used") or 0)["target"]
+        tid = b.watcher.front(nav)
+        if not tid:
+            mine_ = b.tabs.awake(nav)
+            tid = max(mine_, key=lambda t: t.get("used") or 0)["target"] if mine_ else None
         return await b.watcher.picture(quality=55, width=max(160, min(960, width)), tid=tid)
 
+    # ---- navigators ------------------------------------------------------------------------------------------
+    def profile_with(self, nav: str) -> str | None:
+        """The profile whose tabs belong to this navigator (a running one first)."""
+        for b in self.running():
+            if b.tabs.of_nav(nav):
+                return b.pid
+        for p in browser.profiles():
+            if self.tabs(p["id"]).of_nav(nav):
+                return p["id"]
+        return None
+
+    async def drop_nav(self, pid: str, nav: str) -> None:
+        """Close every tab of a navigator (a person's navigator deleted)."""
+        tabs = self.tabs(pid)
+        for t in tabs.of_nav(nav):
+            await self.close_tab(pid, t["key"])
+        b = self.browsers.get(pid)
+        if b:
+            self._release(b, nav)
+            if b.watcher:
+                b.watcher.screens.pop(nav, None)
+        await asyncio.to_thread(tabs.save)
+
+    async def move_nav(self, nav: str, old: str, new: str) -> None:
+        """A navigator now uses another profile: its tabs go there, asleep (its pages open again with the other
+        profile's sign-ins)."""
+        if old == new:
+            return
+        src = self.tabs(old)
+        b = self.browsers.get(old)
+        keys = [t["key"] for t in src.of_nav(nav)]
+        for t in src.of_nav(nav):
+            if t.get("target") and b and b.watcher:
+                await b.watcher.close_tab(t["target"], sleep=True)
+        if b:
+            self._release(b, nav)
+            if b.watcher:
+                b.watcher.screens.pop(nav, None)
+        moved = src.take(keys)
+        dst = self.tabs(new)
+        dst.put(moved)
+        await asyncio.to_thread(src.save)
+        await asyncio.to_thread(dst.save)
+        self._changed()
+
     # ---- what the UI shows -----------------------------------------------------------------------------------
-    def public(self, pid: str) -> dict:
-        """One profile: its state, tabs, who has the hand, its turns, memory, traffic."""
+    def public(self, pid: str, nav: str | None = None) -> dict:
+        """One profile, or one navigator of it: its state, tabs, who has the hand, its turns, memory, traffic."""
         b = self.browsers.get(pid)
         s = browser.settings()
         tabs = self.tabs(pid)
-        front = b.watcher.front if b and b.watcher else None
-        return {"profile": pid, "state": b.state if b else "stopped",
+        front = b.watcher.front(nav) if b and b.watcher and nav else None
+        rows = tabs.of_nav(nav) if nav else tabs.ordered()
+        c = (b.control.get(nav) if nav else next(iter(b.control.values()), None)) if b else None
+        turns = [t for t in (b.turns.values() if b else []) if nav is None or t.nav == nav]
+        return {"profile": pid, "nav": nav, "state": b.state if b else "stopped",
                 "started": b.started if b else None, "last_use": b.last_use if b else None,
                 "stops_at": (b.last_use + s["idle_min"] * 60) if b else None,
-                "tabs": [tab_public(t, front) for t in tabs.ordered()],
-                "front": next((t["key"] for t in tabs.awake() if t["target"] == front), None),
-                "page": b.watcher.front_page() if b and b.watcher else None,
-                **(b.watcher.asking() if b and b.watcher else {"dialog": None, "chooser": None}),
-                "control": bool(b and b.control), "control_by": (b.control or {}).get("name") if b else None,
+                "tabs": [tab_public(t, front) for t in rows],
+                "front": next((t["key"] for t in rows if t.get("target") and t["target"] == front), None),
+                "page": b.watcher.front_page(nav) if b and b.watcher and nav else None,
+                **(b.watcher.asking(nav) if b and b.watcher and nav else {"dialog": None, "chooser": None}),
+                "control": bool(c), "control_by": c.get("name") if c else None,
                 "busy": bool(b and self.busy(b, front)),
-                "turns": [{"session": t.sid, "path": t.path, "kind": t.by["kind"]} for t in (b.turns.values() if b else [])],
+                "turns": [{"session": t.sid, "path": t.path, "kind": t.by["kind"], "nav": t.nav} for t in turns],
                 "mem": b.mem if b else 0, "level": b.level if b else "",
                 "bytes": (b.proxy.bytes_in + b.proxy.bytes_out) if b and b.proxy else 0,
                 "blocked": [h for _, h in list(b.proxy.blocked)[-5:]] if b and b.proxy else []}
+
+    def navigators(self) -> list[dict]:
+        """Every navigator to show: the person's, the agents' with a browser, the sessions' with tabs lately."""
+        out: list[dict] = []
+        seen: set[str] = set()
+        now = time.time()
+
+        def add(nav: str, pid: str | None) -> None:
+            if nav in seen:
+                return
+            seen.add(nav)
+            b = self.browsers.get(pid) if pid else None
+            rows = self.tabs(pid).of_nav(nav) if pid else []
+            page = b.watcher.front_page(nav) if b and b.watcher else None
+            if page is None and rows:
+                last = max(rows, key=lambda t: t["used"])
+                page = {"url": tab_public(last)["url"], "title": last["title"][:120]}
+            out.append({"id": nav, **navs.label(nav), "profile": pid,
+                        "running": bool(b and b.state == "running"), "tabs": len(rows),
+                        "awake": len([t for t in rows if t.get("target")]), "page": page,
+                        "control": bool(b and b.control.get(nav)),
+                        "watched": bool(b and b.watcher and b.watcher.watched(nav)),
+                        "turns": len([t for t in b.turns.values() if t.nav == nav]) if b else 0,
+                        "used": max((t["used"] for t in rows), default=0)})
+        for n in navs.person():
+            add(n["id"], n["profile"])
+        for a in navs.agents_on():
+            add(a, navs.profile_of(a))
+        for b in self.running():
+            for t in b.turns.values():
+                add(t.nav, b.pid)
+        for p in browser.profiles():
+            tabs = self.tabs(p["id"])
+            for nav in sorted(tabs.navs()):
+                rows = tabs.of_nav(nav)
+                if navs.kind(nav) != "session" or any(t.get("target") for t in rows) or \
+                        now - max((t["used"] for t in rows), default=0) < 86400:
+                    add(nav, p["id"])
+        return out
 
     def summary(self) -> dict:
         """All profiles at a glance (the sidebar line, the page's list)."""

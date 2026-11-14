@@ -1,14 +1,17 @@
-"""The live view of the Harness Browser: which tab is shown, its picture (screencast) for the people watching, their
-mouse and keyboard, and the person's tab actions (open, wake, close). Every page it hears of goes through the tabs
-registry (tabs.py: who opened each tab).
+"""The live view of the Harness Browser: for each navigator (navs.py) the tab it shows, its picture (screencast) for
+the people watching it, their mouse and keyboard, and the person's tab actions (open, wake, close). Every page it hears
+of goes through the tabs registry (tabs.py: its navigator and who opened it).
 
-One DevTools connection for the browser (our own, through `relay.Cdp`: the same command rules). Pictures are only
-produced while someone watches (and the picture given to Claude with a hand-back).
+One DevTools connection for the browser (our own, through `relay.Cdp`: the same command rules). Each tab is its own
+window (Target.createTarget newWindow): every navigator's tab in front paints at once, at its own size, and a tab put in
+front is made the active one of its window (a tab left behind paints nothing). Pictures are only produced while someone
+watches a navigator (and the picture given to Claude with a hand-back, the agent's card).
 
-Smoothness: Chromium makes the next picture only once the last one is acknowledged, and we acknowledge it only when
-every viewer got it (`delivered`, or ACK_LATE at worst): pictures never pile up on a slow connection, the screen shows
-the newest page. The JPEG quality follows the time a picture takes to reach the slowest viewer ("auto"), between
-Q_MIN and Q_MAX; pictures are never larger than the viewer's own size.
+Smoothness: Chromium makes the next picture only once the last one is acknowledged. We acknowledge it at once while
+every viewer has fewer than INFLIGHT pictures on their way (`delivered` counts them back), so a far viewer still gets
+several pictures per round trip, and a slow one never gets a pile of late ones. The JPEG quality ("auto") follows the
+time a picture spends queued on the way to the slowest viewer (its round trip minus the fastest one seen: the
+distance alone lowers nothing), between Q_MIN and Q_MAX; pictures are never larger than the viewer's own size.
 """
 from __future__ import annotations
 
@@ -21,15 +24,17 @@ import time
 from typing import Any, Callable
 
 from . import rules
+from .navs import ME
 from .relay import Cdp
 
 log = logging.getLogger("maxxing.browser")
 
 QUALITY = {"auto": (60, 1920, 1200), "high": (70, 1920, 1200), "low": (40, 960, 960)}   # JPEG quality, largest picture
 Q_MIN, Q_MAX, Q_STEP = 30, 70, 10
-SLOW_S, FAST_S = 0.25, 0.08          # a picture's way to the slowest viewer: above -> lower quality, below -> higher
-ADAPT_EVERY = 3.0                    # at most one quality change this often (each one restarts the screencast)
-ACK_LATE = 1.0                       # a viewer that does not confirm a picture holds the others at most this long
+SLOW_S, FAST_S = 0.25, 0.08          # time a picture waits on the way (above the network's own delay): lower / raise
+ADAPT_EVERY = 4.0                    # at most one quality change this often (each one restarts the screencast)
+INFLIGHT = 3                         # pictures on their way to one viewer before the browser waits for it
+ACK_LATE = 1.0                       # a viewer that does not confirm pictures holds the others at most this long
 SIZE = (1280, 800)                  # the pages' size when nobody watches (Claude's)
 MIN_SIZE, MAX_SIZE = (360, 320), (2560, 1600)
 INTERNAL = ("chrome://", "chrome-untrusted://", "devtools://", "chrome-extension://")   # Chromium's own UI pages
@@ -37,6 +42,8 @@ INTERNAL = ("chrome://", "chrome-untrusted://", "devtools://", "chrome-extension
 
 def _shown(t: dict) -> bool:
     return t.get("type") == "page" and not str(t.get("url") or "").startswith(INTERNAL)
+
+
 MODS = {"alt": 1, "ctrl": 2, "meta": 4, "shift": 8}
 COPY_JS = "(() => { const e = document.activeElement; if (e && (e.tagName === 'TEXTAREA' || (e.tagName === 'INPUT' && " \
           "typeof e.selectionStart === 'number'))) return e.value.slice(e.selectionStart, e.selectionEnd); " \
@@ -46,38 +53,94 @@ SEARCH_REFUSED = ("This browser only opens the sites of its list: add the search
                   "address of a site.")
 
 
+class Screen:
+    """What one navigator shows: its tab in front, the people watching it and the pictures on their way."""
+
+    def __init__(self, nav: str) -> None:
+        self.nav = nav
+        self.front: str | None = None               # targetId shown / driven
+        self.viewers: dict[int, Callable[[Any], Any]] = {}   # id -> send(bytes)
+        self.quality: dict[int, str] = {}
+        self.casting: str | None = None             # targetId being screencast
+        self.meta: dict = {}                        # last frame metadata (device size, offsets)
+        self.frame: bytes | None = None
+        self.frame_at = 0.0
+        self.size: tuple[int, int] = SIZE           # its pages' size: the live view's while someone watches
+        self.unacked: tuple[str, object] | None = None   # (DevTools session, frame id) of a picture not acknowledged
+        self.inflight: dict[int, int] = {}          # viewer -> pictures sent, not confirmed yet
+        self._late: asyncio.TimerHandle | None = None
+        self.q = QUALITY["auto"][0]                 # the quality now ("auto" moves it)
+        self.trip: dict[int, float] = {}            # viewer -> smoothed round trip of a picture
+        self.fastest: dict[int, float] = {}         # viewer -> fastest round trip seen (the network's own delay)
+        self.adapted = time.monotonic()
+        self.frames = 0                             # pictures made (stats)
+        self.frame_bytes = 0
+
+    def want(self) -> tuple[int, int, int]:
+        modes = set(self.quality.values())
+        mode = "low" if "low" in modes else "auto" if "auto" in modes else "high"
+        q, w, h = QUALITY[mode]
+        if mode == "auto":
+            q = self.q
+        return q, min(w, self.size[0]), min(h, self.size[1])
+
+    def room(self) -> bool:
+        """Every viewer may take one more picture."""
+        return all(self.inflight.get(v, 0) < INFLIGHT for v in self.viewers)
+
+
 class Watcher:
     def __init__(self, sock, path: str, sites: Callable[[], list[str] | None], tabs=None) -> None:
         self.sock, self.path, self.sites, self.registry = sock, path, sites, tabs
         self.cdp: Cdp | None = None
         self.pages: dict[str, dict] = {}            # targetId -> {url, title, at}
-        self.front: str | None = None               # targetId shown / driven
         self.sessions: dict[str, str] = {}          # targetId -> DevTools session (flatten)
-        self.viewers: dict[int, Callable[[Any], Any]] = {}   # id -> send(bytes | dict)
-        self.quality: dict[int, str] = {}
-        self.casting: str | None = None            # targetId being screencast
-        self.meta: dict = {}                        # last frame metadata (device size, offsets)
-        self.frame: bytes | None = None
-        self.frame_at = 0.0
+        self.screens: dict[str, Screen] = {}        # navigator -> what it shows
+        self.viewer_nav: dict[int, str] = {}        # viewer -> the navigator it watches
         self.sleeping: set[str] = set()             # targetIds closed to sleep (their tab stays)
         self.tab_page: dict[str, str] = {}          # "tab" targetId -> the page it holds (Puppeteer attaches to tabs)
         self.tab_sessions: dict[str, str] = {}      # our session on a tab target -> its targetId
         self._tab_ev: dict[str, asyncio.Event] = {}
         self._lock = asyncio.Lock()
-        self.size: tuple[int, int] = SIZE           # the pages' size: the live view's while someone watches
         self.sized: dict[int, tuple[int, int]] = {}   # windowId -> the size it was given
         self.extra: tuple[int, int] = (0, 0)          # window size - page size (headless still counts a toolbar)
-        self.unacked: tuple[str, object] | None = None   # (DevTools session, frame id) of the picture in flight
-        self.waiting: set[int] = set()                # viewers that did not confirm the last picture yet
-        self._late: asyncio.TimerHandle | None = None
-        self.q = QUALITY["auto"][0]                   # the quality now ("auto" moves it)
-        self.trip: dict[int, float] = {}              # viewer -> smoothed time a picture takes to reach it
-        self.adapted = time.monotonic()
-        self.dialog: dict | None = None               # an alert / confirm / prompt open on a page {tid, type, message, default}
-        self.chooser: dict | None = None              # a page asked for files {tid, node, multiple}
-        self.frames = 0                               # pictures made (stats)
-        self.frame_bytes = 0
+        self.dialogs: dict[str, dict] = {}            # targetId -> its alert / confirm / prompt {type, message, default}
+        self.choosers: dict[str, dict] = {}           # targetId -> its file request {node, multiple}
 
+    on_state: Callable[[], Any] | None = None
+    on_move: Callable[[str, str, str], None] | None = None     # (targetId, url, title) of a page that changed
+    may_follow: Callable[[str], bool] | None = None            # a page opened / moved: show it to its navigator?
+
+    # ---- navigators --------------------------------------------------------------------------------------------
+    def nav_of(self, tid: str | None) -> str:
+        n = self.registry.nav_of(tid) if self.registry is not None and tid else None
+        return n or ME
+
+    def screen(self, nav: str) -> Screen:
+        sc = self.screens.get(nav)
+        if sc is None:
+            sc = self.screens[nav] = Screen(nav)
+        return sc
+
+    def front(self, nav: str) -> str | None:
+        sc = self.screens.get(nav)
+        return sc.front if sc else None
+
+    def watched(self, nav: str | None = None) -> bool:
+        if nav is not None:
+            sc = self.screens.get(nav)
+            return bool(sc and sc.viewers)
+        return any(sc.viewers for sc in self.screens.values())
+
+    def shown(self) -> set[str]:
+        """The tabs in front of a navigator someone watches."""
+        return {sc.front for sc in self.screens.values() if sc.viewers and sc.front}
+
+    def _latest(self, nav: str) -> str | None:
+        mine = [k for k in self.pages if self.nav_of(k) == nav]
+        return max(mine, key=lambda k: self.pages[k]["at"]) if mine else None
+
+    # ---- start / stop ------------------------------------------------------------------------------------------
     async def start(self) -> None:
         self.cdp = await Cdp.open(self.sock, self.path, self._event)
         await self.cdp.call("Target.setDiscoverTargets", {"discover": True})
@@ -87,8 +150,10 @@ class Watcher:
             if _shown(t):
                 self.pages[t["targetId"]] = {"url": t.get("url") or "", "title": t.get("title") or "",
                                              "at": time.time()}
-        if self.pages:
-            self.front = max(self.pages, key=lambda k: self.pages[k]["at"])
+        for tid in self.pages:
+            nav = self.nav_of(tid)
+            if self.screen(nav).front is None:
+                self.screen(nav).front = self._latest(nav)
         # which page each tab target holds: attach to tabs, and under each one to its page (never waiting for us)
         await self.cdp.call("Target.setAutoAttach", {"autoAttach": True, "waitForDebuggerOnStart": False,
                                                      "flatten": True, "filter": [{"type": "tab"}]})
@@ -131,24 +196,31 @@ class Watcher:
                     self.on_move(tid, t.get("url") or "", t.get("title") or "")
                 except Exception:  # noqa: BLE001
                     log.exception("browser page move")
-            if (moved or method == "Target.targetCreated") and (self.may_follow is None or self.may_follow(tid)):
+            sc = self.screen(self.nav_of(tid))
+            if sc.front is None or ((moved or method == "Target.targetCreated") and sc.front != tid
+                                    and (self.may_follow is None or self.may_follow(tid))):
                 await self._show(tid)
             else:
                 await self._state()
         elif method == "Target.targetDestroyed":
             tid = p.get("targetId")
-            if self.dialog and self.dialog["tid"] == tid:
-                self.dialog = None
-            if self.chooser and self.chooser["tid"] == tid:
-                self.chooser = None
+            self.dialogs.pop(tid, None)
+            self.choosers.pop(tid, None)
+            nav = self.nav_of(tid)
             if self.registry is not None:
                 self.registry.gone(tid, keep=tid in self.sleeping)
             self.sleeping.discard(tid)
             self.pages.pop(tid, None)
             self.sessions.pop(tid, None)
-            if self.front == tid:
-                self.front = max(self.pages, key=lambda k: self.pages[k]["at"]) if self.pages else None
-                await self._show(self.front)
+            for sc in self.screens.values():
+                if sc.front == tid:
+                    if sc.casting == tid:
+                        sc.casting = None
+                    sc.front = None
+                    nxt = self._latest(sc.nav) or self._latest(nav)
+                    if nxt:
+                        await self._show(nxt)
+            await self._state()
         elif method == "Target.attachedToTarget":
             info = p.get("targetInfo") or {}
             child = str(p.get("sessionId") or "")
@@ -173,24 +245,26 @@ class Watcher:
             for k, v in list(self.sessions.items()):
                 if v == sid:
                     self.sessions.pop(k, None)
-                    if self.casting == k:
-                        self.casting = None
+                    for sc in self.screens.values():
+                        if sc.casting == k:
+                            sc.casting = None
         elif method == "Page.screencastFrame":
             await self._frame(m.get("sessionId"), p)
         elif method == "Page.javascriptDialogOpening":
             tid = self._tid_of(m.get("sessionId"))
             if tid:
-                self.dialog = {"tid": tid, "type": str(p.get("type") or "alert"), "message": str(p.get("message") or "")[:1000],
-                               "default": str(p.get("defaultPrompt") or "")[:500]}
+                self.dialogs[tid] = {"type": str(p.get("type") or "alert"),
+                                     "message": str(p.get("message") or "")[:2000],
+                                     "default": str(p.get("defaultPrompt") or "")[:500]}
                 await self._state()
         elif method == "Page.javascriptDialogClosed":
-            if self.dialog and self.dialog["tid"] == self._tid_of(m.get("sessionId")):
-                self.dialog = None
+            tid = self._tid_of(m.get("sessionId"))
+            if tid and self.dialogs.pop(tid, None) is not None:
                 await self._state()
         elif method == "Page.fileChooserOpened":
             tid = self._tid_of(m.get("sessionId"))
             if tid and p.get("backendNodeId"):
-                self.chooser = {"tid": tid, "node": int(p["backendNodeId"]), "multiple": p.get("mode") == "selectMultiple"}
+                self.choosers[tid] = {"node": int(p["backendNodeId"]), "multiple": p.get("mode") == "selectMultiple"}
                 await self._state()
 
     def _tid_of(self, session: object) -> str | None:
@@ -207,206 +281,230 @@ class Watcher:
             await self.cdp.call("Page.setInterceptFileChooserDialog", {"enabled": True}, session=s)
         return s
 
-    async def _show(self, tid: str | None) -> None:
-        """Put a page in front (the one Claude just opened or navigated): the viewers follow it."""
+    async def _show(self, tid: str) -> None:
+        """Put a page in front of its navigator (one Claude just opened or moved to, or one the person picked)."""
+        sc = self.screen(self.nav_of(tid))
         async with self._lock:
-            if tid != self.front:
-                self.front = tid
-            if tid and self.cdp:
+            sc.front = tid
+            if self.cdp:
                 # a tab left behind is hidden for Chromium: it paints nothing (no pictures) until it is the active one
                 with contextlib.suppress(Exception):
                     await self.cdp.call("Target.activateTarget", {"targetId": tid}, timeout=5)
-            if self.viewers:
-                await self._cast()
+            if sc.viewers:
+                await self._cast(sc)
         await self._state()
 
     # ---- screencast ------------------------------------------------------------------------------------------
-    def _want(self) -> tuple[int, int, int]:
-        modes = set(self.quality.values())
-        mode = "low" if "low" in modes else "auto" if "auto" in modes else "high"
-        q, w, h = QUALITY[mode]
-        if mode == "auto":
-            q = self.q
-        return q, min(w, self.size[0]), min(h, self.size[1])
-
-    async def _cast(self) -> None:
+    async def _cast(self, sc: Screen) -> None:
         if not self.cdp:
             return
-        if self.casting and (self.casting != self.front or not self.viewers):
-            s = self.sessions.get(self.casting)
+        if sc.casting and (sc.casting != sc.front or not sc.viewers):
+            s = self.sessions.get(sc.casting)
             if s:
                 try:
                     await self.cdp.call("Page.stopScreencast", session=s, timeout=5)
                 except Exception:  # noqa: BLE001
                     pass
-            self.casting = None
-        if self.viewers and self.front and self.casting != self.front:
-            q, w, h = self._want()
+            sc.casting = None
+        if sc.viewers and sc.front and sc.casting != sc.front:
+            q, w, h = sc.want()
             with contextlib.suppress(Exception):
-                await self._fit(self.front)
+                await self._fit(sc.front, sc.size)
             try:
-                s = await self._session(self.front)
+                s = await self._session(sc.front)
                 await self.cdp.call("Page.startScreencast", {"format": "jpeg", "quality": q, "maxWidth": w,
                                                              "maxHeight": h, "everyNthFrame": 1}, session=s)
-                self.casting = self.front
+                sc.casting = sc.front
             except Exception as e:  # noqa: BLE001
                 log.info("screencast: %s", e)
 
+    def _screen_casting(self, session: str | None) -> Screen | None:
+        return next((sc for sc in self.screens.values()
+                     if sc.casting and self.sessions.get(sc.casting) == session), None)
+
     async def _frame(self, session: str | None, p: dict) -> None:
-        if self.sessions.get(self.casting or "") != session or not self.viewers:
+        sc = self._screen_casting(session)
+        if sc is None or not sc.viewers:
             if self.cdp and session:
                 await self.cdp.send_nowait("Page.screencastFrameAck", {"sessionId": p.get("sessionId")}, session)
             return
-        await self._ack()                           # an older one still waiting (a viewer that left)
-        self.meta = p.get("metadata") or {}
-        self._learn(self.meta)
-        self.frame = base64.b64decode(p.get("data") or "")
-        self.frame_at = time.time()
-        self.frames += 1
-        self.frame_bytes += len(self.frame)
-        self.unacked = (str(session), p.get("sessionId"))
-        self.waiting = set(self.viewers)
-        self._late = asyncio.get_running_loop().call_later(ACK_LATE, lambda: asyncio.ensure_future(self._ack()))
-        for send in list(self.viewers.values()):
+        await self._ack(sc)                          # an older one still held (a viewer that left)
+        sc.meta = p.get("metadata") or {}
+        self._learn(sc, sc.meta)
+        sc.frame = base64.b64decode(p.get("data") or "")
+        sc.frame_at = time.time()
+        sc.frames += 1
+        sc.frame_bytes += len(sc.frame)
+        for vid, send in list(sc.viewers.items()):
+            if sc.inflight.get(vid, 0) >= INFLIGHT:
+                continue                             # it gets a newer one once it caught up
+            sc.inflight[vid] = sc.inflight.get(vid, 0) + 1
             try:
-                await send(self.frame)
+                await send(sc.frame)
             except Exception:  # noqa: BLE001
                 pass
+        sc.unacked = (str(session), p.get("sessionId"))
+        if sc.room():
+            await self._ack(sc)
+        else:
+            sc._late = asyncio.get_running_loop().call_later(ACK_LATE, lambda: asyncio.ensure_future(self._ack(sc)))
 
-    async def _ack(self) -> None:
-        """Let Chromium make the next picture."""
-        if self._late is not None:
-            self._late.cancel()
-            self._late = None
-        ack, self.unacked = self.unacked, None
-        self.waiting = set()
+    async def _ack(self, sc: Screen) -> None:
+        """Let Chromium make the next picture of this navigator."""
+        if sc._late is not None:
+            sc._late.cancel()
+            sc._late = None
+        ack, sc.unacked = sc.unacked, None
         if ack and self.cdp:
             with contextlib.suppress(Exception):
                 await self.cdp.send_nowait("Page.screencastFrameAck", {"sessionId": ack[1]}, ack[0])
 
     def delivered(self, vid: int, size: int, secs: float) -> None:
-        """A viewer got the last picture (its page confirmed it, `secs` after it was sent)."""
-        old = self.trip.get(vid)
-        self.trip[vid] = secs if old is None else old * 0.7 + secs * 0.3
-        self.waiting.discard(vid)
-        if self.unacked and not self.waiting:
-            asyncio.ensure_future(self._ack())
-        self._adapt()
-
-    def _adapt(self) -> None:
-        """"auto": lower the quality while pictures are slow to arrive, raise it back when they are fast."""
-        if "auto" not in self.quality.values() or not self.trip or time.monotonic() - self.adapted < ADAPT_EVERY:
+        """A viewer got a picture (its page confirmed it, `secs` after it was sent; < 0: one replaced by a newer one
+        before it left)."""
+        sc = self.screens.get(self.viewer_nav.get(vid, ""))
+        if sc is None:
             return
-        slow = max(self.trip.values())
-        q = self.q - Q_STEP if slow > SLOW_S else self.q + Q_STEP // 2 if slow < FAST_S else self.q
-        q = max(Q_MIN, min(Q_MAX, q))
-        if q != self.q:
-            self.q = q
-            self.adapted = time.monotonic()
-            asyncio.ensure_future(self._restart_cast())
+        sc.inflight[vid] = max(0, sc.inflight.get(vid, 0) - 1)
+        if secs < 0:
+            if sc.unacked and sc.room():
+                asyncio.ensure_future(self._ack(sc))
+            return
+        old = sc.trip.get(vid)
+        sc.trip[vid] = secs if old is None else old * 0.7 + secs * 0.3
+        sc.fastest[vid] = min(sc.fastest.get(vid, secs), secs)
+        if sc.unacked and sc.room():
+            asyncio.ensure_future(self._ack(sc))
+        self._adapt(sc)
 
-    async def watch(self, vid: int, send: Callable[[Any], Any], quality: str = "auto") -> None:
-        self.viewers[vid] = send
-        self.quality[vid] = quality if quality in QUALITY else "auto"
-        await self._restart_cast()
-        if self.frame:
-            await send(self.frame)
+    def _adapt(self, sc: Screen) -> None:
+        """"auto": lower the quality while pictures queue on their way, raise it back when they flow."""
+        if "auto" not in sc.quality.values() or not sc.trip or time.monotonic() - sc.adapted < ADAPT_EVERY:
+            return
+        queued = max(sc.trip[v] - sc.fastest.get(v, sc.trip[v]) for v in sc.trip)
+        q = sc.q - Q_STEP if queued > SLOW_S else sc.q + Q_STEP // 2 if queued < FAST_S else sc.q
+        q = max(Q_MIN, min(Q_MAX, q))
+        if q != sc.q:
+            sc.q = q
+            sc.adapted = time.monotonic()
+            asyncio.ensure_future(self._restart_cast(sc))
+
+    async def watch(self, vid: int, nav: str, send: Callable[[Any], Any], quality: str = "auto") -> None:
+        sc = self.screen(nav)
+        self.viewer_nav[vid] = nav
+        sc.viewers[vid] = send
+        sc.quality[vid] = quality if quality in QUALITY else "auto"
+        sc.inflight[vid] = 0
+        if sc.front is None:
+            sc.front = self._latest(nav)
+        if sc.front and self.cdp:
+            with contextlib.suppress(Exception):
+                await self.cdp.call("Target.activateTarget", {"targetId": sc.front}, timeout=5)
+        await self._restart_cast(sc)
+        if sc.frame:
+            sc.inflight[vid] = 1
+            await send(sc.frame)
         await self._state()
 
     async def unwatch(self, vid: int) -> None:
-        self.viewers.pop(vid, None)
-        self.quality.pop(vid, None)
-        self.trip.pop(vid, None)
-        self.waiting.discard(vid)
-        if self.unacked and not self.waiting:
-            await self._ack()
-        if not self.viewers and self.size != SIZE:      # back to Claude's size
-            self.size = SIZE
-            if self.front:
+        nav = self.viewer_nav.pop(vid, None)
+        sc = self.screens.get(nav or "")
+        if sc is None:
+            return
+        sc.viewers.pop(vid, None)
+        for d in (sc.quality, sc.trip, sc.fastest, sc.inflight):
+            d.pop(vid, None)
+        if sc.unacked and sc.room():
+            await self._ack(sc)
+        if not sc.viewers and sc.size != SIZE:      # back to Claude's size
+            sc.size = SIZE
+            if sc.front:
                 with contextlib.suppress(Exception):
-                    await self._fit(self.front)
-        await self._restart_cast()
+                    await self._fit(sc.front, sc.size)
+        await self._restart_cast(sc)
 
-    async def resize(self, w: object, h: object, dpr: object = None) -> None:
-        """The live view's size (CSS pixels): the page in front is laid out for it, like a browser window (and its
-        pictures are never larger)."""
+    async def resize(self, vid: int, w: object, h: object, dpr: object = None) -> None:
+        """A viewer's size (CSS pixels): the page in front of its navigator is laid out for it, like a browser window
+        (and its pictures are never larger)."""
+        sc = self.screens.get(self.viewer_nav.get(vid, ""))
+        if sc is None:
+            return
         try:
             size = (max(MIN_SIZE[0], min(MAX_SIZE[0], int(w))), max(MIN_SIZE[1], min(MAX_SIZE[1], int(h))))
         except (TypeError, ValueError):
             return
-        if size == self.size:
+        if size == sc.size:
             return
-        self.size = size
-        if self.front:
-            await self._fit(self.front)
-        if self.viewers:
-            await self._restart_cast()
+        sc.size = size
+        if sc.front:
+            await self._fit(sc.front, size)
+        if sc.viewers:
+            await self._restart_cast(sc)
 
-    async def _fit(self, tid: str) -> None:
-        """Give the window of this page the current size (headless: the window is the page)."""
+    async def _fit(self, tid: str, size: tuple[int, int]) -> None:
+        """Give the window of this page a size (headless: the window is the page)."""
         if not self.cdp:
             return
         win = (await self.cdp.call("Browser.getWindowForTarget", {"targetId": tid}, timeout=5)).get("windowId")
-        if win is None or self.sized.get(win) == self.size:
+        if win is None or self.sized.get(win) == size:
             return
         await self.cdp.call("Browser.setWindowBounds", {"windowId": win, "bounds": {
-            "width": self.size[0] + self.extra[0], "height": self.size[1] + self.extra[1]}}, timeout=5)
-        self.sized[win] = self.size
+            "width": size[0] + self.extra[0], "height": size[1] + self.extra[1]}}, timeout=5)
+        self.sized[win] = size
 
-    def _learn(self, meta: dict) -> None:
+    def _learn(self, sc: Screen, meta: dict) -> None:
         """The first picture after a fit says the page's real size: learn the window's extra height once, fit again.
         (Same width = a picture taken after the fit.)"""
         try:
             dw, dh = int(meta.get("deviceWidth") or 0), int(meta.get("deviceHeight") or 0)
         except (TypeError, ValueError):
             return
-        if self.extra != (0, 0) or not self.sized or not self.casting or dw != self.size[0] or not 0 < self.size[1] - dh <= 400:
+        if self.extra != (0, 0) or not self.sized or not sc.casting or dw != sc.size[0] or \
+                not 0 < sc.size[1] - dh <= 400:
             return
-        self.extra = (0, self.size[1] - dh)
+        self.extra = (0, sc.size[1] - dh)
         self.sized.clear()
-        asyncio.get_running_loop().create_task(self._refit(self.casting))
+        asyncio.get_running_loop().create_task(self._refit(sc.casting, sc.size))
 
-    async def _refit(self, tid: str) -> None:
+    async def _refit(self, tid: str, size: tuple[int, int]) -> None:
         with contextlib.suppress(Exception):
-            await self._fit(tid)
+            await self._fit(tid, size)
 
     async def set_quality(self, vid: int, quality: str) -> None:
         """auto (default) | high | low (a phone on a slow network)."""
-        if vid in self.viewers and quality in QUALITY:
-            self.quality[vid] = quality
-            await self._restart_cast()
+        sc = self.screens.get(self.viewer_nav.get(vid, ""))
+        if sc is not None and vid in sc.viewers and quality in QUALITY:
+            sc.quality[vid] = quality
+            await self._restart_cast(sc)
 
-    async def _restart_cast(self) -> None:
-        await self._ack()
+    async def _restart_cast(self, sc: Screen) -> None:
+        await self._ack(sc)
         async with self._lock:
-            if self.casting and self.cdp:
-                s = self.sessions.get(self.casting)
+            if sc.casting and self.cdp:
+                s = self.sessions.get(sc.casting)
                 if s:
                     try:
                         await self.cdp.call("Page.stopScreencast", session=s, timeout=5)
                     except Exception:  # noqa: BLE001
                         pass
-                self.casting = None
-            await self._cast()
+                sc.casting = None
+            await self._cast(sc)
 
     # ---- state for the viewers -------------------------------------------------------------------------------
-    def tabs(self) -> list[dict]:
-        return [{"id": k, "url": rules_page(v["url"]), "title": v["title"][:120], "front": k == self.front}
-                for k, v in sorted(self.pages.items(), key=lambda kv: kv[1]["at"])]
-
-    def front_page(self) -> dict:
-        p = self.pages.get(self.front or "", {})
+    def front_page(self, nav: str) -> dict | None:
+        tid = self.front(nav)
+        if not tid:
+            return None
+        p = self.pages.get(tid, {})
         return {"url": rules_page(p.get("url", "")), "title": (p.get("title") or "")[:120]}
 
-    on_state: Callable[[], Any] | None = None
-    on_move: Callable[[str, str, str], None] | None = None     # (targetId, url, title) of a page that changed
-    may_follow: Callable[[str], bool] | None = None            # a page opened / moved: show it to the viewers?
-
     # ---- tabs ------------------------------------------------------------------------------------------------
-    async def open_tab(self, url: str = "about:blank") -> str:
-        """A new page (the caller claimed its scope first: tabs.claim). Returns its targetId."""
+    async def open_tab(self, url: str = "about:blank", nav: str | None = None) -> str:
+        """A new page in a window of its own (the caller claimed it first: tabs.claim). Returns its targetId."""
         assert self.cdp
-        r = await self.cdp.call("Target.createTarget", {"url": url or "about:blank"})
+        size = self.screen(nav).size if nav else SIZE
+        r = await self.cdp.call("Target.createTarget", {"url": url or "about:blank", "newWindow": True,
+                                                        "width": size[0], "height": size[1] + self.extra[1]})
         return str(r.get("targetId") or "")
 
     async def close_tab(self, tid: str, sleep: bool = False) -> None:
@@ -437,15 +535,23 @@ class Watcher:
                 log.exception("browser state")
 
     # ---- the person who took over ----------------------------------------------------------------------------
-    async def input(self, ev: dict) -> str | dict | None:
-        """One input event from the viewer in control. Coordinates are 0..1 of the picture. Returns an error text, or
-        a message for that viewer ({"t": "copied", "text"})."""
-        if not self.cdp or not self.front:
-            return "no page"
-        s = await self._session(self.front)
+    async def input(self, nav: str, ev: dict) -> str | dict | None:
+        """One input event from a viewer of `nav` in control. Coordinates are 0..1 of the picture. Returns an error
+        text, or a message for that viewer ({"t": "copied", "text"})."""
+        sc = self.screens.get(nav)
         t = ev.get("t")
-        dw = float(self.meta.get("deviceWidth") or 1280)
-        dh = float(self.meta.get("deviceHeight") or 800)
+        if t == "dialog":
+            return await self._answer_dialog(nav, ev)
+        if t == "chooser":                              # the person closed the file window without a file
+            for tid in [k for k in self.choosers if self.nav_of(k) == nav]:
+                self.choosers.pop(tid, None)
+            await self._state()
+            return None
+        if not self.cdp or not sc or not sc.front:
+            return "no page"
+        s = await self._session(sc.front)
+        dw = float(sc.meta.get("deviceWidth") or sc.size[0])
+        dh = float(sc.meta.get("deviceHeight") or sc.size[1])
         mods = sum(v for k, v in MODS.items() if ev.get(k))
 
         def xy() -> tuple[float, float]:
@@ -495,21 +601,6 @@ class Watcher:
             r = await self.cdp.call("Runtime.evaluate", {"expression": COPY_JS, "returnByValue": True}, session=s, timeout=5)
             text = str(((r.get("result") or {}).get("value")) or "")[:100_000]
             return {"t": "copied", "text": text}
-        elif t == "dialog":
-            d = self.dialog
-            if not d:
-                return None
-            ds = await self._session(d["tid"])
-            params: dict = {"accept": bool(ev.get("accept"))}
-            if d["type"] == "prompt" and ev.get("accept"):
-                params["promptText"] = str(ev.get("text") or "")[:2000]
-            self.dialog = None
-            with contextlib.suppress(RuntimeError):     # already closed by the page or by Claude
-                await self.cdp.call("Page.handleJavaScriptDialog", params, session=ds)
-            await self._state()
-        elif t == "chooser":                            # the person closed the file window without a file
-            self.chooser = None
-            await self._state()
         elif t in ("back", "forward"):
             h = await self.cdp.call("Page.getNavigationHistory", session=s)
             i = int(h.get("currentIndex", 0)) + (-1 if t == "back" else 1)
@@ -522,26 +613,54 @@ class Watcher:
             return "unknown event"
         return None
 
-    async def give_files(self, paths: list[str]) -> None:
-        """The files the person picked for the page that asked (paths as Chromium sees them: its uploads folder)."""
-        c = self.chooser
+    def _asking_tid(self, table: dict[str, dict], nav: str) -> str | None:
+        """The tab of `nav` with a dialog / a file request: the one in front first."""
+        front = self.front(nav)
+        if front in table:
+            return front
+        return next((k for k in table if self.nav_of(k) == nav), None)
+
+    async def _answer_dialog(self, nav: str, ev: dict) -> None:
+        tid = self._asking_tid(self.dialogs, nav)
+        if not tid or not self.cdp:
+            return None
+        d = self.dialogs.pop(tid)
+        ds = await self._session(tid)
+        params: dict = {"accept": bool(ev.get("accept"))}
+        if d["type"] == "prompt" and ev.get("accept"):
+            params["promptText"] = str(ev.get("text") or "")[:2000]
+        with contextlib.suppress(RuntimeError):     # already closed by the page or by Claude
+            await self.cdp.call("Page.handleJavaScriptDialog", params, session=ds)
+        await self._state()
+        return None
+
+    def chooser_of(self, nav: str) -> dict | None:
+        tid = self._asking_tid(self.choosers, nav)
+        return {"tid": tid, **self.choosers[tid]} if tid else None
+
+    async def give_files(self, nav: str, paths: list[str]) -> None:
+        """The files the person picked for the page of `nav` that asked (paths as Chromium sees them)."""
+        c = self.chooser_of(nav)
         if not c or not self.cdp:
             raise RuntimeError("no page is asking for a file")
         s = await self._session(c["tid"])
-        self.chooser = None
+        self.choosers.pop(c["tid"], None)
         await self.cdp.call("DOM.setFileInputFiles", {"files": paths[: (20 if c["multiple"] else 1)],
                                                       "backendNodeId": c["node"]}, session=s, timeout=15)
         await self._state()
 
-    def asking(self) -> dict:
-        """What a page waits for from the person: its dialog, its file window (the live view's state)."""
-        d, c = self.dialog, self.chooser
-        return {"dialog": {k: d[k] for k in ("type", "message", "default")} if d else None,
-                "chooser": {"multiple": c["multiple"]} if c else None}
+    def asking(self, nav: str) -> dict:
+        """What a page of this navigator waits for from the person: its dialog, its file window."""
+        dt, ct = self._asking_tid(self.dialogs, nav), self._asking_tid(self.choosers, nav)
+        return {"dialog": dict(self.dialogs[dt]) if dt else None,
+                "chooser": {"multiple": self.choosers[ct]["multiple"]} if ct else None}
+
+    def stats(self, nav: str) -> dict:
+        sc = self.screens.get(nav)
+        return {"frames": sc.frames, "bytes": sc.frame_bytes, "quality": sc.q} if sc else {}
 
     async def picture(self, quality: int = 50, width: int = 960, tid: str | None = None) -> bytes | None:
-        """A small picture of a page (the one shown by default)."""
-        tid = tid or self.front
+        """A small picture of a page."""
         if not self.cdp or not tid or tid not in self.pages:
             return None
         try:

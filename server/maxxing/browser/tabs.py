@@ -1,12 +1,13 @@
 """The tabs of one profile of the Harness Browser, kept in <state>/browser/tabs/<profile>.json.
 
-    {"tabs": [{key, url, title, by: {kind: you|session|agent, sid?, name?, path?}, at, used, asleep}]}
+    {"tabs": [{key, url, title, nav, by: {kind: you|session|agent, sid?, name?, path?}, at, used, asleep}]}
 
-Every turn of the profile sees all its tabs; `by` says who opened one (the tools mark it "yours" for that turn).
+`nav` is the navigator the tab belongs to (navs.py: the person's, an agent's, a session's): a turn sees only the tabs
+of its navigator. `by` says who opened it (the person may open tabs in an agent's navigator too).
 `key` is ours and stays the same while a tab sleeps and wakes; `target` (Chromium's id) is only known while the tab is
-awake (not saved). A page Chromium opens learns who opened it the first time anyone sees it (`resolve`): the opener
-of the tab that opened it (a popup), else the oldest claim waiting (a turn or a person just asked for a new tab), else
-the person.
+awake (not saved). A page Chromium opens learns its navigator and opener the first time anyone sees it (`resolve`):
+the tab that opened it (a popup), else the claim waiting (pool.create: one at a time per profile), else the person's
+first navigator.
 """
 from __future__ import annotations
 
@@ -14,6 +15,7 @@ import secrets
 import time
 
 from .. import browser, config
+from .navs import ME, of_by, valid as valid_nav
 
 INTERNAL = ("chrome://", "chrome-untrusted://", "devtools://", "chrome-extension://")   # Chromium's own UI pages
 CLAIM_S = 8.0                      # a claim (a new tab asked for) waits this long for its page
@@ -26,7 +28,7 @@ class Tabs:
         self.pid = pid
         self.items: dict[str, dict] = {}
         self.by_target: dict[str, str] = {}
-        self.claims: list[dict] = []           # {by, key?, at}
+        self.claims: list[dict] = []           # {by, nav, key?, at}
         self.dirty = False
 
     # ---- loading / saving --------------------------------------------------------------------------------------
@@ -65,17 +67,35 @@ class Tabs:
         k = self.by_target.get(target or "")
         return self.items.get(k) if k else None
 
-    def awake(self) -> list[dict]:
-        return [t for t in self.ordered() if t.get("target")]
+    def awake(self, nav: str | None = None) -> list[dict]:
+        return [t for t in self.ordered() if t.get("target") and (nav is None or t["nav"] == nav)]
 
-    def asleep(self) -> list[dict]:
-        return [t for t in self.ordered() if not t.get("target")]
+    def asleep(self, nav: str | None = None) -> list[dict]:
+        return [t for t in self.ordered() if not t.get("target") and (nav is None or t["nav"] == nav)]
+
+    def of_nav(self, nav: str) -> list[dict]:
+        return [t for t in self.ordered() if t["nav"] == nav]
+
+    def navs(self) -> set[str]:
+        return {t["nav"] for t in self.items.values()}
+
+    def nav_of(self, target: str | None) -> str | None:
+        t = self.of_target(target)
+        return t["nav"] if t else None
 
     # ---- new pages ---------------------------------------------------------------------------------------------
-    def claim(self, by: dict, key: str | None = None) -> None:
-        """Someone is about to open a page (a turn's new tab, a person's, a tab woken up): it is theirs."""
+    def claim(self, by: dict, nav: str | None = None, key: str | None = None) -> None:
+        """Someone is about to open a page (a turn's new tab, a person's, a tab woken up): it is theirs, in `nav`."""
         now = time.time()
-        self.claims = [c for c in self.claims if now - c["at"] < CLAIM_S] + [{"by": by, "key": key, "at": now}]
+        self.claims = [c for c in self.claims if now - c["at"] < CLAIM_S] + \
+            [{"by": by, "nav": nav or of_by(by), "key": key, "at": now}]
+
+    def assign(self, target: str, by: dict, nav: str) -> None:
+        """A page we just made (pool.create): whatever its event said first, it is `nav`'s."""
+        t = self.of_target(target)
+        if t is not None and t["nav"] != nav:
+            t.update(nav=nav, by=by)
+            self.dirty = True
 
     def resolve(self, info: dict) -> dict | None:
         """The tab of a page Chromium tells about (targetInfo); a page seen for the first time learns its opener here."""
@@ -98,8 +118,10 @@ class Tabs:
             t.update(target=target, asleep=False, used=now)
         else:
             by = opener["by"] if opener else claim["by"] if claim else {"kind": "you"}
+            nav = opener["nav"] if opener else claim["nav"] if claim else ME
             t = {"key": secrets.token_hex(5), "target": target, "url": str(info.get("url") or "")[:URL_MAX],
-                 "title": str(info.get("title") or "")[:200], "by": by, "at": now, "used": now, "asleep": False}
+                 "title": str(info.get("title") or "")[:200], "by": by, "nav": nav, "at": now, "used": now,
+                 "asleep": False}
             self.items[t["key"]] = t
         self.by_target[target] = t["key"]
         self.dirty = True
@@ -141,6 +163,23 @@ class Tabs:
         if t:
             t["used"] = time.time()
 
+    def take(self, keys: list[str]) -> list[dict]:
+        """Remove these tabs (asleep ones) and return them: a navigator moving to another profile."""
+        out = []
+        for k in keys:
+            t = self.items.pop(k, None)
+            if t:
+                if t.get("target"):
+                    self.by_target.pop(t["target"], None)
+                out.append({**t, "target": None, "asleep": True})
+        self.dirty = self.dirty or bool(out)
+        return out
+
+    def put(self, tabs: list[dict]) -> None:
+        for t in tabs:
+            self.items[t["key"]] = {**t, "target": None, "asleep": True}
+        self.dirty = self.dirty or bool(tabs)
+
     def drop(self, key: str) -> None:
         t = self.items.pop(key, None)
         if t and t.get("target"):
@@ -150,8 +189,9 @@ class Tabs:
 
 def _clean(t: dict) -> dict:
     by = t.get("by") if isinstance(t.get("by"), dict) else {"kind": "you"}
+    by = {k: str(v)[:200] for k, v in by.items() if k in ("kind", "sid", "name", "path")}
     return {"key": str(t["key"])[:20], "url": str(t.get("url") or "")[:URL_MAX], "title": str(t.get("title") or "")[:200],
-            "by": {k: str(v)[:200] for k, v in by.items() if k in ("kind", "sid", "name", "path")},
+            "by": by, "nav": t["nav"] if valid_nav(t.get("nav")) else of_by(by),
             "at": float(t.get("at") or time.time()), "used": float(t.get("used") or time.time())}
 
 
@@ -163,5 +203,5 @@ def mine(t: dict, sid: str, path: str) -> bool:
 
 def public(t: dict, front: str | None = None) -> dict:
     from .live import rules_page
-    return {"key": t["key"], "url": rules_page(t["url"]), "title": t["title"][:120], "by": t["by"],
+    return {"key": t["key"], "url": rules_page(t["url"]), "title": t["title"][:120], "by": t["by"], "nav": t["nav"],
             "asleep": not t.get("target"), "front": bool(front and t.get("target") == front), "used": t["used"]}

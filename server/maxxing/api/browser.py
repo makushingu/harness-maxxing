@@ -3,15 +3,21 @@ answers, turns waiting for an exit, the live view, and the two loopback routes o
 
 Signed in:
   GET  /api/browser                           feature, settings, what this server lacks, profiles (state, tabs,
-                                              memory), exits (state, last test), asks, waiting turns
+                                              memory), navigators (the person's, agents', sessions'), exits
+                                              (state, last test), asks, waiting turns
+  POST /api/browser/navigators                {profile?, name?} a new navigator of the person (me-2...)
+  PUT  /api/browser/navigators/{nav}          {profile?, name?} (a new profile: its tabs move there, asleep)
+  DELETE /api/browser/navigators/{nav}        its tabs closed (not "me")
   PUT  /api/browser/settings                  global settings (asks, downloads, sleep, profiles at once...)
   POST /api/browser/setup                     {exits?} install what is missing (root; in the background, see GET)
   POST /api/browser/profiles                  {name, exit?, web?, sites?, on_exit_down?} a new profile
   GET  /api/browser/profiles/{pid}            the profile, its browser (tabs...), who uses it, its journal
   PUT  /api/browser/profiles/{pid}            change it          DELETE: delete it (its sign-ins too)
-  POST /api/browser/profiles/{pid}/open       {session?} start it for the person (its last tab; a session's tab)
+  POST /api/browser/profiles/{pid}/open       {nav?} start it for the person, with a tab in that navigator
   POST /api/browser/profiles/{pid}/stop | sleep | forget     forget = sign-ins, tabs and journal erased
-  POST /api/browser/profiles/{pid}/tabs       {url?} a new tab of the person
+  POST /api/browser/profiles/{pid}/tabs       {url?, nav?} a new tab of the person in a navigator (default "me")
+  GET  /api/browser/profiles/{pid}/picture?nav=&w=     a small JPEG of a navigator's tab (204: not running)
+  POST /api/browser/profiles/{pid}/files?nav=          the files for the page of that navigator asking for some
   POST /api/browser/profiles/{pid}/tabs/{key}/show            show it (wakes an asleep tab)    DELETE: close it
   POST /api/browser/exits                     {name, type, url?, user?, secret?, node?, login_server?} a new exit
   PUT  /api/browser/exits/{eid}               change it (secret: into the vault)    DELETE: delete it
@@ -23,13 +29,14 @@ Signed in:
   POST /api/browser/waiting/{sid}             {action: resume|retry|dismiss} a turn stopped by a down exit
   GET  /api/browser/asks?session=&path=       pending `ask_human` requests
   POST /api/browser/asks/{id}                 {action: done|skip, note?}
-  POST /api/browser/live-token                -> {token} (30 s, one use) for WS /api/browser/live?t=&profile=
+  POST /api/browser/live-token                -> {token} (30 s, one use) for WS /api/browser/live?t=&profile=&nav=
 Loopback only (+ a secret): POST /api/browser/mcp/{sid} (Bearer = the turn's token), WS /api/browser/cdp/{profile}
 (X-Browser-Secret = the secret of a turn's tools: chrome-devtools-mcp).
 """
 from __future__ import annotations
 
 import asyncio
+import collections
 import contextlib
 import json
 import logging
@@ -44,7 +51,7 @@ from pydantic import BaseModel, Field
 from starlette.websockets import WebSocketDisconnect
 
 from .. import agents, browser, bus, config
-from ..browser import asks, exits, pool as pool_mod, replays, unit
+from ..browser import asks, exits, navs, pool as pool_mod, replays, unit
 from ..security import COOKIE, cookie_valid, require_auth
 from .pc import _loopback
 
@@ -54,7 +61,6 @@ AUTH = [Depends(require_auth)]
 LIVE_TOKEN_S = 30.0
 MAX_INPUT = 8192
 POLL_S = 2.0
-GOT_WAIT = 1.0                              # a live view that does not confirm a picture gets the next one anyway
 
 
 def _err(e: browser.BrowserError | asks.AskError | agents.AgentError) -> HTTPException:
@@ -71,6 +77,20 @@ def _owner(path: str) -> str:
     if not owner.startswith("agent:") and not (config.workspace() / path).is_dir():
         raise HTTPException(404, detail={"error": "not_found", "message": "No such folder"})
     return owner
+
+
+def _nav(nav: str | None) -> str:
+    nav = (nav or navs.ME).strip()
+    if not navs.valid(nav):
+        raise HTTPException(400, detail={"error": "bad_navigator", "message": "Not a browser of this server"})
+    if navs.kind(nav) == "person" and navs.get_person(nav) is None:
+        raise HTTPException(404, detail={"error": "no_navigator", "message": "No such browser"})
+    return nav
+
+
+def _ask_nav(a: dict) -> str:
+    owner = str(a.get("owner") or "")
+    return f"agent:{browser.owner_path(owner)}" if owner.startswith("agent:") else f"session:{a.get('session') or ''}"
 
 
 def _profile(pid: str) -> dict:
@@ -123,7 +143,8 @@ def _status() -> dict:
             "available": unit.available(),
             "tools": {"tailscale": bool(exits.tailscale_bins()), "wireguard": bool(exits.wireproxy_bin())},
             "setup": {k: _setup[k] for k in ("running", "log", "error")},
-            "profiles": _profiles_view(s), "exits": [rt.public(e) for e in s["exits"]],
+            "profiles": _profiles_view(s), "navigators": pool_mod.pool().navigators(),
+            "exits": [rt.public(e) for e in s["exits"]],
             "direct": {"test": rt.tests.get(browser.DIRECT)},
             "summary": pool_mod.pool().summary(), "asks": asks.pending(),
             "waiting": exits._waiters()}
@@ -206,24 +227,62 @@ async def delete_profile(pid: str) -> dict:
     except browser.BrowserError as e:
         raise _err(e) from None
     await pool_mod.pool().forget(pid)
+    await asyncio.to_thread(navs.on_profile_deleted, pid)
     bus.invalidate("browser", "workspace", "agents")
     return {"ok": True}
 
 
 class OpenIn(BaseModel):
-    session: Optional[str] = Field(default=None, max_length=100)
+    nav: Optional[str] = Field(default=None, max_length=300)
 
 
 @router.post("/profiles/{pid}/open", dependencies=AUTH)
 async def open_profile(pid: str, body: Optional[OpenIn] = None) -> dict:
     p = pool_mod.pool()
+    nav = _nav(body.nav if body else None)
     try:
-        b = await p.open_for_person(pid)
-        if body and body.session:
-            await p.focus_session(b, body.session)
+        await p.open_for_person(pid, nav)
     except browser.BrowserError as e:
         raise _err(e) from None
-    return p.public(pid)
+    return p.public(pid, nav)
+
+
+# ---- the person's navigators ----------------------------------------------------------------------------------------
+class NavIn(BaseModel):
+    profile: Optional[str] = Field(default=None, max_length=40)
+    name: Optional[str] = Field(default=None, max_length=80)
+
+
+@router.post("/navigators", dependencies=AUTH)
+async def new_navigator(body: NavIn) -> dict:
+    try:
+        n = await asyncio.to_thread(navs.create, body.profile or browser.MAIN, body.name or "")
+    except browser.BrowserError as e:
+        raise _err(e) from None
+    bus.invalidate("browser")
+    return n
+
+
+@router.put("/navigators/{nav}", dependencies=AUTH)
+async def put_navigator(nav: str, body: NavIn) -> dict:
+    try:
+        n, old = await asyncio.to_thread(navs.update, nav, body.profile, body.name)
+    except browser.BrowserError as e:
+        raise _err(e) from None
+    await pool_mod.pool().move_nav(nav, old, n["profile"])
+    bus.invalidate("browser")
+    return n
+
+
+@router.delete("/navigators/{nav}", dependencies=AUTH)
+async def delete_navigator(nav: str) -> dict:
+    try:
+        n = await asyncio.to_thread(navs.delete, nav)
+    except browser.BrowserError as e:
+        raise _err(e) from None
+    await pool_mod.pool().drop_nav(n["profile"], nav)
+    bus.invalidate("browser")
+    return {"ok": True}
 
 
 @router.post("/profiles/{pid}/stop", dependencies=AUTH)
@@ -253,36 +312,39 @@ async def forget(pid: str) -> dict:
 
 class TabIn(BaseModel):
     url: Optional[str] = Field(default=None, max_length=2000)
+    nav: Optional[str] = Field(default=None, max_length=300)
 
 
 @router.post("/profiles/{pid}/tabs", dependencies=AUTH)
 async def new_tab(pid: str, body: TabIn) -> dict:
     _profile(pid)
+    nav = _nav(body.nav)
     p = pool_mod.pool()
     try:
-        await p.new_tab(pid, (body.url or "").strip())
+        await p.new_tab(pid, (body.url or "").strip(), nav)
     except browser.BrowserError as e:
         raise _err(e) from None
-    return p.public(pid)
+    return p.public(pid, nav)
 
 
 @router.get("/profiles/{pid}/picture", dependencies=AUTH)
-async def picture(pid: str, path: str = "", w: int = 480) -> Response:
-    """A small JPEG of the profile's tab (the one `path` used last, else the one shown); 204 while it is not running."""
+async def picture(pid: str, nav: str = navs.ME, w: int = 480) -> Response:
+    """A small JPEG of a navigator's tab (the one in front, else the one used last); 204 while it is not running."""
     _profile(pid)
-    data = await pool_mod.pool().thumb(pid, path.strip("/"), w)
+    data = await pool_mod.pool().thumb(pid, _nav(nav), w)
     if not data:
         return Response(status_code=204)
     return Response(data, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
 
 
 @router.post("/profiles/{pid}/files", dependencies=AUTH)
-async def give_files(pid: str, files: list[UploadFile] = File(...)) -> dict:
-    """The files the person picked for the page of this profile that asked for some (its file input)."""
+async def give_files(pid: str, nav: str = navs.ME, files: list[UploadFile] = File(...)) -> dict:
+    """The files the person picked for the page of this navigator that asked for some (its file input)."""
     _profile(pid)
+    nav = _nav(nav)
     p = pool_mod.pool()
     b = p.get(pid)
-    if not b or not b.watcher or not b.watcher.chooser:
+    if not b or not b.watcher or not b.watcher.chooser_of(nav):
         raise HTTPException(409, detail={"error": "no_chooser", "message": "No page is asking for a file"})
     paths = []
     for f in files[:20]:
@@ -292,11 +354,11 @@ async def give_files(pid: str, files: list[UploadFile] = File(...)) -> dict:
                                              "message": f"{f.filename} is larger than {pool_mod.UPLOAD_MAX // 1024 // 1024} MB"})
         paths.append(await asyncio.to_thread(pool_mod.stage, b, f.filename or "file", data))
     try:
-        await b.watcher.give_files(paths)
+        await b.watcher.give_files(nav, paths)
     except (RuntimeError, PermissionError) as e:
         raise HTTPException(409, detail={"error": "no_chooser", "message": str(e)}) from None
     b.last_use = time.time()
-    return p.public(pid)
+    return p.public(pid, nav)
 
 
 @router.post("/profiles/{pid}/tabs/{key}/show", dependencies=AUTH)
@@ -307,15 +369,17 @@ async def show_tab(pid: str, key: str) -> dict:
         await p.wake(pid, key)
     except browser.BrowserError as e:
         raise _err(e) from None
-    return p.public(pid)
+    t = p.tabs(pid).items.get(key)
+    return p.public(pid, t["nav"] if t else None)
 
 
 @router.delete("/profiles/{pid}/tabs/{key}", dependencies=AUTH)
 async def close_tab(pid: str, key: str) -> dict:
     _profile(pid)
     p = pool_mod.pool()
+    t = p.tabs(pid).items.get(key)
     await p.close_tab(pid, key)
-    return p.public(pid)
+    return p.public(pid, t["nav"] if t else None)
 
 
 # ---- exits -------------------------------------------------------------------------------------------------------
@@ -521,7 +585,8 @@ class AnswerIn(BaseModel):
 async def _decide(rid: str, action: str, note: str = "") -> dict:
     """Answer a request; "done" gives Claude what the person did (pages, the page now, a picture of it)."""
     cur = await asyncio.to_thread(asks.get, rid)
-    extra = await pool_mod.pool().hand_back(cur.get("session")) if cur and action == "done" else None
+    extra = await pool_mod.pool().hand_back(cur.get("session"), str(cur.get("owner") or "")) \
+        if cur and action == "done" else None
     return await asyncio.to_thread(asks.decide, rid, action, "web", note, extra)
 
 
@@ -557,16 +622,18 @@ def _take_token(t: str) -> bool:
 
 @router.websocket("/live")
 async def live(ws: WebSocket):
-    """Pictures of the tab shown of one profile (binary JPEG) + its state (text JSON) while it runs; the person's mouse
-    and keyboard on the tab shown ({"t":"mouse"|"wheel"|"key"|"text"|"nav"|"back"|"forward"|"reload"}: the tab is theirs
-    while they use it; {"t":"take"} / {"t":"release","done":bool,"note":...}; {"t":"size","w","h"}).
-    A picture is sent only when the page confirmed the one before ({"t":"got"}): a slow connection gets fewer pictures,
-    never late ones, and the browser makes the next one only then (live.Watcher.delivered). The signed-in cookie AND a live token (POST /live-token) are needed."""
+    """Pictures of the tab shown of one navigator (binary JPEG) + its state (text JSON) while its profile runs; the
+    person's mouse and keyboard on that tab ({"t":"mouse"|"wheel"|"key"|"text"|"nav"|"back"|"forward"|"reload"|"copy"|
+    "dialog"|"chooser"}: the tab is theirs while they use it; {"t":"take"} / {"t":"release","done":bool,"note":...};
+    {"t":"size","w","h"}; {"t":"quality","q"}). Each picture is confirmed by the page ({"t":"got"}): a few may be on
+    their way at once (live.INFLIGHT), so a far connection still gets several per round trip and a slow one never a
+    pile of late ones (live.Watcher.delivered). The signed-in cookie AND a live token (POST /live-token) are needed."""
     if not _take_token(ws.query_params.get("t", "")) or not cookie_valid(ws.cookies.get(COOKIE)):
         await ws.close(code=4403)
         return
     pid = ws.query_params.get("profile") or browser.MAIN
-    if browser.profile(pid) is None:
+    nav = ws.query_params.get("nav") or navs.ME
+    if browser.profile(pid) is None or not navs.valid(nav):
         await ws.close(code=4404)
         return
     await ws.accept()
@@ -575,12 +642,16 @@ async def live(ws: WebSocket):
     watched: list = [None]                  # the Browser being watched
     sent = {"state": ""}
     send_lock = asyncio.Lock()
-    latest: list = [None]                   # the newest picture not sent yet (older ones are dropped)
+    latest: list = [None]                   # the newest picture not sent yet
     fresh = asyncio.Event()
-    got = asyncio.Event()                   # the page confirmed the last picture ({"t":"got"})
+    on_way: collections.deque = collections.deque()   # (sent at, size) of the pictures not confirmed yet
 
     async def send_bytes(data: bytes) -> None:
-        """Never waits for the network: the pump sends the newest picture when the connection is free."""
+        """Never waits for the network: the pump sends the newest picture when the connection is free (one it did
+        not send in time is replaced, and counted back at once)."""
+        b = watched[0]
+        if latest[0] is not None and b is not None and b.watcher:
+            b.watcher.delivered(vid, 0, -1.0)
         latest[0] = data
         fresh.set()
 
@@ -590,35 +661,30 @@ async def live(ws: WebSocket):
             fresh.clear()
             data, latest[0] = latest[0], None
             if data:
-                got.clear()
-                t0 = time.monotonic()
+                on_way.append((time.monotonic(), len(data)))
                 async with send_lock:
                     await ws.send_bytes(data)
-                with contextlib.suppress(asyncio.TimeoutError):
-                    await asyncio.wait_for(got.wait(), GOT_WAIT)
-                b = watched[0]
-                if b is not None and b.watcher:
-                    b.watcher.delivered(vid, len(data), time.monotonic() - t0)
 
     async def send_json(d: dict) -> None:
         async with send_lock:
             await ws.send_text(json.dumps(d, ensure_ascii=False))
 
     async def follow() -> None:
-        """Attach to the profile's browser when it (re)starts; push its state when it changes."""
+        """Attach to the profile's browser when it (re)starts; push the navigator's state when it changes."""
         while True:
             b = p.browsers.get(pid)
             if b is not watched[0]:
                 old = watched[0]
                 if old is not None and old.watcher:
                     await old.watcher.unwatch(vid)
+                on_way.clear()
                 watched[0] = b if b and b.state == "running" and b.watcher else None
                 if watched[0] is not None:
-                    await watched[0].watcher.watch(vid, send_bytes, ws.query_params.get("q", "auto"))
+                    await watched[0].watcher.watch(vid, nav, send_bytes, ws.query_params.get("q", "auto"))
                     await p._level(watched[0])
-            st = {"t": "state", "browser": p.public(pid), "me": bool(b and b.control and b.control["vid"] == vid),
-                  "asks": [a for a in await asyncio.to_thread(asks.pending)
-                           if (a.get("profile") or browser.MAIN) == pid]}
+            c = b.control.get(nav) if b else None
+            st = {"t": "state", "browser": p.public(pid, nav), "me": bool(c and c["vid"] == vid),
+                  "asks": [a for a in await asyncio.to_thread(asks.pending) if _ask_nav(a) == nav]}
             text = json.dumps(st, sort_keys=True, default=str)
             if text != sent["state"]:
                 sent["state"] = text
@@ -639,35 +705,39 @@ async def live(ws: WebSocket):
             if not isinstance(ev, dict):
                 continue
             t = ev.get("t")
-            if t == "got":
-                got.set()
-                continue
             b = p.get(pid)
+            if t == "got":
+                if on_way:
+                    at, size = on_way.popleft()
+                    if b is not None and b is watched[0] and b.watcher:
+                        b.watcher.delivered(vid, size, time.monotonic() - at)
+                continue
             if t == "quality":
                 if b and b.watcher:
                     await b.watcher.set_quality(vid, str(ev.get("q") or "auto"))
             elif t == "size":
                 if b and b.watcher:
                     with contextlib.suppress(Exception):
-                        await b.watcher.resize(ev.get("w"), ev.get("h"), ev.get("dpr"))
+                        await b.watcher.resize(vid, ev.get("w"), ev.get("h"), ev.get("dpr"))
             elif t == "take":
                 if b:
-                    p.input(b, vid)
+                    p.input(b, vid, nav)
             elif t == "release":
                 if ev.get("done") in (True, "done", "skip"):
                     action = "skip" if ev.get("done") == "skip" else "done"
                     for d in await asyncio.to_thread(asks.pending):
-                        if (d.get("profile") or browser.MAIN) != pid:
+                        if _ask_nav(d) != nav:
                             continue
                         with contextlib.suppress(asks.AskError):
                             await _decide(d["id"], action, str(ev.get("note") or "")[:500])
                 await p.release(pid, vid)
             elif b and b.watcher:
+                c = b.control.get(nav)
                 if t in ("mouse", "wheel", "key", "text", "nav", "back", "forward", "reload") and \
-                        not (t == "mouse" and ev.get("type") == "move" and not (b.control and b.control["vid"] == vid)):
-                    p.input(b, vid)
+                        not (t == "mouse" and ev.get("type") == "move" and not (c and c["vid"] == vid)):
+                    p.input(b, vid, nav)
                 try:
-                    why = await b.watcher.input(ev)
+                    why = await b.watcher.input(nav, ev)
                 except Exception as e:  # noqa: BLE001 - a page that went away
                     why = str(e)[:200]
                 b.last_use = time.time()
