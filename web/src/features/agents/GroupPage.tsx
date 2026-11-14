@@ -604,6 +604,12 @@ function Composer({ group: g, ref, first }: { group: AgentGroup; ref?: React.Ref
   const [hi, setHi] = React.useState(0)
   const [closed, setClosed] = React.useState(false)
   const input = React.useRef<HTMLTextAreaElement>(null)
+  // the element too (state): the chips' backdrop follows it from its first render (a restored "@name" draft)
+  const [inputEl, setInputEl] = React.useState<HTMLTextAreaElement | null>(null)
+  const setInput = React.useCallback((el: HTMLTextAreaElement | null) => {
+    input.current = el
+    setInputEl(el)
+  }, [])
   // The caret goes to `placeAt` as soon as the new text is in the box (before the next key is typed).
   const placeAt = React.useRef<number | null>(null)
   const putText = (pasted: string, start: number, end: number) =>
@@ -770,9 +776,9 @@ function Composer({ group: g, ref, first }: { group: AgentGroup; ref?: React.Ref
           <AttachList atts={files.atts} onRemove={files.remove} />
           <div className="flex items-end gap-1">
             <AttachButton onFiles={files.add} />
-            <ChipBackdrop text={text} spans={mentionSpans(text, names, '')} target={input.current} />
+            <ChipBackdrop text={text} spans={mentionSpans(text, names, '')} target={inputEl} />
             <Textarea
-              ref={input}
+              ref={setInput}
               value={text}
               onPaste={files.onPaste}
               onChange={(e) => {

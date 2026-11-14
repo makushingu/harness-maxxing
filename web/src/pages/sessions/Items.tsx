@@ -41,6 +41,8 @@ export type ItemCtx = {
   scope?: readonly string[] | null
   /** The session shown (unset outside a session column): what the Changes chip opens. */
   sid?: string
+  /** Its topic (`projects/<p>/topics/<t>`): the skills a "/name" message can start. */
+  path?: string
 }
 /** Hover / focus on a media thumbnail: start loading what the viewer will show (light preview, video poster). */
 function prefetchMedia(p: string) {
@@ -311,7 +313,7 @@ export function UserMessage({
 } & Omit<MsgActions, 'text'>) {
   const t = useT()
   const lang = useLang()
-  const { tz } = React.useContext(ItemContext)
+  const { tz, path } = React.useContext(ItemContext)
   // Quotes sent from the composer lead the message as Markdown blockquotes: shown as quote blocks (Copy keeps the raw text).
   const { quotes, rest } = React.useMemo(() => splitQuotes(text), [text])
   const { onContextMenu, touch, menu } = useMessageMenu({ text: [text, heard?.text].filter(Boolean).join('\n\n'), onFork, onEdit, onDelete, onRevert })
@@ -334,7 +336,7 @@ export function UserMessage({
                 </blockquote>
               ),
             )}
-            <ChipText text={quotes.length ? rest : text} mentions={mentions} />
+            <ChipText text={quotes.length ? rest : text} mentions={mentions} path={path} />
           </Sensitive>
         </div>
       )}

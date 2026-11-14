@@ -348,7 +348,7 @@ export const Thread = React.forwardRef<ThreadHandle, {
                 )
               })}
               {optimistic.map((p) => (
-                <UserMessage key={p.lid} text={p.text} attachments={p.attachments} voice={p.voice || undefined} pending />
+                <UserMessage key={p.lid} text={p.text} attachments={p.attachments} voice={p.voice || undefined} mentions={p.mentions} pending />
               ))}
               {serverSent.map((p, i) => (
                 <UserMessage key={`sent${i}`} text={p.text} attachments={p.attachments} source={p.source} voice={p.voice} pending />

@@ -14,7 +14,9 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   agent conversation box (`/`) and the group box (`@handle`, `features/agents/mentions.tsx` now builds on it).
 - The `mx_user` log line keeps the resolved mentions (`runner._mentions_shown`: kind, ref, label, group, avatar; never
   the command); the `user` event carries them as `mentions` (`SentMention`), drawn by `ChipText` in `UserMessage`.
-  `mentions.resolve` adds the agent's `avatar`.
+  `mentions.resolve` adds the agent's `avatar`; `mentions.candidates` labels Team names with `_plain()` like `resolve`
+  (the written `@name` is found again). A sent `/name` is a chip only for a skill of its topic (`ChipText path`).
+  Unsent bubbles carry their mentions (`Pending.mentions`).
 
 - Memory: `memory.files()` adds `heavy` (bytes > `max_bytes(limit)` = limit x 1024 / `LINES_PER_KB`, 1 KB for 10
   lines) and `over` is now "too many lines OR too heavy"; `/api/memory` and `maxxing memory --json` add `max_bytes`;

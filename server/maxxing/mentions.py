@@ -47,7 +47,8 @@ def candidates(exclude: str = "") -> list[dict]:
     if config.load_config().get("team_page"):
         from . import team
         for r in team.recipients():
-            rows.append({"kind": "team", "ref": r["id"], "label": r["name"], "group": r["kind"] == "group",
+            # the name as resolve() keeps it: the "@name" written in the box is the one a sent message finds again
+            rows.append({"kind": "team", "ref": r["id"], "label": _plain(r["name"]), "group": r["kind"] == "group",
                          "hint": ", ".join(r.get("members") or []) if r["kind"] == "group" else ""})
     return rows
 

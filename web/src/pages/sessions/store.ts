@@ -4,6 +4,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { arrange, type Slot } from './layouts'
+import type { SentMention } from '@/lib/types'
 
 /** What the sessions list is grouped by: `project` (projects > topics > sessions) or `session` (only the
  *  sessions, each labelled with its project › topic, most used first by default). */
@@ -452,7 +453,7 @@ export const useSessionsUI = create<State>()(
 /* ---------------------------------------------------------------- Local "pending" messages
  * Messages sent from this tab that are not in the log yet: shown as an optimistic bubble (sent while
  * idle) or in the queue stack (sent while running), removed when the matching `user` event arrives. */
-export type Pending = { lid: string; text: string; attachments: string[]; queued: boolean; at: number; /** A voice message being sent. */ voice?: boolean }
+export type Pending = { lid: string; text: string; attachments: string[]; queued: boolean; at: number; /** A voice message being sent. */ voice?: boolean; /** The @ it names (chips until the log has it). */ mentions?: SentMention[] }
 
 type PendingState = {
   bySession: Record<string, Pending[]>

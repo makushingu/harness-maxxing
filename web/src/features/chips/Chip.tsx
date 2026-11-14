@@ -80,24 +80,28 @@ export type ChipSpan = { start: number; end: number; chip: ChipData }
 
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
-/** Where each `@label` is written as a whole name ("@Leah" is not Lea), first come first, never overlapping. */
+/** Where each `@label` is written as a whole name ("@Leah" is not Lea), never overlapping; the longest first ("@Lea
+ *  Martin" wins over "@Lea"). Two names written the same (two sessions called "Blog") take the places in turn. */
 export function findNames(text: string, names: { raw: string; chip: ChipData }[]): ChipSpan[] {
   const out: ChipSpan[] = []
-  // longest first: "@Lea Martin" wins over "@Lea"
-  for (const n of [...names].sort((a, b) => b.raw.length - a.raw.length)) {
-    const re = new RegExp(`(?<![\\p{L}\\p{N}_@./-])${esc(n.raw)}(?![\\p{L}\\p{N}_-])`, 'gu')
+  const byRaw = new Map<string, ChipData[]>()
+  for (const n of names) byRaw.set(n.raw, [...(byRaw.get(n.raw) || []), n.chip])
+  for (const [raw, chips] of [...byRaw].sort((a, b) => b[0].length - a[0].length)) {
+    const re = new RegExp(`(?<![\\p{L}\\p{N}_@./-])${esc(raw)}(?![\\p{L}\\p{N}_-])`, 'gu')
+    let k = 0
     for (const m of text.matchAll(re)) {
       const s = m.index, e = s + m[0].length
-      if (!out.some((o) => s < o.end && e > o.start)) out.push({ start: s, end: e, chip: n.chip })
+      if (out.some((o) => s < o.end && e > o.start)) continue
+      out.push({ start: s, end: e, chip: chips[Math.min(k++, chips.length - 1)] })
     }
   }
   return out.sort((a, b) => a.start - b.start)
 }
 
-/** "/name" at the very start of a message: the command or skill it runs. */
-export function findCommand(text: string, known?: (name: string) => boolean): ChipSpan | null {
+/** "/name" at the very start of a message, when `known` says it is a command or a skill ("/tmp is full" is not). */
+export function findCommand(text: string, known: (name: string) => boolean): ChipSpan | null {
   const m = /^\/([a-z0-9][\w:.-]{0,63})(?=\s|$)/i.exec(text)
-  if (!m || (known && !known(m[1]))) return null
+  if (!m || !known(m[1])) return null
   return { start: 0, end: m[0].length, chip: { kind: 'command', label: m[1], raw: m[0] } }
 }
 
@@ -132,31 +136,41 @@ export function ChipBackdrop({ text, spans, target }: { text: string; spans: Chi
   const box = React.useRef<HTMLDivElement>(null)
   const inner = React.useRef<HTMLDivElement>(null)
   const on = spans.length > 0 && !!target
+  const sync = React.useCallback(() => {
+    const el = target, b = box.current, i = inner.current, parent = el?.offsetParent
+    if (!el || !b || !i || !parent) return
+    const cs = getComputedStyle(el)
+    for (const k of MIRROR) i.style[k] = cs[k]
+    i.style.borderStyle = 'solid'
+    i.style.borderColor = 'transparent'
+    i.style.borderRightWidth = i.style.borderBottomWidth = '0px'
+    // exact (fractional) sizes: a width rounded down by a pixel wraps a word the textarea keeps on its line
+    const r = el.getBoundingClientRect(), pr = parent.getBoundingClientRect()
+    const bl = parseFloat(cs.borderLeftWidth) || 0, br = parseFloat(cs.borderRightWidth) || 0
+    const bar = Math.max(0, el.offsetWidth - el.clientWidth - bl - br) // its scrollbar, when it has one
+    b.style.top = `${r.top - pr.top - parent.clientTop}px`
+    b.style.left = `${r.left - pr.left - parent.clientLeft}px`
+    b.style.width = `${r.width}px`
+    b.style.height = `${r.height}px`
+    i.style.width = `${r.width - br - bar}px`
+    i.style.transform = `translateY(${-el.scrollTop}px)`
+  }, [target])
+  // Size, place and scroll follow the textarea and its box (an attachment strip above moves it without resizing it).
   React.useLayoutEffect(() => {
-    const el = target, b = box.current, i = inner.current
-    if (!on || !el || !b || !i) return
-    const sync = () => {
-      const cs = getComputedStyle(el)
-      for (const k of MIRROR) i.style[k] = cs[k]
-      i.style.borderStyle = 'solid'
-      i.style.borderColor = 'transparent'
-      i.style.borderRightWidth = i.style.borderBottomWidth = '0px'
-      i.style.width = `${el.clientWidth + parseFloat(cs.borderLeftWidth)}px`
-      b.style.top = `${el.offsetTop}px`
-      b.style.left = `${el.offsetLeft}px`
-      b.style.width = `${el.offsetWidth}px`
-      b.style.height = `${el.offsetHeight}px`
-      i.style.transform = `translateY(${-el.scrollTop}px)`
-    }
-    sync()
+    const el = target
+    if (!on || !el) return
     const ro = new ResizeObserver(sync)
     ro.observe(el)
+    if (el.offsetParent) ro.observe(el.offsetParent)
     el.addEventListener('scroll', sync, { passive: true })
     return () => {
       ro.disconnect()
       el.removeEventListener('scroll', sync)
     }
-  }, [on, target, text])
+  }, [on, target, sync])
+  React.useLayoutEffect(() => {
+    if (on) sync()
+  })
   if (!on) return null
   const out: React.ReactNode[] = []
   let at = 0

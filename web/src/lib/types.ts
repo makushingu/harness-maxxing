@@ -416,7 +416,7 @@ export type MentionKind = 'session' | 'agent' | 'team'
 export type Mention = { kind: MentionKind; ref: string }
 /** A name of a sent message (log line `mentions`). */
 export type SentMention = Mention & { label: string; group?: boolean; avatar?: Partial<AgentAvatar> | null }
-export type MentionTarget = Mention & { label: string; hint: string; state?: string; avatar?: string | null; group?: boolean }
+export type MentionTarget = Mention & { label: string; hint: string; state?: string; avatar?: Partial<AgentAvatar> | null; group?: boolean }
 export type SessionSearchHit = { id: string; title: string; path: string; snippet: string; at: number }
 export type SearchKind = 'session' | 'file' | 'memory' | 'task' | 'group'
 /** Full-text hit: `snippet` marks the matched words with \u0002 … \u0003. */

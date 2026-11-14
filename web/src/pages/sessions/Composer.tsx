@@ -10,7 +10,7 @@ import { errorMessage } from '@/lib/api'
 import { DRAFT_EVENT, leftOutbox, loadAtts, loadDraft, loadQuotes, onSeed, outboxAdd, outboxDone, outboxMove, registerComposer, saveAtts, saveDraft, saveQuotes, takeSeed, type DraftAtt, type OutboxEntry, type Pending, type Seed } from './store'
 import { busyEnd, busyStart } from '@/lib/busy'
 import { fmtBytes } from '@/lib/format'
-import type { Mention, MentionTarget, QueueItem } from '@/lib/types'
+import type { MentionTarget, QueueItem, SentMention } from '@/lib/types'
 import { baseName, isImage, quotedFile, quotesMarkdown, thumbUrl } from './util'
 import { QuotedFile } from './QuotedFile'
 import { pastedFile, pastedName } from './pasteAsFile'
@@ -54,7 +54,7 @@ export const Composer = React.forwardRef<ComposerHandle, {
   asking?: boolean
   clearingQueue?: boolean
   /** `clientId`: the outbox id, sent with the message so that a reload mid-send can tell whether it arrived. */
-  onSend: (text: string, attachments: string[], clientId?: string, mentions?: Mention[]) => Promise<boolean>
+  onSend: (text: string, attachments: string[], clientId?: string, mentions?: SentMention[]) => Promise<boolean>
   /** Messages a previous page load was sending when it went away: resolves to those the server never got. */
   checkSent?: (left: OutboxEntry[]) => Promise<OutboxEntry[] | null>
   /** Voice message sent directly (setting on by default): the recording is sent as it is, the server transcribes it. */
