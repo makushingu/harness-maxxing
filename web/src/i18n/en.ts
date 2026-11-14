@@ -4530,7 +4530,7 @@ export const en = {
   'browser.persistentYou': 'Your browser is on this profile.',
   'browser.temporary': 'Temporary',
   'browser.temporaryDesc': 'The browsers sessions open: closed once the session no longer uses them, this line stays.',
-  'browser.temporaryEmpty': "A session of a topic that has the browser (the project's menu -> Browser...) opens one when Claude needs it; it closes once the session no longer uses it, and a line stays here.",
+  'browser.temporaryEmpty': 'A session of this project opens one when Claude needs it; it closes once the session no longer uses it, and a line stays here.',
   'browser.temp.session': 'Session',
   'browser.temp.topic': 'Topic',
   'browser.temp.sites': 'Sites',

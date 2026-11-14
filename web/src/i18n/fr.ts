@@ -4512,7 +4512,7 @@ export const fr: Record<keyof typeof en, string> = {
   'browser.persistentYou': 'Votre navigateur est sur ce profil.',
   'browser.temporary': 'Temporaires',
   'browser.temporaryDesc': "Les navigateurs ouverts par les sessions : fermés quand la session ne s'en sert plus, il en reste cette ligne.",
-  'browser.temporaryEmpty': "Une session d'un topic qui a le navigateur (menu du projet → Navigateur…) en ouvre un quand Claude en a besoin ; il se ferme quand la session ne s'en sert plus, et une ligne reste ici.",
+  'browser.temporaryEmpty': "Une session de ce projet en ouvre un quand Claude en a besoin ; il se ferme quand la session ne s'en sert plus, et une ligne reste ici.",
   'browser.temp.session': 'Session',
   'browser.temp.topic': 'Topic',
   'browser.temp.sites': 'Sites',
