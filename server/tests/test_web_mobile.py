@@ -129,3 +129,11 @@ def test_a_file_and_the_link_of_a_check_are_big_enough_to_tap():
     assert row and "pointer-coarse:min-h-10" in row[1].split()
     link = re.search(r'<a href=\{c\.url\}[^>]*className="([^"]*)"', src)
     assert link and "pointer-coarse:size-10" in link[1].split()
+
+
+def test_the_links_of_a_cut_turn_are_big_enough_to_tap():
+    src = (WEB / "pages" / "sessions" / "Cut.tsx").read_text()
+    usage = re.search(r'<a href=\{url\}[^>]*className="([^"]*)"', src)
+    assert usage and "pointer-coarse:h-10" in usage[1].split()
+    details = re.search(r'aria-expanded=\{open\}\s+onClick=\{\(\) => setOpen\(\(o\) => !o\)\}\s+className="([^"]*)"', src)
+    assert details and "pointer-coarse:h-10" in details[1].split()

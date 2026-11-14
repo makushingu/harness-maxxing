@@ -56,7 +56,7 @@ export function CutCard({ cut, last, children }: { cut: Cut; /** The thread ends
               )}
               {last && model}
               {url && (
-                <a href={url} target="_blank" rel="noreferrer" className="inline-flex h-8 items-center gap-1 rounded-md px-2 font-medium text-muted-foreground transition hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
+                <a href={url} target="_blank" rel="noreferrer" className="inline-flex h-8 items-center pointer-coarse:h-10 gap-1 rounded-md px-2 font-medium text-muted-foreground transition hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
                   {t('cut.usage')} <ExternalLink className="size-3" />
                 </a>
               )}
@@ -65,7 +65,7 @@ export function CutCard({ cut, last, children }: { cut: Cut; /** The thread ends
                   type="button"
                   aria-expanded={open}
                   onClick={() => setOpen((o) => !o)}
-                  className="ml-auto inline-flex h-8 items-center gap-0.5 rounded-md px-2 text-muted-foreground transition hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                  className="ml-auto inline-flex h-8 items-center pointer-coarse:h-10 gap-0.5 rounded-md px-2 text-muted-foreground transition hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                 >
                   {t('cut.details')} <ChevronRight className={cn('size-3 transition-transform', open && 'rotate-90')} />
                 </button>
