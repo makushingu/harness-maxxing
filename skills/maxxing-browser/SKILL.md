@@ -10,7 +10,8 @@ profile, **General** is the user's own (also the projects `general` and `system`
 gets **its own browser** inside its profile: it sees only its tabs. Docs: `docs/user/33-browser.md` (Docs ->
 Harness Browser).
 
-Where it is in the UI (say it to the user as written):
+Where it is in the UI (name it in the user's language, as the UI shows it: in French **Réglages -> Fonctionnalités
+-> Harness Browser**, **Réglages -> Navigateur**, **Regarder**):
 - **Settings -> Features -> Harness Browser**: the feature switch, **Set up** once;
 - **Settings -> Browser**: My browser, Profiles, Connections, how it works (asks, downloads, sleep);
 - the **Browser** line at the bottom of the sidebar, or Ctrl+K "my browser": the user's own browser, in a window;

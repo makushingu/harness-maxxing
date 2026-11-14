@@ -166,8 +166,10 @@ def _handler(a) -> int:
                   f"profiles at once, {s['max_tabs']} tabs awake each")
             names = {e["id"]: e["name"] for e in s["exits"]}
             for p in s["profiles"]:
-                print(f"profile {p['id']} ({p['name'] or 'Personal'}"
-                      + (f", project {p['project'].split('/', 1)[1]}" if p.get("project") else "") + f"): exit {names.get(p['exit'], p['exit'])}"
+                print(f"profile {p['id']} ({p['name'] or 'General'}"
+                      + (f", project {p['project'].split('/', 1)[1]}" if p.get("project")
+                         else ", the user's own and the projects general and system" if p["id"] == "main"
+                         else ", added by hand") + f"): exit {names.get(p['exit'], p['exit'])}"
                       + ("; exit down: this server's address" if p["on_exit_down"] == "vps" else ""))
             for e in s["exits"]:
                 print(f"exit {e['id']} ({e['name']}): {e['type']}")

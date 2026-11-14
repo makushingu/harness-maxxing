@@ -1,5 +1,5 @@
 // What a browser shows while it sleeps: a backdrop in its project's colour (the outfit colour of the project's agents
-// on the Agents page) with a small white window on it (window buttons, a moon, "Asleep"). No project (the Personal
+// on the Agents page) with a small white window on it (window buttons, a moon, "Asleep"). No project (the General
 // profile) = a neutral backdrop.
 import * as React from 'react'
 import { Moon } from 'lucide-react'

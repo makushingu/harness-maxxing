@@ -2,7 +2,7 @@
 import type { TFn as T } from '@/i18n'
 import type { BrowserExit, BrowserExitTest, BrowserNavigator, BrowserProfile } from '@/lib/types'
 
-/** `main` with no name of its own reads "Personal" in the user's language. */
+/** `main` with no name of its own reads "General" in the user's language. */
 export const profileName = (p: Pick<BrowserProfile, 'id' | 'name'> | undefined, t: T) =>
   !p ? '' : p.name || (p.id === 'main' ? t('browser.mainProfile') : p.id)
 
