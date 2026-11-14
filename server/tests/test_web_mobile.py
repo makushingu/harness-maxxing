@@ -155,3 +155,13 @@ def test_the_path_of_a_memory_file_takes_the_width_of_the_table():
     src = (WEB / "pages" / "settings" / "sections" / "Memory.tsx").read_text()
     cell = re.search(r'<td className="([^"]*)" title=\{mask\(f\.path, 12\)\}>', src)
     assert cell and "w-full" in cell[1].split()
+
+
+def test_the_links_under_a_git_block_are_big_enough_to_tap():
+    src = (WEB / "features" / "git" / "GitBlock.tsx").read_text()
+    code = re.search(r'<button type="button" className="([^"]*)" onClick=\{\(\) => setShowCode\(true\)\}', src)
+    page = re.search(r'<Link to=\{`/git\?repo=[^`]*`\} className="([^"]*)"', src)
+    github = re.search(r'<a href=\{repo\.url\}[^>]*className="([^"]*)"', src)
+    for m in (code, page, github):
+        assert m and "pointer-coarse:min-h-10" in m[1].split()
+    assert "pointer-coarse:min-w-10" in github[1].split()
