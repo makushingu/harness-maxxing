@@ -1296,9 +1296,10 @@ def workspace_allowed(path: str) -> list[str]:
 
 BROWSER_NOTE = ("The Harness Browser is available (mcp__maxxing-browser__* tools) for pages that need JavaScript, a "
                 "sign-in or clicks. Read pages with WebFetch, curl or an API first: they are faster and cheaper. It "
-                "is a profile shared with the user (their sign-ins) and maybe other sessions: open your own tabs with "
-                "new_page and leave the others as they are. When a page needs the user (a captcha, a sign-in, a "
-                "code), call ask_human. If the browser says its exit is offline, stop using it and say so.")
+                "is a browser of your own (this session's, or this agent's): you see only its tabs, with the "
+                "sign-ins of its profile. The user can watch it and may open tabs in it too: leave those as they "
+                "are. When a page needs the user (a captcha, a sign-in, a code), call ask_human. If the browser says "
+                "its exit is offline, stop using it and say so.")
 
 
 def browser_args(sid: str, path: str, agent: dict) -> list[str]:

@@ -522,11 +522,15 @@ class Watcher:
         return str(r.get("targetId") or "")
 
     def _window_page(self, nav: str) -> str | None:
-        """A page of the navigator's window to open its next tab from: the one in front, else its newest."""
+        """A page of the navigator's window to open its next tab from: the one in front, else its newest. Not one
+        showing a dialog (it would not run), nor an error page (it may not open anything)."""
+        def ok(k: str) -> bool:
+            url = str(self.pages.get(k, {}).get("url") or "")
+            return k not in self.dialogs and (url.startswith(("http://", "https://")) or url in ("", "about:blank"))
         front = self.front(nav)
-        if front in self.pages and front not in self.dialogs:
+        if front in self.pages and ok(front):
             return front
-        mine = [k for k in self.pages if self.nav_of(k) == nav and k not in self.dialogs]
+        mine = [k for k in self.pages if self.nav_of(k) == nav and ok(k)]
         return max(mine, key=lambda k: self.pages[k]["at"]) if mine else None
 
     async def _open_from(self, src: str, url: str) -> str | None:
@@ -543,7 +547,7 @@ class Watcher:
             await self.cdp.call("Runtime.evaluate", {
                 "expression": f"window.open({json.dumps(url)}, '_blank', 'noopener,noreferrer'), 1",
                 "contextId": ctx, "userGesture": True, "returnByValue": True}, session=s, timeout=3)
-            return await asyncio.wait_for(fut, 3)
+            return await asyncio.wait_for(fut, 2)
         finally:
             self._opened.pop(src, None)
 
