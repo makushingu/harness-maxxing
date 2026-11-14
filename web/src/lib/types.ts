@@ -1381,7 +1381,8 @@ export type BrowserSettings = {
   /** the address bar's search engine */
   search: 'google' | 'duckduckgo' | 'bing'
 }
-/** A profile: its own Chromium (sign-ins), its sites, its exit. `main` always exists (name "" = "Main"). */
+/** A profile: its own Chromium (sign-ins), its sites, its exit. `main` always exists (name "" = "Personal");
+ *  one per project (made at its first use, or when the project has agents). */
 export type BrowserProfile = {
   id: string
   name: string
@@ -1391,8 +1392,8 @@ export type BrowserProfile = {
   sites: string[]
   /** exit down: wait (default) or go out by the server's address */
   on_exit_down: 'wait' | 'vps'
-  /** the agent this browser is for (its own browser), "" for the user's */
-  agent: string
+  /** the project this profile is for (`projects/<name>`), "" for the others */
+  project: string
 }
 export type BrowserProfileRow = BrowserProfile & {
   state: 'starting' | 'running' | 'stopped'
@@ -1404,6 +1405,10 @@ export type BrowserProfileRow = BrowserProfile & {
   asks: boolean
   /** its Chromium folder exists (sign-ins may be saved) */
   has_data: boolean
+  /** a project's profile whose project was deleted */
+  gone: boolean
+  /** agents whose browser is on and runs on it */
+  agents: number
 }
 export type BrowserExitKind = 'proxy' | 'tailscale' | 'wireguard'
 /** What the sites see through an exit (ip-api.com through it), its delay and speed. */
@@ -1517,8 +1522,8 @@ export type BrowserAction = {
 }
 /** A turn stopped because its profile's exit went down (the session's card). */
 export type BrowserWaiter = { session: string; owner: string; exit: string; profile: string; at: number; resume: boolean }
-/** A navigator = a window of tabs in a profile's Chromium: the person's (me, me-2...), an agent's, a session's.
- *  Several may share a profile (its sign-ins); each sees only its own tabs. */
+/** A navigator = a window of tabs in a profile's Chromium: the person's ("me"), an agent's (lasting), a session's
+ *  (temporary). Several may share a profile (its sign-ins); each sees only its own tabs. */
 export type BrowserNavigator = {
   id: string
   kind: 'person' | 'agent' | 'session'
@@ -1555,10 +1560,29 @@ export type BrowserStatus = {
   asks: BrowserAsk[]
   waiting: BrowserWaiter[]
 }
+/** A line of a profile's journal of temporary navigators (a session's): its sites, when, how much. */
+export type BrowserSessionLine = {
+  session: string
+  title: string
+  path: string
+  first: number
+  last: number
+  actions: number
+  sites: string[]
+  /** its tabs are still open */
+  open: boolean
+  turns: number
+}
 export type BrowserProfileView = {
   profile: BrowserProfile
   browser: BrowserState
-  used_by: { owner: string; path: string; kind: 'project' | 'topic' | 'agent' }[]
+  gone: boolean
+  /** the agents' navigators on it (lasting) */
+  agents: BrowserNavigator[]
+  /** the person's navigator, when it is on it */
+  person: BrowserNavigator[]
+  /** the sessions' navigators (temporary): a journal */
+  temporary: BrowserSessionLine[]
   actions: BrowserAction[]
   asks: BrowserAsk[]
 }
@@ -1577,11 +1601,8 @@ export type BrowserOwner = {
   inherited: { enabled: boolean; profile: string; from: { enabled: string; profile: string } } | null
   chain: string[]
   exit: BrowserExit | null
-  /** an agent reading outside text on the main profile: advise its own profile */
-  outside_on_main: boolean
-  /** the agent's own browser (a profile made for it), when it has one */
-  own_profile: string | null
-  /** its own browser was deleted: it has none until turned on again */
-  gone: boolean
+  /** its project (`projects/<name>`) and that project's profile ("" while never made) */
+  project: string
+  project_profile: string
   asks: BrowserAsk[]
 }

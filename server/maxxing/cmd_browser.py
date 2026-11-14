@@ -3,10 +3,11 @@ Claude browses with its tools (one set per turn), never with this command: it sa
 
     maxxing browser status [--json]             feature, what is missing, settings, browsers, exits, requests waiting
     maxxing browser show PATH [--json]          what a project / topic / agent gets (and where it is inherited from)
-    maxxing browser set PATH on|off|inherit [--profile ID|own|inherit]
-                                                may its sessions use it, with which browser (an agent turned on gets
-                                                its own; `--profile main` shares main's sign-ins; `inherit` = its
-                                                parent's, not for an agent's switch)
+    maxxing browser set PATH on|off|inherit [--profile ID|inherit]
+                                                may its sessions use it (`inherit` = its parent's switch, not for an
+                                                agent); sessions use their project's profile (made the first time);
+                                                an agent too, unless `--profile` picks another (`inherit` = back to
+                                                its project's)
     maxxing browser setup [--exits]             install what it needs on this server (root): socat, Chromium, its
                                                 user, its AppArmor profile, chrome-devtools-mcp (+ Tailscale and
                                                 wireproxy for the exits)
@@ -17,7 +18,8 @@ Advanced:
                              [--tab-sleep MIN] [--max-tabs N] [--max-profiles N]
     maxxing browser profile add NAME [--exit ID] [--sites a.com,b.com | --public] [--fallback-vps]
     maxxing browser profile set ID [--name N] [--exit ID] [--sites ... | --public] [--fallback-vps | --wait-exit]
-    maxxing browser profile rm ID               its sign-ins too (agents that had it as their own have none then)
+    maxxing browser profile rm ID               its sign-ins too (not a project's: `forget` it); its agents go back
+                                                to their project's
 PATH: `<p>`, `<p>/<t>`, `<p>/<t>/<agent>` or the full folder. Settings belong to the owner: refused in an agent turn.
 Exits are added on the Browser page (their passwords go to the vault).
 """
@@ -70,7 +72,7 @@ def _configure(p) -> None:
     s = sub.add_parser("set", help="may a project / topic / agent use the browser, and which one")
     s.add_argument("path")
     s.add_argument("state", choices=("on", "off", "inherit"), help="inherit: its parent's switch (not an agent)")
-    s.add_argument("--profile", help="a browser id, own (an agent's own browser) or inherit")
+    s.add_argument("--profile", help="an agent's profile: an id, or inherit (its project's)")
     s = sub.add_parser("show", help="what a project / topic / agent gets, and from where")
     s.add_argument("path")
     s.add_argument("--json", action="store_true")
@@ -154,7 +156,8 @@ def _handler(a) -> int:
             names = {e["id"]: e["name"] for e in s["exits"]}
             for p in s["profiles"]:
                 sites = "any public site" if p["web"] == "public" else ", ".join(p["sites"]) or "no site yet"
-                print(f"profile {p['id']} ({p['name'] or 'Main'}): exit {names.get(p['exit'], p['exit'])}; {sites}"
+                print(f"profile {p['id']} ({p['name'] or 'Personal'}"
+                      + (f", project {p['project'].split('/', 1)[1]}" if p.get("project") else "") + f"): exit {names.get(p['exit'], p['exit'])}; {sites}"
                       + ("; exit down: this server's address" if p["on_exit_down"] == "vps" else ""))
             for e in s["exits"]:
                 print(f"exit {e['id']} ({e['name']}): {e['type']}")
@@ -211,19 +214,18 @@ def _handler(a) -> int:
             change: dict = {} if a.state == "inherit" else {"enabled": a.state == "on"}
             inherit = ["enabled"] if a.state == "inherit" else []
             prof = a.profile
-            if prof == browser.OWN and not agent:
-                raise browser.BrowserError(400, "bad_browser", "Only an agent has a browser of its own")
+            if prof and not agent:
+                raise browser.BrowserError(400, "bad_browser", "A project's sessions use its profile: only an agent chooses")
             if prof == "inherit":
                 inherit.append("profile")
-            elif prof and prof != browser.OWN and browser.profile(prof) is None:
-                raise browser.BrowserError(404, "no_profile", f"No browser {prof}")
+            elif prof and browser.profile(prof) is None:
+                raise browser.BrowserError(404, "no_profile", f"No browser profile {prof}")
             elif prof:
                 change["profile"] = prof
-            elif a.state == "on" and agent and browser.resolve(path).get("gone"):
-                change["profile"] = browser.OWN           # its own was deleted: a new one
             _save(owner, change, tuple(inherit))
             r = browser.resolve(path)
-            print(f"{path}: {'may use the Harness Browser' if r['enabled'] else 'no browser'}; browser {r['profile']}"
+            print(f"{path}: {'may use the Harness Browser' if r['enabled'] else 'no browser'}; profile "
+                  f"{r['profile'] or 'of ' + r['project'] + ' (made at first use)'}"
                   + (f" (inherited from {browser.owner_path(r['from']['profile'])})"
                      if r["from"]["profile"] and r["from"]["profile"] != owner else "")
                   + ("" if browser.feature_on() or not r["enabled"] else ". The feature is off: Settings -> Features."))
@@ -239,7 +241,7 @@ def _handler(a) -> int:
                 o = r["from"][k]
                 return "" if o == owner else f" (inherited from {browser.owner_path(o)})" if o else " (default)"
             print(f"{path}: {'may use the Harness Browser' if r['enabled'] else 'off'}{where('enabled')}; "
-                  f"profile {r['profile']}{where('profile')}")
+                  f"profile {r['profile'] or 'of ' + r['project'] + ' (made at first use)'}{where('profile')}")
             return 0
     except browser.BrowserError as e:
         print(e.message, file=sys.stderr)

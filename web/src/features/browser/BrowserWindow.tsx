@@ -29,19 +29,17 @@ export function BrowserWindow({ open, onOpenChange, who, start, session, context
   const known = person ? undefined : st?.navigators.find((n) => n.id === asked)?.profile
   const owner = useBrowserOwner(context || '', open && !profile && !known && !!context)
   const pid = profile || known || owner.data?.profile || (context ? undefined : 'main')
-  // a topic's browser, opened by the person: their navigator on that profile (a new one if none uses it yet)
-  const mineOn = person && pid ? st?.navigators.find((n) => n.kind === 'person' && n.profile === pid)?.id : undefined
-  const make = useBrowserNavigator()
-  const making = React.useRef('')
-  // none could be made (8 already): the person's first one, on its own profile
-  const [failed, setFailed] = React.useState(false)
+  // a topic's browser, opened by the person: their browser, put on that profile (its tabs follow, asleep)
+  const me = st?.navigators.find((n) => n.id === 'me')
+  const move = useBrowserNavigator()
+  const moved = React.useRef('')
   React.useEffect(() => {
-    if (!open || !person || !pid || !st || mineOn || making.current === pid) return
-    making.current = pid
-    make.mutate({ profile: pid }, { onError: () => setFailed(true) })
-  }, [open, person, pid, st, mineOn, make])
-  const id = person && !failed ? mineOn : asked
-  const livePid = person && failed ? st?.navigators.find((n) => n.id === 'me')?.profile || 'main' : pid
+    if (!open || !person || !pid || !me || me.profile === pid || moved.current === pid) return
+    moved.current = pid
+    move.mutate({ profile: pid })
+  }, [open, person, pid, me, move])
+  const id = person ? (me && me.profile === pid ? 'me' : undefined) : asked
+  const livePid = pid
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent

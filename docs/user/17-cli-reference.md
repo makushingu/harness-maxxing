@@ -271,7 +271,7 @@ OAuth sign-ins (state "To connect") are done in Settings -> MCP -> **Connect**. 
 | `maxxing browser profile set ID [--name N] [--exit ID] [--sites ... \| --public] [--fallback-vps \| --wait-exit]` | change a profile |
 | `maxxing browser profile rm ID` | delete a profile and its sign-ins (`main` cannot be deleted; an agent that had it has no browser any more) |
 | `maxxing browser exit test ID\|direct` | what the sites see through an exit (`direct` = the server): address, country, operator, kind, delay, speed; exit code 1 when it fails |
-| `maxxing browser set PATH on\|off\|inherit [--profile ID\|own\|inherit]` | let a project (`acme`), a topic (`acme/blog`) or an agent (`acme/blog/writer`) use it, or not (`inherit` = its parent's switch, not for an agent), and with which profile (`own` = the agent's own browser, made when it is turned on; `inherit` = its parent's) |
+| `maxxing browser set PATH on\|off\|inherit [--profile ID\|inherit]` | let a project (`acme`), a topic (`acme/blog`) or an agent (`acme/blog/writer`) use it, or not (`inherit` = its parent's switch, not for an agent); sessions use their project's profile (made the first time); `--profile` (an agent only): another profile, `inherit` = its project's again |
 | `maxxing browser show PATH [--json]` | what it gets (on or off, its profile) and where each is inherited from |
 | `maxxing browser forget ID` | erase a profile's sign-ins, tabs and journal |
 

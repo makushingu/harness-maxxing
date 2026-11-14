@@ -302,20 +302,20 @@ def test_an_owner_is_off_until_turned_on(client, topic, mx):
     assert browser.active_for(A) is None and browser.active_for(T) is None
     r = client.put("/api/browser/owner", json={"path": A, "enabled": True})
     assert r.status_code == 200, r.text
-    # turned on, an agent gets its own browser (its own sign-ins), made from the one it would have shared
-    assert r.json()["own"] == {"enabled": True, "profile": "writer"} and r.json()["profile"] == "writer"
-    assert r.json()["own_profile"] == "writer" and r.json()["from"]["profile"] == f"agent:{A}"
-    assert browser.profile("writer")["agent"] == A and browser.profile("writer")["name"] == "writer"
+    # turned on, an agent uses its project's profile: made at its first use, with main's exit and sites
+    assert r.json()["own"] == {"enabled": True} and r.json()["profile"] == "" and r.json()["project"] == "projects/acme"
     assert browser.active_for(A) is None                 # the feature is off
     assert client.put("/api/settings", json={"browser_feature": True}).status_code == 200
     assert client.get("/api/settings").json()["browser_feature"] is True
     owner, prof, s = browser.active_for(A)
-    assert owner == f"agent:{A}" and prof["id"] == "writer" and prof["web"] == "list"
+    assert owner == f"agent:{A}" and prof["id"] == "acme" and prof["project"] == "projects/acme" and prof["web"] == "list"
+    assert client.get("/api/browser/owner", params={"path": A}).json()["from"]["profile"] == "project:projects/acme"
+    assert client.delete("/api/browser/profiles/acme").status_code == 409     # a project's stays: forget it instead
     assert client.get(f"/api/agents/acme/blog/writer").json()["browser"]["enabled"] is True
     r = client.put("/api/browser/settings", json={"idle_min": 45})
     assert r.status_code == 200 and r.json()["settings"]["idle_min"] == 45
     assert client.put("/api/browser/profiles/main", json={"sites": ["not a site"]}).status_code == 400
-    assert client.put("/api/browser/profiles/main", json={"web": "public"}).status_code == 200
+    assert client.put("/api/browser/profiles/acme", json={"web": "public"}).status_code == 200
     # a project turns it on for all its topics; the agent's switch is its own
     r = client.put("/api/browser/owner", json={"path": "projects/acme", "enabled": True})
     assert r.status_code == 200 and r.json()["kind"] == "project"
@@ -326,7 +326,12 @@ def test_an_owner_is_off_until_turned_on(client, topic, mx):
     assert client.get("/api/browser/owner", params={"path": "projects/acme/topics/nope"}).status_code == 404
     st = client.get("/api/browser").json()
     assert st["feature"] is True and st["settings"]["idle_min"] == 45
-    assert [p["id"] for p in st["profiles"]] == ["main", "writer"] and st["profiles"][0]["state"] == "stopped"
+    assert [p["id"] for p in st["profiles"]] == ["main", "acme"] and st["profiles"][0]["state"] == "stopped"
+    assert st["profiles"][1]["agents"] == 1
+    v = client.get("/api/browser/profiles/acme").json()
+    assert [n["id"] for n in v["agents"]] == [f"agent:{A}"] and v["temporary"] == []
+    # a topic or a project never picks a profile: its sessions use the project's
+    assert client.put("/api/browser/owner", json={"path": T, "profile": "main"}).status_code == 400
     assert client.get("/api/browser/profiles/main").json()["browser"]["tabs"] == []
     assert client.get("/api/browser/profiles/nope").status_code == 404
     assert client.post("/api/browser/profiles/main/tabs/nope/show").status_code == 404
@@ -372,7 +377,7 @@ def test_a_turn_gets_the_browser_only_when_it_is_on(client, topic, mx):
     assert oct(Path(args[1]).stat().st_mode & 0o777) == "0o600"
     assert spec["env"]["MAXXING_BROWSER_OWNER"] == f"agent:{A}" and spec["env"]["MAXXING_BROWSER_URL"].endswith(
         "/api/browser/mcp/sess01")
-    assert spec["env"]["MAXXING_BROWSER_PROFILE"] == "writer"          # its own browser
+    assert spec["env"]["MAXXING_BROWSER_PROFILE"] == "acme"            # its project's profile
     forced = {"args": [], "approvals_forced": True}
     assert "--allowedTools" not in runner.browser_args("sess02", A, forced)
     assert runner.browser_args("sess03", T, {}) == []          # its topic: off
@@ -446,13 +451,11 @@ def test_cli_set_show(mx, capsys):
     assert browser.own_block(f"topic:{T}") == {"enabled": True}
     assert cli.main(["browser", "profile", "add", "Shop", "--sites", "example.com,shop.example.org"]) == 0
     assert browser.profile("shop")["sites"] == ["example.com", "shop.example.org"]
-    assert cli.main(["browser", "set", "acme", "inherit", "--profile", "shop"]) == 0   # the project's: topics inherit
-    assert browser.resolve(T)["profile"] == "shop" and browser.resolve(T)["from"]["profile"] == "project:projects/acme"
+    assert cli.main(["browser", "set", "acme", "inherit", "--profile", "shop"]) == 1   # only an agent chooses
+    assert browser.resolve(T)["profile"] == ""                                       # its project's, not made yet
+    assert browser.active_for(T) is None                                             # the feature is off
     assert cli.main(["browser", "settings", "--tab-sleep", "30"]) == 0 and browser.settings()["tab_sleep_min"] == 30
     assert cli.main(["browser", "show", "acme/blog", "--json"]) == 0
-    assert cli.main(["browser", "set", "acme", "inherit", "--profile", "inherit"]) == 0
-    assert browser.resolve(T)["profile"] == "main"
-    assert cli.main(["browser", "set", "acme/blog", "on", "--profile", "own"]) == 1   # only an agent has its own
     assert cli.main(["browser", "set", "acme/blog", "off"]) == 0
     assert browser.own_block(f"topic:{T}")["enabled"] is False
     assert cli.main(["browser", "settings", "--max-tabs", "99"]) == 1          # out of range
@@ -581,29 +584,48 @@ def test_profiles_are_added_changed_and_deleted(mx):
     assert [p["id"] for p in browser.profiles()] == ["main", "boutique-paris"]
 
 
-def test_a_folder_inherits_its_profile_and_an_agent_its_switch_never(mx):
+def test_a_folder_uses_its_project_profile_and_an_agent_may_choose_another(mx):
     from maxxing import agents, browser, workspace
     (mx["ws"] / T).mkdir(parents=True)
     agents.create(T, "writer")
-    browser.set_profile({"name": "Shop"})
     browser.set_profile({"name": "Support"})
     assert browser.chain(A) == [f"agent:{A}", f"topic:{T}", "project:projects/acme"]
-    assert browser.resolve(A) == {"enabled": False, "profile": "main", "from": {"enabled": "", "profile": ""}}
-    workspace.set_folder_browser("projects/acme", {"enabled": True, "profile": "shop"})
-    r = browser.resolve(T)
-    assert r["enabled"] and r["profile"] == "shop" and r["from"] == {"enabled": "project:projects/acme",
+    assert browser.resolve(A) == {"enabled": False, "profile": "", "project": "projects/acme",
+                                  "from": {"enabled": "", "profile": ""}}
+    workspace.set_folder_browser("projects/acme", {"enabled": True, "profile": "support"})   # a project's pick: ignored
+    r = browser.resolve(T, create=True)
+    assert r["enabled"] and r["profile"] == "acme" and r["from"] == {"enabled": "project:projects/acme",
                                                                      "profile": "project:projects/acme"}
+    p = browser.profile("acme")
+    assert p["project"] == "projects/acme" and p["name"] == "acme"
+    assert browser.ensure_project_profile("projects/acme") == "acme"                # made once
     r = browser.resolve(A)
-    assert not r["enabled"] and r["profile"] == "shop"           # its switch is its own, its profile inherited
-    workspace.set_folder_browser(T, {"profile": "support"})
-    assert browser.resolve(A)["profile"] == "support" and browser.resolve(T)["enabled"]
-    agents.update(A, {"browser": {"enabled": True, "profile": "main"}})
-    assert browser.resolve(A) == {"enabled": True, "profile": "main", "from": {"enabled": f"agent:{A}",
-                                                                                "profile": f"agent:{A}"}}
-    used = browser.used_by("support")
-    assert [u["owner"] for u in used] == [f"topic:{T}"]
-    browser.delete_profile("support")                            # gone: back to main
-    assert browser.resolve(T)["profile"] == "main"
+    assert not r["enabled"] and r["profile"] == "acme"            # its switch is its own, its profile its project's
+    agents.update(A, {"browser": {"enabled": True, "profile": "support"}})
+    assert browser.resolve(A)["profile"] == "support" and browser.resolve(A)["from"]["profile"] == f"agent:{A}"
+    assert browser.agents_of("support") == [A] and browser.agents_of("acme") == []
+    browser.delete_profile("support")                              # gone: its project's again
+    assert browser.resolve(A)["profile"] == "acme" and browser.agents_of("acme") == [A]
+    agents.update(A, {"browser": {"profile": "own"}})              # of before: its project's
+    assert "profile" not in agents.load(A)["browser"]
+    # a second profile naming the same project is just a profile
+    s = browser.settings()
+    s["profiles"].append({**s["profiles"][1], "id": "acme-2"})
+    assert browser.clean_settings(s)["profiles"][2]["project"] == ""
+
+
+def test_every_project_with_agents_gets_its_profile(client, topic, mx):
+    from maxxing import browser
+    _agent(client)
+    (mx["ws"] / "projects/empty/topics/x").mkdir(parents=True)
+    client.put("/api/settings", json={"browser_feature": True})
+    st = client.get("/api/browser").json()
+    assert [(p["id"], p["project"]) for p in st["profiles"]] == [("main", ""), ("acme", "projects/acme")]
+    # the project gone: its profile may be deleted
+    import shutil
+    shutil.rmtree(mx["ws"] / "projects/acme")
+    assert browser.project_gone(browser.profile("acme"))
+    browser.delete_profile("acme")
 
 
 def test_a_new_page_belongs_to_who_asked(mx):
@@ -931,17 +953,6 @@ def test_a_profile_whose_exit_is_gone_never_goes_out_directly(mx):
     assert asyncio.run(p.exit_ready({**prof, "on_exit_down": "vps"}, "s", "x")) is None
 
 
-def test_an_agent_fed_by_notifications_on_the_main_profile_is_warned(client, topic, mx, monkeypatch):
-    from maxxing import agents
-    _agent(client)
-    assert client.put("/api/browser/owner", json={"path": A, "enabled": True}).status_code == 200
-    assert client.put("/api/browser/owner", json={"path": A, "profile": "main"}).status_code == 200   # shares main
-    assert client.get("/api/browser/owner", params={"path": A}).json()["outside_on_main"] is False
-    real = agents.load
-    monkeypatch.setattr(agents, "load", lambda path: {**real(path), "triggers": [{"kind": "feed", "sources": ["github"]}]})
-    assert client.get("/api/browser/owner", params={"path": A}).json()["outside_on_main"] is True
-
-
 def test_exits_come_back_and_resume_the_turns_that_asked(mx, monkeypatch):
     from maxxing.browser import exits
     from maxxing.sessions import service, store
@@ -1128,33 +1139,19 @@ def test_claude_gives_a_page_only_files_of_its_folder(tmp_path, monkeypatch):
             pool_mod.claude_file(B(), "projects/acme/topics/blog", bad)
 
 
-def test_an_agent_has_its_own_browser_or_shares_one_and_never_falls_back_to_main(client, topic, mx):
-    """Turned on: its own browser (the exit and sites of the one it would have used). Sharing is a choice; its own
-    browser deleted, it has none (never main's sign-ins by itself); "own" makes it again."""
+def test_an_agent_uses_its_project_profile_unless_it_chooses_another(client, topic, mx):
     from maxxing import agents, browser
     _agent(client)
     client.put("/api/settings", json={"browser_feature": True})
     assert client.put("/api/browser/profiles/main", json={"web": "public"}).status_code == 200
     r = client.put("/api/browser/owner", json={"path": A, "enabled": True}).json()
-    assert r["profile"] == "writer" and browser.profile("writer")["web"] == "public"
-    # shares the sign-ins of main, then its own again (the same browser, not a second one)
+    assert r["enabled"] and browser.active_for(A)[1]["id"] == "acme" and browser.profile("acme")["web"] == "public"
     assert client.put("/api/browser/owner", json={"path": A, "profile": "main"}).json()["profile"] == "main"
-    r = client.put("/api/browser/owner", json={"path": A, "profile": "own"}).json()
-    assert r["profile"] == "writer" and [p["id"] for p in browser.profiles()] == ["main", "writer"]
-    assert client.put("/api/browser/owner", json={"path": T, "profile": "own"}).status_code == 400
-    # its browser deleted: off, said so
-    assert client.delete("/api/browser/profiles/writer").status_code == 200
-    r = client.get("/api/browser/owner", params={"path": A}).json()
-    assert r["enabled"] is False and r["gone"] is True and browser.active_for(A) is None
-    # turned on again: a new browser of its own
-    r = client.put("/api/browser/owner", json={"path": A, "enabled": True}).json()
-    assert r["enabled"] is True and r["profile"] == "writer" and not r["gone"]
-    # its manager asks for another's, then its own (a change card, applied through agents.update)
-    agents.update(A, {"browser": {"profile": "main"}})
-    assert browser.resolve(A)["profile"] == "main"
-    agents.update(A, {"browser": {"profile": "own"}})
-    assert browser.resolve(A)["profile"] == "writer" and browser.active_for(A)[1]["id"] == "writer"
-
+    r = client.put("/api/browser/owner", json={"path": A, "inherit": ["profile"]}).json()
+    assert r["profile"] == "acme" and [p["id"] for p in browser.profiles()] == ["main", "acme"]
+    assert client.put("/api/browser/owner", json={"path": T, "inherit": ["profile"]}).status_code == 400
+    agents.update(A, {"browser": {"profile": "main"}})       # its manager's change card
+    assert browser.resolve(A)["profile"] == "main" and browser.active_for(A)[1]["id"] == "main"
 
 def test_a_profile_picture_is_empty_while_it_sleeps(client, mx):
     """The agent panel's card never starts a browser to draw it."""
@@ -1165,29 +1162,21 @@ def test_a_profile_picture_is_empty_while_it_sleeps(client, mx):
 
 
 # ---- navigators ----------------------------------------------------------------------------------------------------
-def test_the_person_has_navigators_of_their_own_on_any_profile(mx):
-    """"me" always exists (on main); more can be made, renamed, moved to another profile, deleted (not "me"); a
-    profile deleted sends its navigators back to main."""
+def test_the_person_has_one_navigator_on_any_profile(mx):
+    """"me" always exists (on main); it moves to another profile; a profile deleted sends it back to main."""
     from maxxing import browser
     from maxxing.browser import navs
     assert [n["id"] for n in navs.person()] == ["me"] and navs.profile_of("me") == "main"
     browser.set_profile({"name": "Shop"})
-    n = navs.create("shop", "Boutique")
-    assert n["id"] == "me-2" and navs.profile_of("me-2") == "shop" and navs.kind("me-2") == "person"
-    row, old = navs.update("me-2", profile="main", name="Perso")
-    assert old == "shop" and row["profile"] == "main" and navs.get_person("me-2")["name"] == "Perso"
-    navs.update("me-2", profile="shop")
+    row, old = navs.update("me", profile="shop")
+    assert old == "main" and row["profile"] == "shop" and navs.profile_of("me") == "shop"
     navs.on_profile_deleted("shop")
-    assert navs.profile_of("me-2") == "main"
-    with pytest.raises(browser.BrowserError):
-        navs.delete("me")
-    navs.delete("me-2")
-    assert [n["id"] for n in navs.person()] == ["me"]
+    assert navs.profile_of("me") == "main"
+    assert navs.get_person("me-2") is None
     assert navs.valid("agent:projects/acme/topics/blog/agents/writer") and navs.valid("session:abcdef12")
     assert not navs.valid("agent:../x y") and not navs.valid("you")
     assert navs.of_turn("s1", f"topic:{T}") == "session:s1"
     assert navs.of_turn("s1", "agent:projects/acme/topics/blog/agents/writer") == "agent:projects/acme/topics/blog/agents/writer"
-
 
 def test_a_tab_belongs_to_the_navigator_that_opened_it(mx):
     """A claimed page lands in the claim's navigator; a popup in its opener's; an unknown one in the person's first;
@@ -1248,22 +1237,41 @@ def test_a_navigator_id_names_an_agent_folder_or_nothing():
         assert not navs.valid(bad), bad
 
 
-def test_the_api_lists_and_manages_the_navigators(client, mx):
+def test_the_api_moves_the_person_navigator(client, mx):
     from maxxing import browser
     from maxxing.browser import pool as pool_mod
     st = client.get("/api/browser").json()
     assert [n["id"] for n in st["navigators"] if n["kind"] == "person"] == ["me"]
-    r = client.post("/api/browser/navigators", json={"name": "Work"})
-    assert r.status_code == 200 and r.json()["id"] == "me-2"
-    assert client.put("/api/browser/navigators/me-2", json={"profile": "nope"}).status_code == 404
-    assert client.delete("/api/browser/navigators/me").status_code == 400
-    pool_mod.pool().tabs("main").claim({"kind": "you"}, "me-2")
+    assert client.post("/api/browser/navigators", json={}).status_code in (404, 405)   # no second one
+    assert client.put("/api/browser/navigators/me", json={"profile": "nope"}).status_code == 404
+    pool_mod.pool().tabs("main").claim({"kind": "you"}, "me")
     pool_mod.pool().tabs("main").resolve({"targetId": "x1", "type": "page", "url": "https://a.example/"})
     pool_mod.pool().tabs("main").gone("x1", keep=True)
     browser.set_profile({"name": "Shop"})
-    assert client.put("/api/browser/navigators/me-2", json={"profile": "shop"}).status_code == 200
-    assert pool_mod.pool().tabs("shop").asleep("me-2") and not pool_mod.pool().tabs("main").of_nav("me-2")
-    assert client.delete("/api/browser/navigators/me-2").json() == {"ok": True}
-    assert not pool_mod.pool().tabs("shop").of_nav("me-2")
+    assert client.put("/api/browser/navigators/me", json={"profile": "shop"}).status_code == 200
+    assert pool_mod.pool().tabs("shop").asleep("me") and not pool_mod.pool().tabs("main").of_nav("me")
     assert client.get("/api/browser/profiles/main/picture?nav=../x").status_code == 400
     assert client.get("/api/browser/profiles/main/picture?nav=me-9").status_code == 404
+
+
+def test_a_session_navigator_is_temporary_and_journaled(client, mx):
+    """Its tabs close once the session has had no turn for idle_min; the profile's journal keeps a line."""
+    import time as _t
+    from maxxing.browser import pool as pool_mod, replays
+    tabs = pool_mod.pool().tabs("main")
+    tabs.claim({"kind": "session", "sid": "sess01"}, "session:sess01")
+    tabs.resolve({"targetId": "x1", "type": "page", "url": "https://a.example/"})
+    tabs.gone("x1", keep=True)
+    replays.log_action("main", {"at": _t.time() - 60, "session": "sess01", "nav": "session:sess01",
+                                "tool": "navigate_page", "args": {"url": "https://a.example/x"}, "ok": True})
+    replays.log_action("main", {"at": _t.time(), "session": "sess02", "nav": "agent:" + A, "tool": "click", "ok": True})
+    v = client.get("/api/browser/profiles/main").json()
+    assert [(r["session"], r["sites"], r["open"]) for r in v["temporary"]] == [("sess01", ["a.example"], True)]
+    asyncio.run(pool_mod.pool()._close_sessions())
+    assert tabs.of_nav("session:sess01")                   # used just now: kept
+    for t in tabs.of_nav("session:sess01"):
+        t["used"] = 0
+    asyncio.run(pool_mod.pool()._close_sessions())
+    assert not tabs.of_nav("session:sess01")
+    v = client.get("/api/browser/profiles/main").json()
+    assert [(r["session"], r["open"]) for r in v["temporary"]] == [("sess01", False)]

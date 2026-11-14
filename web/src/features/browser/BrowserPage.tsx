@@ -1,24 +1,22 @@
-// /browser: the Harness Browser (Settings -> Features -> Harness Browser). The second sidebar lists the navigators
-// (windows of tabs: the person's, each agent's, the sessions' lately), the profiles (sign-ins, sites and exit: one
-// Chromium each, shared by the navigators on it) and the exits (where their pages go out). The page shows a navigator
-// live (?nav=<id>, "me" by default), a profile's settings (?profile=<id>), or an exit (?exit=<id>, ?exit=new to add
-// one). ?session=<id> shows the navigator of that session (its agent's for an agent run: the link of a request).
-// ?new=profile opens "New profile".
+// /browser: the Harness Browser (Settings -> Features -> Harness Browser). The second sidebar: the Browser (the person's
+// one, on the profile they pick), the Profiles (one per project, `main` = the person's, more added by hand) and the
+// Connections (where the pages go out: the server's IP, a phone, a box, a proxy). The page shows the Browser live (also
+// an agent's or a session's: ?nav=<id>, ?session=<id> = that session's, its agent's for an agent run), a profile
+// (?profile=<id>: its agents' browsers, its sessions' journal, its settings), or a connection (?exit=<id>, ?exit=new to
+// add one). ?new=profile opens "Add a profile".
 import * as React from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router'
-import { Bot, Globe, MessageSquare, MoreHorizontal, Pencil, Plus, User, X } from 'lucide-react'
+import { Link, useSearchParams } from 'react-router'
+import { Bot, Globe, MessageSquare, Plus } from 'lucide-react'
 import { useT } from '@/i18n'
-import { useBrowserNavigator, useBrowserProfile, useBrowserStatus, useSaveBrowserProfile, useSettings } from '@/lib/queries'
-import type { BrowserNavigator, BrowserStatus } from '@/lib/types'
+import { useBrowserNavigator, useBrowserStatus, useSaveBrowserProfile, useSettings } from '@/lib/queries'
+import type { BrowserNavigator, BrowserProfileRow, BrowserStatus } from '@/lib/types'
 import { cn } from '@/lib/utils'
-import {
-  Badge, Button, confirm, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DropdownMenu, DropdownMenuContent,
-  DropdownMenuItem, DropdownMenuTrigger, Input, Skeleton,
-} from '@/components/ui'
+import { Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, Input, Select, Skeleton } from '@/components/ui'
 import { PageList } from '@/components/shell/PageList'
 import { Callout } from '@/features/common'
 import { LiveView } from './LiveView'
-import { ProfileSettings } from './ProfileSettings'
+import { ProfilePage } from './ProfilePage'
+import { ConnectionPicker } from './ConnectionPicker'
 import { AddExit, DirectPanel, ExitPanel } from './Exits'
 import { exitLine, exitName, exitTone, navName, ownerParts, profileName, testWhere } from './profiles'
 
@@ -32,11 +30,9 @@ function navOfSession(st: BrowserStatus | undefined, session: string): string {
 
 export default function BrowserPage() {
   const t = useT()
-  const go = useNavigate()
   const [params, setParams] = useSearchParams()
   const { data: s } = useSettings()
   const { data: st } = useBrowserStatus(!!s?.browser_feature)
-  const make = useBrowserNavigator()
   const [adding, setAdding] = React.useState(params.get('new') === 'profile')
   const session = params.get('session') || undefined
   const exitId = params.get('exit')
@@ -55,33 +51,13 @@ export default function BrowserPage() {
       </div>
     )
 
-  const newNav = () => make.mutate({}, { onSuccess: (n) => n && typeof n === 'object' && 'id' in n && go(`/browser?nav=${encodeURIComponent(String(n.id))}`) })
-  const profile = pid ? st?.profiles.find((p) => p.id === pid) : undefined
   const exit = exitId && exitId !== 'new' && exitId !== 'direct' ? st?.exits.find((e) => e.id === exitId) : undefined
   const n = st?.navigators.find((x) => x.id === navId)
   const navProfile = n?.profile || (session ? st?.summary.turns[session] || st?.asks.find((a) => a.session === session)?.profile : undefined) || (navId === 'me' ? 'main' : undefined)
   return (
     <div className="flex h-full min-h-0 flex-col" data-testid="browser-page">
-      <PageList
-        id="browser"
-        label={t('nav.browser')}
-        icon={Globe}
-        actions={
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon-sm" aria-label={t('browser.addMenu')} data-testid="browser-add">
-                <Plus />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onSelect={newNav} data-testid="browser-add-nav">{t('browser.nav.new')}</DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => setAdding(true)} data-testid="browser-add-profile">{t('browser.profile.new')}</DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => setParams({ exit: 'new' })}>{t('browser.exit.add')}</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        }
-      >
-        <SideList navId={exitId || pid ? null : navId} pid={pid} exitId={exitId} onNewNav={newNav} />
+      <PageList id="browser" label={t('nav.browser')} icon={Globe}>
+        <SideList navId={exitId || pid ? null : navId} pid={pid} exitId={exitId} onAddProfile={() => setAdding(true)} />
       </PageList>
 
       {exitId ? (
@@ -89,9 +65,7 @@ export default function BrowserPage() {
           {exitId === 'new' ? <AddExit /> : exitId === 'direct' ? <DirectPanel /> : exit ? <ExitPanel key={exit.id} exit={exit} /> : <Skeleton className="h-40" />}
         </Section>
       ) : pid ? (
-        <Section title={t('browser.profile.settingsTitle', { name: profileName(profile || { id: pid, name: '' }, t) })}>
-          <ProfileSettings key={pid} pid={pid} />
-        </Section>
+        <ProfilePage key={pid} pid={pid} />
       ) : navProfile ? (
         <Live key={`${navId}:${navProfile}`} nav={n || { id: navId, kind: navId.startsWith('agent:') ? 'agent' : navId.startsWith('session:') ? 'session' : 'person', name: '' }} pid={navProfile} st={st} session={session} />
       ) : (
@@ -114,169 +88,114 @@ function Section({ title, actions, children }: { title: string; actions?: React.
   )
 }
 
-/** A navigator live: its name, the sign-ins (profile) and exit it uses; rename / close the person's; the live view. */
+/** Profiles in the order of the sidebar: the person's, then the projects' (by name), then the others. */
+function ordered(rows: BrowserProfileRow[], t: ReturnType<typeof useT>): BrowserProfileRow[] {
+  const rank = (p: BrowserProfileRow) => (p.id === 'main' ? 0 : p.project && !p.gone ? 1 : 2)
+  return [...rows].sort((a, b) => rank(a) - rank(b) || profileName(a, t).localeCompare(profileName(b, t)))
+}
+
+/** A navigator live. The person's Browser: pick its profile and that profile's connection here. An agent's or a
+ *  session's: its name, where it is, its profile. */
 function Live({ nav, pid, st, session }: { nav: Pick<BrowserNavigator, 'id' | 'kind' | 'name'> & Partial<BrowserNavigator>; pid: string; st?: BrowserStatus; session?: string }) {
   const t = useT()
-  const go = useNavigate()
-  const { data: v } = useBrowserProfile(pid)
-  const change = useBrowserNavigator()
-  const [renaming, setRenaming] = React.useState(false)
+  const move = useBrowserNavigator()
   const row = st?.profiles.find((p) => p.id === pid)
-  const e = st?.exits.find((x) => x.id === row?.exit)
-  const where = row?.exit === 'direct' ? t('browser.exit.directLine') : e ? [e.name, testWhere(e.test)].filter(Boolean).join(' · ') : ''
-  const close = async () => {
-    if (!(await confirm({ title: t('browser.nav.closeTitle', { name: navName(nav, t) }), description: t('browser.nav.closeDesc'), destructive: true }))) return
-    change.mutate({ id: nav.id, remove: true }, { onSuccess: () => go('/browser') })
-  }
-  const Icon = nav.kind === 'agent' ? Bot : nav.kind === 'session' ? MessageSquare : User
+  const person = nav.kind === 'person'
+  const Icon = nav.kind === 'agent' ? Bot : nav.kind === 'session' ? MessageSquare : Globe
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex min-h-12 shrink-0 flex-wrap items-center gap-2 border-b px-4 py-1.5">
         <Icon className="size-4 shrink-0 text-muted-foreground" />
-        <h1 className="min-w-0 truncate text-sm font-semibold" data-testid="browser-nav-name">{navName(nav, t)}</h1>
-        {nav.kind !== 'person' && nav.path && <span className="truncate text-[12px] text-muted-foreground">{ownerParts(nav.path).where || ownerParts(nav.path).name}</span>}
-        <Link to={`/browser?profile=${encodeURIComponent(pid)}`} title={t('browser.nav.signinsTitle')} className="inline-flex h-5 max-w-56 items-center truncate rounded-full border px-2 text-[11px] hover:bg-accent/50" data-testid="browser-nav-profile">
-          {t('browser.nav.signins', { name: profileName(row || { id: pid, name: '' }, t) })}
-        </Link>
-        {row && (
-          <Badge variant={e?.state === 'down' ? 'destructive' : row.exit === 'direct' ? 'muted' : 'success'} title={t('browser.profile.exit')}>
-            <span className={cn('size-1.5 rounded-full', exitTone(e))} /> {t('browser.via', { where })}
-          </Badge>
-        )}
-        {v?.browser.level === 'live' && <Badge variant="outline" className="font-normal text-sky-600 dark:text-sky-400">{t('browser.levelLive')}</Badge>}
+        <h1 className="min-w-0 truncate text-sm font-semibold" data-testid="browser-nav-name">{person ? t('browser.side.browser') : navName(nav, t)}</h1>
+        {!person && nav.path && <span className="truncate text-[12px] text-muted-foreground">{ownerParts(nav.path).where || ownerParts(nav.path).name}</span>}
         <span className="flex-1" />
-        {nav.kind === 'person' && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon-sm" aria-label={t('browser.nav.more')} data-testid="browser-nav-more">
-                <MoreHorizontal />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onSelect={() => setRenaming(true)}>
-                <Pencil /> {t('browser.nav.rename')}
-              </DropdownMenuItem>
-              {nav.id !== 'me' && (
-                <DropdownMenuItem destructive onSelect={close} data-testid="browser-nav-close">
-                  <X /> {t('browser.nav.close')}
-                </DropdownMenuItem>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+        {person ? (
+          <span className="inline-flex items-center gap-1">
+            <span className="hidden text-[12px] text-muted-foreground sm:inline">{t('browser.menu.signins')}</span>
+            <Select
+              className="h-8 w-44 text-[13px]"
+              aria-label={t('browser.menu.signins')}
+              value={pid}
+              onValueChange={(x) => x !== pid && move.mutate({ profile: x })}
+              options={ordered(st?.profiles || [], t).map((p) => ({ value: p.id, label: profileName(p, t) }))}
+              data-testid="browser-nav-profile"
+            />
+          </span>
+        ) : (
+          <Link to={`/browser?profile=${encodeURIComponent(pid)}`} title={t('browser.nav.signinsTitle')} className="inline-flex h-6 max-w-56 items-center truncate rounded-full border px-2 text-[12px] hover:bg-accent/50" data-testid="browser-nav-profile">
+            {t('browser.nav.signins', { name: profileName(row || { id: pid, name: '' }, t) })}
+          </Link>
         )}
+        <ConnectionPicker pid={pid} note />
       </div>
       <LiveView profile={pid} nav={nav.id} session={session} start={!!session} className="min-h-0 flex-1" />
-      <RenameNav nav={nav} open={renaming} onOpenChange={setRenaming} />
     </div>
   )
 }
 
-function RenameNav({ nav, open, onOpenChange }: { nav: Pick<BrowserNavigator, 'id' | 'kind' | 'name'>; open: boolean; onOpenChange: (v: boolean) => void }) {
-  const t = useT()
-  const change = useBrowserNavigator()
-  const [name, setName] = React.useState(nav.name)
-  React.useEffect(() => {
-    if (open) setName(nav.name)
-  }, [open, nav.name])
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="md:max-w-md">
-        <DialogHeader>
-          <DialogTitle>{t('browser.nav.rename')}</DialogTitle>
-          <DialogDescription>{t('browser.nav.renameDesc')}</DialogDescription>
-        </DialogHeader>
-        <form
-          className="grid gap-3"
-          onSubmit={(e) => {
-            e.preventDefault()
-            change.mutate({ id: nav.id, name: name.trim() }, { onSuccess: () => onOpenChange(false) })
-          }}
-        >
-          <Input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder={navName({ ...nav, name: '' }, t)} maxLength={80} />
-          <DialogFooter>
-            <Button type="submit" loading={change.isPending}>
-              {t('common.save')}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-/** The second sidebar: the person's navigators, the agents', the sessions', then profiles and exits (Direct last). */
-function SideList({ navId, pid, exitId, onNewNav }: { navId: string | null; pid: string | null; exitId: string | null; onNewNav: () => void }) {
+/** The second sidebar: the Browser, the Profiles (+ Add a profile), the Connections (+ Add a connection). */
+function SideList({ navId, pid, exitId, onAddProfile }: { navId: string | null; pid: string | null; exitId: string | null; onAddProfile: () => void }) {
   const t = useT()
   const { data: st } = useBrowserStatus()
   if (!st) return <Skeleton className="m-2 h-40" />
   const waitingProfiles = new Set(st.waiting.map((w) => w.profile))
-  const profileOf = (id: string | null) => st.profiles.find((p) => p.id === id)
-  const navRow = (n: BrowserNavigator) => {
-    const p = profileOf(n.profile)
-    const tone = !n.profile ? 'bg-destructive' : n.running && n.awake ? 'bg-success' : 'bg-muted-foreground/50'
-    const blank = !n.page?.url || n.page.url === 'about:blank'
-    const what = blank ? '' : n.page?.title || n.page?.url || ''
-    return (
-      <Row key={n.id} to={`/browser?nav=${encodeURIComponent(n.id)}`} active={navId === n.id} tone={tone} title={navName(n, t)} right={n.turns ? t('browser.nav.acting') : n.running && n.awake ? t('browser.tabsAwake', { count: n.awake }) : ''} testid="browser-side-nav">
-        {[p ? profileName(p, t) : t('browser.nav.noProfile'), what || (n.running && n.awake ? '' : t('browser.asleepShort'))].filter(Boolean).join(' · ')}
-      </Row>
-    )
-  }
-  const mine = st.navigators.filter((n) => n.kind === 'person')
-  const agents = st.navigators.filter((n) => n.kind === 'agent')
-  const sessions = st.navigators.filter((n) => n.kind === 'session')
+  const me = st.navigators.find((n) => n.id === 'me')
+  const meProfile = st.profiles.find((p) => p.id === me?.profile)
+  const blank = !me?.page?.url || me.page.url === 'about:blank'
   const heading = (text: string) => <h3 className="px-2.5 pb-1 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">{text}</h3>
+  const add = (label: string, testid: string, active: boolean, onClick?: () => void, to?: string) =>
+    to ? (
+      <Link to={to} className={cn('mt-0.5 inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[13px] text-primary hover:bg-accent/50', active && 'bg-accent')} data-testid={testid}>
+        <Plus className="size-3.5" /> {label}
+      </Link>
+    ) : (
+      <button type="button" onClick={onClick} className="mt-0.5 inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-left text-[13px] text-primary hover:bg-accent/50" data-testid={testid}>
+        <Plus className="size-3.5" /> {label}
+      </button>
+    )
   return (
     <div className="grid content-start gap-4 overflow-y-auto p-2" data-testid="browser-side">
-      <div className="grid gap-0.5" data-testid="browser-side-mine">
-        {heading(t('browser.navs.yours'))}
-        {mine.map(navRow)}
-        {mine.length < 8 && (
-          <button type="button" onClick={onNewNav} className="mt-0.5 rounded-md px-2.5 py-1.5 text-left text-[13px] text-primary hover:bg-accent/50" data-testid="browser-side-new-nav">
-            + {t('browser.nav.new')}
-          </button>
+      <div className="grid gap-0.5">
+        <Row to="/browser" active={navId === 'me'} tone={me?.running && me.awake ? 'bg-success' : 'bg-muted-foreground/50'} title={t('browser.side.browser')} right={me?.running && me.awake ? t('browser.tabsAwake', { count: me.awake }) : ''} testid="browser-side-nav">
+          {[profileName(meProfile || { id: me?.profile || 'main', name: '' }, t), blank ? '' : me?.page?.title || me?.page?.url].filter(Boolean).join(' · ')}
+        </Row>
+        {navId && navId !== 'me' && (
+          <Row to={`/browser?nav=${encodeURIComponent(navId)}`} active tone="bg-success" title={navName(st.navigators.find((n) => n.id === navId) || { id: navId, kind: navId.startsWith('agent:') ? 'agent' : 'session', name: '' }, t)}>
+            {t(navId.startsWith('agent:') ? 'browser.persistent' : 'browser.temporary')}
+          </Row>
         )}
       </div>
-      {agents.length > 0 && (
-        <div className="grid gap-0.5" data-testid="browser-side-agents">
-          {heading(t('browser.navs.agents'))}
-          {agents.map(navRow)}
-        </div>
-      )}
-      {sessions.length > 0 && (
-        <div className="grid gap-0.5" data-testid="browser-side-sessions">
-          {heading(t('browser.navs.sessions'))}
-          {sessions.map(navRow)}
-        </div>
-      )}
-      <div className="grid gap-0.5">
+      <div className="grid gap-0.5" data-testid="browser-side-profiles">
         {heading(t('browser.profiles'))}
-        {st.profiles.map((p) => {
+        {ordered(st.profiles, t).map((p) => {
           const e = st.exits.find((x) => x.id === p.exit)
           const down = e?.state === 'down'
           const tone = down ? 'bg-destructive' : p.state === 'running' ? 'bg-success' : 'bg-muted-foreground/50'
+          const line = [
+            p.id === 'main' ? t('browser.profile.yours') : p.gone ? t('browser.profile.projectGone') : '',
+            p.agents ? (p.agents === 1 ? t('browser.profile.agentsOne') : t('browser.profile.agentsMany', { count: p.agents })) : '',
+            exitName(p.exit, st.exits, t),
+            down ? t('browser.exit.down') : '',
+          ].filter(Boolean)
           return (
-            <Row key={p.id} to={`/browser?profile=${encodeURIComponent(p.id)}`} active={pid === p.id} tone={tone} title={p.agent ? t('browser.profile.agentOwn', { name: ownerParts(p.agent).name }) : profileName(p, t)} right={waitingProfiles.has(p.id) ? t('browser.paused') : ''} testid="browser-side-profile">
-              {exitName(p.exit, st.exits, t)}
-              {e && testWhere(e.test) ? ` · ${testWhere(e.test)}` : ''}
-              {down ? ` · ${t('browser.exit.down')}` : ''}
+            <Row key={p.id} to={`/browser?profile=${encodeURIComponent(p.id)}`} active={pid === p.id} tone={tone} title={profileName(p, t)} right={waitingProfiles.has(p.id) ? t('browser.paused') : ''} testid="browser-side-profile">
+              {line.join(' · ')}
             </Row>
           )
         })}
+        {add(t('browser.profile.add'), 'browser-side-add-profile', false, onAddProfile)}
       </div>
-      <div className="grid gap-0.5">
+      <div className="grid gap-0.5" data-testid="browser-side-exits">
         {heading(t('browser.exits'))}
+        <Row to="/browser?exit=direct" active={exitId === 'direct'} tone="bg-success" title={t('browser.exit.direct')} testid="browser-side-exit">
+          {testWhere(st.direct.test) || t('browser.exit.directLine')}
+        </Row>
         {st.exits.map((e) => (
           <Row key={e.id} to={`/browser?exit=${encodeURIComponent(e.id)}`} active={exitId === e.id} tone={exitTone(e)} title={e.name} testid="browser-side-exit">
             {exitLine(e, t)}
           </Row>
         ))}
-        <Row to="/browser?exit=direct" active={exitId === 'direct'} tone="bg-success" title={t('browser.exit.direct')}>
-          {t('browser.exit.directLine')}
-        </Row>
-        <Link to="/browser?exit=new" className={cn('mt-1 rounded-md px-2.5 py-1.5 text-[13px] text-primary hover:bg-accent/50', exitId === 'new' && 'bg-accent')} data-testid="browser-side-add-exit">
-          + {t('browser.exit.add')}
-        </Link>
+        {add(t('browser.exit.add'), 'browser-side-add-exit', exitId === 'new', undefined, '/browser?exit=new')}
       </div>
     </div>
   )
@@ -303,7 +222,7 @@ function NewProfile({ open, onOpenChange, onDone }: { open: boolean; onOpenChang
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="md:max-w-md">
         <DialogHeader>
-          <DialogTitle>{t('browser.profile.new')}</DialogTitle>
+          <DialogTitle>{t('browser.profile.add')}</DialogTitle>
           <DialogDescription>{t('browser.profile.newDesc')}</DialogDescription>
         </DialogHeader>
         <form

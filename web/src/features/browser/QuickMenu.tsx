@@ -1,7 +1,7 @@
-// The ⋮ of the live view's toolbar: the settings one changes while browsing, without leaving the page. Whose sign-ins
-// this navigator uses (the person's navigators and an agent's may switch; a session's follows its folder), the profile's
-// exit and its state, the sites it may open, the search engine of the address bar, the picture (smooth / sharp / auto),
-// forget the sign-ins. The Browser page keeps the rest (profiles, exits, their settings).
+// The ⋮ of the live view's toolbar: the settings one changes while browsing, without leaving the page. The profile this
+// navigator uses (the person's browser and an agent's may switch; a session's is its project's), the profile's
+// connection and its state, the sites it may open, the search engine of the address bar, the picture (smooth / sharp /
+// auto), forget the sign-ins. The Browser page keeps the rest (profiles, connections, their settings).
 import { useNavigate } from 'react-router'
 import { Check, Eraser, EllipsisVertical, Gauge, Globe, KeyRound, Search, Settings2, Waypoints } from 'lucide-react'
 import { useT } from '@/i18n'
@@ -37,12 +37,16 @@ export function QuickMenu({ profile, nav, quality, onQuality, sites }: {
   const exit = st?.exits.find((e) => e.id === p?.exit)
   const kind = nav.startsWith('agent:') ? 'agent' : nav.startsWith('session:') ? 'session' : 'person'
   const agentPath = kind === 'agent' ? nav.slice(6) : ''
-  // the sign-ins it may use: the person's profiles, plus the agent's own one for an agent
-  const choices = (st?.profiles || []).filter((x) => !x.agent || (kind === 'agent' && x.agent === agentPath))
+  const choices = st?.profiles || []
+  // an agent back on its project's profile: no choice of its own any more
+  const projectOf = agentPath.split('/').slice(0, 2).join('/')
   const pick = (id: string) => {
     if (id === profile) return
-    if (kind === 'person') move.mutate({ id: nav, profile: id })
-    else if (kind === 'agent') owner.mutate({ path: agentPath, profile: choices.find((x) => x.id === id)?.agent ? 'own' : id })
+    if (kind === 'person') move.mutate({ profile: id })
+    else if (kind === 'agent') {
+      const mine = choices.find((x) => x.project === projectOf)?.id === id
+      owner.mutate(mine ? { path: agentPath, inherit: ['profile'] } : { path: agentPath, profile: id })
+    }
   }
   const forget = async () => {
     if (!(await confirm({ title: t('browser.forgetTitle'), description: t('browser.forgetConfirm'), destructive: true }))) return
@@ -72,12 +76,12 @@ export function QuickMenu({ profile, nav, quality, onQuality, sites }: {
               <DropdownMenuRadioGroup value={profile} onValueChange={pick}>
                 {choices.map((x) => (
                   <DropdownMenuRadioItem key={x.id} value={x.id}>
-                    <span className="truncate">{x.agent ? t('browser.signins.own') : profileName(x, t)}</span>
+                    <span className="truncate">{profileName(x, t)}</span>
                   </DropdownMenuRadioItem>
                 ))}
               </DropdownMenuRadioGroup>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={() => go('/browser?new=profile')}>{t('browser.profile.new')}</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => go('/browser?new=profile')}>{t('browser.profile.add')}</DropdownMenuItem>
             </DropdownMenuSubContent>
           </DropdownMenuSub>
         )}

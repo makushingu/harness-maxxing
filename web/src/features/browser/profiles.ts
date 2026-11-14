@@ -2,7 +2,7 @@
 import type { TFn as T } from '@/i18n'
 import type { BrowserExit, BrowserExitTest, BrowserNavigator, BrowserProfile } from '@/lib/types'
 
-/** `main` with no name of its own reads "Main" in the user's language. */
+/** `main` with no name of its own reads "Personal" in the user's language. */
 export const profileName = (p: Pick<BrowserProfile, 'id' | 'name'> | undefined, t: T) =>
   !p ? '' : p.name || (p.id === 'main' ? t('browser.mainProfile') : p.id)
 
@@ -40,10 +40,10 @@ export function navOf(session?: string, path?: string): string {
   return session ? `session:${session}` : 'me'
 }
 
-/** A navigator's name: the person's own name for it ("Your browser", "Browser 2"), an agent's, a session's title. */
+/** A navigator's name: "Your browser", an agent's, a session's title. */
 export function navName(n: Pick<BrowserNavigator, 'id' | 'kind' | 'name'> | undefined, t: T): string {
   if (!n) return ''
   if (n.name) return n.name
-  if (n.kind === 'person') return n.id === 'me' ? t('browser.nav.me') : t('browser.nav.numbered', { n: n.id.slice(3) })
+  if (n.kind === 'person') return t('browser.nav.me')
   return n.kind === 'session' ? t('browser.nav.session') : n.id
 }

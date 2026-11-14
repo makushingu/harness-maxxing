@@ -3,9 +3,11 @@
 A profile is sign-ins (cookies, saved logins), an exit and a site list: one Chromium. A navigator is a window of tabs
 in a profile's Chromium. Several navigators may use the same profile (the same sign-ins); each one sees only its tabs:
 
-    me, me-2 ...          the person's navigators (Browser page; <state>/browser/navigators.json: name, profile)
-    agent:<path>          an agent's (all its runs), in the profile its browser settings give
-    session:<sid>         a session's (the turns of that session), in the profile of its folder
+    me                    the person's one navigator (Browser page; <state>/browser/navigators.json: its profile)
+    agent:<path>          an agent's (all its runs): lasting, in its project's profile or the one it chose
+    session:<sid>         a session's (the turns of that session), in its project's profile: temporary, its tabs
+                          are closed once the session has had no turn for a while (pool.tidy); a line stays in the
+                          profile's journal
 
 A tab knows its navigator (tabs.py `nav`). The person may open tabs in an agent's or a session's navigator too (to
 sign in for Claude, for example): Claude sees them, they are marked as the person's.
@@ -15,16 +17,14 @@ from __future__ import annotations
 import json
 import re
 import threading
-import time
 
 from .. import browser, config
 
 ME = "me"
-MAX_PERSON = 8
 SEG = r"(?!\.\.?/)[^\s:/]{1,80}"            # a folder name (never "." or "..")
 NAV_RE = re.compile(rf"^(me(-[0-9]{{1,3}})?|agent:projects/{SEG}/topics/{SEG}/agents/(?!\.\.?\Z)[^\s:/]{{1,80}}"
                     r"|session:[A-Za-z0-9_-]{6,80})\Z")
-PERSON_RE = re.compile(r"^me(-[0-9]{1,3})?\Z")
+PERSON_RE = re.compile(r"^me\Z")
 _lock = threading.Lock()                # navigators.json: read, change, write (routes run in threads)
 
 
@@ -58,25 +58,15 @@ def _file():
 
 
 def person() -> list[dict]:
-    """[{id, name, profile, at}], "me" first (always there, on `main` unless changed)."""
+    """[{id: "me", name, profile, at}]: the person's navigator, on `main` unless changed (older `me-N` are ignored)."""
     try:
         d = json.loads(_file().read_text())
         raw = d.get("navigators") if isinstance(d, dict) else None
     except (OSError, ValueError):
         raw = None
-    out: list[dict] = []
-    seen: set[str] = set()
-    for n in raw if isinstance(raw, list) else []:
-        if not isinstance(n, dict) or not PERSON_RE.match(str(n.get("id") or "")) or n["id"] in seen:
-            continue
-        seen.add(n["id"])
-        pid = str(n.get("profile") or browser.MAIN)
-        out.append({"id": n["id"], "name": browser._name(n.get("name")), "at": float(n.get("at") or 0),
-                    "profile": pid if browser.profile(pid) else browser.MAIN})
-    if ME not in seen:
-        out.insert(0, {"id": ME, "name": "", "profile": browser.MAIN, "at": 0.0})
-    out.sort(key=lambda n: (n["id"] != ME, n["at"]))
-    return out[:MAX_PERSON]
+    me = next((n for n in (raw if isinstance(raw, list) else []) if isinstance(n, dict) and n.get("id") == ME), {})
+    pid = str(me.get("profile") or browser.MAIN)
+    return [{"id": ME, "name": "", "at": 0.0, "profile": pid if browser.profile(pid) else browser.MAIN}]
 
 
 def _save(rows: list[dict]) -> None:
@@ -88,24 +78,8 @@ def get_person(nav: str) -> dict | None:
     return next((n for n in person() if n["id"] == nav), None)
 
 
-def create(profile: str = browser.MAIN, name: str = "") -> dict:
-    with _lock:
-        if browser.profile(profile) is None:
-            raise browser.BrowserError(404, "no_profile", "No such browser profile")
-        rows = person()
-        if len(rows) >= MAX_PERSON:
-            raise browser.BrowserError(409, "too_many", f"At most {MAX_PERSON} browsers of your own")
-        taken = {n["id"] for n in rows}
-        i = 2
-        while f"me-{i}" in taken:
-            i += 1
-        row = {"id": f"me-{i}", "name": browser._name(name), "profile": profile, "at": time.time()}
-        _save(rows + [row])
-        return row
-
-
-def update(nav: str, profile: str | None = None, name: str | None = None) -> tuple[dict, str]:
-    """(the navigator, the profile it had)."""
+def update(nav: str, profile: str | None = None) -> tuple[dict, str]:
+    """Put the person's navigator on another profile: (the navigator, the profile it had)."""
     with _lock:
         rows = person()
         row = next((n for n in rows if n["id"] == nav), None)
@@ -116,22 +90,8 @@ def update(nav: str, profile: str | None = None, name: str | None = None) -> tup
             if browser.profile(profile) is None:
                 raise browser.BrowserError(404, "no_profile", "No such browser profile")
             row["profile"] = profile
-        if name is not None:
-            row["name"] = browser._name(name)
         _save(rows)
         return row, old
-
-
-def delete(nav: str) -> dict:
-    with _lock:
-        if nav == ME:
-            raise browser.BrowserError(400, "keep_me", "Your first browser stays (close its tabs instead)")
-        rows = person()
-        row = next((n for n in rows if n["id"] == nav), None)
-        if row is None:
-            raise browser.BrowserError(404, "no_navigator", "No such browser")
-        _save([n for n in rows if n["id"] != nav])
-        return row
 
 
 def on_profile_deleted(pid: str) -> None:
@@ -150,8 +110,7 @@ def profile_of(nav: str) -> str | None:
         n = get_person(nav)
         return n["profile"] if n else None
     if k == "agent":
-        r = browser.resolve(nav.split(":", 1)[1])
-        return None if r.get("gone") else r["profile"]
+        return browser.resolve(nav.split(":", 1)[1])["profile"] or None
     from .turns import read_turn
     t = read_turn(nav.split(":", 1)[1])
     if t and t.get("profile"):

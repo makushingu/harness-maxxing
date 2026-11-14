@@ -530,8 +530,8 @@ def clean(data: Any, strict: bool = False) -> dict:
 
 
 def _clean_browser(raw: Any, strict: bool) -> dict:
-    """The agent's own browser block {enabled?, profile?} (maxxing/browser): off unless turned on, the profile of its
-    topic / project unless it has its own."""
+    """The agent's browser block {enabled?, profile?} (maxxing/browser): off unless turned on, its project's profile
+    unless it chose another."""
     from . import browser
     try:
         return browser.clean(raw, strict)
@@ -609,7 +609,7 @@ MANAGER_NOTE = ("You run as a Harness Maxxing agent, in a conversation with your
                 "`watch`, `on`, `off`; never edit agent.json by hand; run each `maxxing` command alone on its line, "
                 "without pipe, `;` or `&&`). A safety setting (sandbox, domains, "
                 "keys, permission mode, approvals, trusting outside events, writable folders, rules, tool lists, "
-                "mailboxes, the Harness Browser (`set browser.enabled=true`: its own browser; `browser.profile=<id>` shares the sign-ins of another, `browser.profile=own` its own again), budget, runs per hour, timeout) that "
+                "mailboxes, the Harness Browser (`set browser.enabled=true`: on, with its project's profile; `browser.profile=<id>` another profile, `browser.profile=` its project's again), budget, runs per hour, timeout) that "
                 "only makes you safer (your sandbox on, approvals on, fewer keys or sites, the browser off, a lower "
                 "budget) applies at once; one that opens you sends the owner a request "
                 "to allow: say so, it is applied once allowed. {box}Your memory and your runs' results may hold text that came from outside (mails, "
@@ -1219,28 +1219,14 @@ def update(path: str, fields: dict) -> dict:
             f["limits"] = {**cur["limits"], **f["limits"]}
         if "avatar" in f and isinstance(f["avatar"], dict):
             f["avatar"] = {**cur["avatar"], **f["avatar"]}
-        own = False
         if "browser" in f and isinstance(f["browser"], dict):
             f["browser"] = {**cur["browser"], **f["browser"]}
             from . import browser as _browser
-            if f["browser"].get("profile") == _browser.OWN:     # "its own browser": made below, outside the lock
+            if f["browser"].get("profile") == _browser.OWN:     # of before the profiles per project: its project's
                 f["browser"].pop("profile")
-                own = True
         data = clean({**cur, **{k: v for k, v in f.items() if k in known}}, strict=True)
-        # turned on without a browser of its own choosing: its own (never everybody's sign-ins by default)
-        if not own and data["browser"].get("enabled") and not cur["browser"].get("enabled"):
-            from . import browser as _browser
-            pid = data["browser"].get("profile")
-            own = not pid or _browser.profile(pid) is None   # none chosen, or its own was deleted
         boxed = _auto_box(cur, data, f)
         _save(path, data)
-    if own:
-        from . import browser as _browser
-        pid = _browser.own_profile(path)
-        with _lock:
-            d2 = load(path)
-            d2["browser"] = {**d2.get("browser", {}), "profile": pid}
-            _save(path, clean(d2, strict=True))
     if data["sandbox"] and not cur["sandbox"]:
         from . import agent_guard
         agent_guard.ensure_profile()

@@ -306,6 +306,7 @@ class Pool:
             b = self.browsers.get(pid)
             if b:
                 await self._tidy(b)
+        await self._close_sessions()
         for t in self._tabs.values():
             await asyncio.to_thread(t.save)
 
@@ -340,6 +341,25 @@ class Pool:
         b.mem = await asyncio.to_thread(unit.memory_current, b.slug, b.proc)
         await self._level(b)
         await self._sleep_tabs(b, s, now)
+
+    async def _close_sessions(self) -> None:
+        """A session's navigator is temporary: once the session has had no turn on it for `idle_min`, its tabs are
+        closed (the profile's journal keeps a line of what it did)."""
+        idle = browser.settings()["idle_min"] * 60
+        now = time.time()
+        for prof in browser.profiles():
+            pid = prof["id"]
+            tabs = self.tabs(pid)
+            b = self.browsers.get(pid)
+            for nav in list(tabs.navs()):
+                if navs.kind(nav) != "session":
+                    continue
+                if b and (any(t.nav == nav for t in b.turns.values()) or b.control.get(nav)
+                          or (b.watcher and b.watcher.watched(nav))):
+                    continue
+                if now - max((t["used"] for t in tabs.of_nav(nav)), default=0) > idle:
+                    log.info("Harness Browser %s: the tabs of %s closed (session idle)", pid, nav)
+                    await self.drop_nav(pid, nav)
 
     def mem_level(self, b: Browser | None = None) -> str:
         used, total = self.server_mem
@@ -395,7 +415,7 @@ class Pool:
         why = rules.page_refusal(args.get("url"), browser.sites_of(p)) if isinstance(args.get("url"), str) else None
         if why:
             await asyncio.to_thread(replays.log_action, pid,
-                                    {"at": time.time(), "session": sid, "tool": name,
+                                    {"at": time.time(), "session": sid, "nav": navs.of_turn(sid, owner), "tool": name,
                                      "args": replays.summary(name, args), "ok": False, "refused": why[:200]})
             return _error(why)
         down = await self.exit_ready(p, sid, owner)
@@ -450,7 +470,8 @@ class Pool:
             if t.last_target and b.watcher and t.last_target in b.watcher.pages:
                 page = b.watcher.pages[t.last_target].get("url") or ""
             await asyncio.to_thread(replays.log_action, pid,
-                                    {"at": t0, "session": sid, "tool": name, "args": replays.summary(name, args),
+                                    {"at": t0, "session": sid, "nav": t.nav, "tool": name,
+                                     "args": replays.summary(name, args),
                                      "ok": ok, "ms": int((time.time() - t0) * 1000), "page": replays.page(page)})
             self._changed()
 
@@ -798,7 +819,7 @@ class Pool:
         return None
 
     async def drop_nav(self, pid: str, nav: str) -> None:
-        """Close every tab of a navigator (a person's navigator deleted)."""
+        """Close every tab of a navigator (a session's, once idle)."""
         tabs = self.tabs(pid)
         for t in tabs.of_nav(nav):
             await self.close_tab(pid, t["key"])
@@ -859,7 +880,6 @@ class Pool:
         """Every navigator to show: the person's, the agents' with a browser, the sessions' with tabs lately."""
         out: list[dict] = []
         seen: set[str] = set()
-        now = time.time()
 
         def add(nav: str, pid: str | None) -> None:
             if nav in seen:
@@ -889,8 +909,7 @@ class Pool:
             tabs = self.tabs(p["id"])
             for nav in sorted(tabs.navs()):
                 rows = tabs.of_nav(nav)
-                if navs.kind(nav) != "session" or any(t.get("target") for t in rows) or \
-                        now - max((t["used"] for t in rows), default=0) < 86400:
+                if rows:
                     add(nav, p["id"])
         return out
 

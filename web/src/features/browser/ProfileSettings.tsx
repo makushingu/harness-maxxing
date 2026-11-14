@@ -1,39 +1,31 @@
-// A profile of the Harness Browser (Browser page -> a profile -> Profile settings): its name, its exit, its sites, what
-// happens when its exit goes down; who uses it (chosen there or inherited); its memory; forget its sign-ins, delete it.
+// The settings of a profile (bottom of its page, ProfilePage): the sites it may open, what happens when its connection
+// goes down, its memory, forget its sign-ins, delete it (not a project's while its project exists). Its name and its
+// connection are at the top of the page.
 import * as React from 'react'
-import { Link, useNavigate } from 'react-router'
+import { useNavigate } from 'react-router'
 import { Eraser, Moon, Trash2 } from 'lucide-react'
 import { useT } from '@/i18n'
-import { useBrowserProfile, useBrowserStatus, useProfileAction, useSaveBrowserProfile } from '@/lib/queries'
+import { useBrowserProfile, useProfileAction, useSaveBrowserProfile } from '@/lib/queries'
 import type { BrowserProfile } from '@/lib/types'
 import { fmtBytes } from '@/lib/format'
 import { cn } from '@/lib/utils'
-import { Badge, Button, confirm, Input, Label, Select, Skeleton } from '@/components/ui'
+import { Button, confirm, Label, Select, Skeleton } from '@/components/ui'
 import { ListEditor } from '@/features/agents/AgentSettings'
-import { exitLine, exitName, exitTone, ownerParts, profileName } from './profiles'
+import { profileName } from './profiles'
 
 export function ProfileSettings({ pid }: { pid: string }) {
   const t = useT()
   const nav = useNavigate()
   const { data: v } = useBrowserProfile(pid)
-  const { data: st } = useBrowserStatus()
   const save = useSaveBrowserProfile()
   const action = useProfileAction()
-  const [name, setName] = React.useState('')
   const [err, setErr] = React.useState<string | null>(null)
-  React.useEffect(() => setName(v?.profile.name || ''), [v?.profile.name])
   if (!v) return <Skeleton className="h-64" />
   const p = v.profile
   const set = (patch: Partial<BrowserProfile>, done?: () => void) =>
     save.mutate({ id: p.id, ...patch }, { onSuccess: () => (setErr(null), done?.()), onError: (e) => setErr(e instanceof Error ? e.message : String(e)) })
-  const exits = st?.exits || []
-  const exitOptions = [
-    { value: 'direct', label: <ExitOption tone="bg-success" name={t('browser.exit.direct')} line={t('browser.exit.directLine')} /> },
-    ...exits.map((e) => ({ value: e.id, label: <ExitOption tone={exitTone(e)} name={e.name} line={exitLine(e, t)} /> })),
-    { value: '__new', label: <span className="text-primary">{t('browser.exit.add')}</span> },
-  ]
   const b = v.browser
-  const mine = st?.navigators.find((n) => n.kind === 'person' && n.profile === p.id)
+  const deletable = p.id !== 'main' && (!p.project || v.gone)
   const forget = async () => {
     if (!(await confirm({ title: t('browser.forgetTitle'), description: t('browser.forgetConfirm'), destructive: true }))) return
     action.mutate({ profile: p.id, action: 'forget' })
@@ -45,22 +37,6 @@ export function ProfileSettings({ pid }: { pid: string }) {
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]" data-testid="browser-profile-settings">
       <div className="grid content-start gap-5">
-        <div className="grid gap-1.5">
-          <Label htmlFor="pr-name">{t('browser.profile.name')}</Label>
-          <Input
-            id="pr-name"
-            value={name}
-            placeholder={p.id === 'main' ? t('browser.mainProfile') : ''}
-            onChange={(e) => setName(e.target.value)}
-            onBlur={() => name !== p.name && (name.trim() || p.id === 'main') && set({ name: name.trim() })}
-            maxLength={40}
-          />
-        </div>
-        <div className="grid gap-1.5">
-          <Label htmlFor="pr-exit">{t('browser.profile.exit')}</Label>
-          <Select id="pr-exit" value={p.exit} onValueChange={(x) => (x === '__new' ? nav('/browser?exit=new') : set({ exit: x }))} options={exitOptions} />
-          <p className="text-[12px] text-muted-foreground">{t('browser.profile.exitHint')}</p>
-        </div>
         <div className="grid gap-2">
           <Label>{t('browser.sites')}</Label>
           <Choice on={p.web === 'list'} onPick={() => set({ web: 'list' })} title={t('browser.web.list')} testid="browser-web-list">
@@ -97,26 +73,6 @@ export function ProfileSettings({ pid }: { pid: string }) {
 
       <div className="grid content-start gap-5">
         <section className="grid gap-2">
-          <h3 className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">{t('browser.profile.usedBy')}</h3>
-          <div className="divide-y rounded-lg border bg-card/60" data-testid="browser-used-by">
-            {v.used_by.length ? (
-              v.used_by.map((u) => {
-                const o = ownerParts(u.path)
-                return (
-                  <div key={u.path} className="flex items-center gap-2 px-3 py-2 text-[13px]">
-                    <Badge variant="muted">{t(`browser.kind.${u.kind}`)}</Badge>
-                    <span className="min-w-0 flex-1 truncate">{o.name}</span>
-                    <span className="text-[11px] text-muted-foreground">{t('browser.profile.chosenHere')}</span>
-                  </div>
-                )
-              })
-            ) : (
-              <p className="px-3 py-2 text-[13px] text-muted-foreground">{p.id === 'main' ? t('browser.profile.mainUsers') : t('browser.profile.noUsers')}</p>
-            )}
-          </div>
-          {v.used_by.length > 0 && <p className="text-[12px] text-muted-foreground">{t('browser.profile.inheritHint')}</p>}
-        </section>
-        <section className="grid gap-2">
           <h3 className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">{t('browser.profile.memory')}</h3>
           <div className="flex items-center gap-3 text-[13px]">
             <span className="min-w-0 flex-1">
@@ -137,31 +93,17 @@ export function ProfileSettings({ pid }: { pid: string }) {
             <Button size="sm" variant="outline" onClick={forget} data-testid="browser-forget">
               <Eraser /> {t('browser.forget')}
             </Button>
-            {p.id !== 'main' && (
+            {deletable && (
               <Button size="sm" variant="outline" className="text-destructive" onClick={remove} data-testid="browser-profile-delete">
                 <Trash2 /> {t('browser.profile.delete')}
               </Button>
             )}
           </div>
           <p className="text-[12px] text-muted-foreground">{t('browser.forgetDesc')}</p>
+          {p.project && !v.gone && <p className="text-[12px] text-muted-foreground">{t('browser.profile.projectKeep')}</p>}
         </section>
-        {mine && (
-          <Link to={`/browser?nav=${encodeURIComponent(mine.id)}`} className="text-[12px] text-primary underline-offset-2 hover:underline">
-            {t('browser.profile.backToLive', { exit: exitName(p.exit, exits, t) })}
-          </Link>
-        )}
       </div>
     </div>
-  )
-}
-
-function ExitOption({ tone, name, line }: { tone: string; name: string; line: string }) {
-  return (
-    <span className="inline-flex min-w-0 items-center gap-2">
-      <span className={cn('size-1.5 shrink-0 rounded-full', tone)} />
-      <span className="truncate">{name}</span>
-      {line && <span className="truncate text-muted-foreground">· {line}</span>}
-    </span>
   )
 }
 

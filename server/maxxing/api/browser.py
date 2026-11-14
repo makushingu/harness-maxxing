@@ -3,16 +3,15 @@ answers, turns waiting for an exit, the live view, and the two loopback routes o
 
 Signed in:
   GET  /api/browser                           feature, settings, what this server lacks, profiles (state, tabs,
-                                              memory), navigators (the person's, agents', sessions'), exits
-                                              (state, last test), asks, waiting turns
-  POST /api/browser/navigators                {profile?, name?} a new navigator of the person (me-2...)
-  PUT  /api/browser/navigators/{nav}          {profile?, name?} (a new profile: its tabs move there, asleep)
-  DELETE /api/browser/navigators/{nav}        its tabs closed (not "me")
+                                              memory; one per project with agents is made here), navigators (the
+                                              person's, agents', sessions'), exits (state, last test), asks, waiting turns
+  PUT  /api/browser/navigators/me             {profile} the person's browser on another profile (its tabs move there)
   PUT  /api/browser/settings                  global settings (asks, downloads, sleep, profiles at once...)
   POST /api/browser/setup                     {exits?} install what is missing (root; in the background, see GET)
   POST /api/browser/profiles                  {name, exit?, web?, sites?, on_exit_down?} a new profile
-  GET  /api/browser/profiles/{pid}            the profile, its browser (tabs...), who uses it, its journal
-  PUT  /api/browser/profiles/{pid}            change it          DELETE: delete it (its sign-ins too)
+  GET  /api/browser/profiles/{pid}            the profile, its browser (tabs...), its agents (lasting navigators),
+                                              its sessions' journal (temporary navigators), its actions
+  PUT  /api/browser/profiles/{pid}            change it          DELETE: delete it (its sign-ins too; not a project's)
   POST /api/browser/profiles/{pid}/open       {nav?} start it for the person, with a tab in that navigator
   POST /api/browser/profiles/{pid}/stop | sleep | forget     forget = sign-ins, tabs and journal erased
   POST /api/browser/profiles/{pid}/tabs       {url?, nav?} a new tab of the person in a navigator (default "me")
@@ -25,7 +24,7 @@ Signed in:
   GET  /api/browser/exits/{eid}/tailscale     its Tailscale: signed in?, sign-in address, devices offered as exit
   POST /api/browser/exits/{eid}/tailscale     {node} use that device | {action: login|logout}
   GET  /api/browser/owner?path=               a project / topic / agent: its own block, what it gets (inherited)
-  PUT  /api/browser/owner                     {path, enabled?, profile?, inherit?: [enabled|profile]}
+  PUT  /api/browser/owner                     {path, enabled?, profile? (an agent), inherit?: [enabled|profile]}
   POST /api/browser/waiting/{sid}             {action: resume|retry|dismiss} a turn stopped by a down exit
   GET  /api/browser/asks?session=&path=       pending `ask_human` requests
   POST /api/browser/asks/{id}                 {action: done|skip, note?}
@@ -124,6 +123,7 @@ def _run_setup(with_exits: bool) -> None:
 # ---- signed in ---------------------------------------------------------------------------------------------------
 def _profiles_view(s: dict) -> list[dict]:
     p = pool_mod.pool()
+    agents_on = [n for n in p.navigators() if n["kind"] == "agent"]
     out = []
     for prof in s["profiles"]:
         b = p.browsers.get(prof["id"])
@@ -131,11 +131,14 @@ def _profiles_view(s: dict) -> list[dict]:
         out.append({**prof, "state": b.state if b else "stopped", "tabs": len(tabs.items),
                     "awake": len(tabs.awake()), "mem": b.mem if b else 0, "turns": len(b.turns) if b else 0,
                     "control": bool(b and b.control), "asks": asks.pending_for_profile(prof["id"]),
-                    "has_data": browser.profile_dir(prof["id"]).is_dir()})
+                    "has_data": browser.profile_dir(prof["id"]).is_dir(), "gone": browser.project_gone(prof),
+                    "agents": len([n for n in agents_on if n["profile"] == prof["id"]])})
     return out
 
 
 def _status() -> dict:
+    if browser.feature_on():
+        browser.ensure_projects_with_agents()
     s = browser.settings()
     rt = exits.runtime()
     return {"feature": browser.feature_on(),
@@ -189,9 +192,25 @@ class ProfileIn(BaseModel):
 
 def _profile_view(pid: str) -> dict:
     p = _profile(pid)
-    return {"profile": p, "browser": pool_mod.pool().public(pid), "used_by": browser.used_by(pid),
-            "actions": replays.actions(pid, 30), "asks": [a for a in asks.pending() if (a.get("profile") or
-                                                                                       browser.MAIN) == pid]}
+    pool = pool_mod.pool()
+    navigators = pool.navigators()
+    live = {n["id"]: n for n in navigators if n["profile"] == pid}
+    temporary = []
+    for r in replays.sessions(pid):
+        nav = f"session:{r['session']}"
+        lab = navs.label(nav)
+        temporary.append({**r, "title": lab.get("name") or "", "path": lab.get("path") or "",
+                          "open": nav in live, "turns": live[nav]["turns"] if nav in live else 0})
+    for nav, n in live.items():                       # open, nothing journaled yet (the person's tabs only)
+        if n["kind"] == "session" and not any(f"session:{t['session']}" == nav for t in temporary):
+            temporary.insert(0, {"session": n.get("session") or nav[8:], "first": n["used"], "last": n["used"],
+                                 "actions": 0, "sites": [], "title": n.get("name") or "", "path": n.get("path") or "",
+                                 "open": True, "turns": n["turns"]})
+    return {"profile": p, "browser": pool.public(pid), "gone": browser.project_gone(p),
+            "agents": [n for n in navigators if n["kind"] == "agent" and n["profile"] == pid],
+            "person": [n for n in navigators if n["kind"] == "person" and n["profile"] == pid],
+            "temporary": temporary, "actions": replays.actions(pid, 30),
+            "asks": [a for a in asks.pending() if (a.get("profile") or browser.MAIN) == pid]}
 
 
 @router.post("/profiles", dependencies=AUTH)
@@ -247,42 +266,20 @@ async def open_profile(pid: str, body: Optional[OpenIn] = None) -> dict:
     return p.public(pid, nav)
 
 
-# ---- the person's navigators ----------------------------------------------------------------------------------------
+# ---- the person's navigator ----------------------------------------------------------------------------------------
 class NavIn(BaseModel):
-    profile: Optional[str] = Field(default=None, max_length=40)
-    name: Optional[str] = Field(default=None, max_length=80)
-
-
-@router.post("/navigators", dependencies=AUTH)
-async def new_navigator(body: NavIn) -> dict:
-    try:
-        n = await asyncio.to_thread(navs.create, body.profile or browser.MAIN, body.name or "")
-    except browser.BrowserError as e:
-        raise _err(e) from None
-    bus.invalidate("browser")
-    return n
+    profile: str = Field(max_length=40)
 
 
 @router.put("/navigators/{nav}", dependencies=AUTH)
 async def put_navigator(nav: str, body: NavIn) -> dict:
     try:
-        n, old = await asyncio.to_thread(navs.update, nav, body.profile, body.name)
+        n, old = await asyncio.to_thread(navs.update, nav, body.profile)
     except browser.BrowserError as e:
         raise _err(e) from None
     await pool_mod.pool().move_nav(nav, old, n["profile"])
     bus.invalidate("browser")
     return n
-
-
-@router.delete("/navigators/{nav}", dependencies=AUTH)
-async def delete_navigator(nav: str) -> dict:
-    try:
-        n = await asyncio.to_thread(navs.delete, nav)
-    except browser.BrowserError as e:
-        raise _err(e) from None
-    await pool_mod.pool().drop_nav(n["profile"], nav)
-    bus.invalidate("browser")
-    return {"ok": True}
 
 
 @router.post("/profiles/{pid}/stop", dependencies=AUTH)
@@ -483,26 +480,20 @@ def _owner_view(owner: str) -> dict:
     path = browser.owner_path(owner)
     s = browser.settings()
     r = browser.resolve(path, s)
+    if r["enabled"] and not r["profile"] and r["project"] and browser.feature_on():
+        r = browser.resolve(path, create=True)          # on: its project's profile is made now (shown, opened)
+        s = browser.settings()
     chain = browser.chain(path)
     parent = browser.resolve(path.rsplit("/", 2)[0], s) if owner.startswith(("agent:", "topic:")) else None
-    p = browser.profile(r["profile"], s)
+    p = browser.profile(r["profile"], s) if r["profile"] else None
+    mine = browser.project_profile(r["project"], s) if r["project"] else None
     return {"owner": owner, "path": path, "kind": owner.split(":", 1)[0], "own": browser.own_block(owner),
             "enabled": r["enabled"], "profile": r["profile"], "from": r["from"], "feature": browser.feature_on(),
+            "project": r["project"], "project_profile": mine["id"] if mine else "",
             "inherited": parent, "chain": chain,
             "exit": exits.runtime().public(exits.get(p["exit"])) if p and p["exit"] != browser.DIRECT
             and exits.get(p["exit"]) else None,
-            "outside_on_main": owner.startswith("agent:") and r["profile"] == browser.MAIN and _outside(path),
-            "own_profile": next((x["id"] for x in s["profiles"] if x.get("agent") == path), None),
-            "gone": bool(r.get("gone")),
             "asks": asks.pending(owner=owner)}
-
-
-def _outside(path: str) -> bool:
-    """Does this agent read text from outside (mail, webhook, feed): it should have its own profile."""
-    try:
-        return agents.reads_outside(agents.load(path))
-    except Exception:  # noqa: BLE001
-        return False
 
 
 @router.get("/owner", dependencies=AUTH)
@@ -521,9 +512,10 @@ class OwnerIn(BaseModel):
 async def put_owner(body: OwnerIn) -> dict:
     owner = _owner(body.path)
     path = browser.owner_path(owner)
-    if body.profile == browser.OWN and not owner.startswith("agent:"):
-        raise HTTPException(400, detail={"error": "bad_browser", "message": "Only an agent has a browser of its own"})
-    if body.profile and body.profile != browser.OWN and browser.profile(body.profile) is None:
+    if (body.profile or "profile" in body.inherit) and not owner.startswith("agent:"):
+        raise HTTPException(400, detail={"error": "bad_browser",
+                                         "message": "A project's sessions use its profile: only an agent chooses"})
+    if body.profile and browser.profile(body.profile) is None:
         raise HTTPException(404, detail={"error": "no_profile", "message": "No such browser profile"})
 
     def save() -> None:
@@ -532,8 +524,6 @@ async def put_owner(body: OwnerIn) -> dict:
             block["enabled"] = body.enabled
         if body.profile:
             block["profile"] = body.profile
-        elif body.enabled and owner.startswith("agent:") and browser.resolve(path).get("gone"):
-            block["profile"] = browser.OWN               # turned on again after its browser was deleted: a new one
         for k in body.inherit:
             block.pop(k, None)
         block = browser.clean(block, strict=True)

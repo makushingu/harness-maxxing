@@ -1,11 +1,12 @@
 // A project, a topic or an agent and the Harness Browser: may its turns use it (a project or a topic can inherit the
-// switch, an agent always chooses), which profile (its own choice or inherited), where that profile's pages go out,
-// "Open the browser" (BrowserWindow on that profile). Profiles and exits themselves are set up on the Browser page.
+// switch, an agent always chooses), which profile (sessions: their project's; an agent: its project's unless it picks
+// another), where that profile's pages go out, "Open the browser" (BrowserWindow on that profile). Profiles and
+// connections themselves are set up on the Browser page.
 import * as React from 'react'
 import { Link } from 'react-router'
-import { TriangleAlert } from 'lucide-react'
 import { useT } from '@/i18n'
 import { useBrowserOwner, useBrowserStatus, useSaveBrowserOwner } from '@/lib/queries'
+import type { BrowserOwner } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { Button, Select, Skeleton, Switch } from '@/components/ui'
 import { Callout, SettingRow } from '@/features/common'
@@ -13,7 +14,6 @@ import { BrowserWindow } from './BrowserWindow'
 import { exitLine, exitName, exitTone, ownerParts, profileName } from './profiles'
 
 const INHERIT = '__inherit'
-const OWN = 'own'
 
 export function BrowserPanel({ path, live = true, who }: { path: string; live?: boolean; who?: string }) {
   const t = useT()
@@ -28,8 +28,8 @@ export function BrowserPanel({ path, live = true, who }: { path: string; live?: 
   const inh = o.inherited
   const switchValue = agent || o.own.enabled !== undefined ? (o.own.enabled ? 'on' : 'off') : INHERIT
   const profiles = st?.profiles || []
-  const profileValue = agent && o.own_profile && o.own.profile === o.own_profile ? OWN : o.own.profile ? o.own.profile : INHERIT
-  const inheritedProfile = inh ? profiles.find((p) => p.id === inh.profile) : profiles.find((p) => p.id === 'main')
+  const projectProfile = profiles.find((p) => p.id === o.project_profile)
+  const projectName = projectProfile ? profileName(projectProfile, t) : o.project.slice(9)
   const current = profiles.find((p) => p.id === o.profile)
 
   return (
@@ -63,45 +63,20 @@ export function BrowserPanel({ path, live = true, who }: { path: string; live?: 
             />
           </SettingRow>
         )}
-        <SettingRow
-          label={t(agent ? 'browser.signins.label' : 'browser.profile.label')}
-          description={t(agent ? 'browser.signins.desc' : 'browser.profile.ownerDesc')}
-          htmlFor="br-profile"
-        >
-          <Select
-            id="br-profile"
-            className="w-56"
-            value={profileValue}
-            onValueChange={(v) => save.mutate(v === INHERIT ? { path, inherit: ['profile'] } : { path, profile: v })}
-            options={[
-              ...(agent ? [{ value: OWN, label: t('browser.signins.own') }] : []),
-              { value: INHERIT, label: t(agent ? 'browser.signins.inherit' : 'browser.inheritProfile', { name: profileName(inheritedProfile || { id: inh?.profile || 'main', name: '' }, t) }) },
-              ...profiles
-                .filter((p) => !(agent && p.id === o.own_profile))
-                .map((p) => ({ value: p.id, label: agent ? t('browser.signins.of', { name: profileName(p, t) }) : profileName(p, t) })),
-            ]}
-            data-testid="browser-profile"
-          />
-        </SettingRow>
+        {agent && (
+          <SettingRow label={t('browser.signins.label')} description={t('browser.signins.desc')} htmlFor="br-profile">
+            <AgentProfilePicker o={o} id="br-profile" className="w-56" />
+          </SettingRow>
+        )}
       </div>
-
-      {o.gone && (
-        <Callout tone="warning" icon={TriangleAlert}>
-          {t('browser.signins.gone')}
-        </Callout>
-      )}
-      {o.outside_on_main && (
-        <Callout tone="warning" icon={TriangleAlert}>
-          {t('browser.outsideOnMain')}
-        </Callout>
-      )}
+      {!agent && <p className="text-[12px] text-muted-foreground">{t('browser.panel.projectProfile', { name: projectName })}</p>}
 
       <div className="grid gap-2">
         <p className="flex min-w-0 items-center gap-2 text-[12px] text-muted-foreground">
           <span className={cn('size-1.5 shrink-0 rounded-full', exitTone(o.exit || undefined))} />
           <span className="min-w-0 truncate">
             {t('browser.ownerLine', {
-              profile: profileName(current || { id: o.profile, name: '' }, t),
+              profile: current ? profileName(current, t) : projectName,
               exit: current ? exitName(current.exit, st?.exits, t) : '',
               line: o.exit ? exitLine(o.exit, t) : t('browser.exit.directLine'),
             })}
@@ -112,7 +87,7 @@ export function BrowserPanel({ path, live = true, who }: { path: string; live?: 
             <Button size="sm" variant="outline" onClick={() => setWin(true)} data-testid="browser-open-window">
               {t('browser.open')}
             </Button>
-            <Link to={`/browser?profile=${encodeURIComponent(o.profile)}`} className="text-[12px] text-muted-foreground underline-offset-2 hover:underline">
+            <Link to={`/browser?profile=${encodeURIComponent(o.profile || o.project_profile)}`} className="text-[12px] text-muted-foreground underline-offset-2 hover:underline">
               {t('browser.profile.settingsLink')}
             </Link>
           </div>
@@ -120,5 +95,30 @@ export function BrowserPanel({ path, live = true, who }: { path: string; live?: 
       </div>
       {o.enabled && live && <BrowserWindow context={path} profile={o.profile} who={who} open={win} onOpenChange={setWin} start />}
     </div>
+  )
+}
+
+/** An agent's profile: its project's (the default: shared with the project's sessions and agents) or another one. */
+export function AgentProfilePicker({ o, id, className }: { o: BrowserOwner; id?: string; className?: string }) {
+  const t = useT()
+  const { data: st } = useBrowserStatus(o.feature)
+  const save = useSaveBrowserOwner()
+  const profiles = st?.profiles || []
+  const projectProfile = profiles.find((p) => p.id === o.project_profile)
+  const projectName = projectProfile ? profileName(projectProfile, t) : o.project.slice(9)
+  const value = o.own.profile && o.own.profile !== o.project_profile && profiles.some((p) => p.id === o.own.profile) ? o.own.profile : INHERIT
+  return (
+    <Select
+      id={id}
+      className={className}
+      aria-label={t('browser.agent.profile')}
+      value={value}
+      onValueChange={(v) => save.mutate(v === INHERIT ? { path: o.path, inherit: ['profile'] } : { path: o.path, profile: v })}
+      options={[
+        { value: INHERIT, label: t('browser.signins.inherit', { name: projectName }) },
+        ...profiles.filter((p) => p.id !== o.project_profile).map((p) => ({ value: p.id, label: profileName(p, t) })),
+      ]}
+      data-testid="browser-profile"
+    />
   )
 }

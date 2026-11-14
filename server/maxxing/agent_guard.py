@@ -682,7 +682,7 @@ def check_cli(argv: list[str]) -> str | None:
                 "from the agent page or a session.")
     if turn["path"] and words[0] == "browser" and len(words) > 1 and words[1] in BROWSER_OWNER_ONLY:
         return (f"`maxxing browser {words[1]}` is not allowed in an agent turn: its browser settings belong to the "
-                "owner. Say what should change in your answer (the owner's conversation asks for its own browser "
+                "owner. Say what should change in your answer (the owner's conversation asks for its browser "
                 "with `maxxing agents set <itself> browser.enabled=true`: a request the owner allows).")
     path = sandboxed_turn()
     if not path:

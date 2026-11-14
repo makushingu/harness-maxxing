@@ -23,75 +23,77 @@ It is off everywhere until you turn it on:
      topic of the project that does not choose for itself);
    - a topic: its **...** menu -> **Browser...** (every session of the topic; **Inherited** = what its project says);
    - an agent: its settings -> **Browser**. An agent is off until you turn it on for it: it never inherits the switch
-     of its topic or project. Turned on, it gets **its own browser** (see below).
+     of its topic or project.
 
 The browser has its own page: **Browser** in the sidebar.
 
-## Browsers and profiles
+## The Browser page
 
-Two words, two things:
+The second bar of the **Browser** page has three parts:
 
-- a **browser** is a window with its tabs. You open as many as you like (**+ New browser** on the Browser page), each
-  agent has its own, and so does each session that uses the browser. A browser only sees its own tabs: a session
-  never sees an agent's tabs, nor yours, and the other way round.
-- a **profile** is what a browser is signed in with: its sign-ins (cookies), its sites and its exit. Several browsers
-  may use the same profile: they are then signed in to the same sites, each with its own tabs.
+- **Browser**: your browser. Open it to browse yourself (to sign in to a site for Claude, say). At the top, pick its
+  **Profile** and that profile's **Connection**.
+- **Profiles**: the sign-ins (cookies), the sites and the connection the browsers use. **+ Add a profile** makes one
+  more.
+- **Connections**: where the pages go out (the server's IP, your phone, your home box, a proxy). **+ Add a connection**
+  adds one.
 
-You may open a tab in a session's or an agent's browser yourself (to sign in for it, say): it sees that tab, marked
-as yours.
+## Profiles: one per project
 
-## Profiles
+A **profile** is a set of sign-ins of its own (cookies), its own list of sites and its own connection. **Personal** is
+yours. **Each project has its own profile**, named after it: it is made by itself the first time a session or an agent
+of the project uses the browser (and, for every project that has agents, when you open the Browser page). It starts
+with the sites and the connection of Personal.
 
-A **profile** is a set of sign-ins of its own: its own sign-ins (cookies), its own list of sites, its own exit (where its pages
-go out, see below). **Main** always exists and is used by the sessions of every project and topic that do not choose
-another one. Make another profile for what you want kept apart: a client, a second shop account. Each agent turned on
-gets one of its own (see [Agents](#agents)).
+Everything of a project shares its profile: its sessions, its agents and your browser when you put it on that profile
+are signed in to the same sites. Sign in once, and every agent of the project can work there.
 
-On the Browser page, **Profiles (sign-ins)** lists Main, the profiles you made and the agents' own.
+Click a profile to open its page:
 
-- **New profile**: the **+** of the Browser page -> **New profile**, give it a name (`Shop`, `Client Acme`).
-- **Profile settings** (a profile of the list, or **Sign-ins: ...** above the live view): its name, its **Exit**, **Sites it may open**, **When the exit is
-  down**, who uses it, its memory.
-- **Sites it may open**:
-  - **Only these sites** (the default): type the sites it needs (`shop.example.com`, `example.com`: subdomains are
-    included). Any other page is refused and Claude is told why (and which site to ask you to add). Images and
-    scripts those pages load from elsewhere still come.
-  - **Any public site**: any site on the internet.
+- at the top, its **name** (click it to rename it) and its **Connection**; the eye shows the address the sites see
+  through it. The connection belongs to the profile: changing it changes it for its agents and sessions too;
+- **Persistent**: one browser per agent on this profile, always there, with a live picture while it runs. A click opens
+  it to watch or take over;
+- **Temporary**: the browsers the sessions opened. They are closed once the session no longer uses them (30 minutes
+  without a browser action, the same as **A profile sleeps after**); a line stays: the session, its topic, the sites it
+  went to, when, for how long. Text only, no picture;
+- **Profile settings**:
+  - **Sites it may open**:
+    - **Only these sites** (the default): type the sites it needs (`shop.example.com`, `example.com`: subdomains are
+      included). Any other page is refused and Claude is told why (and which site to ask you to add). Images and
+      scripts those pages load from elsewhere still come.
+    - **Any public site**: any site on the internet.
 
-  In both cases the addresses of your server and of local networks (`localhost`, `127.0.0.1`, `192.168.x.x`, your
-  router, `*.local`...) are always refused, as are `file:` pages and the browser's own settings pages.
-- **Sign-ins** stay in the profile on the server. **Forget sign-ins** erases its cookies, its tabs and the journal of
-  its actions (the values typed are never kept, only their length): you will have to sign in again.
-- **Delete the profile** erases its sign-ins and tabs too. A project or a topic that chose it goes back to what it
-  inherits (in the end, **Main**). An agent that used it has **no browser** any more (never your sign-ins by itself):
-  turn its browser on again to give it a new one. **Main** cannot be deleted.
+    In both cases the addresses of your server and of local networks (`localhost`, `127.0.0.1`, `192.168.x.x`, your
+    router, `*.local`...) are always refused, as are `file:` pages and the browser's own settings pages.
+  - **When the connection is down** (see below), its memory;
+  - **Forget sign-ins** erases its cookies, its tabs and the journal of its actions (the values typed are never kept,
+    only their length): you will have to sign in again;
+  - **Delete the profile** (a profile you added) erases its sign-ins and tabs too; the agents that used it go back to
+    their project's. A project's profile stays as long as its project (forget its sign-ins to start again);
+    **Personal** cannot be deleted.
 
-## Who uses which profile
+Each browser only sees its own tabs: a session never sees an agent's tabs, nor yours, and the other way round. You
+may open a tab in a session's or an agent's browser yourself (to sign in for it, say): it sees that tab, marked as
+yours.
 
-The **Browser...** window of a project or a topic has a **Profile** choice. **Inherited** takes the one of the parent:
-a topic its project's, a project **Main**. So choosing a profile for a project is enough for all its topics and their
-sessions.
-
-The same window shows the profile's exit and its state, and **Open the browser**: one of your browsers on that profile
-(a new one if none uses it yet).
-
-## Exits: where the pages go out
+## Connections: where the pages go out
 
 Sites see the address the pages come from. Your server's is a data-center one: some sites (shops, social networks,
-banks, anything behind a strict anti-bot) ask more checks or refuse it. An **exit** makes a profile's pages, and only
-them, go out somewhere else, by a normal everyday address. Chromium, the pages and Claude stay on your server.
+banks, anything behind a strict anti-bot) ask more checks or refuse it. A **connection** makes a profile's pages, and
+only them, go out somewhere else, by a normal everyday address. Chromium, the pages and Claude stay on your server.
 
-On the Browser page, **Exits** in the second bar lists them, with **Server** (the server's own address, always there)
-last. **+ Add an exit** offers four ways:
+On the Browser page, **Connections** in the second bar lists them: **Server's IP** (always there) first. **+ Add a
+connection** offers four ways:
 
-| Exit | What the sites see | What you need |
+| Connection | What the sites see | What you need |
 |---|---|---|
 | **My phone (Tailscale)** (recommended) | your phone's 4G, or your home connection | an iPhone, an Android phone or a computer that stays on, a free Tailscale account |
 | **Rented proxy** | an address in the country you choose | a residential or ISP proxy from a provider: its address (`socks5://` or `http://`), a user, a password |
 | **WireGuard** | your home connection, or the VPN's | a WireGuard configuration file from your router (Fritz!Box, OpenWrt...) or a VPN |
 | **My computer** | the computer you work on | soon |
 
-Then pick the exit in a profile's settings (**Exit**). One exit can serve several profiles.
+Then pick it at the top of a profile's page (**Connection**). One connection can serve several profiles.
 
 **My phone (Tailscale)**: a wizard that ticks each step itself when it sees it done.
 
@@ -112,7 +114,7 @@ Then pick the exit in a profile's settings (**Exit**). One exit can serve severa
 WireGuard file go to **Settings -> Keys** (`BROWSER_EXIT_<ID>`), never into the settings. WireGuard needs a small tool
 (wireproxy), installed by **Set up** on the exit's page.
 
-**Test** shows what the sites see through an exit (the **Server** entry has it too): the address, its country and
+**Test** shows what the sites see through a connection (the **Server's IP** entry has it too): the address, its country and
 operator, its kind - **Home / ISP**, **Mobile** or **Data center** - the delay and the speed. The kind comes from
 ip-api.com (it sees the address of the exit, nothing else), the speed from a small download. A rented proxy that turns
 out to be a data center is said plainly: it will not help with the sites that block servers.
@@ -120,20 +122,20 @@ out to be a data center is said plainly: it will not help with the sites that bl
 Safety:
 
 - Only the browser goes out there: your sessions, agents and the rest of the server keep the server's address.
-- Every site name is looked up on your server and checked public before the page goes through the exit: an exit never
+- Every site name is looked up on your server and checked public before the page goes through the connection: it never
   reaches the network of your home (your router, your NAS, your printer) and never answers for a name itself.
 
-## When an exit is down
+## When a connection is down
 
-A phone switched off, a proxy that stopped: the profile **waits** for its exit, it never goes out by the server's
+A phone switched off, a proxy that stopped: the profile **waits** for its connection, it never goes out by the server's
 address on its own (the sites would see your account move to a data center and could lock it).
 
-- Claude's browser action waits for the exit (3 minutes by default, **Settings -> Features -> Harness Browser -> Wait
-  for a down exit**), then stops using the browser, finishes what it can without it and tells you.
+- Claude's browser action waits for the connection (3 minutes by default, **Settings -> Features -> Harness Browser ->
+  Wait for a connection that is down**), then stops using the browser, finishes what it can without it and tells you.
 - You get a notification **Browser exit offline** with **Retry now** and **Go on when it is back**.
-- The session shows a card **The exit ... is down** with **Go on when it is back**, **Retry now** and **Open the
-  exit**. With **Go on when it is back**, Claude goes on by itself as soon as the exit works again.
-- On the Browser page the profile says **paused** and the exit **offline**.
+- The session shows a card **The connection ... is down** with **Go on when it is back**, **Retry now** and **Open the
+  connection**. With **Go on when it is back**, Claude goes on by itself as soon as the connection works again.
+- On the Browser page the profile says **paused** and the connection **offline**.
 
 A profile can choose the other way: **When the exit is down -> Go out by the server's address**. Its sites may then
 see a data-center address and ask more checks.
@@ -154,19 +156,10 @@ the engine's site in it to search. A new tab has the same search box in its midd
 - The browser speaks the language of Harness and keeps its time zone (Settings -> General): sites answer in your
   language and see your time.
 
-The **Browser** page has two parts:
-
-- the second bar: **Your browsers** (+ **New browser**), **Agents**, **Sessions** (those that used it in the last day),
-  each with its profile and its page, then **Profiles (sign-ins)**, then **Exits**, and **+** to add a browser, a
-  profile or an exit;
-- the browser picked, live: its name, **Sign-ins:** its profile, **via** its exit (your browsers: **...** -> **Rename**,
-  **Close this browser**); then the browser itself: tabs, `+` for a new tab, the address bar, the page (full screen on
-  a phone). A new tab shows your sites to open in one click.
-
-The **⋮** at the end of the address bar holds what you change while browsing: whose **sign-ins** it uses (your
-browsers and an agent's; a session's follows its folder), the profile's **exit** and its state, the **sites** it may
-open, the **search engine**, the **picture** (**Auto** follows your network, **Smooth** = lighter pictures, more of
-them, for a far or slow connection, **Sharp**), **Forget sign-ins**, and **Profiles and exits...** for the rest.
+The **⋮** at the end of the address bar holds what you change while browsing: its **profile** (your browser and an
+agent's; a session's is its project's), the profile's **connection** and its state, the **sites** it may open, the
+**search engine**, the **picture** (**Auto** follows your network, **Smooth** = lighter pictures, more of them, for a
+far or slow connection, **Sharp**), **Forget sign-ins**, and **Profiles and connections...** for the rest.
 
 In a session, a line above the message box says when Claude is using the browser, or how many tabs of this session
 are open. **Watch** opens the browser window of that session (of the agent, in an agent's conversation); the **x**
@@ -210,26 +203,24 @@ action. **Skip** tells it to do without that step. With no answer in time, it gi
   memory, the line turns amber with **Sleep** (every tab not shown goes to sleep); when memory is critical, the
   oldest tabs sleep by themselves.
 - These are in **Settings -> Features -> Harness Browser**: **A tab sleeps after**, **A profile sleeps after**, **Tabs
-  awake at most**, **Profiles running at once**, **Wait for a down exit**, **Search engine**, plus **Ask me when it
+  awake at most**, **Profiles running at once**, **Wait for a connection that is down**, **Search engine**, plus **Ask me when it
   is stuck**, **Wait for me** and **Allow downloads** (off by default; files go to `downloads/browser` in the workspace).
 
 ## Agents
 
-- **Its own browser**: an agent turned on gets a browser of its own, with its name: its own sign-ins, apart from
-  yours. It starts with the sites and the exit of the browser it would have used (its topic's, else Main), then you
-  change them in its profile settings. Sign it in to the sites it needs once (open its browser, sign in, done).
-- **Sign-ins** (its settings -> Browser): **Its own browser** (the default), **Its topic's**, or **Share** another
-  browser (Main, a client's, another agent's): it then works with the sites you are signed in to there. An agent that
-  reads text from outside (e-mail, a webhook, the feed) should keep its own: a message written by a stranger could try
-  to steer it, and its settings warn you when it uses Main. Such an agent also asks you before every browser action
-  (unless you trust its outside texts), like for its other tools.
-- **In its info panel** (the **Info** button of the agent page): a small live picture of its tab while its browser
-  runs, **Claude is acting** when it is, **Waits for you** when it asks you something. A click opens its browser to
-  watch or take over.
+- **Its profile**: an agent uses its project's profile, like the project's sessions and other agents: sign in once
+  for all of them. Its browser itself is its own (its tabs), and lasting: it is one of the **Persistent** browsers of
+  that profile. To keep an agent apart (one that reads e-mail or a webhook, a client's account), **+ Add a profile**
+  and pick it in the agent's settings -> **Browser -> Profile**, or under its browser picture in its info panel.
+- An agent that reads text from outside (e-mail, a webhook, the feed) asks you before every browser action (unless
+  you trust its outside texts), like for its other tools.
+- **In its info panel** (the **Info** button of the agent page), at the top: a small live picture of its tab while its
+  browser runs, **Claude is acting** when it is, **Waits for you** when it asks you something, and its **profile**
+  under it. A click opens its browser to watch or take over.
 - An agent never changes the browser settings (`maxxing browser` commands that change them are refused in its runs).
-- In your conversation with an agent, it can ask for its browser itself: turning it **on**, choosing whose sign-ins
-  it uses, is a request you allow (a card in the conversation), turning it **off** is done at once. Once on, the
-  conversation and the runs of the agent both have it.
+- In your conversation with an agent, it can ask for its browser itself: turning it **on**, choosing its profile, is
+  a request you allow (a card in the conversation), turning it **off** is done at once. Once on, the conversation and
+  the runs of the agent both have it.
 
 ## From a terminal
 
@@ -239,27 +230,27 @@ maxxing browser status                         feature, what is missing, setting
 maxxing browser profile add Shop --sites shop.example.com
 maxxing browser profile set shop --exit phone --public
 maxxing browser set acme on                    a project (acme/blog = a topic, acme/blog/writer = an agent)
-maxxing browser set acme/blog/writer on        an agent: its own browser
-maxxing browser set acme/blog/writer on --profile shop    it shares the sign-ins of shop (own = its own again)
-maxxing browser set acme/blog inherit --profile inherit   a topic: its project's switch and profile
+maxxing browser set acme/blog/writer on        an agent: on, with its project's profile
+maxxing browser set acme/blog/writer on --profile shop    it uses the profile shop (inherit = its project's again)
+maxxing browser set acme/blog inherit          a topic: its project's switch
 maxxing browser show acme/blog                 what it gets, and where it is inherited from
 maxxing browser exit test phone                what the sites see through that exit (direct = the server)
 maxxing browser forget shop                    erase a profile's sign-ins, tabs and journal
 ```
 
-Exits are added on the Browser page (their passwords go to the vault). Every command: [CLI reference](17-cli-reference.md#harness-browser).
+Connections are added on the Browser page (their passwords go to the vault). Every command: [CLI reference](17-cli-reference.md#harness-browser).
 
 ## Troubleshooting
 
 - **"The browser is not set up on this server"**: run **Set up** (Settings -> Features) or `maxxing browser setup`
   as root. On Ubuntu 24.04 it also installs an AppArmor profile Chromium needs.
-- **A page is refused**: add its site to the profile's list (**Profile settings**), or switch it to **Any public
-  site**. Addresses of your own server and of local networks are refused on purpose.
-- **A site still blocks the browser**: **Test** its profile's exit. **Data center** = the sites see a server: use a
+- **A page is refused**: add its site to the profile's list (its page -> **Profile settings**), or switch it to
+  **Any public site**. Addresses of your own server and of local networks are refused on purpose.
+- **A site still blocks the browser**: **Test** its profile's connection. **Data center** = the sites see a server: use a
   phone, a home connection or an ISP proxy.
 - **"... browser profiles are in use right now"**: every running profile is busy; wait, or raise **Profiles running
   at once**.
-- **The exit stays offline**: open it on the Browser page. Tailscale: the phone must be on, signed in to the same
+- **The connection stays offline**: open it on the Browser page. Tailscale: the phone must be on, signed in to the same
   account, with **Run as exit node** on. Proxy: check its address, user and password, then **Test**.
 - **The server is slow**: put tabs to sleep (status bar of the browser, or the sidebar line), lower **Tabs awake at
   most** or **Profiles running at once**.

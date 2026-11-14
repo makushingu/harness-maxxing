@@ -557,15 +557,19 @@ Approval { id: string (16 hex), session: string, agent_path: string, tool: strin
 
 `maxxing/browser/` + `maxxing/api/browser.py` (INTERNALS "maxxing.browser"). Off unless `browser_feature` (Settings).
 Settings in config `browser`: global values, **profiles** (each one its own Chromium: sign-ins, sites, exit; `main`
-always exists, cannot be deleted) and **exits** (where a profile's traffic leaves: `direct` = this server, always
-there, not stored). Who uses which profile: a `browser` block `{enabled?, profile?}` in the `.maxxing.json` of a
-project or a topic and in an agent's agent.json; a missing key is inherited agent -> topic -> project -> default
-(`enabled: false`, `profile: "main"`); an agent's `enabled` is never inherited; a profile that no longer exists =
-`main`, except an agent's own choice: it then has no browser (`enabled: false`, `gone`). An agent turned on without a
-profile (or `profile: "own"`) gets its own browser: a profile with `agent` = its path, made once. **Navigators**
+= the person's "Personal", always there, cannot be deleted) and **exits** (shown as "connections": where a profile's
+traffic leaves; `direct` = this server, always there, not stored). **One profile per project** (`project` =
+`projects/<name>`, one at most per project): made with the exit, sites, web mode and `on_exit_down` of `main`, named
+after the project, the first time a turn of the project gets the browser (`active_for`), when an owner view of an
+enabled folder is asked, and for every project that has an agent when `GET /api/browser` runs; it cannot be deleted
+while its project exists (`409 project`). Who may use it: a `browser` block `{enabled?}` in the `.maxxing.json` of a
+project or a topic (topic -> project -> `false`) and `{enabled?, profile?}` in an agent's agent.json (its `enabled` is
+never inherited). Which profile: a session = its project's; an agent = its `profile` if that profile exists, else its
+project's (`profile: "own"` of before = its project's; a project's / topic's `profile` is ignored). **Navigators**
 (`navs.py`): a window of tabs in a profile's Chromium; several may share a profile (its sign-ins), each sees only its
-tabs: the person's `me`, `me-2`... (stored in `<state>/browser/navigators.json`, on any profile), `agent:<path>` (every
-run of an agent), `session:<sid>` (the turns of a session, in its folder's profile). A turn's tools see only its
+tabs: the person's one `me` (its profile stored in `<state>/browser/navigators.json`), `agent:<path>` (every run of an
+agent: lasting), `session:<sid>` (the turns of a session, in its project's profile: temporary, its tabs are closed
+once no turn, viewer or person used them for `idle_min`; the profile's journal keeps a line). A turn's tools see only its
 navigator's tabs (view.py); the person may open tabs in any navigator (they are marked as theirs). Bus topic `browser` on every start / stop /
 tab change / request / exit state change (`sessions` too when a turn starts or stops waiting for an exit).
 Errors: `{error, message}`.
@@ -577,8 +581,8 @@ BrowserSettings { ask: bool (true), wait_min: int (30, 1..1440), downloads: bool
                   search: "google"|"duckduckgo"|"bing" ("google": the address bar's search) }
 BrowserProfile  { id (^[a-z0-9][a-z0-9-]{0,23}$, not "direct"), name (<= 40), exit: "direct"|exit id,
                   web: "list"|"public", sites: [string] (<= 50, "example.com", subdomains included),
-                  on_exit_down: "wait"|"vps", agent: ""|agent path (its own browser, set by the server) }
-                                                                                     (<= 20 profiles, main first)
+                  on_exit_down: "wait"|"vps", project: ""|"projects/<name>" (set by the server) }
+                                                                                     (<= 40 profiles, main first)
 BrowserExit     { id, name, type: "proxy"|"tailscale"|"wireguard",
                   proxy: url ("socks5://host:port"|"http://host:port"; no scheme = socks5), user
                   tailscale: node (the device used as exit node, its Tailscale IP), login_server ("https://..." Headscale, "" = Tailscale)
@@ -591,14 +595,17 @@ ExitTest        { ok, at, error?, ip, country, country_code, city, operator, asn
                   latency_ms, mbps? }        (ip-api.com through the exit; kind "hosting" also when ip-api says proxy;
                   mbps = 2 MB over TLS from a CDN, absent when that part failed)
 ProfileRow      = BrowserProfile + { state: "starting"|"running"|"stopped", tabs, awake, mem, turns, control: bool,
-                  asks, has_data: bool (its folder exists) }
+                  asks, has_data: bool (its folder exists), gone: bool (a project's whose project was deleted),
+                  agents: int (agents whose browser is on and runs on it) }
+SessionLine     { session, title, path, first, last, actions, sites: [host] (<= 12), open: bool (its tabs are still
+                  open), turns }      (a temporary navigator, from the profile's journal: entries with nav "session:*")
 BrowserTab      { key, url, title, by: {kind: "you"|"session"|"agent", sid?, name?, path?}, asleep: bool,
                   front: bool (shown in the live view of its navigator), used, nav }
-Navigator       { id: "me"|"me-<n>"|"agent:<path>"|"session:<sid>", kind: "person"|"agent"|"session", name (the
-                  person's name for it | the agent's | the session's title), path?, session?, profile: pid|null (an
-                  agent whose profile is gone), running, tabs, awake, page: {url, title}|null, control: bool,
+Navigator       { id: "me"|"agent:<path>"|"session:<sid>", kind: "person"|"agent"|"session", name ("" | the
+                  agent's | the session's title), path?, session?, profile: pid|null (an agent whose project's profile
+                  is not made yet), running, tabs, awake, page: {url, title}|null, control: bool,
                   watched: bool (a live view shows it), turns, used }
-                  (the person's, the agents' with a browser on, sessions with a tab awake or used in the last 24 h)
+                  (the person's, the agents' with a browser on, sessions with a tab)
 BrowserState    { profile, nav: navigator|null (null: the whole profile), state, started, last_use, stops_at, tabs: [BrowserTab], front: key|null,
                   page: {url, title}|null, control: bool (the person has the tab shown), control_by,
                   busy: bool (a turn acted on the tab shown in the last 15 s), turns: [{session, path, kind, nav}],
@@ -611,23 +618,22 @@ Waiting         { session, owner, exit, profile, at, resume: bool }      (a turn
 OwnerView       { owner: "project:<path>"|"topic:<path>"|"agent:<path>", path, kind, own: {enabled?, profile?},
                   enabled, profile, from: {enabled, profile} (owner that set it, "" = default), feature,
                   inherited: OwnerResolve of the parent|null (topic, agent), chain: [owner] (nearest first),
-                  exit: ExitView|null (its profile's, not direct), outside_on_main: bool (an agent that reads mail /
-                  webhooks / the feed on main), own_profile: pid|null (an agent's own browser), gone: bool (an
-                  agent whose own browser was deleted: none), asks: [BrowserAsk] }
+                  exit: ExitView|null (its profile's, not direct), project: "projects/<name>", project_profile:
+                  pid|"" (not made yet), asks: [BrowserAsk] }
 BrowserAsk      { id (16 hex), session, owner, profile, reason, what: "captcha"|"sign_in"|"code"|"payment"|"consent"|"other",
                   at, expires, status: "pending"|"done"|"skip"|"timeout"|"expired", note?, decided_at?, decided_by? }
-BrowserAction   { at, session, tool, args (values typed -> "<n chars>", urls without query), ok, ms?, page?, refused? }
+BrowserAction   { at, session, nav, tool, args (values typed -> "<n chars>", urls without query), ok, ms?, page?, refused? }
 ```
 
 | Method | Path | Body | Response |
 |---|---|---|---|
-| GET | `/api/browser` | – | `{feature, navigators: [Navigator], settings: BrowserSettings, available: {ok, missing}, tools: {tailscale, wireguard} (installed), setup: {running, log, error}, profiles: [ProfileRow], exits: [ExitView], direct: {test: ExitTest\|null}, summary: Summary, asks: [BrowserAsk], waiting: [Waiting]}` |
+| GET | `/api/browser` | – | the feature on: every project with an agent gets its profile first; `{feature, navigators: [Navigator], settings: BrowserSettings, available: {ok, missing}, tools: {tailscale, wireguard} (installed), setup: {running, log, error}, profiles: [ProfileRow], exits: [ExitView], direct: {test: ExitTest\|null}, summary: Summary, asks: [BrowserAsk], waiting: [Waiting]}` |
 | PUT | `/api/browser/settings` | `Partial<BrowserSettings>` (other keys ignored) | same as GET (`400 bad_browser`) |
 | POST | `/api/browser/setup` | `{exits?: bool}` | `{running: true}`; installs in the background (root): Chromium & co, `exits` = also Tailscale + wireproxy (pinned versions, checked hashes) into `<state>/tools/`; see `setup` in GET |
 | POST | `/api/browser/profiles` | `{name, exit?, web?, sites?, on_exit_down?}` | `BrowserProfile` (`400 bad_browser` no name / bad value / unknown exit, `409 too_many`) |
-| GET | `/api/browser/profiles/{pid}` | – | `{profile: BrowserProfile, browser: BrowserState, used_by: [{owner, path, kind}] (chosen there, not inherited), actions: [BrowserAction] (30 newest), asks: [BrowserAsk]}` (`404 no_profile`) |
+| GET | `/api/browser/profiles/{pid}` | – | `{profile: BrowserProfile, browser: BrowserState, gone, agents: [Navigator] (lasting, on it), person: [Navigator] (the person's when on it), temporary: [SessionLine] (newest first, open ones without journal first), actions: [BrowserAction] (30 newest), asks: [BrowserAsk]}` (`404 no_profile`) |
 | PUT | `/api/browser/profiles/{pid}` | same as POST, every key optional | `BrowserProfile` (`400`, `404 no_profile`); a change of `web` / `sites` restarts a running profile once nobody uses it |
-| DELETE | `/api/browser/profiles/{pid}` | – | `{ok}`; stops it, erases its folder, tabs and journal (`404`, `409 main`) |
+| DELETE | `/api/browser/profiles/{pid}` | – | `{ok}`; stops it, erases its folder, tabs and journal; its agents go back to their project's (`404`, `409 main`, `409 project` while its project exists) |
 | POST | `/api/browser/profiles/{pid}/open` | `{nav?}` (`me`) | `BrowserState` of that navigator; starts the profile for the person with a tab in it (its last one, else the first site of the list) (`400 bad_navigator`, `404 no_navigator`, `409 off`, `409 too_many_profiles`, `503 unavailable`, `404`) |
 | POST | `/api/browser/profiles/{pid}/stop` | – | `BrowserState`; the profile sleeps (its tabs are kept, asleep) |
 | POST | `/api/browser/profiles/{pid}/sleep` | – | `BrowserState` + `slept`: every tab not shown sleeps |
@@ -637,9 +643,7 @@ BrowserAction   { at, session, tool, args (values typed -> "<n chars>", urls wit
 | POST | `/api/browser/profiles/{pid}/tabs` | `{url?, nav?}` (`me`) | `BrowserState` of that navigator; a new tab of the person in it, in that navigator's window (`400 refused` for a page its rules refuse) |
 | POST | `/api/browser/profiles/{pid}/tabs/{key}/show` | – | `BrowserState`; shows it, wakes an asleep one (`404 no_tab`) |
 | DELETE | `/api/browser/profiles/{pid}/tabs/{key}` | – | `BrowserState` (show / close: of the tab's navigator) |
-| POST | `/api/browser/navigators` | `{profile?, name?}` | `{id, name, profile, at}`; a new navigator of the person (`me-2`...; `400 bad_browser`, `409 too_many` past 8) |
-| PUT | `/api/browser/navigators/{nav}` | `{profile?, name?}` | same; a new profile: its tabs move there, asleep (`404 no_navigator`) |
-| DELETE | `/api/browser/navigators/{nav}` | – | `{ok}`; its tabs closed (`409` for `me`) |
+| PUT | `/api/browser/navigators/{nav}` | `{profile}` (`nav` = `me`) | `{id, name, profile, at}`; the person's browser on another profile: its tabs move there, asleep (`404 no_navigator`, `404 no_profile`) |
 | POST | `/api/browser/exits` | `{type, name?, url?, user?, secret?, node?, login_server?}` | `ExitView`; the id is made from the name (`400 bad_exit` no type / bad url / bad login_server, `400 bad_secret`, `409 too_many`) |
 | PUT | `/api/browser/exits/{eid}` | same, every key optional (`type` ignored) | `ExitView`; `secret` replaces the vault value; its runtime state is forgotten (`404 no_exit`) |
 | DELETE | `/api/browser/exits/{eid}` | – | `{ok}`; vault key, unit and `<state>/browser/exits/<eid>/` removed (`404`, `409 in_use` while a profile uses it) |
@@ -647,7 +651,7 @@ BrowserAction   { at, session, tool, args (values typed -> "<n chars>", urls wit
 | GET | `/api/browser/exits/{eid}/tailscale` | – | `{state: "needs_setup"\|"needs_login"\|"starting"\|"no_node"\|"node_offline"\|"up", backend, auth_url, account, nodes: [{id, name, dns, os, online, active}] (devices offering an exit node), node, error?}`; starts its `tailscaled` and, signed out, `tailscale up` for a sign-in address (`404 no_exit` not a Tailscale exit) |
 | POST | `/api/browser/exits/{eid}/tailscale` | `{node?}` \| `{action: "login"\|"logout"}` | same as GET; `node`: use that device (`--exit-node`, LAN access off) and save it (`400 bad_node`) |
 | GET | `/api/browser/owner?path=` | – | `OwnerView` (`400 bad_path`: not a project / topic / agent folder, `404 not_found`) |
-| PUT | `/api/browser/owner` | `{path, enabled?, profile?, inherit?: ["enabled"\|"profile"]}` | `OwnerView`; `inherit` removes the owner's own key; `profile: "own"` (agents only) = its own browser; `enabled: true` on an agent whose own browser is gone makes a new one (`400 bad_browser`, `404 no_profile`) |
+| PUT | `/api/browser/owner` | `{path, enabled?, profile?, inherit?: ["enabled"\|"profile"]}` | `OwnerView`; `inherit` removes the owner's own key (`profile` = back to its project's); `profile` / `inherit: ["profile"]` for an agent only (`400 bad_browser`, `404 no_profile`) |
 | POST | `/api/browser/waiting/{sid}` | `{action: "resume"\|"retry"\|"dismiss"}` | `resume` / `retry`: `{ok (the exit works now), waiting: Waiting\|null}` (`resume` = the turn goes on when the exit is back); `dismiss`: `{ok}` (`404 not_waiting`) |
 | GET | `/api/browser/asks?session=&path=` | – | `{asks: [BrowserAsk]}` pending |
 | POST | `/api/browser/asks/{id}` | `{action: "done"\|"skip", note?}` | `BrowserAsk` (`409 decided`); the person's hand is released. `done` stores the hand-back in the request file (never in the response): `trail` (pages the person went to in that session's tab, without query), `page`, `picture` (base64 JPEG): `ask_human` returns them to Claude (text + an image block) |

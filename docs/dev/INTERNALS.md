@@ -689,13 +689,15 @@ URLs without query / fragment / userinfo. A channel with more than 64 MB waiting
 Chromium on this server for the user, their sessions and their agents (API.md "Harness Browser", user doc 33). Off
 unless `browser_feature`. Settings: `config.json -> browser` = the globals (`browser.DEFAULTS`), `profiles: [...]`,
 `exits: [...]` (`clean_settings`: complete and valid, `strict=True` on every save; settings of before the profiles -
-`web` / `sites` at the top - become those of `main`). Who uses which profile: `{enabled?, profile?}` in a project's /
-topic's `.maxxing.json` (`workspace.folder_browser` / `set_folder_browser`) and in agent.json `browser`;
-`browser.resolve(path)` walks `chain(path)` (agent, topic, project): nearest key wins, an agent's `enabled` stops at
-the agent, an unknown profile = `main` (an agent's own choice gone = no browser, `gone`). An agent turned on without a
-profile, or with `profile: "own"` (`browser.OWN`), gets `own_profile(path)` (in `agents.update`, after the lock: a
-profile with `agent` = its path, made once from its topic's resolved profile). `active_for(path)` = (owner, profile,
-settings) when turns there get the tools.
+`web` / `sites` at the top - become those of `main`). One profile per project (`project` field, unique;
+`project_profile(project)`, `ensure_project_profile(project)` under `_plock`: made from `main`'s exit / web / sites /
+on_exit_down, named after the project; `ensure_projects_with_agents()` from `GET /api/browser`; `project_gone(p)`;
+`delete_profile` refuses a project's while its folder exists). Who may use it: `{enabled?}` in a project's / topic's
+`.maxxing.json` (`workspace.folder_browser` / `set_folder_browser`) and `{enabled?, profile?}` in agent.json
+`browser`; `browser.resolve(path, s, create=False)` = `{enabled, profile, project, from}`: `enabled` walks
+`chain(path)` (nearest wins, an agent's stops at the agent); `profile` = the agent's own choice when it exists, else
+the project's ("" while not made; `create` makes it). `active_for(path)` = (owner, profile, settings) when turns
+there get the tools (makes the project's profile). `agents_of(pid)` = the agents on, on that profile.
 Modules:
 - `__init__` settings, profiles, owners, folders; `migrate()` (server start and every profile start): the one
   browser's folder `profiles/harness` -> `profiles/main`, `tabs.json` -> `tabs/main.json` (only when the new one is
@@ -721,14 +723,16 @@ Modules:
   start -> call (`upload_file`: `claude_file` copies a file of the turn's topic / project into `run/<pid>/uploads/`
   with `stage`, the path given to Chromium is `/mxrun/uploads/...`; `rules.check_command` lets
   `DOM.setFileInputFiles` through only for those). `thumb(pid, nav)` = a picture for the agent's card. `control[nav]` = the person's hand per navigator; `navigators()`
-  the list of the Browser page; `move_nav` / `drop_nav` (a person's navigator changes profile / is closed). `_tidy` every 15 s: dead / off / deleted / sites changed (`POLICY_KEYS`, restart once unused) /
+  the list of the Browser page; `move_nav` / `drop_nav` (the person's navigator changes profile / a session's is closed). `_tidy` every 15 s: dead / off / deleted / sites changed (`POLICY_KEYS`, restart once unused) /
   idle -> stop; tabs to sleep; CPU level.
 - `unit` the profile's unit `maxxing-br-<install>-<pid>` (user `maxxing-browser`, PrivateNetwork + socat to the
   proxy socket, MemoryMax 1536M, in `maxxing-turns.slice` when CPU priorities are on); `set_level(pid, live|background)`
   -> `cpu.set_level` (live while someone watches it or Claude acted in the last 15 s). Chromium gets `--lang` /
   `--accept-lang` from the interface's language and `TZ` from the Harness time zone (`unit.locale`, `unit.timezone`).
-- `navs` the navigators: `me`, `me-<n>` (the person's, `navigators.json`: name, profile; at most 8), `agent:<path>`,
-  `session:<sid>`; `of_turn(sid, owner)` (an agent's runs share its navigator), `profile_of(nav)`, `label(nav)`,
+- `navs` the navigators: `me` (the person's one, `navigators.json`: its profile; older `me-<n>` ignored),
+  `agent:<path>` (lasting), `session:<sid>` (temporary: `pool._close_sessions` in `tidy` closes its tabs once no turn,
+  person or viewer used them for `idle_min`; `replays.sessions(pid)` = the journal lines of those, from actions with a
+  `nav`); `of_turn(sid, owner)` (an agent's runs share its navigator), `profile_of(nav)`, `label(nav)`,
   `on_profile_deleted` (the person's navigators on it go back to `main`). A tab's `nav` (tabs.py) comes from its opener,
   else the claim of whoever asked for it (`claim` / `assign`), else `me`. One window per navigator: its first tab
   is `Target.createTarget {newWindow}`, the next ones `window.open(url, '_blank', 'noopener')` from a page of that

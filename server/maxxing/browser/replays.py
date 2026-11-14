@@ -72,3 +72,27 @@ def actions(slug: str, n: int = 50, session: str | None = None) -> list[dict]:
 
 def forget(slug: str) -> None:
     (browser.actions_dir() / f"{slug}.jsonl").unlink(missing_ok=True)
+
+
+def sessions(slug: str, n: int = 30) -> list[dict]:
+    """The journal of the temporary navigators of a profile (sessions'), newest first:
+    [{session, first, last, actions, sites}] - sites = the hosts its pages were on."""
+    rows: dict[str, dict] = {}
+    for e in actions(slug, MAX_ACTIONS):
+        nav = str(e.get("nav") or "")
+        sid = str(e.get("session") or "")
+        if not nav.startswith("session:") or not sid:
+            continue
+        r = rows.setdefault(sid, {"session": sid, "first": e.get("at") or 0, "last": e.get("at") or 0,
+                                  "actions": 0, "sites": []})
+        r["actions"] += 1
+        at = e.get("at") or 0
+        r["first"], r["last"] = min(r["first"], at), max(r["last"], at)
+        for u in ((e.get("args") or {}).get("url"), e.get("page")):
+            try:
+                host = urlsplit(str(u or "")).hostname or ""
+            except ValueError:
+                host = ""
+            if host and host not in r["sites"] and len(r["sites"]) < 12:
+                r["sites"].append(host)
+    return sorted(rows.values(), key=lambda r: -r["last"])[:n]

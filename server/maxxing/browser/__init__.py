@@ -4,16 +4,18 @@ Off unless the feature is on (Settings -> Features: `browser_feature`). Its sett
 global ones (sleep, asks, downloads) plus
 
 - **profiles**: each one its own Chromium (its own sign-ins), its sites (a list or the public web) and its exit.
-  `main` always exists. A profile only runs while someone uses it (`max_active_profiles` at once).
+  `main` (the person's, "Personal") always exists. **One profile per project** (`project` = its folder), made by
+  itself the first time the browser is used there (and for every project with agents when the Browser page is
+  shown), with the exit and sites of `main`. More profiles may be added by hand. A profile only runs while someone
+  uses it (`max_active_profiles` at once).
 - **exits**: where a profile's traffic leaves (exits.py): `direct` (this server's address, always there), a rented
   `proxy`, a phone / box over `tailscale`, a `wireguard` box. An exit that is down makes its profiles wait, never fall
   back to the server's address (unless the profile says `on_exit_down: vps`).
 
-Who uses which profile: a `browser` block {enabled?, profile?} in the .maxxing.json of a project or a topic and in an
-agent's agent.json; a missing key is inherited (agent -> topic -> project -> off / `main`). An agent's `enabled` is
-its own (never inherited: its owner turns it on). An agent turned on gets **its own browser** (a profile of its own,
-`agent` = its path, `own_profile`); sharing the sign-ins of another profile is a choice. An agent whose profile was
-deleted has no browser any more (never someone else's sign-ins by itself).
+Who may use it: a `browser` block {enabled?} in the .maxxing.json of a project or a topic and {enabled?, profile?} in
+an agent's agent.json; `enabled` is inherited (topic -> project -> off), an agent's is its own (never inherited: its
+owner turns it on). Which profile: a session's is its project's; an agent's is its project's unless it chose another
+(`profile`; a chosen profile that was deleted = its project's again).
 
 Modules: rules (what may be opened / sent), proxy (the only way out of a browser), exits (the exits and their
 runtimes), unit (the systemd unit of a profile's Chromium), cdm (chrome-devtools-mcp, the tools Claude gets: one per
@@ -25,6 +27,7 @@ from __future__ import annotations
 
 import re
 import secrets as _secrets
+import threading
 from pathlib import Path
 
 from .. import config
@@ -38,16 +41,18 @@ DEFAULTS = {"ask": True, "wait_min": 30, "downloads": False, "idle_min": 30, "ta
             "max_active_profiles": 3, "exit_wait_s": 180, "search": "google"}
 NUMBERS = {"wait_min": (1, 1440), "idle_min": (5, 1440), "tab_sleep_min": (2, 720), "max_tabs": (2, 30),
            "max_active_profiles": (1, 8), "exit_wait_s": (0, 900)}
-PROFILE_DEFAULTS = {"name": "", "exit": DIRECT, "web": "list", "sites": [], "on_exit_down": "wait", "agent": ""}
-OWN = "own"                                    # an agent's browser.profile: "its own browser" (made when asked)
+PROFILE_DEFAULTS = {"name": "", "exit": DIRECT, "web": "list", "sites": [], "on_exit_down": "wait", "project": ""}
+OWN = "own"                                    # of before the profiles per project: read as "its project's"
 OWNER_DEFAULTS = {"enabled": False, "profile": MAIN}
+PROJECT_RE = re.compile(r"projects/[^/\s]{1,80}")
 WEB_MODES = ("list", "public")
 EXIT_DOWN = ("wait", "vps")
 EXIT_TYPES = ("proxy", "tailscale", "wireguard")
 ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,23}\Z")
-MAX_PROFILES = 20
+MAX_PROFILES = 40
 MAX_EXITS = 10
 NAME_MAX = 40
+_plock = threading.Lock()                       # a project's profile is made once, whoever asks first
 
 
 class BrowserError(Exception):
@@ -100,9 +105,9 @@ def clean_profile(raw: object, strict: bool = False, exits: set[str] | None = No
     if exits is not None and ex != DIRECT and ex not in exits:
         _bad(strict, "exit", f"no exit {ex!r}")     # read back as it is: the profile then waits, never goes direct
     out["exit"] = ex[:40]
-    agent = str(src.get("agent") or "")
-    if agent and re.fullmatch(r"projects/[^/]+/topics/[^/]+/agents/[^/]+", agent) and len(agent) <= 300:
-        out["agent"] = agent                       # the agent this browser is for (its own)
+    project = str(src.get("project") or "")
+    if project and PROJECT_RE.fullmatch(project):
+        out["project"] = project                   # the project this profile is for
     if "sites" in src:
         items = src["sites"] if isinstance(src["sites"], list) else []
         if strict:
@@ -155,6 +160,8 @@ def clean_settings(raw: object, strict: bool = False) -> dict:
     for p in raw_profiles[:MAX_PROFILES]:
         c = clean_profile(p, strict, ids)
         if c and c["id"] not in {x["id"] for x in profiles}:
+            if c["project"] and any(x["project"] == c["project"] for x in profiles):
+                c["project"] = ""                    # one profile per project: a second one is just a profile
             profiles.append(c)
     if not any(p["id"] == MAIN for p in profiles):
         profiles.insert(0, {**PROFILE_DEFAULTS, "id": MAIN, "sites": []})
@@ -209,29 +216,50 @@ def set_profile(values: dict, pid: str | None = None) -> dict:
     return profile(pid, out)  # type: ignore[return-value]
 
 
-def own_profile(path: str) -> str:
-    """The id of an agent's own browser, made the first time: its sites and its exit are those of the browser it
-    had until now (its topic's, else main), its name the agent's."""
-    s = settings()
-    mine = next((p for p in s["profiles"] if p.get("agent") == path), None)
-    if mine:
-        return mine["id"]
-    from .. import agents
-    try:
-        name = agents.get(path).get("display_name") or path.rsplit("/", 1)[-1]
-    except Exception:  # noqa: BLE001
-        name = path.rsplit("/", 1)[-1]
-    was = profile(resolve(path.rsplit("/", 2)[0], s)["profile"], s) or profile(MAIN, s) or {}
-    keep = {k: was[k] for k in ("exit", "web", "sites", "on_exit_down") if k in was}
-    return set_profile({**keep, "name": name, "agent": path})["id"]
+def project_profile(project: str, s: dict | None = None) -> dict | None:
+    """The profile of a project (`projects/<name>`), None while it was never made."""
+    return next((p for p in (s or settings())["profiles"] if p.get("project") == project), None)
+
+
+def ensure_project_profile(project: str) -> str:
+    """The id of a project's profile, made the first time with the exit and sites of `main`, named after it."""
+    with _plock:
+        mine = project_profile(project)
+        if mine:
+            return mine["id"]
+        main = profile(MAIN) or {}
+        keep = {k: main[k] for k in ("exit", "web", "sites", "on_exit_down") if k in main}
+        return set_profile({**keep, "name": project.split("/", 1)[1], "project": project})["id"]
+
+
+def ensure_projects_with_agents() -> None:
+    """Every project with an agent has its profile (shown on the Browser page before its first use)."""
+    root = config.workspace() / "projects"
+    if not root.is_dir():
+        return
+    have = {p.get("project") for p in profiles()}
+    for pdir in sorted(root.iterdir()):
+        rel = f"projects/{pdir.name}"
+        if rel not in have and PROJECT_RE.fullmatch(rel) and pdir.is_dir() and any(pdir.glob("topics/*/agents/*/agent.json")):
+            try:
+                ensure_project_profile(rel)
+            except BrowserError:                      # too many profiles: the others wait for their first use
+                return
+
+
+def project_gone(p: dict) -> bool:
+    return bool(p.get("project")) and not (config.workspace() / p["project"]).is_dir()
 
 
 def delete_profile(pid: str) -> None:
     if pid == MAIN:
         raise BrowserError(409, "main", "The main profile cannot be deleted")
     s = settings()
-    if profile(pid, s) is None:
+    p = profile(pid, s)
+    if p is None:
         raise BrowserError(404, "no_profile", "No such profile")
+    if p.get("project") and not project_gone(p):
+        raise BrowserError(409, "project", "A project's profile stays as long as its project: forget its sign-ins instead")
     s["profiles"] = [p for p in s["profiles"] if p["id"] != pid]
     _save(s)
 
@@ -318,25 +346,33 @@ def chain(path: str) -> list[str]:
     return out
 
 
-def resolve(path: str, s: dict | None = None) -> dict:
-    """{enabled, profile, from: {enabled, profile}} for a folder: its own block, else its topic's, else its
-    project's; `from` = the owner that set it ("" = the default). An agent's `enabled` is never inherited.
-    A profile that no longer exists = `main`."""
+def resolve(path: str, s: dict | None = None, create: bool = False) -> dict:
+    """{enabled, profile, project, from: {enabled, profile}} for a folder. `enabled`: its own block, else its topic's,
+    else its project's (an agent's is never inherited). `profile`: the one an agent chose, else its project's ("" while
+    the project's was never made; `create` makes it). `from`: the owner that set it ("" = the default)."""
     s = s or settings()
     owners = chain(path)
-    out = {**OWNER_DEFAULTS, "from": {"enabled": "", "profile": ""}}
-    for key in ("enabled", "profile"):
-        for o in owners:
-            if key == "enabled" and owners[0].startswith("agent:") and o != owners[0]:
-                break
-            v = own_block(o).get(key)
-            if v is not None:
-                out[key], out["from"][key] = v, o
-                break
-    if profile(out["profile"], s) is None:
-        if owners and owners[0].startswith("agent:") and out["from"]["profile"] == owners[0]:
-            out["enabled"], out["gone"] = False, True   # its own browser was deleted: none, never main by itself
-        out["profile"], out["from"]["profile"] = MAIN, ""
+    project = project_of(path) or ""
+    out = {**OWNER_DEFAULTS, "profile": "", "project": project, "from": {"enabled": "", "profile": ""}}
+    for o in owners:
+        if owners[0].startswith("agent:") and o != owners[0]:
+            break
+        v = own_block(o).get("enabled")
+        if v is not None:
+            out["enabled"], out["from"]["enabled"] = v, o
+            break
+    if owners and owners[0].startswith("agent:"):
+        chosen = own_block(owners[0]).get("profile")
+        if chosen and chosen != OWN and profile(chosen, s) is not None:
+            out["profile"], out["from"]["profile"] = chosen, owners[0]
+            return out
+    if project:
+        mine = project_profile(project, s)
+        if mine is None and create:
+            ensure_project_profile(project)
+            mine = project_profile(project)
+        if mine:
+            out["profile"], out["from"]["profile"] = mine["id"], f"project:{project}"
     return out
 
 
@@ -351,32 +387,30 @@ def active_for(path: str) -> tuple[str, dict, dict] | None:
     r = resolve(path, s)
     if not r["enabled"]:
         return None
-    return owners[0], profile(r["profile"], s), s  # type: ignore[return-value]
+    if not r["profile"]:
+        r = resolve(path, create=True)
+        s = settings()
+    p = profile(r["profile"], s)
+    return (owners[0], p, s) if p else None
 
 
-def used_by(pid: str) -> list[dict]:
-    """Who chose this profile (projects, topics, agents of the workspace): [{owner, path, kind}]."""
-    from .. import agents, workspace
-    out: list[dict] = []
+def agents_of(pid: str) -> list[str]:
+    """The agents whose browser is on and runs on this profile (their project's, or chosen): their paths."""
+    from .. import agents
+    out: list[str] = []
     root = config.workspace() / "projects"
     if not root.is_dir():
         return out
-    for pdir in sorted(root.iterdir()):
-        if not pdir.is_dir():
+    s = settings()
+    for a in sorted(root.glob("*/topics/*/agents/*/agent.json")):
+        ap = str(a.parent.relative_to(config.workspace()))
+        try:
+            if not agents.exists(ap) or not clean(agents.load(ap).get("browser")).get("enabled"):
+                continue
+        except Exception:  # noqa: BLE001
             continue
-        folders = [pdir] + sorted(x for x in (pdir / "topics").glob("*") if x.is_dir())
-        for f in folders:
-            rel = str(f.relative_to(config.workspace()))
-            if workspace.folder_browser(rel).get("profile") == pid:
-                out.append({"owner": owner_of(rel), "path": rel, "kind": "project" if f == pdir else "topic"})
-            if f != pdir:
-                for a in sorted((f / "agents").glob("*/agent.json")):
-                    ap = str(a.parent.relative_to(config.workspace()))
-                    try:
-                        if agents.exists(ap) and clean(agents.load(ap).get("browser")).get("profile") == pid:
-                            out.append({"owner": f"agent:{ap}", "path": ap, "kind": "agent"})
-                    except Exception:  # noqa: BLE001
-                        pass
+        if resolve(ap, s)["profile"] == pid:
+            out.append(ap)
     return out
 
 

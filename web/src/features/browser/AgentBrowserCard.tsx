@@ -1,16 +1,16 @@
-// An agent's browser (its own navigator) in its info panel: a small live picture of its tab (a new one every 2 s, only while the panel
-// is shown and the browser runs: never started for it), the page, "Claude is acting" and its requests to the person.
-// A click opens the browser window to watch or take over. Nothing when its browser is off.
+// An agent's browser (its persistent navigator) in its info panel: a small live picture of its tab (a new one every
+// 2 s, only while the panel is shown and the browser runs: never started for it), the page, "Claude is acting" and its
+// requests to the person; under it, its profile (its project's by default, or another). A click opens the browser
+// window to watch or take over. Nothing when its browser is off.
 import * as React from 'react'
 import { Globe, Hand, Moon } from 'lucide-react'
 import { useT } from '@/i18n'
 import { useBrowserOwner, useBrowserStatus } from '@/lib/queries'
-import { seg } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import { AgentProfilePicker } from './BrowserPanel'
 import { BrowserWindow } from './BrowserWindow'
 import { navOf } from './profiles'
-
-const EVERY_MS = 2000
+import { useNavPicture } from './useNavPicture'
 
 export function AgentBrowserCard({ path, who, title }: { path: string; who: string; title: string }) {
   const t = useT()
@@ -18,46 +18,11 @@ export function AgentBrowserCard({ path, who, title }: { path: string; who: stri
   const on = !!o?.feature && !!o?.enabled
   const { data: st } = useBrowserStatus(on)
   const [win, setWin] = React.useState(false)
-  const [src, setSrc] = React.useState<string | null>(null)
   const id = navOf(undefined, path)
   const n = st?.navigators.find((x) => x.id === id)
   const running = !!n?.running
   const pid = n?.profile || o?.profile || ''
-
-  // the picture: fetched while the page is visible and the browser runs; the previous one stays until the next
-  React.useEffect(() => {
-    if (!on || !running || !pid) {
-      setSrc(null)
-      return
-    }
-    let stop = false
-    let url: string | null = null
-    let timer: ReturnType<typeof setTimeout> | undefined
-    const tick = async () => {
-      if (stop) return
-      if (document.visibilityState === 'visible') {
-        try {
-          const r = await fetch(`/api/browser/profiles/${seg(pid)}/picture?w=640&nav=${encodeURIComponent(id)}`, { credentials: 'same-origin', cache: 'no-store' })
-          if (r.status === 200 && !stop) {
-            const next = URL.createObjectURL(await r.blob())
-            if (url) URL.revokeObjectURL(url)
-            url = next
-            setSrc(next)
-          }
-        } catch {
-          /* the next one */
-        }
-      }
-      timer = setTimeout(tick, EVERY_MS)
-    }
-    tick()
-    return () => {
-      stop = true
-      clearTimeout(timer)
-      if (url) URL.revokeObjectURL(url)
-    }
-  }, [on, running, pid, id])
-
+  const src = useNavPicture(pid, id, on && running)
   if (!on || !o) return null
   const tab = n?.page
   const asks = o.asks.length
@@ -90,6 +55,7 @@ export function AgentBrowserCard({ path, who, title }: { path: string; who: stri
           {tab?.url && <span className="truncate font-mono text-[11px] text-muted-foreground">{tab.url}</span>}
         </div>
       </button>
+      <AgentProfilePicker o={o} className="h-8 w-full text-[12px]" />
       <BrowserWindow context={path} profile={pid} nav={id} who={who} open={win} onOpenChange={setWin} start />
     </section>
   )

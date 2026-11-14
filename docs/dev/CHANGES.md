@@ -45,22 +45,22 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   Browser", INTERNALS "maxxing.browser", user doc 33). Config `browser_feature` (default false) + `config.json ->
   browser` = `{ask, wait_min, downloads, idle_min, tab_sleep_min, max_tabs, max_active_profiles (3, 1..8),
   exit_wait_s (180, 0..900), search (google|duckduckgo|bing), profiles: [{id, name, exit: "direct"|<exit id>, web: list|public, sites, on_exit_down:
-  wait|vps, agent: "" | <agent path>}] (<= 20, `main` always first, not deletable; `agent` = that agent's own browser), exits: [{id, name, type: proxy {url, user} | tailscale
+  wait|vps, project: "" | "projects/<name>"}] (<= 40, `main` always first, not deletable; one per project, see below), exits: [{id, name, type: proxy {url, user} | tailscale
   {node, login_server} | wireguard {}}] (<= 10)}`; `browser.clean_settings(raw, strict)`. Exit secrets in the vault
   `BROWSER_EXIT_<ID>` (`expose: false`). Owners: `browser: {enabled?, profile?}` in a project's / topic's
   `.maxxing.json` (`workspace.folder_browser` / `set_folder_browser`) and agent.json (`agents._clean_browser`,
-  `browser` in `SECURITY_FIELDS`: off is safer, the rest is asked); `browser.resolve` = agent -> topic -> project ->
-  `{enabled: false, profile: main}`, an agent's `enabled` never inherited. Own browser: `agents.update` turning an
-  agent on without a profile (or with a deleted one), or `browser.profile = "own"` (`browser.OWN`, also through
-  `PUT /owner` and change cards), calls `browser.own_profile(path)` (made once, copies `exit/web/sites/on_exit_down`
-  of the topic's resolved profile, name = display name) and writes its id; `resolve` gives an agent whose own
-  profile is gone `enabled: false, gone: true` (never main); `GET /owner` adds `own_profile`, `gone`.
+  `browser` in `SECURITY_FIELDS`: off is safer, the rest is asked); `browser.resolve` = `enabled` agent -> topic ->
+  project -> false (an agent's never inherited), `profile` = an agent's own choice when it exists, else its project's.
+  **One profile per project** (`project` field): `ensure_project_profile` (from `main`'s exit/web/sites/on_exit_down,
+  named after the project) at the first `active_for`, at `GET /owner` of an enabled folder, and for every project with
+  an agent at `GET /api/browser`; `DELETE` refused (`409 project`) while the project exists; `GET /profiles/{pid}` = `{profile, browser, gone, agents, person, temporary (replays.sessions: actions with a `nav` "session:*"), actions, asks}`; ProfileRow adds `gone`, `agents`; `profile: "own"` and a
+  project's / topic's `profile` are read as "its project's". `GET /owner` adds `project`, `project_profile`.
 - Modules: `exits.py` (exits, `Runtime` up/down state + 30 s watcher, `Tailscale` = own userspace `tailscaled`, `WireGuard` =
   `wireproxy`, units `maxxing-bx-<install>-<eid>`, `test()` via ip-api.com + 2 MB download, `wait_down` / `set_resume` /
   `_resume_waiters`, `feed_action`), `pool.py` (one Chromium per profile, `max_active_profiles`, `exit_ready`, a
   chrome-devtools-mcp per turn; `control[nav]`, `create` one tab at a time per profile, `navigators()`, `move_nav`,
-  `drop_nav`), `navs.py` (navigators `me` / `me-<n>` in `<state>/browser/navigators.json`, `agent:<path>`,
-  `session:<sid>`; one window per navigator: `window.open` from a page of it, else `newWindow`), `live.py` (a `Screen`
+  `drop_nav`, `_close_sessions`: a session's navigator closed after `idle_min` unused), `navs.py` (navigators `me` (its
+  profile in `<state>/browser/navigators.json`), `agent:<path>`, `session:<sid>`; one window per navigator: `window.open` from a page of it, else `newWindow`), `live.py` (a `Screen`
   per navigator watched; up to `INFLIGHT` = 3 frames on their way per viewer, `{"t":"got"}` sent on arrival,
   adaptive JPEG quality 30..70 on the queueing (trip minus fastest trip), `?q=auto|high|low`; the tab shown is
   `Target.activateTarget`-ed; `Watcher.dialog` / `chooser` from `Page.javascriptDialogOpening` /
@@ -86,7 +86,7 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 - Routes (`api/browser.py`): `GET /api/browser`, `PUT /settings`, `POST /setup {exits?}`, `/profiles` (POST, GET / PUT
   / DELETE `{pid}`, `{pid}/open|stop|sleep|forget`, `{pid}/tabs`, `{pid}/tabs/{key}/show`, DELETE `{pid}/tabs/{key}`),
   `{pid}/open {nav?}`, `{pid}/tabs {url?, nav?}`, `{pid}/picture?nav=&w=` (JPEG of that navigator's tab; 204 when not
-  running, never starts it), `/navigators` (POST, PUT / DELETE `{nav}`), `{pid}/files?nav=` (multipart `files`, <= 50 MB each: for the page's open file chooser, 409 without one;
+  running, never starts it), `PUT /navigators/me {profile}`, `{pid}/files?nav=` (multipart `files`, <= 50 MB each: for the page's open file chooser, 409 without one;
   `pool.stage`), `/exits` (POST, PUT / DELETE `{eid}`, `{eid}/test` incl. `direct`, GET / POST `{eid}/tailscale`), GET / PUT
   `/owner` (`inherit: [...]`), `POST /waiting/{sid} {action: resume|retry|dismiss}`, `/asks`, `/live-token`, WS
   `/live?t=&profile=&nav=&q=`, `GET /api/browser` adds `navigators`, loopback `POST /mcp/{sid}` and WS `/cdp/{pid}`. Sessions list: `browser_asks`,

@@ -4,7 +4,7 @@
 // "Test" says what the sites see: the address, its country and operator, its kind (internet provider, mobile network or
 // datacenter - a rented proxy that is in fact a datacenter is said plainly), the delay and the speed.
 import * as React from 'react'
-import { useNavigate } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { Check, ExternalLink, Globe, Laptop, Loader2, Router, Server, Smartphone, Trash2 } from 'lucide-react'
 import { useT } from '@/i18n'
 import { useBrowserSetup, useBrowserStatus, useSaveExit, useTailscale, useTailscaleSet, useTestExit, type ExitInput } from '@/lib/queries'
@@ -114,6 +114,12 @@ export function DirectPanel() {
   const { data: st } = useBrowserStatus()
   return (
     <div className="grid max-w-2xl gap-4" data-testid="browser-exit-direct">
+      <Callout tone="warning">
+        {t('browser.directWarn')}{' '}
+        <Link to="/browser?exit=new" className="text-primary underline">
+          {t('browser.exit.add')}
+        </Link>
+      </Callout>
       <p className="text-[13px] text-muted-foreground">{t('browser.exit.directDesc')}</p>
       <TestBlock id="direct" last={st?.direct.test} />
     </div>

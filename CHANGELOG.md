@@ -16,16 +16,17 @@ New:
 - **Harness Browser: a browser on your server for Claude and you.** For sites without an API, Claude opens pages,
   clicks and fills forms in a Chromium of your server, and you watch it live, take over for a captcha or a sign-in
   and hand back. Off until you turn it on (Settings -> Features -> Harness Browser), then let a project, a topic
-  (its menu -> **Browser...**) or an agent (its settings) use it. **Profiles** keep sign-ins, sites and exit apart (a
-  client, a second shop account); a project or a topic picks one, or inherits it, and each agent gets **its own
-  browser** (or shares one you choose), shown live in its info panel. Every agent and every session has **a browser
-  of its own** (its own window and tabs: it never sees the others'), and you open as many as you like on the Browser
-  page; several browsers may share a profile's sign-ins. The **⋮** of the live view changes the sign-ins used, the
-  exit, the search engine and the picture (smooth or sharp) without leaving the page. **Exits** send a
-  profile's pages out by your phone (Tailscale), a rented proxy or a WireGuard box instead of the server's
-  data-center address, which some sites block; **Test** shows the address the sites see and its kind. When an exit is
-  down, the profile waits and you get a notification - never the server's address behind your back - and Claude goes
-  on once it is back. The address bar searches (Google, DuckDuckGo or Bing) what is not an address; copy, paste, the page's messages
+  (its menu -> **Browser...**) or an agent (its settings) use it. The Browser page has three parts: **your browser**,
+  the **profiles** and the **connections**. **Each project has its own profile** (sign-ins, sites, connection), made by
+  itself: its sessions and its agents share it, so you sign in once for all of them; add more profiles to keep an
+  agent apart. A profile's page shows its agents' browsers live (**Persistent**) and a journal of the browsers its
+  sessions opened (**Temporary**, closed once the session no longer uses them); an agent's info panel shows its
+  browser at the top, with its profile under it. Each browser only sees its own tabs. The **⋮** of the live view
+  changes the profile, the connection, the search engine and the picture (smooth or sharp) without leaving the page.
+  **Connections** send a profile's pages out by your phone (Tailscale), a rented proxy or a WireGuard box instead of
+  the server's data-center address, which some sites block; the eye next to a profile's connection shows the address
+  the sites see. When a connection is down, the profile waits and you get a notification - never the server's address
+  behind your back - and Claude goes on once it is back. The address bar searches (Google, DuckDuckGo or Bing) what is not an address; copy, paste, the page's messages
   and its file buttons work from the live view; the browser speaks your language and keeps your time zone. The live
   view keeps up with a slow connection. [Show me](#show:browser)
 
