@@ -32,6 +32,14 @@ Changed:
   reads the vault, and a change of its safety settings still waits for your OK.
 
 Fixed:
+- **Agents: a long conversation is summarized from its first answer on, like a session.** The conversation with an
+  agent (and an agent's part in a group) followed the compaction rules of Settings -> Claude only from your second
+  message: a first answer that filled the context was not summarized. The runs of an agent (a schedule, a webhook)
+  are still never summarized.
+- **Agents: the summary of a long conversation no longer shows up as the agent's answer.** When Harness summarized
+  a conversation with an agent, the summary (and a short reply to it) appeared in the agent's flow as two answers,
+  and on Telegram when the agent writes there. They are now kept out, like in a session; their cost still counts in
+  the agent's daily budget.
 - **Code mode: closing a terminal right after opening it no longer risks stopping Harness.** In the first
   instant of a terminal, its shell is not yet apart from the server: closing or resizing it then could send the
   stop signal to the server too. It now goes to the shell alone until the terminal has its own group.

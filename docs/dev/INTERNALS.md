@@ -61,7 +61,8 @@ Python modules call each other only through these functions. Keep signatures sta
   `models()`, `uploads_dir(path)`. Blocking functions raise `SessionError(status, code, message)`.
 - Compaction in the runner (`sessions/runner.py`): `_auto_compact` after a turn above `auto_compact_tokens`; idle
   compaction in `_pop` - `_idle_compact(meta, item, cfg, now)` returns `(away, k_tokens)` when a `user` item (not
-  cron/system source, steer, plan approval) pops for a non-fresh, non-cron session whose last call
+  cron/system source, steer, plan approval) pops for a non-fresh session that is not `store.unattended` (a cron
+  or agent run; an agent's owner conversation or group session is not) whose last call
   (`max(finished_at, cache_at)`; `cache_at` = last side question, it warms the thread too) is older than
   `idle_compact_after_s` with `context_tokens >= max(idle_compact_tokens, IDLE_COMPACT_MIN)`, unless
   `context_tokens - base_tokens` (meta `base_tokens` = context of the first call of the current thread, i.e. its

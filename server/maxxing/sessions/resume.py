@@ -20,6 +20,8 @@ from __future__ import annotations
 
 import math
 
+from . import store
+
 MIN_PAUSE_S = 300                       # below this, a message is just the next one of the conversation
 WARM_FACTOR = 2                         # cache still warm: re-reading is cheap, only summarize a much bigger thread
 MIN_TOKENS = 20_000                     # a lower non-zero setting is raised to this (like idle compaction)
@@ -75,7 +77,7 @@ def candidate(m: dict, item: dict, cfg: dict, now: float, window: object = None)
     if (item.get("kind") or "user") != "user" or item.get("source") in ("system", "cron") or item.get("steer") \
             or item.get("plan_approved") or item.get("held"):
         return None
-    if m.get("fresh", True) or m.get("cron") or m.get("plan_ready"):
+    if m.get("fresh", True) or store.unattended(m) or m.get("plan_ready"):
         return None
     try:
         ctx = int(m.get("context_tokens") or 0)

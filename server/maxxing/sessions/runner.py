@@ -689,7 +689,7 @@ class Runner:
             return
         with store.edit(self.sid) as m:
             q = m.get("queue") or []
-            if m.get("cron") or m.get("plan_ready") or any(x.get("kind") in ("compact", "handoff") for x in q):
+            if store.unattended(m) or m.get("plan_ready") or any(x.get("kind") in ("compact", "handoff") for x in q):
                 return
             try:
                 base = int(m.get("base_tokens") or 0)  # what a fresh thread costs anyway (CLAUDE.md, memory...)
@@ -1399,7 +1399,7 @@ def _idle_compact(m: dict, item: dict, cfg: dict, now: float, window: object = N
     if (item.get("kind") or "user") != "user" or item.get("source") in ("system", "cron") or item.get("steer") \
             or item.get("plan_approved"):
         return None
-    if m.get("fresh", True) or m.get("cron") or m.get("plan_ready"):
+    if m.get("fresh", True) or store.unattended(m) or m.get("plan_ready"):
         return None
     away = now - last
     hours = f"{away / 3600:.0f} h" if away >= 5400 else f"{away / 60:.0f} min"
