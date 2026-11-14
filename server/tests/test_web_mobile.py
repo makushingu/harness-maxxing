@@ -93,3 +93,11 @@ def test_search_in_the_touch_drawer_opens_the_search():
     src = (WEB / "components" / "shell" / "Sidebar.tsx").read_text()
     assert src.count("onClick={drawer ? searchNow : openPalette}") == 2
 
+
+
+def test_the_effort_levels_are_big_enough_to_tap():
+    # max-md: missed tablets: the effort buttons of the model menu were 36 px high at 820 px on touch
+    src = (WEB / "pages" / "sessions" / "Widgets.tsx").read_text()
+    row = src[src.index("function EffortRow"):]
+    cls = re.search(r"'(h-7 [^']*)'", row)
+    assert cls and "pointer-coarse:h-10" in cls[1].split()
