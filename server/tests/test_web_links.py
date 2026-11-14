@@ -61,3 +61,10 @@ def test_a_mention_is_only_kept_when_its_whole_name_is_written():
     # "@Leah" typed after picking Lea still mentioned Lea
     src = (WEB / "pages" / "sessions" / "mentions.tsx").read_text()
     assert "(?![\\\\p{L}\\\\p{N}_-])" in src and "written(text, x.label)" in src
+
+
+def test_an_icon_name_is_never_read_from_the_object_prototype():
+    # a page manifest with the icon "constructor" rendered Object as a component: Settings > Pages crashed
+    src = (WEB / "components" / "ui" / "icon.tsx").read_text()
+    assert "Object.hasOwn(ICONS, key)" in src
+
