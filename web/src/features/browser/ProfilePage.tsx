@@ -4,13 +4,14 @@
 // what to do when the connection is down, memory, forget its sign-ins, delete).
 import * as React from 'react'
 import { Link } from 'react-router'
-import { Bot, Globe, Moon, User } from 'lucide-react'
+import { Bot, Globe, User } from 'lucide-react'
 import { useLang, useT } from '@/i18n'
 import { useBrowserProfile, useBrowserStatus, useSaveBrowserProfile } from '@/lib/queries'
 import type { BrowserNavigator, BrowserSessionLine } from '@/lib/types'
 import { fmtRelative } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { Button, Skeleton } from '@/components/ui'
+import { AsleepScene } from './AsleepScene'
 import { BrowserWindow } from './BrowserWindow'
 import { ConnectionPicker } from './ConnectionPicker'
 import { ProfileSettings } from './ProfileSettings'
@@ -105,11 +106,12 @@ function AgentCard({ n, pid, onOpen }: { n: BrowserNavigator; pid: string; onOpe
       <div className="relative grid aspect-[16/10] place-items-center overflow-hidden bg-muted/40">
         {src ? (
           <img src={src} alt={n.page?.title || t('browser.page')} className="size-full object-cover object-top" draggable={false} />
-        ) : (
+        ) : n.running && n.awake > 0 ? (
           <span className="inline-flex items-center gap-1.5 text-[12px] text-muted-foreground">
-            {n.running ? <Globe className="size-4 opacity-60" /> : <Moon className="size-4 opacity-60" />}
-            {n.running ? t('browser.loading') : t('browser.card.asleep')}
+            <Globe className="size-4 opacity-60" /> {t('browser.loading')}
           </span>
+        ) : (
+          <AsleepScene project={n.path || ''} label={t('browser.card.asleep')} />
         )}
         {n.turns > 0 && (
           <span className="absolute top-1.5 left-1.5 inline-flex items-center gap-1.5 rounded-full bg-background/90 px-2 py-0.5 text-[11px] text-muted-foreground shadow-xs">

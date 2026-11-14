@@ -3,10 +3,11 @@
 // requests to the person; under it, its profile (its project's by default, or another). A click opens the browser
 // window to watch or take over. Nothing when its browser is off.
 import * as React from 'react'
-import { Globe, Hand, Moon } from 'lucide-react'
+import { Globe, Hand } from 'lucide-react'
 import { useT } from '@/i18n'
 import { useBrowserOwner, useBrowserStatus } from '@/lib/queries'
 import { cn } from '@/lib/utils'
+import { AsleepScene } from './AsleepScene'
 import { AgentProfilePicker } from './BrowserPanel'
 import { BrowserWindow } from './BrowserWindow'
 import { navOf } from './profiles'
@@ -33,11 +34,12 @@ export function AgentBrowserCard({ path, who, title }: { path: string; who: stri
         <div className="relative grid aspect-[16/10] place-items-center overflow-hidden bg-muted/40">
           {running && src ? (
             <img src={src} alt={tab?.title || t('browser.page')} className="size-full object-cover object-top" draggable={false} />
-          ) : (
+          ) : running ? (
             <span className="inline-flex items-center gap-1.5 text-[12px] text-muted-foreground">
-              {running ? <Globe className="size-4 opacity-60" /> : <Moon className="size-4 opacity-60" />}
-              {running ? t('browser.loading') : t('browser.card.asleep')}
+              <Globe className="size-4 opacity-60" /> {t('browser.loading')}
             </span>
+          ) : (
+            <AsleepScene project={path} label={t('browser.card.asleep')} />
           )}
           {running && !!n?.turns && (
             <span className="absolute top-1.5 left-1.5 inline-flex items-center gap-1.5 rounded-full bg-background/90 px-2 py-0.5 text-[11px] text-muted-foreground shadow-xs">

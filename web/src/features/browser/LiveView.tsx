@@ -20,6 +20,7 @@ import { fmtBytes } from '@/lib/format'
 import { useCompact } from '@/stores/media'
 import { cn } from '@/lib/utils'
 import { Button, Input } from '@/components/ui'
+import { AsleepScene } from './AsleepScene'
 import { QuickMenu, type Quality } from './QuickMenu'
 
 const QUALITY_KEY = 'mx.browser.quality'
@@ -472,6 +473,12 @@ export function LiveView({ profile, nav, session, who, start, onMinimize, classN
             }}
             onContextMenu={(e) => e.preventDefault()}
           />
+        ) : connected && b?.state !== 'starting' && !action.isPending && !(running && awake > 0) ? (
+          <AsleepScene project={view.data?.profile.project || ''} label={t('browser.idle')} size="lg">
+            <Button size="sm" variant="secondary" className="shadow-md" onClick={startIt} data-testid="browser-open">
+              {t('browser.open')}
+            </Button>
+          </AsleepScene>
         ) : (
           <div className="grid place-items-center self-center p-6 text-center text-[13px] text-muted-foreground">
             {b?.state === 'starting' || action.isPending ? (
@@ -485,10 +492,7 @@ export function LiveView({ profile, nav, session, who, start, onMinimize, classN
             ) : (
               <div className="grid justify-items-center gap-2">
                 <Globe className="size-6 opacity-60" />
-                <span>{connected ? t('browser.idle') : t('browser.connecting')}</span>
-                <Button size="sm" variant="outline" onClick={startIt} data-testid="browser-open">
-                  {t('browser.open')}
-                </Button>
+                <span>{t('browser.connecting')}</span>
               </div>
             )}
           </div>
