@@ -4,7 +4,8 @@ navigator (navs.py), nothing of the others.
 The tools speak DevTools to the whole browser (Puppeteer: target discovery + auto-attach). Between them and Chromium:
   - events about another navigator's tab or page are dropped (discovery, info changes, closings); when Chromium
     attaches the tools to one (auto-attach), the relay lets it run and detaches it at once, and every message of that
-    session is dropped; frames and workers are seen only through a page of theirs;
+    session is dropped; frames and workers are seen only through a page of theirs; service and shared workers (one
+    for every page of an origin, whatever its navigator) are never shown, like another navigator's tab;
   - the list of targets they ask for (Target.getTargets) keeps only theirs;
   - commands naming another navigator's tab are refused; a new tab (Target.createTarget) is made by the server in
     their navigator, in a window of its own (pool.create), and its id is answered.
@@ -16,6 +17,7 @@ from __future__ import annotations
 from typing import Awaitable, Callable
 
 FRAMES = {"iframe", "worker", "webview", "auction_worklet", "shared_storage_worklet"}   # seen through their page only
+WORKERS = {"service_worker", "shared_worker", "background_page"}   # shared by the pages of an origin: never shown
 TAB_WAIT = 2.0                      # a new tab: wait this long to learn the page it holds (the watcher attaches to it)
 OWN_IDS = 1_000_000_000            # ids of the commands the relay sends itself (their answers are dropped)
 TARGET_COMMANDS = ("Target.attachToTarget", "Target.closeTarget", "Target.activateTarget", "Target.detachFromTarget",
@@ -50,7 +52,9 @@ class View:
             return True
         if tid in self.hidden:
             return False
-        if kind == "page":
+        if kind in WORKERS:
+            ok = False
+        elif kind == "page":
             ok = self.nav_of(info) == self.nav
         elif kind == "tab":
             page = await self.page_of(tid, TAB_WAIT) if self.page_of else None
@@ -107,7 +111,7 @@ class View:
             child = str(p.get("sessionId") or "")
             target = str(info.get("targetId") or "")
             parent_page = self.sessions.get(str(sid)) if sid else None
-            if info.get("type") in ("page", "tab") and not await self.visible(info):
+            if (info.get("type") in ("page", "tab") or info.get("type") in WORKERS) and not await self.visible(info):
                 self.hidden_sessions.add(child)
                 return None, [self._cmd("Runtime.runIfWaitingForDebugger", {}, child),
                               self._cmd("Target.detachFromTarget", {"sessionId": child}, sid)]

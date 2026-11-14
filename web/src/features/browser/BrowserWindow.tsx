@@ -33,12 +33,15 @@ export function BrowserWindow({ open, onOpenChange, who, start, session, context
   const mineOn = person && pid ? st?.navigators.find((n) => n.kind === 'person' && n.profile === pid)?.id : undefined
   const make = useBrowserNavigator()
   const making = React.useRef('')
+  // none could be made (8 already): the person's first one, on its own profile
+  const [failed, setFailed] = React.useState(false)
   React.useEffect(() => {
     if (!open || !person || !pid || !st || mineOn || making.current === pid) return
     making.current = pid
-    make.mutate({ profile: pid })
+    make.mutate({ profile: pid }, { onError: () => setFailed(true) })
   }, [open, person, pid, st, mineOn, make])
-  const id = person ? mineOn : asked
+  const id = person && !failed ? mineOn : asked
+  const livePid = person && failed ? st?.navigators.find((n) => n.id === 'me')?.profile || 'main' : pid
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
@@ -50,8 +53,8 @@ export function BrowserWindow({ open, onOpenChange, who, start, session, context
         <DialogTitle className="sr-only">{who ? t('browser.topicTitle', { name: who }) : t('browser.name')}</DialogTitle>
         <DialogDescription className="sr-only">{t('browser.dialogDesc')}</DialogDescription>
         <React.Suspense fallback={<Skeleton className="m-4 h-80" />}>
-          {pid && id ? (
-            <LiveView profile={pid} nav={id} session={session} who={who} start={start} onMinimize={() => onOpenChange(false)} className="h-full" />
+          {livePid && id ? (
+            <LiveView profile={livePid} nav={id} session={session} who={who} start={start} onMinimize={() => onOpenChange(false)} className="h-full" />
           ) : (
             <Skeleton className="m-4 h-80" />
           )}

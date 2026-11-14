@@ -152,6 +152,7 @@ function useLive(active: boolean, profile: string, nav: string, quality: Quality
   // the <img> of the page: shows the latest picture as soon as it is mounted
   const imgRef = React.useCallback((el: HTMLImageElement | null) => {
     img.current = el
+    drawing.current = false             // a new <img>: nothing of the old one's is pending any more
     if (el && url.current) el.src = url.current
   }, [])
   return { frame, imgRef, state, error, setError, connected, send, readPace }

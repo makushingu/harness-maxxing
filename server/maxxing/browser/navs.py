@@ -14,14 +14,18 @@ from __future__ import annotations
 
 import json
 import re
+import threading
 import time
 
 from .. import browser, config
 
 ME = "me"
 MAX_PERSON = 8
-NAV_RE = re.compile(r"^(me(-[0-9]{1,3})?|agent:projects/[^\s:]{1,250}|session:[A-Za-z0-9_-]{6,80})\Z")
+SEG = r"(?!\.\.?/)[^\s:/]{1,80}"            # a folder name (never "." or "..")
+NAV_RE = re.compile(rf"^(me(-[0-9]{{1,3}})?|agent:projects/{SEG}/topics/{SEG}/agents/(?!\.\.?\Z)[^\s:/]{{1,80}}"
+                    r"|session:[A-Za-z0-9_-]{6,80})\Z")
 PERSON_RE = re.compile(r"^me(-[0-9]{1,3})?\Z")
+_lock = threading.Lock()                # navigators.json: read, change, write (routes run in threads)
 
 
 def valid(nav: object) -> bool:
@@ -85,53 +89,57 @@ def get_person(nav: str) -> dict | None:
 
 
 def create(profile: str = browser.MAIN, name: str = "") -> dict:
-    if browser.profile(profile) is None:
-        raise browser.BrowserError(404, "no_profile", "No such browser profile")
-    rows = person()
-    if len(rows) >= MAX_PERSON:
-        raise browser.BrowserError(409, "too_many", f"At most {MAX_PERSON} browsers of your own")
-    taken = {n["id"] for n in rows}
-    i = 2
-    while f"me-{i}" in taken:
-        i += 1
-    row = {"id": f"me-{i}", "name": browser._name(name), "profile": profile, "at": time.time()}
-    _save(rows + [row])
-    return row
+    with _lock:
+        if browser.profile(profile) is None:
+            raise browser.BrowserError(404, "no_profile", "No such browser profile")
+        rows = person()
+        if len(rows) >= MAX_PERSON:
+            raise browser.BrowserError(409, "too_many", f"At most {MAX_PERSON} browsers of your own")
+        taken = {n["id"] for n in rows}
+        i = 2
+        while f"me-{i}" in taken:
+            i += 1
+        row = {"id": f"me-{i}", "name": browser._name(name), "profile": profile, "at": time.time()}
+        _save(rows + [row])
+        return row
 
 
 def update(nav: str, profile: str | None = None, name: str | None = None) -> tuple[dict, str]:
     """(the navigator, the profile it had)."""
-    rows = person()
-    row = next((n for n in rows if n["id"] == nav), None)
-    if row is None:
-        raise browser.BrowserError(404, "no_navigator", "No such browser")
-    old = row["profile"]
-    if profile is not None:
-        if browser.profile(profile) is None:
-            raise browser.BrowserError(404, "no_profile", "No such browser profile")
-        row["profile"] = profile
-    if name is not None:
-        row["name"] = browser._name(name)
-    _save(rows)
-    return row, old
+    with _lock:
+        rows = person()
+        row = next((n for n in rows if n["id"] == nav), None)
+        if row is None:
+            raise browser.BrowserError(404, "no_navigator", "No such browser")
+        old = row["profile"]
+        if profile is not None:
+            if browser.profile(profile) is None:
+                raise browser.BrowserError(404, "no_profile", "No such browser profile")
+            row["profile"] = profile
+        if name is not None:
+            row["name"] = browser._name(name)
+        _save(rows)
+        return row, old
 
 
 def delete(nav: str) -> dict:
-    if nav == ME:
-        raise browser.BrowserError(400, "keep_me", "Your first browser stays (close its tabs instead)")
-    rows = person()
-    row = next((n for n in rows if n["id"] == nav), None)
-    if row is None:
-        raise browser.BrowserError(404, "no_navigator", "No such browser")
-    _save([n for n in rows if n["id"] != nav])
-    return row
+    with _lock:
+        if nav == ME:
+            raise browser.BrowserError(400, "keep_me", "Your first browser stays (close its tabs instead)")
+        rows = person()
+        row = next((n for n in rows if n["id"] == nav), None)
+        if row is None:
+            raise browser.BrowserError(404, "no_navigator", "No such browser")
+        _save([n for n in rows if n["id"] != nav])
+        return row
 
 
 def on_profile_deleted(pid: str) -> None:
     """The person's navigators on a deleted profile go back to `main`."""
-    rows = person()
-    if any(n["profile"] == pid for n in rows):
-        _save([{**n, "profile": browser.MAIN if n["profile"] == pid else n["profile"]} for n in rows])
+    with _lock:
+        rows = person()
+        if any(n["profile"] == pid for n in rows):
+            _save([{**n, "profile": browser.MAIN if n["profile"] == pid else n["profile"]} for n in rows])
 
 
 # ---- where a navigator lives ---------------------------------------------------------------------------------------

@@ -657,6 +657,13 @@ def test_a_turn_sees_only_the_tabs_of_its_own_browser(mx):
         assert (await v.incoming(mine))[0] is mine and (await v.incoming(other))[0] is None
         frame = {"method": "Target.targetCreated", "params": {"targetInfo": {"targetId": "f1", "type": "iframe"}}}
         assert (await v.incoming(frame))[0] is None                     # frames: only through a page of its own
+        # a service worker serves every page of its origin, whatever the navigator: never shown, detached at once
+        sw = {"targetId": "sw1", "type": "service_worker", "url": "https://bank.example/sw.js"}
+        assert (await v.incoming({"method": "Target.targetCreated", "params": {"targetInfo": sw}}))[0] is None
+        out, extra = await v.incoming({"method": "Target.attachedToTarget", "params": {"sessionId": "S5", "targetInfo": sw}})
+        assert out is None and extra[-1]["method"] == "Target.detachFromTarget"
+        assert v.outgoing({"id": 4, "method": "Runtime.evaluate", "sessionId": "S5", "params": {}})
+        assert v.outgoing({"id": 3, "method": "Target.attachToTarget", "params": {"targetId": "sw1"}})
         # auto-attach to another navigator's tab: let it run, detach it, drop everything of that session
         out, extra = await v.incoming({"method": "Target.attachedToTarget", "params": {"sessionId": "S9", "targetInfo": {
             "targetId": "tab2", "type": "tab"}}})
@@ -1231,6 +1238,14 @@ def test_new_tabs_are_made_one_at_a_time_in_their_navigator(mx):
         assert b.tabs.claims == []
     asyncio.run(run())
     assert pool_mod.Turn("s9", "agent:projects/acme/topics/blog/agents/w").nav == "agent:projects/acme/topics/blog/agents/w"
+
+
+def test_a_navigator_id_names_an_agent_folder_or_nothing():
+    from maxxing.browser import navs
+    assert navs.valid("agent:projects/acme/topics/blog/agents/writer") and navs.valid("me-2")
+    for bad in ("agent:projects/../topics/x/agents/y", "agent:projects/a/topics/b/agents/..",
+                "agent:projects/a/topics/b", "agent:projects/a/topics/b/agents/w/x", "me-x", "session:a b"):
+        assert not navs.valid(bad), bad
 
 
 def test_the_api_lists_and_manages_the_navigators(client, mx):
