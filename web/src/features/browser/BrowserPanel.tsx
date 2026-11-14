@@ -112,7 +112,7 @@ export function BrowserPanel({ path, live = true, who }: { path: string; live?: 
             <Button size="sm" variant="outline" onClick={() => setWin(true)} data-testid="browser-open-window">
               {t('browser.open')}
             </Button>
-            <Link to={`/browser?profile=${encodeURIComponent(o.profile)}&view=settings`} className="text-[12px] text-muted-foreground underline-offset-2 hover:underline">
+            <Link to={`/browser?profile=${encodeURIComponent(o.profile)}`} className="text-[12px] text-muted-foreground underline-offset-2 hover:underline">
               {t('browser.profile.settingsLink')}
             </Link>
           </div>

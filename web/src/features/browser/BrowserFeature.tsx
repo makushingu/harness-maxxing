@@ -86,7 +86,7 @@ export function BrowserSettingsForm() {
         {st.profiles.map((p) => {
           const e = st.exits.find((x) => x.id === p.exit)
           return (
-            <Link key={p.id} to={`/browser?profile=${encodeURIComponent(p.id)}&view=settings`} className="flex items-center gap-2 rounded-md px-1 py-1 text-[13px] hover:bg-accent/50">
+            <Link key={p.id} to={`/browser?profile=${encodeURIComponent(p.id)}`} className="flex items-center gap-2 rounded-md px-1 py-1 text-[13px] hover:bg-accent/50">
               <span className={`size-1.5 shrink-0 rounded-full ${exitTone(e)}`} />
               <span className="font-medium">{profileName(p, t)}</span>
               <span className="truncate text-muted-foreground">· {p.exit === 'direct' ? t('browser.exit.direct') : e?.name || p.exit}</span>

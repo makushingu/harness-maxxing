@@ -1,6 +1,6 @@
 // Small helpers shared by the browser's views: names of profiles and exits, who uses a tab, an exit's state line.
 import type { TFn as T } from '@/i18n'
-import type { BrowserExit, BrowserExitTest, BrowserProfile, BrowserTab } from '@/lib/types'
+import type { BrowserExit, BrowserExitTest, BrowserNavigator, BrowserProfile } from '@/lib/types'
 
 /** `main` with no name of its own reads "Main" in the user's language. */
 export const profileName = (p: Pick<BrowserProfile, 'id' | 'name'> | undefined, t: T) =>
@@ -24,13 +24,6 @@ export const testWhere = (x: BrowserExitTest | null | undefined) => (x?.ok ? [x.
 /** green / red / grey dot of an exit (direct: always green). */
 export const exitTone = (e: BrowserExit | undefined) => (!e ? 'bg-success' : e.state === 'up' ? 'bg-success' : e.state === 'down' ? 'bg-destructive' : 'bg-muted-foreground/50')
 
-/** The tab a session last used, else the newest one a turn of that folder opened. */
-export function tabOfSession(tabs: BrowserTab[], session: string, path?: string): BrowserTab | undefined {
-  const own = tabs.filter((t) => t.by.sid === session).sort((a, b) => b.used - a.used)
-  if (own.length) return own[0]
-  return path ? tabs.filter((t) => t.by.path === path).sort((a, b) => b.used - a.used)[0] : undefined
-}
-
 /** "projects/acme/topics/blog/agents/writer" -> { kind: 'agent', name: 'writer', where: 'acme / blog' }. */
 export function ownerParts(path: string): { kind: 'project' | 'topic' | 'agent'; name: string; where: string } {
   const m = path.match(/^projects\/([^/]+)(?:\/topics\/([^/]+)(?:\/agents\/([^/]+))?)?/)
@@ -38,4 +31,19 @@ export function ownerParts(path: string): { kind: 'project' | 'topic' | 'agent';
   if (m[3]) return { kind: 'agent', name: m[3], where: `${m[1]} / ${m[2]}` }
   if (m[2]) return { kind: 'topic', name: `${m[1]} / ${m[2]}`, where: m[1] }
   return { kind: 'project', name: m[1], where: '' }
+}
+
+/** The navigator of a turn: an agent's (all its runs share it), else the session's; "me" = the person's own. */
+export function navOf(session?: string, path?: string): string {
+  const p = (path || '').replace(/\/+$/, '')
+  if (/^projects\/[^/]+\/topics\/[^/]+\/agents\/[^/]+$/.test(p)) return `agent:${p}`
+  return session ? `session:${session}` : 'me'
+}
+
+/** A navigator's name: the person's own name for it ("Your browser", "Browser 2"), an agent's, a session's title. */
+export function navName(n: Pick<BrowserNavigator, 'id' | 'kind' | 'name'> | undefined, t: T): string {
+  if (!n) return ''
+  if (n.name) return n.name
+  if (n.kind === 'person') return n.id === 'me' ? t('browser.nav.me') : t('browser.nav.numbered', { n: n.id.slice(3) })
+  return n.kind === 'session' ? t('browser.nav.session') : n.id
 }

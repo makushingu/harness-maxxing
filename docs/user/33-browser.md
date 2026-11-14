@@ -27,17 +27,30 @@ It is off everywhere until you turn it on:
 
 The browser has its own page: **Browser** in the sidebar.
 
+## Browsers and profiles
+
+Two words, two things:
+
+- a **browser** is a window with its tabs. You open as many as you like (**+ New browser** on the Browser page), each
+  agent has its own, and so does each session that uses the browser. A browser only sees its own tabs: a session
+  never sees an agent's tabs, nor yours, and the other way round.
+- a **profile** is what a browser is signed in with: its sign-ins (cookies), its sites and its exit. Several browsers
+  may use the same profile: they are then signed in to the same sites, each with its own tabs.
+
+You may open a tab in a session's or an agent's browser yourself (to sign in for it, say): it sees that tab, marked
+as yours.
+
 ## Profiles
 
-A **profile** is a browser of its own: its own sign-ins (cookies), its own list of sites, its own exit (where its pages
+A **profile** is a set of sign-ins of its own: its own sign-ins (cookies), its own list of sites, its own exit (where its pages
 go out, see below). **Main** always exists and is used by the sessions of every project and topic that do not choose
 another one. Make another profile for what you want kept apart: a client, a second shop account. Each agent turned on
 gets one of its own (see [Agents](#agents)).
 
-On the Browser page, **Your browsers** lists Main and the profiles you made, **Agents' browsers** the agents' own.
+On the Browser page, **Profiles (sign-ins)** lists Main, the profiles you made and the agents' own.
 
 - **New profile**: the **+** of the Browser page -> **New profile**, give it a name (`Shop`, `Client Acme`).
-- **Profile settings** (button above the live view): its name, its **Exit**, **Sites it may open**, **When the exit is
+- **Profile settings** (a profile of the list, or **Sign-ins: ...** above the live view): its name, its **Exit**, **Sites it may open**, **When the exit is
   down**, who uses it, its memory.
 - **Sites it may open**:
   - **Only these sites** (the default): type the sites it needs (`shop.example.com`, `example.com`: subdomains are
@@ -59,7 +72,8 @@ The **Browser...** window of a project or a topic has a **Profile** choice. **In
 a topic its project's, a project **Main**. So choosing a profile for a project is enough for all its topics and their
 sessions.
 
-The same window shows the profile's exit and its state, and **Open the browser** on that profile.
+The same window shows the profile's exit and its state, and **Open the browser**: one of your browsers on that profile
+(a new one if none uses it yet).
 
 ## Exits: where the pages go out
 
@@ -142,23 +156,29 @@ the engine's site in it to search. A new tab has the same search box in its midd
 
 The **Browser** page has two parts:
 
-- the second bar: **Your browsers**, then **Agents' browsers** (each with its exit and its state: tabs open, asleep,
-  paused), then **Exits**, and **+** to add a profile or an exit;
-- the profile picked, live: its name, **via** its exit, who uses it, **Profile settings**, **Sleep**; then the browser
-  itself: tabs, `+` for a new tab, the address bar, the page (full screen on a phone). A new tab shows your sites to
-  open in one click.
+- the second bar: **Your browsers** (+ **New browser**), **Agents**, **Sessions** (those that used it in the last day),
+  each with its profile and its page, then **Profiles (sign-ins)**, then **Exits**, and **+** to add a browser, a
+  profile or an exit;
+- the browser picked, live: its name, **Sign-ins:** its profile, **via** its exit (your browsers: **...** -> **Rename**,
+  **Close this browser**); then the browser itself: tabs, `+` for a new tab, the address bar, the page (full screen on
+  a phone). A new tab shows your sites to open in one click.
+
+The **⋮** at the end of the address bar holds what you change while browsing: whose **sign-ins** it uses (your
+browsers and an agent's; a session's follows its folder), the profile's **exit** and its state, the **sites** it may
+open, the **search engine**, the **picture** (**Auto** follows your network, **Smooth** = lighter pictures, more of
+them, for a far or slow connection, **Sharp**), **Forget sign-ins**, and **Profiles and exits...** for the rest.
 
 In a session, a line above the message box says when Claude is using the browser, or how many tabs of this session
-are open. **Watch** opens the browser window on that session's tab; the **x** only hides the line.
+are open. **Watch** opens the browser window of that session (of the agent, in an agent's conversation); the **x**
+only hides the line.
 
-Every tab of a profile is seen by every session and agent that uses that profile; each tab says who opened it (you,
-a session, the agent `writer`). When Claude is acting on the tab you are looking at, **click the page to take
+Each tab says who opened it (you, a session, the agent `writer`). When Claude is acting on the tab you are looking at, **click the page to take
 over**. While you have the tab, Claude's actions on it wait (at most a minute and a half, then it is told the tab is
 busy); its other tabs go on. You give the tab back with **Hand back to Claude**, or by going to another tab (after a
 minute without using it, it goes back by itself).
 
-The live view follows your connection: a slow network gets fewer pictures, never late ones, and the picture quality
-adapts. The gauge button in the bar under the page shows how smooth it is (pictures per second, their size, the delay
+The live view follows your connection: a far one still gets a steady flow (a few pictures are on their way at
+once), a slow one gets fewer, never late ones, and the picture quality adapts (or pick it in the **⋮**). The gauge button in the bar under the page shows how smooth it is (pictures per second, their size, the delay
 after a click). The view is drawn first while you watch it or Claude acts in it, when the server's processor is busy.
 
 ## When Claude needs you

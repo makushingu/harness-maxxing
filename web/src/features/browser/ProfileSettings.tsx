@@ -33,6 +33,7 @@ export function ProfileSettings({ pid }: { pid: string }) {
     { value: '__new', label: <span className="text-primary">{t('browser.exit.add')}</span> },
   ]
   const b = v.browser
+  const mine = st?.navigators.find((n) => n.kind === 'person' && n.profile === p.id)
   const forget = async () => {
     if (!(await confirm({ title: t('browser.forgetTitle'), description: t('browser.forgetConfirm'), destructive: true }))) return
     action.mutate({ profile: p.id, action: 'forget' })
@@ -144,9 +145,11 @@ export function ProfileSettings({ pid }: { pid: string }) {
           </div>
           <p className="text-[12px] text-muted-foreground">{t('browser.forgetDesc')}</p>
         </section>
-        <Link to={`/browser?profile=${encodeURIComponent(p.id)}`} className="text-[12px] text-primary underline-offset-2 hover:underline">
-          {t('browser.profile.backToLive', { exit: exitName(p.exit, exits, t) })}
-        </Link>
+        {mine && (
+          <Link to={`/browser?nav=${encodeURIComponent(mine.id)}`} className="text-[12px] text-primary underline-offset-2 hover:underline">
+            {t('browser.profile.backToLive', { exit: exitName(p.exit, exits, t) })}
+          </Link>
+        )}
       </div>
     </div>
   )

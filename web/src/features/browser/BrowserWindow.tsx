@@ -1,16 +1,18 @@
 // The Harness Browser in a window that looks like a browser (LiveView), the same everywhere: "Watch" above a session's
 // composer, the "!" of the Office, a topic's / an agent's browser settings. Full screen on a phone. Closing the window
-// only hides it: the browser keeps running (it is stopped from its status bar or the Browser page). `start`: a stopped
-// profile starts when the window opens; `session`: that session's tab is shown; `context`: the project / topic / agent
-// folder it is opened from (its profile, unless `profile` says which).
+// only hides it: the browser keeps running (it is stopped from its status bar or the Browser page). It shows one
+// navigator: the agent's when `context` is an agent folder, else the session's (`session`), unless `nav` says which;
+// in the profile that navigator uses (the folder's settings, unless `profile` says which). `start`: a stopped profile
+// starts when the window opens.
 import * as React from 'react'
 import { useT } from '@/i18n'
-import { useBrowserOwner } from '@/lib/queries'
+import { useBrowserNavigator, useBrowserOwner, useBrowserStatus } from '@/lib/queries'
 import { Dialog, DialogContent, DialogDescription, DialogTitle, Skeleton } from '@/components/ui'
+import { navOf } from './profiles'
 
 const LiveView = React.lazy(() => import('./LiveView').then((m) => ({ default: m.LiveView })))
 
-export function BrowserWindow({ open, onOpenChange, who, start, session, context, profile }: {
+export function BrowserWindow({ open, onOpenChange, who, start, session, context, profile, nav }: {
   open: boolean
   onOpenChange: (v: boolean) => void
   who?: string
@@ -18,10 +20,25 @@ export function BrowserWindow({ open, onOpenChange, who, start, session, context
   session?: string
   context?: string
   profile?: string
+  nav?: string
 }) {
   const t = useT()
-  const owner = useBrowserOwner(context || '', open && !profile && !!context)
-  const pid = profile || owner.data?.profile || (context ? undefined : 'main')
+  const asked = nav || navOf(session, context)
+  const person = asked === 'me' && !nav
+  const { data: st } = useBrowserStatus(open)
+  const known = person ? undefined : st?.navigators.find((n) => n.id === asked)?.profile
+  const owner = useBrowserOwner(context || '', open && !profile && !known && !!context)
+  const pid = profile || known || owner.data?.profile || (context ? undefined : 'main')
+  // a topic's browser, opened by the person: their navigator on that profile (a new one if none uses it yet)
+  const mineOn = person && pid ? st?.navigators.find((n) => n.kind === 'person' && n.profile === pid)?.id : undefined
+  const make = useBrowserNavigator()
+  const making = React.useRef('')
+  React.useEffect(() => {
+    if (!open || !person || !pid || !st || mineOn || making.current === pid) return
+    making.current = pid
+    make.mutate({ profile: pid })
+  }, [open, person, pid, st, mineOn, make])
+  const id = person ? mineOn : asked
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
@@ -33,8 +50,8 @@ export function BrowserWindow({ open, onOpenChange, who, start, session, context
         <DialogTitle className="sr-only">{who ? t('browser.topicTitle', { name: who }) : t('browser.name')}</DialogTitle>
         <DialogDescription className="sr-only">{t('browser.dialogDesc')}</DialogDescription>
         <React.Suspense fallback={<Skeleton className="m-4 h-80" />}>
-          {pid ? (
-            <LiveView profile={pid} context={context} session={session} who={who} start={start} onMinimize={() => onOpenChange(false)} className="h-full" />
+          {pid && id ? (
+            <LiveView profile={pid} nav={id} session={session} who={who} start={start} onMinimize={() => onOpenChange(false)} className="h-full" />
           ) : (
             <Skeleton className="m-4 h-80" />
           )}

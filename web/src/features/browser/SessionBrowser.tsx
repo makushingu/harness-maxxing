@@ -1,8 +1,8 @@
 // The Harness Browser in a session: a line above the composer while this session uses it ("Claude is using the
 // browser") or while it has tabs open in its profile (Watch, x to hide the line); while Claude waits for the user in it
 // (its request, Open, Skip); and while its turn stopped because the profile's exit is down (Go on when it is back,
-// Retry now, Open the exit). Watch opens the browser window (BrowserWindow) on this session's tab, as does a new
-// request or ?browser=1 (the notification's link).
+// Retry now, Open the exit). Watch opens the browser window (BrowserWindow) on this session's navigator (the agent's in
+// an agent folder), as does a new request or ?browser=1 (the notification's link).
 import * as React from 'react'
 import { Link } from 'react-router'
 import { CloudOff, Globe, Hand, SkipForward, X } from 'lucide-react'
@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui'
 import { openBrowserOf, useBrowserWanted } from './open'
 import { BrowserWindow } from './BrowserWindow'
-import { exitName, tabOfSession } from './profiles'
+import { exitName, navOf } from './profiles'
 
 /** A topic or an agent folder: the folders that may use the browser. */
 const BROWSER_PATH = /^projects\/[^/]+\/topics\/[^/]+(\/agents\/[^/]+)?$/
@@ -38,15 +38,16 @@ function Bar({ session }: { session: Session }) {
   const open = useBrowserWanted(session.id)
   const [, redraw] = React.useReducer((n: number) => n + 1, 0)
   const { data: o } = useBrowserOwner(session.path || '')
+  const nav = navOf(session.id, session.path)
   const turnProfile = st?.summary.turns[session.id]
-  const pid = turnProfile || o?.profile || 'main'
+  const pid = turnProfile || st?.navigators.find((n) => n.id === nav)?.profile || o?.profile || 'main'
   const { data: v } = useBrowserProfile(pid, !!st?.summary.running.includes(pid))
   const b = v?.browser
   const running = b?.state === 'running'
   const waiting = asks || []
   const using = !!turnProfile
-  const tab = running ? tabOfSession(b?.tabs || [], session.id, session.path) : undefined
-  const tabs = running ? (b?.tabs || []).filter((x) => !x.asleep && (x.by.sid === session.id || x.by.path === session.path)) : []
+  const tabs = running ? (b?.tabs || []).filter((x) => !x.asleep && x.nav === nav) : []
+  const tab = [...tabs].sort((x, y) => y.used - x.used)[0]
   const down = session.browser_exit
   if (using) hidden.delete(session.id)
 
@@ -92,7 +93,7 @@ function Bar({ session }: { session: Session }) {
           </Button>
         </div>
       )}
-      <BrowserWindow context={session.path} profile={pid} session={session.id} open={open} onOpenChange={(v) => openBrowserOf(v ? session.id : null)} start />
+      <BrowserWindow context={session.path} profile={pid} nav={nav} session={session.id} open={open} onOpenChange={(v) => openBrowserOf(v ? session.id : null)} start />
     </div>
   )
 }

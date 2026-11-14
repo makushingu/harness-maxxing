@@ -562,7 +562,11 @@ there, not stored). Who uses which profile: a `browser` block `{enabled?, profil
 project or a topic and in an agent's agent.json; a missing key is inherited agent -> topic -> project -> default
 (`enabled: false`, `profile: "main"`); an agent's `enabled` is never inherited; a profile that no longer exists =
 `main`, except an agent's own choice: it then has no browser (`enabled: false`, `gone`). An agent turned on without a
-profile (or `profile: "own"`) gets its own browser: a profile with `agent` = its path, made once. Every turn of a profile sees all its tabs (`by` says who opened one). Bus topic `browser` on every start / stop /
+profile (or `profile: "own"`) gets its own browser: a profile with `agent` = its path, made once. **Navigators**
+(`navs.py`): a window of tabs in a profile's Chromium; several may share a profile (its sign-ins), each sees only its
+tabs: the person's `me`, `me-2`... (stored in `<state>/browser/navigators.json`, on any profile), `agent:<path>` (every
+run of an agent), `session:<sid>` (the turns of a session, in its folder's profile). A turn's tools see only its
+navigator's tabs (view.py); the person may open tabs in any navigator (they are marked as theirs). Bus topic `browser` on every start / stop /
 tab change / request / exit state change (`sessions` too when a turn starts or stops waiting for an exit).
 Errors: `{error, message}`.
 
@@ -589,10 +593,15 @@ ExitTest        { ok, at, error?, ip, country, country_code, city, operator, asn
 ProfileRow      = BrowserProfile + { state: "starting"|"running"|"stopped", tabs, awake, mem, turns, control: bool,
                   asks, has_data: bool (its folder exists) }
 BrowserTab      { key, url, title, by: {kind: "you"|"session"|"agent", sid?, name?, path?}, asleep: bool,
-                  front: bool (shown in the live view), used }
-BrowserState    { profile, state, started, last_use, stops_at, tabs: [BrowserTab], front: key|null,
+                  front: bool (shown in the live view of its navigator), used, nav }
+Navigator       { id: "me"|"me-<n>"|"agent:<path>"|"session:<sid>", kind: "person"|"agent"|"session", name (the
+                  person's name for it | the agent's | the session's title), path?, session?, profile: pid|null (an
+                  agent whose profile is gone), running, tabs, awake, page: {url, title}|null, control: bool,
+                  watched: bool (a live view shows it), turns, used }
+                  (the person's, the agents' with a browser on, sessions with a tab awake or used in the last 24 h)
+BrowserState    { profile, nav: navigator|null (null: the whole profile), state, started, last_use, stops_at, tabs: [BrowserTab], front: key|null,
                   page: {url, title}|null, control: bool (the person has the tab shown), control_by,
-                  busy: bool (a turn acted on the tab shown in the last 15 s), turns: [{session, path, kind}],
+                  busy: bool (a turn acted on the tab shown in the last 15 s), turns: [{session, path, kind, nav}],
                   mem, level: ""|"live"|"background" (CPU level of its unit), bytes, blocked: [host] (5 newest),
                   dialog: {type: "alert"|"confirm"|"prompt"|"beforeunload", message, default}|null (open on a page),
                   chooser: {multiple}|null (a page asked for files) }
@@ -612,22 +621,25 @@ BrowserAction   { at, session, tool, args (values typed -> "<n chars>", urls wit
 
 | Method | Path | Body | Response |
 |---|---|---|---|
-| GET | `/api/browser` | – | `{feature, settings: BrowserSettings, available: {ok, missing}, tools: {tailscale, wireguard} (installed), setup: {running, log, error}, profiles: [ProfileRow], exits: [ExitView], direct: {test: ExitTest\|null}, summary: Summary, asks: [BrowserAsk], waiting: [Waiting]}` |
+| GET | `/api/browser` | – | `{feature, navigators: [Navigator], settings: BrowserSettings, available: {ok, missing}, tools: {tailscale, wireguard} (installed), setup: {running, log, error}, profiles: [ProfileRow], exits: [ExitView], direct: {test: ExitTest\|null}, summary: Summary, asks: [BrowserAsk], waiting: [Waiting]}` |
 | PUT | `/api/browser/settings` | `Partial<BrowserSettings>` (other keys ignored) | same as GET (`400 bad_browser`) |
 | POST | `/api/browser/setup` | `{exits?: bool}` | `{running: true}`; installs in the background (root): Chromium & co, `exits` = also Tailscale + wireproxy (pinned versions, checked hashes) into `<state>/tools/`; see `setup` in GET |
 | POST | `/api/browser/profiles` | `{name, exit?, web?, sites?, on_exit_down?}` | `BrowserProfile` (`400 bad_browser` no name / bad value / unknown exit, `409 too_many`) |
 | GET | `/api/browser/profiles/{pid}` | – | `{profile: BrowserProfile, browser: BrowserState, used_by: [{owner, path, kind}] (chosen there, not inherited), actions: [BrowserAction] (30 newest), asks: [BrowserAsk]}` (`404 no_profile`) |
 | PUT | `/api/browser/profiles/{pid}` | same as POST, every key optional | `BrowserProfile` (`400`, `404 no_profile`); a change of `web` / `sites` restarts a running profile once nobody uses it |
 | DELETE | `/api/browser/profiles/{pid}` | – | `{ok}`; stops it, erases its folder, tabs and journal (`404`, `409 main`) |
-| POST | `/api/browser/profiles/{pid}/open` | `{session?}` | `BrowserState`; starts it for the person (its last tab, else the first site of its list); `session`: shows that session's last tab (`409 off`, `409 too_many_profiles`, `503 unavailable`, `404`) |
+| POST | `/api/browser/profiles/{pid}/open` | `{nav?}` (`me`) | `BrowserState` of that navigator; starts the profile for the person with a tab in it (its last one, else the first site of the list) (`400 bad_navigator`, `404 no_navigator`, `409 off`, `409 too_many_profiles`, `503 unavailable`, `404`) |
 | POST | `/api/browser/profiles/{pid}/stop` | – | `BrowserState`; the profile sleeps (its tabs are kept, asleep) |
 | POST | `/api/browser/profiles/{pid}/sleep` | – | `BrowserState` + `slept`: every tab not shown sleeps |
 | POST | `/api/browser/profiles/{pid}/forget` | – | `BrowserState`; stopped, sign-ins, tabs and journal erased |
-| GET | `/api/browser/profiles/{pid}/picture?path=&w=480` | – | JPEG (`no-store`) of the tab the folder `path` used last, else the one shown, `w` 160..960 px wide; `204` while the profile is not running (never starts it) (`404 no_profile`) |
-| POST | `/api/browser/profiles/{pid}/files` | multipart `files` (<= 20, 50 MB each) | `BrowserState`; given to the page that asked (its file input, `chooser`), copied into the profile's uploads folder (`409 no_chooser`, `413 too_large`) |
-| POST | `/api/browser/profiles/{pid}/tabs` | `{url?}` | `BrowserState`; a new tab of the person (`400 refused` for a page its rules refuse) |
+| GET | `/api/browser/profiles/{pid}/picture?nav=me&w=480` | – | JPEG (`no-store`) of the tab shown in that navigator, else its last used, `w` 160..960 px wide; `204` while the profile is not running (never starts it) (`404 no_profile`) |
+| POST | `/api/browser/profiles/{pid}/files?nav=me` | multipart `files` (<= 20, 50 MB each) | `BrowserState`; given to the page of that navigator that asked (its file input, `chooser`), copied into the profile's uploads folder (`409 no_chooser`, `413 too_large`) |
+| POST | `/api/browser/profiles/{pid}/tabs` | `{url?, nav?}` (`me`) | `BrowserState` of that navigator; a new tab of the person in it, in that navigator's window (`400 refused` for a page its rules refuse) |
 | POST | `/api/browser/profiles/{pid}/tabs/{key}/show` | – | `BrowserState`; shows it, wakes an asleep one (`404 no_tab`) |
-| DELETE | `/api/browser/profiles/{pid}/tabs/{key}` | – | `BrowserState` |
+| DELETE | `/api/browser/profiles/{pid}/tabs/{key}` | – | `BrowserState` (show / close: of the tab's navigator) |
+| POST | `/api/browser/navigators` | `{profile?, name?}` | `{id, name, profile, at}`; a new navigator of the person (`me-2`...; `400 bad_browser`, `409 too_many` past 8) |
+| PUT | `/api/browser/navigators/{nav}` | `{profile?, name?}` | same; a new profile: its tabs move there, asleep (`404 no_navigator`) |
+| DELETE | `/api/browser/navigators/{nav}` | – | `{ok}`; its tabs closed (`409` for `me`) |
 | POST | `/api/browser/exits` | `{type, name?, url?, user?, secret?, node?, login_server?}` | `ExitView`; the id is made from the name (`400 bad_exit` no type / bad url / bad login_server, `400 bad_secret`, `409 too_many`) |
 | PUT | `/api/browser/exits/{eid}` | same, every key optional (`type` ignored) | `ExitView`; `secret` replaces the vault value; its runtime state is forgotten (`404 no_exit`) |
 | DELETE | `/api/browser/exits/{eid}` | – | `{ok}`; vault key, unit and `<state>/browser/exits/<eid>/` removed (`404`, `409 in_use` while a profile uses it) |
@@ -640,7 +652,7 @@ BrowserAction   { at, session, tool, args (values typed -> "<n chars>", urls wit
 | GET | `/api/browser/asks?session=&path=` | – | `{asks: [BrowserAsk]}` pending |
 | POST | `/api/browser/asks/{id}` | `{action: "done"\|"skip", note?}` | `BrowserAsk` (`409 decided`); the person's hand is released. `done` stores the hand-back in the request file (never in the response): `trail` (pages the person went to in that session's tab, without query), `page`, `picture` (base64 JPEG): `ask_human` returns them to Claude (text + an image block) |
 | POST | `/api/browser/live-token` | – | `{token}` one use, 30 s |
-| WS | `/api/browser/live?t=<token>&profile=<pid>&q=auto\|high\|low` | signed-in cookie + token | one profile (default `main`; `4403` bad token / cookie, `4404` no profile). Server -> binary JPEG frames of the tab shown, text `{"t":"state", browser: BrowserState, me, asks}` (when it changes) / `{"t":"error", text}`. Client -> `{"t":"got"}` after drawing each frame (the next one is sent only then, or after 1 s; frames are never queued: newest only), `{"t":"mouse", type: down\|up\|move, x, y (0..1), button?, clicks?, alt?, ctrl?, meta?, shift?}`, `{"t":"wheel", x, y, dx, dy}`, `{"t":"key", type: down\|up, key, code, keyCode, text?}`, `{"t":"text", text}`, `{"t":"nav", url}` (`rules.address`: not an address = a search with `settings.search`), `{"t":"back"\|"forward"\|"reload"}` (each one gives the person the tab shown), `{"t":"copy"}` -> `{"t":"copied", text}` (the page's selection), `{"t":"dialog", accept, text?}` (answers `dialog`), `{"t":"chooser"}` (no file for the page), `{"t":"take"}`, `{"t":"release", done?: true\|"skip", note?}`, `{"t":"quality", q}`, `{"t":"size", w, h, dpr?}` (CSS px of the view: the page in front is laid out for it, clamped 360x320..2560x1600; back to 1280x800 when nobody watches). `auto`: JPEG quality 30..70 follows the time a frame takes to reach the slowest viewer |
+| WS | `/api/browser/live?t=<token>&profile=<pid>&nav=<navigator>&q=auto\|high\|low` | signed-in cookie + token | one navigator (default `me`) of a profile (default `main`; `4403` bad token / cookie, `4404` no profile). Server -> binary JPEG frames of the tab shown, text `{"t":"state", browser: BrowserState, me, asks}` (when it changes) / `{"t":"error", text}`. Client -> `{"t":"got"}` as each frame arrives (up to 3 are on their way per viewer, `live.INFLIGHT`; one the connection could not send yet is replaced by the newer one; quality adapts to the queueing measured), `{"t":"mouse", type: down\|up\|move, x, y (0..1), button?, clicks?, alt?, ctrl?, meta?, shift?}`, `{"t":"wheel", x, y, dx, dy}`, `{"t":"key", type: down\|up, key, code, keyCode, text?}`, `{"t":"text", text}`, `{"t":"nav", url}` (`rules.address`: not an address = a search with `settings.search`), `{"t":"back"\|"forward"\|"reload"}` (each one gives the person the tab shown), `{"t":"copy"}` -> `{"t":"copied", text}` (the page's selection), `{"t":"dialog", accept, text?}` (answers `dialog`), `{"t":"chooser"}` (no file for the page), `{"t":"take"}`, `{"t":"release", done?: true\|"skip", note?}`, `{"t":"quality", q}`, `{"t":"size", w, h, dpr?}` (CSS px of the view: the page in front is laid out for it, clamped 360x320..2560x1600; back to 1280x800 when nobody watches). `auto`: JPEG quality 30..70 follows the time a frame takes to reach the slowest viewer |
 | POST | `/api/browser/mcp/{sid}` | JSON-RPC `tools/list` \| `tools/call` | loopback + `Authorization: Bearer <turn token>` only (`browser_mcp.py`); owner and profile come from the turn file; refusals, a down exit (after `exit_wait_s`) and `409 too_many_profiles` come back as `isError` tool results |
 | WS | `/api/browser/cdp/{pid}` | – | loopback + `X-Browser-Secret` (one per turn) only: that turn's chrome-devtools-mcp to its profile's Chromium, filtered by `rules.json` and by its view (view.py) |
 

@@ -58,13 +58,19 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 - Modules: `exits.py` (exits, `Runtime` up/down state + 30 s watcher, `Tailscale` = own userspace `tailscaled`, `WireGuard` =
   `wireproxy`, units `maxxing-bx-<install>-<eid>`, `test()` via ip-api.com + 2 MB download, `wait_down` / `set_resume` /
   `_resume_waiters`, `feed_action`), `pool.py` (one Chromium per profile, `max_active_profiles`, `exit_ready`, a
-  chrome-devtools-mcp per turn), `live.py` (frames acknowledged after every viewer's `{"t":"got"}`, adaptive JPEG
-  quality 30..70, `?q=auto|high|low`; `Watcher.dialog` / `chooser` from `Page.javascriptDialogOpening` /
+  chrome-devtools-mcp per turn; `control[nav]`, `create` one tab at a time per profile, `navigators()`, `move_nav`,
+  `drop_nav`), `navs.py` (navigators `me` / `me-<n>` in `<state>/browser/navigators.json`, `agent:<path>`,
+  `session:<sid>`; one window per navigator: `window.open` from a page of it, else `newWindow`), `live.py` (a `Screen`
+  per navigator watched; up to `INFLIGHT` = 3 frames on their way per viewer, `{"t":"got"}` sent on arrival,
+  adaptive JPEG quality 30..70 on the queueing (trip minus fastest trip), `?q=auto|high|low`; the tab shown is
+  `Target.activateTarget`-ed; `Watcher.dialog` / `chooser` from `Page.javascriptDialogOpening` /
   `fileChooserOpened` (interception on for its sessions), viewer events `{"t":"copy"}` -> `{"t":"copied", text}`,
   `{"t":"dialog", accept, text}`, `{"t":"chooser"}` = cancel; `give_files`), `unit.py` (unit
   `maxxing-br-<install>-<pid>`, `set_level` -> `cpu.set_level`, `cpu.turn_slice_args()`, `--lang` /
   `--accept-lang` from `config.language`, `TZ` from `config.timezone`; `run/<pid>/uploads` emptied at each start), `proxy.py` (upstream through the exit by checked IP, 502 + marked down when it fails),
-  `tabs.py` (every turn of a profile sees all its tabs; `by` = who opened it), `view.py`, `relay.py`, `rules.py`
+  `tabs.py` (tabs carry `nav`; `claim` / `assign`; `by` = who opened it), `view.py` (a turn's tools see only their
+  navigator: events filtered, foreign auto-attach detached, `getTargets` filtered, foreign targets refused,
+  `createTarget` made by the server), `relay.py`, `rules.py`
   (`address(text, engine)`: an address or a search, `SEARCH_ENGINES` google | duckduckgo | bing = settings `search`,
   default google; `DOM.setFileInputFiles` allowed only for files
   under `rules.UPLOAD_ROOTS` = `/mxrun/uploads/` (+ the real folder in direct mode),
@@ -79,11 +85,11 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   `tabs/main.json`; top-level `web` / `sites` -> profile `main`.
 - Routes (`api/browser.py`): `GET /api/browser`, `PUT /settings`, `POST /setup {exits?}`, `/profiles` (POST, GET / PUT
   / DELETE `{pid}`, `{pid}/open|stop|sleep|forget`, `{pid}/tabs`, `{pid}/tabs/{key}/show`, DELETE `{pid}/tabs/{key}`),
-  `{pid}/picture?path=&w=` (JPEG of the tab `path` used last, else the one shown; 204 when not running, never
-  starts it), `{pid}/files` (multipart `files`, <= 50 MB each: for the page's open file chooser, 409 without one;
+  `{pid}/open {nav?}`, `{pid}/tabs {url?, nav?}`, `{pid}/picture?nav=&w=` (JPEG of that navigator's tab; 204 when not
+  running, never starts it), `/navigators` (POST, PUT / DELETE `{nav}`), `{pid}/files?nav=` (multipart `files`, <= 50 MB each: for the page's open file chooser, 409 without one;
   `pool.stage`), `/exits` (POST, PUT / DELETE `{eid}`, `{eid}/test` incl. `direct`, GET / POST `{eid}/tailscale`), GET / PUT
   `/owner` (`inherit: [...]`), `POST /waiting/{sid} {action: resume|retry|dismiss}`, `/asks`, `/live-token`, WS
-  `/live?t=&profile=&q=`, loopback `POST /mcp/{sid}` and WS `/cdp/{pid}`. Sessions list: `browser_asks`,
+  `/live?t=&profile=&nav=&q=`, `GET /api/browser` adds `navigators`, loopback `POST /mcp/{sid}` and WS `/cdp/{pid}`. Sessions list: `browser_asks`,
   `browser_exit` (`sessions/service.py`). Feed: ref `browserexit:<eid>` (`feed.HANDLERS`), actions `retry`, `resume`.
 - `pool.public` adds `dialog {type, message, default}` and `chooser {multiple}`. Claude's `upload_file`:
   `pool.claude_file` (a file of the turn's topic / project folder, <= 50 MB) copied by `pool.stage` into the uploads
@@ -92,7 +98,9 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   profile add|set|rm | exit test ID|direct | set PATH on|off|inherit [--profile ID|own|inherit] | show [--json] |
   forget ID`; `agent_guard.BROWSER_OWNER_ONLY` refuses `set profile forget setup settings stop` in agent turns.
 - Web: `features/browser/{BrowserPage, BrowserPanel, BrowserFeature, ProfileSettings, Exits, SessionBrowser,
-  LiveView, BrowserWindow, AgentBrowserCard, profiles, open}` (`AgentBrowserCard` in the agent's info panel: a
+  LiveView, QuickMenu, BrowserWindow, AgentBrowserCard, profiles, open}` (Browser page: `?nav=`, `?profile=` =
+  settings, `?exit=`, `?session=`, `?new=profile`; `QuickMenu` = the ⋮ of the live view; picture choice in
+  `localStorage` `mx.browser.quality`) (`AgentBrowserCard` in the agent's info panel: a
   picture every 2 s while visible and running); route `/browser` (`?profile=`, `&view=settings`, `?exit=<id>|new|direct`,
   `?session=`); project and topic menus -> **Browser...** (`Tree.tsx`), agent settings section `browser`; sidebar
   line in `HealthIndicator.tsx`. i18n group `browser` (`groups.ts`) loaded with `/browser`, elsewhere on its first

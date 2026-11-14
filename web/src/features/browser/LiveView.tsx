@@ -1,10 +1,12 @@
-// The live view of one profile of the Harness Browser (WS /api/browser/live?profile=), drawn as a browser window: its
-// tabs (a dot on the ones Claude opened), a toolbar with the address, the page as pictures (JPEG frames) and a status
+// The live view of one navigator of the Harness Browser (WS /api/browser/live?profile=&nav=: a window of tabs in a
+// profile's Chromium, the person's, an agent's or a session's), drawn as a browser window: its tabs (a dot on the
+// ones Claude opened), a toolbar with the address, the page as pictures (JPEG frames) and a status
 // bar (memory, Stop). The person drives the tab shown as soon as they click or type; on a tab Claude is using right
 // now, a first click takes over (Claude's commands on that tab then wait). What Claude asked shows as an info bar with
 // "Hand back to Claude". Coordinates are sent as 0..1 of the picture: the server maps them to the page's size.
-// Pace: each picture is confirmed ({"t":"got"}) once drawn, and the server sends the next one only then (a slow network
-// gets fewer pictures, never late ones). The wheel is summed and sent at most once per picture; the picture moves
+// Pace: each picture is confirmed ({"t":"got"}) as soon as it arrives; the server keeps a few on their way, so a far
+// connection still gets several per round trip, and a slow one fewer, never late ones. Here only the newest picture
+// waiting for the <img> is drawn (one decoded at a time). The wheel is summed and sent at most once per picture; the picture moves
 // at once by what was scrolled (the real one follows).
 import * as React from 'react'
 import {
@@ -18,15 +20,18 @@ import { fmtBytes } from '@/lib/format'
 import { useCompact } from '@/stores/media'
 import { cn } from '@/lib/utils'
 import { Button, Input } from '@/components/ui'
-import { tabOfSession } from './profiles'
+import { QuickMenu, type Quality } from './QuickMenu'
+
+const QUALITY_KEY = 'mx.browser.quality'
 
 type LiveState = { browser: BrowserState | null; me: boolean; asks: BrowserAsk[] }
 /** What the pictures cost, measured here (the "speed" button of the status bar). */
 type Pace = { fps: number; kb: number; delay: number | null }
 
 /** The WebSocket of the live view: pictures + state; reconnects while mounted. */
-function useLive(active: boolean, profile: string, onFrame?: () => void) {
-  const compact = useCompact()
+function useLive(active: boolean, profile: string, nav: string, quality: Quality, onFrame?: () => void) {
+  const q = React.useRef(quality)
+  q.current = quality
   const [frame, setFrame] = React.useState(false)
   const img = React.useRef<HTMLImageElement | null>(null)
   const [state, setState] = React.useState<LiveState | null>(null)
@@ -38,6 +43,26 @@ function useLive(active: boolean, profile: string, onFrame?: () => void) {
   frameCb.current = onFrame
   // the pace, for the status bar: pictures in the last 2 s, their mean size, the delay after an input
   const pace = React.useRef({ times: [] as number[], bytes: [] as number[], inputAt: 0, delay: null as number | null })
+  const drawing = React.useRef(false)
+  const waiting = React.useRef<string | null>(null)
+  const draw = React.useCallback((next: string) => {
+    if (url.current) URL.revokeObjectURL(url.current)
+    url.current = next
+    const done = () => {
+      drawing.current = false
+      frameCb.current?.()
+      const more = waiting.current
+      waiting.current = null
+      if (more) draw(more)
+    }
+    if (img.current) {
+      drawing.current = true
+      img.current.onload = done
+      img.current.onerror = done
+      img.current.src = next
+    } else frameCb.current?.()
+    setFrame(true)
+  }, [])
 
   React.useEffect(() => {
     if (!active) return
@@ -55,7 +80,7 @@ function useLive(active: boolean, profile: string, onFrame?: () => void) {
       }
       if (stop) return
       const proto = location.protocol === 'https:' ? 'wss' : 'ws'
-      const s = new WebSocket(`${proto}://${location.host}/api/browser/live?t=${encodeURIComponent(token)}&profile=${encodeURIComponent(profile)}&q=${compact ? 'low' : 'auto'}`)
+      const s = new WebSocket(`${proto}://${location.host}/api/browser/live?t=${encodeURIComponent(token)}&profile=${encodeURIComponent(profile)}&nav=${encodeURIComponent(nav)}&q=${q.current}`)
       s.binaryType = 'blob'
       ws.current = s
       s.onopen = () => ((retry = 0), setConnected(true))
@@ -72,9 +97,10 @@ function useLive(active: boolean, profile: string, onFrame?: () => void) {
           }
           return
         }
-        // pictures go straight to the <img> (no render per picture); the state only says there is one. Once drawn,
-        // the server may send the next one.
+        // pictures go straight to the <img> (no render per picture); the state only says there is one. Confirmed at
+        // once (the server measures the network with it); drawn one at a time, the newest first.
         const blob = m.data as Blob
+        if (s.readyState === WebSocket.OPEN) s.send('{"t":"got"}')
         const next = URL.createObjectURL(blob)
         const p = pace.current
         const now = performance.now()
@@ -84,18 +110,13 @@ function useLive(active: boolean, profile: string, onFrame?: () => void) {
           p.delay = Math.round(now - p.inputAt)
           p.inputAt = 0
         }
-        const done = () => {
-          if (s.readyState === WebSocket.OPEN) s.send('{"t":"got"}')
-          frameCb.current?.()
+        if (drawing.current) {
+          // the <img> is still decoding the previous one: this one waits, replacing any older one waiting
+          if (waiting.current) URL.revokeObjectURL(waiting.current)
+          waiting.current = next
+          return
         }
-        if (url.current) URL.revokeObjectURL(url.current)
-        url.current = next
-        if (img.current) {
-          img.current.onload = done
-          img.current.onerror = done
-          img.current.src = next
-        } else done()
-        setFrame(true)
+        draw(next)
       }
       s.onclose = () => {
         setConnected(false)
@@ -110,10 +131,12 @@ function useLive(active: boolean, profile: string, onFrame?: () => void) {
       ws.current?.close()
       ws.current = null
       if (url.current) URL.revokeObjectURL(url.current)
-      url.current = null
+      if (waiting.current) URL.revokeObjectURL(waiting.current)
+      url.current = waiting.current = null
+      drawing.current = false
       setFrame(false)
     }
-  }, [active, compact, profile])
+  }, [active, profile, nav, draw])
 
   const send = React.useCallback((d: Record<string, unknown>) => {
     if (ws.current?.readyState !== WebSocket.OPEN) return
@@ -134,12 +157,12 @@ function useLive(active: boolean, profile: string, onFrame?: () => void) {
   return { frame, imgRef, state, error, setError, connected, send, readPace }
 }
 
-/** The live view of a profile. `context` = the project / topic / agent folder it is opened from (its requests first);
- *  `session` = show the tab of that session; `start` = start a stopped profile with the view; `who` = who asks (an
- *  agent's name); `onMinimize` = the window's "minimize" (hides it, the browser keeps running). */
-export function LiveView({ profile, context, session, who, start, onMinimize, className }: {
+/** The live view of a navigator (`nav`: me, me-2, agent:<path>, session:<sid>) in the Chromium of `profile`. `session`
+ *  = its requests first; `start` = start a stopped profile with the view; `who` = who asks (an agent's name);
+ *  `onMinimize` = the window's "minimize" (hides it, the browser keeps running). */
+export function LiveView({ profile, nav, session, who, start, onMinimize, className }: {
   profile: string
-  context?: string
+  nav: string
   session?: string
   who?: string
   start?: boolean
@@ -157,7 +180,18 @@ export function LiveView({ profile, context, session, who, start, onMinimize, cl
     if (imgEl.current) imgEl.current.style.transform = ''
     if (w.dx || w.dy) flushRef.current()
   }, [])
-  const { frame, imgRef, state, error, setError, connected, send, readPace } = useLive(true, profile, onFrame)
+  const compact = useCompact()
+  // the picture: auto (adapts to the network), smooth (lighter) or sharp; kept in this browser
+  const [quality, setQuality] = React.useState<Quality>(() => {
+    const v = localStorage.getItem(QUALITY_KEY)
+    return v === 'auto' || v === 'low' || v === 'high' ? v : compact ? 'low' : 'auto'
+  })
+  const { frame, imgRef, state, error, setError, connected, send, readPace } = useLive(true, profile, nav, quality, onFrame)
+  const changeQuality = (v: Quality) => {
+    setQuality(v)
+    localStorage.setItem(QUALITY_KEY, v)
+    send({ t: 'quality', q: v })
+  }
   const flushRef = React.useRef(() => {})
   flushRef.current = () => {
     const w = scroll.current
@@ -183,9 +217,9 @@ export function LiveView({ profile, context, session, who, start, onMinimize, cl
   const tabs = b?.tabs || []
   const front = tabs.find((x) => x.front)
   const shared = !!front && front.by.kind !== 'you'
-  // its own requests first (the session's, then the folder's), else any
+  // the requests of this navigator's turns (the session's first)
   const asks = state?.asks || []
-  const ask = asks.find((a) => a.session === session) || asks.find((a) => context && a.owner.endsWith(context)) || asks[0]
+  const ask = asks.find((a) => a.session === session) || asks[0]
   const [address, setAddress] = React.useState('')
   const [editing, setEditing] = React.useState(false)
   const [typing, setTyping] = React.useState('')
@@ -197,7 +231,6 @@ export function LiveView({ profile, context, session, who, start, onMinimize, cl
   const pane = React.useRef<HTMLDivElement>(null)
   const lastMove = React.useRef(0)
   const started = React.useRef(false)
-  const focused = React.useRef(false)
 
   React.useEffect(() => {
     if (!editing) setAddress(b?.page?.url && b.page.url !== 'about:blank' ? b.page.url : '')
@@ -213,19 +246,13 @@ export function LiveView({ profile, context, session, who, start, onMinimize, cl
 
   const startIt = () => {
     started.current = true
-    action.mutate({ profile, action: 'open', ...(session ? { session } : {}) })
+    action.mutate({ profile, action: 'open', nav })
   }
-  // "Open the browser" / a session's "Watch": a stopped browser starts with the view, on that session's tab
+  // "Open the browser" / a session's "Watch": a stopped browser starts with the view
   React.useEffect(() => {
     if (started.current || !state) return
-    if (!running && b?.state !== 'starting' && (start || session)) startIt()
+    if (!running && b?.state !== 'starting' && start) startIt()
   })
-  React.useEffect(() => {
-    if (focused.current || !running || !session) return
-    focused.current = true
-    const tab = tabOfSession(tabs, session, context)
-    if (tab && !tab.front) tabOp.mutate({ profile, op: 'show', key: tab.key })
-  }, [running, session, context, tabs, tabOp, profile])
 
   // the page is laid out for the size of this view, like a browser window (sent again on reconnect / start)
   React.useEffect(() => {
@@ -291,7 +318,7 @@ export function LiveView({ profile, context, session, who, start, onMinimize, cl
           {tabs.map((tab) => (
             <TabButton key={tab.key} tab={tab} onShow={() => tabOp.mutate({ profile, op: 'show', key: tab.key })} onClose={() => tabOp.mutate({ profile, op: 'close', key: tab.key })} />
           ))}
-          <Button variant="ghost" size="icon-sm" className="mb-1 shrink-0" onClick={() => tabOp.mutate({ profile, op: 'new' })} title={t('browser.newTab')} aria-label={t('browser.newTab')} data-testid="browser-new-tab">
+          <Button variant="ghost" size="icon-sm" className="mb-1 shrink-0" onClick={() => tabOp.mutate({ profile, op: 'new', nav })} title={t('browser.newTab')} aria-label={t('browser.newTab')} data-testid="browser-new-tab">
             <Plus />
           </Button>
         </div>
@@ -335,6 +362,7 @@ export function LiveView({ profile, context, session, who, start, onMinimize, cl
             data-testid="browser-address"
           />
         </form>
+        <QuickMenu profile={profile} nav={nav} quality={quality} onQuality={changeQuality} sites={view.data?.profile} />
       </div>
 
       {/* what Claude asked, or "you have this shared tab" */}
@@ -535,7 +563,7 @@ export function LiveView({ profile, context, session, who, start, onMinimize, cl
                 if (!files.length) return
                 setSending(true)
                 try {
-                  await giveBrowserFiles(profile, files)
+                  await giveBrowserFiles(profile, nav, files)
                 } catch (err) {
                   setError((err as Error).message || t('browser.chooser.failed'))
                 } finally {

@@ -1459,10 +1459,13 @@ export type BrowserTab = {
   /** shown in the live view */
   front: boolean
   used: number
+  /** the navigator it belongs to (me, me-2, agent:<path>, session:<sid>) */
+  nav: string
 }
-/** One profile's browser (running or not). */
+/** One profile's browser (running or not), or one navigator of it (`nav`: then only its tabs, its page...). */
 export type BrowserState = {
   profile: string
+  nav: string | null
   state: 'starting' | 'running' | 'stopped'
   started: number | null
   last_use: number | null
@@ -1478,7 +1481,7 @@ export type BrowserState = {
   /** Claude acted on the tab shown a moment ago */
   busy: boolean
   /** turns using it now */
-  turns: { session: string; path: string; kind: 'session' | 'agent' }[]
+  turns: { session: string; path: string; kind: 'session' | 'agent'; nav: string }[]
   /** bytes of memory of its Chromium */
   mem: number
   /** its CPU priority now: live (watched / Claude acts) or background */
@@ -1514,8 +1517,31 @@ export type BrowserAction = {
 }
 /** A turn stopped because its profile's exit went down (the session's card). */
 export type BrowserWaiter = { session: string; owner: string; exit: string; profile: string; at: number; resume: boolean }
+/** A navigator = a window of tabs in a profile's Chromium: the person's (me, me-2...), an agent's, a session's.
+ *  Several may share a profile (its sign-ins); each sees only its own tabs. */
+export type BrowserNavigator = {
+  id: string
+  kind: 'person' | 'agent' | 'session'
+  /** the person's name for it, the agent's name, the session's title */
+  name: string
+  path?: string
+  session?: string
+  /** the profile it uses (null: an agent whose profile is gone) */
+  profile: string | null
+  running: boolean
+  tabs: number
+  awake: number
+  page: { url: string; title: string } | null
+  /** the person has its tab shown */
+  control: boolean
+  /** a live view shows it now */
+  watched: boolean
+  turns: number
+  used: number
+}
 export type BrowserStatus = {
   feature: boolean
+  navigators: BrowserNavigator[]
   settings: BrowserSettings
   available: { ok: boolean; missing: string[] }
   /** the exits' tools are on this server */

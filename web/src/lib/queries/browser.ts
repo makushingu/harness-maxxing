@@ -68,22 +68,22 @@ export function useSaveBrowserProfile() {
   )
 }
 
-/** open (start it for the person; `session`: show that session's tab) / stop / forget (sign-ins, tabs, journal) /
+/** open (start it for the person, with a tab in navigator `nav`) / stop / forget (sign-ins, tabs, journal) /
  *  sleep (every tab not shown sleeps). */
 export function useProfileAction() {
   return useMut(
-    ({ profile, action, session }: { profile: string; action: 'open' | 'stop' | 'forget' | 'sleep'; session?: string }) =>
-      api.post<BrowserState>(`/api/browser/profiles/${seg(profile)}/${action}`, session ? { session } : {}),
+    ({ profile, action, nav }: { profile: string; action: 'open' | 'stop' | 'forget' | 'sleep'; nav?: string }) =>
+      api.post<BrowserState>(`/api/browser/profiles/${seg(profile)}/${action}`, nav ? { nav } : {}),
     { invalidate: [browserKeys.all] },
   )
 }
 
-/** Tabs of a profile: a new one (the person's), show (wakes an asleep one), close. */
+/** Tabs of a profile: a new one (the person's, in navigator `nav`), show (wakes an asleep one), close. */
 export function useBrowserTab() {
   return useMut(
-    (a: { profile: string } & ({ op: 'new'; url?: string } | { op: 'show' | 'close'; key: string })) => {
+    (a: { profile: string } & ({ op: 'new'; url?: string; nav?: string } | { op: 'show' | 'close'; key: string })) => {
       const base = `/api/browser/profiles/${seg(a.profile)}/tabs`
-      if (a.op === 'new') return api.post<BrowserState>(base, { url: a.url || '' })
+      if (a.op === 'new') return api.post<BrowserState>(base, { url: a.url || '', ...(a.nav ? { nav: a.nav } : {}) })
       if (a.op === 'show') return api.post<BrowserState>(`${base}/${seg(a.key)}/show`)
       return api.del<BrowserState>(`${base}/${seg(a.key)}`)
     },
@@ -162,8 +162,22 @@ export function useBrowserSetup() {
 /** A one-use token for the live view's WebSocket (30 s). */
 export const browserLiveToken = () => api.post<{ token: string }>('/api/browser/live-token', {})
 /** The files the person picked for the page that asked for some. */
-export function giveBrowserFiles(profile: string, files: File[]) {
+export function giveBrowserFiles(profile: string, nav: string, files: File[]) {
   const form = new FormData()
   for (const f of files) form.append('files', f)
-  return api.post<BrowserState>(`/api/browser/profiles/${seg(profile)}/files`, form)
+  return api.post<BrowserState>(`/api/browser/profiles/${seg(profile)}/files?nav=${encodeURIComponent(nav)}`, form)
+}
+
+/** The person's navigators: a new one (on a profile), rename / move to another profile (its tabs follow, asleep),
+ *  close one (its tabs closed; never "me"). */
+export function useBrowserNavigator() {
+  return useMut(
+    ({ id, remove, ...v }: { id?: string; remove?: boolean; profile?: string; name?: string }): Promise<unknown> =>
+      remove && id
+        ? api.del(`/api/browser/navigators/${encodeURIComponent(id)}`)
+        : id
+          ? api.put(`/api/browser/navigators/${encodeURIComponent(id)}`, v)
+          : api.post<{ id: string }>('/api/browser/navigators', v),
+    { invalidate: [browserKeys.all] },
+  )
 }
