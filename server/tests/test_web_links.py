@@ -55,3 +55,9 @@ def test_picking_a_mention_keeps_the_line_break_that_follows():
     rest = re.compile(m[1])
     assert rest.sub("", "Le\nnext line", count=1) == "\nnext line"
     assert rest.sub("", "Le next", count=1) == "next"
+
+
+def test_a_mention_is_only_kept_when_its_whole_name_is_written():
+    # "@Leah" typed after picking Lea still mentioned Lea
+    src = (WEB / "pages" / "sessions" / "mentions.tsx").read_text()
+    assert "(?![\\\\p{L}\\\\p{N}_-])" in src and "written(text, x.label)" in src
