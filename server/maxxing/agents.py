@@ -2411,6 +2411,9 @@ def check_alerts() -> int:
 
 
 # ---- turn end (server): the result goes to the agent's thread (+ Telegram) ----------------------------
+HARNESS_TURNS = ("compact", "handoff", "seed")   # turns Harness queues itself (sessions/runner.py): not the agent's
+
+
 def _which_turn(session: dict) -> tuple[float | None, bool]:
     """(time of the ended turn's message, it died unrecorded) for service.ended_turn_text / _steps."""
     at = (session.get("last_turn") or {}).get("at")
@@ -2450,6 +2453,14 @@ def on_turn_end(session: dict, result: dict | None) -> None:
     if not isinstance(ended, (int, float)):
         ended = 0.0 if meta.get("state") == "running" or meta.get("queue") else time.time()
     _release(path, session["id"], float(ended))
+    if (session.get("last_turn") or {}).get("kind") in HARNESS_TURNS:
+        # a summary turn of a long conversation (or the fresh thread reading it): costed above, never an answer
+        try:
+            with _lock:
+                _drain_owner(path)
+        except Exception:  # noqa: BLE001
+            log.exception("agent %s: waiting messages", path)
+        return
     group = str((meta.get("env") or {}).get("MAXXING_AGENT_GROUP") or "")
     env = meta.get("env") or {}
     # only a run started by outside text itself: one that got it through its context does not pass the mark on

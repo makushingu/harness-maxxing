@@ -7,6 +7,17 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Compaction of agents: `store.unattended(m)` = `cron` flag and not a conversation (`env.MAXXING_AGENT_CHAT == "1"` or
+  `env.MAXXING_AGENT_GROUP`); `runner._auto_compact`, `runner._idle_compact` and `resume.candidate` use it instead of
+  `m["cron"]`. The owner's conversation and a member's group session are created with `cron=True` (no Telegram
+  mirror, `agents.tidy`), a flag that only dropped at their 2nd message (`service._enqueue` `reset_cron`): their 1st
+  turn was never auto-compacted. Runs keep the flag and are never compacted; the archive rule and
+  `telegram.gateway.is_human` still read `cron`.
+- `agents.on_turn_end`: a turn whose `last_turn.kind` is in `HARNESS_TURNS` (`compact`, `handoff`, `seed`) is costed
+  (`charge_unbilled`) and releases its budget hold, then only drains the owner's waiting messages: no `result` in the
+  thread, no `agent_rooms.on_turn_end`, no feed alert, no Telegram (before: the summary and the seed turn's reply were
+  posted as two results; in a group, a member's next message queued behind its summary could take the summary as its
+  answer). Same filter as `telegram.gateway`. Tests: `tests/test_agent_compact.py`.
 - Terminal (`maxxing/terminal.py`): `_signal()` used by `resize` and `_kill`: `os.kill(pid)` while
   `getpgid(pid) == getpgrp()` (`setsid -c` has not run yet: the child is still in the server's group), `killpg`
   after. Before, a terminal closed in its first milliseconds sent SIGHUP + SIGTERM to the server's whole group (seen

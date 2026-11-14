@@ -144,6 +144,9 @@ between days).
   (under the box) starts a fresh one; a new one also starts by itself after 6 hours without a message (**New
   conversation after**, in Settings -> Limits; 0 = never) or when the last one failed. A new conversation gets the
   agent's last results as context, so "and the second point?" still makes sense.
+  A long conversation is summarized like a session's (Settings -> Claude, **Automatic compaction**): from its first
+  answer on, a big context continues in a fresh thread seeded with a summary, and the agent keeps its role and
+  memory. A run of the agent (a schedule, a webhook) is one turn and is never summarized.
 - **The box works like a session's**: the model and the intelligence are picked under it (they change the next turns
   of the conversation, or start the next one with them), `/` opens the same menu (`/model`, `/effort`, `/new`,
   `/compact` and the skills of its topic), and the microphone sends a **voice message** directly when **Send voice

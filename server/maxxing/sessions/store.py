@@ -274,6 +274,14 @@ def known_windows() -> dict[str, int]:
     return {str(k): int(v) for k, v in d.items() if isinstance(v, (int, float)) and v > 0} if isinstance(d, dict) else {}
 
 
+def unattended(m: dict) -> bool:
+    """A session nobody talks to: a scheduled job's, an agent's run. Compaction leaves it alone (one turn, then it
+    folds away). An agent's conversation with its owner or its session in a group is a conversation from its first
+    turn on, like any session: it starts with the `cron` flag, which only drops at its second message (_enqueue)."""
+    env = m.get("env") if isinstance(m.get("env"), dict) else {}
+    return bool(m.get("cron")) and not (env.get("MAXXING_AGENT_CHAT") == "1" or env.get("MAXXING_AGENT_GROUP"))
+
+
 def window_for(m: dict, cfg: dict) -> int | None:
     """Context window of the model the next turn of session `m` runs on: the one Claude Code reported for that model
     on this server, else the window of the session's last turn. None: not known yet (first turn of a new model)."""
