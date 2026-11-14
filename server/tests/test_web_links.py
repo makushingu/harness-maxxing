@@ -68,3 +68,9 @@ def test_an_icon_name_is_never_read_from_the_object_prototype():
     src = (WEB / "components" / "ui" / "icon.tsx").read_text()
     assert "Object.hasOwn(ICONS, key)" in src
 
+
+
+def test_a_dragged_text_is_never_cut_in_the_middle_of_an_emoji():
+    # cut at 20 000 between the two halves of an emoji: the message was refused (422)
+    src = (WEB / "pages" / "sessions" / "contentDrag.ts").read_text()
+    assert "/[\\ud800-\\udbff]/.test(t[MAX_TEXT - 1]) ? MAX_TEXT - 1 : MAX_TEXT" in src
