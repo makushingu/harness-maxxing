@@ -43,16 +43,20 @@ Settings -> Keys and mention only the key name).
   explicitly: "remember that ...".
 - **`memory-compaction`** – keeps files short and consistent. A scheduled job "Memory compaction"
   runs it every day at 05:00 (see Crons; it starts once the onboarding is finished with Claude signed in). It acts on files longer than the **line limit**
-  (Settings -> **Memory**, 200 lines by default) or redundant, contradictory or outdated: it merges
+  (Settings -> **Memory**, 200 lines by default), heavier than the weight that goes with it (1 KB for 10 lines:
+  20 KB by default, so a file of a few very long bullets counts too) or redundant, contradictory or outdated: it merges
   duplicates, summarizes old history and reorders each file (rules and preferences, current
   state, decisions, references, context). It only edits `memory.md` files.
 
 ## Second brain cleaner (Settings -> Memory)
 
-- **Maximum length per file**: the line limit above (or *No limit*).
+- **Maximum length per file**: the line limit above, and its weight (or *No limit*).
 - **Clean now**: starts the compaction immediately, in a session at the workspace root that you
   can watch.
-- The list shows every `memory.md` with its line count; files over the limit are in red.
+- The list shows every `memory.md` with its line count and size; what is over the limit is in red.
+- Why size matters: a `memory.md` is part of the instructions of every session of its folder, and Claude Code sends
+  it again in full each time it changes. A heavy file (50 KB is about 20,000 tokens) fills the context a little more
+  at every edit, until the session is summarized (automatic compaction) - sometimes after almost every message.
 - From a shell: `maxxing memory` prints the same list.
 
 ## Editing memory yourself

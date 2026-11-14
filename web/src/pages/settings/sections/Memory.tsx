@@ -19,6 +19,7 @@ export function MemorySection() {
   const compact = useCompactMemory()
   const limit = settings?.memory_max_lines ?? mem.data?.max_lines ?? 200
   const files = mem.data?.files || []
+  const size = fmtBytes((limit * 1024) / 10) // the weight that goes with the line limit (memory.py)
   const over = files.filter((f) => f.over)
   const options = (LIMITS.includes(limit) ? LIMITS : [...LIMITS, limit].sort((a, b) => a - b)).map((n) => ({
     value: String(n),
@@ -67,7 +68,7 @@ export function MemorySection() {
 
       <SettingsCard
         title={t('memory.files')}
-        description={limit ? (over.length ? t('memory.overCount', { count: over.length, limit }) : t('memory.allUnder', { limit })) : t('memory.filesDesc')}
+        description={limit ? (over.length ? t('memory.overCount', { count: over.length, limit, size }) : t('memory.allUnder', { limit, size })) : t('memory.filesDesc')}
       >
         {mem.isPending ? (
           <div className="grid gap-2">
@@ -89,14 +90,14 @@ export function MemorySection() {
               </thead>
               <tbody className="divide-y">
                 {[...files]
-                  .sort((a, b) => Number(b.over) - Number(a.over) || b.lines - a.lines)
+                  .sort((a, b) => Number(b.over) - Number(a.over) || b.bytes - a.bytes)
                   .map((f) => (
                     <tr key={f.path}>
                       <td className="max-w-0 truncate px-2 py-1.5 font-mono text-[12.5px]">
                         <Sensitive length={12}>{f.path}</Sensitive>
                       </td>
-                      <td className={cn('px-2 py-1.5 text-right tabular-nums', f.over && 'font-semibold text-destructive')}>{f.lines}</td>
-                      <td className="px-2 py-1.5 text-right text-muted-foreground tabular-nums">{fmtBytes(f.bytes)}</td>
+                      <td className={cn('px-2 py-1.5 text-right tabular-nums', !!limit && f.lines > limit && 'font-semibold text-destructive')}>{f.lines}</td>
+                      <td className={cn('px-2 py-1.5 text-right tabular-nums', f.heavy ? 'font-semibold text-destructive' : 'text-muted-foreground')}>{fmtBytes(f.bytes)}</td>
                     </tr>
                   ))}
               </tbody>

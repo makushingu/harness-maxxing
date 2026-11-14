@@ -831,8 +831,8 @@ export type Settings = {
 export type ResultField = 'model' | 'duration' | 'cost' | 'tokens' | 'cache'
 
 /* ---------------------------------------------------------------- Memory, stats, changelog */
-export type MemoryFile = { path: string; level: 'global' | 'project' | 'topic'; lines: number; bytes: number; over: boolean }
-export type MemoryInfo = { max_lines: number; files: MemoryFile[] }
+export type MemoryFile = { path: string; level: 'global' | 'project' | 'topic'; lines: number; bytes: number; over: boolean; heavy?: boolean }
+export type MemoryInfo = { max_lines: number; max_bytes?: number; files: MemoryFile[] }
 export type TokenCounts = { input: number; output: number; cache_read: number; cache_write: number; total: number; cost_usd: number; turns: number; sessions: number }
 export type TokenStats = {
   totals: TokenCounts

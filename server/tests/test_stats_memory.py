@@ -50,11 +50,15 @@ def test_memory_files_limit_and_settings(client, mx):
     by = {f["path"]: f for f in r["files"]}
     assert by["memory.md"]["lines"] == 11 and not by["memory.md"]["over"]
     assert by["projects/acme/topics/blog/memory.md"]["over"] and by["projects/acme/topics/blog/memory.md"]["level"] == "topic"
+    assert r["max_bytes"] == 20 * 1024 and not by["projects/acme/topics/blog/memory.md"]["heavy"]
+    (t / "memory.md").write_text(("- " + "x" * 2000 + "\n") * 12)   # few lines, very long bullets: as heavy to load
+    heavy = {f["path"]: f for f in client.get("/api/memory").json()["files"]}["projects/acme/topics/blog/memory.md"]
+    assert heavy["lines"] == 12 and heavy["over"] and heavy["heavy"]
 
     assert client.put("/api/settings", json={"memory_max_lines": 10}).status_code == 400
     assert client.put("/api/settings", json={"memory_max_lines": 0}).json()["memory_max_lines"] == 0
     assert not any(f["over"] for f in client.get("/api/memory").json()["files"])
-    assert "No line limit" in memory.compact_prompt(0) and "at most 300 lines" in memory.compact_prompt(300)
+    assert "No line limit" in memory.compact_prompt(0) and "at most 300 lines and 30 KB" in memory.compact_prompt(300)
 
 
 def test_memory_files_skip_what_is_not_a_regular_file_and_read_a_bounded_part(mx, monkeypatch):
