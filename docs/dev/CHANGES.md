@@ -44,17 +44,23 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 - Harness Browser (`maxxing/browser/`, never released before: it lived on a research branch; API.md "Harness
   Browser", INTERNALS "maxxing.browser", user doc 33). Config `browser_feature` (default false) + `config.json ->
   browser` = `{ask, wait_min, downloads, idle_min, tab_sleep_min, max_tabs, max_active_profiles (3, 1..8),
-  exit_wait_s (180, 0..900), search (google|duckduckgo|bing), profiles: [{id, name, exit: "direct"|<exit id>, web: list|public, sites, on_exit_down:
+  exit_wait_s (180, 0..900), search (google|duckduckgo|bing), profiles: [{id, name, exit: "direct"|<exit id>, on_exit_down:
   wait|vps, project: "" | "projects/<name>"}] (<= 40, `main` always first, not deletable; one per project, see below), exits: [{id, name, type: proxy {url, user} | tailscale
   {node, login_server} | wireguard {}}] (<= 10)}`; `browser.clean_settings(raw, strict)`. Exit secrets in the vault
   `BROWSER_EXIT_<ID>` (`expose: false`). Owners: `browser: {enabled?, profile?}` in a project's / topic's
   `.maxxing.json` (`workspace.folder_browser` / `set_folder_browser`) and agent.json (`agents._clean_browser`,
   `browser` in `SECURITY_FIELDS`: off is safer, the rest is asked); `browser.resolve` = `enabled` agent -> topic ->
   project -> false (an agent's never inherited), `profile` = an agent's own choice when it exists, else its project's.
-  **One profile per project** (`project` field): `ensure_project_profile` (from `main`'s exit/web/sites/on_exit_down,
+  **One profile per project** (`project` field): `ensure_project_profile` (from `main`'s exit/on_exit_down,
   named after the project) at the first `active_for`, at `GET /owner` of an enabled folder, and for every project with
   an agent at `GET /api/browser`; `DELETE` refused (`409 project`) while the project exists; `GET /profiles/{pid}` = `{profile, browser, gone, agents, person, temporary (replays.sessions: actions with a `nav` "session:*"), actions, asks}`; ProfileRow adds `gone`, `agents`; `profile: "own"` and a
-  project's / topic's `profile` are read as "its project's". `GET /owner` adds `project`, `project_profile`.
+  project's / topic's `profile` are read as "its project's". `GET /owner` adds `project`, `project_profile`, `sites`.
+  **Sites**: a profile has no list (a profile's `web` / `sites` of before are dropped; Chromium policy without
+  `URLAllowlist`, no restart on a change). Any public site for every turn and the person, except a sandboxed agent:
+  `browser.agent_sites(owner)` = its `domains` (None = any public site, `[]` = nothing), checked on a tool's `url`
+  (`Pool.call`), in its `/cdp` relay (`Page.navigate` / `Target.createTarget`) and after each tool call
+  (`Pool._keep_to`: a tab of its navigator outside them -> `about:blank`, Claude told; `Watcher.cdp_navigate`).
+  `rules.page_refusal` keeps refusing this server, local networks, raw IPs, `file:` and browser pages for all.
 - Modules: `exits.py` (exits, `Runtime` up/down state + 30 s watcher, `Tailscale` = own userspace `tailscaled`, `WireGuard` =
   `wireproxy`, units `maxxing-bx-<install>-<eid>`, `test()` via ip-api.com + 2 MB download, `wait_down` / `set_resume` /
   `_resume_waiters`, `feed_action`), `pool.py` (one Chromium per profile, `max_active_profiles`, `exit_ready`, a
@@ -82,7 +88,7 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   `asks/<id>.json`, `turns/<sid>.json` + `.mcp.json`, `exits/<eid>/`, `waiting.json` (`[{session, owner, exit,
   profile, at, resume}]`); tools `<state>/tools/tailscale-<v>/`, `wireproxy-<v>/` (pinned sha256). Migration
   (`browser.migrate()`, at startup and each profile start): `profiles/harness` -> `profiles/main`, `tabs.json` ->
-  `tabs/main.json`; top-level `web` / `sites` -> profile `main`.
+  `tabs/main.json`; top-level `web` / `sites` dropped.
 - Routes (`api/browser.py`): `GET /api/browser`, `PUT /settings`, `POST /setup {exits?}`, `/profiles` (POST, GET / PUT
   / DELETE `{pid}`, `{pid}/open|stop|sleep|forget`, `{pid}/tabs`, `{pid}/tabs/{key}/show`, DELETE `{pid}/tabs/{key}`),
   `{pid}/open {nav?}`, `{pid}/tabs {url?, nav?}`, `{pid}/picture?nav=&w=` (JPEG of that navigator's tab; 204 when not

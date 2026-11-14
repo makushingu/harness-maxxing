@@ -3,9 +3,9 @@
 Three layers, each one enough on its own for what it covers:
 - the proxy (proxy.py) refuses every host that is not on the public internet - the server itself, its local network,
   cloud metadata, raw IPs, DNS-rebinding helpers - after resolving it, and connects to the IP it checked;
-- the Chromium policy (`policy()`) blocks file:, chrome:, devtools: pages, downloads and, in "list" mode, every page
-  outside the sites of the owner (images and scripts of an allowed page may come from any public site);
-- the DevTools relay (relay.py) refuses commands that reach past the page (`check_command`, rules.json).
+- the Chromium policy (`policy()`) blocks file:, chrome:, devtools: pages and downloads;
+- the DevTools relay (relay.py) refuses commands that reach past the page (`check_command`, rules.json) and, for a
+  sandboxed agent, pages outside its domains (`page_refusal`; pool.Pool._keep_to empties a tab that got there anyway).
 """
 from __future__ import annotations
 
@@ -144,7 +144,7 @@ def address(text: object, engine: str = "google") -> str:
 
 
 def page_refusal(url: object, sites: list[str] | None = None) -> str | None:
-    """Why `url` cannot be opened (None = it can). sites: the owner's list ("list" mode), None = the public web."""
+    """Why `url` cannot be opened (None = it can). sites: a sandboxed agent's domains, None = any public site."""
     if url is None:
         return None
     raw = re.sub(r"[\t\n\r]", "", str(url)).strip().replace("\\", "/")
@@ -170,8 +170,8 @@ def page_refusal(url: object, sites: list[str] | None = None) -> str | None:
     if parse_ip(host.strip("[]")) is not None:
         return "Open sites by their name, not by an IP address."
     if sites is not None and not site_allowed(host, sites):
-        return (f"{host} is not one of the sites this browser may open ({', '.join(sites) or 'none yet'}). "
-                "Ask the user to add it (browser settings), or use another way (WebFetch, an API).")
+        return (f"{host} is not one of this agent's domains ({', '.join(sites) or 'none yet'}): in its sandbox, its "
+                "browser opens only those. Ask the user to add it (the agent's page -> Protection), or use another way.")
     return None
 
 
@@ -240,11 +240,10 @@ def refusal(cmd: dict | None, reason: str) -> str | None:
 
 
 # ---- Chromium policy ---------------------------------------------------------------------------------------------
-def policy(sites: list[str] | None, downloads: bool = False) -> dict:
-    """The managed policy of one browser. sites = None: the public web (the proxy still refuses local hosts)."""
+def policy(downloads: bool = False) -> dict:
+    """The managed policy of one browser (any public site: the proxy refuses local hosts)."""
     p: dict = {
-        "URLBlocklist": list(BLOCKED_PAGES) + (["*"] if sites is not None else []),
-        "URLAllowlist": ["about:blank"] + list(sites or []),
+        "URLBlocklist": list(BLOCKED_PAGES),
         "DownloadRestrictions": 0 if downloads else 3,
         "PasswordManagerEnabled": False, "AutofillAddressEnabled": False, "AutofillCreditCardEnabled": False,
         "BackgroundModeEnabled": False, "MetricsReportingEnabled": False, "TranslateEnabled": False,

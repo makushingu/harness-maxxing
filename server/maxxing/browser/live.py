@@ -50,9 +50,6 @@ MODS = {"alt": 1, "ctrl": 2, "meta": 4, "shift": 8}
 COPY_JS = "(() => { const e = document.activeElement; if (e && (e.tagName === 'TEXTAREA' || (e.tagName === 'INPUT' && " \
           "typeof e.selectionStart === 'number'))) return e.value.slice(e.selectionStart, e.selectionEnd); " \
           "return String(getSelection ? getSelection() : ''); })()"
-SEARCH_REFUSED = ("This browser only opens the sites of its list: add the search engine's site (google.com, "
-                  "duckduckgo.com or bing.com) to the profile's sites to search from the address bar, or type the "
-                  "address of a site.")
 
 
 class Screen:
@@ -92,8 +89,8 @@ class Screen:
 
 
 class Watcher:
-    def __init__(self, sock, path: str, sites: Callable[[], list[str] | None], tabs=None) -> None:
-        self.sock, self.path, self.sites, self.registry = sock, path, sites, tabs
+    def __init__(self, sock, path: str, tabs=None) -> None:
+        self.sock, self.path, self.registry = sock, path, tabs
         self.cdp: Cdp | None = None
         self.pages: dict[str, dict] = {}            # targetId -> {url, title, at}
         self.sessions: dict[str, str] = {}          # targetId -> DevTools session (flatten)
@@ -286,6 +283,10 @@ class Watcher:
         with contextlib.suppress(Exception):           # a file input clicked by the person: we hand it the files
             await self.cdp.call("Page.setInterceptFileChooserDialog", {"enabled": True}, session=s)
         return s
+
+    async def cdp_navigate(self, tid: str, url: str) -> None:
+        assert self.cdp
+        await self.cdp.call("Page.navigate", {"url": url}, session=await self._session(tid), timeout=5)
 
     async def _show(self, tid: str) -> None:
         """Put a page in front of its navigator (one Claude just opened or moved to, or one the person picked)."""
@@ -637,9 +638,9 @@ class Watcher:
             url = rules.address(ev.get("url"), engine)
             if not url:
                 return None
-            why = rules.page_refusal(url, self.sites())
+            why = rules.page_refusal(url)
             if why:
-                return SEARCH_REFUSED if url.startswith(rules.SEARCH_ENGINES[engine]) else why
+                return why
             await self.cdp.send_nowait("Page.navigate", {"url": url}, s)   # a "leave this page?" may hold it
         elif t == "copy":
             r = await self.cdp.call("Runtime.evaluate", {"expression": COPY_JS, "returnByValue": True}, session=s, timeout=5)

@@ -1,12 +1,12 @@
 // The ⋮ of the live view's toolbar: the settings one changes while browsing, without leaving the page. The profile this
 // navigator uses (the person's browser and an agent's may switch; a session's is its project's), the profile's
-// connection and its state, the sites it may open, the search engine of the address bar, the picture (smooth / sharp /
+// connection and its state, the search engine of the address bar, the picture (smooth / sharp /
 // auto), forget the sign-ins. The Browser page keeps the rest (profiles, connections, their settings).
 import { useNavigate } from 'react-router'
-import { Check, Eraser, EllipsisVertical, Gauge, Globe, KeyRound, Search, Settings2, Waypoints } from 'lucide-react'
+import { Check, Eraser, EllipsisVertical, Gauge, KeyRound, Search, Settings2, Waypoints } from 'lucide-react'
 import { useT } from '@/i18n'
 import { useBrowserNavigator, useBrowserStatus, useProfileAction, useSaveBrowserOwner, useSaveBrowserProfile, useSaveBrowserSettings } from '@/lib/queries'
-import type { BrowserProfile, BrowserSettings } from '@/lib/types'
+import type { BrowserSettings } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import {
   Button, confirm, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem,
@@ -17,13 +17,11 @@ import { exitLine, exitName, exitTone, profileName } from './profiles'
 export type Quality = 'auto' | 'high' | 'low'
 const ENGINES: Record<BrowserSettings['search'], string> = { google: 'Google', duckduckgo: 'DuckDuckGo', bing: 'Bing' }
 
-export function QuickMenu({ profile, nav, quality, onQuality, sites }: {
+export function QuickMenu({ profile, nav, quality, onQuality }: {
   profile: string
   nav: string
   quality: Quality
   onQuality: (q: Quality) => void
-  /** the profile's site rules (its view), when known */
-  sites?: Pick<BrowserProfile, 'web' | 'sites'>
 }) {
   const t = useT()
   const go = useNavigate()
@@ -52,7 +50,6 @@ export function QuickMenu({ profile, nav, quality, onQuality, sites }: {
     if (!(await confirm({ title: t('browser.forgetTitle'), description: t('browser.forgetConfirm'), destructive: true }))) return
     action.mutate({ profile, action: 'forget' })
   }
-  const siteLine = !sites ? '' : sites.web === 'public' ? t('browser.menu.sitesAll') : t('browser.menu.sitesList', { count: sites.sites.length })
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -108,10 +105,6 @@ export function QuickMenu({ profile, nav, quality, onQuality, sites }: {
             <DropdownMenuItem onSelect={() => go('/browser?exit=new')}>{t('browser.exit.add')}</DropdownMenuItem>
           </DropdownMenuSubContent>
         </DropdownMenuSub>
-        <DropdownMenuItem onSelect={() => go(`/browser?profile=${encodeURIComponent(profile)}`)} data-testid="browser-menu-sites">
-          <Globe /> <span className="min-w-0 flex-1 truncate">{t('browser.menu.sites')}</span>
-          <span className="text-[11px] text-muted-foreground">{siteLine}</span>
-        </DropdownMenuItem>
 
         <DropdownMenuSeparator />
         <DropdownMenuSub>

@@ -33,17 +33,17 @@ The second bar of the **Browser** page has three parts:
 
 - **Browser**: your browser. Open it to browse yourself (to sign in to a site for Claude, say). At the top, pick its
   **Profile** and that profile's **Connection**.
-- **Profiles**: the sign-ins (cookies), the sites and the connection the browsers use. **+ Add a profile** makes one
+- **Profiles**: the sign-ins (cookies) and the connection the browsers use. **+ Add a profile** makes one
   more.
 - **Connections**: where the pages go out (the server's IP, your phone, your home box, a proxy). **+ Add a connection**
   adds one.
 
 ## Profiles: one per project
 
-A **profile** is a set of sign-ins of its own (cookies), its own list of sites and its own connection. **Personal** is
+A **profile** is a set of sign-ins of its own (cookies) and its own connection. **Personal** is
 yours. **Each project has its own profile**, named after it: it is made by itself the first time a session or an agent
 of the project uses the browser (and, for every project that has agents, when you open the Browser page). It starts
-with the sites and the connection of Personal.
+with the connection of Personal.
 
 Everything of a project shares its profile: its sessions, its agents and your browser when you put it on that profile
 are signed in to the same sites. Sign in once, and every agent of the project can work there.
@@ -58,14 +58,6 @@ Click a profile to open its page:
   without a browser action, the same as **A profile sleeps after**); a line stays: the session, its topic, the sites it
   went to, when, for how long. Text only, no picture;
 - **Profile settings**:
-  - **Sites it may open**:
-    - **Only these sites** (the default): type the sites it needs (`shop.example.com`, `example.com`: subdomains are
-      included). Any other page is refused and Claude is told why (and which site to ask you to add). Images and
-      scripts those pages load from elsewhere still come.
-    - **Any public site**: any site on the internet.
-
-    In both cases the addresses of your server and of local networks (`localhost`, `127.0.0.1`, `192.168.x.x`, your
-    router, `*.local`...) are always refused, as are `file:` pages and the browser's own settings pages.
   - **When the connection is down** (see below), its memory;
   - **Forget sign-ins** erases its cookies, its tabs and the journal of its actions (the values typed are never kept,
     only their length): you will have to sign in again;
@@ -140,12 +132,22 @@ address on its own (the sites would see your account move to a data center and c
 A profile can choose the other way: **When the exit is down -> Go out by the server's address**. Its sites may then
 see a data-center address and ask more checks.
 
+## Which sites
+
+A browser opens **any public site**. The addresses of your server and of local networks (`localhost`, `127.0.0.1`,
+`192.168.x.x`, your router, `*.local`...) are always refused, as are `file:` pages and the browser's own settings
+pages.
+
+An agent **in its sandbox** (its page -> **Protection**) opens only **its domains**: the same list as its commands and
+WebFetch (`example.com` includes its subdomains). Any other page is refused and Claude is told which site to ask you
+to add; a tab that gets there anyway (a link, a redirect) is emptied. Its browser card says **Limited to its domains**.
+Sessions and free agents have no list: you decide what they do.
+
 ## Using it, watching Claude
 
 The address bar opens what you type: an address (`example.com`), or a **search** for anything else - Google by
 default, or DuckDuckGo or Bing (**Settings -> Features -> Harness Browser -> Search engine**; Google sometimes asks a
-browser driven by Claude to prove it is not a robot, the other two do not). A profile limited to a list of sites needs
-the engine's site in it to search. A new tab has the same search box in its middle.
+browser driven by Claude to prove it is not a robot, the other two do not). A new tab has the same search box in its middle.
 
 - **Copy and paste**: Ctrl+C (⌘C) on the page copies its selected text to your clipboard; Ctrl+V pastes yours into
   the page.
@@ -157,8 +159,7 @@ the engine's site in it to search. A new tab has the same search box in its midd
   language and see your time.
 
 The **⋮** at the end of the address bar holds what you change while browsing: its **profile** (your browser and an
-agent's; a session's is its project's), the profile's **connection** and its state, the **sites** it may open, the
-**search engine**, the **picture** (**Auto** follows your network, **Smooth** = lighter pictures, more of them, for a
+agent's; a session's is its project's), the profile's **connection** and its state, the **search engine**, the **picture** (**Auto** follows your network, **Smooth** = lighter pictures, more of them, for a
 far or slow connection, **Sharp**), **Forget sign-ins**, and **Profiles and connections...** for the rest.
 
 In a session, a line above the message box says when Claude is using the browser, or how many tabs of this session
@@ -227,8 +228,8 @@ action. **Skip** tells it to do without that step. With no answer in time, it gi
 ```
 maxxing browser setup [--exits]                install what it needs (root); --exits: Tailscale and wireproxy too
 maxxing browser status                         feature, what is missing, settings, profiles, exits, requests
-maxxing browser profile add Shop --sites shop.example.com
-maxxing browser profile set shop --exit phone --public
+maxxing browser profile add Shop
+maxxing browser profile set shop --exit phone
 maxxing browser set acme on                    a project (acme/blog = a topic, acme/blog/writer = an agent)
 maxxing browser set acme/blog/writer on        an agent: on, with its project's profile
 maxxing browser set acme/blog/writer on --profile shop    it uses the profile shop (inherit = its project's again)
@@ -244,8 +245,8 @@ Connections are added on the Browser page (their passwords go to the vault). Eve
 
 - **"The browser is not set up on this server"**: run **Set up** (Settings -> Features) or `maxxing browser setup`
   as root. On Ubuntu 24.04 it also installs an AppArmor profile Chromium needs.
-- **A page is refused**: add its site to the profile's list (its page -> **Profile settings**), or switch it to
-  **Any public site**. Addresses of your own server and of local networks are refused on purpose.
+- **A page is refused**: for an agent in its sandbox, add the site to its domains (its page -> **Protection**).
+  Addresses of your own server and of local networks are refused on purpose, for everyone.
 - **A site still blocks the browser**: **Test** its profile's connection. **Data center** = the sites see a server: use a
   phone, a home connection or an ISP proxy.
 - **"... browser profiles are in use right now"**: every running profile is busy; wait, or raise **Profiles running

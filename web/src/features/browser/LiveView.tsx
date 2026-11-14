@@ -295,7 +295,6 @@ export function LiveView({ profile, nav, session, who, start, onMinimize, classN
   const secure = (b?.page?.url || '').startsWith('https://')
   const drive = (d: Record<string, unknown>) => running && send(d)
   const mem = b?.mem || 0
-  const sites = view.data?.profile.web === 'list' ? view.data.profile.sites : []
   const pace = showPace ? readPace() : null
   // the picture follows the wheel at once (clamped to a third of its height), until the real one comes
   // Listened to natively (React's wheel is passive): the wheel scrolls the page in the browser, never Harness around it.
@@ -377,7 +376,7 @@ export function LiveView({ profile, nav, session, who, start, onMinimize, classN
             data-testid="browser-address"
           />
         </form>
-        <QuickMenu profile={profile} nav={nav} quality={quality} onQuality={changeQuality} sites={view.data?.profile} />
+        <QuickMenu profile={profile} nav={nav} quality={quality} onQuality={changeQuality} />
       </div>
 
       {/* what Claude asked, or "you have this shared tab" */}
@@ -498,7 +497,7 @@ export function LiveView({ profile, nav, session, who, start, onMinimize, classN
           </div>
         )}
 
-        {/* a new tab: the sites of the list, and what this browser is for */}
+        {/* a new tab: what this browser is for, and the address bar */}
         {blank && !veil && (
           <div className="absolute inset-0 grid place-items-center overflow-auto bg-background p-6" data-testid="browser-ntp">
             <div className="grid w-full max-w-lg justify-items-center gap-4 text-center">
@@ -506,15 +505,6 @@ export function LiveView({ profile, nav, session, who, start, onMinimize, classN
                 <p className="text-base font-semibold">{t('browser.name')}</p>
                 <p className="text-[13px] text-muted-foreground">{t('browser.ntp.desc')}</p>
               </div>
-              {sites.length > 0 && (
-                <div className="flex flex-wrap justify-center gap-2">
-                  {sites.slice(0, 12).map((site) => (
-                    <button key={site} type="button" onClick={() => drive({ t: 'nav', url: `https://${site}/` })} className="inline-flex h-9 items-center gap-1.5 rounded-lg border bg-card px-3 text-[13px] hover:bg-accent">
-                      <Globe className="size-3.5 text-muted-foreground" /> {site}
-                    </button>
-                  ))}
-                </div>
-              )}
               <form
                 className="flex h-10 w-full max-w-md items-center gap-2 rounded-full border bg-card px-4 focus-within:ring-2 focus-within:ring-ring"
                 onSubmit={(e) => {

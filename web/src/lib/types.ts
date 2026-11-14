@@ -1388,8 +1388,6 @@ export type BrowserProfile = {
   name: string
   /** an exit id, or "direct" (the server's address) */
   exit: string
-  web: 'list' | 'public'
-  sites: string[]
   /** exit down: wait (default) or go out by the server's address */
   on_exit_down: 'wait' | 'vps'
   /** the project this profile is for (`projects/<name>`), "" for the others */
@@ -1604,5 +1602,7 @@ export type BrowserOwner = {
   /** its project (`projects/<name>`) and that project's profile ("" while never made) */
   project: string
   project_profile: string
+  /** a sandboxed agent's domains (the only sites its browser opens); null = any public site */
+  sites: string[] | null
   asks: BrowserAsk[]
 }

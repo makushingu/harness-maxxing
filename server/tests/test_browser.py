@@ -34,14 +34,16 @@ def test_pages_that_can_never_be_opened():
         assert rules.page_refusal(url, None) is None, url
 
 
-def test_the_list_mode_allows_only_its_sites_and_their_subdomains():
+def test_a_list_of_domains_allows_only_its_sites_and_their_subdomains():
     from maxxing.browser import rules
     sites = rules.clean_sites(["Example.com", "https://shop.acme.io/path", "*.blog.dev", "co.uk", "bad site", "x"])
     assert sites == ["example.com", "shop.acme.io", "blog.dev"]
     assert rules.page_refusal("https://www.example.com/", sites) is None
     assert rules.page_refusal("https://a.blog.dev/", sites) is None
-    assert "not one of the sites" in rules.page_refusal("https://example.org/", sites)
-    assert "not one of the sites" in rules.page_refusal("https://example.com.evil.io/", sites)
+    assert "not one of this agent's domains" in rules.page_refusal("https://example.org/", sites)
+    assert "not one of this agent's domains" in rules.page_refusal("https://example.com.evil.io/", sites)
+    assert rules.page_refusal("https://example.org/") is None              # no list: any public site
+    assert rules.page_refusal("http://192.168.1.1/") and rules.page_refusal("file:///etc/passwd")
 
 
 def test_devtools_commands_that_are_refused():
@@ -57,7 +59,7 @@ def test_devtools_commands_that_are_refused():
         assert fwd is None and json.loads(err)["id"] == cmd["id"], cmd
     fwd, err = relay.filter_command(json.dumps({"id": 8, "method": "Page.navigate",
                                                 "params": {"url": "https://example.org/"}}), ["example.com"])
-    assert fwd is None and "not one of the sites" in json.loads(err)["error"]["message"]
+    assert fwd is None and "not one of this agent's domains" in json.loads(err)["error"]["message"]
     ok = json.dumps({"id": 9, "method": "Runtime.evaluate", "params": {"expression": "1+1"}, "sessionId": "S"})
     assert relay.filter_command(ok, None) == (ok, None)
     assert rules.check_command("x" * (2 << 20))[0] == "command too large"
@@ -65,11 +67,9 @@ def test_devtools_commands_that_are_refused():
 
 def test_the_policy_blocks_local_pages_and_downloads():
     from maxxing.browser import rules
-    p = rules.policy(["example.com"], downloads=False)
-    assert "*" in p["URLBlocklist"] and "file://*" in p["URLBlocklist"]
-    assert p["URLAllowlist"] == ["about:blank", "example.com"] and p["DownloadRestrictions"] == 3
-    pub = rules.policy(None, downloads=True)
-    assert "*" not in pub["URLBlocklist"] and pub["DownloadRestrictions"] == 0
+    p = rules.policy(downloads=False)
+    assert "file://*" in p["URLBlocklist"] and "*" not in p["URLBlocklist"] and "URLAllowlist" not in p
+    assert p["DownloadRestrictions"] == 3 and rules.policy(downloads=True)["DownloadRestrictions"] == 0
 
 
 # ---- proxy ---------------------------------------------------------------------------------------------------------
@@ -302,24 +302,23 @@ def test_an_owner_is_off_until_turned_on(client, topic, mx):
     assert browser.active_for(A) is None and browser.active_for(T) is None
     r = client.put("/api/browser/owner", json={"path": A, "enabled": True})
     assert r.status_code == 200, r.text
-    # turned on, an agent uses its project's profile: made at its first use, with main's exit and sites
+    # turned on, an agent uses its project's profile: made at its first use, with main's exit
     assert r.json()["own"] == {"enabled": True} and r.json()["profile"] == "" and r.json()["project"] == "projects/acme"
     assert browser.active_for(A) is None                 # the feature is off
     assert client.put("/api/settings", json={"browser_feature": True}).status_code == 200
     assert client.get("/api/settings").json()["browser_feature"] is True
     owner, prof, s = browser.active_for(A)
-    assert owner == f"agent:{A}" and prof["id"] == "acme" and prof["project"] == "projects/acme" and prof["web"] == "list"
+    assert owner == f"agent:{A}" and prof["id"] == "acme" and prof["project"] == "projects/acme" and "sites" not in prof
     assert client.get("/api/browser/owner", params={"path": A}).json()["from"]["profile"] == "project:projects/acme"
     assert client.delete("/api/browser/profiles/acme").status_code == 409     # a project's stays: forget it instead
     assert client.get(f"/api/agents/acme/blog/writer").json()["browser"]["enabled"] is True
     r = client.put("/api/browser/settings", json={"idle_min": 45})
     assert r.status_code == 200 and r.json()["settings"]["idle_min"] == 45
-    assert client.put("/api/browser/profiles/main", json={"sites": ["not a site"]}).status_code == 400
-    assert client.put("/api/browser/profiles/acme", json={"web": "public"}).status_code == 200
+    assert client.put("/api/browser/profiles/acme", json={"name": "Acme"}).status_code == 200
     # a project turns it on for all its topics; the agent's switch is its own
     r = client.put("/api/browser/owner", json={"path": "projects/acme", "enabled": True})
     assert r.status_code == 200 and r.json()["kind"] == "project"
-    assert browser.active_for(T)[1]["web"] == "public"
+    assert browser.active_for(T)[1]["name"] == "Acme"
     assert json.loads((mx["ws"] / "projects/acme/.maxxing.json").read_text())["browser"] == {"enabled": True}
     assert client.get("/api/browser/owner", params={"path": T}).json()["from"]["enabled"] == "project:projects/acme"
     assert client.get("/api/browser/owner", params={"path": "projects"}).status_code == 400
@@ -449,8 +448,8 @@ def test_cli_set_show(mx, capsys):
     (mx["ws"] / T).mkdir(parents=True)
     assert cli.main(["browser", "set", "acme/blog", "on"]) == 0
     assert browser.own_block(f"topic:{T}") == {"enabled": True}
-    assert cli.main(["browser", "profile", "add", "Shop", "--sites", "example.com,shop.example.org"]) == 0
-    assert browser.profile("shop")["sites"] == ["example.com", "shop.example.org"]
+    assert cli.main(["browser", "profile", "add", "Shop", "--fallback-vps"]) == 0
+    assert browser.profile("shop")["on_exit_down"] == "vps"
     assert cli.main(["browser", "set", "acme", "inherit", "--profile", "shop"]) == 1   # only an agent chooses
     assert browser.resolve(T)["profile"] == ""                                       # its project's, not made yet
     assert browser.active_for(T) is None                                             # the feature is off
@@ -552,13 +551,48 @@ def test_decide_keeps_only_the_hand_back_fields(mx):
     assert "picture" not in out and asks.get(rid)["status"] == "done"
 
 
+def test_a_sandboxed_agent_browses_only_its_domains(client, topic, mx):
+    from maxxing import agents, browser
+    _agent(client)
+    assert browser.agent_sites(f"agent:{A}") is None                          # free: any public site
+    assert browser.agent_sites(f"topic:{T}") is None and browser.agent_sites("session:x") is None
+    a = agents.load(A)
+    agents._save(A, {**a, "sandbox": True, "domains": ["api.github.com", "*.Example.com", "not a site"]})
+    assert browser.agent_sites(f"agent:{A}") == ["api.github.com", "example.com"]
+    client.put("/api/settings", json={"browser_feature": True})
+    assert client.put("/api/browser/owner", json={"path": A, "enabled": True}).json()["sites"] == \
+        ["api.github.com", "example.com"]
+    agents._save(A, {**a, "sandbox": True, "domains": []})
+    assert browser.agent_sites(f"agent:{A}") == []                            # no domain: no page
+
+
+def test_a_tab_of_a_sandboxed_agent_that_left_its_domains_is_emptied(mx):
+    from maxxing.browser import pool as pool_mod
+
+    class W:
+        pages = {"t1": {"url": "https://www.example.com/a"}, "t2": {"url": "https://evil.example.org/"}}
+        went: list = []
+
+        async def cdp_navigate(self, tid, url):
+            self.went.append((tid, url))
+
+    class Tabs:
+        def awake(self, nav):
+            return [{"target": "t1"}, {"target": "t2"}]
+
+    b = type("B", (), {"watcher": W(), "tabs": Tabs(), "pid": "acme"})()
+    t = type("T", (), {"nav": f"agent:{A}"})()
+    notes = asyncio.run(pool_mod.Pool()._keep_to(b, t, ["example.com"]))
+    assert W.went == [("t2", "about:blank")] and len(notes) == 1 and "evil.example.org" in notes[0]
+
+
 # ---- profiles and who uses which -------------------------------------------------------------------------------------
 def test_settings_of_before_the_profiles_become_the_main_profile(mx):
     from maxxing import browser, config
     config.update_config(browser={"web": "list", "sites": ["example.com"], "profile": "keep", "idle_min": 40})
     s = browser.settings()
     assert s["idle_min"] == 40 and s["exits"] == []
-    assert s["profiles"] == [{**browser.PROFILE_DEFAULTS, "id": "main", "sites": ["example.com"]}]
+    assert s["profiles"] == [{**browser.PROFILE_DEFAULTS, "id": "main"}]          # its old site list: dropped
     old = browser.profiles_dir() / "harness"
     old.mkdir(parents=True)
     (browser.home() / "tabs.json").write_text('{"tabs": []}')
@@ -569,15 +603,14 @@ def test_settings_of_before_the_profiles_become_the_main_profile(mx):
 
 def test_profiles_are_added_changed_and_deleted(mx):
     from maxxing import browser
-    shop = browser.set_profile({"name": "Boutique Paris", "web": "public"})
+    shop = browser.set_profile({"name": "Boutique Paris", "web": "list", "sites": ["example.com"]})   # of before
+    assert "web" not in shop and "sites" not in shop
     assert shop["id"] == "boutique-paris" and shop["exit"] == "direct" and shop["on_exit_down"] == "wait"
     assert browser.set_profile({"name": "Boutique Paris"})["id"] == "boutique-paris-2"
     with pytest.raises(browser.BrowserError):
         browser.set_profile({"exit": "nope"}, "boutique-paris")             # no such exit
     with pytest.raises(browser.BrowserError):
         browser.set_profile({"name": " "})
-    assert browser.set_profile({"sites": ["https://Shop.Example.com/x"]}, "boutique-paris")["sites"] == \
-        ["shop.example.com"]
     with pytest.raises(browser.BrowserError):
         browser.delete_profile("main")
     browser.delete_profile("boutique-paris-2")
@@ -1143,9 +1176,10 @@ def test_an_agent_uses_its_project_profile_unless_it_chooses_another(client, top
     from maxxing import agents, browser
     _agent(client)
     client.put("/api/settings", json={"browser_feature": True})
-    assert client.put("/api/browser/profiles/main", json={"web": "public"}).status_code == 200
+    assert client.put("/api/browser/profiles/main", json={"on_exit_down": "vps"}).status_code == 200
     r = client.put("/api/browser/owner", json={"path": A, "enabled": True}).json()
-    assert r["enabled"] and browser.active_for(A)[1]["id"] == "acme" and browser.profile("acme")["web"] == "public"
+    assert r["enabled"] and browser.active_for(A)[1]["id"] == "acme" and browser.profile("acme")["on_exit_down"] == "vps"
+    assert r["sites"] is None                                                  # a free agent: any public site
     assert client.put("/api/browser/owner", json={"path": A, "profile": "main"}).json()["profile"] == "main"
     r = client.put("/api/browser/owner", json={"path": A, "inherit": ["profile"]}).json()
     assert r["profile"] == "acme" and [p["id"] for p in browser.profiles()] == ["main", "acme"]

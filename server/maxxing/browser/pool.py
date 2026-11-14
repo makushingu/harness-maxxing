@@ -49,8 +49,7 @@ EXIT_POLL = 10.0                       # a tool waiting for its exit checks it t
 TRAIL_MAX = 30                         # pages a person went to in a tab of a turn (told to Claude after)
 PICTURE_MAX = 400_000                  # bytes of the picture given back to Claude with a hand-back
 MEM_WARN, MEM_CRITICAL = 0.85, 0.92    # share of the server's memory (or of a browser's cap)
-POLICY_KEYS = ("web", "sites")
-UPLOAD_MAX = 50 * 1024 * 1024          # one file given to a page (by Claude or by the person)         # set at a profile's start: a change restarts it (when unused)
+UPLOAD_MAX = 50 * 1024 * 1024          # one file given to a page (by Claude or by the person)
 
 
 class Turn:
@@ -83,7 +82,7 @@ class Browser:
 
     def __init__(self, profile: dict, tabs: Tabs) -> None:
         self.pid = profile["id"]
-        self.profile = profile                      # its settings at start (POLICY_KEYS: a change restarts it)
+        self.profile = profile                      # its settings at start
         self.tabs = tabs
         self.proc: asyncio.subprocess.Process | None = None
         self.ws_path = ""
@@ -114,10 +113,6 @@ class Browser:
     @property
     def data(self) -> Path:
         return browser.profile_dir(self.pid)
-
-    def sites(self) -> list[str] | None:
-        p = browser.profile(self.pid)
-        return browser.sites_of(p or self.profile)
 
     def busy(self) -> bool:
         """Someone uses it now: a turn, a viewer, the person's hand."""
@@ -200,9 +195,9 @@ class Pool:
             root = str(b.run / "uploads") + "/"
             if root not in rules.UPLOAD_ROOTS:
                 rules.UPLOAD_ROOTS.append(root)
-        b.proc = await unit.start(b.slug, b.data, b.run, rules.policy(b.sites(), s["downloads"]), downloads)
+        b.proc = await unit.start(b.slug, b.data, b.run, rules.policy(s["downloads"]), downloads)
         b.ws_path = await unit.ready(b.run, b.proc, b.slug)
-        b.watcher = Watcher(b.run / "cdp.sock", b.ws_path, b.sites, b.tabs)
+        b.watcher = Watcher(b.run / "cdp.sock", b.ws_path, b.tabs)
         b.watcher.on_state = self._changed
         b.watcher.on_move = lambda tid, url, title: self._moved(b, tid, url, title)
         b.watcher.may_follow = lambda tid: self._may_follow(b, tid)
@@ -334,8 +329,6 @@ class Pool:
                 self._release(b, nav)
         busy_turns = bool(b.turns) or asks.pending_for_profile(b.pid)
         viewers = bool(b.watcher and b.watcher.watched())
-        if any(b.profile.get(k) != p.get(k) for k in POLICY_KEYS) and not busy_turns and not b.control:
-            return await self.stop(b.pid, "its sites changed")      # the policy is set at start
         if not busy_turns and not viewers and not b.control and now - b.last_use > s["idle_min"] * 60:
             return await self.stop(b.pid, "unused")
         b.mem = await asyncio.to_thread(unit.memory_current, b.slug, b.proc)
@@ -412,7 +405,8 @@ class Pool:
         if p is None:
             return _error("The browser profile of this turn was deleted.")
         args = cdm.clean_args(args)
-        why = rules.page_refusal(args.get("url"), browser.sites_of(p)) if isinstance(args.get("url"), str) else None
+        sites = await asyncio.to_thread(browser.agent_sites, owner)
+        why = rules.page_refusal(args.get("url"), sites) if isinstance(args.get("url"), str) else None
         if why:
             await asyncio.to_thread(replays.log_action, pid,
                                     {"at": time.time(), "session": sid, "nav": navs.of_turn(sid, owner), "tool": name,
@@ -450,10 +444,12 @@ class Pool:
                     t = await self._turn(b, sid, owner)
                     res = await t.child.call("tools/call", {"name": name, "arguments": args})  # type: ignore[union-attr]
             ok = not res.get("isError")
-            res = _explain(res, b)
+            res = _explain(res, b, sites)
             if ok and name == "new_page":
                 await self._drop_blank(b, t)
             extra = []
+            if sites is not None:
+                extra += await self._keep_to(b, t, sites)
             if told:
                 extra.append("[Harness Maxxing] Since your last action, the person drove a tab of yours: " + told)
             content = list(res.get("content") or [])
@@ -474,6 +470,25 @@ class Pool:
                                      "args": replays.summary(name, args),
                                      "ok": ok, "ms": int((time.time() - t0) * 1000), "page": replays.page(page)})
             self._changed()
+
+    async def _keep_to(self, b: Browser, t: Turn, sites: list[str]) -> list[str]:
+        """A sandboxed agent's tabs stay on its domains: a page it reached another way (a link, a redirect, a script)
+        goes back to a blank page; what to tell Claude."""
+        out: list[str] = []
+        if not b.watcher:
+            return out
+        for tab in b.tabs.awake(t.nav):
+            url = (b.watcher.pages.get(tab["target"]) or {}).get("url") or ""
+            if not url or url == "about:blank" or not rules.page_refusal(url, sites):
+                continue
+            try:
+                await b.watcher.cdp_navigate(tab["target"], "about:blank")
+            except Exception as e:  # noqa: BLE001
+                log.info("Harness Browser %s: page outside the domains not left: %s", b.pid, e)
+                await b.watcher.close_tab(tab["target"])
+            out.append(f"[Harness Maxxing] A tab of yours reached {replays.page(url)}, outside this agent's domains: "
+                       "it was emptied. " + DOMAINS_HINT.split("] ", 1)[1].format(sites=", ".join(sites) or "none yet"))
+        return out
 
     async def exit_ready(self, p: dict, sid: str, owner: str) -> str | None:
         """None when the profile's exit carries traffic (or it has none); else, after waiting `exit_wait_s` for it,
@@ -714,7 +729,7 @@ class Pool:
     # ---- tabs of the person ----------------------------------------------------------------------------------
     async def open_for_person(self, pid: str, nav: str = navs.ME) -> Browser:
         """Start a navigator for the person (the live view): its tab in front, else its last one asleep, else the
-        first site of the profile's list (an empty tab without one)."""
+        an empty tab."""
         if not browser.feature_on():
             raise browser.BrowserError(409, "off", "The browser is off (Settings -> Features)")
         p = browser.profile(pid)
@@ -726,8 +741,7 @@ class Pool:
             if sleeping:
                 await self.wake(pid, sleeping[-1]["key"])
             else:
-                first = (browser.sites_of(p) or [None])[0]
-                tid = await self.create(b, {"kind": "you"}, f"https://{first}/" if first else "about:blank", nav)
+                tid = await self.create(b, {"kind": "you"}, "about:blank", nav)
                 if tid:
                     await b.watcher.show(tid)
         b.last_use = time.time()
@@ -737,7 +751,7 @@ class Pool:
         b = await self.ensure(pid)
         if url:
             url = url if "://" in url else "https://" + url
-            why = rules.page_refusal(url, b.sites())
+            why = rules.page_refusal(url)
             if why:
                 raise browser.BrowserError(400, "refused", why)
         tid = await self.create(b, {"kind": "you"}, url or "about:blank", nav)
@@ -933,13 +947,15 @@ def pool() -> Pool:
     return _pool
 
 
-BLOCKED_HINT = ("[Harness Maxxing] ERR_BLOCKED_BY_ADMINISTRATOR = this page, or the page it redirected to (a sign-in "
-                "on another domain, for example), is not one of the sites this browser profile may open. Tell the user "
-                "which site to add to the profile's sites (Browser page -> the profile -> Profile settings); do not try to get around it.")
+BLOCKED_HINT = ("[Harness Maxxing] ERR_BLOCKED_BY_ADMINISTRATOR = this page, or the page it redirected to, is never "
+                "opened by this browser: a page of this server or of a local network, a file, or a page of the browser "
+                "itself. Do not try to get around it.")
+DOMAINS_HINT = ("[Harness Maxxing] This agent runs in its sandbox: its browser opens only its domains ({sites}). "
+                "Ask the user to add the site to the agent's domains (its page -> Protection), or use another way.")
 
 
-def _explain(res: dict, b: Browser | None = None) -> dict:
-    """A page refused by the profile's own rules (the site list) comes back as a cryptic Chromium error: say why."""
+def _explain(res: dict, b: Browser | None = None, sites: list[str] | None = None) -> dict:
+    """A page Chromium refused comes back as a cryptic error: say why."""
     texts = [c.get("text") or "" for c in res.get("content") or [] if isinstance(c, dict)]
     if any("ERR_BLOCKED_BY_ADMINISTRATOR" in x or "This page is blocked" in x for x in texts):
         return {**res, "content": list(res.get("content") or []) + [{"type": "text", "text": BLOCKED_HINT}]}

@@ -16,12 +16,13 @@ Claude browses with its tools (one set per turn), never with this command: it sa
 Advanced:
     maxxing browser settings [--ask | --no-ask] [--wait MIN] [--downloads | --no-downloads] [--idle MIN]
                              [--tab-sleep MIN] [--max-tabs N] [--max-profiles N]
-    maxxing browser profile add NAME [--exit ID] [--sites a.com,b.com | --public] [--fallback-vps]
-    maxxing browser profile set ID [--name N] [--exit ID] [--sites ... | --public] [--fallback-vps | --wait-exit]
+    maxxing browser profile add NAME [--exit ID] [--fallback-vps]
+    maxxing browser profile set ID [--name N] [--exit ID] [--fallback-vps | --wait-exit]
     maxxing browser profile rm ID               its sign-ins too (not a project's: `forget` it); its agents go back
                                                 to their project's
 PATH: `<p>`, `<p>/<t>`, `<p>/<t>/<agent>` or the full folder. Settings belong to the owner: refused in an agent turn.
-Exits are added on the Browser page (their passwords go to the vault).
+Exits are added on the Browser page (their passwords go to the vault). A browser opens any public site, a sandboxed
+agent's only its domains (`maxxing agents set PATH domains='["example.com"]'`).
 """
 from __future__ import annotations
 
@@ -58,9 +59,6 @@ def _configure(p) -> None:
         if name == "set":
             s.add_argument("--name")
         s.add_argument("--exit", help="an exit id (Browser page -> Exits), or direct")
-        g = s.add_mutually_exclusive_group()
-        g.add_argument("--sites", help="comma-separated sites it may open (subdomains included)")
-        g.add_argument("--public", action="store_true", help="any public site")
         g = s.add_mutually_exclusive_group()
         g.add_argument("--fallback-vps", action="store_true", help="exit down: go out by this server's address")
         g.add_argument("--wait-exit", action="store_true", help="exit down: wait for it (default)")
@@ -115,10 +113,6 @@ def _profile_values(a) -> dict:
         v["name"] = a.name
     if a.exit:
         v["exit"] = a.exit
-    if a.public:
-        v["web"] = "public"
-    if a.sites is not None:
-        v.update(web="list", sites=[x.strip() for x in a.sites.split(",") if x.strip()])
     if a.fallback_vps or a.wait_exit:
         v["on_exit_down"] = "vps" if a.fallback_vps else "wait"
     return v
@@ -155,9 +149,8 @@ def _handler(a) -> int:
                   f"profiles at once, {s['max_tabs']} tabs awake each")
             names = {e["id"]: e["name"] for e in s["exits"]}
             for p in s["profiles"]:
-                sites = "any public site" if p["web"] == "public" else ", ".join(p["sites"]) or "no site yet"
                 print(f"profile {p['id']} ({p['name'] or 'Personal'}"
-                      + (f", project {p['project'].split('/', 1)[1]}" if p.get("project") else "") + f"): exit {names.get(p['exit'], p['exit'])}; {sites}"
+                      + (f", project {p['project'].split('/', 1)[1]}" if p.get("project") else "") + f"): exit {names.get(p['exit'], p['exit'])}"
                       + ("; exit down: this server's address" if p["on_exit_down"] == "vps" else ""))
             for e in s["exits"]:
                 print(f"exit {e['id']} ({e['name']}): {e['type']}")

@@ -3,10 +3,10 @@
 Off unless the feature is on (Settings -> Features: `browser_feature`). Its settings are in `config.json` -> `browser`:
 global ones (sleep, asks, downloads) plus
 
-- **profiles**: each one its own Chromium (its own sign-ins), its sites (a list or the public web) and its exit.
+- **profiles**: each one its own Chromium (its own sign-ins) and its exit; it opens any public site.
   `main` (the person's, "Personal") always exists. **One profile per project** (`project` = its folder), made by
   itself the first time the browser is used there (and for every project with agents when the Browser page is
-  shown), with the exit and sites of `main`. More profiles may be added by hand. A profile only runs while someone
+  shown), with the exit of `main`. More profiles may be added by hand. A profile only runs while someone
   uses it (`max_active_profiles` at once).
 - **exits**: where a profile's traffic leaves (exits.py): `direct` (this server's address, always there), a rented
   `proxy`, a phone / box over `tailscale`, a `wireguard` box. An exit that is down makes its profiles wait, never fall
@@ -16,6 +16,10 @@ Who may use it: a `browser` block {enabled?} in the .maxxing.json of a project o
 an agent's agent.json; `enabled` is inherited (topic -> project -> off), an agent's is its own (never inherited: its
 owner turns it on). Which profile: a session's is its project's; an agent's is its project's unless it chose another
 (`profile`; a chosen profile that was deleted = its project's again).
+
+Which sites: a profile has no list. A sandboxed agent opens only its `domains` (the same list as its commands and
+WebFetch: `agent_sites`); every other turn and the person open any public site. Pages of this server and of local
+networks, `file:` and Chromium's own pages are refused for all (rules).
 
 Modules: rules (what may be opened / sent), proxy (the only way out of a browser), exits (the exits and their
 runtimes), unit (the systemd unit of a profile's Chromium), cdm (chrome-devtools-mcp, the tools Claude gets: one per
@@ -41,11 +45,10 @@ DEFAULTS = {"ask": True, "wait_min": 30, "downloads": False, "idle_min": 30, "ta
             "max_active_profiles": 3, "exit_wait_s": 180, "search": "google"}
 NUMBERS = {"wait_min": (1, 1440), "idle_min": (5, 1440), "tab_sleep_min": (2, 720), "max_tabs": (2, 30),
            "max_active_profiles": (1, 8), "exit_wait_s": (0, 900)}
-PROFILE_DEFAULTS = {"name": "", "exit": DIRECT, "web": "list", "sites": [], "on_exit_down": "wait", "project": ""}
+PROFILE_DEFAULTS = {"name": "", "exit": DIRECT, "on_exit_down": "wait", "project": ""}
 OWN = "own"                                    # of before the profiles per project: read as "its project's"
 OWNER_DEFAULTS = {"enabled": False, "profile": MAIN}
 PROJECT_RE = re.compile(r"projects/[^/\s]{1,80}")
-WEB_MODES = ("list", "public")
 EXIT_DOWN = ("wait", "vps")
 EXIT_TYPES = ("proxy", "tailscale", "wireguard")
 ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,23}\Z")
@@ -92,11 +95,7 @@ def clean_profile(raw: object, strict: bool = False, exits: set[str] | None = No
     if not ID_RE.match(pid) or pid == DIRECT:
         _bad(strict, "profiles", f"bad id {pid!r}")
         return None
-    out = {**PROFILE_DEFAULTS, "id": pid, "name": _name(src.get("name")), "sites": []}
-    if src.get("web") in WEB_MODES:
-        out["web"] = src["web"]
-    elif "web" in src:
-        _bad(strict, "web", "list or public")
+    out = {**PROFILE_DEFAULTS, "id": pid, "name": _name(src.get("name"))}   # `web` / `sites` of before: dropped
     if src.get("on_exit_down") in EXIT_DOWN:
         out["on_exit_down"] = src["on_exit_down"]
     elif "on_exit_down" in src:
@@ -108,21 +107,12 @@ def clean_profile(raw: object, strict: bool = False, exits: set[str] | None = No
     project = str(src.get("project") or "")
     if project and PROJECT_RE.fullmatch(project):
         out["project"] = project                   # the project this profile is for
-    if "sites" in src:
-        items = src["sites"] if isinstance(src["sites"], list) else []
-        if strict:
-            wrong = [str(s) for s in items if rules.clean_site(s) is None]
-            if not isinstance(src["sites"], list) or wrong:
-                _bad(strict, "sites", "public site names like example.com" + (f" (not: {', '.join(wrong[:3])})" if wrong else ""))
-            if len(items) > rules.MAX_SITES:
-                _bad(strict, "sites", f"at most {rules.MAX_SITES}")
-        out["sites"] = rules.clean_sites(items)
     return out
 
 
 def clean_settings(raw: object, strict: bool = False) -> dict:
     """The browser's settings, complete and valid. strict: a bad value raises instead of being replaced.
-    Settings of before the profiles (`web`, `sites` at the top) become those of `main`."""
+    Settings of before the profiles become `main`."""
     from . import exits as exits_mod
     src = raw if isinstance(raw, dict) else {}
     out: dict = {**DEFAULTS}
@@ -156,7 +146,7 @@ def clean_settings(raw: object, strict: bool = False) -> dict:
     profiles: list[dict] = []
     raw_profiles = src.get("profiles") if isinstance(src.get("profiles"), list) else None
     if raw_profiles is None:                         # settings of before the profiles
-        raw_profiles = [{"id": MAIN, "web": src.get("web", "list"), "sites": src.get("sites") or []}]
+        raw_profiles = [{"id": MAIN}]
     for p in raw_profiles[:MAX_PROFILES]:
         c = clean_profile(p, strict, ids)
         if c and c["id"] not in {x["id"] for x in profiles}:
@@ -164,7 +154,7 @@ def clean_settings(raw: object, strict: bool = False) -> dict:
                 c["project"] = ""                    # one profile per project: a second one is just a profile
             profiles.append(c)
     if not any(p["id"] == MAIN for p in profiles):
-        profiles.insert(0, {**PROFILE_DEFAULTS, "id": MAIN, "sites": []})
+        profiles.insert(0, {**PROFILE_DEFAULTS, "id": MAIN})
     else:                                            # main first
         profiles.sort(key=lambda p: p["id"] != MAIN)
     out["profiles"] = profiles
@@ -222,13 +212,13 @@ def project_profile(project: str, s: dict | None = None) -> dict | None:
 
 
 def ensure_project_profile(project: str) -> str:
-    """The id of a project's profile, made the first time with the exit and sites of `main`, named after it."""
+    """The id of a project's profile, made the first time with the exit of `main`, named after it."""
     with _plock:
         mine = project_profile(project)
         if mine:
             return mine["id"]
         main = profile(MAIN) or {}
-        keep = {k: main[k] for k in ("exit", "web", "sites", "on_exit_down") if k in main}
+        keep = {k: main[k] for k in ("exit", "on_exit_down") if k in main}
         return set_profile({**keep, "name": project.split("/", 1)[1], "project": project})["id"]
 
 
@@ -264,9 +254,25 @@ def delete_profile(pid: str) -> None:
     _save(s)
 
 
-def sites_of(p: dict) -> list[str] | None:
-    """What a profile may open: a list of sites, None = the public web."""
-    return None if p.get("web") == "public" else list(p.get("sites") or [])
+def agent_sites(owner: str) -> list[str] | None:
+    """The sites a turn may open: a sandboxed agent's `domains` (also those of its commands and WebFetch), None = any
+    public site (every other turn). An agent that cannot be read opens nothing."""
+    kind, _, path = (owner or "").partition(":")
+    if kind != "agent":
+        return None
+    from .. import agents
+    try:
+        a = agents.load(path)
+    except Exception:  # noqa: BLE001
+        return []
+    if not a.get("sandbox"):
+        return None
+    out: list[str] = []
+    for d in a.get("domains") or []:
+        site = rules.clean_site(d)
+        if site and site not in out:
+            out.append(site)
+    return out
 
 
 # ---- who uses it: a project, a topic, an agent ---------------------------------------------------------------------

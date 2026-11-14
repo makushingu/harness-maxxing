@@ -1,5 +1,5 @@
-// The settings of a profile (bottom of its page, ProfilePage): the sites it may open, what happens when its connection
-// goes down, its memory, forget its sign-ins, delete it (not a project's while its project exists). Its name and its
+// The settings of a profile (bottom of its page, ProfilePage): what happens when its connection goes down (it opens any
+// public site: only a sandboxed agent is held to its domains, on the agent's page), its memory, forget its sign-ins, delete it (not a project's while its project exists). Its name and its
 // connection are at the top of the page.
 import * as React from 'react'
 import { useNavigate } from 'react-router'
@@ -8,9 +8,7 @@ import { useT } from '@/i18n'
 import { useBrowserProfile, useProfileAction, useSaveBrowserProfile } from '@/lib/queries'
 import type { BrowserProfile } from '@/lib/types'
 import { fmtBytes } from '@/lib/format'
-import { cn } from '@/lib/utils'
 import { Button, confirm, Label, Select, Skeleton } from '@/components/ui'
-import { ListEditor } from '@/features/agents/AgentSettings'
 import { profileName } from './profiles'
 
 export function ProfileSettings({ pid }: { pid: string }) {
@@ -37,24 +35,6 @@ export function ProfileSettings({ pid }: { pid: string }) {
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]" data-testid="browser-profile-settings">
       <div className="grid content-start gap-5">
-        <div className="grid gap-2">
-          <Label>{t('browser.sites')}</Label>
-          <Choice on={p.web === 'list'} onPick={() => set({ web: 'list' })} title={t('browser.web.list')} testid="browser-web-list">
-            {p.web === 'list' && (
-              <ListEditor
-                value={p.sites}
-                onChange={(sites, saved) => set({ sites }, saved)}
-                placeholder={t('browser.sitesPlaceholder')}
-                empty={t('browser.sitesEmpty')}
-                error={err}
-                testid="browser-sites"
-              />
-            )}
-          </Choice>
-          <Choice on={p.web === 'public'} onPick={() => set({ web: 'public' })} title={t('browser.web.public')} testid="browser-web-public">
-            <span className="text-[12px] text-muted-foreground">{t('browser.web.publicDesc')}</span>
-          </Choice>
-        </div>
         <div className="grid gap-1.5">
           <Label htmlFor="pr-down">{t('browser.profile.down')}</Label>
           <Select
@@ -68,7 +48,9 @@ export function ProfileSettings({ pid }: { pid: string }) {
             ]}
           />
           <p className="text-[12px] text-muted-foreground">{t(p.on_exit_down === 'vps' ? 'browser.profile.downVpsHint' : 'browser.profile.downWaitHint')}</p>
+          {err && <p className="text-[12px] text-destructive">{err}</p>}
         </div>
+        <p className="text-[12px] text-muted-foreground" data-testid="browser-profile-web">{t('browser.profile.web')}</p>
       </div>
 
       <div className="grid content-start gap-5">
@@ -103,18 +85,6 @@ export function ProfileSettings({ pid }: { pid: string }) {
           {p.project && !v.gone && <p className="text-[12px] text-muted-foreground">{t('browser.profile.projectKeep')}</p>}
         </section>
       </div>
-    </div>
-  )
-}
-
-function Choice({ on, onPick, title, testid, children }: { on: boolean; onPick: () => void; title: string; testid: string; children?: React.ReactNode }) {
-  return (
-    <div className={cn('grid gap-2 rounded-lg border p-3', on ? 'border-primary/60 bg-primary/5' : 'bg-card/40')} data-testid={testid}>
-      <button type="button" onClick={onPick} className="flex items-center gap-2 text-left text-[13px] font-medium" aria-pressed={on}>
-        <span className={cn('flex size-4 items-center justify-center rounded-full border', on && 'border-primary')}>{on && <span className="size-2 rounded-full bg-primary" />}</span>
-        {title}
-      </button>
-      {children}
     </div>
   )
 }

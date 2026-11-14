@@ -8,7 +8,7 @@ Signed in:
   PUT  /api/browser/navigators/me             {profile} the person's browser on another profile (its tabs move there)
   PUT  /api/browser/settings                  global settings (asks, downloads, sleep, profiles at once...)
   POST /api/browser/setup                     {exits?} install what is missing (root; in the background, see GET)
-  POST /api/browser/profiles                  {name, exit?, web?, sites?, on_exit_down?} a new profile
+  POST /api/browser/profiles                  {name, exit?, on_exit_down?} a new profile
   GET  /api/browser/profiles/{pid}            the profile, its browser (tabs...), its agents (lasting navigators),
                                               its sessions' journal (temporary navigators), its actions
   PUT  /api/browser/profiles/{pid}            change it          DELETE: delete it (its sign-ins too; not a project's)
@@ -23,7 +23,8 @@ Signed in:
   POST /api/browser/exits/{eid}/test          address seen, country, operator, kind, delay, speed ("direct" too)
   GET  /api/browser/exits/{eid}/tailscale     its Tailscale: signed in?, sign-in address, devices offered as exit
   POST /api/browser/exits/{eid}/tailscale     {node} use that device | {action: login|logout}
-  GET  /api/browser/owner?path=               a project / topic / agent: its own block, what it gets (inherited)
+  GET  /api/browser/owner?path=               a project / topic / agent: its own block, what it gets (inherited),
+                                              `sites` (a sandboxed agent's domains, null = any public site)
   PUT  /api/browser/owner                     {path, enabled?, profile? (an agent), inherit?: [enabled|profile]}
   POST /api/browser/waiting/{sid}             {action: resume|retry|dismiss} a turn stopped by a down exit
   GET  /api/browser/asks?session=&path=       pending `ask_human` requests
@@ -185,8 +186,6 @@ async def setup(body: Optional[SetupIn] = None) -> dict:
 class ProfileIn(BaseModel):
     name: Optional[str] = Field(default=None, max_length=80)
     exit: Optional[str] = Field(default=None, max_length=40)
-    web: Optional[Literal["list", "public"]] = None
-    sites: Optional[list[str]] = Field(default=None, max_length=100)
     on_exit_down: Optional[Literal["wait", "vps"]] = None
 
 
@@ -490,7 +489,7 @@ def _owner_view(owner: str) -> dict:
     return {"owner": owner, "path": path, "kind": owner.split(":", 1)[0], "own": browser.own_block(owner),
             "enabled": r["enabled"], "profile": r["profile"], "from": r["from"], "feature": browser.feature_on(),
             "project": r["project"], "project_profile": mine["id"] if mine else "",
-            "inherited": parent, "chain": chain,
+            "inherited": parent, "chain": chain, "sites": browser.agent_sites(owner),
             "exit": exits.runtime().public(exits.get(p["exit"])) if p and p["exit"] != browser.DIRECT
             and exits.get(p["exit"]) else None,
             "asks": asks.pending(owner=owner)}
@@ -796,7 +795,7 @@ async def cdp(ws: WebSocket, pid: str):
         except (WebSocketDisconnect, RuntimeError):
             return None
     try:
-        await relay.pump(b.run / "cdp.sock", b.ws_path, b.sites, recv, ws.send_text, view=p.view_for(b, turn),
+        await relay.pump(b.run / "cdp.sock", b.ws_path, lambda: browser.agent_sites(turn.owner), recv, ws.send_text, view=p.view_for(b, turn),
                          wait_tab=lambda target: p.wait_tab(b, target))
     except Exception as e:  # noqa: BLE001
         log.info("browser devtools relay: %s", e)

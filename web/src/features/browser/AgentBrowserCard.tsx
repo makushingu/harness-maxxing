@@ -1,9 +1,10 @@
 // An agent's browser (its persistent navigator) in its info panel: a small live picture of its tab (a new one every
 // 2 s, only while the panel is shown and the browser runs: never started for it), the page, "Claude is acting" and its
-// requests to the person; under it, its profile (its project's by default, or another). A click opens the browser
-// window to watch or take over. Nothing when its browser is off.
+// requests to the person; under it, its profile (its project's by default, or another) and, in its sandbox, its
+// domains (the only sites it opens). A click opens the browser window to watch or take over. Nothing when its browser
+// is off.
 import * as React from 'react'
-import { Globe, Hand } from 'lucide-react'
+import { Globe, Hand, ShieldCheck } from 'lucide-react'
 import { useT } from '@/i18n'
 import { useBrowserOwner, useBrowserStatus } from '@/lib/queries'
 import { cn } from '@/lib/utils'
@@ -58,6 +59,12 @@ export function AgentBrowserCard({ path, who, title }: { path: string; who: stri
         </div>
       </button>
       <AgentProfilePicker o={o} className="h-8 w-full text-[12px]" />
+      {o.sites && (
+        <p className="flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground" title={o.sites.join(', ')} data-testid="agent-browser-domains">
+          <ShieldCheck className="size-3.5 shrink-0" />
+          <span className="truncate">{o.sites.length ? t('browser.card.domains', { count: o.sites.length }) : t('browser.card.noDomain')}</span>
+        </p>
+      )}
       <BrowserWindow context={path} profile={pid} nav={id} who={who} open={win} onOpenChange={setWin} start />
     </section>
   )

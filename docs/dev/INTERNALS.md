@@ -688,9 +688,9 @@ URLs without query / fragment / userinfo. A channel with more than 64 MB waiting
 ## maxxing.browser  (owner: organisation) - Harness Browser
 Chromium on this server for the user, their sessions and their agents (API.md "Harness Browser", user doc 33). Off
 unless `browser_feature`. Settings: `config.json -> browser` = the globals (`browser.DEFAULTS`), `profiles: [...]`,
-`exits: [...]` (`clean_settings`: complete and valid, `strict=True` on every save; settings of before the profiles -
-`web` / `sites` at the top - become those of `main`). One profile per project (`project` field, unique;
-`project_profile(project)`, `ensure_project_profile(project)` under `_plock`: made from `main`'s exit / web / sites /
+`exits: [...]` (`clean_settings`: complete and valid, `strict=True` on every save; settings of before the profiles
+become `main`; a profile's old `web` / `sites` are dropped: a profile has no site list). One profile per project (`project` field, unique;
+`project_profile(project)`, `ensure_project_profile(project)` under `_plock`: made from `main`'s exit /
 on_exit_down, named after the project; `ensure_projects_with_agents()` from `GET /api/browser`; `project_gone(p)`;
 `delete_profile` refuses a project's while its folder exists). Who may use it: `{enabled?}` in a project's / topic's
 `.maxxing.json` (`workspace.folder_browser` / `set_folder_browser`) and `{enabled?, profile?}` in agent.json
@@ -698,6 +698,12 @@ on_exit_down, named after the project; `ensure_projects_with_agents()` from `GET
 `chain(path)` (nearest wins, an agent's stops at the agent); `profile` = the agent's own choice when it exists, else
 the project's ("" while not made; `create` makes it). `active_for(path)` = (owner, profile, settings) when turns
 there get the tools (makes the project's profile). `agents_of(pid)` = the agents on, on that profile.
+Sites: any public site for every turn and the person, except a sandboxed agent: `agent_sites(owner)` = its `domains`
+(`rules.clean_site`; `[]` = nothing, an unreadable agent too; None = any public site), checked on a tool's `url`
+(`Pool.call`), on every DevTools command that opens a page (the `/cdp` relay of its turn) and after each tool call
+(`Pool._keep_to`: a tab of its navigator outside them goes back to `about:blank`, Claude is told). Never opened by
+anyone (`rules.page_refusal` without a list, the proxy, the Chromium policy): this server, local networks, raw IPs,
+`file:`, the browser's own pages.
 Modules:
 - `__init__` settings, profiles, owners, folders; `migrate()` (server start and every profile start): the one
   browser's folder `profiles/harness` -> `profiles/main`, `tabs.json` -> `tabs/main.json` (only when the new one is
@@ -723,7 +729,7 @@ Modules:
   start -> call (`upload_file`: `claude_file` copies a file of the turn's topic / project into `run/<pid>/uploads/`
   with `stage`, the path given to Chromium is `/mxrun/uploads/...`; `rules.check_command` lets
   `DOM.setFileInputFiles` through only for those). `thumb(pid, nav)` = a picture for the agent's card. `control[nav]` = the person's hand per navigator; `navigators()`
-  the list of the Browser page; `move_nav` / `drop_nav` (the person's navigator changes profile / a session's is closed). `_tidy` every 15 s: dead / off / deleted / sites changed (`POLICY_KEYS`, restart once unused) /
+  the list of the Browser page; `move_nav` / `drop_nav` (the person's navigator changes profile / a session's is closed). `_tidy` every 15 s: dead / off / deleted /
   idle -> stop; tabs to sleep; CPU level.
 - `unit` the profile's unit `maxxing-br-<install>-<pid>` (user `maxxing-browser`, PrivateNetwork + socat to the
   proxy socket, MemoryMax 1536M, in `maxxing-turns.slice` when CPU priorities are on); `set_level(pid, live|background)`
@@ -747,7 +753,7 @@ Modules:
   frames never larger than the viewer. It also intercepts the page's file chooser (`chooser`, files from
   `POST /files` -> `give_files`) and its dialogs (`dialog`, answered with `{"t":"dialog"}`), copies the selection
   (`{"t":"copy"}`), and turns what is typed in the address bar into an address or a search (`rules.address`).
-- `tabs` the tabs of a profile, `rules` (sites, Chromium policy, `rules.json` DevTools command rules), `relay`
+- `tabs` the tabs of a profile, `rules` (pages never opened, a list of sites, Chromium policy, `rules.json` DevTools command rules), `relay`
   (DevTools between a client and `cdp.sock`, filtered), `view` (what a turn's tools see: only the tabs and pages of their navigator - other navigators' events dropped,
   auto-attached foreign tabs detached at once, `Target.getTargets` filtered, commands naming a foreign target refused,
   `Target.createTarget` made by the server in their navigator), `cdm`

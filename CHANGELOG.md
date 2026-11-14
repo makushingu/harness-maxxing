@@ -17,7 +17,7 @@ New:
   clicks and fills forms in a Chromium of your server, and you watch it live, take over for a captcha or a sign-in
   and hand back. Off until you turn it on (Settings -> Features -> Harness Browser), then let a project, a topic
   (its menu -> **Browser...**) or an agent (its settings) use it. The Browser page has three parts: **your browser**,
-  the **profiles** and the **connections**. **Each project has its own profile** (sign-ins, sites, connection), made by
+  the **profiles** and the **connections**. **Each project has its own profile** (sign-ins, connection), made by
   itself: its sessions and its agents share it, so you sign in once for all of them; add more profiles to keep an
   agent apart. A profile's page shows its agents' browsers live (**Persistent**) and a journal of the browsers its
   sessions opened (**Temporary**, closed once the session no longer uses them); an agent's info panel shows its
@@ -28,7 +28,9 @@ New:
   the sites see. When a connection is down, the profile waits and you get a notification - never the server's address
   behind your back - and Claude goes on once it is back. The address bar searches (Google, DuckDuckGo or Bing) what is not an address; copy, paste, the page's messages
   and its file buttons work from the live view; the browser speaks your language and keeps your time zone. The live
-  view keeps up with a slow connection. [Show me](#show:browser)
+  view keeps up with a slow connection. It opens any public site, never your server or your local network; an agent in
+  its sandbox opens only its domains, the same as its commands. An asleep browser shows a small window in its
+  project's colour. [Show me](#show:browser)
 
 ## 2.0.0-alpha.149 - 2026-11-13
 

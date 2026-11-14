@@ -556,10 +556,10 @@ Approval { id: string (16 hex), session: string, agent_path: string, tool: strin
 ## Harness Browser
 
 `maxxing/browser/` + `maxxing/api/browser.py` (INTERNALS "maxxing.browser"). Off unless `browser_feature` (Settings).
-Settings in config `browser`: global values, **profiles** (each one its own Chromium: sign-ins, sites, exit; `main`
+Settings in config `browser`: global values, **profiles** (each one its own Chromium: sign-ins, exit; `main`
 = the person's "Personal", always there, cannot be deleted) and **exits** (shown as "connections": where a profile's
 traffic leaves; `direct` = this server, always there, not stored). **One profile per project** (`project` =
-`projects/<name>`, one at most per project): made with the exit, sites, web mode and `on_exit_down` of `main`, named
+`projects/<name>`, one at most per project): made with the exit and `on_exit_down` of `main`, named
 after the project, the first time a turn of the project gets the browser (`active_for`), when an owner view of an
 enabled folder is asked, and for every project that has an agent when `GET /api/browser` runs; it cannot be deleted
 while its project exists (`409 project`). Who may use it: a `browser` block `{enabled?}` in the `.maxxing.json` of a
@@ -580,7 +580,6 @@ BrowserSettings { ask: bool (true), wait_min: int (30, 1..1440), downloads: bool
                   max_active_profiles: int (3, 1..8), exit_wait_s: int (180, 0..900),
                   search: "google"|"duckduckgo"|"bing" ("google": the address bar's search) }
 BrowserProfile  { id (^[a-z0-9][a-z0-9-]{0,23}$, not "direct"), name (<= 40), exit: "direct"|exit id,
-                  web: "list"|"public", sites: [string] (<= 50, "example.com", subdomains included),
                   on_exit_down: "wait"|"vps", project: ""|"projects/<name>" (set by the server) }
                                                                                      (<= 40 profiles, main first)
 BrowserExit     { id, name, type: "proxy"|"tailscale"|"wireguard",
@@ -619,7 +618,8 @@ OwnerView       { owner: "project:<path>"|"topic:<path>"|"agent:<path>", path, k
                   enabled, profile, from: {enabled, profile} (owner that set it, "" = default), feature,
                   inherited: OwnerResolve of the parent|null (topic, agent), chain: [owner] (nearest first),
                   exit: ExitView|null (its profile's, not direct), project: "projects/<name>", project_profile:
-                  pid|"" (not made yet), asks: [BrowserAsk] }
+                  pid|"" (not made yet), sites: [site]|null (a sandboxed agent's domains, the only sites its
+                  browser opens; null = any public site), asks: [BrowserAsk] }
 BrowserAsk      { id (16 hex), session, owner, profile, reason, what: "captcha"|"sign_in"|"code"|"payment"|"consent"|"other",
                   at, expires, status: "pending"|"done"|"skip"|"timeout"|"expired", note?, decided_at?, decided_by? }
 BrowserAction   { at, session, nav, tool, args (values typed -> "<n chars>", urls without query), ok, ms?, page?, refused? }
@@ -630,9 +630,9 @@ BrowserAction   { at, session, nav, tool, args (values typed -> "<n chars>", url
 | GET | `/api/browser` | – | the feature on: every project with an agent gets its profile first; `{feature, navigators: [Navigator], settings: BrowserSettings, available: {ok, missing}, tools: {tailscale, wireguard} (installed), setup: {running, log, error}, profiles: [ProfileRow], exits: [ExitView], direct: {test: ExitTest\|null}, summary: Summary, asks: [BrowserAsk], waiting: [Waiting]}` |
 | PUT | `/api/browser/settings` | `Partial<BrowserSettings>` (other keys ignored) | same as GET (`400 bad_browser`) |
 | POST | `/api/browser/setup` | `{exits?: bool}` | `{running: true}`; installs in the background (root): Chromium & co, `exits` = also Tailscale + wireproxy (pinned versions, checked hashes) into `<state>/tools/`; see `setup` in GET |
-| POST | `/api/browser/profiles` | `{name, exit?, web?, sites?, on_exit_down?}` | `BrowserProfile` (`400 bad_browser` no name / bad value / unknown exit, `409 too_many`) |
+| POST | `/api/browser/profiles` | `{name, exit?, on_exit_down?}` | `BrowserProfile` (`400 bad_browser` no name / bad value / unknown exit, `409 too_many`) |
 | GET | `/api/browser/profiles/{pid}` | – | `{profile: BrowserProfile, browser: BrowserState, gone, agents: [Navigator] (lasting, on it), person: [Navigator] (the person's when on it), temporary: [SessionLine] (newest first, open ones without journal first), actions: [BrowserAction] (30 newest), asks: [BrowserAsk]}` (`404 no_profile`) |
-| PUT | `/api/browser/profiles/{pid}` | same as POST, every key optional | `BrowserProfile` (`400`, `404 no_profile`); a change of `web` / `sites` restarts a running profile once nobody uses it |
+| PUT | `/api/browser/profiles/{pid}` | same as POST, every key optional | `BrowserProfile` (`400`, `404 no_profile`) |
 | DELETE | `/api/browser/profiles/{pid}` | – | `{ok}`; stops it, erases its folder, tabs and journal; its agents go back to their project's (`404`, `409 main`, `409 project` while its project exists) |
 | POST | `/api/browser/profiles/{pid}/open` | `{nav?}` (`me`) | `BrowserState` of that navigator; starts the profile for the person with a tab in it (its last one, else the first site of the list) (`400 bad_navigator`, `404 no_navigator`, `409 off`, `409 too_many_profiles`, `503 unavailable`, `404`) |
 | POST | `/api/browser/profiles/{pid}/stop` | – | `BrowserState`; the profile sleeps (its tabs are kept, asleep) |
