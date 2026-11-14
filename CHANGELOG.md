@@ -18,6 +18,16 @@ Fixed:
   commands and agents running in the background. Such a message now goes to the same Claude, and the new choice
   applies once that work is over. A new Claude is still started when your message names a server that is not
   loaded, or when Claude asked for one; the line in the conversation now says which server.
+- **Agents: on a phone, Deny / Allow no longer go off screen while the agent works.** On an agent's page, a
+  request waiting for your answer was drawn above the turn going on and its steps (up to 12 lines), so the two
+  buttons were pushed out of view and the agent looked stuck. The request is now the last thing of the
+  conversation, under the turn that asks.
+- **Files: on an iPhone, a video no longer stays at 0:00 once the player's volume was lowered.** An iPhone does
+  not let a page set the volume, so the player's slider sends the sound through the browser's audio engine. When
+  that engine was not running (Harness installed on the Home Screen, back from the background), the video showed
+  as playing and never moved; the same video played in Safari, where the volume was never touched. The sound now
+  takes that path only once the engine really runs, and pressing play wakes it: until then the video plays at the
+  level of the phone's buttons.
 
 ## 2.0.0-alpha.150 - 2026-11-13
 
