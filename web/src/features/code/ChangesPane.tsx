@@ -180,7 +180,7 @@ function UndoBarView() {
   }, [bar, set])
   if (!bar) return null
   return (
-    <div role="status" className="flex items-center gap-2 border-t bg-muted/60 px-3 py-1.5 text-[13px]" data-testid="undo-bar">
+    <div role="status" className="flex items-center gap-2 border-t bg-muted px-3 py-1.5 text-[13px]" data-testid="undo-bar">
       <Undo2 className="size-3.5 shrink-0 text-muted-foreground" />
       <span className="min-w-0 truncate">
         {t('code.undone')} · <Sensitive>{bar.label}</Sensitive>
@@ -209,7 +209,7 @@ function RepoBlock({ sid, scope, repo, onOpen }: { sid: string; scope: ChangesSc
   const paths = (fs: ChangedFile[]) => fs.flatMap((f) => (f.old ? [f.path, f.old] : [f.path]))
   return (
     <section className="overflow-hidden rounded-lg border" data-testid="changes-repo">
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b bg-muted/30 px-3 py-2">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b bg-fill-1 px-3 py-2">
         <span className="text-sm font-medium">
           <Sensitive>{repo.name}</Sensitive>
         </span>

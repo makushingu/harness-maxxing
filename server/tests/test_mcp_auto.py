@@ -355,3 +355,63 @@ def test_local_scope_server_wins_over_a_user_server_of_the_same_name(mx, servers
     p = mcp_auto.plan("s1", config.load_config(), {"path": topic}, servers, "check the blog-db please")
     assert json.loads(Path(p.args[-1]).read_text())["mcpServers"]["blog-db"] == {"type": "stdio", "command": "blog-db-mcp"}
     assert "mcp.example.com" not in p.hint                       # the hidden user server is not offered either
+
+
+# ---- a message sent while only background tasks run ------------------------------------------------
+
+def _answered(mx, sid: str, n: int) -> bool:
+    from maxxing.sessions import store
+    lines = [json.loads(x) for x in store.log_path(sid).read_text().splitlines() if x.strip()]
+    return sum(e.get("type") == "result" for e in lines) >= n
+
+
+def _notes(client, sid: str) -> list[str]:
+    from conftest import all_events
+    return [e["text"] for e in all_events(client, sid) if e["type"] == "note"]
+
+
+def test_the_background_tasks_survive_a_change_of_the_automatic_choice(client, topic, mx, servers, monkeypatch):
+    """Another session of the topic used a server meanwhile: the next message would load it too. Nothing in the
+    message asks for it, so it joins the running process instead of a new one that would stop its tasks."""
+    from maxxing import config, mcp_auto
+    config.update_config(mcp_auto=True)
+    monkeypatch.setenv("FAKE_CLAUDE_BG_S", "60")
+    sid = client.post("/api/sessions", json={"path": topic, "message": "BGTASK:dev NOTOOL"}).json()["id"]
+    wait_for(lambda: _answered(mx, sid, 1), 10)
+    mcp_auto.record_used(topic, {"notion"})
+    client.post(f"/api/sessions/{sid}/messages", json={"text": "next one NOTOOL"})
+    wait_for(lambda: _answered(mx, sid, 2), 10)
+    assert [x.get("continued", False) for x in calls(mx)] == [False, True]           # the same process
+    assert not (mx["fake_dir"] / "bg-dev.done").exists() and not _notes(client, sid)
+    client.post(f"/api/sessions/{sid}/stop")
+    wait_idle(client, sid, 20)
+    _, c = _turn(client, mx, topic, "and now NOTOOL", sid)                             # a new process: the new choice
+    assert _loaded(c["argv"]) == ["blog-db", "notion"]
+
+
+def test_a_message_naming_a_server_the_process_lacks_starts_a_new_one(client, topic, mx, servers, monkeypatch):
+    from maxxing import config
+    config.update_config(mcp_auto=True)
+    monkeypatch.setenv("FAKE_CLAUDE_BG_S", "6")
+    sid = client.post("/api/sessions", json={"path": topic, "message": "BGTASK:dev NOTOOL"}).json()["id"]
+    wait_for(lambda: _answered(mx, sid, 1), 10)
+    client.post(f"/api/sessions/{sid}/messages", json={"text": "look at the notion pages NOTOOL"})
+    wait_idle(client, sid, 30)
+    c = calls(mx)
+    assert [x.get("continued", False) for x in c] == [False, False] and _loaded(c[1]["argv"]) == ["blog-db", "notion"]
+    assert [n for n in _notes(client, sid) if "notion" in n and "background tasks were stopped" in n]
+
+
+def test_what_a_process_lacks_is_only_what_was_asked_by_name(mx, servers, topic):
+    from maxxing import config, mcp_auto
+    config.update_config(mcp_auto=True)
+    cfg, meta = config.load_config(), {"path": topic}
+    live = mcp_auto.plan("s1", cfg, meta, servers, "hi")
+    mcp_auto.record_used(topic, {"facebook-ads"})
+    assert mcp_auto.missing(live, mcp_auto.plan("s1", cfg, meta, servers, "hi")) == []
+    assert mcp_auto.missing(live, mcp_auto.plan("s1", cfg, meta, servers, "the notion pages")) == ["notion"]
+    assert mcp_auto.missing(live, mcp_auto.plan("s1", cfg, {**meta, "mcp_loaded": ["notion", "gone"]}, servers, "hi")) == ["notion"]
+    assert mcp_auto.missing(live, mcp_auto.plan("s1", cfg, meta, servers, "my Google Drive")) == ["claude.ai Google Drive"]
+    everything = mcp_auto.plan("s1", cfg, meta, servers, "my Google Drive")          # a connector: nothing restricted
+    assert mcp_auto.missing(everything, mcp_auto.plan("s1", cfg, meta, servers, "the notion pages")) == []
+    assert mcp_auto.missing(mcp_auto.NO_PLAN, live) == []

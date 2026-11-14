@@ -31,7 +31,7 @@ import {
   Tooltip,
   usePresentation,
 } from '@/components/ui'
-import { basename, dirname, iconFor, isRendered, isTextual, joinPath, kindOf, uniqueName } from '@/features/files/kinds'
+import { basename, dirname, iconFor, isRendered, isTextDoc, isTextual, joinPath, kindOf, uniqueName } from '@/features/files/kinds'
 import { ArchiveView, CsvView, FontView, HtmlView } from '@/features/files/rich'
 import { openFileViewer, useFileViewer } from '@/features/files/viewerStore'
 
@@ -39,6 +39,7 @@ import { openFileViewer, useFileViewer } from '@/features/files/viewerStore'
 const viewerFullscreen = () => useFileViewer.getState().setFull(true)
 import { FileInfoCard, ImageView, LazyCodeEditor, MediaView, PdfView } from '@/features/files/viewers'
 import { FileSkeleton } from '@/features/files/skeletons'
+import { DocView } from '@/features/files/docs'
 import { ReadError } from '@/features/files/FilePreview'
 import { MarkdownReader, TextZoomControl, ZoomBox, zoomsText } from '@/features/files/textZoom'
 import { useTextZoom } from '@/features/files/readPos'
@@ -257,6 +258,7 @@ export function FileView({ path, siblings, actions, entry }: { path: string; sib
   else if (kind === 'pdf') body = <PdfView path={path} />
   else if (kind === 'archive') body = <ArchiveView path={path} />
   else if (kind === 'font') body = <FontView path={path} version={entry?.mtime} />
+  else if (kind === 'document') body = <DocView path={path} />
   else if (kind === 'other') body = <FileInfoCard path={path} size={size} reason={t('files.binaryHint')} />
   else if (content.isError && !base) body = <ReadError path={path} error={content.error} onRetry={() => content.refetch()} />
   else if (kind === 'html' && effMode === 'preview' && !dirty) body = <HtmlView path={path} version={base?.mtime ?? entry?.mtime} />
@@ -316,7 +318,7 @@ export function FileView({ path, siblings, actions, entry }: { path: string; sib
             </Badge>
           )}
         </div>
-        {textual && base && !presentation && zoomsText(kind, effMode === 'preview') && <TextZoomControl inlineFrom={1536} />}
+        {!presentation && (isTextDoc(name) || (textual && base && zoomsText(kind, effMode === 'preview'))) && <TextZoomControl inlineFrom={1536} />}
         {rendered && (base || kind === 'html') && <Segmented size="sm" value={effMode} onChange={setMode} options={mdModes} aria-label={t('files.view')} />}
         {textual && base && editable && (effMode !== 'preview' || !rendered || dirty) && (
           <Tooltip content={<span className="flex items-center gap-1.5">{t('common.save')} <Kbd>{MOD}</Kbd><Kbd>S</Kbd></span>}>

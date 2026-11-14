@@ -259,7 +259,7 @@ function JobRow({ job, tz, now, onOpen, onToggle, actions }: { job: Cron; tz?: s
   const when = useJobWhen()
   const ctx = useContextMenu()
   return (
-    <li {...ctx.props} className={cn('flex items-center gap-3 px-4 py-3 transition-colors hover:bg-accent/40', !job.enabled && 'opacity-70')} data-job-id={job.id}>
+    <li {...ctx.props} className={cn('flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted', !job.enabled && 'opacity-70')} data-job-id={job.id}>
       <button type="button" onClick={onOpen} className="grid min-w-0 flex-1 gap-1 rounded text-left outline-none focus-visible:ring-2 focus-visible:ring-ring">
         <span className="flex min-w-0 flex-wrap items-center gap-2">
           <span className="truncate text-sm font-medium">
@@ -415,7 +415,7 @@ function JobSheet({
                 <h3 className="text-sm font-medium">{job.kind === 'claude' ? t('crons.field.prompt') : t('crons.field.command')}</h3>
                 <Sensitive block className="h-16">
                   {job.kind === 'claude' ? (
-                    <div className="rounded-lg border bg-muted/30 px-3 py-2.5 text-sm break-words whitespace-pre-wrap">{job.prompt}</div>
+                    <div className="rounded-lg border bg-fill-1 px-3 py-2.5 text-sm break-words whitespace-pre-wrap">{job.prompt}</div>
                   ) : (
                     <CodeBlock code={job.command} className="[&_pre]:break-all [&_pre]:whitespace-pre-wrap" />
                   )}

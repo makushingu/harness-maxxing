@@ -82,7 +82,7 @@ export function TaskCalendar({ tasks, projects, today, hideProject, onOpen, onSe
       </div>
 
       <div className="overflow-hidden rounded-xl border bg-card">
-        <div className="grid grid-cols-7 border-b bg-muted/30">
+        <div className="grid grid-cols-7 border-b bg-fill-1">
           {days.slice(0, 7).map((d) => (
             <div key={d} className="px-2 py-1.5 text-center text-[11px] font-medium text-muted-foreground uppercase md:text-left">
               {weekday.format(new Date(`${d}T12:00:00Z`))}
@@ -125,7 +125,7 @@ export function TaskCalendar({ tasks, projects, today, hideProject, onOpen, onSe
                 className={cn(
                   'flex min-h-14 min-w-0 cursor-pointer flex-col gap-1 border-r border-b p-1 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset md:min-h-28 md:p-1.5',
                   (i + 1) % 7 === 0 && 'border-r-0',
-                  !inMonth && 'bg-muted/20',
+                  !inMonth && 'bg-fill-1',
                   picked === d && 'bg-primary/5',
                   over === d && 'bg-primary/10 ring-2 ring-primary/40 ring-inset',
                 )}
@@ -164,7 +164,7 @@ export function TaskCalendar({ tasks, projects, today, hideProject, onOpen, onSe
                       }}
                       title={x.title}
                       className={cn(
-                        'flex min-w-0 items-center gap-1 truncate rounded border-l-2 bg-muted/50 px-1.5 py-0.5 text-left text-[11px] leading-4 hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+                        'flex min-w-0 items-center gap-1 truncate rounded border-l-2 bg-muted px-1.5 py-0.5 text-left text-[11px] leading-4 hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
                         x.status === 'done' && 'text-muted-foreground line-through opacity-70',
                         x.due! < today && x.status !== 'done' && 'text-destructive',
                       )}
@@ -235,7 +235,7 @@ function DayPanel({
           const done = x.status === 'done'
           const project = !hideProject && x.project_id ? projById.get(x.project_id) : undefined
           return (
-            <li key={x.id} className="flex items-start gap-3 px-3 py-2.5 hover:bg-accent/40">
+            <li key={x.id} className="flex items-start gap-3 px-3 py-2.5 hover:bg-muted">
               <span className="flex h-5 items-center">
                 <Checkbox checked={done} onCheckedChange={(v) => onToggleDone(x, v === true)} aria-label={done ? t('tasks.markOpen') : t('tasks.markDone')} />
               </span>

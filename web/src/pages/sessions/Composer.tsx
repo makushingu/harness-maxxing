@@ -459,7 +459,7 @@ export const Composer = React.forwardRef<ComposerHandle, {
     const target = row.target
     if (!target) return
     const name = `@${target.label} `
-    const next = text.slice(0, at.start) + name + text.slice(caret).replace(/^\S*\s?/, '')
+    const next = text.slice(0, at.start) + name + text.slice(caret).replace(/^\S* ?/, '')
     const pos = at.start + name.length
     setText(next)
     setCaret(pos)
@@ -794,7 +794,7 @@ export const Composer = React.forwardRef<ComposerHandle, {
           data-tour="composer"
           data-kbd-box=""
           className={cn(
-            'relative z-10 rounded-xl border bg-card shadow-xs transition-[border-color,box-shadow] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/20',
+            'mx-lg relative z-10 rounded-xl border bg-card shadow-xs transition-[border-color,box-shadow] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/20',
             disabledReason && 'opacity-80',
           )}
         >

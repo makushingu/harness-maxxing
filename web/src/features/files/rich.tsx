@@ -121,7 +121,7 @@ export function CsvView({ content, name, className }: { content: string; name: s
             </thead>
             <tbody>
               {view.slice(0, shown).map((r, ri) => (
-                <tr key={ri} className="hover:bg-accent/50">
+                <tr key={ri} className="hover:bg-muted">
                   <td className="sticky left-0 border-r border-b bg-background px-2 py-1 text-right text-[11px] text-muted-foreground tabular-nums">{ri + 1}</td>
                   {Array.from({ length: cols }, (_, ci) => (
                     <td key={ci} className={cn('max-w-[28rem] truncate border-r border-b px-2.5 py-1 last:border-r-0', numeric[ci] && 'text-right tabular-nums')} title={r[ci] && r[ci].length > 40 ? r[ci] : undefined}>
@@ -160,7 +160,7 @@ export function HtmlView({ path, version, className }: { path: string; version?:
   return (
     <div className={cn('flex min-h-0 flex-1 flex-col', className)} data-testid="html-view">
       <div className="relative min-h-0 flex-1 bg-white">
-        <Sensitive placeholder={<div className="absolute inset-0 bg-muted/60" aria-label={t('presentation.hidden')} />}>
+        <Sensitive placeholder={<div className="absolute inset-0 bg-muted" aria-label={t('presentation.hidden')} />}>
           {q.data ? (
             <iframe key={`${q.data.url}|${reload}`} src={q.data.url} sandbox={SANDBOX} title={path} className="absolute inset-0 size-full border-0" referrerPolicy="no-referrer" />
           ) : q.isError ? (
@@ -231,7 +231,7 @@ export function ArchiveView({ path, className }: { path: string; className?: str
             const depth = needle ? 0 : parts.length - 1
             const Icon = e.dir ? Folder : iconFor('file', e.name)
             return (
-              <div key={e.name} className="flex h-7 items-center gap-2 px-3 text-[13px] hover:bg-accent/50" style={{ paddingLeft: 12 + depth * 16 }}>
+              <div key={e.name} className="flex h-7 items-center gap-2 px-3 text-[13px] hover:bg-muted" style={{ paddingLeft: 12 + depth * 16 }}>
                 <Icon className={cn('size-3.5 shrink-0', iconTone(e.dir ? 'dir' : 'file'))} />
                 <span className="min-w-0 flex-1 truncate">{needle ? e.name : parts[parts.length - 1]}</span>
                 {!e.dir && <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{fmtBytes(e.size)}</span>}
@@ -377,11 +377,11 @@ const FolderTile = React.memo(function FolderTile({ entry: e, checked, cv }: { e
         aria-pressed={checked || undefined}
         className={cn(
           'mx-tile grid gap-1.5 rounded-lg p-1.5 text-center outline-none focus-visible:ring-2 focus-visible:ring-ring',
-          checked ? 'bg-primary/10 ring-2 ring-primary' : 'hover:bg-accent/60',
+          checked ? 'bg-primary/10 ring-2 ring-primary' : 'hover:bg-muted',
           cv && 'mx-cv-tile',
         )}
       >
-        <div className="relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-md border bg-muted/40">
+        <div className="relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-md border bg-muted">
           <Sensitive placeholder={<Icon className={cn('size-8', iconTone(e.type))} strokeWidth={1.4} />}>
             {thumb ? (
               <img src={fileThumbUrl(e.path, 240, e.mtime)} alt="" loading="lazy" decoding="async" draggable={false} onError={() => setThumbOk(false)} className={cn('size-full object-cover', extOf(e.name) === 'pdf' && 'object-top')} />

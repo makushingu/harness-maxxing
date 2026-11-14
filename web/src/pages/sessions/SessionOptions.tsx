@@ -119,7 +119,7 @@ export function SessionOptions({
 function Toggle({ icon: Icon, label, hint, checked, onChange }: { icon: LucideIcon; label: string; hint: string; checked: boolean; onChange: () => void }) {
   const id = React.useId()
   return (
-    <label htmlFor={id} className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-accent/60">
+    <label htmlFor={id} className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-muted">
       <Icon className={cn('size-4 shrink-0', checked ? 'text-primary' : 'text-muted-foreground')} />
       <span className="min-w-0 flex-1">
         <span className="block text-sm">{label}</span>
@@ -136,7 +136,7 @@ function Row({ icon: Icon, label, disabled, onClick }: { icon: LucideIcon; label
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm outline-none hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 pointer-coarse:py-2.5"
+      className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 pointer-coarse:py-2.5"
     >
       <Icon className="size-4 shrink-0 text-muted-foreground" /> {label}
     </button>

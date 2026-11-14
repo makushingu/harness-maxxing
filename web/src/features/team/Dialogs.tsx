@@ -260,7 +260,7 @@ export function NewChatDialog({
                       key={id}
                       type="button"
                       onClick={() => toggle(id)}
-                      className="inline-flex items-center gap-1.5 rounded-full border bg-accent/50 py-0.5 pr-1.5 pl-0.5 text-[12.5px] font-medium hover:bg-accent"
+                      className="inline-flex items-center gap-1.5 rounded-full border bg-muted py-0.5 pr-1.5 pl-0.5 text-[12.5px] font-medium hover:bg-accent"
                     >
                       <Avatar profile={p} size="sm" />
                       {p.name}
@@ -279,7 +279,7 @@ export function NewChatDialog({
                     key={id}
                     type="button"
                     onClick={() => toggle(id)}
-                    className={cn('flex items-center gap-3 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-accent/60', on && 'bg-primary/[0.06] hover:bg-primary/10')}
+                    className={cn('flex items-center gap-3 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-muted', on && 'bg-primary/[0.06] hover:bg-primary/10')}
                   >
                     <PersonAvatar person={p} status />
                     <span className="min-w-0 flex-1">
@@ -390,7 +390,7 @@ export function GroupDialog({ open, onOpenChange, team, chat }: { open: boolean;
                 key={id}
                 type="button"
                 onClick={() => toggle(add, setAdd, id)}
-                className={cn('flex items-center gap-3 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-accent/60', on && 'bg-primary/[0.06]')}
+                className={cn('flex items-center gap-3 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-muted', on && 'bg-primary/[0.06]')}
               >
                 <PersonAvatar person={p} status />
                 <span className="min-w-0 flex-1 truncate text-[14px] font-medium">{p.name}</span>

@@ -31,14 +31,20 @@ Almost every file opens in a preview. Thumbnails (images, videos, first page of 
 |---|---|
 | Images (also TIFF, converted on the fly) | the picture, zoomable |
 | Videos, audio | the built-in player; videos have a **quality** button (Auto, Original, 1080p, 720p, 480p, see below) |
-| PDF | the document (some phone browsers only offer *Open in a new tab*) |
+| PDF | the document; on a phone (and any browser with no PDF reader of its own) page by page: two fingers, a double tap or **− / +** zoom, the bar shows the page you are on |
+| Word, PowerPoint, OpenDocument text and slides (`.docx`, `.pptx`, `.odt`, `.odp`) | the text of the document as a page: headings, lists, tables, links, its pictures, one section per slide with its notes |
+| Excel, OpenDocument sheets (`.xlsx`, `.ods`) | a table per sheet (tabs at the bottom), with the column letters, the row numbers and a filter |
 | Markdown | rendered, or the source |
 | CSV / TSV | a **table**: click a column to sort, filter rows, numbers right-aligned |
 | HTML | the **page itself** with its images, styles and scripts (see below), or the source |
 | Archives (zip, tar, tar.gz, gz) | the **list of what is inside**, with sizes, without extracting anything |
 | Fonts (woff, woff2, ttf, otf) | a **specimen** in several sizes, with your own sample text |
 | Code, text | highlighted, with line numbers |
-| Anything else (Office documents, 7z, rar...) | a card with **Download** |
+| Anything else (old `.doc` / `.xls` / `.ppt`, 7z, rar...) | a card with **Download** |
+
+Office documents are read by Harness Maxxing itself, with nothing to install: you get the words and the numbers
+of the file (values as the file stores them, formulas already computed), not its layout, fonts or charts -
+**Download** gives the original. A very large document is cut, and says so.
 
 **Text size and where you were.** Markdown (rendered or source), code and text files have **− 100% +** in the
 toolbar (on the Files page of a smaller window, or on a phone, the **T** button opens it): the text gets larger or

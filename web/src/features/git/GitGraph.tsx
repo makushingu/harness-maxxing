@@ -338,7 +338,7 @@ export function GitGraph({ commits, selected, highlight, onSelect, compact, gith
             onKeyDown={onSelect ? (e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), onSelect(c.sha)) : undefined}
             className={cn(
               'flex items-center gap-2 rounded-md pr-2 outline-none',
-              onSelect && 'cursor-pointer hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring',
+              onSelect && 'cursor-pointer hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring',
               hl && !sel && 'bg-primary/10 ring-1 ring-primary/30 ring-inset',
               sel && 'bg-accent',
               github && 'pointer-coarse:select-none [-webkit-touch-callout:none]', // the long press opens our menu, not iOS's

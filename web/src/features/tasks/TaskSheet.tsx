@@ -444,7 +444,7 @@ function TaskEditor({
               )}
             </TabsContent>
             <TabsContent value="preview" className="mt-2">
-              <div className="min-h-28 rounded-md border bg-muted/20 px-4 py-3">
+              <div className="min-h-28 rounded-md border bg-fill-1 px-4 py-3">
                 {notes.value.trim() ? (
                   <Sensitive block>
                     <React.Suspense fallback={<Skeleton className="h-16" />}>

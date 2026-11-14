@@ -244,7 +244,7 @@ function RecordingBar({
       role="status"
       aria-live="polite"
       data-voice-overlay
-      className="absolute inset-0 z-10 flex items-center gap-2 rounded-[inherit] bg-card/95 px-2"
+      className="absolute inset-0 z-10 flex items-center gap-2 rounded-[inherit] bg-card px-2"
       style={ptt && slide ? { transform: `translateX(${Math.max(slide, -60) / 3}px)` } : undefined}
     >
       <Tooltip content={t('voice.cancel')}>

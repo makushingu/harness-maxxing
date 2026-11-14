@@ -32,7 +32,7 @@ function PackCard({ p, action, control, selected }: { p: Pack; action?: React.Re
       </div>
       <div className="flex flex-wrap gap-1.5">
         {p.topics.map((tp) => (
-          <span key={tp} className="rounded-md border bg-background/40 px-2 py-0.5 text-xs text-muted-foreground">
+          <span key={tp} className="rounded-md border bg-sunken px-2 py-0.5 text-xs text-muted-foreground">
             {tp}
           </span>
         ))}

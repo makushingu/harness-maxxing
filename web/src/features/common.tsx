@@ -8,7 +8,7 @@ const toneCls: Record<Tone, string> = {
   success: 'border-success/30 bg-success/8 [&>svg]:text-success',
   error: 'border-destructive/30 bg-destructive/8 [&>svg]:text-destructive',
   warning: 'border-warning/35 bg-warning/8 [&>svg]:text-warning',
-  info: 'border-border bg-muted/40 [&>svg]:text-muted-foreground',
+  info: 'border-border bg-muted [&>svg]:text-muted-foreground',
 }
 const toneIcon: Record<Tone, typeof Info> = { success: CheckCircle2, error: XCircle, warning: AlertTriangle, info: Info }
 
@@ -65,7 +65,7 @@ export function OptionCard({
     <label
       className={cn(
         'relative flex cursor-pointer gap-3 rounded-lg border p-3.5 transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring',
-        selected ? 'border-primary/60 bg-primary/5' : 'hover:bg-accent/50',
+        selected ? 'border-primary/60 bg-primary/5' : 'hover:bg-muted',
       )}
     >
       <input type="radio" name={name} value={value} checked={selected} onChange={onSelect} className="sr-only" />

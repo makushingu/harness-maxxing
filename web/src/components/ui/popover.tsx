@@ -19,7 +19,7 @@ export function PopoverContent({ className, align = 'center', sideOffset = 6, sh
         sideOffset={sideOffset}
         collisionPadding={8}
         className={cn(
-          'z-50 w-72 max-w-[calc(100vw-16px)] rounded-lg border bg-popover p-4 text-popover-foreground shadow-pop outline-none data-[state=open]:animate-in data-[state=closed]:animate-out',
+          'mx-glass z-50 w-72 max-w-[calc(100vw-16px)] rounded-lg border bg-popover p-4 text-popover-foreground shadow-pop outline-none data-[state=open]:animate-in data-[state=closed]:animate-out',
           sheet && 'mx-sheet',
           className,
         )}

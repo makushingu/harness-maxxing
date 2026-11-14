@@ -156,7 +156,7 @@ export function SecondBar({ left }: { left: number }) {
     <div
       ref={ref}
       className={cn(
-        'border-r border-sidebar-border bg-sidebar text-sidebar-foreground',
+        'mx-list border-x border-sidebar-border text-sidebar-foreground',
         !list ? 'hidden' : over ? 'mx-list-peek absolute inset-y-0' : 'relative shrink-0',
       )}
       style={{ width, left: over ? left : undefined }}
@@ -376,7 +376,7 @@ export function ListEntry({ icon: Icon, label, to, onClick, active, count, badge
 }) {
   const touch = useCompact()
   const cls = cn(
-    'flex w-full min-w-0 items-center gap-2.5 rounded-md px-2.5 text-sm text-muted-foreground outline-none transition-colors hover:bg-accent/50 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
+    'flex w-full min-w-0 items-center gap-2.5 rounded-md px-2.5 text-sm text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
     touch ? 'h-11' : 'h-9',
     active && 'bg-accent font-medium text-foreground hover:bg-accent',
     className,

@@ -467,7 +467,7 @@ function Flow({ agent: a, onReply, onSuggest, ref }: { agent: AgentDetail; onRep
       .finally(() => setLoadingOlder(false))
   }, [a.path, msgs, more, loadingOlder])
 
-  const rows: { key: string; session?: string; node: React.ReactNode }[] = []
+  const rows: { key: string; session?: string; ask?: boolean; node: React.ReactNode }[] = []
   let day = ''
   let talked = false
   for (const m of msgs) {
@@ -499,18 +499,25 @@ function Flow({ agent: a, onReply, onSuggest, ref }: { agent: AgentDetail; onRep
           decided={m.kind === 'approval' && m.approval ? asks.decided.get(m.approval) : undefined}
         />
       )
-    rows.push({ key: m.id, session: m.session, node })
+    rows.push({ key: m.id, session: m.session, ask: m.kind === 'approval' && !!m.approval && asks.live.has(m.approval), node })
   }
-  // A turn going on now: right under the last message of its session (the owner's message, what started the run).
+  // A turn going on now: right under the last message of its session (the owner's message, what started the run),
+  // and above a request of that turn still waiting: Allow / Deny stay the last thing of the thread, the one a phone
+  // shows (under the turn and its steps, they were pushed off screen).
   for (const s of running) {
     let at = -1
-    for (let i = rows.length - 1; i >= 0; i--)
-      if (rows[i].session === s.id) {
-        at = i
-        break
+    let ask = -1
+    for (let i = rows.length - 1; i >= 0; i--) {
+      if (rows[i].session !== s.id) continue
+      if (rows[i].ask) {
+        ask = i
+        continue
       }
+      at = i
+      break
+    }
     const node = <LiveTurn agent={a} sid={s.id} chat={own.has(s.id)} onWrite={follow} />
-    rows.splice(at < 0 ? rows.length : at + 1, 0, { key: `live:${s.id}`, node })
+    rows.splice(ask >= 0 ? ask : at < 0 ? rows.length : at + 1, 0, { key: `live:${s.id}`, node })
   }
 
   return (
@@ -573,7 +580,7 @@ function Suggestions({ onPick }: { onPick: (text: string) => void }) {
   const { data: templates } = useAgentTemplates(lang)
   const [all, setAll] = React.useState(false)
   const chip =
-    'flex items-center gap-2 rounded-full border bg-card py-1 pr-3 pl-1 text-xs transition-colors hover:border-primary/40 hover:bg-accent/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none'
+    'flex items-center gap-2 rounded-full border bg-card py-1 pr-3 pl-1 text-xs transition-colors hover:border-primary/40 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none'
   const shown = (templates || []).filter((tp) => all || tp.first)
   const more = (templates || []).length - shown.length
   return (
@@ -693,7 +700,7 @@ function StepRow({ s }: { s: Step }) {
   const full = s.summary.startsWith(s.name) ? s.summary.slice(s.name.length).replace(/^[:\s]+/, '') : s.summary
   const shown = relPaths(full, bases)
   return (
-    <div className={cn('flex h-8 min-w-0 items-center gap-2 rounded-lg border bg-card/60 px-2.5 text-[13px]', s.state === 'error' && 'border-destructive/40')} data-testid="agent-step">
+    <div className={cn('flex h-8 min-w-0 items-center gap-2 rounded-lg border bg-card px-2.5 text-[13px]', s.state === 'error' && 'border-destructive/40')} data-testid="agent-step">
       <Icon className="size-3.5 shrink-0 text-muted-foreground" />
       <span className="shrink-0 font-medium">{s.name.replace(/^mcp__/, '')}</span>
       <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-muted-foreground" title={shown !== full ? full : undefined}>
@@ -716,8 +723,8 @@ function StepsFold({ steps, total }: { steps: Step[]; total: number }) {
   const [open, setOpen] = React.useState(false)
   const names = [...new Set(steps.map((s) => s.name.replace(/^mcp__/, '')))].join(' · ')
   return (
-    <div className="min-w-0 overflow-hidden rounded-lg border bg-card/60 text-[13px]" data-testid="agent-steps">
-      <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="flex h-8 w-full min-w-0 items-center gap-2 px-2.5 text-left hover:bg-accent/60 max-md:h-10">
+    <div className="min-w-0 overflow-hidden rounded-lg border bg-card text-[13px]" data-testid="agent-steps">
+      <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="flex h-8 w-full min-w-0 items-center gap-2 px-2.5 text-left hover:bg-muted max-md:h-10">
         <Layers className="size-3.5 shrink-0 text-muted-foreground" />
         <span className="shrink-0 font-medium">{total === 1 ? t('agents.flow.step') : t('agents.flow.steps', { n: total })}</span>
         <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-muted-foreground">{names}</span>
@@ -1165,7 +1172,7 @@ function Composer({ agent: a, replyTo, onCancelReply, onSend, ref }: { agent: Ag
       <div className="relative mx-auto flex max-w-3xl flex-col rounded-xl border bg-card p-1.5 focus-within:border-primary/50" {...(a.enabled ? files.dropProps : {})}>
         {slash.node}
         {replyTo && (
-          <div className="mb-1 flex items-center gap-2 rounded-lg bg-muted/60 py-1 pr-1 pl-2 text-[12px]" data-testid="agent-replying">
+          <div className="mb-1 flex items-center gap-2 rounded-lg bg-muted py-1 pr-1 pl-2 text-[12px]" data-testid="agent-replying">
             <Reply className="size-3.5 shrink-0 text-primary" />
             <span className="min-w-0 flex-1 truncate">
               <span className="font-medium">{t('agents.conv.replyingTo')}</span>
@@ -1426,7 +1433,7 @@ function RoleEditor({ agent: a }: { agent: AgentDetail }) {
         <button
           type="button"
           onClick={() => setV(a.description)}
-          className="group min-w-0 rounded-lg bg-muted/50 px-3 py-2 text-left text-sm break-words whitespace-pre-line hover:bg-muted"
+          className="group min-w-0 rounded-lg bg-muted px-3 py-2 text-left text-sm break-words whitespace-pre-line hover:bg-muted"
           data-testid="agent-role"
         >
           {a.description ? <Sensitive block>{a.description}</Sensitive> : <span className="text-muted-foreground italic">{t('agents.noRole')}</span>}
@@ -1475,7 +1482,7 @@ function MemoryPreview({ agent: a }: { agent: AgentDetail }) {
     .filter((l) => l && !l.startsWith('#'))
   if (!lines.length) return <p className="text-xs text-muted-foreground">{t('agents.panel.memoryEmpty')}</p>
   return (
-    <div className="rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+    <div className="rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">
       <Sensitive block>
         {lines.slice(0, 4).map((l, i) => (
           <p key={i} className="truncate">

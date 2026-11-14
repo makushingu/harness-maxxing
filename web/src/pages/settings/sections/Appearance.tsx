@@ -2,7 +2,7 @@
 // three cards - colors, layout, fonts. Everything here is saved in this browser (the last choice also colors the sign-in page).
 import * as React from 'react'
 import { Check, Monitor, Moon, Sun } from 'lucide-react'
-import { ACCENTS, useUI, type Accent, type Density, type Layout, type Theme, type Tint, type TouchHome } from '@/stores/ui'
+import { ACCENTS, useUI, type Accent, type Density, type Layout, type Theme, type Tint, type Material, type TouchHome } from '@/stores/ui'
 import { cn } from '@/lib/utils'
 import { FONT_GROUPS, loadFontPreview, MONO_FONTS, SANS_FONTS, type FontGroup } from '@/lib/fonts'
 import { useT, type TKey } from '@/i18n'
@@ -124,6 +124,17 @@ export function AppearanceSection() {
               options={[
                 { value: 'neutral', label: t('tint.neutral') },
                 { value: 'tinted', label: t('tint.tinted') },
+              ]}
+            />
+          </SettingRow>
+          <SettingRow label={t('settings.material')} description={t('settings.materialDesc')}>
+            <Segmented<Material>
+              value={ui.material}
+              onChange={ui.setMaterial}
+              aria-label={t('settings.material')}
+              options={[
+                { value: 'solid', label: t('material.solid') },
+                { value: 'glass', label: t('material.glass') },
               ]}
             />
           </SettingRow>

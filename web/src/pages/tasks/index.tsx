@@ -38,6 +38,7 @@ import {
   projectStats,
   statsOf,
   todayISO,
+  withKnownProjects,
   type QuickParse,
   type SortKey,
   type TaskFilters,
@@ -99,7 +100,7 @@ export default function TasksPage() {
 
   const data = q.data
   const corrupt = isApiError(q.error, 'corrupt_file') ? q.error : null
-  const tasks = React.useMemo(() => data?.tasks ?? [], [data])
+  const tasks = React.useMemo(() => withKnownProjects(data?.tasks ?? [], data?.projects ?? []), [data])
   const wsOrder = React.useMemo(() => ws.data?.projects.map((p) => p.name) ?? [], [ws.data])
   const emojis = React.useMemo(() => new Map((ws.data?.projects ?? []).filter((p) => p.emoji).map((p) => [p.name, p.emoji])), [ws.data])
   const projects = React.useMemo(() => orderProjects(data?.projects ?? [], wsOrder), [data, wsOrder])
@@ -444,7 +445,7 @@ export default function TasksPage() {
         </div>
       </div>
       {data && <BulkBar tasks={tasks} visible={visible} projects={projects} labels={labels} today={today} />}
-      <TaskSheet id={openId} tasks={data?.tasks} projects={projects} loading={q.isPending} onClose={closeTask} onManageProjects={() => setProjectsOpen(true)} />
+      <TaskSheet id={openId} tasks={data ? tasks : undefined} projects={projects} loading={q.isPending} onClose={closeTask} onManageProjects={() => setProjectsOpen(true)} />
       <ProjectsDialog open={projectsOpen} onOpenChange={setProjectsOpen} projects={projects} tasks={tasks} />
     </Page>
   )
@@ -560,7 +561,7 @@ function BoardSkeleton() {
   return (
     <div className="grid gap-4 md:grid-cols-3" aria-hidden>
       {[3, 2, 2].map((n, i) => (
-        <div key={i} className="grid content-start gap-2 rounded-xl border bg-muted/25 p-2 max-md:hidden first:max-md:grid">
+        <div key={i} className="grid content-start gap-2 rounded-xl border bg-fill-1 p-2 max-md:hidden first:max-md:grid">
           <Skeleton className="m-1 h-5 w-24" />
           {Array.from({ length: n }, (_, j) => (
             <Skeleton key={j} className="h-[68px] rounded-lg" />

@@ -257,7 +257,7 @@ function TaskRow({
   const done = task.status === 'done'
   const ctx = useContextMenu({ disabled: !menu })
   return (
-    <li {...ctx.props} className={cn('group flex min-h-[var(--row-h,40px)] items-start gap-3 px-3 py-2.5 transition-colors hover:bg-accent/40 max-md:py-3', selected && 'bg-primary/5')}>
+    <li {...ctx.props} className={cn('group flex min-h-[var(--row-h,40px)] items-start gap-3 px-3 py-2.5 transition-colors hover:bg-muted max-md:py-3', selected && 'bg-primary/5')}>
       {/* on touch, 10 px more so its hit area stops where the done box's begins */}
       <span className="flex h-5 items-center pointer-coarse:mr-2.5">
         <SelectDot checked={selected} visible={selecting} label={task.title} onToggle={() => useTaskSelection.getState().toggle(task.id)} />

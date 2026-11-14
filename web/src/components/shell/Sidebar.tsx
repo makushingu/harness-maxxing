@@ -17,6 +17,7 @@ import { StatusBlock } from './HealthIndicator'
 import { HelpMenu } from './HelpMenu'
 import { UpdateIndicator } from './UpdateIndicator'
 import { useDragOrder } from './dragOrder'
+import { searchNow } from './TouchNav'
 import { useShowSessions } from '@/features/notify/showSessions'
 import { usePrefetchLink } from '@/pages/pageData'
 
@@ -275,7 +276,7 @@ export const Sidebar = React.memo(function Sidebar({ drawer }: { /** touch layou
           data-testid="sidebar"
           data-unfold={pinned ? 'pinned' : 'folded'}
           data-side-expanded={collapsed ? 'false' : 'true'}
-          className={cn('mx-side relative flex min-h-0 w-full flex-col overflow-x-clip overflow-y-auto overscroll-contain [scrollbar-width:none] border-r border-sidebar-border bg-sidebar pt-[var(--safe-top)] pl-[var(--safe-left)]', drawer && 'border-r-0 pt-0 pl-0')}
+          className={cn('mx-side relative flex min-h-0 w-full flex-col overflow-x-clip overflow-y-auto overscroll-contain [scrollbar-width:none] mx-frame pt-[var(--safe-top)] pl-[var(--safe-left)]', drawer && 'pt-0 pl-0')}
           aria-label={t('shell.navigation')}
         >
           <KeepTooltipShape.Provider value>
@@ -304,7 +305,7 @@ export const Sidebar = React.memo(function Sidebar({ drawer }: { /** touch layou
             <div data-boot-rv className={cn('flex items-center gap-1.5 px-3 pt-2', collapsed && 'px-2.5')}>
               {collapsed && (
                 <Tooltip content={<>{t('palette.search')} <Kbd className="border-background/20 bg-background/15 text-background">{MOD} K</Kbd></>} side="right">
-                  <button type="button" onClick={openPalette} data-tour="palette" aria-label={t('palette.open')} className={navRow(true)}>
+                  <button type="button" onClick={drawer ? searchNow : openPalette} data-tour="palette" aria-label={t('palette.open')} className={navRow(true)}>
                     <Search className="size-[18px] shrink-0" strokeWidth={1.7} />
                   </button>
                 </Tooltip>
@@ -312,9 +313,9 @@ export const Sidebar = React.memo(function Sidebar({ drawer }: { /** touch layou
               {!collapsed && (
                 <button
                   type="button"
-                  onClick={openPalette}
+                  onClick={drawer ? searchNow : openPalette}
                   data-tour="palette"
-                  className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-md border bg-background/60 px-2.5 text-sm text-muted-foreground shadow-xs transition hover:border-ring/40 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none dark:bg-input/20"
+                  className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-md border bg-fill-1 px-2.5 text-sm text-muted-foreground shadow-xs transition hover:border-ring/40 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none dark:bg-input/20"
                   aria-label={t('palette.open')}
                 >
                   <Search className="size-4 shrink-0" strokeWidth={1.7} />

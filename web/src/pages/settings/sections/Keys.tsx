@@ -183,7 +183,7 @@ function SecretRow({ s, onEdit }: { s: Secret; onEdit: () => void }) {
         </span>
       </div>
       <div className="col-span-2 row-start-2 flex min-w-0 items-center gap-1 md:col-span-1 md:row-start-auto">
-        <code className="min-w-0 flex-1 truncate rounded-md bg-muted/60 px-2 py-1 font-mono text-xs">
+        <code className="min-w-0 flex-1 truncate rounded-md bg-muted px-2 py-1 font-mono text-xs">
           <Sensitive length={12}>{revealed ?? s.preview}</Sensitive>
         </code>
         <Tooltip content={revealed !== null ? t('common.hide') : t('keys.reveal')}>
@@ -255,7 +255,7 @@ export function KeysSection() {
           <EmptyState compact icon={KeyRound} title={t('keys.empty')} description={t('keys.emptyDesc')} />
         ) : (
           <>
-            <div className="hidden grid-cols-[minmax(0,1.2fr)_minmax(0,1.4fr)_auto_auto] gap-4 border-y bg-muted/30 px-4 py-2 text-xs font-medium text-muted-foreground md:grid">
+            <div className="hidden grid-cols-[minmax(0,1.2fr)_minmax(0,1.4fr)_auto_auto] gap-4 border-y bg-fill-1 px-4 py-2 text-xs font-medium text-muted-foreground md:grid">
               <span>{t('keys.name')}</span>
               <span>{t('keys.value')}</span>
               <span>{t('keys.exposeShort')}</span>

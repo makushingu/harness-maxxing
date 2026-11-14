@@ -30,7 +30,9 @@ export const gripRef = (text: string) => (el: HTMLElement | null) => void (el &&
 function cleanText(s: string): string {
   // eslint-disable-next-line no-control-regex
   const t = s.replace(/\r\n?/g, '\n').replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u200e\u200f\u2028-\u202e\u2066-\u2069]/g, '').trim()
-  return t.length > MAX_TEXT ? t.slice(0, MAX_TEXT).trimEnd() + '…' : t
+  if (t.length <= MAX_TEXT) return t
+  const cut = /[\ud800-\udbff]/.test(t[MAX_TEXT - 1]) ? MAX_TEXT - 1 : MAX_TEXT // never half of an emoji
+  return t.slice(0, cut).trimEnd() + '…'
 }
 
 /** An absolute path, `.` / `..` / repeated slashes resolved; null when it is not one. */

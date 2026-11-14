@@ -436,7 +436,7 @@ async def copy_prefs(body: CopyPrefsIn):
     def run():
         worktrees._need_enabled()
         repo = worktrees.main_clone(codediff.checked_repo(body.repo))
-        prefix = worktrees.check_prefix(body.prefix) if body.prefix is not None else None
+        prefix = worktrees.check_prefix(body.prefix, repo) if body.prefix is not None else None
         return worktrees.set_prefs(repo, prefix=prefix, prepare=(body.prepare or "")[:500] if body.prepare is not None
                                    else None, copy_env=body.copy_env)
     return await _call(run)

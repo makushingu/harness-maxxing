@@ -469,7 +469,7 @@ const Row = React.memo(function Row({ entry: e, selected, checked, dropTarget, a
       {...dragProps(e)}
       className={cn(
         'mx-cv mx-tile group relative flex h-[var(--row-h,40px)] items-center rounded-md transition-colors max-md:h-12',
-        checked ? 'bg-primary/10 ring-1 ring-primary/60 ring-inset' : selected ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/60',
+        checked ? 'bg-primary/10 ring-1 ring-primary/60 ring-inset' : selected ? 'bg-accent text-accent-foreground' : 'hover:bg-muted',
         dropTarget && 'bg-primary/10 ring-2 ring-primary ring-inset',
       )}
     >
@@ -511,10 +511,10 @@ const GridItem = React.memo(function GridItem({ entry: e, selected, checked, dro
         aria-pressed={checked || undefined}
         className={cn(
           'grid w-full gap-1.5 rounded-lg p-1.5 text-center outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
-          checked ? 'bg-primary/10 ring-2 ring-primary' : selected ? 'bg-accent' : 'hover:bg-accent/60',
+          checked ? 'bg-primary/10 ring-2 ring-primary' : selected ? 'bg-accent' : 'hover:bg-muted',
         )}
       >
-        <div className="relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-md border bg-muted/40">
+        <div className="relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-md border bg-muted">
           {thumb ? (
             <img src={fileThumbUrl(e.path, 240, e.mtime)} alt="" loading="lazy" decoding="async" draggable={false} onError={() => setThumbOk(false)} className="size-full object-cover" />
           ) : (

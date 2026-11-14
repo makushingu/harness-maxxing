@@ -20,9 +20,11 @@ const EMPTY: AgentsLayout = { projects: [], colors: {}, agents: {} }
 
 /** Position in a hand-picked order (not listed = after every listed one). */
 const rank = (list: string[] | undefined, x: string) => {
-  const i = list ? list.indexOf(x) : -1
+  const i = Array.isArray(list) ? list.indexOf(x) : -1
   return i < 0 ? 1e9 : i
 }
+/** `o[k]` when `o` has it: a project named "constructor" must not read Object.prototype.constructor. */
+const own = <T,>(o: Record<string, T>, k: string): T | undefined => (Object.hasOwn(o, k) ? o[k] : undefined)
 /** The default order of agents inside a project: by topic, then name. */
 const byTopicName = (x: Agent, y: Agent) => x.topic.localeCompare(y.topic) || x.display_name.localeCompare(y.display_name)
 
@@ -57,7 +59,13 @@ export type AgentsLayoutApi = {
 /** The colour of a project: the one picked on the Agents page, else projectColor(). For the outfit of a new agent. */
 export function useProjectColorOf(): (project: string) => string {
   const { data: lay = EMPTY } = useAgentsLayoutData()
-  return React.useCallback((p: string) => (lay.colors[p] && lay.colors[p] in OUTFIT ? lay.colors[p] : projectColor(p)), [lay])
+  return React.useCallback(
+    (p: string) => {
+      const c = own(lay.colors, p)
+      return c && c in OUTFIT ? c : projectColor(p)
+    },
+    [lay],
+  )
 }
 
 /** THE helper of the Agents page for the order of projects and agents and the project colours. */
@@ -75,7 +83,7 @@ export function useAgentsLayout(): AgentsLayoutApi {
     [lay, wsOrder],
   )
   const sortAgents = React.useCallback(
-    (p: string, list: Agent[]) => [...list].sort((x, y) => rank(lay.agents[p], x.path) - rank(lay.agents[p], y.path) || byTopicName(x, y)),
+    (p: string, list: Agent[]) => [...list].sort((x, y) => rank(own(lay.agents, p), x.path) - rank(own(lay.agents, p), y.path) || byTopicName(x, y)),
     [lay],
   )
   const group = React.useCallback(

@@ -116,6 +116,100 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   upstream, waiting for a down exit, live pacing, routes, CLI); `test_settings.py::test_get_defaults` has
   `browser_feature`.
 
+- Memory: `memory.files()` adds `heavy` (bytes > `max_bytes(limit)` = limit x 1024 / `LINES_PER_KB`, 1 KB for 10
+  lines) and `over` is now "too many lines OR too heavy"; `/api/memory` and `maxxing memory --json` add `max_bytes`;
+  `compact_prompt` names both limits; skills `memory` (one or two lines per bullet) and `memory-compaction` (weight,
+  how to shorten a heavy file). No new setting. Why: Claude Code re-reads the instruction files at each process
+  start (`--resume`, attachment `instructions` with `changed: true`, reason `session_start`) and attaches every
+  changed file IN FULL; a turn is a new process unless it joins a live one, so each edit of an imported `memory.md`
+  costs its whole size in every session of the folder at their next turn. Measured here: 71 KB = +32k tokens per
+  edit, three edits between two automatic compactions (130k on a 200k window). No switch for this in the CLI.
+- Sessions: the `init` event carries `same: true` when its turn runs in a Claude process that already ran one
+  (`runner.py` stamps the raw line `mx_same_proc`, after `clip_event`, from `_Proc.inits`). The page (`log.ts`
+  `fold`) marked every running task `interrupted` at each `user` event (true before stream-json input, when a turn
+  was a process); it now does it at the `init` that follows a typed message and has no `same` (`turnOpen`, `cut`,
+  `headNew` in `LogState`, used by `foldBefore` when the turn straddles two pages). Logs written before have no
+  stamp: their tasks read as before. Mock: `same` on the turn of a session with its background agent.
+- Runner, reuse of the live process: `launch` differed as soon as `mcp_auto.plan` did (the hint of the system
+  prompt lists the servers left out), so a handed-over message got a new process for any drift of the plan. Now
+  `proc_core` (the command line built with `NO_PLAN`, + cwd, env, the `mcp_auto` switch) and `proc_plan` are kept
+  next to `proc_launch`: same core and `mcp_auto.missing(proc_plan, plan) == []` -> the process stays. `Plan.asked`
+  = servers of the pool named by the message or by `mcp_loaded`. A turn that joins a live process (steer too)
+  passes `proc_plan` to `_mcp_after`: `given` is what the process has, not what a new one would get.
+
+## 2.0.0-alpha.150 - 2026-11-13
+
+- Documents: `maxxing/documents.py` (stdlib only: zipfile + ElementTree) reads OOXML and ODF: `read(path)` ->
+  `{type: text|slides, markdown}` or `{type: sheets, sheets: [{name, rows, truncated}]}`, `media(path, name)` for a
+  picture of the package; `Unreadable(unsupported|too_large)`. Guards: XML parts capped, 8 s deadline, DTD refused,
+  text escaped, links http(s)/mailto only, pictures png/jpg/gif/webp/bmp only. Routes `GET /api/files/doc`
+  (413 / 415) and `/api/files/doc/media`. Web: kind `document` (`kinds.ts`, `isSheets` / `isTextDoc`),
+  `features/files/docs.tsx` (`DocView`, `SheetsView`), `MarkdownView` / `MarkdownReader` take `image` (a ref of the
+  Markdown -> URL).
+- PDF pages: `GET /api/files/pdf` (`{pages, ratio, mtime}`, 415 without poppler / ffmpeg) and `/api/files/pdf/page`
+  (`n`, `w` mapped to 640 / 1280 / 2048, WebP cached in `state/thumbs`). `_pdf_thumb` renders through an uncompressed
+  TIFF (0.04 s instead of 0.33 s for the PNG; ~0.35 s per page with the WebP). Web: `PdfView` keeps the iframe when
+  `navigator.pdfViewerEnabled` and the pointer is fine, else `features/files/pdfPages.tsx` (pages near the screen
+  only, zoom 1-4 by pinch / double tap / Ctrl + wheel, the picture asked again at the zoom once the fingers are up,
+  `data-zoomed` holds the viewer's swipe); a 415 falls back to the iframe.
+- Web, file viewer speed: the viewer's chunk is loaded by `features/files/viewerLoad.ts` (`loadFileViewer`, with
+  the `files` words) and mounted by `AppShell` WITHOUT Suspense: React keeps a fallback it has shown for 300 ms
+  (even `null`), which delayed every first opening. It is warmed by the last step of `startIdlePrefetch` and by a
+  delegated `pointerover` on `[data-mx-file]` / `#mx-file=` links (the chunk only, no request about the path).
+  `warmLazy()` (`viewers.tsx`) does the same for CodeMirror and Markdown: warmed when the file opens
+  (`warmCodeEditor`, `warmMarkdown`), rendered directly once loaded. `ViewerPane`: a name with a known extension
+  (`kind !== 'binary'`) no longer waits for the probe (`eager`): `/read`, `/stat`, `/doc`, `/pdf` leave with the
+  listings, and the first answer shows the file (the probe still decides when it says folder or missing). The
+  probe's listings seed the stamps (`seedFileStamps`), a stamp asked `within` a folder also seeds the plain one,
+  `prefetchMedia` (thumbnail hover) asks the stamp first (`fileStamp`) so it loads the URL the viewer uses.
+  `ImageView` fetches the original after the preview only when `canPrefetch()`. `PdfPages` starts from the
+  screen's width (it asked the first pages at 2048 then again at 1280 on a phone). Not changed: video Auto quality.
+
+- Web, surface levels (`styles/globals.css`): the surfaces come from one lightness scale per theme (`--l-frame`
+  `--l-list` `--l-content` `--l-card` `--l-float` `--l-muted` `--l-accent`) and a hue/chroma pair (`--sf-h`, `--sf-c`;
+  `[data-tint='tinted']` only changes the pair). New token `list` (`bg-list`, second bar). Shell classes: `mx-shell`
+  (AppShell root = frame), `mx-frame` (sidebar), `mx-list` (second bar), `mx-content` (`#main`: inset panel, 8 px
+  margin, `--shadow-panel`, desktop only), `mx-bar` (sticky headers), `mx-glass` (floating layers: popover, dropdown,
+  select, dialog, alert dialog, sheet, palette, `/` menu, session preview). Light mode: hover/selected rows on the bars
+  rise to white (`--accent` redefined under `.mx-frame, .mx-list`). Sidebar and second bar lost their right border.
+- Web, sessions: `TaskBar` (pill above the composer, `data-testid="task-bar"`) removed; `RunningRow` (Thread.tsx)
+  shows the running tasks itself through `TasksRunning` (Tasks.tsx, `data-testid="tasks-running"`, same popover,
+  `runningTasks()`): the count leads when nothing else is pending or when the pending tool launched one of them,
+  otherwise "· N subagents" after the tool (`tasks.short*`). `RunningRow tasks={false}` in `PreviewWorking` (the
+  preview lists them already).
+- Web, fills: `--fill-1` / `--muted` / `--accent` are now `color-mix` veils of `--foreground` (`--a-fill-1/2/3`:
+  3 / 5.5 / 8.5 % light, 3.5 / 6.5 / 10.5 % dark), `--sunken` = `--sidebar` at 60 %; utilities `bg-fill-1`,
+  `bg-sunken`. Codemod: `bg-muted/20-30` → `bg-fill-1`, `bg-muted/40-70` and `bg-accent/30-70` → `bg-muted`,
+  `bg-card/60` → `bg-card`, `bg-background/40-80` in quiet zones → `bg-sunken` (overlays over text kept). New test
+  `test_fills_come_from_the_scale`. `--secondary` stays solid.
+- Web, liquid glass (Glass material only): `.mx-lg` (Card, Composer box), `.mx-lg-btn` (button secondary/outline),
+  `.mx-lg-pill` (`navRow` active, `Segmented` active); vars `--lg-fill/-sheen/-rim-hi/-rim-lo/-rim-mid/-spec/-drop`;
+  the content panel goes to 58 % in glass so the wallpaper shows through the cards.
+- Web, material: `useUI().material` = `solid | glass` (localStorage `mx-ui`, mirrored by the `index.html` first-paint
+  script as `html[data-material]`), Settings -> Appearance row. Glass = accent wallpaper on `.mx-shell`
+  (`--wall-a/-b`), translucent `color-mix` on the classes above, `backdrop-filter` only on `.mx-bar` and `.mx-glass`
+  (DESIGN.md rule relaxed for this opt-in; `test_no_backdrop_blur` skips the glass rules of `globals.css`),
+  `--glass-edge` inset highlight; disabled under `prefers-reduced-transparency`. Not part of the server-shared look (`/api/settings/look`).
+- Web, glass 2nd pass: wallpaper in `--wall`, also on `.mx-wall` (the phone `Drawer`, opaque) and on the folded list
+  `.mx-list.mx-list-peek` (list tint over the fixed wallpaper: opaque, same look as the list kept beside the page);
+  fills raised (cards 62/56 %, message box 86 %, `.mx-glass` 86 % with the cards' sheen + gradient rim); the
+  `.mx-lg-pill` halo is neutral; the message box in focus lights its rim instead of `border-ring` + ring; the glass
+  `box-shadow` replaced the ring of `.mx-lg-btn` / `.mx-lg-pill`, so a soft `:focus-visible` outline instead.
+- Web, gliding selection: `ActiveMark` now renders the active row's pill (`bg-accent` / `.mx-lg-pill`, `-z-10` in the
+  `isolate` row) next to its bar and FLIPs both; `navRow(active)` no longer paints a background. `Segmented`: one
+  absolute highlight placed from the chosen option's offsets (ResizeObserver: options may wrap), FLIP translate +
+  scaleX on change; no animation with reduced motion.
+- UI kit twins (rule a69): `ui-callout` fill = `--fill-1`, `ui-tile` = `--sunken` (hover `--accent`); Glass material
+  = the app's liquid glass on `ui-card`, `ui-tile`, `ui-btn.ui-secondary/.ui-outline` (`html[data-material='glass']`:
+  the app's `<html>` for page extensions; the widget frame's `<html>`, set by the bridge from `material` in the
+  fragment and the `theme` message). `HtmlWidget` also sends `--fill-1`, `--sunken` and the `--lg-*` variables, and
+  re-sends on a material change.
+- Web, entrance order (top to bottom): boot `--bd` = height under the logo (index.html, no longer the radial
+  distance) and also set on `.mx-rise` / `.mx-unfold` / `.mx-fade` (they played hidden under the loader before);
+  session tree `--i` = running row index (`rowAt`, was `pi * 2 + ti + 1`: a project's 3rd topic rose with the next
+  project); `SectionStack` cards after the section title; `.mx-card-in` sets `--cd` and its rows / fades / chart /
+  end dot wait for it (the dot's `[animation-delay:720ms]` was overridden by `.mx-pop` and played at once).
+
 ## 2.0.0-alpha.149 - 2026-11-13
 
 - Web, file viewer loaders: `features/files/skeletons.tsx` (`FileSkeleton({kind, preview})`: picture, PDF page,

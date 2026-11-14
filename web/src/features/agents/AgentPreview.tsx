@@ -101,7 +101,7 @@ export default function AgentPreviewCard({
       )}
       {running ? (
         // its run's own bottom rows while Claude works (the session card's block), its title until they load
-        <div className="flex max-h-[176px] min-h-0 shrink-0 flex-col justify-end overflow-hidden bg-muted/30 px-3 pt-2 pb-0.5">
+        <div className="flex max-h-[176px] min-h-0 shrink-0 flex-col justify-end overflow-hidden bg-fill-1 px-3 pt-2 pb-0.5">
           <p className="mb-1 truncate text-[11px] leading-4 text-muted-foreground">
             <Sensitive length={14}>{a.running_sessions?.[0]?.title || t('agents.list.working')}</Sensitive>
           </p>

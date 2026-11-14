@@ -27,7 +27,7 @@ export function EmptyState({
           className={cn(
             'flex items-center justify-center rounded-xl border',
             compact ? 'size-10' : 'size-12',
-            tone === 'error' ? 'border-destructive/30 bg-destructive/10 text-destructive' : 'bg-muted/60 text-muted-foreground',
+            tone === 'error' ? 'border-destructive/30 bg-destructive/10 text-destructive' : 'bg-muted text-muted-foreground',
           )}
         >
           <Icon className={compact ? 'size-5' : 'size-6'} strokeWidth={1.6} />

@@ -15,7 +15,7 @@ export function AlertDialogContent({ className, children, ...props }: React.Comp
       <AD.Overlay className="fixed inset-0 z-50 bg-overlay data-[state=closed]:animate-overlay-out data-[state=open]:animate-overlay-in" />
       <AD.Content
         className={cn(
-          'fixed z-50 grid gap-4 border bg-popover text-popover-foreground shadow-pop outline-none',
+          'mx-glass fixed z-50 grid gap-4 border bg-popover text-popover-foreground shadow-pop outline-none',
           'inset-x-0 bottom-[var(--kbd-inset)] max-h-[calc(var(--vvh,100dvh)*0.92)] overflow-y-auto overscroll-contain rounded-t-2xl p-5 pb-[calc(1.25rem+var(--safe-bottom))] data-[state=closed]:animate-sheet-down data-[state=open]:animate-sheet-up',
           'md:inset-auto md:top-1/2 md:left-1/2 md:w-full md:max-w-md md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-xl md:p-6 md:data-[state=closed]:animate-out md:data-[state=open]:animate-in',
           className,

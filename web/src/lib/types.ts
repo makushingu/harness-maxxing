@@ -439,7 +439,7 @@ export type SessionEvent =
   | { type: 'thinking'; text: string; at: number }
   | { type: 'tool_use'; id: string; name: string; input: unknown; input_lines?: Record<string, number>; summary: string; at: number }
   | { type: 'tool_result'; tool_use_id: string; text: string; is_error: boolean; at: number }
-  | { type: 'init'; model: string; cwd: string; at: number }
+  | { type: 'init'; model: string; cwd: string; at: number; /** A turn of a Claude process that already ran one: its background tasks run on. */ same?: boolean }
   | { type: 'result'; ok: boolean; cost_usd: number; duration_ms: number; model: string; usage: Usage; at: number }
   | { type: 'note'; text: string; level: 'info' | 'warn' | 'error'; at: number; /** The turn's process ended on a failure (its last lines). */ failed?: boolean }
   /** What turn `n` changed in git repositories (Changes view, features/code). */
@@ -586,6 +586,12 @@ export type InvalidatePayload = { topics: BusTopic[] }
 export type FileEntry = { name: string; path: string; type: 'file' | 'dir'; size: number; mtime: number; mime: string }
 export type FileList = { path: string; parent: string | null; root: string; entries: FileEntry[] }
 export type FileContent = { path: string; content: string; mtime: number; size: number; mime: string; editable: boolean }
+/** An office document read by the server: text and slides as Markdown, a spreadsheet as the rows of its sheets. */
+export type FileSheet = { name: string; rows: string[][]; truncated: boolean }
+export type FileDoc = { path: string; mtime: number; size: number; truncated: boolean } & (
+  | { type: 'text' | 'slides'; markdown: string }
+  | { type: 'sheets'; sheets: FileSheet[] }
+)
 export type FileWriteBody = { path: string; content: string; expected_mtime?: number }
 export type FileWriteResult = { ok: boolean; mtime: number }
 export type FileSearchHit = { path: string; name: string; type: 'file' | 'dir' }
@@ -836,8 +842,8 @@ export type Settings = {
 export type ResultField = 'model' | 'duration' | 'cost' | 'tokens' | 'cache'
 
 /* ---------------------------------------------------------------- Memory, stats, changelog */
-export type MemoryFile = { path: string; level: 'global' | 'project' | 'topic'; lines: number; bytes: number; over: boolean }
-export type MemoryInfo = { max_lines: number; files: MemoryFile[] }
+export type MemoryFile = { path: string; level: 'global' | 'project' | 'topic'; lines: number; bytes: number; over: boolean; heavy?: boolean }
+export type MemoryInfo = { max_lines: number; max_bytes?: number; files: MemoryFile[] }
 export type TokenCounts = { input: number; output: number; cache_read: number; cache_write: number; total: number; cost_usd: number; turns: number; sessions: number }
 export type TokenStats = {
   totals: TokenCounts

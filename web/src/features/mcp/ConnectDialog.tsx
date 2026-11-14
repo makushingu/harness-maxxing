@@ -119,8 +119,8 @@ export function ConnectDialog({ server, onClose }: { server: McpServer | null; o
             <Step n={3} title={t('mcp.step3')}>
               <span>{t('mcp.step3Desc')}</span>
               {/* What the browser shows: an error page whose address holds the code. */}
-              <div className="overflow-hidden rounded-lg border bg-muted/30 text-xs">
-                <div className="flex items-center gap-2 border-b bg-muted/60 px-2.5 py-1.5">
+              <div className="overflow-hidden rounded-lg border bg-fill-1 text-xs">
+                <div className="flex items-center gap-2 border-b bg-muted px-2.5 py-1.5">
                   <span className="flex gap-1">
                     <span className="size-2 rounded-full bg-muted-foreground/30" />
                     <span className="size-2 rounded-full bg-muted-foreground/30" />

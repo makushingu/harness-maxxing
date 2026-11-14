@@ -133,7 +133,7 @@ export function ProfileSection() {
           </SettingRow>
           <div className="grid gap-2 pt-4">
             <span className="text-[13px] text-muted-foreground">{t('profile.preview')}</span>
-            <div className="flex items-end justify-end gap-2 rounded-lg bg-muted/40 p-3">
+            <div className="flex items-end justify-end gap-2 rounded-lg bg-muted p-3">
               <div className="grid justify-items-end gap-1">
                 <div className="rounded-2xl rounded-br-md bg-secondary px-3.5 py-2 text-[14px] text-secondary-foreground">{t('profile.previewText')}</div>
                 <span className="text-[11px] text-muted-foreground">{preview.name || t('profile.you')}</span>

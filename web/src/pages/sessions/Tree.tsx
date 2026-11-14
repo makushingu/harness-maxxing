@@ -229,6 +229,7 @@ export function SessionTree({ onOpenSession, onNewSession, activePath, openIds, 
     }
     return projects.map((p) => ({ p, topics: p.topics.map((tp) => ({ tp, sessions: byPath.get(tp.path) || [] })) }))
   }, [projects, byPath, narrowing, shows])
+  const rowAt = filtered.reduce<number[]>((at, _x, i) => [...at, i ? at[i - 1] + 1 + filtered[i - 1].topics.length : 0], [])
 
   const header = (
     <ListHeader
@@ -318,18 +319,19 @@ export function SessionTree({ onOpenSession, onNewSession, activePath, openIds, 
               </p>
             )}
             {filtered.map(({ p, topics }, pi) => (
+              // a running row index (a project, then its topics), so the rows rise strictly top to bottom
               <ProjectNode
                 key={p.name}
                 project={p}
                 forceOpen={narrowed}
                 onDialog={setDialog}
-                stagger={Math.min(pi * 2, 10)}
+                stagger={Math.min(rowAt[pi], 10)}
                 onMove={narrowed ? undefined : (dragged, before) => reorderProjects.mutate(moveName(projects.map((x) => x.name), dragged, p.name, before))}
               >
                 {topics.map(({ tp, sessions }, ti) => (
                   <TopicNode
                     key={tp.path}
-                    stagger={Math.min(pi * 2 + ti + 1, 10)}
+                    stagger={Math.min(rowAt[pi] + ti + 1, 10)}
                     topic={tp}
                     sessions={sessions}
                     archived={narrowed ? [] : archivedByPath.get(tp.path) || []}
@@ -646,7 +648,7 @@ function ProjectNode({ project, forceOpen, onDialog, stagger, onMove, children }
         {...dnd.props}
         {...press}
         data-testid="tree-project"
-        className="group/row relative flex h-8 items-center gap-1 rounded-md pr-1 hover:bg-accent/60 max-md:h-12 max-md:select-none max-md:[-webkit-touch-callout:none]"
+        className="group/row relative flex h-8 items-center gap-1 rounded-md pr-1 hover:bg-muted max-md:h-12 max-md:select-none max-md:[-webkit-touch-callout:none]"
         onContextMenu={(e) => {
           e.preventDefault()
           setMenu(true)
@@ -852,7 +854,7 @@ function TopicNode({
         {...mergeDnd(dnd.props, drop.props)}
         {...press}
         data-testid="tree-topic"
-        className={cn('group/row relative flex h-8 items-center gap-0.5 rounded-md pr-1 pl-3 hover:bg-accent/60 max-md:h-12 max-md:select-none max-md:[-webkit-touch-callout:none]', active && 'bg-accent/70', drop.over && dropCls)}
+        className={cn('group/row relative flex h-8 items-center gap-0.5 rounded-md pr-1 pl-3 hover:bg-muted max-md:h-12 max-md:select-none max-md:[-webkit-touch-callout:none]', active && 'bg-muted', drop.over && dropCls)}
         onContextMenu={(e) => {
           e.preventDefault()
           setMenu(true)
@@ -1022,7 +1024,7 @@ const SessionRow = React.memo(function SessionRow({
       {...press}
       data-testid="tree-session"
       className={cn(
-        'group/row relative flex items-center rounded-md pr-1 hover:bg-accent/60 max-md:h-14 max-md:select-none max-md:[-webkit-touch-callout:none]',
+        'group/row relative flex items-center rounded-md pr-1 hover:bg-muted max-md:h-14 max-md:select-none max-md:[-webkit-touch-callout:none]',
         compact ? 'h-8' : 'h-9',
         focused && 'bg-accent',
         s.unread && 'font-medium',
@@ -1496,7 +1498,7 @@ function DrillRow({
   const press = useLongPress(() => setOpen(true))
   const row = (
     <div
-      className={cn('group/row flex h-9 items-center gap-0.5 rounded-md pr-1 hover:bg-accent/60 max-md:h-12', !below && 'mx-rise')}
+      className={cn('group/row flex h-9 items-center gap-0.5 rounded-md pr-1 hover:bg-muted max-md:h-12', !below && 'mx-rise')}
       style={below ? undefined : ({ '--i': stagger } as React.CSSProperties)}
       onContextMenu={(e) => {
         e.preventDefault()

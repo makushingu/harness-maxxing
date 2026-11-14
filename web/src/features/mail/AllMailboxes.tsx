@@ -35,7 +35,7 @@ export function AllMailboxes({ accounts, onOpen }: { accounts: MailAccount[]; on
         {rows.map((m) => (
           <li
             key={`${m.account}/${m.folder}/${m.uid}`}
-            className="relative flex cursor-pointer items-start gap-2.5 border-b px-4 py-2.5 transition-colors outline-none hover:bg-accent/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+            className="relative flex cursor-pointer items-start gap-2.5 border-b px-4 py-2.5 transition-colors outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
             onClick={() => onOpen(m)}
             tabIndex={0}
             onKeyDown={(e) => {

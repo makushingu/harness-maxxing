@@ -29,17 +29,18 @@ export function toPreset(expr: string, base: Preset = DEFAULT_PRESET): Preset {
   const [mi, h, dom, mon, dow] = parts
   if (mon !== '*') return custom
   if (mi === '*' && h === '*' && dom === '*' && dow === '*') return { ...base, kind: 'minutes', every: 1 }
+  // cron restarts a step at every hour (day): `*/45` runs at :00 and :45, so only a divisor of 60 (24) is regular
   const step = /^\*\/(\d{1,2})$/.exec(mi)
   if (step && h === '*' && dom === '*' && dow === '*') {
     const n = int(step[1], 1, 59)
-    return n ? { ...base, kind: 'minutes', every: n } : custom
+    return n && 60 % n === 0 ? { ...base, kind: 'minutes', every: n } : custom
   }
   const m = int(mi, 0, 59)
   if (m == null) return custom
   const hstep = /^\*\/(\d{1,2})$/.exec(h)
   if (hstep && dom === '*' && dow === '*') {
     const n = int(hstep[1], 1, 23)
-    return n ? { ...base, kind: 'hours', every: n, minute: m } : custom
+    return n && 24 % n === 0 ? { ...base, kind: 'hours', every: n, minute: m } : custom
   }
   if (h === '*' && dom === '*' && dow === '*') return { ...base, kind: 'hourly', minute: m }
   const hr = int(h, 0, 23)
@@ -115,5 +116,9 @@ export function inputInZone(ts: number, tz?: string): string {
 
 /** Default time of a new one-time job: the next whole hour, at least 30 minutes from now. */
 export function defaultOnceAt(tz?: string, now = Date.now() / 1000): string {
-  return inputInZone(Math.ceil((now + 1800) / 3600) * 3600, tz)
+  // rounded in `tz`, not in UTC: an hour in Asia/Kolkata starts at :30 UTC
+  const soon = now + 1800
+  const minute = Number(inputInZone(soon, tz).slice(14, 16))
+  const start = Math.floor(soon / 60) * 60
+  return inputInZone(minute === 0 && start === soon ? soon : start + (60 - minute) * 60, tz)
 }

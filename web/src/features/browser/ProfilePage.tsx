@@ -103,7 +103,7 @@ function AgentCard({ n, pid, onOpen }: { n: BrowserNavigator; pid: string; onOpe
   const where = n.path ? ownerParts(n.path).where : ''
   return (
     <button type="button" onClick={onOpen} className="group grid min-w-0 overflow-hidden rounded-lg border bg-card text-left hover:border-primary/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none" data-testid="browser-agent-card">
-      <div className="relative grid aspect-[16/10] place-items-center overflow-hidden bg-muted/40">
+      <div className="relative grid aspect-[16/10] place-items-center overflow-hidden bg-fill-1">
         {src ? (
           <img src={src} alt={n.page?.title || t('browser.page')} className="size-full object-cover object-top" draggable={false} />
         ) : n.running && n.awake > 0 ? (
@@ -139,7 +139,7 @@ function Journal({ rows, onWatch }: { rows: BrowserSessionLine[]; onWatch: (r: B
   return (
     <div className="overflow-x-auto rounded-lg border">
       <table className="w-full min-w-[36rem] text-[13px]">
-        <thead className="bg-muted/30 text-left text-[11px] text-muted-foreground">
+        <thead className="bg-fill-1 text-left text-[11px] text-muted-foreground">
           <tr>
             <th className={cn(cell, 'font-medium')}>{t('browser.temp.session')}</th>
             <th className={cn(cell, 'font-medium')}>{t('browser.temp.topic')}</th>

@@ -44,6 +44,8 @@ export const GROUPS = {
   code: ['code', 'copy', 'pr'],
   // the terminal drawer and its setting (features/terminal)
   term: ['term'],
+  // Office documents and the page-by-page PDF reader (features/files/docs.tsx, pdfPages.tsx): on the first one opened
+  docs: ['doc'],
   // the sentences of the status line (components/shell/mood.ts): fetched once the shell shows, not before it
   mood: ['mood'],
   // who takes the processor (the CPU meter's window, components/shell/HealthIndicator.tsx): loaded when it opens

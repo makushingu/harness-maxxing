@@ -45,7 +45,8 @@ export const ICONS: Record<string, LucideIcon> = {
 }
 
 export function NamedIcon({ name, className, ...props }: { name?: string | null; className?: string } & React.SVGProps<SVGSVGElement>) {
-  const Cmp = (name && ICONS[name.toLowerCase()]) || Puzzle
+  const key = name?.toLowerCase()
+  const Cmp = (key && Object.hasOwn(ICONS, key) && ICONS[key]) || Puzzle // "constructor" is not an icon
   return <Cmp className={cn('size-4', className)} aria-hidden {...(props as object)} />
 }
 

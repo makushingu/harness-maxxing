@@ -85,7 +85,7 @@ function QuotaCard() {
 
 function Tile({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div className="grid gap-0.5 rounded-lg border bg-muted/20 px-3 py-2.5">
+    <div className="grid gap-0.5 rounded-lg border bg-fill-1 px-3 py-2.5">
       <span className="text-xs text-muted-foreground">{label}</span>
       <span className="text-lg font-semibold tracking-tight tabular-nums">{value}</span>
       {hint && <span className="text-[11px] text-muted-foreground">{hint}</span>}

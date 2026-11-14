@@ -265,7 +265,7 @@ function GroupRow({ group: g }: { group: AgentGroup }) {
       to={{ pathname: to, search: location.pathname.startsWith('/agents') ? location.search : '' }}
       aria-current={active ? 'page' : undefined}
       className={cn(
-        'relative flex min-h-12 items-center gap-2.5 rounded-lg px-2 py-1.5 outline-none hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring max-md:min-h-14',
+        'relative flex min-h-12 items-center gap-2.5 rounded-lg px-2 py-1.5 outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring max-md:min-h-14',
         active && 'bg-accent hover:bg-accent',
       )}
       data-testid="groups-row"
@@ -340,7 +340,7 @@ function AgentRow({ agent: a, index, layout }: { agent: Agent; index: number; la
       {...dnd.props}
       {...ctx.props}
       className={cn(
-        'relative flex min-h-12 items-center gap-2.5 rounded-lg px-2 py-1.5 outline-none hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring max-md:min-h-14',
+        'relative flex min-h-12 items-center gap-2.5 rounded-lg px-2 py-1.5 outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring max-md:min-h-14',
         active && 'bg-accent hover:bg-accent',
         dnd.dragging && 'opacity-50',
       )}

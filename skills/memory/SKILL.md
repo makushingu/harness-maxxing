@@ -31,6 +31,10 @@ The workspace root is printed by `maxxing status` (here `{{WORKSPACE}}`).
 
 ## How
 - Short factual bullets in the matching section; add a date when it helps: `- 2026-03-02: …`.
+- **One or two lines per bullet** (about 300 characters). The file is loaded by every session of the folder and sent
+  to Claude again in full each time it changes, so a long bullet is paid on every later turn and fills the context
+  (the session is then summarized more often). Detail worth keeping (commits, test commands, steps) goes in a
+  report file next to it; memory keeps one line and the path.
 - **Replace** a fact that became wrong; never keep two contradictory versions.
 - Merge with an existing bullet rather than adding a near-duplicate.
 - No conversation logs, no step-by-step narratives: only what is reusable.

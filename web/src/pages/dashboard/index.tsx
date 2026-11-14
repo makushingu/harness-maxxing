@@ -94,7 +94,7 @@ const WidgetCard = React.memo(function WidgetCard({ w, index, panel }: { w: Widg
         )}
       </div>
       {card?.link && (
-        <SmartLink href={card.link} className="flex h-10 items-center gap-1.5 border-t px-[var(--pad-card)] text-[13px] font-medium text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground">
+        <SmartLink href={card.link} className="flex h-10 items-center gap-1.5 border-t px-[var(--pad-card)] text-[13px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
           {t('dash.open')} <ExternalLink className="size-3" />
         </SmartLink>
       )}
@@ -153,7 +153,7 @@ function EditList({ widgets, layout, setLayout }: { widgets: Widget[]; layout: L
               e.preventDefault()
               if (dragging && dragging !== id) move(layout.order.indexOf(dragging), i)
             }}
-            className={cn('flex items-center gap-3 rounded-lg border bg-card px-3 py-2.5 transition-[opacity,box-shadow]', dragging === id && 'opacity-50 shadow-pop', hidden && 'bg-muted/30')}
+            className={cn('flex items-center gap-3 rounded-lg border bg-card px-3 py-2.5 transition-[opacity,box-shadow]', dragging === id && 'opacity-50 shadow-pop', hidden && 'bg-fill-1')}
           >
             <GripVertical className="size-4 shrink-0 cursor-grab text-muted-foreground active:cursor-grabbing max-md:hidden" aria-hidden />
             <NamedIcon name={w.icon} className={cn('size-4', hidden ? 'text-muted-foreground/50' : 'text-muted-foreground')} />

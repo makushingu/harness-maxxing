@@ -134,7 +134,7 @@ export function FeedbackDialog() {
               <DialogTitle className="flex items-center gap-2"><Sparkles className="size-4 shrink-0 text-primary" />{t(reply.verdict === 'self' ? 'feedback.reply.selfTitle' : 'feedback.reply.answerTitle')}</DialogTitle>
               <DialogDescription>{t('feedback.reply.notSent')}</DialogDescription>
             </DialogHeader>
-            <div className="max-h-[45dvh] overflow-y-auto rounded-md border bg-muted/40 px-3 py-2 text-sm [overflow-wrap:anywhere]">
+            <div className="max-h-[45dvh] overflow-y-auto rounded-md border bg-muted px-3 py-2 text-sm [overflow-wrap:anywhere]">
               <Markdown>{reply.answer}</Markdown>
             </div>
             {reply.verdict === 'self' && reply.prompt && (

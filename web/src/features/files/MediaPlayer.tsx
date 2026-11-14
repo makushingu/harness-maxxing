@@ -54,9 +54,15 @@ function canSetVolume() {
   return volumeWorks
 }
 /** Where `volume` is read-only: the element's sound goes through a gain node, made on the first slider move only
- *  (an untouched player keeps the plain media path). One per element: an element can be routed only once. */
+ *  (an untouched player keeps the plain media path). One per element: an element can be routed only once.
+ *  Routed only once the audio context really runs: an element routed to a context that stays asleep (`suspended`,
+ *  or `interrupted` in an installed app back from the background) does not advance, the video stays at 0:00.
+ *  Until then (`null`) the plain path plays, at the level of the hardware buttons. */
 let audioCtx: AudioContext | null = null
 const gains = new WeakMap<HTMLMediaElement, GainNode>()
+function wakeAudio() {
+  if (audioCtx && audioCtx.state !== 'running' && audioCtx.state !== 'closed') void audioCtx.resume().catch(() => {})
+}
 function gainFor(m: HTMLMediaElement): GainNode | null {
   try {
     let g = gains.get(m)
@@ -64,11 +70,15 @@ function gainFor(m: HTMLMediaElement): GainNode | null {
       const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
       if (!Ctx) return null
       audioCtx ??= new Ctx()
+      if (audioCtx.state !== 'running') {
+        wakeAudio()
+        return null
+      }
       g = audioCtx.createGain()
       audioCtx.createMediaElementSource(m).connect(g).connect(audioCtx.destination)
       gains.set(m, g)
     }
-    if (audioCtx?.state === 'suspended') void audioCtx.resume().catch(() => {})
+    wakeAudio()
     return g
   } catch {
     return null
@@ -145,6 +155,7 @@ export function MediaPlayer({ path, kind, version, onError, onOpen, keepAlive, w
   const [volOpen, setVolOpen] = React.useState(false)
   const volTimer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const gainVol = React.useRef<number | null>(null)
+  const gainOff = React.useRef<(() => void) | null>(null)
   const [speed, setSpeed] = React.useState(prefs.speed)
   const [fullscreen, setFullscreen] = React.useState(false)
   const [hover, setHover] = React.useState<{ x: number; t: number } | null>(null)
@@ -339,6 +350,7 @@ export function MediaPlayer({ path, kind, version, onError, onOpen, keepAlive, w
     document.addEventListener('fullscreenchange', onFs)
     return () => document.removeEventListener('fullscreenchange', onFs)
   }, [])
+  React.useEffect(() => () => gainOff.current?.(), [])
 
   // ---- the element: rendered below, or (keepAlive audio) taken from sharedAudio
   const setMediaEl = React.useCallback((m: HTMLMediaElement | null) => {
@@ -394,7 +406,10 @@ export function MediaPlayer({ path, kind, version, onError, onOpen, keepAlive, w
       setStarted(true) // asked to play: the Auto copy may start (even when this browser cannot read the original)
       playIntent.current = true
       // where `volume` is read-only (iPhone): the saved level goes through the gain, set up now (a user gesture)
-      if (!canSetVolume() && !gif && gainVol.current == null && prefs.volume < 1) setVol(prefs.volume)
+      if (!canSetVolume() && !gif) {
+        if (gainVol.current == null && prefs.volume < 1) setVol(prefs.volume)
+        else applyGain(m) // an audio context left asleep (back from the background) is woken by this gesture
+      }
       if (video && origBad && !onCopy) {
         last.current.play = true // the copy starts playing when ready
         return
@@ -418,18 +433,35 @@ export function MediaPlayer({ path, kind, version, onError, onOpen, keepAlive, w
     last.current.t = m.currentTime // a switch that starts before the next `timeupdate` resumes here
     setTime(m.currentTime)
   }
+  // The level asked where `volume` is read-only: on the gain when the audio runs, as soon as it does otherwise.
+  const applyGain = (m: HTMLMediaElement) => {
+    const v = gainVol.current
+    if (v == null) return
+    const g = gainFor(m)
+    if (g) g.gain.value = v
+    else if (audioCtx && !gainOff.current) {
+      const ctx = audioCtx
+      const on = () => {
+        if (ctx.state !== 'running') return
+        gainOff.current?.()
+        if (media.current) applyGain(media.current)
+      }
+      ctx.addEventListener('statechange', on)
+      gainOff.current = () => {
+        ctx.removeEventListener('statechange', on)
+        gainOff.current = null
+      }
+    }
+  }
   const setVol = (v: number) => {
     const m = media.current
     if (!m) return
     v = Math.max(0, Math.min(1, v))
     if (!canSetVolume()) {
-      const g = gainFor(m)
-      if (g) {
-        g.gain.value = v
-        gainVol.current = v
-        setVolume(v)
-        if (!gif) savePrefs({ volume: v })
-      }
+      gainVol.current = v
+      applyGain(m)
+      setVolume(v)
+      if (!gif) savePrefs({ volume: v })
       m.muted = v === 0
       return
     }
@@ -736,10 +768,7 @@ export function MediaPlayer({ path, kind, version, onError, onOpen, keepAlive, w
       const v = m as HTMLVideoElement
       if (video && v.videoWidth && v.videoHeight) setNatural({ w: v.videoWidth, h: v.videoHeight })
       // where `volume` is read-only, the gain stays on the element: set its level again after a source change
-      if (gainVol.current != null) {
-        const g = gainFor(m)
-        if (g) g.gain.value = gainVol.current
-      }
+      applyGain(m)
       const r = resume.current
       resume.current = null
       // opened again: back where it was left (not for a short or GIF-like clip)

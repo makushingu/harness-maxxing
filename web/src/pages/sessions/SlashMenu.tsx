@@ -64,12 +64,15 @@ export function slashItems(text: string, commands: SlashCommand[], expanded: str
   return items.length ? { stage: 'arg', items } : null
 }
 
-/** The session command typed in full ("/model opus"), if any: it runs instead of being sent. */
+/** The session command typed in full ("/model opus"), if any: it runs instead of being sent. Text after a command
+ *  that takes no value, or on a next line, is a message: it is sent, never swallowed by the command. */
 export function slashAction(text: string, commands: SlashCommand[]): { cmd: SlashCommand; arg: string } | null {
-  const m = /^\/(\S+)(?:\s+([\s\S]*))?$/.exec(text.trim())
+  const m = /^\/(\S+)(?:[^\S\n]+([^\n]*))?$/.exec(text.trim())
   if (!m) return null
   const cmd = commands.find((c) => c.kind === 'action' && c.name === m[1])
-  return cmd?.run ? { cmd, arg: (m[2] || '').trim() } : null
+  const arg = (m[2] || '').trim()
+  if (arg && !cmd?.args?.length && !cmd?.freeArg) return null
+  return cmd?.run ? { cmd, arg } : null
 }
 
 function groupTitle(g: string, t: ReturnType<typeof useT>, chat?: boolean): string {
@@ -95,7 +98,7 @@ export function SlashMenu({ items, active, onPick, onHover, stage, label, keys, 
       role="listbox"
       aria-label={label || t('slash.label')}
       data-testid="slash-menu"
-      className="absolute inset-x-0 bottom-full z-30 mb-1.5 overflow-hidden rounded-xl border bg-popover text-popover-foreground shadow-lg"
+      className="mx-glass absolute inset-x-0 bottom-full z-30 mb-1.5 overflow-hidden rounded-xl border bg-popover text-popover-foreground shadow-lg"
     >
       <div ref={list} className="max-h-72 overflow-y-auto overscroll-contain p-1 [scrollbar-width:thin]">
         {items.map((it, i) => (

@@ -26,6 +26,7 @@ export type FileKind =
   | 'text'
   | 'font'
   | 'archive'
+  | 'document'
   | 'other'
   | 'binary'
 
@@ -37,6 +38,14 @@ const CSV = new Set(['csv', 'tsv'])
 const HTML = new Set(['html', 'htm'])
 /** Archives the server can list (zip, tar and gzip); 7z / rar / zst are only downloadable. */
 const LISTABLE = /\.(zip|tar|tgz|tbz2?|txz|gz|bz2|xz)$/i
+/** Office documents the server reads (documents.py): shown as text, slides or sheets. The old binary formats
+ *  (.doc, .xls, .ppt) are not. */
+const SHEETS = new Set(['xlsx', 'xlsm', 'ods'])
+const DOCUMENT = new Set(['docx', 'docm', 'odt', 'pptx', 'pptm', 'ppsx', 'odp', ...SHEETS])
+/** A document shown as a table of cells (else as a page of text). */
+export const isSheets = (name: string) => SHEETS.has(extOf(name))
+/** A document shown as a page of text (the text zoom applies to it). */
+export const isTextDoc = (name: string) => DOCUMENT.has(extOf(name)) && !isSheets(name)
 const VIDEO = new Set(['mp4', 'webm', 'mov', 'm4v', 'ogv', 'mkv'])
 const AUDIO = new Set(['mp3', 'wav', 'ogg', 'oga', 'm4a', 'aac', 'flac', 'opus'])
 const MARKDOWN = new Set(['md', 'markdown', 'mdx'])
@@ -49,8 +58,8 @@ const CODE = new Set([
 /** Known binary formats: shown as an info card without trying to read them as text. */
 const BINARY = new Set([
   'bin', 'exe', 'dll', 'so', 'o', 'a', 'dylib', 'class', 'jar', 'pyc', 'wasm', 'eot',
-  'sqlite', 'sqlite3', 'db', 'iso', 'dmg', 'img', 'deb', 'rpm', 'apk', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
-  'odt', 'ods', 'odp', 'psd', 'ai', 'sketch', 'fig', 'blend', 'mid', 'pkl', 'npy', 'parquet',
+  'sqlite', 'sqlite3', 'db', 'iso', 'dmg', 'img', 'deb', 'rpm', 'apk', 'doc', 'xls', 'ppt',
+  'psd', 'ai', 'sketch', 'fig', 'blend', 'mid', 'pkl', 'npy', 'parquet',
 ])
 const TEXT = new Set(['txt', 'log', 'lock', 'gitignore', 'service', 'timer', 'rst', 'org'])
 const TEXT_NAMES = new Set(['dockerfile', 'makefile', 'license', 'readme', 'caddyfile', 'procfile', '.env', '.gitignore', '.bashrc', '.profile'])
@@ -74,6 +83,7 @@ export function kindOf(name: string, mime?: string): FileKind {
   if (CODE.has(ext)) return 'code'
   if (TEXT.has(ext) || TEXT_NAMES.has(basename(name).toLowerCase())) return 'text'
   if (FONT.has(ext)) return 'font'
+  if (DOCUMENT.has(ext)) return 'document'
   if (ARCHIVE.has(ext)) return LISTABLE.test(name) ? 'archive' : 'other'
   if (BINARY.has(ext)) return 'other'
   if (mime) {
@@ -99,7 +109,7 @@ export function iconFor(type: 'file' | 'dir', name: string): LucideIcon {
   if (type === 'dir') return Folder
   const ext = extOf(name)
   if (ext === 'json' || ext === 'jsonc') return FileJson
-  if (ext === 'csv' || ext === 'tsv' || ext === 'xlsx' || ext === 'ods') return FileSpreadsheet
+  if (ext === 'csv' || ext === 'tsv' || ext === 'xls' || SHEETS.has(ext)) return FileSpreadsheet
   switch (kindOf(name)) {
     case 'image':
       return FileImage
@@ -122,6 +132,7 @@ export function iconFor(type: 'file' | 'dir', name: string): LucideIcon {
     case 'markdown':
     case 'text':
     case 'pdf':
+    case 'document':
       return FileText
     default:
       return File

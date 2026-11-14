@@ -27,10 +27,10 @@ from pathlib import Path
 from typing import Any, Callable
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 
-from .. import config, downloads, security, videos, workspace
+from .. import config, documents, downloads, security, videos, workspace
 from ..security import require_auth
 from .sessions import save_uploads
 
@@ -42,7 +42,7 @@ THUMB_TIMEOUT_S = 30
 # here instead of filling the shared worker threads every other request (health, lists, settings) needs.
 THUMB_JOBS = 3
 _thumb_pool = ThreadPoolExecutor(max_workers=THUMB_JOBS, thread_name_prefix="mx-thumb")
-_thumb_jobs: dict[tuple[str, int, int], asyncio.Future] = {}   # (file, mtime, width) -> its render in flight (shared)
+_thumb_jobs: dict[tuple, asyncio.Future] = {}   # (file, mtime, width...) -> its render in flight (shared)
 SEARCH_MAX = 50
 SEARCH_SCAN_MAX = 200_000
 SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", "venv", ".cache", ".next", "dist",
@@ -480,22 +480,25 @@ def _ffmpeg_thumb(src: Path, dest: Path, w: int, video: bool) -> bool | None:
         tmp.unlink(missing_ok=True)
 
 
-def _pdf_thumb(src: Path, dest: Path, w: int) -> bool | None:
-    """First page of a PDF -> WebP (pdftoppm renders it, ffmpeg encodes it); False/None as _ffmpeg_thumb."""
+def _pdf_thumb(src: Path, dest: Path, w: int, page: int = 1, wide: bool = False) -> bool | None:
+    """A page of a PDF (the first: its thumbnail) -> WebP (pdftoppm renders it, ffmpeg encodes it); False/None as
+    _ffmpeg_thumb. `w` bounds its longer side, or its width with `wide` (a page to read)."""
     pdftoppm = shutil.which("pdftoppm")
     if not pdftoppm:
         return None
     with tempfile.TemporaryDirectory(prefix="mx-pdf-") as tmp:
         out = Path(tmp) / "page"
         try:
-            r = subprocess.run([*_nice(), pdftoppm, "-f", "1", "-l", "1", "-singlefile", "-png", "-scale-to", str(w),
+            scale = ["-scale-to-x", str(w), "-scale-to-y", "-1"] if wide else ["-scale-to", str(w)]
+            # an uncompressed TIFF: written at once, when the PNG of a page costs 0.3 s of compression for nothing
+            r = subprocess.run([*_nice(), pdftoppm, "-f", str(page), "-l", str(page), "-singlefile", "-tiff", *scale,
                                 str(src), str(out)], capture_output=True, timeout=THUMB_TIMEOUT_S)
         except (subprocess.TimeoutExpired, OSError):
             return None
-        png = out.with_suffix(".png")
-        if r.returncode != 0 or not png.exists():
+        tif = out.with_suffix(".tif")
+        if r.returncode != 0 or not tif.exists():
             return False
-        return _ffmpeg_thumb(png, dest, w, False)
+        return _ffmpeg_thumb(tif, dest, w, False)
 
 
 THUMB_WIDTHS = (160, 320, 640, 1280, 2048, 4096)   # a few sizes per file (any width asked maps up to one)
@@ -586,11 +589,15 @@ async def _render(p: Path, w: int) -> tuple[Path, str]:
         mtime = (await _t(p.stat)).st_mtime_ns
     except OSError:
         mtime = 0
-    key = (str(p), mtime, next((b for b in THUMB_WIDTHS if b >= w), THUMB_WIDTHS[-1]))
+    return await _pooled((str(p), mtime, next((b for b in THUMB_WIDTHS if b >= w), THUMB_WIDTHS[-1])), _thumb, p, w)
+
+
+async def _pooled(key: tuple, fn: Callable[..., Any], *a: Any) -> Any:
+    """fn(*a) in the thumbnail pool, once for every request that asks for the same `key` meanwhile."""
     loop = asyncio.get_running_loop()
     fut = _thumb_jobs.get(key)
     if fut is None or fut.get_loop() is not loop:
-        fut = loop.run_in_executor(_thumb_pool, _thumb, p, w)
+        fut = loop.run_in_executor(_thumb_pool, fn, *a)
         _thumb_jobs[key] = fut
 
         def done(f: asyncio.Future) -> None:
@@ -765,6 +772,107 @@ def _archive(p: Path) -> dict:
 @router.get("/archive")
 async def archive(path: str):
     return await _t(_archive, resolve(path))
+
+
+# ---- PDF pages and office documents --------------------------------------------------------
+PDF_PAGE_WIDTHS = (640, 1280, 2048)
+
+
+def _pdf_info(p: Path) -> dict:
+    """Pages of a PDF and the shape of the first one (height / width), from pdfinfo."""
+    if not p.is_file():
+        raise _err(404, "not_found", "File not found")
+    tools = [shutil.which(x) for x in ("pdfinfo", "pdftoppm", "ffmpeg")]
+    if not all(tools):
+        raise _err(415, "unsupported", "PDF pages unavailable (poppler-utils or ffmpeg missing)")
+    try:
+        r = subprocess.run([tools[0], str(p)], capture_output=True, timeout=THUMB_TIMEOUT_S)
+    except (subprocess.TimeoutExpired, OSError):
+        raise _err(415, "unsupported", "This PDF could not be read") from None
+    info = dict(line.split(":", 1) for line in r.stdout.decode("utf-8", "replace").splitlines() if ":" in line)
+    try:
+        pages = int(info["Pages"])
+        w, h = (float(x) for x in info["Page size"].split("pts")[0].split("x"))
+    except (KeyError, ValueError):
+        raise _err(415, "unsupported", "This PDF could not be read") from None
+    if r.returncode != 0 or pages < 1 or w <= 0 or h <= 0:
+        raise _err(415, "unsupported", "This PDF could not be read")
+    if info.get("Page rot", "0").strip() in ("90", "270"):
+        w, h = h, w
+    return {"pages": pages, "ratio": round(h / w, 4), "mtime": p.stat().st_mtime}
+
+
+@router.get("/pdf")
+async def pdf_info(path: str):
+    """What the page-by-page PDF reader needs (browsers that cannot show a PDF in the page: most phones)."""
+    return await _t(_pdf_info, resolve(path))
+
+
+def _pdf_page(p: Path, n: int, w: int) -> Path:
+    st = p.stat()
+    key = hashlib.sha1(f"{p}|{st.st_mtime_ns}|{w}|pdf|{n}".encode()).hexdigest()
+    dest = config.state_dir("thumbs") / f"{key}.webp"
+    if dest.exists():
+        return dest
+    ok = None if _failed_recently(f"{key}|{st.st_size}") else _pdf_thumb(p, dest, w, n, True)
+    if ok:
+        _trim_thumbs()
+        return dest
+    _remember_failure(f"{key}|{st.st_size}", ok)
+    raise _err(415, "unsupported", "This page could not be rendered")
+
+
+@router.get("/pdf/page")
+async def pdf_page(path: str, n: int = Query(1, ge=1, le=100_000), w: int = Query(1280, ge=64, le=2048), v: str = ""):
+    """Page `n` of a PDF as a WebP `w` px wide (640, 1280 or 2048), kept with the thumbnails."""
+    p = await _t(resolve, path)
+    if not await _t(p.is_file) or p.suffix.lower() not in PDF_EXT:
+        raise _err(404, "not_found", "File not found")
+    w = next((b for b in PDF_PAGE_WIDTHS if b >= w), PDF_PAGE_WIDTHS[-1])
+    try:
+        mtime = (await _t(p.stat)).st_mtime_ns
+    except OSError:
+        mtime = 0
+    f = await _pooled((str(p), mtime, w, n), _pdf_page, p, n, w)
+    return FileResponse(f, media_type="image/webp", headers=_file_headers("image/webp", _cache(v)))
+
+
+def _doc(p: Path) -> dict:
+    if not p.is_file():
+        raise _err(404, "not_found", "File not found")
+    st = p.stat()
+    try:
+        out = documents.read(p)
+    except documents.Unreadable as e:
+        raise _err(413 if e.code == "too_large" else 415, e.code, str(e)) from None
+    return {"path": _shown(str(p)), "mtime": st.st_mtime, "size": st.st_size, **out}
+
+
+@router.get("/doc")
+async def doc(path: str):
+    """A Word / PowerPoint / OpenDocument file as Markdown, a spreadsheet as the rows of its sheets (documents.py)."""
+    p = await _t(resolve, path)
+    try:
+        mtime = (await _t(p.stat)).st_mtime_ns
+    except OSError:
+        mtime = 0
+    return await _pooled((str(p), mtime, "doc"), _doc, p)      # up to a few seconds of parsing: not in the shared threads
+
+
+def _doc_media(p: Path, name: str) -> tuple[bytes, str]:
+    if not p.is_file():
+        raise _err(404, "not_found", "File not found")
+    try:
+        return documents.media(p, name)
+    except documents.Unreadable as e:
+        raise _err(413 if e.code == "too_large" else 404, e.code, str(e)) from None
+
+
+@router.get("/doc/media")
+async def doc_media(path: str, name: str, v: str = ""):
+    """A picture inside a document, by the name its Markdown gives (png, jpeg, gif, webp, bmp only)."""
+    data, mime = await _t(_doc_media, await _t(resolve, path), name)
+    return Response(data, media_type=mime, headers=_file_headers(mime, _cache(v)))
 
 
 # ---- HTML pages ----------------------------------------------------------------------------

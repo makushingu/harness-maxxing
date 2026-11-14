@@ -32,6 +32,83 @@ New:
   its sandbox opens only its domains, the same as its commands. An asleep browser shows a small window in its
   project's colour. [Show me](#show:browser)
 
+Fixed:
+- **Memory: a heavy memory.md no longer goes unnoticed, and sessions stop being summarized after almost every
+  message because of it.** A `memory.md` is part of the instructions of every session of its folder, and Claude
+  sends it again in full each time it changes. The nightly clean only counted lines: a file of 100 lines made of
+  very long bullets (70 KB, about 30,000 tokens) stayed "under the limit", was added to the conversation again at
+  each note written, and the session reached the automatic summary every two or three messages. The limit of
+  Settings -> Memory now also weighs the file (1 KB for 10 lines: 200 lines = 20 KB): heavier files are shown in
+  red, `maxxing memory` flags them, and the nightly clean (or **Clean now**) shortens their bullets. Claude is
+  also told to write one or two lines per note. Nothing to do: tonight's clean shortens the files that are too
+  heavy; **Clean now** does it right away.
+- **Sessions: background tasks no longer look stopped when you send a message.** A message sent once the answer is
+  written, while commands or agents still work in the background, goes to the same Claude: they keep running. The
+  conversation showed them as "interrupted" all the same and took away the "N running in the background" bar. They
+  now stay shown as running, with their bar, until they really end. They are only shown as interrupted when they
+  were: after **Stop**, or when the message had to start a new Claude (the model, Plan mode or the permissions
+  of the session changed in between, or the message names an MCP server that was not loaded).
+- **Sessions: with "Load MCP servers only when a session needs them", background tasks were sometimes stopped
+  for nothing.** The servers a message gets can change from one message to the next (another session of the topic
+  used a new one, a server was named once and never used): that alone started a new Claude and stopped the
+  commands and agents running in the background. Such a message now goes to the same Claude, and the new choice
+  applies once that work is over. A new Claude is still started when your message names a server that is not
+  loaded, or when Claude asked for one; the line in the conversation now says which server.
+- **Agents: on a phone, Deny / Allow no longer go off screen while the agent works.** On an agent's page, a
+  request waiting for your answer was drawn above the turn going on and its steps (up to 12 lines), so the two
+  buttons were pushed out of view and the agent looked stuck. The request is now the last thing of the
+  conversation, under the turn that asks.
+- **Files: on an iPhone, a video no longer stays at 0:00 once the player's volume was lowered.** An iPhone does
+  not let a page set the volume, so the player's slider sends the sound through the browser's audio engine. When
+  that engine was not running (Harness installed on the Home Screen, back from the background), the video showed
+  as playing and never moved; the same video played in Safari, where the volume was never touched. The sound now
+  takes that path only once the engine really runs, and pressing play wakes it: until then the video plays at the
+  level of the phone's buttons.
+
+## 2.0.0-alpha.150 - 2026-11-13
+
+New:
+- **Files: Word, Excel, PowerPoint and OpenDocument files open in the viewer.** A `.docx`, `.pptx`, `.odt` or `.odp`
+  shows as a page of text (headings, lists, tables, links, its pictures, one section per slide with its notes), a
+  `.xlsx` or `.ods` as a table per sheet with the column letters, the row numbers, a filter and the sheets as tabs at
+  the bottom - on the Files page and when a path is clicked in a conversation, with nothing to install. The words
+  and numbers of the file, not its layout: **Download** gives the original. Old `.doc` / `.xls` / `.ppt` still
+  download.
+- **Files: a PDF reads on a phone.** Where the browser shows no PDF inside a page (most phones: an empty frame or
+  the first page only), the PDF now opens page by page, as far as the last one: two fingers, a double tap or
+  **− / +** zoom, pages load as you scroll and the bar shows the page you are on. On a computer the browser's own
+  reader stays.
+- **Glass material** (Settings -> Appearance -> Material): the bars, menus, dialogs and the search window become
+  see-through and blurred over a soft backdrop in your accent color, in dark and light mode; cards, the message box,
+  buttons and the selected row become liquid glass (a see-through fill with a bright edge and a sheen, the selection
+  tinted by your accent). Menus and the message box stay nearly opaque so text reads easily, the folded list shown
+  over the page is no longer see-through, the phone menu shows the backdrop too, and no accent outline around the
+  message box. Solid stays the default.
+- The highlight of the current page in the sidebar and of the chosen option in switches glides to the one you click.
+- Extensions (pages and HTML widgets) follow the Glass material too: their cards, tiles and secondary buttons
+  become liquid glass like the app's.
+- The interface and the pages now appear top to bottom, in order: at startup, in the sessions list, in Settings and
+  on the dashboard (a card's content after the card).
+
+
+Changed:
+- **Files: the viewer opens faster.** A file clicked in a conversation used to wait three times before anything
+  showed: for the viewer itself, for a look at its folder, then for its date. The viewer is now ready before the
+  click, and a file with a known extension asks for its content at once: on a connection of 8 Mbit/s, an image, a
+  video, a Word or Excel file, a PDF or a file of code shows two to four times sooner (0.2 to 0.5 s instead of 0.5
+  to 0.9 s). A big image no longer downloads its original on a light connection before you zoom, and a PDF read page
+  by page asks each page once instead of twice.
+- **Clearer backgrounds: you see at a glance what you are looking at.** The sidebar, the list beside it and the page
+  no longer share the same background: the sidebar is the darkest (the lightest grey in light mode), the list is one
+  step lighter, and the page sits in a panel with rounded corners; cards, menus and dialogs each come one step
+  nearer. The same steps apply everywhere, with the neutral or tinted background and every accent color.
+- **Sub-agents: one line instead of two.** The bubble above the message box that said "8 subagents running" is
+  gone: the last line of the conversation says it (or adds "· 8 subagents" after what Claude is doing) and a click
+  on it lists them, as the bubble did.
+- **Hovered and selected rows look the same everywhere.** Light fills (hover, selection, quiet zones) are now three
+  shades of the text color instead of a different grey on each screen, so a row reacts the same in the sidebar, a
+  list, the page or a card.
+
 ## 2.0.0-alpha.149 - 2026-11-13
 
 Changed:

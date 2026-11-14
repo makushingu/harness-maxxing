@@ -82,6 +82,11 @@ Harness continues by itself with the server loaded (at most twice in a row), and
 When a message needs a **claude.ai connector** (Google Drive, Gmail...), that message loads every server, as before
 (Claude Code loads connectors only all together). The **Browser of my PC** is always loaded.
 
+A message sent while Claude still has commands or agents running in the background goes to that same Claude, with
+the servers it started with: what the topic used meanwhile is loaded once that work is over. Only a server you name
+in the message, or one Claude asked for, starts Claude again at once (its background work stops, and the
+conversation says so).
+
 ## Browser of my PC
 
 **Settings -> MCP -> Browser of my PC** lets Claude use a browser on **your own computer** (Windows, Mac or Linux):

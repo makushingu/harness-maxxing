@@ -41,7 +41,7 @@ export function CutCard({ cut, last, children }: { cut: Cut; /** The thread ends
   const resumeText = t('cut.resumeText')
   const title = t(`cut.${kind}.title`)
   return (
-    <div role={last ? 'alert' : undefined} data-testid="cut-card" data-kind={kind} className="rounded-lg border bg-muted/30 text-xs">
+    <div role={last ? 'alert' : undefined} data-testid="cut-card" data-kind={kind} className="rounded-lg border bg-fill-1 text-xs">
       <div className="flex items-start gap-2.5 px-3 pt-2.5 pb-2">
         <Icon className={cn('mt-0.5 size-4 shrink-0', kind === 'error' ? 'text-destructive' : 'text-warning')} />
         <div className="min-w-0 flex-1">
@@ -56,7 +56,7 @@ export function CutCard({ cut, last, children }: { cut: Cut; /** The thread ends
               )}
               {last && model}
               {url && (
-                <a href={url} target="_blank" rel="noreferrer" className="inline-flex h-8 items-center gap-1 rounded-md px-2 font-medium text-muted-foreground transition hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
+                <a href={url} target="_blank" rel="noreferrer" className="inline-flex h-8 items-center pointer-coarse:h-10 gap-1 rounded-md px-2 font-medium text-muted-foreground transition hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
                   {t('cut.usage')} <ExternalLink className="size-3" />
                 </a>
               )}
@@ -65,7 +65,7 @@ export function CutCard({ cut, last, children }: { cut: Cut; /** The thread ends
                   type="button"
                   aria-expanded={open}
                   onClick={() => setOpen((o) => !o)}
-                  className="ml-auto inline-flex h-8 items-center gap-0.5 rounded-md px-2 text-muted-foreground transition hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                  className="ml-auto inline-flex h-8 items-center pointer-coarse:h-10 gap-0.5 rounded-md px-2 text-muted-foreground transition hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                 >
                   {t('cut.details')} <ChevronRight className={cn('size-3 transition-transform', open && 'rotate-90')} />
                 </button>
@@ -73,7 +73,7 @@ export function CutCard({ cut, last, children }: { cut: Cut; /** The thread ends
             </div>
           ) : null}
           {open && lines && (
-            <pre className="mt-2 max-h-40 overflow-auto rounded-md bg-background/60 px-2.5 py-2 font-mono text-[11px] leading-4 whitespace-pre-wrap text-muted-foreground [overflow-wrap:anywhere]">
+            <pre className="mt-2 max-h-40 overflow-auto rounded-md bg-sunken px-2.5 py-2 font-mono text-[11px] leading-4 whitespace-pre-wrap text-muted-foreground [overflow-wrap:anywhere]">
               <Sensitive>{lines}</Sensitive>
             </pre>
           )}

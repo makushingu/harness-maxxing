@@ -60,7 +60,7 @@ export function GitBlock({ code, className }: { code: string; className?: string
   const repo = data?.repo
   return (
     <div className={cn('not-prose overflow-hidden rounded-xl border bg-card', className)} data-testid="git-block">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b bg-muted/30 px-3 py-2 text-[13px]">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b bg-fill-1 px-3 py-2 text-[13px]">
         {repo?.kind === 'github' ? <Github className="size-4 text-muted-foreground" /> : <GitBranch className="size-4 text-muted-foreground" />}
         <span className="font-medium">{repo?.github && repo.kind === 'github' ? repo.github : repo?.name || spec.repo.split('/').pop()}</span>
         {repo?.branch && (

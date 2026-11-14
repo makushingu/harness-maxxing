@@ -327,7 +327,7 @@ export function LiveView({ profile, nav, session, who, start, onMinimize, classN
   return (
     <div className={cn('flex min-h-0 min-w-0 flex-col overflow-hidden bg-background', className)} data-testid="browser-live">
       {/* tabs + new tab + the window's minimize */}
-      <div className="flex h-10 shrink-0 items-end gap-1 bg-muted/70 pr-1.5 pl-2">
+      <div className="flex h-10 shrink-0 items-end gap-1 bg-muted pr-1.5 pl-2">
         <div className="flex min-w-0 flex-1 items-end gap-0.5 overflow-x-auto" role="tablist" aria-label={t('browser.tabs')}>
           {tabs.map((tab) => (
             <TabButton key={tab.key} tab={tab} onShow={() => tabOp.mutate({ profile, op: 'show', key: tab.key })} onClose={() => tabOp.mutate({ profile, op: 'close', key: tab.key })} />
@@ -355,7 +355,7 @@ export function LiveView({ profile, nav, session, who, start, onMinimize, classN
           <RotateCw />
         </Button>
         <form
-          className="flex h-8 min-w-0 flex-1 items-center gap-1.5 rounded-full bg-muted/60 px-3 focus-within:ring-2 focus-within:ring-ring"
+          className="flex h-8 min-w-0 flex-1 items-center gap-1.5 rounded-full bg-muted px-3 focus-within:ring-2 focus-within:ring-ring"
           onSubmit={(e) => {
             e.preventDefault()
             if (address.trim()) drive({ t: 'nav', url: address.trim() })
@@ -424,7 +424,7 @@ export function LiveView({ profile, nav, session, who, start, onMinimize, classN
         ref={pane}
         tabIndex={running ? 0 : -1}
         data-no-drag
-        className={cn('group relative grid min-h-48 flex-1 items-start justify-items-center overflow-hidden bg-muted/30 outline-none', me && shared && 'ring-2 ring-primary/60 ring-inset')}
+        className={cn('group relative grid min-h-48 flex-1 items-start justify-items-center overflow-hidden bg-fill-1 outline-none', me && shared && 'ring-2 ring-primary/60 ring-inset')}
         onKeyDown={(e) => {
           if (!running || veil || e.nativeEvent.isComposing) return
           const cmd = e.ctrlKey || e.metaKey
@@ -631,7 +631,7 @@ export function LiveView({ profile, nav, session, who, start, onMinimize, classN
       )}
 
       {/* status bar: memory, what was refused, Stop */}
-      <div className="flex h-7 shrink-0 items-center gap-3 border-t bg-muted/40 px-3 text-[11px] text-muted-foreground">
+      <div className="flex h-7 shrink-0 items-center gap-3 border-t bg-fill-1 px-3 text-[11px] text-muted-foreground">
         <span className="min-w-0 flex-1 truncate">
           {error ? (
             <span className="text-warning">{error}</span>

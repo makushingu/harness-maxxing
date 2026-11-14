@@ -164,7 +164,7 @@ export function AccountDialog({ open, onOpenChange, account, onSaved, address }:
             <SecretInput value={f.password} onChange={(e) => set('password', e.target.value)} onFocus={runDetect} required={!editing} />
           </FormField>
           {note && (
-            <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+            <p className="rounded-md border border-border bg-muted px-3 py-2 text-sm text-muted-foreground">
               {t(`mail.acc.note.${note}`)}
               {note === 'gmail' && (
                 <> <a className="text-primary underline" href="https://myaccount.google.com/apppasswords" target="_blank" rel="noreferrer">myaccount.google.com/apppasswords</a></>
@@ -232,7 +232,7 @@ export function AccountDialog({ open, onOpenChange, account, onSaved, address }:
                         <li key={g.agent}>
                           <Link
                             to={m ? `/agents/${m[1]}/${m[2]}/${m[3]}?settings=mail` : '/agents'}
-                            className="flex items-center gap-2.5 px-3 py-2 hover:bg-accent/50"
+                            className="flex items-center gap-2.5 px-3 py-2 hover:bg-muted"
                           >
                             <AgentAvatarIcon avatar={g.avatar} size={24} mood={g.enabled ? 'idle' : 'sleep'} />
                             <span className="grid min-w-0 flex-1">

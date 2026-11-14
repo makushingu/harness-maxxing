@@ -59,7 +59,7 @@ export function DueBadge({ task, today, className }: { task: Task; today: string
 
 export function LabelChip({ label, className, children }: { label: string; className?: string; children?: React.ReactNode }) {
   return (
-    <span className={cn('inline-flex h-5 max-w-40 shrink-0 items-center gap-1 rounded-full border bg-muted/50 px-2 text-[11px] font-medium text-muted-foreground', className)}>
+    <span className={cn('inline-flex h-5 max-w-40 shrink-0 items-center gap-1 rounded-full border bg-muted px-2 text-[11px] font-medium text-muted-foreground', className)}>
       <span className="truncate">
         <Sensitive length={4}>{label}</Sensitive>
       </span>

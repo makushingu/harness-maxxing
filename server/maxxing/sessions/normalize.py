@@ -140,7 +140,9 @@ def normalize(ev: dict) -> list[dict]:
 def _system(ev: dict, at: float | None) -> list[dict]:
     sub = ev.get("subtype")
     if sub == "init":
-        return [{"type": "init", "model": ev.get("model") or "", "cwd": ev.get("cwd") or "", "at": at}]
+        # `same`: a turn of a process that already ran one (runner.py): its background tasks were not cut
+        return [{"type": "init", "model": ev.get("model") or "", "cwd": ev.get("cwd") or "", "at": at,
+                 **({"same": True} if ev.get("mx_same_proc") else {})}]
     if sub == "compact_boundary":
         return [{"type": "note", "text": "Harness compacted its context automatically.", "level": "info", "at": at}]
     if isinstance(sub, str) and sub.startswith("task_"):

@@ -94,11 +94,18 @@ def set_prefs(repo: Path | str, **kw) -> dict:
     return prefs(repo)
 
 
-def check_prefix(prefix: str) -> str:
+def check_prefix(prefix: str, repo: Path | None = None) -> str:
     prefix = (prefix or "").strip().strip("/")
     if prefix and (not re.fullmatch(r"[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*", prefix) or ".." in prefix
                    or len(prefix) > 40):
         raise GitError(400, "bad_prefix", "a prefix is letters, digits, '.', '_', '-' and '/' (like session or feat)")
+    if any(c.startswith(".") or c.endswith((".lock", ".")) for c in prefix.split("/")):
+        raise GitError(400, "bad_prefix", "a part of the prefix cannot start with '.' nor end with '.' or '.lock'")
+    parts = prefix.split("/") if prefix else []
+    taken = next((n for n in ("/".join(parts[:i]) for i in range(1, len(parts) + 1))
+                  if repo is not None and _branch_exists(repo, n)), None)
+    if taken:
+        raise GitError(400, "bad_prefix", f"'{taken}' is already a branch of this repository: choose another prefix")
     return prefix
 
 
@@ -566,11 +573,12 @@ def remove(meta: dict, force: bool = False, delete_branch: bool = True, merged_s
         raise GitError(404, "no_copy", "this session has no separate copy")
     folder, repo = Path(str(wt.get("path") or "")), Path(str(wt.get("repo") or ""))
     branch = wt.get("branch") or ""
+    moved = None     # the folder was switched to another branch: that one is never deleted, only reported
     if folder.is_dir():
         if not force:
             _clean_or_raise(folder)
         try:
-            branch = codediff.repo_head(folder)["branch"] or branch
+            moved = codediff.repo_head(folder)["branch"]
         except GitError:
             pass
         codediff._git(repo, "worktree", "remove", *(["--force"] if force else []), str(folder), write=True,
@@ -587,6 +595,8 @@ def remove(meta: dict, force: bool = False, delete_branch: bool = True, merged_s
             kept = branch
     elif branch and _branch_exists(repo, branch):
         kept = branch
+    if kept is None and moved and moved != branch and _branch_exists(repo, moved):
+        kept = moved
     from .sessions import store
     try:
         with store.edit(meta["id"]) as m:

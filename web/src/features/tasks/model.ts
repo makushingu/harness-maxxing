@@ -216,6 +216,13 @@ export function parseQuickAdd(input: string, projects: TaskProject[], today: str
 }
 
 /* ------------------------------------------------------------------ projects */
+/** Tasks whose project no longer exists (tasks.json edited by hand or by Claude) shown without a project,
+ *  as projectStats counts them: the "No project" filter, its count and the search then agree. */
+export function withKnownProjects(tasks: Task[], projects: TaskProject[]): Task[] {
+  const known = new Set(projects.map((p) => p.id))
+  return tasks.some((x) => x.project_id && !known.has(x.project_id)) ? tasks.map((x) => (x.project_id && !known.has(x.project_id) ? { ...x, project_id: null } : x)) : tasks
+}
+
 export type ProjectStats = { open: number; doing: number; overdue: number; today: number; urgent: number; done: number; total: number; next?: Task }
 const EMPTY_STATS: ProjectStats = { open: 0, doing: 0, overdue: 0, today: 0, urgent: 0, done: 0, total: 0 }
 

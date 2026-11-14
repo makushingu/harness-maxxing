@@ -169,7 +169,7 @@ on its first message. A title you typed, a Telegram thread you named, or a renam
 **Steer while Claude works.** A message sent during a turn waits in the queue above the composer.
 Click **Steer** (in the waiting-messages card) to use it immediately: the current turn is interrupted, Claude keeps everything
 it has done so far (same conversation) and continues the task taking your new message into account. Commands and
-sub-agents it started in the background keep running. Once Claude has answered and only background work runs (a dev server, a watch), a new message no longer waits: it goes to Claude at once, the background work still running. Several queued messages are sent together. **Edit** puts the waiting messages back into the composer at once
+sub-agents it started in the background keep running. Once Claude has answered and only background work runs (a dev server, a watch), a new message no longer waits: it goes to Claude at once, the background work still running (it only stops when the message cannot go to the same Claude: the model, Plan mode or the permissions of the session changed meanwhile, or the message names an MCP server that was not loaded; a line in the conversation says so). Several queued messages are sent together. **Edit** puts the waiting messages back into the composer at once
 (attachments included) so you can change them before sending again; if one of them started meanwhile, only the
 others stay in the composer. The **×** of the card empties the queue at once too (it comes back if the server
 refuses). **Stop** still cancels the turn
@@ -222,8 +222,8 @@ into another app, the content arrives as plain text (a file as its path).
 - **Agents and background commands**: when Claude hands work to a sub-agent, or runs a command in the background,
   its card keeps spinning, with the time it has been running, until that work really ends (✓ done, ✗ failed, ⊘
   stopped or interrupted). Expand it for where it is: its last action, the tools and tokens used so far, then the
-  agent's report once it is done. While some still run, a pill above the composer says so (**2 agents running**):
-  click it to list them, click one to jump to its card. All of it comes back as it was after a reload or a lost
+  agent's report once it is done. While some still run, the last line of the conversation says so (**2 subagents
+  running**, or **· 2 subagents** after what Claude is doing): click it to list them, click one to jump to its card. All of it comes back as it was after a reload or a lost
   connection.
 - **Diagrams**: to explain how something works, Claude can draw a small diagram (a flowchart, a sequence, the
   states of something...) right in the answer. Click it to open it in the file viewer like a picture (zoom,

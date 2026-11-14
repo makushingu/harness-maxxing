@@ -160,7 +160,7 @@ export default function SettingsPage() {
                         to={`/settings/${s.id}`}
                         className={({ isActive }) =>
                           cn(
-                            'relative flex h-9 pointer-coarse:h-10 items-center gap-2.5 rounded-md px-2.5 text-sm text-muted-foreground outline-none transition-colors hover:bg-accent/50 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
+                            'relative flex h-9 pointer-coarse:h-10 items-center gap-2.5 rounded-md px-2.5 text-sm text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
                             isActive && 'font-medium text-foreground hover:bg-transparent',
                           )
                         }

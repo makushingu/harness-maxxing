@@ -76,7 +76,7 @@ export function TestResult({ test, className }: { test: BrowserExitTest | null |
     )
   const kindTone = test.kind === 'hosting' ? 'warning' : 'success'
   return (
-    <div className={cn('grid gap-1.5 rounded-lg border bg-card/60 p-3 text-[13px]', className)} data-testid="browser-test-result">
+    <div className={cn('grid gap-1.5 rounded-lg border bg-card p-3 text-[13px]', className)} data-testid="browser-test-result">
       <div className="flex flex-wrap items-center gap-2">
         <span className="font-mono">{test.ip}</span>
         {test.kind && <Badge variant={kindTone}>{t(`browser.test.kind.${test.kind}`)}</Badge>}
@@ -319,7 +319,7 @@ function TailscaleWizard({ exit }: { exit: BrowserExit }) {
               </div>
             )}
             {step === 3 && (
-              <span className="mt-1 inline-flex items-center gap-2 rounded-md border bg-card/60 px-2.5 py-1.5 text-muted-foreground">
+              <span className="mt-1 inline-flex items-center gap-2 rounded-md border bg-card px-2.5 py-1.5 text-muted-foreground">
                 <span className="size-1.5 animate-pulse rounded-full bg-warning" /> {t('browser.ts.waitingPhone')}
               </span>
             )}

@@ -58,10 +58,14 @@ export function mentionRows(q: string, targets: MentionTarget[], t: ReturnType<t
   return out
 }
 
+/** "@Lea" written as a whole name: "@Leah" (the name completed by hand) is not a mention of Lea. */
+const written = (text: string, label: string) =>
+  new RegExp(`@${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}\\p{N}_-])`, 'u').test(text)
+
 /** The mentions still written in the text when it is sent (a name deleted by hand is no longer one). */
 export function usedMentions(text: string, picked: MentionTarget[]): Mention[] {
   const seen = new Set<string>()
   return picked
-    .filter((x) => text.includes(`@${x.label}`) && !seen.has(`${x.kind}:${x.ref}`) && !!seen.add(`${x.kind}:${x.ref}`))
+    .filter((x) => written(text, x.label) && !seen.has(`${x.kind}:${x.ref}`) && !!seen.add(`${x.kind}:${x.ref}`))
     .map((x) => ({ kind: x.kind, ref: x.ref }))
 }

@@ -79,7 +79,7 @@ function Bar({ session }: { session: Session }) {
       ))}
       {down && <ExitDown session={session.id} exitId={down.exit} name={exitName(down.exit, st?.exits, t)} resume={down.resume} />}
       {line && !waiting.length && (
-        <div className="flex min-w-0 items-center gap-2 rounded-lg border bg-card/60 py-1 pr-1 pl-2.5 text-[13px]">
+        <div className="flex min-w-0 items-center gap-2 rounded-lg border bg-card py-1 pr-1 pl-2.5 text-[13px]">
           <Globe className={cn('size-3.5 shrink-0 text-primary', using && 'animate-pulse')} />
           <span className="min-w-0 flex-1 truncate">
             <span className="font-medium">{using ? t('browser.bar.on') : t('browser.bar.tabs', { count: tabs.length })}</span>{' '}

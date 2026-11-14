@@ -13,7 +13,8 @@ router = APIRouter(prefix="/api/memory", tags=["memory"], dependencies=[Depends(
 
 @router.get("")
 async def get_memory():
-    return {"max_lines": memory.max_lines(), "files": await asyncio.to_thread(memory.files)}
+    limit = memory.max_lines()
+    return {"max_lines": limit, "max_bytes": memory.max_bytes(limit), "files": await asyncio.to_thread(memory.files)}
 
 
 @router.post("/compact")

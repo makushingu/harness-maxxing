@@ -332,7 +332,7 @@ export function CommandPalette() {
         <DialogPrimitive.Content
           aria-describedby={undefined}
           className={cn(
-            'fixed z-50 flex flex-col overflow-hidden border bg-popover text-popover-foreground shadow-pop outline-none',
+            'mx-glass fixed z-50 flex flex-col overflow-hidden border bg-popover text-popover-foreground shadow-pop outline-none',
             'inset-x-0 top-0 h-[100dvh] pt-[var(--safe-top)] data-[state=open]:animate-overlay-in',
             'md:inset-x-auto md:top-[12vh] md:left-1/2 md:h-auto md:max-h-[min(560px,76vh)] md:w-[640px] md:-translate-x-1/2 md:rounded-xl md:pt-0 md:data-[state=open]:animate-in',
           )}

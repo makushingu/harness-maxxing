@@ -20,12 +20,12 @@ export function SettingsCard({ title, description, actions, children, className,
   )
 }
 
-/** The cards of a section; they rise in one after the other when the section opens (`.mx-rise`, 28 ms apart, the last from the 5th). */
+/** The cards of a section; they rise in one after the other when the section opens, after its title (`.mx-rise`, 28 ms apart, the last from the 5th). */
 export function SectionStack({ children }: { children: React.ReactNode }) {
   return (
     <div className="grid grid-cols-1 gap-6">
       {React.Children.toArray(children).map((child, i) => (
-        <div key={React.isValidElement(child) && child.key != null ? child.key : i} className="mx-rise min-w-0" style={{ '--i': Math.min(i, 4) } as React.CSSProperties}>
+        <div key={React.isValidElement(child) && child.key != null ? child.key : i} className="mx-rise min-w-0" style={{ '--i': Math.min(i + 1, 5) } as React.CSSProperties}>
           {child}
         </div>
       ))}

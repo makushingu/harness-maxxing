@@ -10,6 +10,8 @@ export type Theme = 'dark' | 'light' | 'system'
 export type Density = 'comfortable' | 'compact'
 /** Background: neutral greys, or a shade of the accent color. */
 export type Tint = 'neutral' | 'tinted'
+/** Material of the bars and floating layers: solid colors, or translucent glass over a wallpaper of the accent. */
+export type Material = 'solid' | 'glass'
 /** Layout of this device: auto (touch screens and narrow windows get the touch layout), always touch, or the
  *  desktop layout whenever the window is wide enough. */
 export type Layout = 'auto' | 'touch' | 'desktop'
@@ -31,6 +33,7 @@ type UIState = {
   accent: Accent
   density: Density
   tint: Tint
+  material: Material
   /** Interface and code fonts (this browser). */
   font: SansFont
   monoFont: MonoFont
@@ -76,6 +79,7 @@ type UIState = {
   setAccent: (a: Accent) => void
   setDensity: (d: Density) => void
   setTint: (t: Tint) => void
+  setMaterial: (m: Material) => void
   setFont: (f: SansFont) => void
   setMonoFont: (f: MonoFont) => void
   setLanguage: (l: Language) => void
@@ -106,6 +110,7 @@ export const useUI = create<UIState>()(
       accent: 'blue',
       density: 'comfortable',
       tint: 'neutral',
+      material: 'solid',
       font: 'inter',
       monoFont: 'system',
       language: initialLang(),
@@ -133,6 +138,7 @@ export const useUI = create<UIState>()(
       setAccent: (accent) => set({ accent, lookChosen: true }),
       setDensity: (density) => set({ density }),
       setTint: (tint) => set({ tint, lookChosen: true }),
+      setMaterial: (material) => set({ material }),
       setFont: (font) => set({ font }),
       setMonoFont: (monoFont) => set({ monoFont }),
       setLanguage: (language) => set({ language }),
@@ -167,6 +173,7 @@ export const useUI = create<UIState>()(
         if (!ACCENTS.includes(out.accent)) out.accent = 'blue'
         if (!(out.font in SANS_FONTS)) out.font = 'inter'
         if (out.tint !== 'tinted') out.tint = 'neutral'
+        if (out.material !== 'glass') out.material = 'solid'
         if (!(out.monoFont in MONO_FONTS)) out.monoFont = 'system'
         if (out.layout !== 'touch' && out.layout !== 'desktop') out.layout = 'auto'
         out.sidebarWidth = typeof out.sidebarWidth === 'number' && Number.isFinite(out.sidebarWidth) ? clampSidebar(out.sidebarWidth) : null
@@ -200,6 +207,7 @@ export function bindUIToDocument() {
     r.dataset.accent = s.accent
     r.dataset.density = s.density
     r.dataset.tint = s.tint
+    r.dataset.material = s.material
     r.lang = s.language
     applyFavicon(s.accent)
     applyFonts(s.font, s.monoFont)

@@ -24,10 +24,25 @@ def test_no_browser_dialogs():
     assert not bad, f"window.confirm/alert/prompt in {bad}: use confirm() of ui/alert-dialog or a toast"
 
 
+def _glass_free(p: Path) -> str:
+    """The code minus the rules of the opt-in Glass material (globals.css `html[data-material='glass'] …{…}`)."""
+    s = _code(p)
+    if p.name == "globals.css":
+        s = re.sub(r"html\[data-material='glass'\][^{]*\{[^}]*\}", "", s)
+    return s
+
+
 def test_no_backdrop_blur():
     bad = [
         str(p.relative_to(SRC))
         for p in FILES
-        if not p.as_posix().endswith(BLUR_EXEMPT) and re.search(r"backdrop-(?:blur|filter)", _code(p))
+        if not p.as_posix().endswith(BLUR_EXEMPT) and re.search(r"backdrop-(?:blur|filter)", _glass_free(p))
     ]
-    assert not bad, f"backdrop blur in {bad}: use a near-opaque background"
+    assert not bad, f"backdrop blur in {bad}: use a near-opaque background (blur only in the Glass material rules)"
+
+
+def test_fills_come_from_the_scale():
+    """DESIGN.md "Surface levels": fills are fill-1 / muted / accent / sunken, never an ad hoc opacity of them."""
+    adhoc = re.compile(r"\bbg-(?:muted|accent|card)/\d+")
+    bad = sorted({str(p.relative_to(SRC)) for p in FILES if p.suffix == ".tsx" and adhoc.search(_code(p))})
+    assert not bad, f"ad hoc fills (bg-muted/NN, bg-accent/NN, bg-card/NN) in {bad}: use bg-fill-1, bg-muted, bg-accent or bg-sunken"

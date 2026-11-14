@@ -10,15 +10,21 @@ is the expected outcome.
 
 ## Procedure
 1. Run `maxxing memory`: it lists every memory file (`memory.md`, `projects/*/memory.md`,
-   `projects/*/topics/*/memory.md`, `projects/*/topics/*/agents/*/memory.md`) with its line count, and the **line limit** set in
-   Settings -> Memory (default 200; `none` = no limit). A limit given in the prompt wins.
+   `projects/*/topics/*/memory.md`, `projects/*/topics/*/agents/*/memory.md`) with its line count and weight, and the
+   **limit** set in Settings -> Memory (default 200 lines and 20 KB, 1 KB for 10 lines; `none` = no limit). A limit
+   given in the prompt wins.
 2. Compact a file **only if** at least one is true:
-   - it has more lines than the limit (or, without a limit, larger than ~20 KB or ~400 lines);
+   - it has more lines than the limit **or is heavier** (`<- too heavy`: few lines but very long bullets; without a
+     limit, larger than ~20 KB or ~400 lines). Weight matters as much as lines: a memory file is loaded by every
+     session of its folder and sent to Claude again in full each time it changes;
    - facts contradict each other (keep the most recent);
    - duplicates or near-duplicates;
    - clearly outdated content (finished work long ago, old states superseded by newer ones).
 3. When compacting:
-   - the result must fit the limit: aim for ~80 % of it so the file has room to grow;
+   - the result must fit the limit, in lines and in weight: aim for ~80 % of it so the file has room to grow;
+   - a heavy file is made of long bullets: cut each to one or two lines (the fact, the decision, the path or command
+     still in use) and drop the narrative (lists of commits, test benches, step-by-step, what was tried). When a
+     report file next to the memory already holds the detail, keep its path;
    - reorder into this structure (skip empty sections), most important first inside each:
      `# <title>` line kept as is, then `## Rules & preferences`, `## Current state`,
      `## Decisions`, `## References` (paths, URLs, commands), `## Context` (summarised history);
@@ -29,7 +35,7 @@ is the expected outcome.
    - **never remove**: what is needed to understand the project, the user's preferences and rules,
      structural decisions, conventions, paths/URLs still in use.
 4. Nothing to do -> change nothing.
-5. End with one line per file changed (`projects/acme/memory.md: 412 -> 160 lines, merged 8 duplicates`)
+5. End with one line per file changed (`projects/acme/memory.md: 412 -> 160 lines, 61 -> 14 KB, merged 8 duplicates`)
    or `nothing to compact`.
 
 ## Safety

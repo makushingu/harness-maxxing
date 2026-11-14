@@ -32,7 +32,7 @@ export function AgentBrowserCard({ path, who, title }: { path: string; who: stri
     <section className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2" data-testid="agent-browser-card">
       <h3 className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">{title}</h3>
       <button type="button" onClick={() => setWin(true)} className="group grid min-w-0 overflow-hidden rounded-lg border bg-card text-left hover:border-primary/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
-        <div className="relative grid aspect-[16/10] place-items-center overflow-hidden bg-muted/40">
+        <div className="relative grid aspect-[16/10] place-items-center overflow-hidden bg-fill-1">
           {running && src ? (
             <img src={src} alt={tab?.title || t('browser.page')} className="size-full object-cover object-top" draggable={false} />
           ) : running ? (

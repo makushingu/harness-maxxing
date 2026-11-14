@@ -109,7 +109,7 @@ export function FeedItem({ ev, compact, roomy }: { ev: FeedEvent; compact?: bool
   )
   return (
     <div {...ctx.props}
-      className={cn('group/ev relative flex hover:bg-accent/50', roomy ? 'gap-3 px-4 py-3' : 'gap-2.5 rounded-lg px-2.5 py-2', !ev.read && 'bg-primary/[0.04]')}
+      className={cn('group/ev relative flex hover:bg-muted', roomy ? 'gap-3 px-4 py-3' : 'gap-2.5 rounded-lg px-2.5 py-2', !ev.read && 'bg-primary/[0.04]')}
       data-testid="feed-item"
       data-level={ev.level}
     >
@@ -222,7 +222,7 @@ export function FeedPanel({ className }: { className?: string }) {
           data.events.map((ev) => <FeedItem key={ev.id} ev={ev} compact />)
         )}
       </div>
-      <button type="button" onClick={() => navigate('/feed')} className="h-10 shrink-0 border-t text-[13px] font-medium text-muted-foreground hover:bg-accent/50 hover:text-foreground">
+      <button type="button" onClick={() => navigate('/feed')} className="h-10 shrink-0 border-t text-[13px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground">
         {t('feed.seeAll')}
       </button>
     </aside>

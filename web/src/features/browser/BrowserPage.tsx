@@ -122,7 +122,7 @@ function Live({ nav, pid, st, session }: { nav: Pick<BrowserNavigator, 'id' | 'k
             />
           </span>
         ) : (
-          <Link to={`/browser?profile=${encodeURIComponent(pid)}`} title={t('browser.nav.signinsTitle')} className="inline-flex h-6 max-w-56 items-center truncate rounded-full border px-2 text-[12px] hover:bg-accent/50" data-testid="browser-nav-profile">
+          <Link to={`/browser?profile=${encodeURIComponent(pid)}`} title={t('browser.nav.signinsTitle')} className="inline-flex h-6 max-w-56 items-center truncate rounded-full border px-2 text-[12px] hover:bg-accent" data-testid="browser-nav-profile">
             {t('browser.nav.signins', { name: profileName(row || { id: pid, name: '' }, t) })}
           </Link>
         )}
@@ -145,11 +145,11 @@ function SideList({ navId, pid, exitId, onAddProfile }: { navId: string | null; 
   const heading = (text: string) => <h3 className="px-2.5 pb-1 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">{text}</h3>
   const add = (label: string, testid: string, active: boolean, onClick?: () => void, to?: string) =>
     to ? (
-      <Link to={to} className={cn('mt-0.5 inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[13px] text-primary hover:bg-accent/50', active && 'bg-accent')} data-testid={testid}>
+      <Link to={to} className={cn('mt-0.5 inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[13px] text-primary hover:bg-accent', active && 'bg-accent')} data-testid={testid}>
         <Plus className="size-3.5" /> {label}
       </Link>
     ) : (
-      <button type="button" onClick={onClick} className="mt-0.5 inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-left text-[13px] text-primary hover:bg-accent/50" data-testid={testid}>
+      <button type="button" onClick={onClick} className="mt-0.5 inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-left text-[13px] text-primary hover:bg-accent" data-testid={testid}>
         <Plus className="size-3.5" /> {label}
       </button>
     )
@@ -203,7 +203,7 @@ function SideList({ navId, pid, exitId, onAddProfile }: { navId: string | null; 
 
 function Row({ to, active, tone, title, right, testid, children }: { to: string; active: boolean; tone: string; title: string; right?: string; testid?: string; children: React.ReactNode }) {
   return (
-    <Link to={to} aria-current={active ? 'page' : undefined} className={cn('grid grid-cols-[0.5rem_minmax(0,1fr)_auto] items-start gap-x-2.5 rounded-md px-2.5 py-1.5 hover:bg-accent/50', active && 'bg-accent')} data-testid={testid}>
+    <Link to={to} aria-current={active ? 'page' : undefined} className={cn('grid grid-cols-[0.5rem_minmax(0,1fr)_auto] items-start gap-x-2.5 rounded-md px-2.5 py-1.5 hover:bg-accent', active && 'bg-accent')} data-testid={testid}>
       <span className={cn('mt-1.5 size-2 rounded-full', tone)} />
       <span className="grid min-w-0">
         <span className="truncate text-[13px] font-medium">{title}</span>

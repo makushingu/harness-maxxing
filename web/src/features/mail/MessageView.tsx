@@ -216,7 +216,7 @@ export function MessageView({ acc, folder, uid, folders, currentRole, onBack, on
                     target={viewable ? '_blank' : undefined}
                     rel="noopener noreferrer"
                     download={viewable ? undefined : clean(a.filename) || 'attachment'}
-                    className="flex max-w-64 items-center gap-2 rounded-lg border bg-card px-2.5 py-1.5 text-xs hover:bg-accent/60 pointer-coarse:min-h-10"
+                    className="flex max-w-64 items-center gap-2 rounded-lg border bg-card px-2.5 py-1.5 text-xs hover:bg-muted pointer-coarse:min-h-10"
                   >
                     <Paperclip className="size-3.5 shrink-0 text-muted-foreground" />
                     <span className="min-w-0 truncate" title={presenting ? undefined : clean(a.filename)}>
@@ -231,7 +231,7 @@ export function MessageView({ acc, folder, uid, folders, currentRole, onBack, on
           )}
           {!!m.attachments_more && <p className="text-xs text-muted-foreground">{t('mail.msg.moreParts', { count: m.attachments_more })}</p>}
           {m.html && m.remote_images && !images && (
-            <div className="flex items-center gap-2 rounded-lg bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
+            <div className="flex items-center gap-2 rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">
               <ImageOff className="size-4 shrink-0" />
               <span className="flex-1">{t('mail.msg.imagesBlocked')}</span>
               <Button size="sm" variant="outline" onClick={() => setImages(true)}>

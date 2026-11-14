@@ -4,7 +4,7 @@
 import * as React from 'react'
 import { FileText, Image as ImageIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import type { FileKind } from './kinds'
+import { isSheets, type FileKind } from './kinds'
 
 function Bone({ className, style }: { className?: string; style?: React.CSSProperties }) {
   return <div className={cn('rounded-[4px] bg-muted-foreground/15', className)} style={style} />
@@ -66,12 +66,12 @@ export function ProseSkeleton({ className }: { className?: string }) {
   )
 }
 
-function TableSkeleton() {
+export function TableSkeleton() {
   const cols = [22, 34, 18, 26]
   return (
     <Wait className="overflow-hidden p-4" label="table">
       <div className="overflow-hidden rounded-lg border">
-        <div className="flex gap-4 border-b bg-muted/40 px-3 py-2.5">
+        <div className="flex gap-4 border-b bg-muted px-3 py-2.5">
           {cols.map((w, i) => (
             <Bone key={i} className="h-3 bg-muted-foreground/20" style={{ width: `${w}%` }} />
           ))}
@@ -101,9 +101,9 @@ function PictureSkeleton() {
   )
 }
 
-function PageSkeleton() {
+export function PageSkeleton() {
   return (
-    <Wait className="flex items-start justify-center overflow-hidden bg-muted/40 p-4 [container-type:size] md:p-6" label="pdf">
+    <Wait className="flex items-start justify-center overflow-hidden bg-muted p-4 [container-type:size] md:p-6" label="pdf">
       <div
         className="grid content-start gap-2.5 rounded-sm border bg-card p-[7%] shadow-pop"
         style={{ width: 'min(34rem, 100cqw, calc((100cqh - 1rem) / 1.414))', aspectRatio: '1 / 1.414' }}
@@ -155,7 +155,7 @@ export function MediaSkeleton({ kind }: { kind: 'video' | 'audio' }) {
 }
 
 /** The loader of a file of this kind (`preview` = its rendered view: a page of Markdown, a table of a CSV). */
-export function FileSkeleton({ kind, preview = true }: { kind: FileKind; preview?: boolean }) {
+export function FileSkeleton({ kind, preview = true, name = '' }: { kind: FileKind; preview?: boolean; name?: string }) {
   switch (kind) {
     case 'image':
       return <PictureSkeleton />
@@ -172,6 +172,8 @@ export function FileSkeleton({ kind, preview = true }: { kind: FileKind; preview
     case 'code':
     case 'text':
       return <CodeSkeleton />
+    case 'document':
+      return isSheets(name) ? <TableSkeleton /> : <ProseSkeleton />
     default:
       return <CardSkeleton />
   }

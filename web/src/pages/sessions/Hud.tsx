@@ -189,7 +189,7 @@ function MediaStrip({ paths, onOpen }: { paths: string[]; onOpen: (path: string)
   if (!p) return null
   const n = paths.length
   return (
-    <div className="relative mb-2 overflow-hidden rounded-lg border bg-muted/40 animate-in">
+    <div className="relative mb-2 overflow-hidden rounded-lg border bg-muted animate-in">
       <button type="button" onClick={() => onOpen(p)} className="block w-full focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none" title={t('hud.openFile')}>
         <Thumb key={p} path={p} w={1040} alt={baseName(p)} className="mx-auto max-h-56 w-auto object-contain animate-in" />
         {isVideo(p) && (
