@@ -214,7 +214,8 @@ function SideList({ navId, pid, exitId, onNewNav }: { navId: string | null; pid:
   const navRow = (n: BrowserNavigator) => {
     const p = profileOf(n.profile)
     const tone = !n.profile ? 'bg-destructive' : n.running && n.awake ? 'bg-success' : 'bg-muted-foreground/50'
-    const what = n.page?.title || (n.page?.url && n.page.url !== 'about:blank' ? n.page.url : '')
+    const blank = !n.page?.url || n.page.url === 'about:blank'
+    const what = blank ? '' : n.page?.title || n.page?.url || ''
     return (
       <Row key={n.id} to={`/browser?nav=${encodeURIComponent(n.id)}`} active={navId === n.id} tone={tone} title={navName(n, t)} right={n.turns ? t('browser.nav.acting') : n.running && n.awake ? t('browser.tabsAwake', { count: n.awake }) : ''} testid="browser-side-nav">
         {[p ? profileName(p, t) : t('browser.nav.noProfile'), what || (n.running && n.awake ? '' : t('browser.asleepShort'))].filter(Boolean).join(' · ')}

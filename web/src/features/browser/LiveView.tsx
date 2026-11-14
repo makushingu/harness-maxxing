@@ -666,10 +666,16 @@ export function LiveView({ profile, nav, session, who, start, onMinimize, classN
 /** One tab: its title, asleep or not, a dot when Claude (a session or an agent) opened it. */
 function TabButton({ tab, onShow, onClose }: { tab: BrowserTab; onShow: () => void; onClose: () => void }) {
   const t = useT()
+  const el = React.useRef<HTMLDivElement>(null)
+  // the tab shown stays in sight (a new one is added at the end of a long row)
+  React.useEffect(() => {
+    if (tab.front) el.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  }, [tab.front])
   const label = tab.title || (tab.url && tab.url !== 'about:blank' ? tab.url : t('browser.newTab'))
   const by = tab.by.kind === 'agent' ? t('browser.by.agent', { name: tab.by.name || '' }) : tab.by.kind === 'session' ? t('browser.by.session') : t('browser.by.you')
   return (
     <div
+      ref={el}
       role="tab"
       aria-selected={tab.front}
       className={cn(
