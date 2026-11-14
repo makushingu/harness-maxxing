@@ -40,6 +40,10 @@ def repo(org):
     (r / "new.txt").write_text("u")
     (root / "node_modules" / "dep").mkdir(parents=True)          # pruned
     _git(root / "node_modules" / "dep", "init", "-q")
+    (root / "work" / "tmp" / "try").mkdir(parents=True)          # a throwaway place: found, not listed
+    _git(root / "work" / "tmp" / "try", "init", "-q")
+    (root / "cache").mkdir()                                     # an empty .git file (uv's cache): a marker, not a repository
+    (root / "cache" / ".git").write_text("")
     return r
 
 
@@ -47,6 +51,8 @@ def test_local_overview_graph_commit(client, org, repo):
     ov = client.get("/api/git/repos").json()
     assert ov["github"]["connected"] is False
     assert [r["path"] for r in ov["local"]] == [str(repo)]
+    from maxxing import gitview
+    assert any(r["path"].endswith("/work/tmp/try") for r in gitview.local_repos())   # still there for the other readers
     s = ov["local"][0]
     assert s["branch"] == "main" and s["changed"] == 1 and s["untracked"] == 1
     assert s["github"] == "acme/site" and "secret" not in s["remote"]
@@ -246,6 +252,27 @@ def test_remote_credentials_masked_even_with_at_sign(repo):
     _git(repo, "remote", "set-url", "origin", "https://user:p@ss@github.com/acme/site.git")
     gitview.clear_cache()
     assert gitview.summary(repo)["remote"] == "https://github.com/acme/site.git"
+
+
+def test_github_graph_reads_as_far_as_the_limit(monkeypatch):
+    """The default branch is read a page at a time up to the limit, and "more" is said while a full page came back."""
+    history = [{"sha": f"{i:040x}", "parents": [{"sha": f"{i + 1:040x}"}] if i < 249 else [],
+                "commit": {"message": f"c{i}", "author": {"name": "Ann", "date": "2026-10-01T10:00:00Z"}}} for i in range(250)]
+
+    def gh(full, path, params=None):
+        if path.endswith("/branches"):
+            return [{"name": "main", "commit": {"sha": history[0]["sha"]}}]
+        if path.endswith("/commits"):
+            per, page = params["per_page"], params.get("page", 1)
+            return history[(page - 1) * per: page * per]
+        return {"name": "site", "default_branch": "main"}
+    monkeypatch.setattr(gitview, "_gh_repo", gh)
+    g = gitview.github_graph("acme/site", 200)
+    assert len(g["commits"]) == 200 and g["truncated"] is True
+    g = gitview.github_graph("acme/site", 500)
+    assert len(g["commits"]) == 250 and g["truncated"] is False
+    g = gitview.github_graph("acme/site", 50)
+    assert len(g["commits"]) == 50 and g["truncated"] is True
 
 
 def test_github_odd_answers(org, monkeypatch):

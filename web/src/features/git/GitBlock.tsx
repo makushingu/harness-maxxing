@@ -13,7 +13,7 @@ import { errorMessage } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
 import { CodeBlock, Skeleton } from '@/components/ui'
-import { GitGraph } from './GitGraph'
+import { GitGraph, commitUrl, pushedShas } from './GitGraph'
 import { CommitDetail } from './CommitDetail'
 
 export type GitBlockSpec = { repo: string; branches: string[]; limit: number; highlight: string[] }
@@ -55,6 +55,7 @@ export function GitBlock({ code, className }: { code: string; className?: string
   const [selected, setSelected] = React.useState<string | null>(null)
   const [showCode, setShowCode] = React.useState(false)
   const highlight = React.useMemo(() => new Set(spec?.highlight || []), [spec])
+  const pushed = React.useMemo(() => (data && data.repo.kind !== 'github' ? pushedShas(data.commits) : null), [data])
 
   if (!spec || showCode) return <CodeBlock code={code} language="yaml" className={className} />
   const repo = data?.repo
@@ -114,12 +115,12 @@ export function GitBlock({ code, className }: { code: string; className?: string
         ) : data && !data.commits.length ? (
           <p className="p-2 text-[13px] text-muted-foreground">{t('git.noCommits')}</p>
         ) : data ? (
-          <GitGraph commits={data.commits} selected={selected} highlight={highlight} onSelect={(sha) => setSelected((s) => (s === sha ? null : sha))} compact github={repo?.github} onGithub={repo?.kind === 'github'} />
+          <GitGraph commits={data.commits} selected={selected} highlight={highlight} onSelect={(sha) => setSelected((s) => (s === sha ? null : sha))} compact github={repo?.github} onGithub={repo?.kind === 'github'} clones={repo?.kind === 'local' && repo.path ? [repo.path] : undefined} />
         ) : null}
       </div>
       {selected && data && (
         <div className="border-t p-2">
-          <CommitDetail repo={data.repo.id} sha={selected} className="border-0 bg-transparent p-1" />
+          <CommitDetail repo={data.repo.id} sha={selected} url={commitUrl(selected, data.repo.github, pushed)} className="border-0 bg-transparent p-1" />
         </div>
       )}
       {data?.truncated && <p className="border-t px-3 py-1.5 text-xs text-muted-foreground">{t('git.truncated', { count: data.commits.length })}</p>}

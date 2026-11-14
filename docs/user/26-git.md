@@ -41,6 +41,12 @@ opens that branch or commit on github.com in a new tab, **Copy the GitHub link**
 copies the branch name or the commit SHA. A branch or commit of a clone opens once it is pushed to `origin` on GitHub
 (before that the item says "not on GitHub yet"); a graph read from GitHub opens everything.
 
+The same menu starts with **New session…**, and so does the menu of a repository in the list of the Git page (right
+click, long press on a phone): choose the project and topic, and a session opens there with what you clicked already
+typed in its message box - the repository, where it is cloned on the server (or that it is not), the branch or the
+commit. Nothing is sent yet: write what Claude should do, then send. The topic proposed is the one the clone is in,
+else the one you chose last time.
+
 The repository must be inside the files root (`/root` by default): the same folders the Files page shows.
 
 ## The Git page
@@ -48,18 +54,21 @@ The repository must be inside the files root (`/root` by default): the same fold
 **Git** in the sidebar (shortcut `G` then `B`), once **Git** is turned on in **Settings -> Features**
 (off by default, offered in Settings -> Keys as soon as a GitHub key is there; the graphs in conversations work either way).
 
-- **On this server**: every git repository found under the files root, once (folders like `node_modules` are
-  skipped), with the commits not pushed yet (↑) or not pulled (↓), the changed files, its last commit and its
-  GitHub repository. Branches are not listed here: they are in the repository's graph (a card only names the
-  checked-out branch when it is not `main`/`master`, or says *detached*). The extra working folders
-  of a clone (`git worktree add`, one folder per branch) are not shown as repositories of their own: the clone says
-  how many it has (*+3 worktrees*).
-- **GitHub**: every repository of your account (yours, your organisations', the ones you collaborate on) with
-  your right on it (admin, maintain, write, triage, read), private or public, and "cloned here" when the server
-  has a copy.
+- **The list on the left** names the repositories one after the other, under **On this server** and under each
+  GitHub account: click one to open it (the marks on its line: ↑ commits to push, ↓ to pull, a pencil for changed
+  files, a lock for private, a server when it is cloned here). The search of the list filters them, a click on
+  **On this server** or on an account folds its repositories, and the button at the top of the list reads them
+  again. Nothing is shown beside the list until you pick a repository.
+- **On this server**: every git repository found under the files root, once (folders like `node_modules`, `tmp`
+  or `scratch` are skipped: a trial clone is not a project), with the commits not pushed yet (↑) or not pulled (↓)
+  and the changed files. Branches are not listed here: they are in the repository's graph. The extra working
+  folders of a clone (`git worktree add`, one folder per branch) are not shown as repositories of their own.
+- **GitHub**: every repository of your account (yours, your organisations', the ones you collaborate on),
+  private ones with a lock, and "cloned here" when the server has a copy; your right on it (admin, maintain,
+  write, triage, read) is at the top of the repository once it is open.
 - Click a repository: the graph of its branches and commits (the 200 most recent, **Show more** for up to 1,000),
   the details of a commit (in a sheet from the bottom on a phone or a tablet), and for GitHub the open pull
-  requests. A clone linked to GitHub has a button to switch between the server's copy and GitHub (which shows every
+  requests. The short id at the end of a line is a link to the commit on GitHub, when it is there. A clone linked to GitHub has a button to switch between the server's copy and GitHub (which shows every
   branch, even those not fetched on the server). With many branches, the lines of the graph squeeze on a narrow
   screen and long branch names end with "…" (full name on hover).
 
