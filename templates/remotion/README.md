@@ -7,3 +7,4 @@ Chromium (the one Scrapling and PDFs use), so no second browser is downloaded.
     npm install --prefer-offline --no-audit --no-fund
     npm run still     # out/still.png - check a frame before rendering
     npm run render    # out/video.mp4
+    maxxing video render .    # the same with the background priority (the UI and sessions go first)

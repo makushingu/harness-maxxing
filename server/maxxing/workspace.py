@@ -406,6 +406,30 @@ def add_topic_allowed_tool(path: str, rule: str) -> list[str]:
 _allowed_lock = config.ProcessLock("topic-allowed-tools")
 
 
+def folder_browser(path: str) -> dict:
+    """The `browser` block {enabled?, profile?} of a project's or a topic's .maxxing.json ({} when none)."""
+    try:
+        raw = _folder_meta(topic_dir(path)).get("browser")
+    except ValueError:
+        return {}
+    return raw if isinstance(raw, dict) else {}
+
+
+def set_folder_browser(path: str, block: dict | None) -> None:
+    """Write (or remove, with an empty block) the `browser` block of a project's or a topic's .maxxing.json."""
+    folder = topic_dir(path)
+    meta = _folder_meta(folder)
+    if block:
+        meta["browser"] = block
+    else:
+        meta.pop("browser", None)
+    _forget(folder / META_FILE)
+    if meta:
+        config.write_json(folder / META_FILE, meta)
+    else:
+        (folder / META_FILE).unlink(missing_ok=True)
+
+
 def check_permission_mode(value: str) -> str:
     v = (value or "").strip()
     if v and v not in PERMISSION_MODES:

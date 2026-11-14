@@ -7,9 +7,9 @@ from maxxing import config
 def test_get_defaults(client, org):
     s = client.get("/api/settings").json()
     assert s == {"timezone": "UTC", "language": "en", "public_url": "", "files_root": str(org.tmp),
-                 "presentation_default": False, "usage_widget": False, "tasks_page": False, "git_page": False, "code_mode": False, "infra_page": False, "team_page": False, "agents_page": False, "mail_page": False,
+                 "presentation_default": False, "usage_widget": False, "tasks_page": False, "git_page": False, "code_mode": False, "infra_page": False, "team_page": False, "agents_page": False, "mail_page": False, "browser_feature": False,
                  "maxxing_mode": False,
-                 "memory_max_lines": 200, "result_line_hidden": [], "donation_hidden": False, "sidebar_order": []}
+                 "memory_max_lines": 200, "cpu_priorities": True, "result_line_hidden": [], "donation_hidden": False, "sidebar_order": []}
 
 
 def test_maxxing_mode_is_an_opt_in_feature(client, org):

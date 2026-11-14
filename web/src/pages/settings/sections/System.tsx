@@ -5,7 +5,8 @@ import { fmtRelative } from '@/lib/format'
 import type { ServiceAction } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { useLang, useT } from '@/i18n'
-import { Badge, Button, FormField, Input, Select, Sensitive, Skeleton, Spinner, StatusDot, confirm, toast } from '@/components/ui'
+import { Badge, Button, FormField, Input, Select, Sensitive, Skeleton, Spinner, StatusDot, Switch, confirm, toast } from '@/components/ui'
+import { SettingRow } from '@/features/common'
 import { HealthSummary } from '@/components/shell/HealthIndicator'
 import { SettingsCard, SectionStack } from './ui'
 
@@ -180,10 +181,30 @@ function AddressCard() {
   )
 }
 
+/** CPU priorities (config `cpu_priorities`): when the processor is full, the UI first, then the sessions, then the
+ *  jobs and `maxxing heavy` - weights, never caps (server/maxxing/cpu.py). */
+function CpuCard() {
+  const t = useT()
+  const { data: s } = useSettings()
+  const save = useSaveSettings()
+  return (
+    <SettingsCard>
+      {!s ? (
+        <Skeleton className="h-12" />
+      ) : (
+        <SettingRow label={t('system.cpuPriorities')} description={t('system.cpuPrioritiesDesc')} htmlFor="sys-cpu">
+          <Switch id="sys-cpu" data-testid="cpu-priorities" checked={s.cpu_priorities !== false} onCheckedChange={(v) => save.mutate({ cpu_priorities: v })} />
+        </SettingRow>
+      )}
+    </SettingsCard>
+  )
+}
+
 export function SystemSection() {
   return (
     <SectionStack>
       <HealthCard />
+      <CpuCard />
       <ServicesCard />
       <AddressCard />
       <LogsCard />

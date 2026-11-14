@@ -494,6 +494,23 @@ either a text key or a file, never both (`name_taken`; `vault.put` refuses a nam
   `""`/`infinity` = no line) = the memory budget of all jobs running at once; written only when the text changed
   (then daemon-reload); skipped without systemd and with MAXXING_SPAWN=direct. Claude jobs run their turn in a turn
   unit (outside the slice; capped by `unit_memory_max`), only the waiting `cron run` process is in the slice.
+- **CPU priorities** (`maxxing/cpu.py`, config `cpu_priorities`, default true): three slices with weights, never caps -
+  `maxxing-live.slice` (CPUWeight/IOWeight 1000: the server, via the drop-in `claude-maxxing.service.d/30-cpu-priority.conf`
+  `Slice=maxxing-live.slice`, taken at its next restart), `maxxing-turns.slice` (100: turn units, `spawn._start_unit`
+  adds `cpu.turn_slice_args()` = `--slice maxxing-turns.slice` when the setting is on and the file exists),
+  `maxxing-jobs.slice` (30: job units and `maxxing heavy`; its text = `jobs_slice_text`, MemoryMax + weights). The dash
+  makes them children of `maxxing.slice` (a sibling of system.slice: against Docker and other services the whole of
+  Harness keeps an equal share). Claude jobs' turns stay turn units (normal). `cmd_core.ensure_cpu_slices()` (every
+  `maxxing init`, and PUT /api/settings when `cpu_priorities` changes) writes the files atomically when their text
+  changed, daemon-reloads, then `systemctl set-property --runtime <slice> CPUWeight= IOWeight=` for the slices whose
+  cgroup exists; setting off = weights 100 in the same files. Doctor `cpu_priorities` (files out of date -> `maxxing
+  init`; server not yet in its slice -> info). `cpu.set_level(unit, "live"|"normal"|"background")` = runtime weight of a
+  running unit (no-op off / not root / no systemd), for the watched browser. `maxxing heavy CMD…` (`cmd_heavy.py`)
+  execs `systemd-run --scope --slice=maxxing-jobs.slice --unit=maxxing-heavy-[session-<sid8>|cron-<id>]-<pid>.scope`
+  (foreground, same output and exit code), else `nice -n 10 ionice -c3`; `maxxing video render DIR` uses it.
+  `cpu.snapshot()` (GET /api/system/cpu): PSI `some` + top 6 units (cgroup `cpu.stat` `usage_usec` deltas between
+  calls, 0.5 s sample on the first / after 30 s) named by `describe()` (sessions store, crons). Health: `cpu_pressure`,
+  `cpu_waiting` in the payload; issue `cpu_pressure` when `note_pressure` saw `avg60 >= 40` for 10 min.
 - Shell jobs: `bash -lc` in the workspace, env = os.environ + exposed vault + MAXXING_CRON_ID/NAME; exit 124 on timeout.
   Timeout (`_kill_group`): SIGTERM to the job's process group, then after `KILL_GRACE_S` (5 s) SIGKILL to the whole
   group unconditionally (bash may have exited while a child ignoring SIGTERM lives on; the group id cannot be reused
@@ -668,6 +685,96 @@ Security boundaries: `pair()` stores a `candidate` (15 min); `WS /api/pc/ws` hol
 about:blank / data. The authoritative check is in the agent (`pc-agent/cdpfilter.go`): every DevTools command is
 filtered (downloads, file inputs, drag of files, permissions, PWA / Extensions, non-page URLs). `actions.jsonl` keeps
 URLs without query / fragment / userinfo. A channel with more than 64 MB waiting for the local socket is ended.
+
+## maxxing.browser  (owner: organisation) - Harness Browser
+Chromium on this server for the user, their sessions and their agents (API.md "Harness Browser", user doc 33). Off
+unless `browser_feature`. Settings: `config.json -> browser` = the globals (`browser.DEFAULTS`), `profiles: [...]`,
+`exits: [...]` (`clean_settings`: complete and valid, `strict=True` on every save; settings of before the profiles
+become `main`; a profile's old `web` / `sites` are dropped: a profile has no site list). One profile per project (`project` field, unique;
+`project_profile(project)`, `ensure_project_profile(project)` under `_plock`: made from `main`'s exit /
+on_exit_down, named after the project; `ensure_projects_with_agents()` from `GET /api/browser`; `project_gone(p)`;
+`delete_profile` refuses a project's while its folder exists). Who may use it: `{enabled?}` in a project's / topic's
+`.maxxing.json` (`workspace.folder_browser` / `set_folder_browser`) and `{enabled?, profile?}` in agent.json
+`browser`; `browser.resolve(path, s, create=False)` = `{enabled, profile, project, from}`: `enabled` walks
+`chain(path)` (nearest wins, an agent's stops at the agent; nothing set = `SESSIONS_DEFAULT` (true) for a project /
+topic, false for an agent); `profile` = the agent's own choice when it exists, else
+the project's ("" while not made; `create` makes it). `active_for(path)` = (owner, profile, settings) when turns
+there get the tools (makes the project's profile). `agent_profile(path, block, s)` = an agent's profile from its block
+already read (`navs.agents_on(s)`: Settings -> Browser reads each agent once).
+Sites: any public site for every turn and the person, except a sandboxed agent's run (its owner's conversation is not
+sandboxed): `agent_sites(owner)` = its `domains` (`rules.clean_site`; `[]` = nothing, an unreadable agent too; None =
+any public site), read once when the turn starts (runner `browser_args` -> `turns/<sid>.json` `sites`,
+`turns.sites_of`, `Turn.sites`), checked on a tool's `url` (`Pool.call`), on every DevTools command that opens a page
+(the `/cdp` relay of its turn) and after each tool call (`Pool._keep_to`: a tab of its navigator outside them goes
+back to `about:blank`, Claude is told). A page refused for the list only (`rules.off_domains`) -> `domains.blocked`:
+a feed event (ref `browsersite:<agent>|<host>`, button `add` -> `domains.add`, once a day per agent and host). Never opened by
+anyone (`rules.page_refusal` without a list, the proxy, the Chromium policy): this server, local networks, raw IPs,
+`file:`, the browser's own pages.
+Modules:
+- `__init__` settings, profiles, owners, folders; `migrate()` (server start and every profile start): the one
+  browser's folder `profiles/harness` -> `profiles/main`, `tabs.json` -> `tabs/main.json` (only when the new one is
+  missing).
+- `exits` exits and their runtimes: `Runtime` (in memory: `state[eid] = {ok, since, error, latency_ms, at}`, last
+  `tests`, the upstream kept 20 s), a watcher (every 30 s: the exits of running profiles and of waiting turns, TCP to
+  1.1.1.1:443 through the exit); `Tailscale` = our own `tailscaled --tun=userspace-networking
+  --socks5-server=127.0.0.1:<port>` with state and socket in `<state>/browser/exits/<eid>/`, `tailscale up
+  --hostname=harness-browser --accept-dns=false --accept-routes=false --shields-up` (+ `--login-server`, the vault's
+  auth key, `--exit-node=<node> --exit-node-allow-lan-access=false`); `WireGuard` = `wireproxy` with the vault's config
+  + a `[Socks5]` on the loopback. Both in a unit `maxxing-bx-<install>-<eid>` (MemoryMax 256M, Restart=on-failure),
+  started when needed, kept while the server runs; binaries pinned (`TAILSCALE_VERSION`, `WIREPROXY_VERSION`, sha256
+  per arch) in `<state>/tools/`, else the system's. `test()` = ip-api.com (HTTP) through the exit + 2 MB from
+  speed.cloudflare.com (TLS).
+- `proxy` the only way out of a profile's unit: HTTP proxy on `run/<pid>/proxy.sock`; resolves every host here,
+  refuses it unless all its addresses are public, connects to the checked IP, directly or through
+  `exits.open_via(upstream, ip, port)` (SOCKS5 / HTTP CONNECT by IP: a name is never resolved behind the exit).
+  Exit down: a 502 page, the exit marked down; direct only when the profile says `on_exit_down: vps`.
+- `pool` one `Browser` per running profile (`max_active_profiles`; `_make_room` stops the one unused the longest, none
+  free -> `409 too_many_profiles`); per turn a `Turn` with its own chrome-devtools-mcp (`cdm.Child`, stopped after
+  300 s idle or with the turn); `call()` = turn file -> folder still on -> tool known -> page allowed -> `exit_ready`
+  (exit seen up < 30 s ago, else checked every 10 s up to `exit_wait_s`, then `exits.wait_down` and an error result) ->
+  start -> call (`upload_file`: `claude_file` copies a file of the turn's topic / project into `run/<pid>/uploads/`
+  with `stage`, the path given to Chromium is `/mxrun/uploads/...`; `rules.check_command` lets
+  `DOM.setFileInputFiles` through only for those). `thumb(pid, nav)` = a picture for the agent's card. `control[nav]` = the person's hand per navigator; `navigators()`
+  the list of Settings -> Browser; `move_nav` / `drop_nav` (the person's navigator changes profile / a session's is closed). `_tidy` every 15 s: dead / off / deleted /
+  idle -> stop; tabs to sleep; CPU level.
+- `unit` the profile's unit `maxxing-br-<install>-<pid>` (user `maxxing-browser`, PrivateNetwork + socat to the
+  proxy socket, MemoryMax 1536M, in `maxxing-turns.slice` when CPU priorities are on); `set_level(pid, live|background)`
+  -> `cpu.set_level` (live while someone watches it or Claude acted in the last 15 s). Chromium gets `--lang` /
+  `--accept-lang` from the interface's language and `TZ` from the Harness time zone (`unit.locale`, `unit.timezone`).
+- `navs` the navigators: `me` (the person's one, `navigators.json`: its profile; older `me-<n>` ignored),
+  `agent:<path>` (lasting), `session:<sid>` (temporary: `pool._close_sessions` in `tidy` closes its tabs once no turn,
+  person or viewer used them for `idle_min`; `replays.sessions(pid)` = the journal lines of those, from actions with a
+  `nav`); `of_turn(sid, owner)` (an agent's runs share its navigator), `profile_of(nav)`, `label(nav)`,
+  `on_profile_deleted` (the person's navigators on it go back to `main`). A tab's `nav` (tabs.py) comes from its opener,
+  else the claim of whoever asked for it (`claim` / `assign`), else `me`. One window per navigator: its first tab
+  is `Target.createTarget {newWindow}`, the next ones `window.open(url, '_blank', 'noopener')` from a page of that
+  window (an isolated world, user gesture; not from an error page or one with a dialog), else a new window
+  (`Watcher.open_tab`); `pool.create` makes them one at a time per profile (`create_lock`).
+- `live` `Watcher`: one DevTools connection per profile; one `Screen` per navigator watched (its tab shown, viewers,
+  screencast, quality). A tab shown is `Target.activateTarget`-ed (a hidden one paints nothing). A frame is
+  acknowledged to Chromium at once while every viewer of that navigator has fewer than `INFLIGHT` (3) on their way,
+  else when one is confirmed (`delivered`, from the WS `{"t":"got"}` sent on arrival; a frame replaced before it was
+  sent counts back as `secs < 0`); quality `auto` moves 30..70 by 10 (every `ADAPT_EVERY` s at most) with the
+  queueing of the slowest viewer (its trip minus its fastest trip: a far but flowing connection keeps its quality);
+  frames never larger than the viewer. It also intercepts the page's file chooser (`chooser`, files from
+  `POST /files` -> `give_files`) and its dialogs (`dialog`, answered with `{"t":"dialog"}`), copies the selection
+  (`{"t":"copy"}`), and turns what is typed in the address bar into an address or a search (`rules.address`).
+- `tabs` the tabs of a profile, `rules` (pages never opened, a list of sites, Chromium policy, `rules.json` DevTools command rules), `relay`
+  (DevTools between a client and `cdp.sock`, filtered), `view` (what a turn's tools see: only the tabs and pages of their navigator - other navigators' events dropped,
+  auto-attached foreign tabs detached at once, `Target.getTargets` filtered, commands naming a foreign target refused,
+  `Target.createTarget` made by the server in their navigator), `cdm`
+  (chrome-devtools-mcp, trimmed tool list), `asks` (`ask_human` requests: feed `human:<id>`), `replays` (journal),
+  `turns` (turn files, written by the runner).
+State under `<state>/browser/`: `profiles/<pid>/` (Chromium user data), `run/<pid>/` (proxy.sock, cdp.sock, policy.json),
+`tabs/<pid>.json`, `actions/<pid>.jsonl` (500 newest), `asks/<id>.json`, `turns/<sid>.json` + `<sid>.mcp.json`
+(0600, removed with the turn), `exit-tests.json` (the last test of each exit and of `direct`, kept through a restart; a quick test keeps the speed of the last full one), `exits/<eid>/` (0700: port, tailscaled state + socket, wireproxy.conf 0600, authkey
+0600), `waiting.json` = `[{session, owner, exit, profile, at, resume}]` (50 newest; turns stopped by a down exit:
+`browser_exit` of the session in the sessions list, cleared when the exit is back - `resume` ones get a message
+"[Harness Maxxing] The browser's exit is back online..." through `service.send_message`, source `browser`). Vault:
+`BROWSER_EXIT_<ID>` (proxy password, WireGuard config or Tailscale auth key; `expose: false`). Feed: a down exit posts
+"Browser exit offline" (source `health`, ref `browserexit:<eid>`, actions `retry` = check now, `resume` = every
+waiting turn of that exit goes on; `feed.HANDLERS["browserexit"] = browser.exits`), resolved "Back online".
+Startup (`api.browser.startup`): stop units of a previous run, clear turn files, `migrate()`, pool + exits watchers.
 
 ## maxxing.customs  (owner: core)
 - Customizations = local commits on top of `origin/<branch>` in `config.CODE` (subject `custom: <title>`, trailers

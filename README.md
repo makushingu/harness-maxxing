@@ -50,6 +50,10 @@ _Coming soon: dashboard, sessions (desktop and mobile), files, tasks, crons, onb
   agent; a daily budget, outside text kept as data, approvals (also on Telegram), Claude Code's sandbox; ready-made
   agents and Claude Code agent files (`maxxing agents`); agent groups: 2-6 agents of a project in one conversation
   with you, answering in turn and handing work over with `@name`, with a shared folder.
+- **Harness Browser** (optional) - a Chromium on your server for sites without an API, driven by Claude and watched
+  live (take over, hand back); profiles with their own sign-ins and sites, exits by a phone (Tailscale), a rented
+  proxy or WireGuard instead of the server's data-center address; Claude asks you for captchas and sign-ins
+  (`maxxing browser`).
 - **Tasks** (optional) - kanban and list on a plain `tasks.json` that Claude can edit too.
 - **Crons** - shell commands or Harness prompts on a schedule, run history, Telegram reports.
 - **Telegram** - built-in gateway: one thread per open session, the same sessions as the web UI, photos

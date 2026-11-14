@@ -34,6 +34,7 @@ import { useUI } from '@/stores/ui'
 import { enter, MaxxingDriver, promoteColumn, useMaxxing, useMaxxingEnabled } from './maxxing'
 import { MaxxingControls } from './MaxxingMeter'
 import { MobileTabsSlot, stepCol, TabsArrows, TabsBar, ViewSwitch, useSwipe } from './Tabs'
+import { openBrowserOf } from '@/features/browser/open'
 
 /** Sessions sliding to their new place (reorder, stack, layout): short, the content is heavy. */
 const FLIP_MS = 180
@@ -53,7 +54,10 @@ export default function SessionsPage() {
 
 function RedirectToSession() {
   const { id } = useParams()
-  return <Navigate to={`/sessions?session=${encodeURIComponent(id || '')}`} replace />
+  const [params] = useSearchParams()
+  // ?browser=1 (the link of a browser request): the live view opens with the session
+  const browser = params.get('browser') === '1' ? '&browser=1' : ''
+  return <Navigate to={`/sessions?session=${encodeURIComponent(id || '')}${browser}`} replace />
 }
 
 /* ---------------------------------------------------------------- main view */
@@ -128,6 +132,7 @@ function Workspace() {
           focusComposer(key)
         })
     }
+    if (sid && params.get('browser') === '1') openBrowserOf(sid)
     // A badge was clicked: the tree shows those sessions (and comes back if it was folded away).
     const show = params.get('show')
     if (show === 'running' || show === 'unread') {

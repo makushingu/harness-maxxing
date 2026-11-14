@@ -14,6 +14,7 @@ import { useSessionsUI } from '@/pages/sessions/store'
 import { useTeamUI } from '@/features/team/store'
 import { RESULT_FIELDS, useResultLine } from '@/pages/sessions/resultLine'
 import { SettingsCard, SectionStack } from './ui'
+import { BrowserFeature } from '@/features/browser/BrowserFeature'
 
 export function FeaturesSection() {
   const t = useT()
@@ -79,6 +80,8 @@ export function FeaturesSection() {
       <SettingsCard title={t('features.inSidebar')} description={t('features.pagesDesc')}>
         <FeaturePages core sub={{ '/sessions': sessionOptions, '/agents': agentsOptions, '/team': teamOptions }} />
       </SettingsCard>
+
+      <BrowserFeature link />
     </SectionStack>
   )
 }

@@ -667,6 +667,9 @@ def in_the_sandbox() -> bool:
     return not (config.STATE / "config.json").exists()
 
 
+BROWSER_OWNER_ONLY = {"set", "profile", "forget", "setup", "settings", "enable", "disable"}
+
+
 def check_cli(argv: list[str]) -> str | None:
     """Why `maxxing <argv>` is refused in an agent turn, else None."""
     words = [a for a in argv if not a.startswith("-")]
@@ -686,6 +689,10 @@ def check_cli(argv: list[str]) -> str | None:
         return (f"`maxxing agents {words[1]}` is not allowed in an agent turn: an agent never changes agents (its own "
                 "triggers, settings or role included). Say what should change in your answer; the owner applies it "
                 "from the agent page or a session.")
+    if turn["path"] and words[0] == "browser" and len(words) > 1 and words[1] in BROWSER_OWNER_ONLY:
+        return (f"`maxxing browser {words[1]}` is not allowed in an agent turn: its browser settings belong to the "
+                "owner. Say what should change in your answer (the owner's conversation asks for its browser "
+                "with `maxxing agents set <itself> browser.enabled=true`: a request the owner allows).")
     path = sandboxed_turn()
     if not path:
         return None

@@ -29,7 +29,7 @@ export const iconBtn = (active?: boolean) =>
     active && 'bg-accent text-foreground [&_svg]:text-primary [&_svg]:[stroke-width:2]',
   )
 
-type FeatureSetting = 'tasks_page' | 'git_page' | 'infra_page' | 'team_page' | 'agents_page' | 'mail_page'
+type FeatureSetting = 'tasks_page' | 'git_page' | 'infra_page' | 'team_page' | 'agents_page' | 'mail_page' | 'browser_feature'
 
 export type NavItem = {
   to: string

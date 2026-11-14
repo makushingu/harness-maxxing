@@ -1,17 +1,18 @@
 import * as React from 'react'
 import { Link } from 'react-router'
-import { AlertTriangle, Check, CheckCircle2, ChevronRight, CircleAlert, Cpu, Eye, EyeOff, HardDrive, Info, MemoryStick, Moon, Sun, Undo2 } from 'lucide-react'
-import { useFeedSettings, useHealth, useMarkHealthSeen } from '@/lib/queries'
+import { AlertTriangle, Check, CheckCircle2, ChevronRight, CircleAlert, Cpu, Eye, EyeOff, Globe, HardDrive, Info, MemoryStick, Moon, Sun, TriangleAlert, Undo2 } from 'lucide-react'
+import { useBrowserStatus, useCpu, useFeedSettings, useHealth, useMarkHealthSeen, useProfileAction, useSettings } from '@/lib/queries'
 import { fmtBytes, fmtDuration } from '@/lib/format'
 import { cn } from '@/lib/utils'
-import { useLang, useT } from '@/i18n'
-import type { Health, HealthIssue } from '@/lib/types'
+import { useLang, useT, type TKey } from '@/i18n'
+import type { CpuSnapshot, Health, HealthIssue } from '@/lib/types'
 import { resolveTheme, useUI } from '@/stores/ui'
-import { Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, ProgressBar, Sensitive, Skeleton, Tooltip } from '@/components/ui'
+import { Badge, Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, Popover, PopoverContent, PopoverTrigger, ProgressBar, Sensitive, Skeleton, Tooltip } from '@/components/ui'
 import { iconBtn } from './nav'
 import { MeterBar, MeterIcon, MeterValue, MiniMeter, type MeterTone } from './Meter'
 import { ClaudeStatus } from './UsageIndicator'
 import { useMood } from './mood'
+import { openMyBrowser } from '@/features/browser/open'
 
 /** Issues not marked as seen: the ones the dot and the count are about. */
 export function openIssues(h: Health): Health['issues'] {
@@ -121,17 +122,19 @@ export function useStatusLine() {
   return { tone, health: m.text, alert: m.level === 'error' || m.level === 'warn' ? m.level : null, issues: !!m.issues, to: m.to, figures: !!(m.vars || m.when) } as const
 }
 
-/** CPU / RAM / disk as the meters need them (null while the health loads). */
+/** CPU / RAM / disk as the meters need them (null while the health loads). The CPU is amber at least while programs
+ *  wait for the processor (`waiting`: pressure, not the figure - 99 % with nothing waiting is fine). */
 function useHealthRows() {
   const t = useT()
   const { data: h } = useHealth()
   if (!h) return null
   const mem = h.mem.total ? ((h.mem.total - h.mem.avail) / h.mem.total) * 100 : 0
+  const waiting = !!h.cpu_waiting
   return [
-    { key: 'cpu', label: t('health.cpu'), pct: h.cpu_pct, icon: Cpu },
-    { key: 'mem', label: t('health.ram'), pct: mem, icon: MemoryStick },
-    { key: 'disk', label: t('health.disk'), pct: h.disk.pct, icon: HardDrive },
-  ].map((r) => ({ ...r, tone: meterTone(r.pct) }))
+    { key: 'cpu', label: t('health.cpu'), pct: h.cpu_pct, icon: Cpu, waiting },
+    { key: 'mem', label: t('health.ram'), pct: mem, icon: MemoryStick, waiting: false },
+    { key: 'disk', label: t('health.disk'), pct: h.disk.pct, icon: HardDrive, waiting: false },
+  ].map((r) => ({ ...r, tone: meterTone(r.pct) ?? (r.waiting ? ('warn' as const) : undefined) }))
 }
 
 const alertBg = { error: 'bg-destructive/10 text-destructive', warn: 'bg-warning/10 text-warning' } as const
@@ -183,13 +186,24 @@ export function StatusBlock({ collapsed, lead, tail }: { collapsed?: boolean; /*
           <Skeleton className={collapsed ? 'h-12 w-8' : 'h-12'} />
         ) : collapsed ? (
           <>
-            {/* folded: the mini meters lead to Settings -> System, the health dot (only when something is wrong) to the problems */}
+            {/* folded: the CPU mini meter opens who takes the processor, RAM / disk lead to Settings -> System, the
+                health dot (only when something is wrong) to the problems */}
             <Tooltip content={tip} side="right">
-              <Link to="/settings/system" aria-label={metersLabel} data-testid="status-system" className={cn(link, 'grid w-11 justify-items-center gap-1.5 rounded-md py-1 hover:bg-accent')}>
-                {rows.map((r) => (
-                  <MiniMeter key={r.key} icon={r.icon} pct={r.pct} tone={r.tone} label={r.label} />
-                ))}
-              </Link>
+              <div aria-label={metersLabel} data-testid="status-system" className="grid w-11 justify-items-center gap-0.5">
+                {rows.map((r) =>
+                  r.key === 'cpu' ? (
+                    <CpuWho key={r.key} side="right">
+                      <button type="button" aria-label={`${r.label} ${pct(r.pct)} · ${t('health.cpuOpen')}`} data-testid="status-cpu" className={cn(link, 'flex w-11 justify-center rounded-md py-0.5 hover:bg-accent data-[state=open]:bg-accent')}>
+                        <MiniMeter icon={r.icon} pct={r.pct} tone={r.tone} label={r.label} />
+                      </button>
+                    </CpuWho>
+                  ) : (
+                    <Link key={r.key} to="/settings/system" aria-label={`${r.label} ${pct(r.pct)}`} className={cn(link, 'flex w-11 justify-center rounded-md py-0.5 hover:bg-accent')}>
+                      <MiniMeter icon={r.icon} pct={r.pct} tone={r.tone} label={r.label} />
+                    </Link>
+                  ),
+                )}
+              </div>
             </Tooltip>
             <span className="flex size-3 items-center justify-center">
               {s.issues ? (
@@ -237,24 +251,47 @@ export function StatusBlock({ collapsed, lead, tail }: { collapsed?: boolean; /*
                 </Link>
               )
             })()}
-            {/* CPU / RAM / disk -> Settings -> System */}
-            <Link to="/settings/system" aria-label={metersLabel} data-testid="status-system" className={cn(link, 'mx-side-reveal -mx-1.5 grid grid-cols-3 items-center gap-x-3 rounded-md px-1.5 py-1.5 hover:bg-accent')}>
-              {rows.map((r) => (
-                <span key={r.key} className="grid min-w-0 gap-1">
-                  <span className="flex min-w-0 items-center gap-1.5 text-xs">
-                    <MeterIcon icon={r.icon} tone={r.tone} />
-                    <Sensitive length={3}>
-                      <MeterValue pct={r.pct} tone={r.tone} render={pct} className="text-xs" />
-                    </Sensitive>
-                  </span>
-                  <MeterBar pct={r.pct} tone={r.tone} label={r.label} className="h-1" />
-                </span>
-              ))}
-            </Link>
+            {/* CPU -> who takes the processor (a popover); RAM / disk -> Settings -> System. While programs wait for the
+                processor the CPU says so ("waiting") instead of its figure. */}
+            <div aria-label={metersLabel} data-testid="status-system" className="mx-side-reveal -mx-1.5 grid grid-cols-3 items-center gap-x-1">
+              {rows.map((r) => {
+                const inner = (
+                  <>
+                    <span className="flex min-w-0 items-center gap-1.5 text-xs">
+                      {/* "waiting" takes the place of the icon and the figure (a third of the bar is narrow) */}
+                      {r.waiting ? (
+                        <span className="truncate text-xs font-medium text-warning">{t('health.waiting')}</span>
+                      ) : (
+                        <>
+                          <MeterIcon icon={r.icon} tone={r.tone} />
+                          <Sensitive length={3}>
+                            <MeterValue pct={r.pct} tone={r.tone} render={pct} className="text-xs" />
+                          </Sensitive>
+                        </>
+                      )}
+                    </span>
+                    <MeterBar pct={r.pct} tone={r.tone} label={r.label} className="h-1" />
+                  </>
+                )
+                const cell = cn(link, 'grid min-w-0 gap-1 rounded-md px-1.5 py-1.5 text-left hover:bg-accent')
+                return r.key === 'cpu' ? (
+                  <CpuWho key={r.key} side="top">
+                    <button type="button" aria-label={`${r.label} ${pct(r.pct)} · ${t('health.cpuOpen')}`} title={present ? undefined : t('health.cpuOpen')} data-testid="status-cpu" className={cn(cell, 'data-[state=open]:bg-accent')}>
+                      {inner}
+                    </button>
+                  </CpuWho>
+                ) : (
+                  <Link key={r.key} to="/settings/system" aria-label={`${r.label} ${pct(r.pct)}`} className={cell}>
+                    {inner}
+                  </Link>
+                )
+              })}
+            </div>
           </>
         )}
       </div>
       <ClaudeStatus collapsed={collapsed} />
+      <BrowserLine collapsed={collapsed} />
       <SidebarLook collapsed={collapsed} lead={lead} tail={tail} />
     </div>
   )
@@ -310,6 +347,100 @@ function SidebarLook({ collapsed, lead, tail }: { collapsed?: boolean; lead?: Re
   )
 }
 
+/** The Harness Browser (once on): a click opens my browser's window; while it runs, its memory and tabs; amber with a
+ *  "sleep" button when memory runs short. */
+function BrowserLine({ collapsed, className }: { collapsed?: boolean; className?: string }) {
+  const t = useT()
+  const { data: s } = useSettings()
+  const { data: st } = useBrowserStatus(!!s?.browser_feature, 30_000)
+  const action = useProfileAction()
+  const b = st?.summary
+  if (!s?.browser_feature || !b) return null
+  const warn = b.level !== 'ok'
+  const awake = b.running.reduce((n, pid) => n + (b.tabs[pid] || 0), 0)
+  const text = [
+    t('nav.browser'),
+    b.running.length > 1 ? t('browser.profilesOn', { count: b.running.length }) : '',
+    b.mem ? fmtBytes(b.mem) : '',
+    b.running.length ? t('browser.tabsAwake', { count: awake }) : '',
+  ].filter(Boolean).join(' · ')
+  return (
+    <Tooltip content={warn ? t('browser.memWarn') : collapsed ? text : null} side="right">
+      <div className={cn('flex h-8 items-center gap-2 rounded-md px-1.5 text-xs', collapsed && 'w-11 justify-center px-0', warn ? 'text-warning' : 'text-muted-foreground', className)} data-testid="sidebar-browser">
+        <button type="button" onClick={() => openMyBrowser()} className="flex min-w-0 flex-1 items-center gap-2 text-left hover:text-foreground" aria-label={text} data-testid="sidebar-browser-open">
+          {warn ? <TriangleAlert className="size-3.5 shrink-0" /> : <Globe className="size-3.5 shrink-0" />}
+          {!collapsed && <span className="truncate">{text}</span>}
+        </button>
+        {warn && !collapsed && (
+          <button type="button" className="shrink-0 underline-offset-2 hover:underline" onClick={() => b.running.forEach((pid) => action.mutate({ profile: pid, action: 'sleep' }))} data-testid="sidebar-browser-sleep">
+            {t('browser.sleepShort')}
+          </button>
+        )}
+      </div>
+    </Tooltip>
+  )
+}
+
+/** The CPU meter's window: who takes the processor now (the units using it most, with their priority), how much
+ *  programs wait for it, and the way to CPU priorities (Settings -> System). Asked every 3 s while open. */
+function CpuWho({ children, side }: { children: React.ReactElement; side: 'top' | 'right' }) {
+  const [open, setOpen] = React.useState(false)
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>{children}</PopoverTrigger>
+      <PopoverContent side={side} align="start" className="w-80" data-testid="cpu-who">
+        {open && <CpuPanel onClose={() => setOpen(false)} />}
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+const LEVEL_BADGE = { live: 'success', normal: 'secondary', background: 'muted' } as const
+
+function CpuPanel({ onClose }: { onClose: () => void }) {
+  const t = useT()
+  const lang = useLang()
+  const { data: c } = useCpu(true)
+  const pct = (n: number) => (lang === 'en' ? `${Math.round(n)}%` : `${Math.round(n)} %`)
+  const name = (u: CpuSnapshot['top'][number]) => {
+    if (u.kind === 'other') return u.name || u.unit
+    const kind = t(`cpuwho.kind.${u.kind}` as TKey)
+    return u.name && u.name !== kind ? `${kind} · ${u.name}` : kind
+  }
+  return (
+    <div className="grid gap-3">
+      <div className="grid gap-0.5">
+        <p className="text-sm font-semibold">{t('cpuwho.title')}</p>
+        {c?.pressure && <p className={cn('text-xs tabular-nums', c.waiting ? 'text-warning' : 'text-muted-foreground')}>{t('cpuwho.pressure', { pct: Math.round(c.pressure.avg10) })}</p>}
+      </div>
+      {!c ? (
+        <Skeleton className="h-24" />
+      ) : c.top.length === 0 ? (
+        <p className="text-[13px] text-muted-foreground">{t('cpuwho.empty')}</p>
+      ) : (
+        <ul className="grid gap-2.5" data-testid="cpu-who-list">
+          {c.top.map((u) => (
+            <li key={u.unit} className="grid gap-1">
+              <div className="flex min-w-0 items-center gap-2 text-[13px]">
+                <span className="min-w-0 flex-1 truncate" title={u.unit}>
+                  <Sensitive length={10}>{name(u)}</Sensitive>
+                </span>
+                {u.level !== 'other' && <Badge variant={LEVEL_BADGE[u.level]}>{t(`cpuwho.level.${u.level}` as TKey)}</Badge>}
+                <span className="w-10 shrink-0 text-right text-xs text-muted-foreground tabular-nums">{pct(u.pct)}</span>
+              </div>
+              <MeterBar pct={u.pct} tone={undefined} label={name(u)} className="h-1" />
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="text-[13px] leading-snug text-muted-foreground">{c && !c.enabled ? t('cpuwho.offHint') : c?.waiting ? t('cpuwho.waitingHint') : t('cpuwho.calm')}</p>
+      <Link to="/settings/system" onClick={onClose} className="inline-flex w-fit items-center gap-1 rounded-sm text-[13px] font-medium text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring">
+        {t('cpuwho.setting')} <ChevronRight className="size-3.5" />
+      </Link>
+    </div>
+  )
+}
+
 const dotTone = { ok: 'bg-success', warn: 'bg-warning', error: 'bg-destructive', idle: 'bg-muted-foreground/50' } as const
 
 /** The status line's dot (also alone in the folded bar): its colour fades over (500 ms) when the health changes,
@@ -334,6 +465,7 @@ const ISSUE_TO: Record<string, string> = {
   backup_never: '/settings/backup',
   backup_old: '/settings/backup',
   backup_failed: '/settings/backup',
+  cpu_pressure: '/settings/system',
 }
 
 const issueLook = {

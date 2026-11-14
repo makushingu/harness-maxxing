@@ -25,6 +25,8 @@ existing values and files are kept unless you pass a flag.
 Workspace templates (default projects `general`, `system`, `tutorial`) are copied only when
 missing, and a default project or topic you deleted is never re-created. Default jobs are created
 once each (Memory compaction, Check for updates, Morning tasks and Renewal reminder disabled).
+As root on systemd it also writes the slices of the [CPU priorities](settings-and-keys#cpu-priorities)
+(`maxxing-live.slice`, `maxxing-turns.slice`, `maxxing-jobs.slice`; the server joins its slice at its next restart).
 
 | Option | Effect |
 |---|---|
@@ -93,11 +95,20 @@ See [License](license).
 | Command | Effect |
 |---|---|
 | `maxxing video new DIR` | create a Remotion project in DIR (node_modules linked to the shared install) |
+| `maxxing video render [DIR] [--id Intro] [--out out/video.mp4]` | render a Remotion project with the background priority (through `maxxing heavy`) |
 | `maxxing video status` | Node.js, Remotion and the headless browser on this server (exit 1 if not ready) |
 | `maxxing pdf IN.html OUT.pdf` | print an HTML file or an `https://` URL to PDF (A4, backgrounds) |
 | `scrapling extract get\|fetch\|stealthy-fetch URL OUT.md` | fetch a page (HTTP / browser / stealthy browser) to Markdown, text or HTML |
 | `scrapling-python SCRIPT.py` | run a scraping script with Scrapling and its browser |
 | `bash /opt/claude-maxxing/install.sh --tools` | (re)install Node.js, Chromium, Remotion and Scrapling (= `maxxing deps update`) |
+
+## maxxing heavy
+
+| Command | Effect |
+|---|---|
+| `maxxing heavy COMMAND [ARGS…]` | run a long, CPU-hungry command (render, encode, build, compression) with the background priority: when the processor is full it goes after the interface and the sessions, and is never slowed otherwise. Same terminal, same output, same exit code. Runs in a scope of `maxxing-jobs.slice` (named after the session or job that started it); without systemd or as a normal user, under `nice -n 10` and `ionice -c3` |
+
+See [CPU priorities](settings-and-keys#cpu-priorities).
 
 ## maxxing import
 
@@ -248,6 +259,28 @@ OAuth sign-ins (state "To connect") are done in Settings -> MCP -> **Connect**. 
 | `printf %s "$PW" \| maxxing mail add ADDRESS [--imap HOST[:PORT]] [--smtp HOST[:PORT]]` | add a mailbox (password on stdin) |
 
 `ACCOUNT` = id or address (default: the first mailbox). See [E-mail](32-mail.md).
+
+## Harness Browser
+
+| Command | Purpose |
+|---|---|
+| `maxxing browser enable` / `disable` | switch the feature on or off (as Settings -> Features); `enable` installs what is missing first (root) |
+| `maxxing browser setup [--exits]` | install what it needs on this server (root): `socat`, Chromium, its user, its AppArmor profile, the browser tools; `--exits`: also Tailscale and wireproxy (exits by a phone or a box) |
+| `maxxing browser status [--json]` | feature on or off, what is missing, the settings, the profiles and their exit, the exits, requests waiting for you |
+| `maxxing browser settings [--ask \| --no-ask] [--wait MIN] [--downloads \| --no-downloads] [--idle MIN] [--tab-sleep MIN] [--max-tabs N] [--max-profiles N]` | the settings shared by every profile: ask you when stuck, how long it waits for you, downloads, a profile / a tab sleeps after, tabs awake per profile, profiles running at once |
+| `maxxing browser profile add NAME [--exit ID] [--fallback-vps]` | a new profile (its id is made from the name); `--exit`: an exit id or `direct`; `--fallback-vps`: when its exit is down, go out by the server's address instead of waiting |
+| `maxxing browser profile set ID [--name N] [--exit ID] [--fallback-vps \| --wait-exit]` | change a profile |
+| `maxxing browser profile rm ID` | delete a profile and its sign-ins (`main` cannot be deleted; an agent that had it has no browser any more) |
+| `maxxing browser exit test ID\|direct` | what the sites see through an exit (`direct` = the server): address, country, operator, kind, delay, speed; exit code 1 when it fails |
+| `maxxing browser set PATH on\|off\|inherit [--profile ID\|inherit]` | let a project (`acme`), a topic (`acme/blog`) or an agent (`acme/blog/writer`) use it, or not (`inherit` = its parent's switch, not for an agent); sessions use their project's profile (made the first time); `--profile` (an agent only): another profile, `inherit` = its project's again |
+| `maxxing browser show PATH [--json]` | what it gets (on or off, its profile) and where each is inherited from |
+| `maxxing browser forget ID` | erase a profile's sign-ins, tabs and journal |
+
+`PATH` = `<project>`, `<project>/<topic>`, `<project>/<topic>/<agent>` or the full folder. `on`, `off`, `use`,
+`profile`, `forget`, `setup` and `settings` are refused in an agent's runs. Exits are added in Settings -> Browser
+(their passwords go to Settings -> Keys).
+
+See [Harness Browser](33-browser.md).
 
 ## Memory and sessions
 

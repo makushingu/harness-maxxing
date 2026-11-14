@@ -13,6 +13,32 @@ New:
   the commit). Nothing is sent: you write what Claude should do. The topic of the clone is proposed when the
   clone is inside one, else the topic you picked last time. A repository of the list also has **Open on GitHub**
   and **Copy the GitHub link**.
+- **CPU priorities: what you watch goes first.** When the processor is full (a video render, a big build, several
+  sessions), the interface comes first, then your sessions and agents, then scheduled jobs and heavy work - which
+  slows down a little, never stops. On by default (Settings -> System); nothing changes while the processor has room.
+  Click the CPU meter at the bottom of the sidebar to see who takes the processor; it turns amber and says "waiting"
+  when programs wait for it, and a processor full for 10 minutes becomes a health alert. [Show me](#show:cpu)
+- **`maxxing heavy <command>` and `maxxing video render`.** Long renders, encodes and builds started this way run
+  with the background priority, with the same output and exit code; Remotion videos render this way.
+- **Harness Browser: a browser on your server for Claude and you.** For sites without an API, Claude opens pages,
+  clicks and fills forms in a Chromium of your server, and you watch it live, take over for a captcha or a sign-in
+  and hand back. Off until you turn it on (Settings -> Features -> Harness Browser); then every session has it (a project
+  or a topic can say no: its menu -> **Browser...**) and an agent once you turn it on in its settings. **Settings -> Browser** has **your browser** (also
+  opened from the sidebar's Browser line or Ctrl+K, in a window over any page), the **profiles** and the **connections**. **Each project has its own profile** (sign-ins, connection), made by
+  itself: its sessions and its agents share it, so you sign in once for all of them; add more profiles to keep an
+  agent apart. A profile's page shows its agents' browsers live (**Persistent**) and a journal of the browsers its
+  sessions opened (**Temporary**, closed once the session no longer uses them); an agent's info panel shows its
+  browser at the top, with its profile under it. Each browser only sees its own tabs. The **⋮** of the live view
+  changes the profile, the connection, the search engine and the picture (smooth or sharp) without leaving the page.
+  **Connections** send a profile's pages out by your phone (Tailscale), a rented proxy or a WireGuard box instead of
+  the server's data-center address, which some sites block; the eye next to a profile's connection shows the address
+  the sites see. When a connection is down, the profile waits and you get a notification - never the server's address
+  behind your back - and Claude goes on once it is back. The address bar searches (Google, DuckDuckGo or Bing) what is not an address; copy, paste, the page's messages
+  and its file buttons work from the live view; the browser speaks your language and keeps your time zone. The live
+  view keeps up with a slow connection. It opens any public site, never your server or your local network; the runs of
+  an agent in its sandbox open only its domains, the same as its commands, and a site they were refused comes as a
+  notification with **Add this domain**. An asleep browser shows a small window in its
+  project's colour. **My browser** shows its picture, its profile and its connection, and opens with a click. Ask a session to turn it on (`maxxing browser enable`) or why it has no browser: the skill `maxxing-browser` guides it. [Show me](#show:browser)
 
 Changed:
 - **Git: the repositories are in the list on the left.** The second sidebar of the Git page now lists the

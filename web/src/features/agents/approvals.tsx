@@ -4,14 +4,23 @@
 // only show the "!" (they never decide). Same cards as in a session (pages/sessions/Approvals.tsx), same route.
 import * as React from 'react'
 import { Link } from 'react-router'
-import { Check, Clock, PlayCircle, ShieldCheck, X } from 'lucide-react'
+import { Check, Clock, Globe, Hand, PlayCircle, ShieldCheck, X } from 'lucide-react'
 import { useT, type TKey } from '@/i18n'
-import { agentRunRoute, usePendingApprovals } from '@/lib/queries'
+import { agentRunRoute, useBrowserStatus, usePendingApprovals, useSettings } from '@/lib/queries'
 import type { Agent, AgentMessage, Approval } from '@/lib/types'
 import { cn } from '@/lib/utils'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Sensitive } from '@/components/ui'
+import { Button, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Sensitive } from '@/components/ui'
 import { AgentAvatarIcon } from './Avatar'
 import { ApprovalCard } from '@/pages/sessions/Approvals'
+
+const BrowserWindow = React.lazy(() => import('@/features/browser/BrowserWindow').then((m) => ({ default: m.BrowserWindow })))
+
+/** What an agent's browser waits for from the user (ask_human: a captcha, a sign-in...). */
+export function useAgentBrowserAsks(path: string) {
+  const { data: s } = useSettings()
+  const { data } = useBrowserStatus(!!s?.browser_feature)
+  return React.useMemo(() => (data?.asks || []).filter((x) => x.owner === `agent:${path}` && x.status === 'pending'), [data, path])
+}
 
 /** The requests waiting now for one agent (oldest first). */
 export function useAgentApprovals(path: string, enabled = true): Approval[] {
@@ -92,17 +101,20 @@ export function ApprovalLine({ m, decided }: { m: AgentMessage; decided?: AgentM
 export function WaitingBubble({ agent: a, className, style, children }: { agent: Agent; className?: string; style?: React.CSSProperties; children: React.ReactNode }) {
   const t = useT()
   const [open, setOpen] = React.useState(false)
+  const [win, setWin] = React.useState(false)
   const pending = useAgentApprovals(a.path, true)
-  const sid = pending[0]?.session || a.running_sessions?.[0]?.id
+  const asks = useAgentBrowserAsks(a.path)
+  const sid = pending[0]?.session || asks[0]?.session || a.running_sessions?.[0]?.id
+  const waits = pending.length + asks.length
   const stop = (e: React.SyntheticEvent) => e.stopPropagation()
   // No focus in the message box on open (no phone keyboard over the request); the desk's tooltip closes on the tap
   // (pointerdown reaches it). Answered (here, on Telegram or in the run): nothing left to show, the window closes.
   const had = React.useRef(false)
   React.useEffect(() => {
     if (!open) had.current = false
-    else if (pending.length) had.current = true
+    else if (waits) had.current = true
     else if (had.current) setOpen(false)
-  }, [open, pending.length])
+  }, [open, waits])
   return (
     <>
       <button
@@ -111,7 +123,7 @@ export function WaitingBubble({ agent: a, className, style, children }: { agent:
         // open the desk underneath.
         className={cn("relative cursor-pointer focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none pointer-coarse:before:absolute pointer-coarse:before:-inset-3 pointer-coarse:before:content-['']", className)}
         style={style}
-        onClick={(e) => (stop(e), e.currentTarget.blur(), setOpen(true))}
+        onClick={(e) => (stop(e), e.currentTarget.blur(), asks.length && !pending.length ? setWin(true) : setOpen(true))}
         onKeyDown={stop}
         draggable={false}
         aria-label={t('agents.approval.open', { name: a.display_name })}
@@ -128,23 +140,28 @@ export function WaitingBubble({ agent: a, className, style, children }: { agent:
               <AgentAvatarIcon avatar={a.avatar} size={40} />
               <div className="grid min-w-0 gap-0.5">
                 <DialogTitle className="flex items-center gap-1.5">
-                  <ShieldCheck className="size-4 shrink-0 text-warning" />
-                  <span className="truncate">{t('agents.conv.waiting', { name: a.display_name })}</span>
+                  {asks.length && !pending.length ? <Hand className="size-4 shrink-0 text-warning" /> : <ShieldCheck className="size-4 shrink-0 text-warning" />}
+                  <span className="truncate">{asks.length && !pending.length ? t('browser.agentAsks', { name: a.display_name }) : t('agents.conv.waiting', { name: a.display_name })}</span>
                 </DialogTitle>
                 <DialogDescription className="truncate">
                   {a.project} / {a.topic}
                 </DialogDescription>
               </div>
             </DialogHeader>
-            {pending.length ? (
+            {pending.length > 0 && (
               <div className="grid gap-4">
                 {pending.map((x, i) => (
                   <ApprovalCard key={x.id} approval={x} plain className={cn(i > 0 && 'border-t pt-4')} />
                 ))}
               </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">{t('agents.approval.none')}</p>
             )}
+            {/* its browser waits for the user too: its window */}
+            {asks.length > 0 && (
+              <Button variant="outline" className="w-fit" onClick={() => (setOpen(false), setWin(true))}>
+                <Globe /> {t('browser.openWindow')}
+              </Button>
+            )}
+            {!waits && <p className="text-sm text-muted-foreground">{t('agents.approval.none')}</p>}
             {sid && (
               <Link to={agentRunRoute(a.path, sid)} onClick={() => setOpen(false)} className="inline-flex w-fit items-center gap-1 text-xs text-muted-foreground hover:text-primary hover:underline pointer-coarse:min-h-10">
                 <PlayCircle className="size-3" /> {t('agents.thread.openRun')}
@@ -152,6 +169,11 @@ export function WaitingBubble({ agent: a, className, style, children }: { agent:
             )}
           </DialogContent>
         </Dialog>
+        {win && (
+          <React.Suspense fallback={null}>
+            <BrowserWindow context={a.path} profile={asks[0]?.profile} session={asks[0]?.session} who={a.display_name} open={win} onOpenChange={setWin} start />
+          </React.Suspense>
+        )}
       </span>
     </>
   )

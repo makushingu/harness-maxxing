@@ -16,8 +16,8 @@ from ..security import require_auth
 
 router = APIRouter(prefix="/api/settings", tags=["settings"], dependencies=[Depends(require_auth)])
 
-KEYS = ("timezone", "language", "public_url", "files_root", "presentation_default", "usage_widget", "tasks_page", "git_page", "infra_page", "team_page", "agents_page", "mail_page",
-        "maxxing_mode", "memory_max_lines", "result_line_hidden", "donation_hidden", "sidebar_order")
+KEYS = ("timezone", "language", "public_url", "files_root", "presentation_default", "usage_widget", "tasks_page", "git_page", "infra_page", "team_page", "agents_page", "mail_page", "browser_feature",
+        "maxxing_mode", "memory_max_lines", "cpu_priorities", "result_line_hidden", "donation_hidden", "sidebar_order")
 RESULT_FIELDS = ("model", "duration", "cost", "tokens", "cache")   # parts of the line under each answer
 _ROUTE = re.compile(r"^/(x/[a-z0-9][a-z0-9-]{0,47}|[a-z0-9-]{0,40})\Z")   # a page (/sessions) or a pinned extension page (/x/<id>)
 _URL = config.PUBLIC_URL_RE
@@ -37,9 +37,11 @@ class SettingsIn(BaseModel):
     agents_page: Optional[bool] = None
     maxxing_mode: Optional[bool] = None
     mail_page: Optional[bool] = None
+    browser_feature: Optional[bool] = None
     memory_max_lines: Optional[int] = None
     result_line_hidden: Optional[list[Literal[RESULT_FIELDS]]] = None  # type: ignore[valid-type]
     donation_hidden: Optional[bool] = None
+    cpu_priorities: Optional[bool] = None         # Settings -> System: the UI first when the processor is full
     sidebar_order: Optional[list[str]] = None     # routes of the sidebar pages, in the order the user dragged them
 
 
@@ -62,8 +64,10 @@ def current() -> dict:
             "team_page": bool(cfg.get("team_page", False)),
             "agents_page": bool(cfg.get("agents_page", False)),
             "mail_page": bool(cfg.get("mail_page", False)),
+            "browser_feature": bool(cfg.get("browser_feature", False)),
             "maxxing_mode": bool(cfg.get("maxxing_mode", False)),
             "memory_max_lines": memory.max_lines(),
+            "cpu_priorities": cfg.get("cpu_priorities", True) is not False,
             "result_line_hidden": [f for f in RESULT_FIELDS if f in hidden],
             "donation_hidden": bool(cfg.get("donation_hidden", False)),
             "sidebar_order": sidebar_order(cfg.get("sidebar_order"))}
@@ -384,5 +388,8 @@ def put_settings(body: SettingsIn):
             topics += ["crons", "tasks"]
         if "usage_widget" in changes:
             topics.append("extensions")
+        if "cpu_priorities" in changes:               # the slices' weights now (the server runs as root)
+            from .. import cmd_core
+            cmd_core.ensure_cpu_slices()
         bus.invalidate(*topics)
     return current()

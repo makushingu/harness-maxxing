@@ -461,6 +461,7 @@ class Runner:
             "timeout": _approval_timeout(agent.get("approval_timeout_s") or cfg.get("approval_timeout_s"))}
         mcp_plan = mcp_auto.plan(self.sid, cfg, meta, cwd, item.get("text") or "")   # MCP servers this turn needs
         copy = _copy_note(meta, cwd)
+        web = browser_args(self.sid, str(meta.get("path") or ""), agent) if not plan else []
         allow = [] if agent or mode != "default" else workspace_allowed(meta.get("path") or "")
         effort = str(meta.get("effort") or "").strip()
         from maxxing import pcbridge                    # not at import: the runner starts with stdlib-only modules
@@ -469,14 +470,15 @@ class Runner:
             hint = "\n\n".join(x for x in (mcp.hint, spawn.CRON_SILENT if item.get("silent_ok") else "", copy) if x)
             b = [spawn.claude_bin(), "-p", "--output-format", "stream-json", "--verbose"]
             b += spawn.permission_args(mode)[0] + spawn.settings_args(cfg, agent.get("settings"), allow)
-            b += spawn.agents_args(cfg, "\n\n".join(x for x in (agent.get("system_note"), hint) if x))
+            b += spawn.agents_args(cfg, "\n\n".join(x for x in (agent.get("system_note"), hint,
+                                                                  BROWSER_NOTE if web else "") if x))
             if not agent:                               # a topic's agents with `subagent` on: callable from its sessions
                 from maxxing import agent_format
                 b += agent_format.subagents_args(meta.get("path") or "")
             b += ["--model", model] if model else []
             b += ["--effort", effort] if effort in spawn.EFFORTS else []
             b += agent.get("args") or []
-            return b + pcbridge.mcp_config_args() + mcp.args + approval
+            return b + pcbridge.mcp_config_args() + mcp.args + approval + web
         base = argv(mcp_plan)
         env = spawn.claude_env(meta.get("env") or {}, mode, agent.get("keys") if agent else None)
         env["MAXXING_SESSION"] = self.sid               # `maxxing mcp load` run by the turn finds its session
@@ -537,6 +539,8 @@ class Runner:
                 self._write_line(line)
         if approval:                                   # nobody can use an answer any more
             approval_mcp.expire(approvals_dir(), session=self.sid)
+        if web:                                        # the browser is no longer this turn's
+            browser_done(self.sid)
         if a.saw_init:
             store.update(self.sid, fresh=False)
         if a.stopped and self.interrupted and not a.timed_out:
@@ -1317,6 +1321,54 @@ def workspace_allowed(path: str) -> list[str]:
         return workspace.topic_allowed_tools(path)
     except Exception:  # noqa: BLE001 - a broken .maxxing.json: nothing pre-allowed, it asks
         return []
+
+
+BROWSER_NOTE = ("The Harness Browser is available (mcp__maxxing-browser__* tools) for pages that need JavaScript, a "
+                "sign-in or clicks. Read pages with WebFetch, curl or an API first: they are faster and cheaper. It "
+                "is a browser of your own (this session's, or this agent's): you see only its tabs, with the "
+                "sign-ins of its profile. The user can watch it and may open tabs in it too: leave those as they "
+                "are; they see it with Watch above the message box (Regarder in French). When a page needs the user (a captcha, a sign-in, a "
+                "code), call ask_human, never ask for a password in the chat. If the browser says "
+                "its exit is offline, stop using it and say so.")
+
+
+def browser_args(sid: str, path: str, agent: dict) -> list[str]:
+    """The Harness Browser for this turn (maxxing/browser): `--mcp-config <file>` with its tools + ask_human, and
+    its tools pre-allowed (they are what the owner turned on) unless the turn asks before everything (outside text).
+    [] when the browser is off for this folder. Never raises. Mutates agent["args"] to merge --allowedTools."""
+    try:
+        from maxxing import browser
+        on = browser.active_for(path)
+        if not on:
+            return []
+        from maxxing.browser import turns
+        # a sandboxed run: only its domains (read once here); the owner's conversation and sessions: any public site
+        sites = browser.agent_sites(on[0]) if agent.get("sandbox") else None
+        args = turns.mcp_args(sid, on[0], on[1]["id"], on[2], sites)
+    except Exception:  # noqa: BLE001 - a turn must never fail because of the browser
+        return []
+    if agent.get("approvals_forced"):
+        return args
+    tool = f"mcp__{browser.MCP_NAME}"
+    extra = list(agent.get("args") or [])
+    if "--allowedTools" in extra:
+        i = extra.index("--allowedTools") + 1
+        extra[i] = f"{extra[i]},{tool}"
+        agent["args"] = extra
+        return args
+    return args + ["--allowedTools", tool]
+
+
+def browser_done(sid: str) -> None:
+    try:
+        from maxxing import browser_mcp
+        from maxxing.browser import turns
+        turns.end_turn(sid)
+        from maxxing import browser
+        if browser.asks_dir().is_dir():
+            browser_mcp.expire(browser.asks_dir(), session=sid)
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def effective_mode(meta: dict, cfg: dict) -> str:

@@ -168,7 +168,8 @@ def public(meta: dict) -> dict:
             "plan_mode": bool(m.get("plan_mode")), "plan_ready": bool(m.get("plan_ready")),
             "permission_mode": m.get("permission_mode") or "", "approvals": _approvals_waiting(m["id"]),
             "code_repos": [r for r in (m.get("code_repos") or []) if isinstance(r, str)],
-            "worktree": _worktree_public(m)}
+            "worktree": _worktree_public(m),
+            "browser_asks": _browser_waiting(m["id"]), "browser_exit": _exit_waiting(m["id"])}
 
 
 def _worktree_public(m: dict) -> dict | None:
@@ -179,6 +180,18 @@ def _worktree_public(m: dict) -> dict | None:
     return {**{k: wt.get(k) for k in ("path", "repo", "branch", "base", "pr", "kept_branch", "port")},
             "removed": bool(wt.get("removed")),
             "preparing": (wt.get("prepare") or {}).get("state") == "running"}
+
+
+def _browser_waiting(sid: str) -> int:
+    """`ask_human` requests of the session waiting for the user (maxxing/browser/asks.py; in memory)."""
+    from ..browser import asks
+    return asks.waiting(sid)
+
+
+def _exit_waiting(sid: str) -> dict | None:
+    """Its browser's exit went down during a turn: {exit, profile, at, resume} (browser/exits.py), else None."""
+    from ..browser import exits
+    return exits.waiting_for(sid)
 
 
 def _approvals_waiting(sid: str) -> int:

@@ -17,7 +17,7 @@ import threading
 import time
 from pathlib import Path
 
-from .. import config
+from .. import config, cpu
 
 SERVER_DIR = Path(__file__).resolve().parent.parent.parent      # …/server
 ENV_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -363,7 +363,7 @@ def _start_unit(sid: str) -> str:
         cmd = ["systemd-run", "--collect", "--quiet", "--unit", unit,
                "--description", f"Harness Maxxing turn {sid}",
                "--property", "KillMode=mixed", "--property", "TimeoutStopSec=15", *memory_properties(),
-               *hardening_properties(),
+               *hardening_properties(), *cpu.turn_slice_args(),       # CPU priorities: turns after the UI
                "--working-directory", str(SERVER_DIR), *sets, "--", *_runner_cmd(sid)]
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
         if r.returncode == 0:

@@ -1,8 +1,10 @@
-// An agent's settings (the sheet opened from its profile), in four sections with a small nav on top:
+// An agent's settings (the sheet opened from its profile), in four sections (five with the browser) with a small nav on top:
 //   Essentials (on, silent, look, model, daily budget) · Protection (Free = like a session / Protected = its sandbox,
 //   with its sites and folders; approvals, keys) · E-mail (only once it has a mailbox or one is asked for,
-//   AgentMail.tsx) · Advanced, folded (permission mode, outside events, subagent, tools, rules, the other limits,
-//   export), then the danger zone. `section` = the one shown first (?settings=mail on the agent's page).
+//   AgentMail.tsx) · Browser (only once the Harness Browser is on: may its turns use it, which profile; features/browser,
+//   its conversation gets it like its runs) · Advanced, folded
+//   (permission mode, outside events, subagent, tools, rules, the other limits, export), then the danger zone.
+//   `section` = the one shown first (?settings=mail|browser on the agent's page).
 // Switches save at once; the fields (model, mode, tools, rules, limits) wait for the Save bar. Its name and character
 // are edited elsewhere: click the character at the top of its profile (Appearance.tsx).
 import * as React from 'react'
@@ -10,13 +12,14 @@ import { useNavigate } from 'react-router'
 import { AlertTriangle, ChevronRight, Download, Lock, Mail, Pencil, Plus, Trash2, Unlock, X } from 'lucide-react'
 import { useT } from '@/i18n'
 import { errorMessage, isApiError } from '@/lib/api'
-import { agentExportUrl, usePatchAgent } from '@/lib/queries'
+import { agentExportUrl, usePatchAgent, useSettings } from '@/lib/queries'
 import type { AgentDetail, AgentLimits, AgentRule, AgentRuleTool, PermissionMode } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { Button, FormField, Input, Select, Sensitive, Switch, Textarea, toast } from '@/components/ui'
 import { SettingRow } from '@/features/common'
 import { SettingsCard } from '@/pages/settings/sections/ui'
 import { AgentMail } from './AgentMail'
+import { BrowserPanel } from '@/features/browser/BrowserPanel'
 import { AppearanceDialog } from './Appearance'
 import { KeyChecks, LimitsFields, ModelSelect, PermissionSelect, useDeleteAgentAsk } from './parts'
 
@@ -38,7 +41,7 @@ const draftOf = (a: AgentDetail): Draft => ({
   limits: { ...a.limits },
 })
 
-const SECTIONS = ['essential', 'protection', 'mail', 'advanced'] as const
+const SECTIONS = ['essential', 'protection', 'mail', 'browser', 'advanced'] as const
 export type SectionId = (typeof SECTIONS)[number]
 
 /** A section of the sheet: a title, one line of plain words, its settings. */
@@ -171,9 +174,13 @@ export function AgentSettings({ agent: a, section }: { agent: AgentDetail; secti
     essential: t('agents.settings.sec.essential'),
     protection: t('agents.settings.sec.protection'),
     mail: t('agents.mail.title'),
+    browser: t('browser.title'),
     advanced: t('agents.settings.sec.advanced'),
   }
-  const ids = React.useMemo(() => SECTIONS.filter((x) => x !== 'mail' || showMail), [showMail])
+  // the browser: only once the Harness Browser is on (Settings -> Features), or when the agent still has it on
+  const { data: st } = useSettings()
+  const showBrowser = !!st?.browser_feature || !!a.browser?.enabled
+  const ids = React.useMemo(() => SECTIONS.filter((x) => (x !== 'mail' || showMail) && (x !== 'browser' || showBrowser)), [showMail, showBrowser])
   const hasTools = a.allowed_tools.length > 0 || a.disallowed_tools.length > 0
 
   return (
@@ -227,6 +234,12 @@ export function AgentSettings({ agent: a, section }: { agent: AgentDetail; secti
               <Mail /> {t('agents.settings.mailAdd')}
             </Button>
           </div>
+        )}
+
+        {showBrowser && (
+          <Section id="browser" title={titles.browser} description={t('browser.sectionDesc')}>
+            <BrowserPanel path={a.path} who={a.display_name} />
+          </Section>
         )}
 
         <section id="ag-sec-advanced" data-section="advanced" className="grid scroll-mt-14 grid-cols-[minmax(0,1fr)] gap-4 border-t pt-6" data-testid="agent-advanced-settings">

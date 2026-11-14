@@ -21,6 +21,7 @@ import {
   Columns3,
   FolderOpen,
   FolderPlus,
+  Globe,
   Hash,
   List,
   ListTree,
@@ -101,6 +102,9 @@ import {
 } from '@/components/ui'
 import { SlugPreview } from '@/features/workspace/CreateProjectTopic'
 import { forgetLog } from './log'
+
+// the browser settings of a project or a topic (Settings -> Features -> browser on): loaded when its dialog opens
+const BrowserPanel = React.lazy(() => import('@/features/browser/BrowserPanel').then((m) => ({ default: m.BrowserPanel })))
 import { FLAT_SORTS, RECENT_COUNTS, saveDraft, saveQuotes, TREE_MODES, useSessionsUI, type FlatSort, type ListBy, type TreeMode } from './store'
 import { absTopicDir, modelLabel, topicLabel } from './util'
 
@@ -1035,7 +1039,9 @@ const SessionRow = React.memo(function SessionRow({
       {open && <span aria-hidden className="absolute top-2 bottom-2 left-1 w-0.5 rounded-full bg-primary/70" />}
       <button type="button" onClick={() => onOpen(s)} {...(!open && warmProps(s.id))} className="flex min-w-0 flex-1 items-center gap-2 self-stretch rounded-md text-left focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none" data-session-row={s.id}>
         <span className="flex size-3.5 shrink-0 items-center justify-center">
-          {s.state === 'running' ? (
+          {(s.approvals || 0) + (s.browser_asks || 0) > 0 ? (
+            <StatusDot tone="warn" pulse label={t('sessions.waitingYou')} />
+          ) : s.state === 'running' ? (
             <StatusDot tone="running" pulse label={t('sessions.state.running')} />
           ) : s.state === 'error' ? (
             <StatusDot tone="error" label={t('sessions.state.error')} />
@@ -1161,6 +1167,7 @@ function RowMenu({ open, onOpenChange, label, children }: { open: boolean; onOpe
 /* ---------------------------------------------------------------- menus shared by the tree and drill-down */
 function ProjectMenuItems({ project, onDialog }: { project: Project; onDialog: (d: DialogState) => void }) {
   const t = useT()
+  const { data: settings } = useSettings()
   return (
     <>
       <DropdownMenuItem onSelect={() => onDialog({ kind: 'topic', project: project.name })}>
@@ -1172,6 +1179,11 @@ function ProjectMenuItems({ project, onDialog }: { project: Project; onDialog: (
       <DropdownMenuItem onSelect={() => onDialog({ kind: 'emoji-project', project })} data-testid="project-emoji">
         <Smile /> {project.emoji ? t('sessions.emoji.change') : t('sessions.emoji.set')}
       </DropdownMenuItem>
+      {settings?.browser_feature && (
+        <DropdownMenuItem onSelect={() => onDialog({ kind: 'browser-project', project })} data-testid="project-browser">
+          <Globe /> {t('browser.menu')}
+        </DropdownMenuItem>
+      )}
       <DropdownMenuSeparator />
       <DropdownMenuItem destructive onSelect={() => onDialog({ kind: 'delete-project', project })}>
         <Trash2 /> {t('sessions.tree.delete')}
@@ -1186,6 +1198,7 @@ function TopicMenuItems({ topic, rootDir, onNewSession, onDialog }: { topic: Top
   // Agents live on their own page (Settings -> Features -> agents_page): the topic only points to them.
   const { data: settings } = useSettings()
   const agents = settings?.agents_page ? topic.agents?.length || 0 : 0
+  const browserOn = !!settings?.browser_feature
   return (
     <>
       <DropdownMenuItem onSelect={() => onNewSession(topic.path)}>
@@ -1200,6 +1213,11 @@ function TopicMenuItems({ topic, rootDir, onNewSession, onDialog }: { topic: Top
       <DropdownMenuItem onSelect={() => onDialog({ kind: 'permission-topic', topic })} data-testid="topic-permission">
         <ShieldHalf /> {t('sessions.permission.menu')}
       </DropdownMenuItem>
+      {browserOn && (
+        <DropdownMenuItem onSelect={() => onDialog({ kind: 'browser-topic', topic })} data-testid="topic-browser">
+          <Globe /> {t('browser.menu')}
+        </DropdownMenuItem>
+      )}
       {agents > 0 && (
         <DropdownMenuItem onSelect={() => navigate(`/agents?topic=${encodeURIComponent(`${topic.project}/${topic.name}`)}`)} data-testid="topic-agents">
           <Bot /> {t('sessions.topicAgents', { count: agents })}
@@ -1636,6 +1654,8 @@ type DialogState =
   | { kind: 'emoji-project'; project: Project }
   | { kind: 'rename-topic'; topic: Topic }
   | { kind: 'permission-topic'; topic: Topic }
+  | { kind: 'browser-topic'; topic: Topic }
+  | { kind: 'browser-project'; project: Project }
   | { kind: 'delete-project'; project: Project }
   | { kind: 'delete-topic'; topic: Topic }
 
@@ -1680,6 +1700,34 @@ function TreeDialogs({ state, onClose, onTopicCreated }: { state: DialogState; o
           await patchProject.mutateAsync({ project: state.project.name, emoji })
         }}
       />
+    )
+  if (state.kind === 'browser-project')
+    return (
+      <Dialog open onOpenChange={(o) => !o && onClose()}>
+        <DialogContent className="md:max-w-3xl" data-testid="project-browser-dialog">
+          <DialogHeader>
+            <DialogTitle>{t('browser.projectTitle', { name: state.project.name })}</DialogTitle>
+            <DialogDescription>{t('browser.projectDesc')}</DialogDescription>
+          </DialogHeader>
+          <React.Suspense fallback={<Skeleton className="h-24" />}>
+            <BrowserPanel path={`projects/${state.project.name}`} live={false} />
+          </React.Suspense>
+        </DialogContent>
+      </Dialog>
+    )
+  if (state.kind === 'browser-topic')
+    return (
+      <Dialog open onOpenChange={(o) => !o && onClose()}>
+        <DialogContent className="md:max-w-3xl" data-testid="topic-browser-dialog">
+          <DialogHeader>
+            <DialogTitle>{t('browser.topicTitle', { name: state.topic.name })}</DialogTitle>
+            <DialogDescription>{t('browser.topicDesc')}</DialogDescription>
+          </DialogHeader>
+          <React.Suspense fallback={<Skeleton className="h-24" />}>
+            <BrowserPanel path={`projects/${state.topic.project}/topics/${state.topic.name}`} />
+          </React.Suspense>
+        </DialogContent>
+      </Dialog>
     )
   if (state.kind === 'permission-topic')
     return (

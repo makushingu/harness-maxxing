@@ -15,6 +15,8 @@ export const GROUPS = {
   team: ['team'],
   agents: ['agents', 'groups'],
   mail: ['mail'],
+  // the Harness Browser (Settings -> Features, topic menu, agent settings, live view)
+  browser: ['browser'],
   tasks: ['tasks', 'crons'],
   files: ['files', 'viewer'],
   // the media player: on the first player shown (a conversation shows one only for an audio file or in the viewer)
@@ -46,6 +48,8 @@ export const GROUPS = {
   docs: ['doc'],
   // the sentences of the status line (components/shell/mood.ts): fetched once the shell shows, not before it
   mood: ['mood'],
+  // who takes the processor (the CPU meter's window, components/shell/HealthIndicator.tsx): loaded when it opens
+  cpuwho: ['cpuwho'],
 } as const satisfies Record<string, readonly string[]>
 
 export type Group = keyof typeof GROUPS

@@ -1,0 +1,57 @@
+{
+  "comment": "DevTools commands the Harness Browser never gets, whoever sends them (chrome-devtools-mcp, the live view). Cookies cannot be read or set over DevTools (one browser, everybody's sign-ins: only the page itself sees its own). Read by server/maxxing/browser/rules.py; the PC agent (pc-agent/cdpfilter.go) keeps the same list.",
+  "blocked_methods": [
+    "Browser.setDownloadBehavior",
+    "Page.setDownloadBehavior",
+    "Browser.grantPermissions",
+    "Browser.setPermission",
+    "Browser.executeBrowserCommand",
+    "Browser.close",
+    "Browser.crash",
+    "Browser.crashGpuProcess",
+    "DOM.setFileInputFiles",
+    "Network.loadNetworkResource",
+    "Target.exposeDevToolsProtocol",
+    "Target.setRemoteLocations",
+    "Target.createBrowserContext",
+    "Storage.getCookies",
+    "Network.getAllCookies",
+    "Page.setInterceptFileChooserDialog",
+    "Input.setInterceptDrags",
+    "SystemInfo.getProcessInfo",
+    "Network.getCookies",
+    "Network.setCookie",
+    "Network.setCookies",
+    "Network.deleteCookies",
+    "Network.clearBrowserCookies",
+    "Storage.setCookies",
+    "Storage.clearCookies",
+    "Storage.clearDataForOrigin",
+    "Target.sendMessageToTarget"
+  ],
+  "blocked_domains": [
+    "Extensions",
+    "PWA",
+    "Tethering",
+    "FileSystem",
+    "BluetoothEmulation",
+    "Cast",
+    "WebAuthn",
+    "IndexedDB",
+    "CacheStorage",
+    "Memory",
+    "HeapProfiler",
+    "Tracing",
+    "Profiler"
+  ],
+  "page_schemes": [
+    "http",
+    "https",
+    "data"
+  ],
+  "about_pages": [
+    "about:blank",
+    "about:srcdoc"
+  ],
+  "max_command": 1048576
+}

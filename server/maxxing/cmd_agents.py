@@ -68,8 +68,8 @@ def _configure(p) -> None:
     s.add_argument("--approvals", action="store_true", help="ask before risky actions (answered in the UI)")
     s.add_argument("--telegram", action="store_true", help="its own Telegram thread (results + messages start it)")
     s.add_argument("--keys", default="", help="Keys vault entries its turns see, comma-separated (default: none)")
-    s.add_argument("--domains", default="", help="hosts its shell commands may reach in its sandbox, comma-separated "
-                                                 "(e.g. api.github.com,*.example.com; default: none)")
+    s.add_argument("--domains", default="", help="hosts its shell commands, WebFetch and browser may reach in its sandbox, comma-"
+                                                 "separated (e.g. api.github.com,*.example.com; default: none)")
     s.add_argument("--writable", default="", help="folders of the topic it may write in besides its own, comma-"
                                                   "separated (. = the whole topic)")
     s.add_argument("--mail", default="", metavar="MAILBOX", help="a mailbox of the E-mail page it may use (id or "
@@ -642,7 +642,7 @@ def _handler(a) -> int:
             role = ""
         print(json.dumps({**{k: d.get(k) for k in ("path", "display_name", "enabled", "model", "permission_mode",
                                                     "approvals", "trust_outside", "keys", "telegram", "silent", "sandbox", "domains",
-                                                    "writable", "rules", "subagent", "chat_model", "limits", "triggers")},
+                                                    "writable", "rules", "subagent", "chat_model", "browser", "limits", "triggers")},
                           "claude_md": role, "crons": [{k: j.get(k) for k in ("id", "name", "schedule", "prompt", "enabled")}
                                                        for j in agents.cron_jobs(path)],
                           "webhooks": [{k: v for k, v in h.items() if not own or k != "url"}

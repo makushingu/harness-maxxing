@@ -3,6 +3,7 @@ import { store as lsStore } from '@/lib/utils'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
 import { loadFileViewer, warmFileViewer } from '@/features/files/viewerLoad'
 import { FILE_HREF, useFileViewer } from '@/features/files/viewerStore'
+import { useMyBrowserOpen } from '@/features/browser/open'
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { useGlobalBus } from '@/lib/sse'
@@ -57,6 +58,7 @@ function usePrefetch() {
 }
 
 const WhatsNewDialog = React.lazy(withGroups(['show'], () => import('@/features/whatsnew/WhatsNewDialog')))
+const MyBrowserWindow = React.lazy(withGroups(['browser'], () => import('@/features/browser/MyBrowserWindow').then((m) => ({ default: m.MyBrowserWindow }))))
 const TeamLive = React.lazy(() => import('@/features/team/Live').then((m) => ({ default: m.TeamLive })))
 const TeamBubbles = React.lazy(withGroups(['team'], () => import('@/features/team/TeamBubbles').then((m) => ({ default: m.TeamBubbles }))))
 const FeedbackDialog = React.lazy(withGroups(['feedback'], () => import('./FeedbackDialog').then((m) => ({ default: m.FeedbackDialog }))))
@@ -77,6 +79,19 @@ function FeedbackHost() {
 
 /** The file viewer: its code loads the first time a file is opened, or as soon as the pointer reaches a file of a
  *  conversation. Mounted without Suspense: React keeps a fallback it has shown for 300 ms, even an empty one. */
+/** The person's browser window (openMyBrowser): its code loads the first time it is asked for. */
+function MyBrowserHost() {
+  const open = useMyBrowserOpen()
+  const asked = React.useRef(false)
+  if (open) asked.current = true
+  if (!asked.current) return null
+  return (
+    <React.Suspense fallback={null}>
+      <MyBrowserWindow />
+    </React.Suspense>
+  )
+}
+
 function FileViewer() {
   const open = useFileViewer((s) => s.open)
   const [Host, setHost] = React.useState<React.ComponentType | null>(null)
@@ -264,6 +279,7 @@ export function AppShell() {
       {touch && <TouchDrawers />}
       <GlobalHotkeys />
       <FileViewer />
+      <MyBrowserHost />
       <WhenIdle>
         <CommandPalette />
         <ShortcutsDialog />

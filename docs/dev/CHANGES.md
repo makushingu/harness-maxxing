@@ -47,6 +47,130 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   session's `permission_mode`, i.e. not the agent's). `agent_guard.sandboxed_turn()` / `sandboxed_session()` are None
   for it (the `maxxing` CLI limits of a sandboxed turn do not apply; `_manages` still limits `agents` to itself).
   `settings()` lost `manager=` and `MANAGER_SAFE`; `MANAGER_BOX` now says the runs are sandboxed. Runs unchanged.
+- CPU priorities (`maxxing/cpu.py`, stdlib only; config `cpu_priorities`, default true; INTERNALS "CPU priorities"):
+  `maxxing-live.slice` (CPUWeight/IOWeight 1000) / `maxxing-turns.slice` (100) / `maxxing-jobs.slice` (30, its text =
+  `jobs_slice_text` = MemoryMax + weights). `cmd_core.ensure_cpu_slices(jobs)` (init, after `ensure_jobs_slice`; PUT
+  /api/settings when `cpu_priorities` changes) writes the two new slices + the server drop-in
+  `claude-maxxing.service.d/30-cpu-priority.conf` (`Slice=maxxing-live.slice`, taken at the next restart, never
+  restarted) atomically when changed, daemon-reload, then `set-property --runtime` on the slices whose cgroup exists;
+  off = weights 100, files kept. Uninstall removes them. Paths: `cpu.SLICE_DIR` (conftest points it to tmp_path for
+  every test), `cpu.CGROUP_ROOT`, `cpu.PRESSURE_PATH`.
+- Turn units: `spawn._start_unit` adds `cpu.turn_slice_args()` (`--slice maxxing-turns.slice` when on and the slice
+  file exists). Claude jobs' turns stay there (not in the jobs slice: its MemoryMax budget is unchanged).
+- `cpu.set_level(unit, "live"|"normal"|"background") -> bool`: `systemctl set-property --runtime <unit> CPUWeight=
+  IOWeight=`, no-op when off / not root / no systemd (for the watched browser).
+- `maxxing heavy CMD…` (`cmd_heavy.py`, registered in `commands.py`): `os.execvp` of `cpu.heavy_argv()` =
+  `systemd-run --scope --quiet --collect --slice=maxxing-jobs.slice --unit=maxxing-heavy-[session-<sid8>-|cron-<id>-]<pid>.scope`
+  (MAXXING_SESSION / MAXXING_CRON_ID), else `nice -n 10 ionice -c3`; 127 when the command is not found.
+  `maxxing video render [DIR] [--id] [--out]` (`cmd_video.render`) = `npx remotion render <entry> <id> <out>` through it.
+- GET `/api/system/cpu` = `cpu.snapshot()` (cached 3 s): PSI `some` + top 6 units by cgroup `cpu.stat` `usage_usec`
+  delta (previous sample kept in memory, 0.5 s sample when none or older than 30 s; Docker containers merged), named
+  by `cpu.describe()` (session title / agent name from the sessions store, job name from crons, heavy scopes,
+  `maxxing-br-*`/`maxxing-pc-*` = browser) with their level. Health payload: `cpu_pressure`, `cpu_waiting`
+  (avg10 >= 20); issue `cpu_pressure` when `cpu.note_pressure` saw avg60 >= 40 for 10 min (reset after a 5 min gap
+  without reading), naming the top unit; it goes to the feed like the others (`health_feed`).
+- Doctor `cpu_priorities`: slice files / drop-in out of date -> WARN `maxxing init`; on but the server not yet in its
+  slice -> INFO (restart).
+- Web: CPU meter of `StatusBlock` = popover `CpuWho` / `CpuPanel` (`useCpu`, every 3 s while open; i18n group
+  `cpuwho`), amber + "waiting" when `cpu_waiting`; RAM / disk stay links. `mood.cpuWaiting` before `mood.cpuHot`,
+  `mood.issue.cpuPressure`; Settings -> System `CpuCard` (switch); showcase `cpu`.
+- Template `CLAUDE.md`: rows `maxxing video … render` and `maxxing heavy` (upgrade note
+  `docs/upgrade/2.0.0a150.md`: renumber it if the version is taken). Skill `video-motion-design` and
+  the Remotion README render with `maxxing video render`.
+- Tests: `test_cpu_priorities.py` (slice texts, init on/off + runtime weights, doctor, turn slice, `set_level`, heavy
+  command line + exec, video render, pressure parsing + alert, unit names, cgroup top, endpoint + setting);
+  `test_settings.py::test_get_defaults` has `cpu_priorities`.
+
+- Harness Browser (`maxxing/browser/`, never released before: it lived on a research branch; API.md "Harness
+  Browser", INTERNALS "maxxing.browser", user doc 33). Config `browser_feature` (default false) + `config.json ->
+  browser` = `{ask, wait_min, downloads, idle_min, tab_sleep_min, max_tabs, max_active_profiles (3, 1..8),
+  exit_wait_s (180, 0..900), search (google|duckduckgo|bing), profiles: [{id, name, exit: "direct"|<exit id>, on_exit_down:
+  wait|vps, project: "" | "projects/<name>"}] (<= 40, `main` always first, not deletable; one per project, see below), exits: [{id, name, type: proxy {url, user} | tailscale
+  {node, login_server} | wireguard {}}] (<= 10)}`; `browser.clean_settings(raw, strict)`. Exit secrets in the vault
+  `BROWSER_EXIT_<ID>` (`expose: false`). Owners: `browser: {enabled?, profile?}` in a project's / topic's
+  `.maxxing.json` (`workspace.folder_browser` / `set_folder_browser`) and agent.json (`agents._clean_browser`,
+  `browser` in `SECURITY_FIELDS`: off is safer, the rest is asked); `browser.resolve` = `enabled` topic ->
+  project -> true (`SESSIONS_DEFAULT`; an agent's never inherited, false unless set); `SHARED_PROJECTS` (general, system)
+  use `main` ("General"): no profile of their own, an older one loses its `project`, `profile` = an agent's own choice when it exists, else its project's.
+  **One profile per project** (`project` field): `ensure_project_profile` (from `main`'s exit/on_exit_down,
+  named after the project) at the first `active_for`, at `GET /owner` of an enabled folder, and for every project with
+  an agent at `GET /api/browser`; `DELETE` refused (`409 project`) while the project exists; `GET /profiles/{pid}` = `{profile, browser, gone, agents, person, temporary (replays.sessions: actions with a `nav` "session:*"), actions, asks}`; ProfileRow adds `gone`, `agents`; `profile: "own"` and a
+  project's / topic's `profile` are read as "its project's". `GET /owner` adds `project`, `project_profile`, `sites`.
+  **Sites**: a profile has no list (a profile's `web` / `sites` of before are dropped; Chromium policy without
+  `URLAllowlist`, no restart on a change). Any public site for every turn and the person, except a sandboxed agent's
+  run (not its owner's conversation, which is not sandboxed): `browser.agent_sites(owner)` = its `domains` (None = any
+  public site, `[]` = nothing), read once by the runner (`browser_args`, `agent["sandbox"]`) into the turn file
+  (`turns/<sid>.json` `sites`; `turns.sites_of`, a file without it reads the agent), then `Turn.sites`: checked on a
+  tool's `url` (`Pool.call`), in its `/cdp` relay (`Page.navigate` / `Target.createTarget`) and after each tool call
+  (`Pool._keep_to`: a tab of its navigator outside them -> `about:blank`, Claude told; `Watcher.cdp_navigate`). A
+  refusal for the list only (`rules.off_domains`) posts a feed event (`browser/domains.py`: source `agents`, ref
+  `browsersite:<agent>|<host>`, action `add` -> `domains.add`, dedupe per agent, host and day). Live view:
+  `DomainBar` (PATCH the agent's `domains`). `rules.page_refusal` keeps refusing this server, local networks, raw IPs,
+  `file:` and browser pages for all. `GET /api/browser`: `navigators()` once, `navs.agents_on(s)` reads each agent
+  once (`browser.agent_profile`). Navigator ids: `me`, `agent:<path>`, `session:<sid>` (an old `me-N` tab falls back
+  to `me`). Web: `MyBrowser.tsx` (the page without `?live=1`), `EmptyCard`.
+- Modules: `exits.py` (exits, `Runtime` up/down state + 30 s watcher, `Tailscale` = own userspace `tailscaled`, `WireGuard` =
+  `wireproxy`, units `maxxing-bx-<install>-<eid>`, `test()` via ip-api.com + 2 MB download, `wait_down` / `set_resume` /
+  `_resume_waiters`, `feed_action`), `pool.py` (one Chromium per profile, `max_active_profiles`, `exit_ready`, a
+  chrome-devtools-mcp per turn; `control[nav]`, `create` one tab at a time per profile, `navigators()`, `move_nav`,
+  `drop_nav`, `_close_sessions`: a session's navigator closed after `idle_min` unused), `navs.py` (navigators `me` (its
+  profile in `<state>/browser/navigators.json`), `agent:<path>`, `session:<sid>`; one window per navigator: `window.open` from a page of it, else `newWindow`), `live.py` (a `Screen`
+  per navigator watched; up to `INFLIGHT` = 3 frames on their way per viewer, `{"t":"got"}` sent on arrival,
+  adaptive JPEG quality 30..70 on the queueing (trip minus fastest trip), `?q=auto|high|low`; the tab shown is
+  `Target.activateTarget`-ed; `Watcher.dialog` / `chooser` from `Page.javascriptDialogOpening` /
+  `fileChooserOpened` (interception on for its sessions), viewer events `{"t":"copy"}` -> `{"t":"copied", text}`,
+  `{"t":"dialog", accept, text}`, `{"t":"chooser"}` = cancel; `give_files`), `unit.py` (unit
+  `maxxing-br-<install>-<pid>`, `set_level` -> `cpu.set_level`, `cpu.turn_slice_args()`, `--lang` /
+  `--accept-lang` from `config.language`, `TZ` from `config.timezone`; `run/<pid>/uploads` emptied at each start), `proxy.py` (upstream through the exit by checked IP, 502 + marked down when it fails),
+  `tabs.py` (tabs carry `nav`; `claim` / `assign`; `by` = who opened it), `view.py` (a turn's tools see only their
+  navigator: events filtered, foreign auto-attach detached, `getTargets` filtered, foreign targets refused,
+  `createTarget` made by the server), `relay.py`, `rules.py`
+  (`address(text, engine)`: an address or a search, `SEARCH_ENGINES` google | duckduckgo | bing = settings `search`,
+  default google; `DOM.setFileInputFiles` allowed only for files
+  under `rules.UPLOAD_ROOTS` = `/mxrun/uploads/` (+ the real folder in direct mode),
+  `Page.setInterceptFileChooserDialog` allowed),
+  `cdm.py`, `asks.py`, `replays.py`, `turns.py`; `browser_mcp.py` (stdlib, per turn) + `runner.browser_args`.
+  Removed v3 notions (research branch only): tab scopes `me` / `topic:` / `project:` / `agent:`, "Share with",
+  filtering by scope in the relay, `profile: keep|fresh`, global `web` / `sites`.
+- State `<state>/browser/`: `profiles/<pid>/`, `run/<pid>/`, `tabs/<pid>.json`, `actions/<pid>.jsonl`,
+  `asks/<id>.json`, `turns/<sid>.json` + `.mcp.json`, `exits/<eid>/`, `waiting.json` (`[{session, owner, exit,
+  profile, at, resume}]`); tools `<state>/tools/tailscale-<v>/`, `wireproxy-<v>/` (pinned sha256). Migration
+  (`browser.migrate()`, at startup and each profile start): `profiles/harness` -> `profiles/main`, `tabs.json` ->
+  `tabs/main.json`; top-level `web` / `sites` dropped.
+- Routes (`api/browser.py`): `GET /api/browser`, `PUT /settings`, `POST /setup {exits?}`, `/profiles` (POST, GET / PUT
+  / DELETE `{pid}`, `{pid}/open|stop|sleep|forget`, `{pid}/tabs`, `{pid}/tabs/{key}/show`, DELETE `{pid}/tabs/{key}`),
+  `{pid}/open {nav?}`, `{pid}/tabs {url?, nav?}`, `{pid}/picture?nav=&w=` (JPEG of that navigator's tab; 204 when not
+  running, never starts it), `PUT /navigators/me {profile}`, `{pid}/files?nav=` (multipart `files`, <= 50 MB each: for the page's open file chooser, 409 without one;
+  `pool.stage`), `/exits` (POST, PUT / DELETE `{eid}`, `{eid}/test` incl. `direct`, GET / POST `{eid}/tailscale`), GET / PUT
+  `/owner` (`inherit: [...]`), `POST /waiting/{sid} {action: resume|retry|dismiss}`, `/asks`, `/live-token`, WS
+  `/live?t=&profile=&nav=&q=`, `GET /api/browser` adds `navigators`, loopback `POST /mcp/{sid}` and WS `/cdp/{pid}`. Sessions list: `browser_asks`,
+  `browser_exit` (`sessions/service.py`). Feed: ref `browserexit:<eid>` (`feed.HANDLERS`), actions `retry`, `resume`.
+- `pool.public` adds `dialog {type, message, default}` and `chooser {multiple}`. Claude's `upload_file`:
+  `pool.claude_file` (a file of the turn's topic / project folder, <= 50 MB) copied by `pool.stage` into the uploads
+  folder, `filePath` rewritten.
+- Exits are checked by themselves while looked at: `GET /api/browser` calls `Runtime.refresh_seen(exits)` - in the
+  background, one at a time per exit, an exit not checked for `SEEN_FRESH` (60 s) gets `check()`, and when it is up
+  with no good test younger than `RETEST_EVERY` (1 h; a failed one: 60 s) `test(eid, speed=False)` (no 2 MB
+  download); `direct` too. Tests persist in `<state>/browser/exit-tests.json`; `exits[].checking` / `direct.checking`.
+- CLI `cmd_browser.py`: `maxxing browser enable|disable` (`browser_feature`; `enable` runs `unit.setup` first when
+  something is missing, exit 1 and stays off if it still is) | `setup [--exits] | status [--json] | settings [...] [--max-profiles N] |
+  profile add|set|rm | exit test ID|direct | set PATH on|off|inherit [--profile ID|own|inherit] | show [--json] |
+  forget ID`; `agent_guard.BROWSER_OWNER_ONLY` refuses `set profile forget setup settings enable disable` in agent turns. Skill `maxxing-browser` (turn it on, sign-ins, what to check when its tools are missing, troubleshooting); `BROWSER_NOTE` names Watch and forbids asking for a password in the chat.
+- Web: Settings section `browser` (`features/browser/BrowserSettings.tsx`, lazy with its i18n group; `?profile=`,
+  `?exit=<id>|new|direct`, `?new=profile`; `?live=1` / `?nav=` / `?session=` = the live view in a window over it);
+  `/browser?…` redirects there (`BrowserMoved`, also the links of notifications). My browser = one window for the app
+  (`open.ts` `openMyBrowser` / `useMyBrowserOpen`, `MyBrowserWindow` mounted by `AppShell` once asked): the sidebar's
+  browser line (shown whenever the feature is on), Ctrl+K `act:browser`, Settings -> Browser. `BrowserWindow` up to
+  96vw x 92dvh. No sidebar page any more (`nav.ts`). Files: `features/browser/{BrowserSettings, BrowserPanel, BrowserFeature, ProfileSettings, Exits, SessionBrowser,
+  LiveView, QuickMenu, BrowserWindow, MyBrowserWindow, AgentBrowserCard, profiles, open}` (`QuickMenu` = the ⋮ of the live view; picture choice in
+  `localStorage` `mx.browser.quality`) (`AgentBrowserCard` in the agent's info panel: a
+  picture every 2 s while visible and running); project and topic menus -> **Browser...** (`Tree.tsx`), agent settings section `browser`; sidebar
+  line in `HealthIndicator.tsx`. i18n group `browser` (`groups.ts`) loaded with Settings -> Browser, elsewhere on its first
+  key (`ON_DEMAND` in `test_web_i18n_groups.py`). Showcase `browser` (Settings -> Features, `data-tour="browser-feature"`).
+- Template: help index row `33-browser.md` (upgrade note `docs/upgrade/2.0.0a150.md` step 2).
+- Tests: `test_browser.py` (settings and migration, profiles, owners and inheritance, exits + vault, proxy through an
+  upstream, waiting for a down exit, live pacing, routes, CLI); `test_settings.py::test_get_defaults` has
+  `browser_feature`.
 
 ## 2.0.0-alpha.151 - 2026-11-14
 

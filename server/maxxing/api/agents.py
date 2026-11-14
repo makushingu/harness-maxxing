@@ -101,6 +101,7 @@ class AgentIn(BaseModel):
     subagent: Optional[bool] = None
     chat_model: Optional[str] = Field(default=None, max_length=80)   # its model ("" = model)
     mail: Optional[list[dict]] = Field(default=None, max_length=10)    # mailboxes of the E-mail page (mail/access.py)
+    browser: Optional[dict] = None          # its own browser (maxxing/browser): {enabled, web, sites, profile, ask, wait_min, downloads}
 
 
 def _fields(body: AgentIn) -> dict:

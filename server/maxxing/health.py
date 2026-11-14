@@ -401,8 +401,16 @@ def _collect() -> dict:
                 issues.append(_issue("warn", "backup_old", f"Last memory backup is {age_h:.0f} h old"))
             elif last.get("ok") is False:
                 issues.append(_issue("warn", "backup_failed", "The last memory backup failed"))
+    from . import cpu                             # processor full for a while: programs wait (CPU priorities)
+    pressure = cpu.pressure()
+    high_s = cpu.note_pressure(pressure)
+    if high_s >= cpu.ALERT_S:
+        top = cpu.snapshot()["top"]
+        issues.append(_issue("warn", "cpu_pressure", f"The processor has been full for {int(high_s // 60)} min: "
+                             "programs wait their turn" + (f" - most of it: {top[0]['label']}" if top else "")))
     _apply_seen(issues)
     return {"ok": not issues, "issues": issues, "cpu_pct": cpu_pct(), "load": loadavg(), "mem": mem,
+            "cpu_pressure": pressure, "cpu_waiting": bool(pressure and pressure["avg10"] >= cpu.WAITING_PCT),
             "disk": dsk, "uptime_s": uptime_s(), "claude_auth": auth, "claude_auth_error": ast.get("error"),
             "claude_checked_at": ast.get("checked_at"), "backup_age_h": age_h,
             "failed_logins_1h": fails, "at": time.time()}

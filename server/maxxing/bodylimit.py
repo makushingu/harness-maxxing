@@ -36,14 +36,16 @@ _MUTATING = ("POST", "PUT", "PATCH", "DELETE")
 def _public(path: str) -> bool:
     # /api/pc/pair (pairing code) and /api/pc/mcp (loopback + secret) check their own permission
     # /api/team-peer/* (other Harness servers) checks its own signatures
-    return path.startswith(("/api/auth/", "/api/hooks/", "/api/team-peer/")) or path in ("/api/pc/pair", "/api/pc/mcp")
+    # /api/browser/mcp/<session> (loopback + the turn's token: api/browser.py)
+    return path.startswith(("/api/auth/", "/api/hooks/", "/api/team-peer/", "/api/browser/mcp/")) or \
+        path in ("/api/pc/pair", "/api/pc/mcp")
 
 
 def cap_for(method: str, path: str, authed: bool) -> int:
     if path.startswith("/api/hooks/"):
         from .feedhooks import MAX_BODY
         return MAX_BODY
-    if path == "/api/pc/mcp":                       # tool arguments (a form's text, a script)
+    if path == "/api/pc/mcp" or path.startswith("/api/browser/mcp/"):   # tool arguments (a form's text, a script)
         return DEFAULT_MAX
     if not authed:
         return PUBLIC_MAX

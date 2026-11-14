@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { Navigate, NavLink, useLocation, useParams } from 'react-router'
 import { cn } from '@/lib/utils'
-import { useT } from '@/i18n'
+import { useT, withGroups } from '@/i18n'
 import { PageHeader, useDocumentTitle } from '@/components/shell/Page'
 import { SECTION_MOVED, SETTINGS_GROUPS, SETTINGS_SECTIONS, type SettingsSectionId } from './sections'
 import { GeneralSection } from './sections/General'
@@ -28,6 +28,9 @@ import { UsageSection } from './sections/Usage'
 import { AboutSection } from './sections/About'
 import { MemorySection } from './sections/Memory'
 import { UpdatesSection } from './sections/Updates'
+
+// The browser section: its own chunk (and texts), loaded when it opens.
+const BrowserSection = React.lazy(withGroups(['browser'], () => import('@/features/browser/BrowserSettings').then((m) => ({ default: m.BrowserSettingsSection }))))
 
 // The crons section is a whole page (list, history, editor): its own chunk, loaded when it opens.
 const CronsSection = React.lazy(() => import('@/pages/crons'))
@@ -57,6 +60,7 @@ const COMPONENTS: Record<SettingsSectionId, React.ComponentType> = {
   system: SystemSection,
   updates: UpdatesSection,
   crons: CronsSection,
+  browser: BrowserSection,
 }
 
 export default function SettingsPage() {

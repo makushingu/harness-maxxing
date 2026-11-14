@@ -82,6 +82,7 @@ dependencies = [
     { name = "python-multipart" },
     { name = "uvicorn", extra = ["standard"] },
     { name = "watchfiles" },
+    { name = "websockets" },
 ]
 
 [package.optional-dependencies]
@@ -105,6 +106,7 @@ requires-dist = [
     { name = "python-multipart", specifier = ">=0.0.9" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.30" },
     { name = "watchfiles", specifier = ">=0.21" },
+    { name = "websockets", specifier = ">=13" },
 ]
 provides-extras = ["voice"]
 

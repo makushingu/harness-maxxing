@@ -157,6 +157,8 @@ export type Agent = {
   triggers: AgentTrigger[]
   /** mailboxes of the E-mail page it may use (none by default) */
   mail?: MailGrant[]
+  /** May it use the Harness Browser (maxxing/browser): off unless turned on. */
+  browser?: BrowserSwitch
   created: number
   session_count: number
   archived_count: number
@@ -319,6 +321,7 @@ export type AgentInput = {
   limits?: Partial<AgentLimits>
   triggers?: AgentTriggerInput[]
   mail?: MailGrantInput[]
+  browser?: BrowserSwitch
 }
 export type AgentRunResult = { started: boolean; /** the new session (its id in older answers) */ session?: Session | string; reason?: string; /** a reply: the session of that message went on */ continued?: boolean }
 export type AgentWebhookKind = 'generic' | 'stripe' | 'shopify' | 'github'
@@ -371,6 +374,10 @@ export type Session = {
   code_repos?: string[]
   /** Its separate copy (Code mode): its own folder and branch of the topic's repository. */
   worktree?: SessionCopy | null
+  /** `ask_human` requests of its browser waiting for the user (GET /api/browser/asks?session=). */
+  browser_asks?: number
+  /** its browser's exit went down during a turn (the card "go on when it is back") */
+  browser_exit?: BrowserWaiter | null
 }
 /** A session's separate copy (server: maxxing/worktrees.py). */
 export type SessionCopy = {
@@ -484,7 +491,7 @@ export type SessionEventsBackPage = {
 export type SessionStreamEvents = { events: SessionEvent[]; next: number }
 
 /* ---------------------------------------------------------------- Global bus */
-export type BusTopic = 'agents' | 'agents_layout' | 'agent-groups' | 'sessions' | 'workspace' | 'tasks' | 'crons' | 'telegram' | 'backup' | 'health' | 'extensions' | 'trash' | 'feed' | 'profile' | 'register' | 'license' | 'infra' | 'mcp' | 'team' | 'team_live' | 'approvals' | 'open_sessions'
+export type BusTopic = 'agents' | 'agents_layout' | 'agent-groups' | 'sessions' | 'workspace' | 'tasks' | 'crons' | 'telegram' | 'backup' | 'health' | 'extensions' | 'trash' | 'feed' | 'profile' | 'register' | 'license' | 'infra' | 'mcp' | 'team' | 'team_live' | 'approvals' | 'open_sessions' | 'browser'
 
 /* ---------------------------------------------------------------- MCP servers (Settings -> MCP) */
 export type McpState = 'connected' | 'needs_auth' | 'failed' | 'pending' | 'unknown'
@@ -821,8 +828,12 @@ export type Settings = {
   maxxing_mode?: boolean
   /** Settings -> Features: the E-mail page (/mail) and its sidebar entry */
   mail_page?: boolean
+  /** Settings -> System: CPU priorities (the UI first, then turns, then jobs and `maxxing heavy`), default on */
+  cpu_priorities?: boolean
   /** Sidebar pages in the order the user dragged them (routes, e.g. "/sessions"); empty = the default order. */
   sidebar_order?: string[]
+  /** Settings -> Features: the Harness Browser (each topic / agent may then be let use it) */
+  browser_feature?: boolean
   /** memory-compaction line limit per memory.md (0 = none). */
   memory_max_lines: number
   /** Parts of the line under each answer that are hidden (every browser of the installation). */
@@ -861,6 +872,10 @@ export type Health = {
   ok: boolean
   issues: HealthIssue[]
   cpu_pct: number
+  /** `some` line of /proc/pressure/cpu: share of time programs waited for the processor (null without PSI) */
+  cpu_pressure?: CpuPressure | null
+  /** pressure avg10 >= 20 %: the CPU meter says "waiting" */
+  cpu_waiting?: boolean
   load: number[]
   mem: { total: number; avail: number }
   disk: { total: number; free: number; pct: number }
@@ -870,6 +885,17 @@ export type Health = {
   claude_checked_at?: number | null
   backup_age_h: number | null
   failed_logins_1h: number
+  at: number
+}
+export type CpuPressure = { avg10: number; avg60: number; avg300: number }
+export type CpuLevel = 'live' | 'normal' | 'background' | 'other'
+export type CpuKind = 'harness' | 'session' | 'agent' | 'heavy' | 'job' | 'browser' | 'docker' | 'other'
+/** GET /api/system/cpu: CPU priorities and the units that use the processor most (`maxxing/cpu.py`). */
+export type CpuSnapshot = {
+  enabled: boolean
+  pressure: CpuPressure | null
+  waiting: boolean
+  top: { unit: string; kind: CpuKind; name: string; label: string; level: CpuLevel; pct: number }[]
   at: number
 }
 export type Service = { name: string; label: string; active: boolean; enabled: boolean; since: number | null; state: string }
@@ -1341,3 +1367,252 @@ export type MailDraft = {
 }
 export type MailSent = { ok: boolean; message_id: string; recipients: number; refused: string[]; sent_folder: string | null }
 export type MailAction = 'seen' | 'unseen' | 'flag' | 'unflag' | 'move' | 'archive' | 'trash' | 'junk' | 'inbox' | 'delete'
+
+// ---- the Harness Browser (api/browser.py) ---------------------------------------------------------------------------
+/** A project's / topic's (.maxxing.json) or an agent's (agent.json) own `browser` block: `enabled` is inherited
+ *  topic -> project (an agent's never is); `profile` is an agent's choice only (else its project's). */
+export type BrowserSwitch = { enabled?: boolean; profile?: string }
+/** Global settings (config.json -> browser; profiles and exits apart). */
+export type BrowserSettings = {
+  /** ask_human: Claude may ask the user to take over (captcha, sign-in); waits `wait_min` minutes */
+  ask: boolean
+  wait_min: number
+  downloads: boolean
+  /** minutes without use before a profile sleeps / a tab sleeps; tabs awake at most per profile */
+  idle_min: number
+  tab_sleep_min: number
+  max_tabs: number
+  /** profiles running at once (the oldest unused one sleeps) */
+  max_active_profiles: number
+  /** seconds a tool waits for a down exit before saying so */
+  exit_wait_s: number
+  /** the address bar's search engine */
+  search: 'google' | 'duckduckgo' | 'bing'
+}
+/** A profile: its own Chromium (sign-ins) and its exit. `main` always exists (name "" = "Personal");
+ *  one per project (made at its first use, or when the project has agents). */
+export type BrowserProfile = {
+  id: string
+  name: string
+  /** an exit id, or "direct" (the server's address) */
+  exit: string
+  /** exit down: wait (default) or go out by the server's address */
+  on_exit_down: 'wait' | 'vps'
+  /** the project this profile is for (`projects/<name>`), "" for the others */
+  project: string
+}
+export type BrowserProfileRow = BrowserProfile & {
+  state: 'starting' | 'running' | 'stopped'
+  tabs: number
+  awake: number
+  mem: number
+  turns: number
+  control: boolean
+  asks: boolean
+  /** its Chromium folder exists (sign-ins may be saved) */
+  has_data: boolean
+  /** a project's profile whose project was deleted */
+  gone: boolean
+  /** agents whose browser is on and runs on it */
+  agents: number
+}
+export type BrowserExitKind = 'proxy' | 'tailscale' | 'wireguard'
+/** What the sites see through an exit (ip-api.com through it), its delay and speed. */
+export type BrowserExitTest = {
+  ok: boolean
+  error?: string
+  at: number
+  ip?: string
+  country?: string
+  country_code?: string
+  city?: string
+  operator?: string
+  asn?: string
+  /** isp: a home / office provider; mobile: a phone network; hosting: a datacenter (often blocked) */
+  kind?: 'isp' | 'mobile' | 'hosting'
+  latency_ms?: number
+  mbps?: number
+}
+export type BrowserExit = {
+  id: string
+  name: string
+  type: BrowserExitKind
+  url?: string
+  user?: string
+  node?: string
+  login_server?: string
+  state: 'up' | 'down' | 'unknown'
+  since: number | null
+  error: string
+  latency_ms: number | null
+  test: BrowserExitTest | null
+  /** being checked in the background right now (someone is looking at it) */
+  checking?: boolean
+  /** its password / config / auth key is in the vault */
+  secret: boolean
+}
+export type TailscaleNode = { id: string; name: string; dns: string; os: string; online: boolean; active: boolean }
+export type TailscaleStatus = {
+  state: 'needs_setup' | 'needs_login' | 'starting' | 'no_node' | 'node_offline' | 'up'
+  auth_url?: string
+  account?: string
+  nodes?: TailscaleNode[]
+  node?: TailscaleNode | null
+  /** online in the account but not offered as an exit (not approved in the Tailscale console yet) */
+  unapproved?: { name: string; os: string }[]
+  error?: string
+}
+export type BrowserTab = {
+  key: string
+  url: string
+  title: string
+  /** who opened it */
+  by: { kind: 'you' | 'session' | 'agent'; sid?: string; name?: string; path?: string }
+  asleep: boolean
+  /** shown in the live view */
+  front: boolean
+  used: number
+  /** the navigator it belongs to (me, agent:<path>, session:<sid>) */
+  nav: string
+}
+/** One profile's browser (running or not), or one navigator of it (`nav`: then only its tabs, its page...). */
+export type BrowserState = {
+  profile: string
+  nav: string | null
+  state: 'starting' | 'running' | 'stopped'
+  started: number | null
+  last_use: number | null
+  /** when it sleeps if nothing uses it (Unix seconds) */
+  stops_at: number | null
+  tabs: BrowserTab[]
+  /** the key of the tab shown */
+  front: string | null
+  page: { url: string; title: string } | null
+  /** the person has the tab shown */
+  control: boolean
+  control_by: string | null
+  /** Claude acted on the tab shown a moment ago */
+  busy: boolean
+  /** turns using it now */
+  turns: { session: string; path: string; kind: 'session' | 'agent'; nav: string }[]
+  /** bytes of memory of its Chromium */
+  mem: number
+  /** its CPU priority now: live (watched / Claude acts) or background */
+  level: '' | 'live' | 'background'
+  bytes: number
+  /** hosts the proxy refused lately */
+  blocked: string[]
+  /** an alert / confirm / prompt open on the page shown: the person answers it */
+  dialog: { type: 'alert' | 'confirm' | 'prompt' | 'beforeunload'; message: string; default: string } | null
+  /** the page asked for files (a file input was clicked) */
+  chooser: { multiple: boolean } | null
+}
+export type BrowserAsk = {
+  id: string
+  session: string
+  owner: string
+  profile?: string
+  reason: string
+  what: 'captcha' | 'sign_in' | 'code' | 'payment' | 'consent' | 'other'
+  at: number
+  expires: number
+  status: 'pending' | 'done' | 'skip' | 'timeout' | 'expired'
+}
+export type BrowserAction = {
+  at: number
+  session: string
+  tool: string
+  args: Record<string, unknown>
+  ok: boolean
+  ms?: number
+  page?: string
+  refused?: string
+}
+/** A turn stopped because its profile's exit went down (the session's card). */
+export type BrowserWaiter = { session: string; owner: string; exit: string; profile: string; at: number; resume: boolean }
+/** A navigator = a window of tabs in a profile's Chromium: the person's ("me"), an agent's (lasting), a session's
+ *  (temporary). Several may share a profile (its sign-ins); each sees only its own tabs. */
+export type BrowserNavigator = {
+  id: string
+  kind: 'person' | 'agent' | 'session'
+  /** the person's name for it, the agent's name, the session's title */
+  name: string
+  path?: string
+  session?: string
+  /** the profile it uses (null: an agent whose profile is gone) */
+  profile: string | null
+  running: boolean
+  tabs: number
+  awake: number
+  page: { url: string; title: string } | null
+  /** the person has its tab shown */
+  control: boolean
+  /** a live view shows it now */
+  watched: boolean
+  turns: number
+  used: number
+}
+export type BrowserStatus = {
+  feature: boolean
+  navigators: BrowserNavigator[]
+  settings: BrowserSettings
+  available: { ok: boolean; missing: string[] }
+  /** the exits' tools are on this server */
+  tools: { tailscale: boolean; wireguard: boolean }
+  setup: { running: boolean; log: string[]; error: string | null }
+  profiles: BrowserProfileRow[]
+  exits: BrowserExit[]
+  direct: { test: BrowserExitTest | null; checking?: boolean }
+  /** turns: session id -> the profile it uses now */
+  summary: { running: string[]; mem: number; turns: Record<string, string>; tabs: Record<string, number>; cap: number; server_used: number; server_total: number; level: 'ok' | 'warn' | 'critical' }
+  asks: BrowserAsk[]
+  waiting: BrowserWaiter[]
+}
+/** A line of a profile's journal of temporary navigators (a session's): its sites, when, how much. */
+export type BrowserSessionLine = {
+  session: string
+  title: string
+  path: string
+  first: number
+  last: number
+  actions: number
+  sites: string[]
+  /** its tabs are still open */
+  open: boolean
+  turns: number
+}
+export type BrowserProfileView = {
+  profile: BrowserProfile
+  browser: BrowserState
+  gone: boolean
+  /** the agents' navigators on it (lasting) */
+  agents: BrowserNavigator[]
+  /** the person's navigator, when it is on it */
+  person: BrowserNavigator[]
+  /** the sessions' navigators (temporary): a journal */
+  temporary: BrowserSessionLine[]
+  actions: BrowserAction[]
+  asks: BrowserAsk[]
+}
+/** A project / topic / agent and the browser: what it sets itself, what it gets and where from. */
+export type BrowserOwner = {
+  owner: string
+  path: string
+  kind: 'project' | 'topic' | 'agent'
+  own: BrowserSwitch
+  enabled: boolean
+  profile: string
+  /** the owner that set it ("" = the default) */
+  from: { enabled: string; profile: string }
+  feature: boolean
+  /** what it would get without its own block (its parent's) */
+  inherited: { enabled: boolean; profile: string; from: { enabled: string; profile: string } } | null
+  chain: string[]
+  exit: BrowserExit | null
+  /** its project (`projects/<name>`) and that project's profile ("" while never made) */
+  project: string
+  project_profile: string
+  /** a sandboxed agent's domains (the only sites its browser opens); null = any public site */
+  sites: string[] | null
+  asks: BrowserAsk[]
+}
