@@ -7,6 +7,24 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Git page: `GitNav` (second sidebar) lists the repositories under each source again (`RepoRow`, a `<Link>` so the
+  peeked list and the touch drawer close on a pick); a source head is a plain button that folds its section
+  (`mx-git-folded` in localStorage), not a page: `SourceCards` / `LocalRow` / `GithubRow` and `?source=` / `?account=`
+  are gone, `/git` without `?repo=` is `GitHome` (one line, plus the connect card or the refused keys when GitHub
+  needs them; a button to the list on touch); the refresh button is in `PageList`'s `actions`. No new route; text
+  keys `git.pick`, `git.list` added, 7 keys of the cards removed.
+  `commitUrl(sha, github, pushed)` (GitGraph.tsx) is the one rule for "this commit is on GitHub" (`pushedShas` for a
+  clone): the row's short id, the context menu and `CommitDetail`'s new `url` prop use it.
+- Git: `GitSessionDialog` (features/git/NewSession.tsx) starts a session from the Git page or a ` ```git ` block:
+  `POST /api/sessions` without a message, then `prefillDraft` (as "Work on this PR" does), so no route is added and
+  Code mode is not needed. `GitGraph` takes `clones` (paths on the server) and has the item in its branch / commit
+  menu (commits now have the menu without GitHub too); `RepoRow` gets a menu with `useContextMenu({ links: true })`.
+  The topic proposed: the one holding a clone, else `mx-git-topic` (localStorage), else the inbox. Text keys
+  `git.session.*` (group `git`).
+- `gitview.overview()` leaves out the repositories under a `THROWAWAY` folder (`tmp`, `temp`, `scratch`);
+  `local_repos()` still finds them (pull request sessions, `codediff.prune`) and `resolve()` opens them by their path.
+  `_marker()` skips a `.git` file that is not a `gitdir:` pointer. `github_graph` pages the default branch
+  (`page`, 100 a page) up to `limit` and says `truncated` when the last page came back full.
 - Agents, owner's conversation (`agents.manager_turn`): `run_settings(manager=True)` returns `sandbox: False`,
   `approvals: False` (no `--permission-prompt-tool`), settings = `agent_guard.chat_settings` for a sandboxed agent
   (no `sandbox` block; `permissions.deny` = Read/Edit of the vault and private paths + Edit of `locked_paths` except
@@ -14,6 +32,19 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   session's `permission_mode`, i.e. not the agent's). `agent_guard.sandboxed_turn()` / `sandboxed_session()` are None
   for it (the `maxxing` CLI limits of a sandboxed turn do not apply; `_manages` still limits `agents` to itself).
   `settings()` lost `manager=` and `MANAGER_SAFE`; `MANAGER_BOX` now says the runs are sandboxed. Runs unchanged.
+
+## 2.0.0-alpha.151 - 2026-11-14
+
+- Chips: one component `web/src/features/chips/Chip.tsx` (`Chip`, `ChipData` kinds session/agent/team/group/all/
+  command, `findNames`, `findCommand`, `withChips`, `ChipBackdrop`). In a textarea the chip is a backdrop: the same
+  text, transparent, with a tint under each span, mirrored from the textarea's computed font/padding/width and scroll;
+  the textarea keeps drawing text, caret and selection. Used by the sessions composer (`/` command + picked `@`), the
+  agent conversation box (`/`) and the group box (`@handle`, `features/agents/mentions.tsx` now builds on it).
+- The `mx_user` log line keeps the resolved mentions (`runner._mentions_shown`: kind, ref, label, group, avatar; never
+  the command); the `user` event carries them as `mentions` (`SentMention`), drawn by `ChipText` in `UserMessage`.
+  `mentions.resolve` adds the agent's `avatar`; `mentions.candidates` labels Team names with `_plain()` like `resolve`
+  (the written `@name` is found again). A sent `/name` is a chip only for a skill of its topic (`ChipText path`).
+  Unsent bubbles carry their mentions (`Pending.mentions`).
 
 - Memory: `memory.files()` adds `heavy` (bytes > `max_bytes(limit)` = limit x 1024 / `LINES_PER_KB`, 1 KB for 10
   lines) and `over` is now "too many lines OR too heavy"; `/api/memory` and `maxxing memory --json` add `max_bytes`;

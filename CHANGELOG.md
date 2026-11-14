@@ -5,12 +5,48 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 
 ## Unreleased
 
+New:
+- **Git: start a session from a repository, a branch or a commit.** Right click a repository in the list of the
+  Git page, a branch label or a commit of a graph (long press on a phone; also in the ` ```git ` blocks of a
+  conversation): **New session…** asks for the project and topic, then opens a session there with what you
+  clicked already typed in the message box (the repository and where it is cloned on the server, the branch or
+  the commit). Nothing is sent: you write what Claude should do. The topic of the clone is proposed when the
+  clone is inside one, else the topic you picked last time. A repository of the list also has **Open on GitHub**
+  and **Copy the GitHub link**.
+
 Changed:
+- **Git: the repositories are in the list on the left.** The second sidebar of the Git page now lists the
+  repositories themselves, one after the other, under **On this server** and under each GitHub account: one click
+  opens a repository, and you go from one to the next without coming back to a page of cards (those pages are
+  gone: nothing is shown beside the list until you pick a repository). Each line shows what there is to do
+  (commits to push ↑ or to pull ↓, files changed, private, cloned here), the list's search filters it, and a
+  click on **On this server** or on an account folds its repositories. The refresh button is in the head of the
+  list.
+- **Git: a commit links to GitHub.** In a graph (the Git page and the ` ```git ` blocks of a conversation), the
+  short id of a commit that is on GitHub is a link to it, and the details of a commit of a server's clone have the
+  **GitHub** link too (before, only a right click offered it).
 - **Agents: when you talk with an agent, it is not limited and asks nothing.** Your conversation with an agent now
   runs like a session of its topic: no sandbox and no approvals, even when the agent is protected, because you just
   asked. Its runs (schedules, webhooks, e-mail, notifications, another agent, **Run now**) keep its sandbox, its
   domains and **Ask before risky actions**, as before. In the conversation it still sees only its own keys, never
   reads the vault, and a change of its safety settings still waits for your OK.
+
+Fixed:
+- **Git: test repositories no longer fill "On this server".** A repository left in a `tmp`, `temp` or `scratch`
+  folder (the trial clones a session or an audit makes) was listed like a project, at the top when it was the most
+  recent: names like `r3` on `master` nobody recognised. They are no longer listed (a graph of such a
+  repository still opens by its path), and an empty `.git` file, as some tools leave in their cache, no longer
+  shows as a repository in error.
+- **Git: the GitHub side of a repository stopped at about 100 commits, without "Show more".** The history of the
+  default branch is now read as far as the page asks (200, then up to 1,000 with **Show more**).
+
+## 2.0.0-alpha.151 - 2026-11-14
+
+New:
+- **Chips for names and commands.** When you pick someone from the `@` menu (a session, an agent, a Team contact or
+  group), the name becomes a chip right in the box, and stays one in the sent message: a click opens that session or
+  agent. A `/command` or skill at the start of a message is a chip too, in sessions and in an agent's conversation.
+  The `@` of an agent group use the same chip.
 
 Fixed:
 - **Memory: a heavy memory.md no longer goes unnoticed, and sessions stop being summarized after almost every

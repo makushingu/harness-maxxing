@@ -45,6 +45,9 @@ import { VoiceButton } from '@/features/voice/VoiceButton'
 import { AttachmentStrip, MessageMedia, useMessageMenu, VoiceNote } from '@/pages/sessions/Items'
 import { useSlashCommands } from '@/pages/sessions/slashCommands'
 import { useSlashMenu } from '@/pages/sessions/useSlashMenu'
+import { ChipText } from '@/pages/sessions/mentions'
+import { ChipBackdrop, findCommand } from '@/features/chips/Chip'
+import type { SlashCommand } from '@/pages/sessions/SlashMenu'
 import { AnswerContext, AnswerText } from './answer'
 import { useSessionLog } from '@/pages/sessions/log'
 
@@ -481,7 +484,7 @@ function Flow({ agent: a, onReply, onSuggest, ref }: { agent: AgentDetail; onRep
       // a conversation that started afresh (6 h without a word, not the first one): said above the message that opened it
       if (m.chat === 'new' && talked && !String(rows[rows.length - 1]?.key).startsWith('new:'))
         rows.push({ key: `new:${m.id}`, node: <Divider>{t('agents.chat.new')}</Divider> })
-      node = <OwnerMessage m={m} answers={m.reply_to ? byId.get(m.reply_to) : undefined} />
+      node = <OwnerMessage m={m} agentPath={a.path} answers={m.reply_to ? byId.get(m.reply_to) : undefined} />
       talked = true
     } else if (m.kind === 'run') node = <TriggerCard m={m} crons={jobs} />
     else if (m.kind === 'result')
@@ -624,7 +627,7 @@ function When({ at }: { at: number }) {
 }
 
 /** What the owner wrote (the page, Telegram): on the right, as in a session. */
-function OwnerMessage({ m, answers }: { m: AgentMessage; answers?: AgentMessage }) {
+function OwnerMessage({ m, agentPath, answers }: { m: AgentMessage; agentPath: string; answers?: AgentMessage }) {
   const t = useT()
   const { onContextMenu, touch, menu } = useMessageMenu({ text: m.text, copy: true })
   return (
@@ -639,7 +642,7 @@ function OwnerMessage({ m, answers }: { m: AgentMessage; answers?: AgentMessage 
       ) : (
         <div className="relative max-w-full rounded-2xl rounded-br-md bg-secondary px-3.5 py-2 text-[14px] leading-relaxed whitespace-pre-wrap text-secondary-foreground [overflow-wrap:anywhere]" onContextMenu={onContextMenu} {...touch} data-quote>
           {menu}
-          <Sensitive block>{m.text || t('agents.conv.routine')}</Sensitive>
+          <Sensitive block>{m.text ? <ChipText text={m.text} path={agentPath} /> : t('agents.conv.routine')}</Sensitive>
         </div>
       )}
       <CutNote m={m} />
@@ -1033,6 +1036,12 @@ function Composer({ agent: a, replyTo, onCancelReply, onSend, ref }: { agent: Ag
   const key = agentDraftKey('agent', a.path)
   const { text, setText } = useDraftText(key)
   const input = React.useRef<HTMLTextAreaElement>(null)
+  // the element too (state): the chips' backdrop follows it from its first render (a restored "/name" draft)
+  const [inputEl, setInputEl] = React.useState<HTMLTextAreaElement | null>(null)
+  const setInput = React.useCallback((el: HTMLTextAreaElement | null) => {
+    input.current = el
+    setInputEl(el)
+  }, [])
   // The caret goes to `placeAt` as soon as the new text is in the box (before the next key is typed).
   const placeAt = React.useRef<number | null>(null)
   const putText = (pasted: string, start: number, end: number) =>
@@ -1174,8 +1183,9 @@ function Composer({ agent: a, replyTo, onCancelReply, onSend, ref }: { agent: Ag
           <AttachList atts={files.atts} onRemove={files.remove} />
           <div className="flex items-end gap-1">
             <AttachButton onFiles={files.add} />
+            <ChipBackdrop text={text} spans={commandSpan(text, a.enabled ? commands : undefined)} target={inputEl} />
             <Textarea
-              ref={input}
+              ref={setInput}
               value={text}
               onPaste={files.onPaste}
               onChange={(e) => setText(e.target.value)}
@@ -1191,7 +1201,7 @@ function Composer({ agent: a, replyTo, onCancelReply, onSend, ref }: { agent: Ag
               minRows={1}
               maxRows={8}
               placeholder={replyTo ? t('agents.conv.replyPlaceholder', { name: a.display_name }) : t('agents.conv.placeholder', { name: a.display_name })}
-              className="min-h-8 flex-1 resize-none border-0 bg-transparent px-1.5 py-1.5 text-[14px] shadow-none focus-visible:ring-0 dark:bg-transparent"
+              className="relative min-h-8 flex-1 resize-none border-0 bg-transparent px-1.5 py-1.5 text-[14px] shadow-none focus-visible:ring-0 dark:bg-transparent"
               data-testid="agent-run-text"
             />
             <VoiceButton onTranscript={onTranscript} onVoiceMessage={onVoiceMessage} />
@@ -1533,4 +1543,10 @@ function MemoryEditor({ agent: a }: { agent: AgentDetail }) {
       )}
     </div>
   )
+}
+
+/** The "/" command a message starts with, when the box knows it. */
+function commandSpan(text: string, commands?: SlashCommand[]) {
+  const c = commands && findCommand(text, (n) => commands.some((x) => x.name === n))
+  return c ? [c] : []
 }

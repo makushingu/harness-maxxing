@@ -1,29 +1,34 @@
-// Feature page "Git & GitHub" (/git, Settings -> Features -> git_page). Second-level sidebar: the two sources (this server,
-// GitHub) then the repositories of the one picked, most recent first. A source: its repositories as cards. A repository:
-// graph of branches and commits, commit details, pull requests (a click opens the PR view), the separate copies of a
-// clone (Code mode), Server | GitHub switch when it has both sides.
+// Feature page "Git & GitHub" (/git, Settings -> Features -> git_page). Second-level sidebar: the sources (this server,
+// one per GitHub account) are heads that fold, each with its repositories under it, most recent first. Nothing is shown
+// beside the list until a repository is picked. A repository: graph of branches and commits, commit details, pull requests (a click opens the
+// PR view), the separate copies of a clone (Code mode), Server | GitHub switch when it has both sides.
 // The repository shown is in the URL (?repo=<path or github:owner/name>), so a chat block can link to it.
 import * as React from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import {
-  ArrowDown, ArrowUp, ExternalLink, FolderGit2, GitBranch, GitPullRequest, KeyRound, Lock, PencilLine, RefreshCw, Server, Star,
+  ArrowDown, ArrowUp, ChevronRight, ExternalLink, FolderGit2, GitBranch, GitPullRequest, KeyRound, Link2, Lock, MessageSquarePlus, PencilLine,
+  RefreshCw, Server, TriangleAlert,
 } from 'lucide-react'
 import { gitKeys, refreshGitRepos, useGitGraph, useGitPulls, useGitRepos, useSettings } from '@/lib/queries'
 import { useCopies } from '@/features/code/copyApi'
 import { openPr } from '@/features/code/prApi'
-import type { GitHubRepo, GitLocalRepo, GitPermission } from '@/lib/types'
+import type { GitHubRepo, GitLocalRepo, GitOverview, GitPermission } from '@/lib/types'
 import { errorMessage } from '@/lib/api'
 import { fmtRelative } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useLang, useT } from '@/i18n'
 import { Badge, Button, EmptyState, Segmented, Sheet, SheetBody, SheetContent, SheetTitle, Skeleton } from '@/components/ui'
+import { useContextMenu } from '@/components/ui/context-menu'
+import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { useCompact, useMediaQuery } from '@/stores/media'
-import { Page } from '@/components/shell/Page'
-import { ListEntry, PageList } from '@/components/shell/PageList'
-import { GitGraph } from './GitGraph'
+import { Page, PageHeader, useDocumentTitle } from '@/components/shell/Page'
+import { PageList } from '@/components/shell/PageList'
+import { openPageList } from '@/components/shell/TouchNav'
+import { GitGraph, commitUrl, pushedShas } from './GitGraph'
 import { Github } from './GithubMark'
 import { CommitDetail } from './CommitDetail'
+import { GitSessionDialog } from './NewSession'
 
 const PERM_TONE: Record<GitPermission, string> = {
   admin: 'bg-violet-500/15 text-violet-600 dark:text-violet-300',
@@ -109,184 +114,250 @@ function TokenErrors({ errors }: { errors: { key: string; error: string }[] }) {
   )
 }
 
-function LocalRow({ r, root, onOpen }: { r: GitLocalRepo; root: string; onOpen: () => void }) {
-  const lang = useLang()
-  const t = useT()
-  const rel = r.path.startsWith(root + '/') ? r.path.slice(root.length + 1) : r.path
-  return (
-    <li>
-      <button type="button" onClick={onOpen} className="flex h-full w-full items-start gap-3 rounded-xl border bg-card p-3.5 text-left transition-colors hover:border-primary/40 hover:bg-muted" data-testid="git-local">
-        <FolderGit2 className="mt-0.5 size-5 shrink-0 text-primary" />
-        <div className="grid min-w-0 flex-1 gap-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="min-w-0 font-medium [overflow-wrap:anywhere]">{r.name}</span>
-            {/* the repository only: its branches (and the worktree folders of the same clone) are in its graph;
-                the checked-out branch shows only when it is not the usual one (or HEAD is detached) */}
-            {!r.error && !(r.branch && ['main', 'master'].includes(r.branch)) && (
-              <span className="max-w-full rounded bg-primary/15 px-1.5 py-px font-mono text-[11px] break-all text-primary">
-                {r.branch ?? t('git.detached')}
-              </span>
-            )}
-            <Sync ahead={r.ahead} behind={r.behind} changed={r.changed + r.untracked} />
-            {!!r.worktrees && (
-              <span className="text-xs text-muted-foreground" data-testid="git-worktrees">
-                {t('git.worktrees', { count: r.worktrees })}
-              </span>
-            )}
-            {r.github && (
-              <span className="inline-flex min-w-0 items-center gap-1 text-xs text-muted-foreground [overflow-wrap:anywhere]">
-                <Github className="size-3 shrink-0" />
-                {r.github}
-              </span>
-            )}
-          </div>
-          <span className="truncate font-mono text-xs text-muted-foreground">{rel}</span>
-          {r.error ? (
-            <span className="text-xs text-destructive">{r.error}</span>
-          ) : (
-            r.last_commit && (
-              <span className="truncate text-xs text-muted-foreground">
-                {fmtRelative(r.last_commit, lang)} · {r.last_subject}
-              </span>
-            )
-          )}
-        </div>
-      </button>
-    </li>
-  )
+// ---- the list (second-level sidebar): each source (this server, then one per GitHub account) and its repositories -----
+
+type Entry = {
+  /** what ?repo= takes: a clone's path, or github:owner/name */
+  id: string
+  label: string
+  /** shown when two clones have the same name: the folder that tells them apart */
+  sub?: string
+  local?: GitLocalRepo
+  remote?: GitHubRepo
 }
 
-function GithubRow({ r, onOpen }: { r: GitHubRepo; onOpen: () => void }) {
+/** The clones of the server, as the server sorts them (last commit first). A clone reads under its GitHub name
+ *  (a folder named "repo" or "up" says nothing). */
+function localEntries(data: GitOverview): Entry[] {
+  const out: Entry[] = data.local.map((r) => ({ id: r.path, label: r.github ? r.github.split('/')[1] : r.name, local: r }))
+  const seen = new Map<string, number>()
+  for (const e of out) seen.set(e.label.toLowerCase(), (seen.get(e.label.toLowerCase()) || 0) + 1)
+  for (const e of out) {
+    if ((seen.get(e.label.toLowerCase()) || 0) < 2) continue
+    const parts = e.id.split('/')
+    e.sub = parts[parts.length - 1] !== e.label ? parts[parts.length - 1] : parts[parts.length - 2]
+  }
+  return out
+}
+
+const FOLDED_KEY = 'mx-git-folded'
+const readFolded = (): string[] => {
+  try {
+    const v = JSON.parse(localStorage.getItem(FOLDED_KEY) || '[]')
+    return Array.isArray(v) ? v.filter((x) => typeof x === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+function RepoRow({ e, active }: { e: Entry; active: boolean }) {
   const t = useT()
-  const lang = useLang()
+  const touch = useCompact()
+  const r = e.local
+  const Icon = r ? FolderGit2 : Github
+  const ref = React.useRef<HTMLAnchorElement>(null)
+  // the repository open (a link from the chat, a reload) is in view in the list
+  React.useEffect(() => {
+    if (active) ref.current?.scrollIntoView({ block: 'nearest' })
+  }, [active])
+  // right click (long press on a phone): a session about the repository, in the topic the user picks
+  const ctx = useContextMenu({ links: true })
+  const [session, setSession] = React.useState(false)
+  const github = r?.github || e.remote?.full_name
+  const url = github ? `https://github.com/${github}` : null
   return (
-    <li>
-      <button type="button" onClick={onOpen} className="flex h-full w-full items-start gap-3 rounded-xl border bg-card p-3.5 text-left transition-colors hover:border-primary/40 hover:bg-muted" data-testid="git-github">
-        <Github className="mt-0.5 size-5 shrink-0 text-primary" />
-        <div className="grid min-w-0 flex-1 gap-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="font-medium">
-              <span className="text-muted-foreground">{r.owner}/</span>
-              {r.name}
-            </span>
-            <PermBadge p={r.permission} />
-            {r.private ? (
-              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                <Lock className="size-3" />
-                {t('git.private')}
-              </span>
-            ) : (
-              <span className="text-xs text-muted-foreground">{t('git.public')}</span>
-            )}
-            {r.archived && <Badge variant="muted">{t('git.archived')}</Badge>}
-            {r.fork && <Badge variant="muted">fork</Badge>}
-            {r.keys.length > 0 && (
-              <span className="inline-flex items-center gap-1 font-mono text-[11px] text-muted-foreground" title={r.keys.join(', ')}>
-                <KeyRound className="size-3" />
-                {r.keys.length === 1 ? r.keys[0] : t('git.keysCount', { count: r.keys.length })}
-              </span>
-            )}
-            {r.local_paths.length > 0 && (
-              <span className="inline-flex items-center gap-1 text-xs text-success">
-                <Server className="size-3" />
-                {t('git.clonedHere')}
-              </span>
-            )}
-          </div>
-          {r.description && <span className="line-clamp-1 text-xs text-muted-foreground">{r.description}</span>}
-          <span className="flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
-            {r.language && <span>{r.language}</span>}
-            {r.stars > 0 && (
-              <span className="inline-flex items-center gap-0.5">
-                <Star className="size-3" />
-                {r.stars}
-              </span>
-            )}
-            {r.pushed_at && <span>{t('git.pushed', { when: fmtRelative(Date.parse(r.pushed_at) / 1000, lang) })}</span>}
+    <>
+      <Link
+        ref={ref}
+        {...ctx.props}
+        to={`/git?repo=${encodeURIComponent(e.id)}`}
+        aria-current={active ? 'page' : undefined}
+        title={r ? `${r.path}${r.branch ? ` (${r.branch})` : ''}` : e.remote?.full_name}
+        className={cn(
+          'flex w-full min-w-0 items-center gap-2 rounded-md pr-2 pl-7 text-[13px] text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
+          touch ? 'h-11' : 'h-8',
+          active && 'bg-accent font-medium text-foreground hover:bg-accent',
+          'pointer-coarse:select-none [-webkit-touch-callout:none]', // the long press opens our menu, not iOS's
+        )}
+        data-testid="git-entry"
+      >
+        <Icon className={cn('size-3.5 shrink-0', active && 'text-primary')} />
+        <span className="min-w-0 flex-1 truncate">
+          {e.label}
+          {e.sub && <span className="ml-1.5 text-xs font-normal text-muted-foreground">{e.sub}</span>}
+        </span>
+        {r?.error && <TriangleAlert className="size-3 shrink-0 text-destructive" aria-label={r.error} />}
+        {!!r?.ahead && (
+          <span className="inline-flex shrink-0 items-center text-[11px] text-warning tabular-nums" title={t('git.aheadTip', { count: r.ahead })}>
+            <ArrowUp className="size-3" />
+            {r.ahead}
           </span>
-        </div>
-      </button>
-    </li>
+        )}
+        {!!r?.behind && (
+          <span className="inline-flex shrink-0 items-center text-[11px] tabular-nums" title={t('git.behindTip', { count: r.behind })}>
+            <ArrowDown className="size-3" />
+            {r.behind}
+          </span>
+        )}
+        {!!r && r.changed + r.untracked > 0 && (
+          <span className="inline-flex shrink-0" title={t('git.uncommitted', { count: r.changed + r.untracked })}>
+            <PencilLine className="size-3" />
+          </span>
+        )}
+        {e.remote?.private && <Lock className="size-3 shrink-0" aria-label={t('git.private')} />}
+        {!!e.remote?.local_paths.length && (
+          <span className="inline-flex shrink-0 text-success" title={t('git.clonedHere')}>
+            <Server className="size-3" />
+          </span>
+        )}
+      </Link>
+      {ctx.menu(
+        <>
+          <DropdownMenuItem onSelect={() => setSession(true)} data-testid="git-new-session">
+            <MessageSquarePlus /> {t('git.session.new')}
+          </DropdownMenuItem>
+          {url && (
+            <>
+              <DropdownMenuItem onSelect={() => window.open(url, '_blank', 'noopener,noreferrer')}>
+                <ExternalLink /> {t('git.branch.openGithub')}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => void navigator.clipboard?.writeText(url)}>
+                <Link2 /> {t('git.copyLink')}
+              </DropdownMenuItem>
+            </>
+          )}
+        </>,
+      )}
+      {session && <GitSessionDialog target={{ github, clones: r ? [r.path] : e.remote?.local_paths, branch: r?.branch || undefined }} onClose={() => setSession(false)} />}
+    </>
   )
 }
 
-// ---- the list (second-level sidebar): the sources only - this server, then one entry per GitHub account ------------
-
-type Source = 'local' | 'github'
-
-function GitNav({ repo, source, account, onPick }: { repo: string | null; source: Source; account: string | null; onPick: (s: Source, account?: string) => void }) {
+function GitNav({ repo, query }: { repo: string | null; query: string }) {
   const t = useT()
-  const { data } = useGitRepos()
+  const touch = useCompact()
+  const { data, isLoading } = useGitRepos()
+  const [folded, setFolded] = React.useState(readFolded)
+  const fold = (id: string) =>
+    setFolded((f) => {
+      const next = f.includes(id) ? f.filter((x) => x !== id) : [...f, id]
+      try {
+        localStorage.setItem(FOLDED_KEY, JSON.stringify(next))
+      } catch {
+        /* private mode: the fold lasts the visit */
+      }
+      return next
+    })
   const gh = data?.github
   const accounts = gh?.connected ? gh.accounts : []
-  // a repository open: its source stays lit (its account when only one sees it)
-  const ghRepo = repo?.startsWith('github:') ? gh?.repos.find((g) => `github:${g.full_name}`.toLowerCase() === repo.toLowerCase()) : null
-  const onAccount = (login: string) =>
-    source === 'github' && (account ? account === login : ghRepo ? ghRepo.accounts.length === 1 && ghRepo.accounts[0] === login : accounts.length === 1)
+  const needle = query.trim().toLowerCase()
+  const local = React.useMemo(() => (data ? localEntries(data) : []), [data])
+  const sections: { id: string; icon: React.ComponentType<{ className?: string }>; label: string; count?: number; entries: Entry[] }[] = [
+    {
+      id: 'local',
+      icon: Server,
+      label: t('git.tabLocal'),
+      count: data?.local.length,
+      entries: local.filter((e) => !needle || `${e.label} ${e.id} ${e.local?.github || ''} ${e.local?.branch || ''}`.toLowerCase().includes(needle)),
+    },
+    ...(accounts.length ? accounts : [null]).map((a) => ({
+      id: a ? `github:${a.login}` : 'github',
+      icon: Github,
+      label: a ? `GitHub @${a.login}` : 'GitHub',
+      count: a?.repos,
+      entries: (a && gh ? gh.repos : [])
+        .filter((g) => accounts.length < 2 || g.accounts.includes(a!.login))
+        .filter((g) => !needle || `${g.full_name} ${g.description}`.toLowerCase().includes(needle))
+        .map((g) => ({ id: `github:${g.full_name}`, label: g.name, sub: g.owner.toLowerCase() === a!.login.toLowerCase() ? undefined : g.owner, remote: g })),
+    })),
+  ]
+  const on = (e: Entry) => !!repo && repo.toLowerCase() === e.id.toLowerCase()
+  const hint = 'py-1 pl-9 text-xs text-muted-foreground'
   return (
-    <nav aria-label={t('git.title')} className="grid content-start gap-0.5 p-2" data-testid="git-nav">
-      <ListEntry active={source === 'local'} onClick={() => onPick('local')} icon={Server} label={t('git.tabLocal')} count={data?.local.length} testid="git-src-local" />
-      {accounts.length ? (
-        accounts.map((a) => (
-          <ListEntry key={a.login} active={onAccount(a.login)} onClick={() => onPick('github', accounts.length > 1 ? a.login : undefined)} icon={Github} label={`GitHub @${a.login}`} count={a.repos} testid="git-src-github" />
-        ))
-      ) : (
-        <ListEntry active={source === 'github'} onClick={() => onPick('github')} icon={Github} label="GitHub" testid="git-src-github" />
+    <nav aria-label={t('git.title')} className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] content-start gap-0.5 overflow-y-auto p-2" data-testid="git-nav">
+      {sections.map((s) => {
+        // a source is a head that folds, not a page; a search shows what it finds, folded or not
+        const closed = !needle && folded.includes(s.id)
+        return (
+          <React.Fragment key={s.id}>
+            <button
+              type="button"
+              onClick={() => !needle && fold(s.id)}
+              aria-expanded={!closed}
+              className={cn(
+                'flex w-full min-w-0 items-center gap-2.5 rounded-md px-2.5 text-sm text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
+                touch ? 'h-11' : 'h-9',
+              )}
+              data-testid="git-fold"
+            >
+              <s.icon className="size-4 shrink-0" />
+              <span className="min-w-0 flex-1 truncate text-left font-medium text-foreground">{s.label}</span>
+              {s.count != null && s.count > 0 && <span className="min-w-5 text-right text-xs tabular-nums">{s.count}</span>}
+              <ChevronRight className={cn('size-3.5 shrink-0 transition-transform', !closed && 'rotate-90')} />
+            </button>
+            {!closed && (
+              <>
+                {isLoading && s.id === 'local' && [0, 1, 2].map((i) => <Skeleton key={i} className="my-1 ml-7 h-5" />)}
+                {s.entries.map((e) => <RepoRow key={e.id} e={e} active={on(e)} />)}
+                {!!needle && !!data && !s.entries.length && <p className={hint}>{t('git.noMatch')}</p>}
+                {!needle && !!data && s.id === 'local' && !local.length && <p className={hint}>{t('git.noLocal')}</p>}
+                {!needle && !!gh && s.id === 'github' && (
+                  <Link to="/git" className={cn(hint, 'rounded-md pr-2 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring')} data-testid="git-connect-link">
+                    {t('git.connectTitle')}
+                  </Link>
+                )}
+              </>
+            )}
+          </React.Fragment>
+        )
+      })}
+      {accounts.length > 0 && !needle && (
+        <Link to="/settings/keys" className={cn(hint, 'mt-1 rounded-md pr-2 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring')}>
+          {t('git.addAccount')}
+        </Link>
       )}
     </nav>
   )
 }
 
-// ---- the page of a source: the simple cards of before, filtered by the list's search -------------------------------
+// ---- nothing is open: the page stays empty (a repository is picked in the list), but for what GitHub needs ----------
 
-function SourceCards({ source, account, query, onOpen }: { source: Source; account: string | null; query: string; onOpen: (repo: string) => void }) {
+function GitHome() {
   const t = useT()
-  const { data, isLoading, error } = useGitRepos()
-  if (isLoading)
-    return (
-      <div className="grid gap-2">
-        {[0, 1, 2].map((i) => (
-          <Skeleton key={i} className="h-20 rounded-xl" />
-        ))}
-      </div>
-    )
-  if (error) return <p className="text-sm text-destructive">{errorMessage(error)}</p>
-  if (!data) return null
-  const needle = query.trim().toLowerCase()
-  if (source === 'local') {
-    const local = data.local.filter((r) => !needle || `${r.path} ${r.github || ''} ${r.branch || ''}`.toLowerCase().includes(needle))
-    return local.length ? (
-      <ul className="grid grid-cols-[minmax(0,1fr)] gap-2 lg:grid-cols-2">
-        {local.map((r) => (
-          <LocalRow key={r.path} r={r} root={data.root} onOpen={() => onOpen(r.path)} />
-        ))}
-      </ul>
-    ) : (
-      <EmptyState icon={FolderGit2} title={needle ? t('git.noMatch') : t('git.noLocal')} description={t('git.localHint', { root: data.root })} />
-    )
-  }
-  const gh = data.github
-  const accounts = gh.accounts
-  if (!gh.connected) return <ConnectGithub />
-  if (!accounts.length)
-    return (
-      <div className="grid gap-3">
-        <TokenErrors errors={gh.errors} />
-        <ConnectGithub />
-      </div>
-    )
-  const remote = gh.repos.filter(
-    (r) => (!account || r.accounts.includes(account)) && (!needle || `${r.full_name} ${r.description} ${r.keys.join(' ')}`.toLowerCase().includes(needle)),
-  )
+  const touch = useCompact()
+  const { data, error } = useGitRepos()
+  useDocumentTitle(t('git.title'))
+  const gh = data?.github
+  const none = !!data && !data.local.length && !gh?.repos.length
   return (
-    <div className="grid gap-3">
-      <TokenErrors errors={gh.errors} />
-      {!remote.length && <EmptyState icon={FolderGit2} title={t('git.noMatch')} />}
-      <ul className="grid grid-cols-[minmax(0,1fr)] gap-2 lg:grid-cols-2">
-        {remote.map((r) => (
-          <GithubRow key={r.full_name} r={r} onOpen={() => onOpen(`github:${r.full_name}`)} />
-        ))}
-      </ul>
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col" data-testid="git-home">
+      {touch && <PageHeader title={t('git.title')} />}
+      <div className="flex min-h-0 flex-1 overflow-y-auto p-6">
+        <div className="m-auto grid w-full max-w-xl justify-items-center gap-4">
+          {error ? (
+            <p className="text-sm text-destructive">{errorMessage(error)}</p>
+          ) : (
+            <EmptyState
+              icon={FolderGit2}
+              title={none ? t('git.noLocal') : t('git.pick')}
+              description={none ? t('git.localHint', { root: data.root }) : undefined}
+              action={
+                touch && !none ? (
+                  <Button variant="outline" onClick={openPageList}>
+                    <FolderGit2 /> {t('git.list')}
+                  </Button>
+                ) : undefined
+              }
+            />
+          )}
+          {gh && (!!gh.errors.length || !gh.accounts.length) && (
+            <div className="grid w-full gap-3">
+              <TokenErrors errors={gh.errors} />
+              {!gh.accounts.length && <ConnectGithub />}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
@@ -302,6 +373,9 @@ function RepoView({ repo, onSwitch, refresh }: { repo: string; onSwitch: (repo: 
   const wide = useMediaQuery('(min-width: 1700px)')
   const r = data?.repo
   const isGh = repo.startsWith('github:')
+  // a commit of a clone opens on GitHub once an origin/ branch holds it
+  const pushed = React.useMemo(() => (data && data.repo.kind !== 'github' ? pushedShas(data.commits) : null), [data])
+  const urlOf = (sha: string) => commitUrl(sha, r?.github, pushed)
   // the pull requests of the repository, also on a clone of a GitHub repository
   const prRepo = isGh ? repo : r?.github && overview?.github.connected ? `github:${r.github}` : null
   // the other side of the same repository (clone <-> GitHub), when there is one
@@ -369,7 +443,14 @@ function RepoView({ repo, onSwitch, refresh }: { repo: string; onSwitch: (repo: 
             <p className="p-3 text-sm text-muted-foreground">{t('git.noCommits')}</p>
           ) : data ? (
             <>
-              <GitGraph commits={data.commits} selected={selected} onSelect={setSelected} github={r?.github} onGithub={r?.kind === 'github'} />
+              <GitGraph
+                commits={data.commits}
+                selected={selected}
+                onSelect={setSelected}
+                github={r?.github}
+                onGithub={r?.kind === 'github'}
+                clones={r?.kind === 'local' && r.path ? [r.path] : overview?.github.repos.find((g) => g.full_name === r?.github)?.local_paths}
+              />
               {data.truncated && (
                 <div className="flex items-center justify-center gap-3 p-2 text-xs text-muted-foreground">
                   {isGh && r?.branches && r.branches_shown && r.branches > r.branches_shown
@@ -387,7 +468,7 @@ function RepoView({ repo, onSwitch, refresh }: { repo: string; onSwitch: (repo: 
         </div>
         <div className="grid gap-4 max-[1699px]:order-first min-[1700px]:sticky min-[1700px]:top-4">
           {!wide ? null : selected ? (
-            <CommitDetail repo={data?.repo.id || repo} sha={selected} />
+            <CommitDetail repo={data?.repo.id || repo} sha={selected} url={urlOf(selected)} />
           ) : (
             <p className="rounded-xl border border-dashed p-4 text-[13px] text-muted-foreground">{t('git.pickCommit')}</p>
           )}
@@ -399,7 +480,7 @@ function RepoView({ repo, onSwitch, refresh }: { repo: string; onSwitch: (repo: 
         <Sheet open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
           <SheetContent side="bottom" aria-describedby={undefined}>
             <SheetTitle className="sr-only">{selected?.slice(0, 7)}</SheetTitle>
-            <SheetBody className="pt-2">{selected && <CommitDetail repo={data?.repo.id || repo} sha={selected} className="border-0 p-0" />}</SheetBody>
+            <SheetBody className="pt-2">{selected && <CommitDetail repo={data?.repo.id || repo} sha={selected} url={urlOf(selected)} className="border-0 p-0" />}</SheetBody>
           </SheetContent>
         </Sheet>
       )}
@@ -413,14 +494,8 @@ export default function GitPage() {
   const qc = useQueryClient()
   const [params, setParams] = useSearchParams()
   const repo = params.get('repo')
-  // the source shown: ?source=github, else the side of the repository open, else the server
-  const source: Source = params.get('source') === 'github' || (!params.get('source') && repo?.startsWith('github:')) ? 'github' : 'local'
-  const account = params.get('account')
   const [query, setQuery] = React.useState('')
   const [refreshing, setRefreshing] = React.useState(false)
-  const { data } = useGitRepos()
-  const open = (r: string) => setParams({ repo: r, ...(source === 'github' && !r.startsWith('github:') ? { source: 'github' } : {}), ...(account ? { account } : {}) })
-  const pick = (s: Source, login?: string) => setParams(s === 'github' ? { source: 'github', ...(login ? { account: login } : {}) } : {})
   const doRefresh = async () => {
     setRefreshing(true)
     try {
@@ -430,37 +505,17 @@ export default function GitPage() {
       setRefreshing(false)
     }
   }
-  const refresh = (
-    <Button variant="outline" size="icon-sm" loading={refreshing} onClick={() => void doRefresh()} aria-label={t('git.refresh')} title={t('git.refresh')}>
+  const refresh = (variant: 'outline' | 'ghost') => (
+    <Button variant={variant} size="icon-sm" loading={refreshing} onClick={() => void doRefresh()} aria-label={t('git.refresh')} title={t('git.refresh')} className={variant === 'ghost' ? 'shrink-0 text-muted-foreground' : undefined}>
       <RefreshCw />
     </Button>
   )
-  const gh = data?.github
   return (
     <>
-      <PageList id="git" label={t('git.title')} search={{ value: query, onChange: setQuery, placeholder: t('git.searchList') }}>
-        <GitNav repo={repo} source={source} account={account} onPick={pick} />
+      <PageList id="git" label={t('git.title')} search={{ value: query, onChange: setQuery, placeholder: t('git.searchList') }} actions={refresh('ghost')}>
+        <GitNav repo={repo} query={query} />
       </PageList>
-      {repo ? (
-        <RepoView key={repo} repo={repo} onSwitch={(r) => setParams({ repo: r })} refresh={refresh} />
-      ) : (
-        <Page
-          title={source === 'github' ? (account ? `GitHub @${account}` : gh?.accounts.length === 1 ? `GitHub @${gh.accounts[0].login}` : 'GitHub') : t('git.tabLocal')}
-          description={source === 'github' ? t('git.ghHint') : data ? t('git.localHint', { root: data.root }) : undefined}
-          actions={
-            <>
-              {source === 'github' && (
-                <Button variant="ghost" size="sm" asChild>
-                  <Link to="/settings/keys">{t('git.addAccount')}</Link>
-                </Button>
-              )}
-              {refresh}
-            </>
-          }
-        >
-          <SourceCards source={source} account={account} query={query} onOpen={open} />
-        </Page>
-      )}
+      {repo ? <RepoView key={repo} repo={repo} onSwitch={(r) => setParams({ repo: r })} refresh={refresh('outline')} /> : <GitHome />}
     </>
   )
 }

@@ -52,7 +52,7 @@ import {
   sessionsQuery,
 } from '@/lib/queries'
 import { errorMessage, isApiError } from '@/lib/api'
-import type { Effort, Mention, Session } from '@/lib/types'
+import type { Effort, SentMention, Session } from '@/lib/types'
 import {
   Button,
   confirm,
@@ -490,17 +490,18 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
     if (session) trimQueued(sid, session.queue)
   }, [session?.queue, sid, trimQueued]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const onSend = async (text: string, attachments: string[], clientId?: string, mentions?: Mention[]) => {
+  const onSend = async (text: string, attachments: string[], clientId?: string, named?: SentMention[]) => {
     const add = usePending.getState().add
     const remove = usePending.getState().remove
-    const lid = add(sid, { text, attachments, queued: running })
+    const mentions = named?.map((m) => ({ kind: m.kind, ref: m.ref }))
+    const lid = add(sid, { text, attachments, queued: running, mentions: named })
     thread.current?.scrollToBottom()
     notifySent(sid)
     try {
       const r = await send.mutateAsync({ id: sid, text, attachments, client_id: clientId, mentions })
       if (r.queued !== running) {
         remove(sid, lid)
-        add(sid, { text, attachments, queued: r.queued })
+        add(sid, { text, attachments, queued: r.queued, mentions: named })
       }
       return true
     } catch {
@@ -784,7 +785,7 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
             </Button>
           </div>
         )}
-        <ItemContext.Provider value={React.useMemo(() => ({ filesRoot: settings?.files_root || null, models: claude?.models, running, tz: settings?.timezone, topicDir: dir, wsRoot: ws?.root || null, sid }), [settings?.files_root, settings?.timezone, claude?.models, running, dir, ws?.root, sid])}>
+        <ItemContext.Provider value={React.useMemo(() => ({ filesRoot: settings?.files_root || null, models: claude?.models, running, tz: settings?.timezone, topicDir: dir, wsRoot: ws?.root || null, sid, path }), [settings?.files_root, settings?.timezone, claude?.models, running, dir, ws?.root, sid, path])}>
           {notFound ? (
             <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center text-sm text-muted-foreground">
               {t('sessions.deleted')}

@@ -408,7 +408,7 @@ class Runner:
                                     "source": item.get("source") or "web", "kind": kind,
                                     **({"voice": [str(v["path"]) for v in voices]} if voices else {}),
                                     **({"client_ids": item["client_ids"]} if item.get("client_ids") else {}),
-                                    **_relay_from(item), "at": self.turn_at})
+                                    **_relay_from(item), **_mentions_shown(item), "at": self.turn_at})
         if voices:
             heard, err = self._voice(item, voices)
             if heard is None:                          # stopped, or nothing to send: no Claude call
@@ -890,7 +890,7 @@ class Runner:
                                         "attachments": head.get("attachments") or [],
                                         "source": head.get("source") or "web", "kind": "user", "injected": True,
                                         **({"client_ids": head["client_ids"]} if head.get("client_ids") else {}),
-                                        **_relay_from(head), "at": time.time()})
+                                        **_relay_from(head), **_mentions_shown(head), "at": time.time()})
 
     def _steer_step(self, pr: _Proc) -> bool:
         """One pass of a pending steer: True when the process can take the steered message now (the step it was
@@ -1152,6 +1152,13 @@ def build_prompt(item: dict) -> str:
     if item.get("mentions"):
         text = text + "\n\n" + mentions_note(item["mentions"])
     return text
+
+
+def _mentions_shown(item: dict) -> dict:
+    """The log line of a message with @ mentions: who it names, as the page draws them (chips), never the commands."""
+    keep = ("kind", "ref", "label", "group", "avatar")
+    found = [{k: x[k] for k in keep if x.get(k) not in (None, "")} for x in item.get("mentions") or [] if isinstance(x, dict)]
+    return {"mentions": found} if found else {}
 
 
 def _relay_from(item: dict) -> dict:

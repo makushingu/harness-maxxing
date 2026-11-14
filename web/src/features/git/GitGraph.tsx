@@ -2,13 +2,14 @@
 // forks as curves, branch / tag / HEAD labels on their commit. Shared by the chat (```git blocks) and the Git page.
 // Commits come newest first, children before parents (server/maxxing/gitview.py).
 import * as React from 'react'
-import { Cloud, Copy, ExternalLink, GitBranch, Link2, Tag } from 'lucide-react'
+import { Cloud, Copy, ExternalLink, GitBranch, Link2, MessageSquarePlus, Tag } from 'lucide-react'
 import type { GitCommit, GitRef } from '@/lib/types'
 import { fmtDate, fmtRelative } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useLang, useT } from '@/i18n'
 import { useMediaQuery } from '@/stores/media'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { GitSessionDialog, type GitSessionTarget } from './NewSession'
 
 // row height: 30 px, 40 px on touch screens so a tap opens the intended commit
 const ROW_MOUSE = 30
@@ -139,6 +140,11 @@ export function pushedShas(commits: GitCommit[]): Set<string> {
   return out
 }
 
+/** Where a commit opens on GitHub: `pushed` = the commits of a clone that GitHub has (null: the graph is read from
+ *  GitHub, every commit is there). null = not on GitHub. */
+export const commitUrl = (sha: string, github: string | null | undefined, pushed: Set<string> | null): string | null =>
+  github && (!pushed || pushed.has(sha)) ? `https://github.com/${github}/commit/${sha}` : null
+
 type BadgeHandlers = Pick<React.HTMLAttributes<HTMLElement>, 'onContextMenu' | 'onTouchStart' | 'onTouchMove' | 'onTouchEnd' | 'onTouchCancel'>
 
 function RefBadge({ r, lane, menu }: { r: GitRef; lane: number; menu?: BadgeHandlers }) {
@@ -184,10 +190,12 @@ export type GitGraphProps = {
   github?: string | null
   /** the graph is read from GitHub itself (every branch is there), not from a clone */
   onGithub?: boolean
+  /** the clones of the repository on this server: with them or `github`, the menu starts a session about a branch or a commit */
+  clones?: string[]
   className?: string
 }
 
-export function GitGraph({ commits, selected, highlight, onSelect, compact, github, onGithub, className }: GitGraphProps) {
+export function GitGraph({ commits, selected, highlight, onSelect, compact, github, onGithub, clones, className }: GitGraphProps) {
   const lang = useLang()
   const t = useT()
   const remotes = React.useMemo(() => new Set(commits.flatMap((c) => c.refs.filter((r) => r.kind === 'remote').map((r) => r.name))), [commits])
@@ -196,6 +204,10 @@ export function GitGraph({ commits, selected, highlight, onSelect, compact, gith
   // pointer, placed inside the graph (its scroller is a containing block).
   type Target = { ref: GitRef; sha?: undefined } | { sha: string; ref?: undefined }
   const [menu, setMenu] = React.useState<(Target & { x: number; y: number; url: string | null }) | null>(null)
+  const known = !!github || !!clones?.length
+  const [session, setSession] = React.useState<GitSessionTarget | null>(null)
+  const newSession = (m: Target) =>
+    setSession({ github, clones, ...(m.ref ? { branch: m.ref.name } : { sha: m.sha, subject: commits.find((c) => c.sha === m.sha)?.subject }) })
   const press = React.useRef<{ timer: number; x: number; y: number } | null>(null)
   const pressed = React.useRef(false) // the long press opened the menu: its touchend must not also select the commit
   const cancelPress = () => {
@@ -206,11 +218,7 @@ export function GitGraph({ commits, selected, highlight, onSelect, compact, gith
   const openAt = (target: Target, x: number, y: number) => {
     const b = box.current?.getBoundingClientRect()
     if (!b) return
-    const url = target.ref
-      ? branchUrl(target.ref, github, !!onGithub, remotes)
-      : github && (!pushed || pushed.has(target.sha))
-        ? `https://github.com/${github}/commit/${target.sha}`
-        : null
+    const url = target.ref ? branchUrl(target.ref, github, !!onGithub, remotes) : commitUrl(target.sha, github, pushed)
     setMenu({ ...target, x: x - b.left, y: y - b.top, url })
   }
   // stopPropagation: inside a chat message, the message's own menu (Copy / New session) must not open as well
@@ -271,6 +279,11 @@ export function GitGraph({ commits, selected, highlight, onSelect, compact, gith
           data-testid={menu?.sha ? 'git-commit-menu' : 'git-branch-menu'}
           onCloseAutoFocus={(e) => e.preventDefault()}
         >
+          {known && (
+            <DropdownMenuItem onSelect={() => menu && newSession(menu)} data-testid="git-new-session">
+              <MessageSquarePlus /> {t('git.session.new')}
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem
             disabled={!menu?.url}
             onSelect={() => menu?.url && window.open(menu.url, '_blank', 'noopener,noreferrer')}
@@ -293,6 +306,7 @@ export function GitGraph({ commits, selected, highlight, onSelect, compact, gith
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      {session && <GitSessionDialog target={session} onClose={() => setSession(null)} />}
       <svg width={w} height={h} className="pointer-events-none absolute top-0 left-0" aria-hidden="true">
         {runs.map((r) => (
           <path key={`p${r.lane}-${r.from}`} d={`M${x(r.lane)} ${r.from * rowH}V${(r.to + 1) * rowH}`} stroke={color(r.color)} strokeWidth={2} fill="none" strokeLinecap="round" />
@@ -329,6 +343,9 @@ export function GitGraph({ commits, selected, highlight, onSelect, compact, gith
         const refs = c.refs.filter((r) => r.kind !== 'head')
         const sel = selected === c.sha
         const hl = !!highlight?.size && [...highlight].some((h) => c.sha.startsWith(h))
+        const url = commitUrl(c.sha, github, pushed)
+        // the short id, a link to the commit on GitHub when it is there (the row itself opens the details)
+        const idCls = cn('w-16 shrink-0 font-mono text-xs text-muted-foreground', compact ? 'hidden sm:inline' : 'hidden md:inline')
         return (
           <div
             key={c.sha}
@@ -341,11 +358,11 @@ export function GitGraph({ commits, selected, highlight, onSelect, compact, gith
               onSelect && 'cursor-pointer hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring',
               hl && !sel && 'bg-primary/10 ring-1 ring-primary/30 ring-inset',
               sel && 'bg-accent',
-              github && 'pointer-coarse:select-none [-webkit-touch-callout:none]', // the long press opens our menu, not iOS's
+              known && 'pointer-coarse:select-none [-webkit-touch-callout:none]', // the long press opens our menu, not iOS's
             )}
             style={{ height: rowH, paddingLeft: PAD * 2 + (row.span - 1) * lane + 4 }}
             data-sha={c.sha}
-            {...(github ? menuHandlers({ sha: c.sha }) : {})}
+            {...(known ? menuHandlers({ sha: c.sha }) : {})}
           >
             {refs.length > 0 && (
               <span className="flex max-w-[60%] min-w-0 shrink items-center gap-1 overflow-hidden">
@@ -361,7 +378,22 @@ export function GitGraph({ commits, selected, highlight, onSelect, compact, gith
             <span className="w-20 shrink-0 text-right text-xs whitespace-nowrap text-muted-foreground tabular-nums" title={fmtDate(c.date, lang)}>
               {fmtRelative(c.date, lang, now)}
             </span>
-            {!compact && <span className="hidden w-16 shrink-0 font-mono text-xs text-muted-foreground md:inline">{c.sha.slice(0, 7)}</span>}
+            {url ? (
+              <a
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={t('git.commit.openGithub')}
+                onClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => e.stopPropagation()}
+                className={cn(idCls, 'rounded underline decoration-dotted underline-offset-2 outline-none hover:text-primary hover:decoration-solid focus-visible:ring-2 focus-visible:ring-ring')}
+                data-testid="git-sha-link"
+              >
+                {c.sha.slice(0, 7)}
+              </a>
+            ) : (
+              <span className={idCls}>{c.sha.slice(0, 7)}</span>
+            )}
           </div>
         )
       })}

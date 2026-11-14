@@ -47,7 +47,8 @@ def candidates(exclude: str = "") -> list[dict]:
     if config.load_config().get("team_page"):
         from . import team
         for r in team.recipients():
-            rows.append({"kind": "team", "ref": r["id"], "label": r["name"], "group": r["kind"] == "group",
+            # the name as resolve() keeps it: the "@name" written in the box is the one a sent message finds again
+            rows.append({"kind": "team", "ref": r["id"], "label": _plain(r["name"]), "group": r["kind"] == "group",
                          "hint": ", ".join(r.get("members") or []) if r["kind"] == "group" else ""})
     return rows
 
@@ -74,7 +75,8 @@ def resolve(items: list[dict] | None, sender: str = "") -> list[dict]:
             if agents.is_agent_path(ref) and agents.exists(ref):
                 a = agents.load(ref)
                 out.append({"kind": kind, "ref": ref, "label": a["name"] or agents.parse(ref)[2],
-                            "where": _topic(ref), "command": f"maxxing agents send {ref}"})
+                            "where": _topic(ref), "command": f"maxxing agents send {ref}",
+                            **({"avatar": a["avatar"]} if a.get("avatar") else {})})
         else:
             if team_rows is None:
                 from . import team

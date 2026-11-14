@@ -6,8 +6,9 @@ import { cn } from '@/lib/utils'
 import { useLang, useT } from '@/i18n'
 import { CopyButton, Skeleton } from '@/components/ui'
 
-/** One commit: full message, author, date, files touched with +/- (the diff stays in git / GitHub). */
-export function CommitDetail({ repo, sha, className }: { repo: string; sha: string; className?: string }) {
+/** One commit: full message, author, date, files touched with +/- (the diff stays in git / GitHub). `url`: the commit
+ *  on GitHub for a clone of the server (a repository read from GitHub brings its own). */
+export function CommitDetail({ repo, sha, url, className }: { repo: string; sha: string; url?: string | null; className?: string }) {
   const t = useT()
   const lang = useLang()
   const { data, isLoading, error } = useGitCommit(repo, sha)
@@ -16,6 +17,7 @@ export function CommitDetail({ repo, sha, className }: { repo: string; sha: stri
   const [title, ...body] = data.message.split('\n')
   const add = data.files.reduce((n, f) => n + (f.additions || 0), 0)
   const del = data.files.reduce((n, f) => n + (f.deletions || 0), 0)
+  const link = data.url || url
   return (
     <div className={cn('grid grid-cols-[minmax(0,1fr)] gap-3 rounded-lg border bg-card p-3 text-[13px]', className)} data-testid="git-commit">
       <div className="grid grid-cols-[minmax(0,1fr)] gap-1">
@@ -30,8 +32,8 @@ export function CommitDetail({ repo, sha, className }: { repo: string; sha: stri
           <CopyButton text={data.sha} className="size-5" />
         </span>
         {data.parents.length > 1 && <span>{t('git.mergeOf', { count: data.parents.length })}</span>}
-        {data.url && (
-          <a href={data.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline pointer-coarse:min-h-10">
+        {link && (
+          <a href={link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline pointer-coarse:min-h-10" data-testid="git-commit-link">
             GitHub <ExternalLink className="size-3" />
           </a>
         )}

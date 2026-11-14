@@ -3,12 +3,9 @@
 // Same pattern as the server's MENTION_RE (agent_rooms.py), so a chip is exactly a name the server reads.
 import * as React from 'react'
 import type { Components } from 'react-markdown'
-import { UsersRound } from 'lucide-react'
 import { useT } from '@/i18n'
 import type { AgentGroupMember } from '@/lib/types'
-import { cn } from '@/lib/utils'
-import { Sensitive } from '@/components/ui'
-import { AgentAvatarIcon } from './Avatar'
+import { Chip, withChips, type ChipData, type ChipSpan, type ChipTone } from '@/features/chips/Chip'
 
 export const ALL_WORDS = ['all', 'everyone', 'tous']
 const MENTION_RE = /(?<![\w@./-])@([a-z0-9][a-z0-9-]{0,47})\b/gi
@@ -36,47 +33,38 @@ export function namedIn(text: string, map: MentionMap, members: AgentGroupMember
   return out
 }
 
-export function MentionChip({ member, handle, tone = 'card', className }: { member: AgentGroupMember | null; handle: string; tone?: 'card' | 'primary'; className?: string }) {
-  const t = useT()
-  return (
-    <span
-      className={cn(
-        'inline-flex max-w-full items-center gap-1 rounded-full py-px pr-1.5 pl-0.5 align-[-0.2em] text-[0.92em] font-medium whitespace-nowrap',
-        tone === 'primary' ? 'bg-primary-foreground/20 text-primary-foreground' : 'border bg-primary/10 text-primary',
-        className,
-      )}
-      title={`@${handle}`}
-      data-mention={handle}
-    >
-      {member ? (
-        <AgentAvatarIcon avatar={member.avatar} size={16} className="rounded-full" />
-      ) : (
-        <span className="grid size-4 place-items-center rounded-full bg-muted">
-          <UsersRound className="size-2.5 text-muted-foreground" />
-        </span>
-      )}
-      <span className="truncate">
-        <Sensitive length={6}>{member?.display_name || (member === null ? t('groups.mention.all') : handle)}</Sensitive>
-      </span>
-    </span>
-  )
+/** A member (null = @all) as a chip: the same one as the sessions' @ and the "/" commands. */
+export function memberChip(member: AgentGroupMember | null, handle: string, allLabel: string): ChipData {
+  return member
+    ? { kind: 'agent', label: member.display_name || handle, raw: `@${handle}`, avatar: member.avatar ?? null }
+    : { kind: 'all', label: allLabel, raw: `@${handle}` }
 }
 
-/** A text with its known @names as chips (unknown ones stay as typed). */
-export function mentionNodes(text: string, map: MentionMap, tone?: 'card' | 'primary'): React.ReactNode {
-  if (!text.includes('@')) return text
-  const out: React.ReactNode[] = []
-  let at = 0
+export function MentionChip({ member, handle, tone = 'card', className }: { member: AgentGroupMember | null; handle: string; tone?: ChipTone; className?: string }) {
+  const t = useT()
+  return <Chip chip={memberChip(member, handle, t('groups.mention.all'))} tone={tone} className={className} />
+}
+
+/** Where the known @names of a text are (unknown ones stay as typed). */
+export function mentionSpans(text: string, map: MentionMap, allLabel: string): ChipSpan[] {
+  if (!text.includes('@')) return []
+  const out: ChipSpan[] = []
   for (const m of text.matchAll(MENTION_RE)) {
     const h = m[1].toLowerCase()
-    if (!map.has(h)) continue
-    if (m.index > at) out.push(text.slice(at, m.index))
-    out.push(<MentionChip key={m.index} member={map.get(h) ?? null} handle={h} tone={tone} />)
-    at = m.index + m[0].length
+    if (map.has(h)) out.push({ start: m.index, end: m.index + m[0].length, chip: memberChip(map.get(h) ?? null, h, allLabel) })
   }
-  if (!out.length) return text
-  if (at < text.length) out.push(text.slice(at))
   return out
+}
+
+/** A text with its known @names as chips. */
+export function MentionText({ text, map, tone }: { text: string; map: MentionMap; tone?: ChipTone }) {
+  const t = useT()
+  return <>{withChips(text, mentionSpans(text, map, t('groups.mention.all')), tone)}</>
+}
+
+/** For places without hooks (Markdown overrides): the chips' "@all" is labelled by MentionChip. */
+export function mentionNodes(text: string, map: MentionMap, tone?: ChipTone): React.ReactNode {
+  return text.includes('@') ? <MentionText text={text} map={map} tone={tone} /> : text
 }
 
 /** Every string child (deep) through mentionNodes; elements such as `code` are left alone. */

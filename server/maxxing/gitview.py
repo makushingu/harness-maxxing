@@ -43,6 +43,9 @@ MAX_LIMIT = 1000
 CACHE_S = 60
 PRUNE = {"node_modules", "__pycache__", "venv", "site-packages", "dist", "build", "target", "vendor", "proc", "sys",
          "snap", "attachments", "trash"}
+# throwaway places: a test repository left under one is found (a pull request's session, the photos' cleanup) but is
+# not a project, so the Git page does not list it; its graph still opens by its path
+THROWAWAY = {"tmp", "temp", "scratch"}
 SHA_RE = re.compile(r"\A[0-9a-fA-F]{4,40}\Z")
 FULL_NAME_RE = re.compile(r"^[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}\Z")
 GH_PATH_RE = re.compile(r"/*([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+?)(?:\.git)?/?")
@@ -138,6 +141,19 @@ def _is_repo(d: Path) -> bool:
         return False                                      # a name longer than the system allows: not a repository
 
 
+def _marker(d: Path) -> bool:
+    """A `.git` that is a file without `gitdir:` (uv leaves an empty one in its cache, so that tools stop looking for
+    a repository above): a marker, not a repository."""
+    git = d / ".git"
+    try:
+        if not git.is_file():
+            return False
+        with git.open("rb") as f:
+            return not f.read(64).lstrip().startswith(b"gitdir:")
+    except OSError:
+        return False
+
+
 def _walk(root: Path) -> list[Path]:
     found: list[Path] = []
     budget = MAX_DIRS
@@ -146,7 +162,8 @@ def _walk(root: Path) -> list[Path]:
         d, depth = stack.pop()
         budget -= 1
         if _is_repo(d):
-            found.append(d)
+            if not _marker(d):
+                found.append(d)
             continue                                     # a clone's own tree is not searched for more clones
         if depth >= MAX_DEPTH:
             continue
@@ -647,9 +664,19 @@ def github_graph(full_name: str, limit: int = DEFAULT_LIMIT, branches: list[str]
         wanted = [default] + [b for b in heads if b != default]
     wanted = wanted[: max_branches + 1]
 
+    deeper = []                                           # the default branch has more history than what was read
+
     def fetch(b: str) -> list[dict]:
-        n = min(100, limit) if b == default else min(40, limit)
-        return _gh_repo(full, f"/repos/{full}/commits", {"sha": b, "per_page": n})
+        if b != default:
+            return _gh_repo(full, f"/repos/{full}/commits", {"sha": b, "per_page": min(40, limit)})
+        per, got = min(100, limit), []                    # the main history: as far as the limit asks, a page at a time
+        for page in range(1, -(-limit // per) + 1):
+            batch = _gh_repo(full, f"/repos/{full}/commits", {"sha": b, "per_page": per, "page": page})
+            got += batch if isinstance(batch, list) else []
+            if not isinstance(batch, list) or len(batch) < per:
+                return got
+        deeper.append(True)
+        return got
 
     with ThreadPoolExecutor(max_workers=6) as ex:
         lists = list(ex.map(fetch, wanted))
@@ -672,7 +699,7 @@ def github_graph(full_name: str, limit: int = DEFAULT_LIMIT, branches: list[str]
          "branch": default, "private": bool(info.get("private")), "permission": _perm(info.get("permissions")),
          "url": info.get("html_url"), "description": info.get("description") or "",
          "branches": len(heads), "branches_shown": len(wanted)}
-    return {"repo": s, "commits": commits[:limit], "truncated": tip_count > limit or len(heads) > len(wanted)}
+    return {"repo": s, "commits": commits[:limit], "truncated": tip_count > limit or len(heads) > len(wanted) or bool(deeper)}
 
 
 def _topo(commits: list[dict]) -> list[dict]:
@@ -756,9 +783,17 @@ def any_commit(repo: str, sha: str) -> dict:
     return commit(repo, sha)
 
 
+def _throwaway(p: Path, root: Path) -> bool:
+    try:
+        return any(part in THROWAWAY for part in p.relative_to(root).parts[:-1])
+    except ValueError:
+        return False
+
+
 def overview(refresh: bool = False) -> dict:
     """Local clones + GitHub account; each GitHub repository lists its local clones."""
-    local = local_repos(refresh)
+    root = _root()
+    local = [r for r in local_repos(refresh) if not _throwaway(Path(r["path"]), root)]
     gh = github_repos(refresh)
     clones: dict[str, list[str]] = {}
     for r in local:
@@ -766,7 +801,7 @@ def overview(refresh: bool = False) -> dict:
             clones.setdefault(r["github"].lower(), []).append(r["path"])
     for r in gh["repos"]:
         r["local_paths"] = clones.get(r["full_name"].lower(), [])
-    return {"root": str(_root()), "local": local, "github": gh}
+    return {"root": str(root), "local": local, "github": gh}
 
 
 # ---- Changes view (codediff): the pull request of a branch, and opening one ------------------------------------

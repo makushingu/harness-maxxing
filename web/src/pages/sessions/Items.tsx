@@ -10,7 +10,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Markdown } from '@/components/ui/markdown'
 import { filePreviewUrl, fileRawUrl, fileStamp, fileThumbUrl, prefetchImage, PREVIEW_W } from '@/lib/queries/files'
 import { Thumb } from '@/features/files/Thumb'
-import type { ChangesEvent, ClaudeModel, ResultField } from '@/lib/types'
+import type { ChangesEvent, ClaudeModel, ResultField, SentMention } from '@/lib/types'
+import { ChipText } from './mentions'
 import { costTip, ResultLineMenu, useCostIsBilled, useResultLine } from './resultLine'
 import { isShownTask, taskStatus, type Item } from './log'
 import { TaskDetails, TaskElapsed, TaskStatusIcon, useOpenTaskLine } from './Tasks'
@@ -40,6 +41,8 @@ export type ItemCtx = {
   scope?: readonly string[] | null
   /** The session shown (unset outside a session column): what the Changes chip opens. */
   sid?: string
+  /** Its topic (`projects/<p>/topics/<t>`): the skills a "/name" message can start. */
+  path?: string
 }
 /** Hover / focus on a media thumbnail: start loading what the viewer will show (light preview, video poster). */
 function prefetchMedia(p: string) {
@@ -83,6 +86,7 @@ export const ItemRow = React.memo(function ItemRow({
           at={at}
           source={item.ev.source}
           from={item.ev.from}
+          mentions={item.ev.mentions}
           injected={item.ev.injected}
           onFork={onFork && (() => onFork(seed()))}
           onEdit={onHide && onEdit && (() => onEdit(item.key, at, seed()))}
@@ -280,6 +284,7 @@ export function UserMessage({
   at,
   source,
   from,
+  mentions,
   injected,
   pending,
   queued,
@@ -296,6 +301,8 @@ export function UserMessage({
   source?: string
   /** Sent by another session's turn (maxxing sessions send): a link to it. */
   from?: { session: string; title: string }
+  /** The @ it names: drawn as chips (with the "/" command it starts with). */
+  mentions?: SentMention[]
   /** Added to a running turn (Add to plan). */
   injected?: boolean
   pending?: boolean
@@ -306,7 +313,7 @@ export function UserMessage({
 } & Omit<MsgActions, 'text'>) {
   const t = useT()
   const lang = useLang()
-  const { tz } = React.useContext(ItemContext)
+  const { tz, path } = React.useContext(ItemContext)
   // Quotes sent from the composer lead the message as Markdown blockquotes: shown as quote blocks (Copy keeps the raw text).
   const { quotes, rest } = React.useMemo(() => splitQuotes(text), [text])
   const { onContextMenu, touch, menu } = useMessageMenu({ text: [text, heard?.text].filter(Boolean).join('\n\n'), onFork, onEdit, onDelete, onRevert })
@@ -329,7 +336,7 @@ export function UserMessage({
                 </blockquote>
               ),
             )}
-            {quotes.length ? rest : text}
+            <ChipText text={quotes.length ? rest : text} mentions={mentions} path={path} />
           </Sensitive>
         </div>
       )}

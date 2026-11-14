@@ -57,6 +57,9 @@ def test_a_mention_tells_claude_the_command_and_nothing_else(client, topic, mx, 
     assert "nope" not in prompt and "rm -rf" not in prompt and prompt.count("\n- @") == 2
     shown = [e for e in all_events(client, a["id"]) if e["type"] == "user"][-1]
     assert shown["text"] == "Summarize and send it to @Shop and @Lea"        # the note is not displayed
+    # the page draws who it names as chips: kind, ref and the name as written, never the command
+    assert shown["mentions"] == [{"kind": "session", "ref": b["id"], "label": "Shop"},
+                                 {"kind": "team", "ref": "p1", "label": "Lea", "group": False}]
 
 
 def test_sessions_send_from_a_turn_says_who_sent_it_and_stops_ping_pong(client, topic, mx, monkeypatch, capsys):

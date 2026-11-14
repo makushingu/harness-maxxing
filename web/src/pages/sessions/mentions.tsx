@@ -2,10 +2,13 @@
 // sessions, the agents, the Team contacts and groups (GET /api/sessions/{id}/mentions). The pick writes "@Name" in
 // the text; when the message is sent, the server tells Claude how to write to each one named (mentions.py), and Claude
 // sends if the message asks it to ("summarize and send it to @Lea"). Nothing goes out by itself.
+import * as React from 'react'
 import { Bot, MessageSquare, User, Users } from 'lucide-react'
 import type { useT } from '@/i18n'
-import type { Mention, MentionTarget } from '@/lib/types'
 import { FOLD, fold, type MenuRow } from './SlashMenu'
+import { agentRoute, useTopicSkills } from '@/lib/queries'
+import { findCommand, findNames, withChips, type ChipData } from '@/features/chips/Chip'
+import type { MentionTarget, SentMention } from '@/lib/types'
 
 export type MentionRow = MenuRow & { target?: MentionTarget; /** The "+ N more" row of this group. */ expand?: string }
 
@@ -63,9 +66,43 @@ const written = (text: string, label: string) =>
   new RegExp(`@${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}\\p{N}_-])`, 'u').test(text)
 
 /** The mentions still written in the text when it is sent (a name deleted by hand is no longer one). */
-export function usedMentions(text: string, picked: MentionTarget[]): Mention[] {
+export function usedMentions(text: string, picked: MentionTarget[]): SentMention[] {
   const seen = new Set<string>()
   return picked
     .filter((x) => written(text, x.label) && !seen.has(`${x.kind}:${x.ref}`) && !!seen.add(`${x.kind}:${x.ref}`))
-    .map((x) => ({ kind: x.kind, ref: x.ref }))
+    .map((x) => ({ kind: x.kind, ref: x.ref, label: x.label, group: x.group, avatar: x.avatar }))
+}
+
+/** Where a click on a named one goes: the session, the agent's page, Team. */
+function chipTo(kind: string, ref: string): string | undefined {
+  if (kind === 'session') return `/sessions?session=${encodeURIComponent(ref)}`
+  if (kind === 'agent') {
+    const m = /^projects\/([^/]+)\/topics\/([^/]+)\/agents\/([^/]+)$/.exec(ref)
+    return m ? agentRoute({ project: m[1], topic: m[2], name: m[3] }) : undefined
+  }
+  if (kind === 'team') return '/team'
+}
+
+/** A name of the "@" menu (or of a sent message, SentMention) as a chip. */
+export function targetChip(x: Pick<MentionTarget, 'kind' | 'ref' | 'label' | 'group' | 'state' | 'avatar'>): ChipData {
+  return {
+    kind: x.kind === 'team' ? (x.group ? 'group' : 'team') : x.kind === 'agent' ? 'agent' : 'session',
+    label: x.label,
+    raw: `@${x.label}`,
+    avatar: x.kind === 'agent' ? (x.avatar ?? null) : undefined,
+    running: x.state === 'running',
+    to: chipTo(x.kind, x.ref),
+  }
+}
+
+/** A sent message's text: the "/" skill it starts with (one its topic `path` has) and the @ it named, as chips. */
+export function ChipText({ text, mentions, path, tone }: { text: string; mentions?: SentMention[]; path?: string; tone?: 'card' | 'primary' }) {
+  const { data: skills } = useTopicSkills(path || '', text.startsWith('/'))
+  const spans = React.useMemo(() => {
+    const known = new Set((skills?.skills || []).map((s) => s.name))
+    const cmd = findCommand(text, (n) => known.has(n))
+    const names = mentions?.length ? findNames(text, mentions.map((m) => ({ raw: `@${m.label}`, chip: targetChip(m) }))) : []
+    return cmd ? [cmd, ...names.filter((n) => n.start >= cmd.end)] : names
+  }, [text, mentions, skills])
+  return <>{withChips(text, spans, tone)}</>
 }

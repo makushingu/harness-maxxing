@@ -99,6 +99,8 @@ def normalize(ev: dict) -> list[dict]:
             out["client_ids"] = [str(c) for c in ev["client_ids"]]
         if ev.get("injected"):                # added to a running turn (POST /inject): not the start of a turn
             out["injected"] = True
+        if isinstance(ev.get("mentions"), list):   # the @ of the composer (runner._mentions_shown): drawn as chips
+            out["mentions"] = [m for m in ev["mentions"] if isinstance(m, dict) and m.get("label")]
         f = ev.get("from")
         if isinstance(f, dict) and f.get("session"):   # sent by another session's turn (maxxing sessions send)
             out["from"] = {"session": str(f["session"]), "title": str(f.get("title") or "")}
