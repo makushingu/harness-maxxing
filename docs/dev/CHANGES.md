@@ -7,6 +7,14 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Agents, owner's conversation (`agents.manager_turn`): `run_settings(manager=True)` returns `sandbox: False`,
+  `approvals: False` (no `--permission-prompt-tool`), settings = `agent_guard.chat_settings` for a sandboxed agent
+  (no `sandbox` block; `permissions.deny` = Read/Edit of the vault and private paths + Edit of `locked_paths` except
+  its CLAUDE.md; its rules hook) else `settings()`; the runner gives it the topic's mode (`effective_mode` without the
+  session's `permission_mode`, i.e. not the agent's). `agent_guard.sandboxed_turn()` / `sandboxed_session()` are None
+  for it (the `maxxing` CLI limits of a sandboxed turn do not apply; `_manages` still limits `agents` to itself).
+  `settings()` lost `manager=` and `MANAGER_SAFE`; `MANAGER_BOX` now says the runs are sandboxed. Runs unchanged.
+
 - Memory: `memory.files()` adds `heavy` (bytes > `max_bytes(limit)` = limit x 1024 / `LINES_PER_KB`, 1 KB for 10
   lines) and `over` is now "too many lines OR too heavy"; `/api/memory` and `maxxing memory --json` add `max_bytes`;
   `compact_prompt` names both limits; skills `memory` (one or two lines per bullet) and `memory-compaction` (weight,

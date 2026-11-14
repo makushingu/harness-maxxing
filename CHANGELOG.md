@@ -5,6 +5,13 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 
 ## Unreleased
 
+Changed:
+- **Agents: when you talk with an agent, it is not limited and asks nothing.** Your conversation with an agent now
+  runs like a session of its topic: no sandbox and no approvals, even when the agent is protected, because you just
+  asked. Its runs (schedules, webhooks, e-mail, notifications, another agent, **Run now**) keep its sandbox, its
+  domains and **Ask before risky actions**, as before. In the conversation it still sees only its own keys, never
+  reads the vault, and a change of its safety settings still waits for your OK.
+
 Fixed:
 - **Memory: a heavy memory.md no longer goes unnoticed, and sessions stop being summarized after almost every
   message because of it.** A `memory.md` is part of the instructions of every session of its folder, and Claude

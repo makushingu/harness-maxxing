@@ -3473,7 +3473,7 @@ export const en = {
   'agents.protect.free': 'Free',
   'agents.protect.freeDesc': 'Like a session: it works on the whole server without asking. Fine for an agent that only reads what you give it.',
   'agents.protect.box': 'Protected',
-  'agents.protect.boxDesc': 'In a sandbox: only its folders and its sites, never the secrets. Advised when it reads mails, webhooks or web pages.',
+  'agents.protect.boxDesc': 'Its runs stay in a sandbox: only its folders and its sites, never the secrets. Advised when it reads mails, webhooks or web pages. When you talk with it, it is not limited.',
   'agents.protect.advice': 'It reads text from outside (a mailbox, a webhook, the feed), which may carry orders: Protected is advised.',
   'agents.settings.details': 'Details',
   'agents.settings.tools': 'Allowed and forbidden tools',

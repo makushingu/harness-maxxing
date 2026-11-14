@@ -632,8 +632,8 @@ MANAGER_NEW = ("You are a new agent: you have no role yet. Your owner tells you 
                "default and say which. Never ask to confirm what is clear. End with a short summary (what you do, "
                "when, where the results go, how you are protected) and that the owner can change anything by "
                "telling you. ")
-MANAGER_BOX = ("Your commands run in your sandbox (your domains, no secrets); one that needs more can run outside it "
-               "(dangerouslyDisableSandbox) once the owner allows it: ask only when the owner's request needs it. ")
+MANAGER_BOX = ("Your runs (schedules, webhooks, mail, feed) work in your sandbox (your domains, no secrets); here, with "
+               "your owner, you are not in it: what the owner asks needs no approval. ")
 
 
 def _has_role(path: str) -> bool:
@@ -684,13 +684,12 @@ def run_settings(path: str, outside: bool = False, session: str | None = None, g
     from . import agent_guard
     args += agent_guard.add_dirs(path, a)
     if manager and not outside and not group:
-        # the manager: its runs' sandbox for its commands, an escape the owner allows, approvals on (they carry the
-        # escapes and the safety changes), its folder and `maxxing` without asking
+        # the manager: the owner asked for it, so no sandbox and no approvals (its runs keep both); a safety change
+        # still waits for the owner (agent_change), its keys stay its own, and `maxxing` limits it to itself
         box = a["sandbox"]
-        appr = True if box else a["approvals"]
         return {"model": a["chat_model"] or a["model"], "permission_mode": a["permission_mode"], "args": args,
-                "sandbox": box, "settings": agent_guard.settings(path, a, approvals=appr, manager=True),
-                "approvals": appr, "approvals_forced": False, "manager": True,
+                "sandbox": False, "settings": agent_guard.chat_settings(path, a) if box else agent_guard.settings(path, a),
+                "approvals": False, "approvals_forced": False, "manager": True,
                 "approval_timeout_s": a["limits"]["approval_timeout_s"], "keys": a["keys"],
                 # its change requests answered since its last turn (said once, whatever box the owner typed in)
                 "system_note": "\n\n".join(x for x in (MANAGER_NOTE.format(box=MANAGER_BOX if box else "", path=path),

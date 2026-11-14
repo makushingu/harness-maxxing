@@ -219,7 +219,7 @@ def test_runner_flags_for_an_agent_with_approvals(client, topic, mx):
 def test_end_to_end_allow_from_the_api(client, topic, mx):
     from maxxing import approvals
     _agent(client, approvals=True)
-    run = client.post("/api/agents/acme/blog/writer/run", json={"text": "APPROVE push"}).json()
+    run = _run("APPROVE push")   # a run asks
     sid = run["session"]["id"]
     approvals.scan()
     pend = wait_for(lambda: client.get(f"/api/approvals?session={sid}").json()["approvals"], timeout=15)
@@ -246,7 +246,7 @@ def test_end_to_end_allow_from_the_api(client, topic, mx):
 def test_end_to_end_deny_with_message(client, topic, mx):
     from maxxing import approvals
     _agent(client, approvals=True)
-    sid = client.post("/api/agents/acme/blog/writer/run", json={"text": "APPROVE push"}).json()["session"]["id"]
+    sid = _run("APPROVE push")["session"]["id"]
     p = wait_for(lambda: client.get(f"/api/approvals?session={sid}").json()["approvals"], timeout=15)[0]
     assert client.post(f"/api/approvals/{p['id']}", json={"decision": "deny", "message": "not today"}).status_code == 200
     wait_idle(client, sid)
@@ -314,7 +314,7 @@ def test_two_answers_at_once_only_one_wins(client, mx):
 
 def test_stopped_turn_expires_its_requests(client, topic, mx):
     _agent(client, approvals=True)
-    sid = client.post("/api/agents/acme/blog/writer/run", json={"text": "APPROVE push"}).json()["session"]["id"]
+    sid = _run("APPROVE push")["session"]["id"]
     wait_for(lambda: client.get(f"/api/approvals?session={sid}").json()["approvals"], timeout=15)
     assert client.post(f"/api/sessions/{sid}/stop").status_code == 200
     wait_idle(client, sid)
@@ -499,7 +499,7 @@ def test_a_topic_in_mode_ask_waits_for_the_user_and_always_allow_adds_a_rule(cli
 
 def test_always_allow_is_refused_for_an_agent_and_with_deny(client, topic, mx):
     _agent(client, approvals=True)
-    sid = client.post("/api/agents/acme/blog/writer/run", json={"text": "APPROVE push"}).json()["session"]["id"]
+    sid = _run("APPROVE push")["session"]["id"]
     p = wait_for(lambda: client.get(f"/api/approvals?session={sid}").json()["approvals"], timeout=15)[0]
     assert p["always_rule"] == ""                        # agents keep their own tool lists
     assert client.post(f"/api/approvals/{p['id']}", json={"decision": "allow", "always": True}).status_code == 400
