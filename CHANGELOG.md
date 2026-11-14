@@ -3,7 +3,7 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
-## Unreleased
+## 2.0.0-alpha.151 - 2026-11-14
 
 New:
 - **Chips for names and commands.** When you pick someone from the `@` menu (a session, an agent, a Team contact or

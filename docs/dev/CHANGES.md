@@ -5,7 +5,7 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
-## Unreleased
+## 2.0.0-alpha.151 - 2026-11-14
 
 - Chips: one component `web/src/features/chips/Chip.tsx` (`Chip`, `ChipData` kinds session/agent/team/group/all/
   command, `findNames`, `findCommand`, `withChips`, `ChipBackdrop`). In a textarea the chip is a backdrop: the same
