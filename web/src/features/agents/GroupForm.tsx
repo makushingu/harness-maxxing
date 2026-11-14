@@ -30,6 +30,34 @@ const DEFAULT_LIMITS: AgentGroupLimits = { waves: 3, replies: 10, per_hour: 40 }
 /** name: [min, max] (agent_rooms.LIMITS) */
 const LIMIT_RANGE: Record<keyof AgentGroupLimits, [number, number]> = { waves: [1, 6], replies: [1, 30], per_hour: [1, 200] }
 
+const clampLimit = (text: string, [lo, hi]: [number, number]) => {
+  const n = Math.round(Number(text))
+  return Number.isFinite(n) ? Math.max(lo, Math.min(hi, n)) : null
+}
+
+/** A limit typed freely (empty or out of range while typing), bounded when the field is left. */
+function LimitInput({ range, value, onValue, ...rest }: { range: [number, number]; value: number; onValue: (n: number) => void; 'data-testid'?: string }) {
+  const [text, setText] = React.useState(String(value))
+  React.useEffect(() => setText((s) => (clampLimit(s, range) === value ? s : String(value))), [value, range])
+  return (
+    <Input
+      type="number"
+      inputMode="numeric"
+      min={range[0]}
+      max={range[1]}
+      value={text}
+      onChange={(e) => {
+        setText(e.target.value)
+        const n = clampLimit(e.target.value, range)
+        if (n !== null) onValue(n)
+      }}
+      onBlur={() => setText(String(value))}
+      className="tabular-nums"
+      {...rest}
+    />
+  )
+}
+
 /** Starters: a name, an emoji, a goal and the roles of the first members, in order (texts in the dictionaries). */
 const STARTERS: { id: 'writing' | 'council' | 'support'; emoji: string; roles: number }[] = [
   { id: 'writing', emoji: '✍️', roles: 3 },
@@ -402,17 +430,10 @@ export function GroupForm({
         <div className="grid items-start gap-3 sm:grid-cols-3">
           {(Object.keys(LIMIT_RANGE) as (keyof AgentGroupLimits)[]).map((k) => (
             <FormField key={k} label={t(`groups.limits.${k}` as TKey)} hint={t(`groups.limits.${k}Hint` as TKey)}>
-              <Input
-                type="number"
-                inputMode="numeric"
-                min={LIMIT_RANGE[k][0]}
-                max={LIMIT_RANGE[k][1]}
-                value={String(f.limits[k])}
-                onChange={(e) => {
-                  const n = Math.round(Number(e.target.value))
-                  if (Number.isFinite(n)) set('limits', { ...f.limits, [k]: Math.max(LIMIT_RANGE[k][0], Math.min(LIMIT_RANGE[k][1], n)) })
-                }}
-                className="tabular-nums"
+              <LimitInput
+                range={LIMIT_RANGE[k]}
+                value={f.limits[k]}
+                onValue={(n) => set('limits', { ...f.limits, [k]: n })}
                 data-testid={`group-limit-${k}`}
               />
             </FormField>
