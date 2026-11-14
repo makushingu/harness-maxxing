@@ -248,3 +248,16 @@ def test_webhook_and_watch_refuse_text_that_is_not_utf8(client, topic, capsys):
         assert "not valid text" in err and "Traceback" not in err
     assert agents.load(A)["triggers"] == []
 
+
+def test_set_says_which_fields_were_ignored(client, topic, capsys):
+    _two_agents(client)
+    assert cli.main(["agents", "set", "writer", "bogus=1"]) == 2
+    out = capsys.readouterr()
+    assert "changed" not in out.out and "ignored" in out.err and "bogus" in out.err
+    assert cli.main(["agents", "set", "writer", 'enabled="no"']) == 2
+    assert "changed" not in capsys.readouterr().out and agents.load(A)["enabled"] is True
+    assert cli.main(["agents", "set", "writer", "enabled=false", "bogus=1"]) == 0
+    out = capsys.readouterr()
+    assert "changed: enabled" in out.out and "bogus" in out.err and agents.load(A)["enabled"] is False
+    assert cli.main(["agents", "set", "writer", "enabled=false"]) == 0      # already so: taken, not ignored
+    assert "changed: enabled" in capsys.readouterr().out
