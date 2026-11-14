@@ -217,7 +217,25 @@ export function LiveView({ profile, nav, session, who, start, onMinimize, classN
   const b = state?.browser || null
   const me = !!state?.me
   const running = b?.state === 'running'
-  const tabs = b?.tabs || []
+  // a closed tab leaves the row at once; it comes back only if the browser still has it after a while (refused: at once)
+  const [closing, setClosing] = React.useState<Record<string, number>>({})
+  const all = b?.tabs || []
+  const tabs = all.filter((x) => !closing[x.key] || Date.now() - closing[x.key] > 8000)
+  React.useEffect(() => {
+    const keys = Object.keys(closing)
+    if (!keys.length) return
+    const left = keys.filter((k) => all.some((x) => x.key === k) && Date.now() - closing[k] <= 8000)
+    if (left.length !== keys.length) setClosing(Object.fromEntries(left.map((k) => [k, closing[k]])))
+    if (!left.length) return
+    const id = setTimeout(() => setClosing((c) => ({ ...c })), 8100)
+    return () => clearTimeout(id)
+  }, [all, closing])
+  const closeTab = (key: string) => {
+    setClosing((c) => ({ ...c, [key]: Date.now() }))
+    tabOp.mutate({ profile, op: 'close', key }, {
+      onError: () => setClosing((c) => Object.fromEntries(Object.entries(c).filter(([k]) => k !== key))),
+    })
+  }
   const front = tabs.find((x) => x.front)
   const shared = !!front && front.by.kind !== 'you'
   // the requests of this navigator's turns (the session's first)
@@ -331,7 +349,7 @@ export function LiveView({ profile, nav, session, who, start, onMinimize, classN
       <div className="flex h-10 shrink-0 items-end gap-1 bg-muted pr-1.5 pl-2">
         <div className="flex min-w-0 flex-1 items-end gap-0.5 overflow-x-auto" role="tablist" aria-label={t('browser.tabs')}>
           {tabs.map((tab) => (
-            <TabButton key={tab.key} tab={tab} onShow={() => tabOp.mutate({ profile, op: 'show', key: tab.key })} onClose={() => tabOp.mutate({ profile, op: 'close', key: tab.key })} />
+            <TabButton key={tab.key} tab={tab} onShow={() => tabOp.mutate({ profile, op: 'show', key: tab.key })} onClose={() => closeTab(tab.key)} />
           ))}
           <Button variant="ghost" size="icon-sm" className="mb-1 shrink-0" onClick={() => tabOp.mutate({ profile, op: 'new', nav })} title={t('browser.newTab')} aria-label={t('browser.newTab')} data-testid="browser-new-tab">
             <Plus />

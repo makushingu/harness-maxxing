@@ -563,7 +563,7 @@ Approval { id: string (16 hex), session: string, agent_path: string, tool: strin
 
 `maxxing/browser/` + `maxxing/api/browser.py` (INTERNALS "maxxing.browser"). Off unless `browser_feature` (Settings).
 Settings in config `browser`: global values, **profiles** (each one its own Chromium: sign-ins, exit; `main`
-= the person's "Personal", always there, cannot be deleted) and **exits** (shown as "connections": where a profile's
+= the person's "General", always there, cannot be deleted; also the profile of the projects `general` and `system`) and **exits** (shown as "connections": where a profile's
 traffic leaves; `direct` = this server, always there, not stored). **One profile per project** (`project` =
 `projects/<name>`, one at most per project): made with the exit and `on_exit_down` of `main`, named
 after the project, the first time a turn of the project gets the browser (`active_for`), when an owner view of an

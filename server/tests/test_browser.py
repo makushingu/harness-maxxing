@@ -1383,3 +1383,19 @@ def test_a_session_navigator_is_temporary_and_journaled(client, mx):
     assert not tabs.of_nav("session:sess01")
     v = client.get("/api/browser/profiles/main").json()
     assert [(r["session"], r["open"]) for r in v["temporary"]] == [("sess01", False)]
+
+
+def test_general_and_system_use_the_general_profile(client, mx):
+    """The projects general and system have no profile of their own: their sessions use `main` ("General"). A
+    profile made for one of them before stays as a profile of its own (no project: it can be deleted)."""
+    from maxxing import browser
+    from maxxing import config
+    s = browser.settings()
+    s["profiles"].append({**browser.PROFILE_DEFAULTS, "id": "general", "name": "general", "project": "projects/general"})
+    config.update_config(browser=s)                     # as an older version wrote it
+    assert any(p["id"] == "general" for p in browser.profiles())
+    for project in ("projects/general", "projects/system"):
+        assert browser.ensure_project_profile(project) == browser.MAIN
+        assert browser.resolve(f"{project}/topics/inbox")["profile"] == browser.MAIN
+    assert browser.resolve("projects/acme/topics/blog", create=True)["profile"] not in ("", browser.MAIN)
+    assert all(p.get("project") != "projects/general" for p in browser.profiles())

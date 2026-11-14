@@ -4542,7 +4542,7 @@ export const en = {
   'browser.panel.projectProfile': "Its sessions use the project's profile: {name}.",
   'browser.agent.profile': 'Browser profile',
   'browser.exits': 'Connections',
-  'browser.mainProfile': 'Personal',
+  'browser.mainProfile': 'General',
   'browser.paused': 'paused',
   'browser.nav.me': 'Your browser',
   'browser.nav.session': 'A session',

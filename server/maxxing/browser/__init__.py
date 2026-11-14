@@ -4,7 +4,8 @@ Off unless the feature is on (Settings -> Features: `browser_feature`). Its sett
 global ones (sleep, asks, downloads) plus
 
 - **profiles**: each one its own Chromium (its own sign-ins) and its exit; it opens any public site.
-  `main` (the person's, "Personal") always exists. **One profile per project** (`project` = its folder), made by
+  `main` (the person's, "General") always exists; it is also the profile of the projects general and system.
+  **One profile per project** (`project` = its folder), made by
   itself the first time the browser is used there (and for every project with agents when the Browser page is
   shown), with the exit of `main`. More profiles may be added by hand. A profile only runs while someone
   uses it (`max_active_profiles` at once).
@@ -48,6 +49,7 @@ NUMBERS = {"wait_min": (1, 1440), "idle_min": (5, 1440), "tab_sleep_min": (2, 72
 PROFILE_DEFAULTS = {"name": "", "exit": DIRECT, "on_exit_down": "wait", "project": ""}
 OWN = "own"                                    # of before the profiles per project: read as "its project's"
 OWNER_DEFAULTS = {"enabled": False, "profile": MAIN}
+SHARED_PROJECTS = ("projects/general", "projects/system")   # use `main` ("General"), no profile of their own
 SESSIONS_DEFAULT = True     # a project / topic that says nothing: its sessions have the browser (an agent: off)
 PROJECT_RE = re.compile(r"projects/[^/\s]{1,80}")
 EXIT_DOWN = ("wait", "vps")
@@ -106,7 +108,7 @@ def clean_profile(raw: object, strict: bool = False, exits: set[str] | None = No
         _bad(strict, "exit", f"no exit {ex!r}")     # read back as it is: the profile then waits, never goes direct
     out["exit"] = ex[:40]
     project = str(src.get("project") or "")
-    if project and PROJECT_RE.fullmatch(project):
+    if project and PROJECT_RE.fullmatch(project) and project not in SHARED_PROJECTS:
         out["project"] = project                   # the project this profile is for
     return out
 
@@ -208,12 +210,16 @@ def set_profile(values: dict, pid: str | None = None) -> dict:
 
 
 def project_profile(project: str, s: dict | None = None) -> dict | None:
-    """The profile of a project (`projects/<name>`), None while it was never made."""
+    """The profile of a project (`projects/<name>`), None while it was never made. general and system: `main`."""
+    if project in SHARED_PROJECTS:
+        return profile(MAIN, s)
     return next((p for p in (s or settings())["profiles"] if p.get("project") == project), None)
 
 
 def ensure_project_profile(project: str) -> str:
     """The id of a project's profile, made the first time with the exit of `main`, named after it."""
+    if project in SHARED_PROJECTS:
+        return MAIN
     with _plock:
         mine = project_profile(project)
         if mine:
@@ -231,7 +237,7 @@ def ensure_projects_with_agents() -> None:
     have = {p.get("project") for p in profiles()}
     for pdir in sorted(root.iterdir()):
         rel = f"projects/{pdir.name}"
-        if rel not in have and PROJECT_RE.fullmatch(rel) and pdir.is_dir() and any(pdir.glob("topics/*/agents/*/agent.json")):
+        if rel not in have and rel not in SHARED_PROJECTS and PROJECT_RE.fullmatch(rel) and pdir.is_dir() and any(pdir.glob("topics/*/agents/*/agent.json")):
             try:
                 ensure_project_profile(rel)
             except BrowserError:                      # too many profiles: the others wait for their first use

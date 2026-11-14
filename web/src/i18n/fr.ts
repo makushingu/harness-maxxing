@@ -4524,7 +4524,7 @@ export const fr: Record<keyof typeof en, string> = {
   'browser.panel.projectProfile': 'Ses sessions utilisent le profil du projet : {name}.',
   'browser.agent.profile': 'Profil du navigateur',
   'browser.exits': 'Connexions',
-  'browser.mainProfile': 'Personnel',
+  'browser.mainProfile': 'Général',
   'browser.paused': 'en pause',
   'browser.nav.me': 'Votre navigateur',
   'browser.nav.session': 'Une session',

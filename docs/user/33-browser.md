@@ -42,10 +42,10 @@ The second bar of the **Browser** page has three parts:
 
 ## Profiles: one per project
 
-A **profile** is a set of sign-ins of its own (cookies) and its own connection. **Personal** is
-yours. **Each project has its own profile**, named after it: it is made by itself the first time a session or an agent
+A **profile** is a set of sign-ins of its own (cookies) and its own connection. **General** is
+yours, and the profile of the projects **general** and **system**. **Each other project has its own profile**, named after it: it is made by itself the first time a session or an agent
 of the project uses the browser (and, for every project that has agents, when you open the Browser page). It starts
-with the connection of Personal.
+with the connection of General.
 
 Everything of a project shares its profile: its sessions, its agents and your browser when you put it on that profile
 are signed in to the same sites. Sign in once, and every agent of the project can work there.
@@ -65,7 +65,7 @@ Click a profile to open its page:
     only their length): you will have to sign in again;
   - **Delete the profile** (a profile you added) erases its sign-ins and tabs too; the agents that used it go back to
     their project's. A project's profile stays as long as its project (forget its sign-ins to start again);
-    **Personal** cannot be deleted.
+    **General** cannot be deleted.
 
 Each browser only sees its own tabs: a session never sees an agent's tabs, nor yours, and the other way round. You
 may open a tab in a session's or an agent's browser yourself (to sign in for it, say): it sees that tab, marked as
