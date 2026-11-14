@@ -149,3 +149,9 @@ def test_the_counts_of_the_infra_matrix_are_big_enough_to_tap():
     src = (WEB / "features" / "infra" / "InfraPage.tsx").read_text()
     count = re.search(r'onClick=\{\(\) => onPlace\(x, p\.key\)\}\s+className="([^"]*)"', src)
     assert count and "pointer-coarse:min-h-10" in count[1].split()
+
+
+def test_the_path_of_a_memory_file_takes_the_width_of_the_table():
+    src = (WEB / "pages" / "settings" / "sections" / "Memory.tsx").read_text()
+    cell = re.search(r'<td className="([^"]*)" title=\{mask\(f\.path, 12\)\}>', src)
+    assert cell and "w-full" in cell[1].split()
