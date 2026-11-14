@@ -4475,7 +4475,7 @@ export const fr: Record<keyof typeof en, string> = {
   'browser.memWarn': 'La mémoire manque sur ce serveur : mettez en veille des onglets du navigateur.',
   'browser.sleepShort': 'Veille',
   'browser.profiles': 'Profils',
-  'browser.domain.out': "{host} n'est pas dans les domaines de {name} : sa prochaine action videra cet onglet.",
+  'browser.domain.out': "{host} n'est pas dans les domaines de {name} : ses exécutions automatiques videront cet onglet (pas votre conversation avec lui).",
   'browser.domain.add': 'Ajouter à ses domaines',
   'browser.domain.agent': 'cet agent',
   'browser.mine.asleep': "Il se réveille quand vous l'ouvrez, ou quand Claude en a besoin",

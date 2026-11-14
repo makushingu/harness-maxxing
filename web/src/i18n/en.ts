@@ -4493,7 +4493,7 @@ export const en = {
   'browser.memWarn': "Memory is short on this server: put the browser's tabs to sleep.",
   'browser.sleepShort': 'Sleep',
   'browser.profiles': 'Profiles',
-  'browser.domain.out': '{host} is not one of the domains of {name}: its next step empties this tab.',
+  'browser.domain.out': '{host} is not one of the domains of {name}: its runs will empty this tab (not your conversation with it).',
   'browser.domain.add': 'Add to its domains',
   'browser.domain.agent': 'this agent',
   'browser.mine.asleep': 'It wakes up when you open it, or when Claude needs it',

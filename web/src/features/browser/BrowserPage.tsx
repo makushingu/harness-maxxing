@@ -125,7 +125,7 @@ function Live({ nav, pid, st, session, onBack }: { nav: Pick<BrowserNavigator, '
         )}
         <ConnectionPicker pid={pid} note />
       </div>
-      <LiveView profile={pid} nav={nav.id} session={session} start={!!session || person} onMinimize={person ? onBack : undefined} className="min-h-0 flex-1" />
+      <LiveView profile={pid} nav={nav.id} session={session} who={person ? undefined : navName(nav, t)} start={!!session || person} onMinimize={person ? onBack : undefined} className="min-h-0 flex-1" />
     </div>
   )
 }

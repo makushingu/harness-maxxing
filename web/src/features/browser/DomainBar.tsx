@@ -1,5 +1,5 @@
-// In the live view of a sandboxed agent's browser: the person went to a site outside the agent's domains (a sign-in
-// page of another domain, a link). Nothing stops the person, but the agent's next step empties that tab: the bar says
+// In the live view of a sandboxed agent's browser: a page outside the agent's domains (the person's sign-in page of
+// another domain, a link, the owner's conversation, which is not limited). Its runs would empty that tab: the bar says
 // so and adds the site to its domains in one click (its commands get it too).
 import { useQueryClient } from '@tanstack/react-query'
 import { ShieldCheck } from 'lucide-react'

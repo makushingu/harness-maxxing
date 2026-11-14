@@ -147,8 +147,8 @@ says **Limited to its domains**. When **you talk with the agent**, it is not lim
 are sessions and free agents.
 
 In the live view of such an agent's browser you go where you want, but a bar warns when the page is outside its
-domains (a sign-in page of another site, for example), since its next step would empty that tab: **Add to its
-domains** keeps it.
+domains (a sign-in page of another site, for example), since its runs would empty that tab: **Add to its domains**
+keeps it.
 
 ## Using it, watching Claude
 
