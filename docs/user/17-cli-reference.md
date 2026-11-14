@@ -264,6 +264,7 @@ OAuth sign-ins (state "To connect") are done in Settings -> MCP -> **Connect**. 
 
 | Command | Purpose |
 |---|---|
+| `maxxing browser enable` / `disable` | switch the feature on or off (as Settings -> Features); `enable` installs what is missing first (root) |
 | `maxxing browser setup [--exits]` | install what it needs on this server (root): `socat`, Chromium, its user, its AppArmor profile, the browser tools; `--exits`: also Tailscale and wireproxy (exits by a phone or a box) |
 | `maxxing browser status [--json]` | feature on or off, what is missing, the settings, the profiles and their exit, the exits, requests waiting for you |
 | `maxxing browser settings [--ask \| --no-ask] [--wait MIN] [--downloads \| --no-downloads] [--idle MIN] [--tab-sleep MIN] [--max-tabs N] [--max-profiles N]` | the settings shared by every profile: ask you when stuck, how long it waits for you, downloads, a profile / a tab sleeps after, tabs awake per profile, profiles running at once |

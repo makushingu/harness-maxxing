@@ -111,7 +111,7 @@ field), or add a trigger with the commands above.
   to Claude), `subagent` (callable as a Claude Code subagent from the topic's sessions). A run that fails with
   "sandbox cannot run on this server" -> `maxxing agents sandbox-setup` as root (or `maxxing doctor`).
 - `browser` (the Harness Browser: Chromium on the server for sites without an API; off by default; needs Settings ->
-  Features -> Harness Browser): `{"enabled": true, "profile": "<id>"}`. Turned on, the agent gets its own browser (a
+  Features -> Harness Browser, or `maxxing browser enable`; skill `maxxing-browser`): `{"enabled": true, "profile": "<id>"}`. Turned on, the agent gets its own browser (a
   window of tabs) in **its project's profile** (the sign-ins and the connection every session and agent of the project
   share); `profile: <id>` puts it on another profile (to keep its sign-ins apart), `inherit` brings it back. It opens
   any public site; **in its sandbox, only its `domains`** (the same list as its commands and WebFetch: add a site there).

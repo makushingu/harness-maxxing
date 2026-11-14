@@ -115,9 +115,10 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 - `pool.public` adds `dialog {type, message, default}` and `chooser {multiple}`. Claude's `upload_file`:
   `pool.claude_file` (a file of the turn's topic / project folder, <= 50 MB) copied by `pool.stage` into the uploads
   folder, `filePath` rewritten.
-- CLI `cmd_browser.py`: `maxxing browser setup [--exits] | status [--json] | settings [...] [--max-profiles N] |
+- CLI `cmd_browser.py`: `maxxing browser enable|disable` (`browser_feature`; `enable` runs `unit.setup` first when
+  something is missing, exit 1 and stays off if it still is) | `setup [--exits] | status [--json] | settings [...] [--max-profiles N] |
   profile add|set|rm | exit test ID|direct | set PATH on|off|inherit [--profile ID|own|inherit] | show [--json] |
-  forget ID`; `agent_guard.BROWSER_OWNER_ONLY` refuses `set profile forget setup settings stop` in agent turns.
+  forget ID`; `agent_guard.BROWSER_OWNER_ONLY` refuses `set profile forget setup settings enable disable` in agent turns. Skill `maxxing-browser` (turn it on, sign-ins, what to check when its tools are missing, troubleshooting); `BROWSER_NOTE` names Watch and forbids asking for a password in the chat.
 - Web: Settings section `browser` (`features/browser/BrowserSettings.tsx`, lazy with its i18n group; `?profile=`,
   `?exit=<id>|new|direct`, `?new=profile`; `?live=1` / `?nav=` / `?session=` = the live view in a window over it);
   `/browser?…` redirects there (`BrowserMoved`, also the links of notifications). My browser = one window for the app

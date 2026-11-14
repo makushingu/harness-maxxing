@@ -8,6 +8,8 @@ Claude browses with its tools (one set per turn), never with this command: it sa
                                                 agent); sessions use their project's profile (made the first time);
                                                 an agent too, unless `--profile` picks another (`inherit` = back to
                                                 its project's)
+    maxxing browser enable|disable              switch the feature on / off (as Settings -> Features); `enable` installs
+                                                what is missing first
     maxxing browser setup [--exits]             install what it needs on this server (root): socat, Chromium, its
                                                 user, its AppArmor profile, chrome-devtools-mcp (+ Tailscale and
                                                 wireproxy for the exits)
@@ -37,6 +39,8 @@ def _configure(p) -> None:
     sub = p.add_subparsers(dest="browser_cmd", required=True)
     s = sub.add_parser("setup", help="install what the browser needs on this server (root)")
     s.add_argument("--exits", action="store_true", help="also Tailscale and wireproxy (exits by a phone or a box)")
+    sub.add_parser("enable", help="switch the feature on (installs what is missing first)")
+    sub.add_parser("disable", help="switch the feature off (Settings -> Features)")
     s = sub.add_parser("status", help="feature, what is missing, settings, profiles, exits")
     s.add_argument("--json", action="store_true")
     s = sub.add_parser("settings", help="global settings (asks, downloads, sleep)")
@@ -132,8 +136,21 @@ def _handler(a) -> int:
             st = unit.available(fresh=True)
             print("ready" if st["ok"] else "still missing: " + ", ".join(st["missing"]))
             if st["ok"] and not browser.feature_on():
-                print("Turn it on: Settings -> Features -> Harness Browser.")
+                print("Turn it on: maxxing browser enable (or Settings -> Features -> Harness Browser).")
             return 0 if st["ok"] else 1
+        if cmd in ("enable", "disable"):
+            from . import config
+            if cmd == "enable" and not unit.available(fresh=True)["ok"]:
+                for line in unit.setup(print):
+                    print(line)
+                st = unit.available(fresh=True)
+                if not st["ok"]:
+                    print("still missing: " + ", ".join(st["missing"]) + " - the feature stays off", file=sys.stderr)
+                    return 1
+            config.update_config(browser_feature=cmd == "enable")
+            print("on: every session has it from its next message (an agent once turned on); your browser: Settings "
+                  "-> Browser" if cmd == "enable" else "off: no session or agent gets it any more")
+            return 0
         if cmd == "status":
             s = browser.settings()
             st = {"feature": browser.feature_on(), "settings": s, "available": unit.available(fresh=True),
@@ -141,7 +158,7 @@ def _handler(a) -> int:
             if a.json:
                 print(json.dumps(st, indent=2))
                 return 0
-            print(f"feature: {'on' if st['feature'] else 'off (Settings -> Features)'}")
+            print(f"feature: {'on' if st['feature'] else 'off (maxxing browser enable, or Settings -> Features)'}")
             print("server: " + ("ready" if st["available"]["ok"] else "missing " + ", ".join(st["available"]["missing"])
                                 + " -> maxxing browser setup"))
             print(f"asks you: {'yes, waits ' + str(s['wait_min']) + ' min' if s['ask'] else 'no'}; a profile sleeps "
@@ -221,7 +238,7 @@ def _handler(a) -> int:
                   f"{r['profile'] or 'of ' + r['project'] + ' (made at first use)'}"
                   + (f" (inherited from {browser.owner_path(r['from']['profile'])})"
                      if r["from"]["profile"] and r["from"]["profile"] != owner else "")
-                  + ("" if browser.feature_on() or not r["enabled"] else ". The feature is off: Settings -> Features."))
+                  + ("" if browser.feature_on() or not r["enabled"] else ". The feature is off: maxxing browser enable (or Settings -> Features)."))
             return 0
         if cmd == "show":
             r = browser.resolve(path)

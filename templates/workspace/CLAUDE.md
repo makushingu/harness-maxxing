@@ -106,7 +106,7 @@ UI; the server CLI is `maxxing`:
 | `maxxing agents list\|run\|send\|on\|off` | agents (Settings -> Features -> Agents): start one, hand work from one agent to another (`send`), switch on / off |
 | `maxxing video new DIR` / `video render DIR` / `video status` | Remotion video project linked to the shared install / render it (background priority) / tools check |
 | `maxxing heavy COMMAND…` | run a long CPU-hungry command (ffmpeg, a build, a compression) after the UI and the sessions when the processor is full; same output and exit code |
-| `maxxing browser status\|show PATH\|set PATH on\|off` | the Harness Browser (Settings -> Features): a Chromium on this server for pages without an API (sign-ins, forms, clicks); on for every project's sessions unless turned off, an agent only once its owner turns it on; its tools come at the next message |
+| `maxxing browser status\|enable\|show PATH\|set PATH on\|off` | the Harness Browser (Settings -> Features, skill `maxxing-browser`): a Chromium on this server for pages without an API (sign-ins, forms, clicks); on for every project's sessions unless turned off, an agent only once its owner turns it on; its tools come at the next message |
 | `maxxing pdf IN.html OUT.pdf` | print an HTML page (or URL) to PDF |
 | `maxxing setup-link` / `maxxing password` | first sign-in link / change the UI password |
 
@@ -135,7 +135,7 @@ Before building something, check whether Harness Maxxing already does it: a to-d
 role or a bot -> an agent (skill `maxxing-agents`); something at set times -> a cron; "tell me when…" ->
 the Notifications feed (`maxxing-feed`); e-mail -> the E-mail page (`maxxing-mail`); sites, databases,
 servers -> Infra (`maxxing-infra`); a site with no API, a sign-in or a form to fill in -> the Harness Browser
-(`maxxing browser`); repositories -> Git; a chat with other people -> Team; a card on the
+(`maxxing-browser`); repositories -> Git; a chat with other people -> Team; a card on the
 dashboard or a page of its own -> an extension. Some pages are optional: `maxxing status` (line `Pages`)
 says which are on. When the right one is off, say it exists and that Settings -> Features turns it on in
 one click, then use it, rather than building a substitute.
@@ -176,6 +176,7 @@ under the answer: diff, Undo a file, commit, push, pull request); a branch and a
 | `maxxing-infra` | put a site online, create a database or a bucket on this server, add another server, "where is X / is it up" |
 | `maxxing-mail` | the user's inbox (read, sort, draft replies with `maxxing mail`), or an agent that handles a mailbox |
 | `maxxing-mcp` | add, connect or remove an MCP server (a service's tools for Claude), for every session or one topic |
+| `maxxing-browser` | Claude opens a site, signs in or fills in a form (Harness Browser), its tools are missing, a page is refused or a connection is down |
 | `maxxing-agents` | create or configure an agent (a lasting role in a topic, started by a schedule, a webhook, the feed, Telegram or another agent, with a budget) |
 | `maxxing-customize` | change the product itself and keep it through updates; adapt customizations when an update conflicts |
 | `video-motion-design` | a video, an animation, a short / reel, a trailer (Remotion: `maxxing video new DIR`) |

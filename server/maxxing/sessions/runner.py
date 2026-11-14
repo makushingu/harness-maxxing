@@ -1320,7 +1320,8 @@ BROWSER_NOTE = ("The Harness Browser is available (mcp__maxxing-browser__* tools
                 "sign-in or clicks. Read pages with WebFetch, curl or an API first: they are faster and cheaper. It "
                 "is a browser of your own (this session's, or this agent's): you see only its tabs, with the "
                 "sign-ins of its profile. The user can watch it and may open tabs in it too: leave those as they "
-                "are. When a page needs the user (a captcha, a sign-in, a code), call ask_human. If the browser says "
+                "are; they see it with Watch above the message box. When a page needs the user (a captcha, a sign-in, a "
+                "code), call ask_human, never ask for a password in the chat. If the browser says "
                 "its exit is offline, stop using it and say so.")
 
 

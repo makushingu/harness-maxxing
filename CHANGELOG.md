@@ -31,7 +31,7 @@ New:
   view keeps up with a slow connection. It opens any public site, never your server or your local network; the runs of
   an agent in its sandbox open only its domains, the same as its commands, and a site they were refused comes as a
   notification with **Add this domain**. An asleep browser shows a small window in its
-  project's colour. **My browser** shows its picture, its profile and its connection, and opens with a click. [Show me](#show:browser)
+  project's colour. **My browser** shows its picture, its profile and its connection, and opens with a click. Ask a session to turn it on (`maxxing browser enable`) or why it has no browser: the skill `maxxing-browser` guides it. [Show me](#show:browser)
 
 Changed:
 - **Agents: when you talk with an agent, it is not limited and asks nothing.** Your conversation with an agent now

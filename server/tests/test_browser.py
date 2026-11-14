@@ -447,6 +447,20 @@ def test_an_agent_turn_cannot_change_its_browser(monkeypatch):
     monkeypatch.setattr(agent_guard, "agent_turn", lambda: {"path": A, "tampered": False})
     assert "not allowed" in agent_guard.check_cli(["browser", "set", A, "on"])
     assert agent_guard.check_cli(["browser", "status"]) is None
+    assert "not allowed" in agent_guard.check_cli(["browser", "enable"])
+
+
+def test_cli_enable_installs_first_then_switches(mx, monkeypatch, capsys):
+    from maxxing import browser, cli
+    from maxxing.browser import unit
+    ran = []
+    monkeypatch.setattr(unit, "available", lambda fresh=False: {"ok": bool(ran), "missing": [] if ran else ["socat"]})
+    monkeypatch.setattr(unit, "setup", lambda log: ran.append(1) or ["installed socat"])
+    assert cli.main(["browser", "enable"]) == 0 and ran and browser.feature_on()
+    assert cli.main(["browser", "disable"]) == 0 and not browser.feature_on()
+    monkeypatch.setattr(unit, "setup", lambda log: [])                   # nothing could be installed
+    ran.clear()
+    assert cli.main(["browser", "enable"]) == 1 and not browser.feature_on()
 
 
 def test_cli_set_show(mx, capsys):

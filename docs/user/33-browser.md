@@ -239,6 +239,7 @@ action. **Skip** tells it to do without that step. With no answer in time, it gi
 ## From a terminal
 
 ```
+maxxing browser enable                         install what is missing, then switch the feature on (disable = off)
 maxxing browser setup [--exits]                install what it needs (root); --exits: Tailscale and wireproxy too
 maxxing browser status                         feature, what is missing, settings, profiles, exits, requests
 maxxing browser profile add Shop
@@ -256,15 +257,21 @@ Connections are added in Settings -> Browser (their passwords go to the vault). 
 
 ## Troubleshooting
 
+- **Claude says it has no browser**: ask it, it checks with `maxxing browser status` and `maxxing browser show`:
+  the feature off (it can turn it on with your OK), the project or the topic set to no, an agent not turned on. The
+  tools come at the next message.
 - **"The browser is not set up on this server"**: run **Set up** (Settings -> Features) or `maxxing browser setup`
   as root. On Ubuntu 24.04 it also installs an AppArmor profile Chromium needs.
 - **A page is refused**: for an agent in its sandbox, add the site to its domains (its page -> **Protection**).
   Addresses of your own server and of local networks are refused on purpose, for everyone.
+- **Google shows "unusual traffic"**: Google spots a Chromium driven by a program, whatever the address: pick
+  DuckDuckGo or Bing as the search engine (**⋮** of the window).
 - **A site still blocks the browser**: **Test** its profile's connection. **Data center** = the sites see a server: use a
   phone, a home connection or an ISP proxy.
 - **"... browser profiles are in use right now"**: every running profile is busy; wait, or raise **Profiles running
   at once**.
 - **The connection stays offline**: open it in Settings -> Browser. Tailscale: the phone must be on, signed in to the same
-  account, with **Run as exit node** on. Proxy: check its address, user and password, then **Test**.
+  account, with **Run as exit node** on, and the exit node approved in the Tailscale admin console (the phone ->
+  **Edit route settings** -> **Use as exit node**). Proxy: check its address, user and password, then **Test**.
 - **The server is slow**: put tabs to sleep (status bar of the browser, or the sidebar line), lower **Tabs awake at
   most** or **Profiles running at once**.
