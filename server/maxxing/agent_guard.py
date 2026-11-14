@@ -438,29 +438,19 @@ def mode(requested: str) -> str:
     return requested if requested in ("default", "acceptEdits", "plan") else "acceptEdits"
 
 
-# What the owner's conversation does without asking in its sandbox (read, search the web, its domains' pages): the
-# approvals it keeps are for what matters (leaving the sandbox, another site, a safety change, a mail to send).
-# The deny rules (secrets, its settings) still win over these.
-MANAGER_SAFE = ("Read", "Glob", "Grep", "WebSearch")
-
-
-def settings(path: str, a: dict, approvals: bool = False, manager: bool = False) -> dict:
+def settings(path: str, a: dict, approvals: bool = False) -> dict:
     """The `--settings` part of an agent turn: sandbox (when on) and the hook of its rules. approvals: the turn asks
     before risky tools (the agent's setting, or forced for an outside event): Claude Code would let every sandboxed
     command through without asking (`autoAllowBashIfSandboxed`), and `maxxing` too if pre-allowed, so neither is.
-    manager: the owner's conversation (agents.run_settings): it writes its role (CLAUDE.md), its sandboxed commands,
-    `maxxing` and the edits in its folders do not ask, and a command can leave the sandbox once the owner allows it
-    (Claude Code's `dangerouslyDisableSandbox`: a normal permission prompt, i.e. an approval)."""
+    The owner's conversation with the agent is never sandboxed (chat_settings)."""
     out: dict = {}
     folder = config.workspace() / path
     if a.get("sandbox"):
         write = [str(folder)] + writable_dirs(path, a)
         secrets = secret_paths() + private_paths(path)
         locked = locked_paths(path)
-        if manager:
-            locked = [p for p in locked if p != str(folder / "CLAUDE.md")]
-        out["sandbox"] = {"enabled": True, "allowUnsandboxedCommands": manager, "failIfUnavailable": True,
-                          "autoAllowBashIfSandboxed": manager or not approvals, "excludedCommands": ["maxxing:*"],
+        out["sandbox"] = {"enabled": True, "allowUnsandboxedCommands": False, "failIfUnavailable": True,
+                          "autoAllowBashIfSandboxed": not approvals, "excludedCommands": ["maxxing:*"],
                           "filesystem": {"denyRead": secrets + [p for p in home_wall() if p not in secrets], "allowRead": read_back(),
                                          "allowWrite": write,
                                          "denyWrite": locked},
@@ -472,18 +462,33 @@ def settings(path: str, a: dict, approvals: bool = False, manager: bool = False)
             deny += [f"Read(/{g})", f"Edit(/{g})"]
         for p in locked:                                # its settings and role: the owner's, never the agent's
             deny.append(f"Edit(/{p + '/**' if p.endswith(('/.claude', '/attachments')) else p})")
-        # the manager's own role: not denied (another agent's folder still is, a new one asks: outside its folders)
-        deny += [r for r in topic_edit_denied(path) if r not in deny
-                 and not (manager and r == f"Edit(/{folder.parent}/*/CLAUDE.md)")]
+        deny += [r for r in topic_edit_denied(path) if r not in deny]
         # an excluded command still needs a permission to run outside the sandbox (else it runs inside, where the
         # server state is hidden): `maxxing` is allowed, check_cli limits what it does; with approvals it is asked
         out["permissions"] = {"deny": deny,
-                              "allow": ([] if approvals and not manager else ["Bash(maxxing:*)"])
-                              + [f"WebFetch(domain:{d})" for d in a.get("domains") or []]
-                              + ([f"Edit(/{p}/**)" for p in write] + list(MANAGER_SAFE) if manager else [])}
+                              "allow": ([] if approvals else ["Bash(maxxing:*)"])
+                              + [f"WebFetch(domain:{d})" for d in a.get("domains") or []]}
     if a.get("rules"):
         cmd = hook_command(path)
         out["hooks"] = {"PreToolUse": [{"matcher": "*", "hooks": [{"type": "command", "command": cmd}]}]}
+    return out
+
+
+def chat_settings(path: str, a: dict) -> dict:
+    """The `--settings` of the owner's conversation with a sandboxed agent: no sandbox, no approvals (the owner is
+    talking), but the files tools still keep off its secrets and its settings (a safety change goes through
+    `maxxing agents set`, which asks the owner); its role (CLAUDE.md) is its own to write; its rules hook stays."""
+    out = settings(path, {**a, "sandbox": False})
+    folder = config.workspace() / path
+    deny: list[str] = []
+    for p in secret_paths() + private_paths(path):
+        g = p + "/**" if not Path(p).is_file() and not p.endswith((".json", ".jsonl")) and "*" not in p \
+            and not Path(p).name.startswith(".env") else p
+        deny += [f"Read(/{g})", f"Edit(/{g})"]
+    for p in locked_paths(path):
+        if p != str(folder / "CLAUDE.md"):
+            deny.append(f"Edit(/{p + '/**' if p.endswith(('/.claude', '/attachments')) else p})")
+    out["permissions"] = {"deny": deny}
     return out
 
 
@@ -598,10 +603,12 @@ def agent_turn() -> dict:
 
 
 def sandboxed_turn() -> str | None:
-    """The agent path when this process belongs to a sandboxed agent turn (its systemd unit), else None."""
+    """The agent path when this process belongs to a sandboxed agent turn (its systemd unit), else None. The owner's
+    conversation with that agent is not one: it runs outside the sandbox (agents.run_settings)."""
     meta = turn_meta()
     p = (meta or {}).get("path") or ""
-    return p if p and _sandboxed(p) else None
+    from . import agents
+    return p if p and _sandboxed(p) and not agents.manager_turn(meta) else None
 
 
 def _sandboxed(p: str) -> bool:
@@ -614,8 +621,10 @@ def sandboxed_session(sid8: str) -> str | None:
     from .sessions import store
     for sid in store.list_ids():
         if sid.startswith(sid8):
-            p = (store.read(sid) or {}).get("path") or ""
-            if _sandboxed(p):
+            meta = store.read(sid) or {}
+            p = meta.get("path") or ""
+            from . import agents
+            if _sandboxed(p) and not agents.manager_turn(meta):
                 return p
     return None
 

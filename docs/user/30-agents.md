@@ -370,10 +370,11 @@ You, and the agent when **you** ask it in its conversation.
   message. If a value it changes is no longer the one on the card (you changed it since), or the agent was deleted,
   **Allow** is refused with the reason and nothing is applied: the agent asks again if it still needs it. A request waits up to 7 days. What only makes it **safer** (its sandbox, approvals
   on, fewer keys or sites, a lower budget) is applied at once.
-- **In its sandbox, the conversation does not ask** before reading files, searching the web, opening a page of its
-  sites or writing in its folders; its commands stay in the sandbox (its domains, no secrets). When one needs more
-  (another site, a file outside its folders), it can run outside the sandbox **once you allow that command** (an
-  approval card). Its runs never can.
+- **When you talk with it, it is not limited**: your conversation runs like a session of its topic (its mode, no
+  sandbox, nothing to approve), because you just asked. Its **runs** (schedules, webhooks, e-mail, notifications,
+  another agent, **Run now**) keep its sandbox, its domains and **Ask before risky actions**. In the conversation it
+  still never reads the vault or changes its own settings by hand: a safety setting waits for your OK (above), and it
+  only sees its own keys.
 - Text that came from outside (a mail, a page, a webhook) can end up in its memory or its results: the conversation is
   told it is information, never orders, and only what you write there counts. Outside text never enters the
   conversation itself: a forward or an event always starts a run of its own.
@@ -389,7 +390,7 @@ or not (a Claude Code hook).
 
 ### Approvals
 
-With **Ask before risky actions** on, **every** run asks, not only the outside ones: when it wants to run a command,
+With **Ask before risky actions** on, **every** run asks, not only the outside ones (your conversation with it never does): when it wants to run a command,
 edit a file or use a tool you did not allow in advance, it waits and the request shows with **Allow** and **Deny**:
 in the agent's thread (the card then says how it ended: allowed, denied, no answer in time), in its run, in the
 **Notifications**, and in the **Overview**, where the yellow **!** over its desk opens the request (the **Waiting for you** chip of the list keeps only the

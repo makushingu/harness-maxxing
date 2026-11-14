@@ -8,7 +8,7 @@ import json
 import pytest
 
 from conftest import wait_for, wait_idle
-from maxxing import feed
+from maxxing import agents, feed
 
 A = "projects/acme/topics/blog/agents/writer"
 ALLOW_DENY = [{"id": "allow", "label": "Allow", "style": "primary"}, {"id": "deny", "label": "Deny", "style": "danger"}]
@@ -80,7 +80,7 @@ def test_event_buttons_update_and_act(client, mx):
 def test_a_request_is_an_event_allow_twice_gives_the_same_answer(client, topic, mx, bridge):
     from maxxing import approvals
     _agent(client, approvals=True)
-    sid = client.post("/api/agents/acme/blog/writer/run", json={"text": "APPROVE push"}).json()["session"]["id"]
+    sid = agents.fire(A, trigger="manual", prompt="APPROVE push", source="command line")["session"]["id"]   # a run asks
     wait_for(lambda: client.get(f"/api/approvals?session={sid}").json()["approvals"], timeout=15)
     approvals.scan()
     p = client.get(f"/api/approvals?session={sid}").json()["approvals"][0]
@@ -126,7 +126,7 @@ def test_a_request_shown_in_part_has_no_one_tap_allow(client, mx, bridge):
 def test_without_post_alert_the_older_telegram_message_stays(client, topic, mx, old_bridge):
     from maxxing import approvals
     _agent(client, approvals=True)
-    sid = client.post("/api/agents/acme/blog/writer/run", json={"text": "APPROVE push"}).json()["session"]["id"]
+    sid = agents.fire(A, trigger="manual", prompt="APPROVE push", source="command line")["session"]["id"]
     wait_for(lambda: client.get(f"/api/approvals?session={sid}").json()["approvals"], timeout=15)
     approvals.scan()
     p = client.get(f"/api/approvals?session={sid}").json()["approvals"][0]

@@ -33,17 +33,14 @@ def test_the_conversation_is_the_manager_and_the_runs_keep_their_rules(client, t
     assert meta["env"]["MAXXING_AGENT_CHAT"] == "1" and agents.manager_turn(meta)
     argv = _calls()[-1]["argv"]
     assert argv[argv.index("--model") + 1] == "claude-opus-4-1"              # its chat_model
-    assert "--permission-prompt-tool" in argv                               # escapes and safety changes: asked
+    # the owner is talking: no sandbox, no approvals, the topic's mode (bypass here), like a session
+    assert "--permission-prompt-tool" not in argv and "--dangerously-skip-permissions" in argv
     s = _settings(argv)
-    sb = s["sandbox"]
-    assert sb["allowUnsandboxedCommands"] is True and sb["autoAllowBashIfSandboxed"] is True
-    assert f"{root}/{A}/CLAUDE.md" not in sb["filesystem"]["denyWrite"]     # its role: it writes it
-    assert f"{root}/{A}/agent.json" in sb["filesystem"]["denyWrite"]        # its settings: through `maxxing agents set`
-    deny, allow = s["permissions"]["deny"], s["permissions"]["allow"]
-    assert f"Edit(/{root}/{A}/agent.json)" in deny and f"Edit(/{root}/{A}/CLAUDE.md)" not in deny
-    assert f"Edit(/{root}/projects/acme/topics/blog/agents/*/CLAUDE.md)" not in deny
-    assert "Bash(maxxing:*)" in allow and f"Edit(/{root}/{A}/**)" in allow
-    assert {"Read", "Glob", "Grep", "WebSearch"} <= set(allow)               # reading and searching: never asked
+    assert "sandbox" not in s
+    deny = s["permissions"]["deny"]
+    assert f"Edit(/{root}/{A}/agent.json)" in deny and f"Edit(/{root}/{A}/CLAUDE.md)" not in deny   # settings: `agents set`
+    assert any(d.startswith("Read(/") and "secrets.json" in d for d in deny)                    # the vault stays out
+    assert "not in it" in argv[argv.index("--append-system-prompt") + 1]
     assert "manager of this agent" in argv[argv.index("--append-system-prompt") + 1]
     # a run of the same agent (a cron): its sandbox as before, its role locked, its model
     run = agents.fire(A, trigger="cron:c_1", prompt="NOTOOL routine", source="cron")
@@ -199,9 +196,9 @@ def test_the_manager_runs_maxxing_agents_on_itself_only(client, topic, mx, monke
     assert agents.load(A)["approvals"] is True and agents.load(A)["limits"]["usd_per_day"] == 4
 
 
-def test_claude_codes_own_questions_are_asked_in_the_conversation_and_denied_in_runs(client, topic, mx):
-    """The sandbox asks for a host outside the domains on the control channel (can_use_tool): an approval in the
-    conversation, denied at once in a run (unanswered, the turn would wait until its timeout)."""
+def test_claude_codes_own_questions_are_denied_in_runs_and_never_asked_in_the_conversation(client, topic, mx):
+    """The sandbox asks for a host outside the domains on the control channel (can_use_tool): denied at once in a run
+    (unanswered, the turn would wait until its timeout); the owner's conversation is not sandboxed, nothing to ask."""
     import os
     from pathlib import Path
     from maxxing import approvals
@@ -211,12 +208,9 @@ def test_claude_codes_own_questions_are_asked_in_the_conversation_and_denied_in_
     run = agents.fire(A, trigger="cron:c_1", prompt="NOTOOL ASKNET", source="cron")
     wait_idle(client, run["session"]["id"])
     assert out.read_text().splitlines() == ["deny"]
-    sid = _say(client, "ASKNET")["session"]["id"]
-    req = wait_for(lambda: [x for x in approvals.pending(sid) if x["tool"] == "SandboxNetworkAccess"])[0]
-    assert req["agent_path"] == A and req["summary"] == "SandboxNetworkAccess: example.org"
-    approvals.decide(req["id"], "allow")
+    sid = _say(client, "NOTOOL hi")["session"]["id"]
     wait_idle(client, sid)
-    assert out.read_text().splitlines() == ["deny", "allow"]
+    assert not approvals.pending(sid)
 
 
 def test_help_is_never_refused_in_an_agent_turn(monkeypatch):

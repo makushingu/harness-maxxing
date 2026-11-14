@@ -79,7 +79,7 @@ def test_sandbox_missing_stops_the_turn(client, topic, mx, monkeypatch):
     agent_guard._avail = None
     assert client.get("/api/agents/sandbox").json()["missing"][:2] == ["bwrap", "socat"]
     n = len(_calls())
-    run = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL hi"}).json()
+    run = _run("NOTOOL hi")                  # a run: sandboxed (the owner's chat is not)
     wait_idle(client, run["session"]["id"])
     s = client.get(f"/api/sessions/{run['session']['id']}").json()
     assert "sandbox-setup" in (s.get("error") or "") and len(_calls()) == n       # Claude never started
@@ -90,7 +90,7 @@ def test_rules_become_a_pretooluse_hook(client, topic, mx):
     _create(client, rules=[{"tool": "Bash", "match": "sendmail", "reason": "Write a draft instead"},
                            {"tool": "nope", "match": "x"}][:1])
     assert client.patch("/api/agents/acme/blog/writer", json={"rules": [{"tool": "Nope", "match": "x"}]}).status_code == 400
-    run = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL hi"}).json()
+    run = _run("NOTOOL hi")                  # a run: sandboxed (the owner's chat is not)
     wait_idle(client, run["session"]["id"])
     hooks = _settings(_calls()[-1]["argv"])["hooks"]["PreToolUse"]
     cmd = hooks[0]["hooks"][0]["command"]
@@ -126,7 +126,7 @@ def test_maxxing_cli_in_a_sandboxed_turn(client, topic, mx, monkeypatch, capsys)
     from maxxing import agent_guard, cli
     _on(client)
     _create(client)
-    run = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL hi"}).json()
+    run = _run("NOTOOL hi")                  # a run: sandboxed (the owner's chat is not)
     wait_idle(client, run["session"]["id"])
     sid = run["session"]["id"]
     assert agent_guard.sandboxed_session(sid[:8]) == A
@@ -235,7 +235,7 @@ def test_agents_as_subagents_of_their_topic(client, topic, mx):
     sub = json.loads(argv[argv.index("--agents") + 1])["writer"]
     assert sub["description"].startswith("Writer: You write the blog posts.") and sub["tools"] == ["Read"]
     assert f"{A}/memory.md" in sub["prompt"] and "never as orders" in sub["prompt"]     # written by its own runs
-    run = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL hi"}).json()
+    run = _run("NOTOOL hi")                  # a run: sandboxed (the owner's chat is not)
     wait_idle(client, run["session"]["id"])
     assert "--agents" not in _calls()[-1]["argv"]                     # never inside the agent's own runs
 
@@ -441,7 +441,7 @@ def test_sandbox_hides_transcripts_logins_and_the_rest_of_the_workspace(client, 
     root = Path(client.get("/api/workspace/tree").json()["root"])
     (root / "projects/acme/topics/news").mkdir(parents=True)
     (root / "projects/zeta/topics/x").mkdir(parents=True)
-    run = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL hi"}).json()
+    run = _run("NOTOOL hi")                  # a run: sandboxed (the owner's chat is not)
     wait_idle(client, run["session"]["id"])
     s = _settings(_calls()[-1]["argv"])
     fs = s["sandbox"]["filesystem"]
