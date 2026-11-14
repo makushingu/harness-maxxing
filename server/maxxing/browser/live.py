@@ -63,6 +63,7 @@ class Screen:
         self.casting: str | None = None             # targetId being screencast
         self.meta: dict = {}                        # last frame metadata (device size, offsets)
         self.frame: bytes | None = None
+        self.frame_of: str | None = None            # the targetId of that picture
         self.frame_at = 0.0
         self.size: tuple[int, int] = SIZE           # its pages' size: the live view's while someone watches
         self.unacked: tuple[str, object] | None = None   # (DevTools session, frame id) of a picture not acknowledged
@@ -339,6 +340,7 @@ class Watcher:
         sc.meta = p.get("metadata") or {}
         self._learn(sc, sc.meta)
         sc.frame = base64.b64decode(p.get("data") or "")
+        sc.frame_of = sc.casting
         sc.frame_at = time.time()
         sc.frames += 1
         sc.frame_bytes += len(sc.frame)
@@ -708,6 +710,11 @@ class Watcher:
         """A small picture of a page."""
         if not self.cdp or not tid or tid not in self.pages:
             return None
+        # A page someone watches: its last live picture. A clipped screenshot rescales the page for a moment, and
+        # the live view would show it small ("zoomed out") every time a card refreshes its picture.
+        for sc in self.screens.values():
+            if sc.viewers and sc.casting == tid and sc.frame_of == tid and sc.frame:
+                return sc.frame
         try:
             s = await self._session(tid)
             vp = (await self.cdp.call("Page.getLayoutMetrics", session=s, timeout=10)).get("cssVisualViewport") or {}

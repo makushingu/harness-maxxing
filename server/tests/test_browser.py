@@ -6,6 +6,7 @@ No real Chromium here: the parts that start one (unit.py, live.py) are tried by 
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import os
 import subprocess
@@ -1066,6 +1067,37 @@ def test_too_many_profiles_put_the_oldest_unused_one_to_sleep(mx, monkeypatch):
 
 
 # ---- the live view's pace ------------------------------------------------------------------------------------------
+def test_a_card_picture_of_a_watched_page_is_its_live_picture():
+    """A clipped screenshot rescales the page for a moment: the live view would show it small every time a card
+    refreshes. A page someone watches gives its last live picture instead; one nobody watches is captured."""
+    from maxxing.browser import live
+
+    class FakeCdp:
+        def __init__(self):
+            self.calls = []
+
+        async def call(self, method, params=None, session=None, timeout=30.0):
+            self.calls.append(method)
+            if method == "Page.captureScreenshot":
+                return {"data": base64.b64encode(b"shot").decode()}
+            return {}
+
+    async def run():
+        w = live.Watcher(None, "", lambda: None)
+        w.cdp = FakeCdp()
+        w.sessions = {"t1": "s1", "t2": "s2"}
+        w.pages = {"t1": {"url": "https://example.com/"}, "t2": {"url": "https://example.org/"}}
+        sc = w.screen("me")
+        sc.viewers = {1: lambda b: None}
+        sc.casting, sc.frame, sc.frame_of = "t1", b"live", "t1"
+        assert await w.picture(tid="t1") == b"live"
+        assert "Page.captureScreenshot" not in w.cdp.calls
+        assert await w.picture(tid="t2") == b"shot"            # not the one watched
+        sc.frame_of = "t2"                                       # a picture of the tab shown before
+        assert await w.picture(tid="t1") == b"shot"
+    asyncio.run(run())
+
+
 def test_pictures_flow_while_every_viewer_has_room_and_wait_for_the_slowest():
     """Chromium makes the next picture only after our ack. We ack at once while every viewer has fewer than INFLIGHT
     pictures on their way (a far viewer gets several per round trip); a viewer at its limit holds the next ack until
