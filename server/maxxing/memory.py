@@ -46,18 +46,20 @@ def files() -> list[dict]:
         found.append(("agent", p))
     out = []
     for level, p in found:
+        rel = p.relative_to(ws).as_posix()
         try:
+            rel.encode()                               # a folder named in another encoding cannot be shown in JSON
             st = os.stat(p)
             if not stat.S_ISREG(st.st_mode):          # a FIFO or a link to /dev/zero would never end
                 continue
             with open(p, "rb") as f:
                 data = f.read(READ_MAX)
-        except OSError:
+        except (OSError, UnicodeEncodeError):
             continue
         lines = data.count(b"\n") + (1 if data and not data.endswith(b"\n") else 0)
         size = max(st.st_size, len(data))
         heavy = bool(limit) and size > weight
-        out.append({"path": p.relative_to(ws).as_posix(), "level": level, "lines": lines, "bytes": size,
+        out.append({"path": rel, "level": level, "lines": lines, "bytes": size,
                     "over": heavy or (bool(limit) and lines > limit), "heavy": heavy})
     return out
 
