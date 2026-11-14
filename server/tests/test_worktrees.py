@@ -315,3 +315,10 @@ def test_discarding_a_copy_never_deletes_the_branch_it_was_switched_to(client, c
     assert "precious" in branches and branch not in branches
     assert r.json()["kept_branch"] == "precious"
 
+
+@pytest.mark.parametrize("prefix", ["a.lock", "x/.hid", "x/y.", "main", "main/x"])
+def test_a_prefix_git_would_refuse_is_refused(client, code, prefix):
+    topic, clone = code
+    r = client.put("/api/code/copy-prefs", json={"repo": str(clone), "prefix": prefix})
+    assert r.status_code == 400 and r.json()["error"] == "bad_prefix", r.text
+    assert client.put("/api/code/copy-prefs", json={"repo": str(clone), "prefix": "feat/x"}).status_code == 200

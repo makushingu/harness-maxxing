@@ -94,11 +94,18 @@ def set_prefs(repo: Path | str, **kw) -> dict:
     return prefs(repo)
 
 
-def check_prefix(prefix: str) -> str:
+def check_prefix(prefix: str, repo: Path | None = None) -> str:
     prefix = (prefix or "").strip().strip("/")
     if prefix and (not re.fullmatch(r"[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*", prefix) or ".." in prefix
                    or len(prefix) > 40):
         raise GitError(400, "bad_prefix", "a prefix is letters, digits, '.', '_', '-' and '/' (like session or feat)")
+    if any(c.startswith(".") or c.endswith((".lock", ".")) for c in prefix.split("/")):
+        raise GitError(400, "bad_prefix", "a part of the prefix cannot start with '.' nor end with '.' or '.lock'")
+    parts = prefix.split("/") if prefix else []
+    taken = next((n for n in ("/".join(parts[:i]) for i in range(1, len(parts) + 1))
+                  if repo is not None and _branch_exists(repo, n)), None)
+    if taken:
+        raise GitError(400, "bad_prefix", f"'{taken}' is already a branch of this repository: choose another prefix")
     return prefix
 
 
