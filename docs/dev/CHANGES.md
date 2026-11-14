@@ -5,6 +5,21 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## Unreleased
+
+- Sessions: the `init` event carries `same: true` when its turn runs in a Claude process that already ran one
+  (`runner.py` stamps the raw line `mx_same_proc`, after `clip_event`, from `_Proc.inits`). The page (`log.ts`
+  `fold`) marked every running task `interrupted` at each `user` event (true before stream-json input, when a turn
+  was a process); it now does it at the `init` that follows a typed message and has no `same` (`turnOpen`, `cut`,
+  `headNew` in `LogState`, used by `foldBefore` when the turn straddles two pages). Logs written before have no
+  stamp: their tasks read as before. Mock: `same` on the turn of a session with its background agent.
+- Runner, reuse of the live process: `launch` differed as soon as `mcp_auto.plan` did (the hint of the system
+  prompt lists the servers left out), so a handed-over message got a new process for any drift of the plan. Now
+  `proc_core` (the command line built with `NO_PLAN`, + cwd, env, the `mcp_auto` switch) and `proc_plan` are kept
+  next to `proc_launch`: same core and `mcp_auto.missing(proc_plan, plan) == []` -> the process stays. `Plan.asked`
+  = servers of the pool named by the message or by `mcp_loaded`. A turn that joins a live process (steer too)
+  passes `proc_plan` to `_mcp_after`: `given` is what the process has, not what a new one would get.
+
 ## 2.0.0-alpha.150 - 2026-11-13
 
 - Documents: `maxxing/documents.py` (stdlib only: zipfile + ElementTree) reads OOXML and ODF: `read(path)` ->

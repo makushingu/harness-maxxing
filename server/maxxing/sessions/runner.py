@@ -170,6 +170,7 @@ class _Proc:
     turn_done: bool = False                            # a `result` came since Claude last started working
     tasks: set[str] = field(default_factory=set)       # background tasks still running (Bash, agents, Monitor...)
     interrupt_at: float | None = None                  # monotonic time the interrupt request was sent
+    inits: int = 0                                     # turns this process started (`init` lines)
 
     def track(self, ev: dict) -> None:
         t, st = ev.get("type"), ev.get("subtype")
@@ -179,6 +180,7 @@ class _Proc:
             return
         elif st == "init":                             # Claude starts a turn (also by itself, when a task ends)
             self.turn_done = False
+            self.inits += 1
         elif st == "background_tasks_changed" and isinstance(ev.get("tasks"), list):
             self.tasks = {str(x.get("task_id")) for x in ev["tasks"] if isinstance(x, dict)}
         elif st == "task_started" and ev.get("is_backgrounded") and ev.get("task_id"):
@@ -209,6 +211,8 @@ class Runner:
         self.asks: dict | None = None                  # the turn's approvals (_can_use_tool), None = none
         self.keep_proc = False                         # the last turn handed its process over to the next item
         self.proc_launch: tuple | None = None          # what self.proc was started with (args, cwd, env)
+        self.proc_core: tuple | None = None            # the same, without what mcp_auto chose
+        self.proc_plan: mcp_auto.Plan | None = None    # the MCP servers it was given
 
     # ---- signals -------------------------------------------------------------------------
     def on_sigterm(self, *_: object) -> None:
@@ -455,20 +459,23 @@ class Runner:
             "timeout": _approval_timeout(agent.get("approval_timeout_s") or cfg.get("approval_timeout_s"))}
         mcp_plan = mcp_auto.plan(self.sid, cfg, meta, cwd, item.get("text") or "")   # MCP servers this turn needs
         copy = _copy_note(meta, cwd)
-        hint = "\n\n".join(x for x in (mcp_plan.hint, spawn.CRON_SILENT if item.get("silent_ok") else "", copy) if x)
-        base = [spawn.claude_bin(), "-p", "--output-format", "stream-json", "--verbose"]
         allow = [] if agent or mode != "default" else workspace_allowed(meta.get("path") or "")
-        base += spawn.permission_args(mode)[0] + spawn.settings_args(cfg, agent.get("settings"), allow)
-        base += spawn.agents_args(cfg, "\n\n".join(x for x in (agent.get("system_note"), hint) if x))
-        if not agent:                                   # a topic's agents with `subagent` on: callable from its sessions
-            from maxxing import agent_format
-            base += agent_format.subagents_args(meta.get("path") or "")
-        base += ["--model", model] if model else []
         effort = str(meta.get("effort") or "").strip()
-        base += ["--effort", effort] if effort in spawn.EFFORTS else []
-        base += agent.get("args") or []
         from maxxing import pcbridge                    # not at import: the runner starts with stdlib-only modules
-        base += pcbridge.mcp_config_args() + mcp_plan.args + approval
+
+        def argv(mcp: mcp_auto.Plan) -> list[str]:
+            hint = "\n\n".join(x for x in (mcp.hint, spawn.CRON_SILENT if item.get("silent_ok") else "", copy) if x)
+            b = [spawn.claude_bin(), "-p", "--output-format", "stream-json", "--verbose"]
+            b += spawn.permission_args(mode)[0] + spawn.settings_args(cfg, agent.get("settings"), allow)
+            b += spawn.agents_args(cfg, "\n\n".join(x for x in (agent.get("system_note"), hint) if x))
+            if not agent:                               # a topic's agents with `subagent` on: callable from its sessions
+                from maxxing import agent_format
+                b += agent_format.subagents_args(meta.get("path") or "")
+            b += ["--model", model] if model else []
+            b += ["--effort", effort] if effort in spawn.EFFORTS else []
+            b += agent.get("args") or []
+            return b + pcbridge.mcp_config_args() + mcp.args + approval
+        base = argv(mcp_plan)
         env = spawn.claude_env(meta.get("env") or {}, mode, agent.get("keys") if agent else None)
         env["MAXXING_SESSION"] = self.sid               # `maxxing mcp load` run by the turn finds its session
         if copy:                                        # a separate copy: its folder and its own ports
@@ -488,17 +495,27 @@ class Runner:
         csid, fresh = meta.get("csid") or self.sid, bool(meta.get("fresh", True))
         live = self.proc
         launch = (tuple(base), cwd, tuple(sorted(env.items())))
+        core = (tuple(argv(mcp_auto.NO_PLAN)), bool(cfg.get("mcp_auto")), cwd, launch[2])
         if handed and live is not None and self.proc_launch != launch and not item.get("steer"):
-            handed = False                             # Plan mode, model, permissions or MCP changed: a new process
-            if live.alive():
-                self.note("The settings of this session changed: its background tasks were stopped.", "warn")
+            lacks = mcp_auto.missing(self.proc_plan or mcp_plan, mcp_plan)
+            if self.proc_core == core and not lacks:
+                pass                                   # only mcp_auto's choice moved and the message names no server
+                                                       # the process lacks: it stays, its background tasks too
+            else:
+                handed = False                         # Plan mode, model, permissions or MCP changed: a new process
+                if live.alive() and self.proc_core == core:
+                    self.note(f"This message needs the MCP server {', '.join(lacks)}, which was not loaded: Claude "
+                              "was started again and its background tasks were stopped.", "warn")
+                elif live.alive():
+                    self.note("The settings of this session changed: its background tasks were stopped.", "warn")
         if live is not None and (item.get("steer") or handed) and live.stream and not live.stdin.closed \
                 and live.alive() and not fresh:        # the steered (or next) message joins the running process
+            mcp_plan = self.proc_plan or mcp_plan      # what that process was given, not what a new one would get
             a = self._attempt_in(live, prompt, timeout_s, csid, store.thread_prev_cost(meta, csid))
             a.prev_est = store.thread_estimated(meta, csid)
         else:
             self._end_proc()
-            self.proc_launch = launch
+            self.proc_launch, self.proc_core, self.proc_plan = launch, core, mcp_plan
             a = self.attempt(base + (["--session-id", csid] if fresh else ["--resume", csid]),
                              prompt, cwd, env, timeout_s, hold=not fresh, csid=csid,
                              prev_total=0.0 if fresh else store.thread_prev_cost(meta, csid),
@@ -777,6 +794,9 @@ class Runner:
                             ev["mx_turn_cost"] = a.turn_cost   # shown per turn in the thread (normalize.py)
                         if clip.keep_event(ev):            # not progress-only lines (thinking_tokens)
                             clip.clip_event(ev)            # huge tool outputs / the init lists never reach the log
+                            if ev.get("type") == "system" and ev.get("subtype") == "init" and pr.inits > 1:
+                                ev["mx_same_proc"] = True  # not a new process: what its earlier turns left
+                                                           # running in the background still runs
                             ev.setdefault("mx_at", time.time())
                             line = json.dumps(ev, ensure_ascii=False)
                         else:

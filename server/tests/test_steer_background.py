@@ -140,6 +140,7 @@ def test_a_message_sent_while_only_background_tasks_run_is_answered_at_once(clie
     evs = all_events(client, sid)
     assert not any(e["type"] == "note" for e in evs)
     assert not any("interrupted your previous turn" in e["text"] for e in evs if e["type"] == "assistant")
+    assert [bool(e.get("same")) for e in evs if e["type"] == "init"] == [False, True]   # the page keeps the task
     client.post(f"/api/sessions/{sid}/stop")
     assert wait_idle(client, sid, 20)["turns"] == 2
 
@@ -157,3 +158,4 @@ def test_a_message_after_a_settings_change_starts_a_new_process(client, topic, m
     c = calls(mx)
     assert [x.get("continued", False) for x in c] == [False, False]
     assert "other-model" in c[1]["argv"]
+    assert not any(e.get("same") for e in all_events(client, sid) if e["type"] == "init")   # the task was cut

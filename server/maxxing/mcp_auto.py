@@ -26,7 +26,7 @@ import os
 import re
 import time
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Iterator
@@ -264,6 +264,7 @@ class Plan:
     args: list[str]                             # --strict-mcp-config --mcp-config <file>, or [] (load everything)
     hint: str                                   # system prompt paragraph: the servers left out ("" = none)
     loaded: list[str]                           # names given to the turn (strict only)
+    asked: list[str] = field(default_factory=list)   # servers named by the message or by `maxxing mcp load`
 
 
 NO_PLAN = Plan([], "", [])
@@ -290,11 +291,12 @@ def _plan(sid: str, meta: dict, cwd: str, text: str) -> Plan:
     users, folder = candidates(cwd, claude_json)
     conns = [Server(n, "connector", {}) for n in connectors()]
     pool = users + conns
-    want = set(used(str(meta.get("path") or "")))
-    want |= {norm(n) for n in meta.get("mcp_loaded") or [] if isinstance(n, str)}
-    want |= {norm(n) for n in mentioned([s.name for s in pool], text)}
+    named = {norm(n) for n in meta.get("mcp_loaded") or [] if isinstance(n, str)}
+    named |= {norm(n) for n in mentioned([s.name for s in pool], text)}
+    asked = [s.name for s in pool if norm(s.name) in named]
+    want = set(used(str(meta.get("path") or ""))) | named
     if any(norm(s.name) in want for s in conns):
-        return NO_PLAN
+        return Plan([], "", [], asked)
     chosen = folder + [s for s in users if norm(s.name) in want]
     left = [s for s in pool if s not in chosen]
     f = _dir() / "sessions" / f"{sid}.json"
@@ -315,7 +317,17 @@ def _plan(sid: str, meta: dict, cwd: str, text: str) -> Plan:
         finally:
             tmp.unlink(missing_ok=True)
     hint = HINT.format(items=_hint_items(left)) if left else ""
-    return Plan(["--strict-mcp-config", "--mcp-config", str(f)], hint, [s.name for s in chosen])
+    return Plan(["--strict-mcp-config", "--mcp-config", str(f)], hint, [s.name for s in chosen], asked)
+
+
+def missing(live: Plan, new: Plan) -> list[str]:
+    """The servers `new` was asked for by name that a Claude process started with `live` does not have. The rest of
+    what differs between two plans (what the topic used since, a server added to Claude Code) is no reason to
+    replace a running process: a new one stops its background tasks (runner.py)."""
+    if not live.args:                           # nothing was restricted: it has them all
+        return []
+    have = {norm(n) for n in live.loaded}
+    return [n for n in new.asked if norm(n) not in have]
 
 
 def _hint_items(left: list[Server]) -> str:

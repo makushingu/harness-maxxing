@@ -432,7 +432,7 @@ export type SessionEvent =
   | { type: 'thinking'; text: string; at: number }
   | { type: 'tool_use'; id: string; name: string; input: unknown; input_lines?: Record<string, number>; summary: string; at: number }
   | { type: 'tool_result'; tool_use_id: string; text: string; is_error: boolean; at: number }
-  | { type: 'init'; model: string; cwd: string; at: number }
+  | { type: 'init'; model: string; cwd: string; at: number; /** A turn of a Claude process that already ran one: its background tasks run on. */ same?: boolean }
   | { type: 'result'; ok: boolean; cost_usd: number; duration_ms: number; model: string; usage: Usage; at: number }
   | { type: 'note'; text: string; level: 'info' | 'warn' | 'error'; at: number; /** The turn's process ended on a failure (its last lines). */ failed?: boolean }
   /** What turn `n` changed in git repositories (Changes view, features/code). */

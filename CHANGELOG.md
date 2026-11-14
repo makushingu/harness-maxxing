@@ -3,6 +3,22 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## Unreleased
+
+Fixed:
+- **Sessions: background tasks no longer look stopped when you send a message.** A message sent once the answer is
+  written, while commands or agents still work in the background, goes to the same Claude: they keep running. The
+  conversation showed them as "interrupted" all the same and took away the "N running in the background" bar. They
+  now stay shown as running, with their bar, until they really end. They are only shown as interrupted when they
+  were: after **Stop**, or when the message had to start a new Claude (the model, Plan mode or the permissions
+  of the session changed in between, or the message names an MCP server that was not loaded).
+- **Sessions: with "Load MCP servers only when a session needs them", background tasks were sometimes stopped
+  for nothing.** The servers a message gets can change from one message to the next (another session of the topic
+  used a new one, a server was named once and never used): that alone started a new Claude and stopped the
+  commands and agents running in the background. Such a message now goes to the same Claude, and the new choice
+  applies once that work is over. A new Claude is still started when your message names a server that is not
+  loaded, or when Claude asked for one; the line in the conversation now says which server.
+
 ## 2.0.0-alpha.150 - 2026-11-13
 
 New:

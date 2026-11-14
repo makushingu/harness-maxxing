@@ -154,7 +154,7 @@ previous night — open streams then receive `reset`. **Event** (normalised):
 {type:"tool_use", id, name, input, input_lines?, summary, at}     // summary = one-line human string ("Read src/app.py", "Bash: ls -la")
                                                     // input text fields over 20,000 chars are clipped; input_lines = {field: real line count} of the clipped top-level ones
 {type:"tool_result", tool_use_id, text, is_error, at}   // text truncated to 20 kB
-{type:"init", model, cwd, at}
+{type:"init", model, cwd, at, same?}        // same: a turn of a Claude process that already ran one (its background tasks run on)
 {type:"result", ok, cost_usd, duration_ms, model, usage:{input,output,cache_read,cache_write}, at}   // cost_usd = this turn only (the raw total_cost_usd is the thread's running total)
 {type:"note", text, level:"info"|"warn"|"error", at}   // compact, handoff, resume fallback, stop…
 {type:"hide", ref, hidden, at}                      // ref = `at` of a user event: hidden (true) or shown again{type:"task", id, tool_use_id?, at, state?, kind?, background?, description?, agent_type?, activity?, last_tool?, tokens?, tools?, duration_ms?, summary?}
