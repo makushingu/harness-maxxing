@@ -206,7 +206,7 @@ function Overview({ v, items, all, byId, onOpen, onPlace, onTab }: { v: InfraVie
                           <button
                             type="button"
                             onClick={() => onPlace(x, p.key)}
-                            className="min-w-11 rounded-lg px-2.5 py-1 text-base font-semibold tabular-nums transition-colors hover:bg-accent"
+                            className="min-w-11 rounded-lg px-2.5 py-1 text-base pointer-coarse:min-h-10 font-semibold tabular-nums transition-colors hover:bg-accent"
                             title={`${t(`infra.tab.${x}`)} · ${p.sensitive ? mask(p.label) : p.label}`}
                           >
                             {n}

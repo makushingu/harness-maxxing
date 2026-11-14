@@ -4,7 +4,7 @@ import { useCompactMemory, useMemory, useSaveSettings, useSettings } from '@/lib
 import { fmtBytes } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
-import { Button, EmptyState, Select, Sensitive, Skeleton, toast } from '@/components/ui'
+import { Button, EmptyState, Select, Sensitive, Skeleton, toast, useMask } from '@/components/ui'
 import { SettingRow } from '@/features/common'
 import { SettingsCard, SectionStack } from './ui'
 
@@ -12,6 +12,7 @@ const LIMITS = [0, 100, 150, 200, 300, 500, 1000]
 
 export function MemorySection() {
   const t = useT()
+  const mask = useMask()
   const navigate = useNavigate()
   const { data: settings } = useSettings()
   const save = useSaveSettings()
@@ -93,11 +94,11 @@ export function MemorySection() {
                   .sort((a, b) => Number(b.over) - Number(a.over) || b.bytes - a.bytes)
                   .map((f) => (
                     <tr key={f.path}>
-                      <td className="max-w-0 truncate px-2 py-1.5 font-mono text-[12.5px]">
+                      <td className="w-full max-w-0 truncate px-2 py-1.5 font-mono text-[12.5px]" title={mask(f.path, 12)}>
                         <Sensitive length={12}>{f.path}</Sensitive>
                       </td>
-                      <td className={cn('px-2 py-1.5 text-right tabular-nums', !!limit && f.lines > limit && 'font-semibold text-destructive')}>{f.lines}</td>
-                      <td className={cn('px-2 py-1.5 text-right tabular-nums', f.heavy ? 'font-semibold text-destructive' : 'text-muted-foreground')}>{fmtBytes(f.bytes)}</td>
+                      <td className={cn('w-px px-2 py-1.5 text-right whitespace-nowrap tabular-nums', !!limit && f.lines > limit && 'font-semibold text-destructive')}>{f.lines}</td>
+                      <td className={cn('w-px px-2 py-1.5 text-right whitespace-nowrap tabular-nums', f.heavy ? 'font-semibold text-destructive' : 'text-muted-foreground')}>{fmtBytes(f.bytes)}</td>
                     </tr>
                   ))}
               </tbody>

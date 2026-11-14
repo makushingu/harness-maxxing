@@ -70,3 +70,11 @@ def test_the_agents_layout_never_reads_a_project_name_from_the_prototype():
     src = (WEB / "features" / "agents" / "layout.tsx").read_text(encoding="utf-8")
     assert not re.search(r"lay\.(?:agents|colors)\[", src)
     assert "Array.isArray(list)" in src
+
+
+def test_a_group_limit_keeps_what_is_typed_until_the_field_is_left():
+    # Bounding on every key turned an emptied field into 1, then typing 5 gave 15 (or 6).
+    src = (WEB / "features" / "agents" / "GroupForm.tsx").read_text()
+    assert "value={String(f.limits[k])}" not in src
+    field = re.search(r"function LimitInput\(.*?\n}\n", src, re.S)
+    assert field and "value={text}" in field[0] and "onBlur={() => setText(String(value))}" in field[0]

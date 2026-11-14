@@ -76,6 +76,20 @@ def test_memory_files_skip_what_is_not_a_regular_file_and_read_a_bounded_part(mx
     assert big["bytes"] == 200 and big["lines"] == 25
 
 
+
+def test_a_project_folder_named_in_another_encoding_does_not_break_the_memory_list(client, mx):
+    import os
+    ws = config.workspace()
+    bad = os.path.join(os.fsencode(ws), b"projects", b"bad\xff")
+    os.makedirs(bad)
+    with open(os.path.join(bad, b"memory.md"), "wb") as f:
+        f.write(b"- x\n")
+    (ws / "projects" / "ok").mkdir()
+    (ws / "projects" / "ok" / "memory.md").write_text("- y\n")
+    r = client.get("/api/memory")
+    assert r.status_code == 200
+    assert [f["path"] for f in r.json()["files"] if f["level"] == "project"] == ["projects/ok/memory.md"]
+
 def test_changelog_parse():
     assert changelog.normalize("2.0.0-alpha.6") == changelog.normalize("2.0.0a6") == "2.0.0a6"
     assert changelog.normalize("v2.1.0") == "2.1.0"
