@@ -7,6 +7,13 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Agents, owner's conversation (`agents.manager_turn`): `run_settings(manager=True)` returns `sandbox: False`,
+  `approvals: False` (no `--permission-prompt-tool`), settings = `agent_guard.chat_settings` for a sandboxed agent
+  (no `sandbox` block; `permissions.deny` = Read/Edit of the vault and private paths + Edit of `locked_paths` except
+  its CLAUDE.md; its rules hook) else `settings()`; the runner gives it the topic's mode (`effective_mode` without the
+  session's `permission_mode`, i.e. not the agent's). `agent_guard.sandboxed_turn()` / `sandboxed_session()` are None
+  for it (the `maxxing` CLI limits of a sandboxed turn do not apply; `_manages` still limits `agents` to itself).
+  `settings()` lost `manager=` and `MANAGER_SAFE`; `MANAGER_BOX` now says the runs are sandboxed. Runs unchanged.
 - CPU priorities (`maxxing/cpu.py`, stdlib only; config `cpu_priorities`, default true; INTERNALS "CPU priorities"):
   `maxxing-live.slice` (CPUWeight/IOWeight 1000) / `maxxing-turns.slice` (100) / `maxxing-jobs.slice` (30, its text =
   `jobs_slice_text` = MemoryMax + weights). `cmd_core.ensure_cpu_slices(jobs)` (init, after `ensure_jobs_slice`; PUT

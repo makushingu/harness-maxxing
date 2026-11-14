@@ -154,9 +154,9 @@ source (exit 2).
   timeout_s`) that only make it safer (sandbox on, approvals on, trust off, fewer keys / sites / tools, a lower budget)
   are applied at once; the others are not: `set` writes an approval request (kind `agent_change`, Allow / Deny in the thread, the
   feed and Telegram, 7 days) and prints "waiting for the owner's OK"; once answered, the next owner message starts
-  with "Since your last message: …". Sandboxed agents: the conversation keeps the sandbox for Bash (auto-allowed) but
-  may run a command outside it (`dangerouslyDisableSandbox`) after an approval; `agent.json` and `.claude/` stay
-  read-only. `chat_model` (empty = `model`) is the model a new conversation starts with; the owner changes it in its box. Outside text never continues it (a reply with outside text
+  with "Since your last message: …". The conversation is never sandboxed and never asks (the topic's permission mode, like a
+  session): sandbox, domains and approvals are for its runs; `agent.json`, `.claude/` and the vault stay out of its
+  file tools. `chat_model` (empty = `model`) is the model a new conversation starts with; the owner changes it in its box. Outside text never continues it (a reply with outside text
   starts a run).
 - Every other start is a **new session** in the agent folder (schedules, webhooks, feed, e-mail, another agent,
   `maxxing agents run` from a script, a Telegram forward = outside text), except a **reply**: `POST

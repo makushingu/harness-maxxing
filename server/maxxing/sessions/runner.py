@@ -435,6 +435,8 @@ class Runner:
                                     session=self.sid, group=str(env.get("MAXXING_AGENT_GROUP") or ""),
                                     manager=agents.manager_turn(meta))
         model = (meta.get("model") or agent.get("model") or cfg.get("default_model") or "").strip()
+        if agent.get("manager") and not plan:           # the owner's conversation with an agent: like a session of
+            mode = effective_mode({**meta, "permission_mode": ""}, cfg)   # its topic, not the mode of its runs
         approval: list[str] = []                        # the agent asks before risky tools: Allow / Deny in the UI
         ask = mode == "ask"                             # the topic's mode `ask`: the same, for any session
         if ask:

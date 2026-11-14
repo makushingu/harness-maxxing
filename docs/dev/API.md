@@ -483,7 +483,9 @@ permission, else it runs inside) and `WebFetch(domain:<d>)`; `--add-dir` per wri
 bypass (`agent_guard.mode`: Claude Code lets every domain through in bypass -> acceptEdits). Sandbox unavailable
 (`available()`: bwrap, socat, AppArmor profile when kernel.apparmor_restrict_unprivileged_userns=1) -> the turn
 fails before Claude starts. With `rules`: `hooks.PreToolUse` = `<python> -m maxxing.agent_guard hook <agent path>`
-(deny + reason). The `maxxing` CLI refuses everything but `CLI_ALLOWED` when its process belongs to the systemd unit
+(deny + reason). The owner's conversation (`agents.manager_turn`) is never sandboxed and has no approvals: its
+`--settings` = `agent_guard.chat_settings` (the same `permissions.deny` on secrets + Edit on `locked_paths` but its
+CLAUDE.md, the rules hook), the topic's permission mode. The `maxxing` CLI refuses everything but `CLI_ALLOWED` when its process belongs to the systemd unit
 `maxxing-<sid8>` of a session in a sandboxed agent folder (`/proc/self/cgroup`, not an env var the turn could
 change). A session in a topic gets `--agents <json>` with the topic's agents that have `subagent` on
 (`agent_format.subagents`). Tests: `MAXXING_SANDBOX_CHECK=0` skips the availability check.

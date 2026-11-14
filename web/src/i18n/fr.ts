@@ -3483,7 +3483,7 @@ export const fr: Record<keyof typeof en, string> = {
   'agents.protect.free': 'Libre',
   'agents.protect.freeDesc': "Comme une session : il travaille sur tout le serveur sans demander. Très bien pour un agent qui ne lit que ce que vous lui donnez.",
   'agents.protect.box': 'Protégé',
-  'agents.protect.boxDesc': "Dans un bac à sable : seulement ses dossiers et ses sites, jamais les secrets. Conseillé s'il lit des mails, des webhooks ou des pages web.",
+  'agents.protect.boxDesc': "Ses exécutions restent dans un bac à sable : seulement ses dossiers et ses sites, jamais les secrets. Conseillé s'il lit des mails, des webhooks ou des pages web. Quand vous lui parlez, il n'est pas limité.",
   'agents.protect.advice': "Il lit du texte venu de l'extérieur (une boîte mail, un webhook, le fil), qui peut contenir des ordres : Protégé est conseillé.",
   'agents.settings.details': 'Détails',
   'agents.settings.tools': 'Outils permis et interdits',
