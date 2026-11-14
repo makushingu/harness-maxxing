@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -62,3 +63,10 @@ def test_the_quick_add_of_a_board_column_keeps_the_focus_while_it_adds():
     end = src.index("placeholder={t('tasks.quickAddPlaceholder')}")
     field = src[src.rindex("<Input", 0, end):end]
     assert "readOnly={busy}" in field and "disabled=" not in field
+
+
+def test_the_agents_layout_never_reads_a_project_name_from_the_prototype():
+    # a project named "constructor" (a valid slug) with 2 agents: lay.agents[p] was Object, and the page crashed
+    src = (WEB / "features" / "agents" / "layout.tsx").read_text(encoding="utf-8")
+    assert not re.search(r"lay\.(?:agents|colors)\[", src)
+    assert "Array.isArray(list)" in src
