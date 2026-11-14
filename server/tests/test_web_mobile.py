@@ -110,3 +110,14 @@ def test_the_side_question_buttons_are_big_enough_to_tap():
         part = src[src.index(f"aria-label={{{label}}}"):]
         cls = re.search(r'className="([^"]*)"', part)
         assert cls and "pointer-coarse:size-10" in cls[1].split(), label
+
+
+def test_a_pull_request_on_a_phone_never_scrolls_sideways():
+    # a long branch (dependabot/…) or check name widened the pane: the GitHub link of the check went off the screen
+    src = (WEB / "features" / "code" / "PrPane.tsx").read_text()
+    head = src[src.index("<GitBranch"):]
+    assert re.match(r'<GitBranch[^>]*/><span className="min-w-0 truncate"><Sensitive>\{`\$\{pr\.head\}', head)
+    checks = src[src.index("function Checks"):]
+    assert '<span className="min-w-0 truncate"><Sensitive>{c.name}</Sensitive></span>' in checks
+    link = re.search(r'<a href=\{c\.url\}[^>]*className="([^"]*)"', checks)
+    assert link and "shrink-0" in link[1].split()
