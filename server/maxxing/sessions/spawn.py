@@ -435,8 +435,6 @@ def _start_unit(sid: str) -> str:
 
 def start(sid: str) -> str:
     """Start the runner of `sid`; returns the unit name (or "pid:<n>" in direct mode)."""
-    from .. import pcbridge
-    pcbridge.ensure_mcp_soon()                         # the entry lost from ~/.claude.json comes back (the turn has --mcp-config)
     if os.environ.get("MAXXING_SPAWN") == "direct" or not shutil.which("systemd-run"):
         return _start_direct(sid)
     return _start_unit(sid)

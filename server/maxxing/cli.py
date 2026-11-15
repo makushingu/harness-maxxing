@@ -25,7 +25,7 @@ def cmd_serve(a) -> int:
     if not security.password_is_set():           # the link itself never goes to the journal (readable by admins)
         print("First run - run `maxxing setup-link` on the server for the one-time setup link", flush=True)
     port = a.port or cfg["port"]
-    os.environ["MAXXING_LISTEN_PORT"] = str(port)   # local clients of this server (pcbridge) follow --port
+    os.environ["MAXXING_LISTEN_PORT"] = str(port)   # local clients of this server (a turn's MCP servers) follow --port
     from . import proxylisten
     opts = dict(host=a.host or cfg["bind"], port=port, proxy_headers=True, forwarded_allow_ips="127.0.0.1",
                 log_level="warning", timeout_graceful_shutdown=3)   # live (SSE) connections never end by themselves

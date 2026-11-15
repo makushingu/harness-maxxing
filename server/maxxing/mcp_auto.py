@@ -7,7 +7,7 @@ and time at each turn start (connections). With `mcp_auto` on, the runner gives 
   - the servers loaded for this session (`mcp_loaded` in its meta, written by `maxxing mcp load NAME`);
   - the servers named in the message (the whole name, or a word of it no other server has, 4+ letters);
   - every project / local-scope server of the topic's folder (scoped there on purpose);
-  - harness-pc, unchanged (pcbridge.mcp_config_args, its own --mcp-config file).
+  - the servers a turn gets from Harness itself (maxxing-browser, harness-devices: their own --mcp-config file).
 
 With `--strict-mcp-config --mcp-config <state>/mcp-auto/sessions/<sid>.json` (0600, rewritten only when it changes;
 secrets stay in the file, never on the command line). Strict mode also drops the claude.ai connectors: when the turn
@@ -36,7 +36,8 @@ from . import config
 
 USED_KEEP_S = 60 * 86400                        # a server unused by a topic for 60 days is no longer loaded there
 CONNECTOR_PREFIX = "claude.ai "
-PC_NAME = "harness-pc"                          # pcbridge.MCP_NAME (not imported: pcbridge is not stdlib-only)
+# a turn's own servers, given by the runner (browser.MCP_NAME, devices.MCP_NAME; not imported: not stdlib-only)
+TURN_NAMES = frozenset({"maxxing-browser", "harness-devices"})
 WORD_MIN = 4
 # words of a server name that say nothing about which service it is
 STOP_WORDS = {"mcp", "server", "servers", "api", "apps", "the", "and", "for", "with", "claude", "http", "https",
@@ -96,7 +97,7 @@ def used(path: str, now: float | None = None) -> dict[str, float]:
 
 
 def record_used(path: str, servers: set[str] | list[str], now: float | None = None) -> None:
-    servers = {s for s in servers if s and s != norm(PC_NAME)}
+    servers = {s for s in servers if s and s not in {norm(n) for n in TURN_NAMES}}
     if not servers:
         return
     now = time.time() if now is None else now
@@ -191,7 +192,7 @@ def candidates(cwd: str, claude_json: dict) -> tuple[list[Server], list[Server]]
     here = _d(projects.get(cwd))
     disabled = set(_l(here.get("disabledMcpServers")))
     users = [Server(n, "user", c) for n, c in _d(claude_json.get("mcpServers")).items()
-             if isinstance(c, dict) and n != PC_NAME and n not in disabled]
+             if isinstance(c, dict) and n not in TURN_NAMES and n not in disabled]
     folder: dict[str, Server] = {}
     p = Path(cwd)
     for d in [p, *p.parents]:                   # Claude Code reads .mcp.json from the folder and its parents
@@ -208,10 +209,10 @@ def candidates(cwd: str, claude_json: dict) -> tuple[list[Server], list[Server]]
             ok = any(bool(x.get("enableAllProjectMcpServers")) or n in _l(x.get("enabledMcpjsonServers"))
                      for x in (here, own))
             if isinstance(c, dict) and ok and n not in refused and n not in disabled and n not in folder \
-                    and n != PC_NAME:
+                    and n not in TURN_NAMES:
                 folder[n] = Server(n, "project", c)
     for n, c in _d(here.get("mcpServers")).items():        # local scope wins over a .mcp.json of the same name
-        if isinstance(c, dict) and n != PC_NAME and n not in disabled:
+        if isinstance(c, dict) and n not in TURN_NAMES and n not in disabled:
             folder[n] = Server(n, "local", c)
     # the folder's server of a name hides the user one, as in Claude Code: never both, never the user one
     return [s for s in users if s.name not in folder], list(folder.values())

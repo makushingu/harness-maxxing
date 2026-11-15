@@ -766,6 +766,7 @@ def in_the_sandbox() -> bool:
 
 
 BROWSER_OWNER_ONLY = {"set", "profile", "forget", "setup", "settings", "enable", "disable"}
+DEVICES_OWNER_ONLY = {"add", "confirm", "remove", "rename", "access", "mode", "enable", "disable"}
 
 
 def check_cli(argv: list[str]) -> str | None:
@@ -791,6 +792,10 @@ def check_cli(argv: list[str]) -> str | None:
         return (f"`maxxing browser {words[1]}` is not allowed in an agent turn: its browser settings belong to the "
                 "owner. Say what should change in your answer (the owner's conversation asks for its browser "
                 "with `maxxing agents set <itself> browser.enabled=true`: a request the owner allows).")
+    if turn["path"] and words[0] == "devices" and len(words) > 1 and words[1] in DEVICES_OWNER_ONLY:
+        return (f"`maxxing devices {words[1]}` is not allowed in an agent turn: the person's devices belong to the "
+                "owner. Say what should change in your answer (the owner's conversation asks for a device with "
+                "`maxxing agents set <itself> devices='[\"<id>\"]'`: a request the owner allows).")
     cmd, sub = words[0], (words[1] if len(words) > 1 else "")
     if turn["path"] and not turn.get("manager") and sub in OWNER_ONLY.get(cmd, ()):
         return (f"`maxxing {cmd} {sub}` is not allowed in an agent run: it would start work with the owner's rights, "

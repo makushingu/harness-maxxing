@@ -96,10 +96,10 @@ def clear_turns() -> None:
 
 def mcp_args(sid: str, owner: str, profile: str, settings: dict, sites: list[str] | None = None) -> list[str]:
     """`--mcp-config <file>` giving the turn the browser tools + ask_human (browser_mcp.py, stdio)."""
-    from .. import browser_mcp, pcbridge
+    from .. import browser_mcp
     token = write_turn(sid, owner, profile, sites)
     wait = int(settings.get("wait_min") or 30) * 60 if settings.get("ask", True) else 0
-    env = {"MAXXING_BROWSER_URL": f"http://{pcbridge.local_host()}:{pcbridge.local_port()}/api/browser/mcp/{sid}",
+    env = {"MAXXING_BROWSER_URL": f"http://{config.local_host()}:{config.local_port()}/api/browser/mcp/{sid}",
            "MAXXING_BROWSER_TOKEN": token, "MAXXING_SESSION": sid, "MAXXING_BROWSER_OWNER": owner,
            "MAXXING_BROWSER_PROFILE": profile,
            "MAXXING_BROWSER_ASKS": str(browser.asks_dir()) if settings.get("ask", True) else "",

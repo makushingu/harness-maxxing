@@ -1381,6 +1381,35 @@ def check_agent_sandbox() -> Check | None:
               ", ".join(boxed[:5]), "maxxing agents sandbox-setup   (as root)")
 
 
+def _version_tuple(v: str) -> tuple[int, ...]:
+    out = []
+    for part in re.split(r"[.+-]", str(v or "").lstrip("v")):
+        if not part.isdigit():
+            break
+        out.append(int(part))
+    return tuple(out)
+
+
+def check_devices() -> Check | None:
+    """Only when Devices is on (Settings -> Features): devices waiting for the user's OK, apps older than the one
+    this server hands out."""
+    from . import devices
+    if not devices.feature_on():
+        return None
+    from .devices import dist, store
+    devs = store.devices()
+    waiting = [d["name"] for d in devs if not d.get("confirmed")]
+    if waiting:
+        return _c("devices", WARN, f"device waiting for your OK: {', '.join(waiting)}", "",
+                  "Settings -> Devices, or maxxing devices confirm <id>")
+    latest = _version_tuple(dist.latest_version())
+    old = [d["name"] for d in devs if latest and d.get("version") and _version_tuple(d["version"]) < latest]
+    if old:
+        return _c("devices", WARN, f"Harness Link is out of date on: {', '.join(old)}",
+                  f"latest: {dist.latest_version()}", "Settings -> Devices -> Add a device on that device again")
+    return _c("devices", OK, f"Devices: {len(devs)} added" if devs else "Devices on, none added yet", "")
+
+
 def check_browser() -> Check | None:
     """Only when the Harness Browser is on (Settings -> Features): what Chromium needs on this server."""
     from . import browser
@@ -1650,7 +1679,7 @@ def collect_checks(live: bool = False, fetch: bool = True, deps: bool = False) -
         check_python, check_uv, check_claude_cli, lambda: check_claude_version(fetch), lambda: check_claude_auth(live),
         lambda: check_skill_listing(cfg), check_setup,
         check_service, check_hardening, lambda: check_caddy_site(cfg), check_infra_paths, lambda: check_bind(cfg), lambda: check_http(cfg), lambda: check_public_url(cfg),
-        lambda: check_caddy(cfg), check_crontab, lambda: check_timezone(cfg), lambda: check_telegram(cfg), lambda: check_backup(cfg), check_voice, check_tools, check_stale_units, check_cpu_priorities, check_agent_sandbox, check_browser, check_managed_deps, check_security, check_state_files,
+        lambda: check_caddy(cfg), check_crontab, lambda: check_timezone(cfg), lambda: check_telegram(cfg), lambda: check_backup(cfg), check_voice, check_tools, check_stale_units, check_cpu_priorities, check_agent_sandbox, check_browser, check_devices, check_managed_deps, check_security, check_state_files,
         lambda: check_disk(cfg), check_memory, lambda: check_workspace(cfg), check_skills, check_web,
         check_license, lambda: check_git(fetch), check_update_signature,
     ] + ([check_deps] if deps else [])

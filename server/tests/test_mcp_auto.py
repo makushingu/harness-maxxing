@@ -37,7 +37,7 @@ def servers(mx, topic):
             "Facebook-ads": {"type": "http", "url": "https://mcp.facebook.com/ads?k=SECRETxyz"},
             "notion": {"type": "stdio", "command": "/usr/bin/npx", "args": ["-y", "@notionhq/notion-mcp-server"],
                        "env": {"NOTION_TOKEN": "${NOTION_TOKEN}"}},
-            "harness-pc": {"type": "http", "url": "http://127.0.0.1:1/api/pc/mcp"},
+            "harness-devices": {"type": "http", "url": "http://127.0.0.1:1/api/devices/mcp"},
         },
         "projects": {cwd: {"mcpServers": {"blog-db": {"type": "stdio", "command": "blog-db-mcp"}}}},
     }))
@@ -111,7 +111,7 @@ def test_one_append_system_prompt_flag_carries_both_texts():
 def test_usage_is_kept_60_days(mx):
     from maxxing import mcp_auto
     now = time.time()
-    mcp_auto.record_used("projects/a/topics/b", {"notion", "harness-pc"}, now - 61 * 86400)
+    mcp_auto.record_used("projects/a/topics/b", {"notion", "harness-devices"}, now - 61 * 86400)
     mcp_auto.record_used("projects/a/topics/b", {"facebook-ads"}, now)
     assert set(mcp_auto.used("projects/a/topics/b", now)) == {"facebook-ads"}
     assert mcp_auto.used("projects/a/topics/other", now) == {}
@@ -131,7 +131,7 @@ def test_on_a_turn_gets_the_topic_servers_and_learns_what_it_used(client, topic,
     config.update_config(mcp_auto=True)
     sid, c = _turn(client, mx, topic, "Hi NOTOOL")
     argv = c["argv"]
-    assert "--strict-mcp-config" in argv and _loaded(argv) == ["blog-db"]       # the topic's own, not harness-pc
+    assert "--strict-mcp-config" in argv and _loaded(argv) == ["blog-db"]       # the topic's own, not harness-devices
     f = Path(flag(argv, "--mcp-config"))
     assert f.stat().st_mode & 0o777 == 0o600 and f.parent.stat().st_mode & 0o777 == 0o700
     assert "SECRET" not in " ".join(argv)

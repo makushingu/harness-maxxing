@@ -38,7 +38,6 @@ the turn as before.
 """
 from __future__ import annotations
 
-import base64
 import json
 import math
 import os
@@ -492,10 +491,10 @@ class Runner:
         mcp_plan = mcp_auto.plan(self.sid, cfg, meta, cwd, item.get("text") or "")   # MCP servers this turn needs
         copy = _copy_note(meta, cwd)
         web = browser_args(self.sid, str(meta.get("path") or ""), agent) if not plan else []
+        dev = devices_args(self.sid, str(meta.get("path") or ""), agent, web) if not plan else []
         memory = spawn.upper_memory(cwd, cfg.get("workspace") or "")   # the levels above: never loaded otherwise
         allow = [] if agent or mode != "default" else workspace_allowed(meta.get("path") or "")
         effort = str(meta.get("effort") or "").strip()
-        from maxxing import pcbridge                    # not at import: the runner starts with stdlib-only modules
 
         def argv(mcp: mcp_auto.Plan) -> list[str]:
             hint = "\n\n".join(x for x in (mcp.hint, spawn.CRON_SILENT if item.get("silent_ok") else "", copy,
@@ -503,14 +502,15 @@ class Runner:
             b = [spawn.claude_bin(), "-p", "--output-format", "stream-json", "--verbose"]
             b += spawn.permission_args(mode)[0] + spawn.settings_args(cfg, agent.get("settings"), allow)
             b += spawn.agents_args(cfg, "\n\n".join(x for x in (agent.get("system_note"), hint,
-                                                                  BROWSER_NOTE if web else "") if x))
+                                                                  BROWSER_NOTE if web else "",
+                                                                  DEVICES_NOTE if dev else "") if x))
             if not agent:                               # a topic's agents with `subagent` on: callable from its sessions
                 from maxxing import agent_format
                 b += agent_format.subagents_args(meta.get("path") or "")
             b += ["--model", model] if model else []
             b += ["--effort", effort] if effort in spawn.EFFORTS else []
             b += agent.get("args") or []
-            return b + pcbridge.mcp_config_args() + mcp.args + approval + web
+            return b + mcp.args + approval + web + dev
         base = argv(mcp_plan)
         env = spawn.claude_env(meta.get("env") or {}, mode, agent.get("keys") if agent else None)
         env["MAXXING_SESSION"] = self.sid               # `maxxing mcp load` run by the turn finds its session
@@ -520,10 +520,9 @@ class Runner:
             if wt.get("port"):
                 env["MAXXING_PORT"] = str(wt["port"])
         text = (PLAN_PREFACE if plan else "") + build_prompt(item)
-        root = Path(cfg.get("workspace") or "/").resolve()
-        prompt, json_in = stdin_payload(text, item, root)
+        prompt, json_in = text, False
         if STREAM_INPUT:                                # always a user message: stdin stays open (steer)
-            prompt, json_in = user_message(text, item, root), True
+            prompt, json_in = user_message(text), True
         if json_in:
             base += ["--input-format", "stream-json"]
         timeout_s = meta.get("timeout_s")
@@ -573,6 +572,8 @@ class Runner:
             approval_mcp.expire(approvals_dir(), session=self.sid)
         if web:                                        # the browser is no longer this turn's
             browser_done(self.sid)
+        if dev:                                        # nor the devices
+            devices_done(self.sid)
         if a.saw_init:
             store.update(self.sid, fresh=False)
         if a.stopped and self.interrupted and not a.timed_out:
@@ -909,8 +910,7 @@ class Runner:
                   and not pr.turn_done and not self.steer_pending and not self.stop_flag.is_set()
                   and (self.current or {}).get("kind") not in ("compact", "handoff"))
             if ok:
-                root = Path(config.load_config().get("workspace") or "/").resolve()
-                ok = pr.stdin.send(user_message(build_prompt(head), head, root))
+                ok = pr.stdin.send(user_message(build_prompt(head)))
             if not ok:
                 head.pop("inject", None)               # runs after the turn instead
                 m["queue"] = q
@@ -1179,8 +1179,6 @@ def build_prompt(item: dict) -> str:
     files = [str(p) for p in item.get("attachments") or [] if p]
     if files:
         text = (text + "\n\n" if text else "") + "Attached files:\n" + "\n".join(f"- {p}" for p in files)
-    if item.get("hud"):
-        text = HUD_PREFACE + text
     if item.get("plan_approved"):
         text = PLAN_APPROVED_PREFACE + text
     if item.get("steer"):
@@ -1263,64 +1261,6 @@ STEER_PREFACE = ("[The user interrupted your previous turn to add the message be
                  "you stopped - do not start over, and do not redo what is already done.]\n\n")
 
 
-INLINE_IMAGE_MAX = 3_500_000   # bytes (the API takes 5 MB of base64)
-INLINE_IMAGE_SIDE = 8000       # px (the API refuses larger images; Read would have resized them)
-INLINE_IMAGES = 4
-
-
-def image_info(head: bytes) -> tuple[str, int, int] | None:
-    """(media type, width, height) read from the first bytes of a PNG / GIF / WebP / JPEG, else None.
-    The type comes from the content, never from the extension (the API rejects a mismatch)."""
-    if head[:8] == b"\x89PNG\r\n\x1a\n" and head[12:16] == b"IHDR":
-        return "image/png", int.from_bytes(head[16:20], "big"), int.from_bytes(head[20:24], "big")
-    if head[:6] in (b"GIF87a", b"GIF89a"):
-        return "image/gif", int.from_bytes(head[6:8], "little"), int.from_bytes(head[8:10], "little")
-    if head[:4] == b"RIFF" and head[8:12] == b"WEBP":
-        kind = head[12:16]
-        if kind == b"VP8 " and head[23:26] == b"\x9d\x01\x2a":
-            return ("image/webp", int.from_bytes(head[26:28], "little") & 0x3FFF,
-                    int.from_bytes(head[28:30], "little") & 0x3FFF)
-        if kind == b"VP8L" and head[20:21] == b"\x2f":
-            b = int.from_bytes(head[21:25], "little")
-            return "image/webp", (b & 0x3FFF) + 1, ((b >> 14) & 0x3FFF) + 1
-        if kind == b"VP8X":
-            return ("image/webp", int.from_bytes(head[24:27], "little") + 1,
-                    int.from_bytes(head[27:30], "little") + 1)
-        return None
-    if head[:3] == b"\xff\xd8\xff":                        # JPEG: walk the segments to the frame header
-        i = 2
-        while i + 9 < len(head):
-            if head[i] != 0xFF:
-                return None
-            marker = head[i + 1]
-            if marker in (0xD8, 0x01) or 0xD0 <= marker <= 0xD7:
-                i += 2
-                continue
-            size = int.from_bytes(head[i + 2:i + 4], "big")
-            if 0xC0 <= marker <= 0xCF and marker not in (0xC4, 0xC8, 0xCC):
-                return "image/jpeg", int.from_bytes(head[i + 7:i + 9], "big"), int.from_bytes(head[i + 5:i + 7], "big")
-            i += 2 + size
-    return None
-
-
-def inline_image(path: str, root: Path) -> dict | None:
-    """An image content block for an attachment, or None (it stays a path Claude opens with Read): only
-    real PNG/GIF/WebP/JPEG files inside the workspace (the permission mode applies to anything else), at
-    most INLINE_IMAGE_MAX bytes and INLINE_IMAGE_SIDE px per side."""
-    try:
-        p = Path(path).resolve()
-        if root not in p.parents or not p.is_file() or p.stat().st_size > INLINE_IMAGE_MAX:
-            return None
-        data = p.read_bytes()
-    except OSError:
-        return None
-    info = image_info(data[:65536])
-    if not info or not (0 < info[1] <= INLINE_IMAGE_SIDE and 0 < info[2] <= INLINE_IMAGE_SIDE):
-        return None
-    return {"type": "image", "source": {"type": "base64", "media_type": info[0],
-                                         "data": base64.b64encode(data).decode("ascii")}}
-
-
 def approvals_dir() -> Path:
     return config.STATE / "approvals"
 
@@ -1395,6 +1335,51 @@ def browser_args(sid: str, path: str, agent: dict) -> list[str]:
     return args + ["--allowedTools", tool]
 
 
+DEVICES_NOTE = ("The person's own devices are available (mcp__harness-devices__* tools: their computers and phones "
+                "running Harness Link; call `devices` to see them). Use them for the apps of those devices; a web page "
+                "is better done with the Harness Browser, WebFetch or an API. The person may watch and take over at "
+                "any time. Ask before you send a message, post, pay, delete or change an account in their name. When "
+                "a password, a code (SMS, e-mail) or a captcha is needed, call ask_human: never guess or ask for a "
+                "password in the chat. A device in \"view only\" lets you look and guide, not act.")
+
+
+def devices_args(sid: str, path: str, agent: dict, others: list[str] | None = None) -> list[str]:
+    """The person's devices for this turn (maxxing/devices): `--mcp-config <file>` with their tools, and the tools
+    pre-allowed (what the owner turned on) unless the turn asks before everything (outside text). [] when the feature
+    is off or no device is visible from this folder. Never raises. Merges --allowedTools into agent["args"] or into
+    `others` (the browser's args) when one of them has it: one --allowedTools flag per turn."""
+    try:
+        from maxxing import devices
+        if not devices.visible(path):
+            return []
+        from maxxing.devices import turns
+        args = turns.mcp_args(sid, path)
+    except Exception:  # noqa: BLE001 - a turn must never fail because of the devices
+        return []
+    if agent.get("approvals_forced"):
+        return args
+    tool = f"mcp__{devices.MCP_NAME}"
+    extra = list(agent.get("args") or [])
+    if "--allowedTools" in extra:
+        i = extra.index("--allowedTools") + 1
+        extra[i] = f"{extra[i]},{tool}"
+        agent["args"] = extra
+        return args
+    if others is not None and "--allowedTools" in others:
+        i = others.index("--allowedTools") + 1
+        others[i] = f"{others[i]},{tool}"
+        return args
+    return args + ["--allowedTools", tool]
+
+
+def devices_done(sid: str) -> None:
+    try:
+        from maxxing.devices import turns
+        turns.end_turn(sid)
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def browser_done(sid: str) -> None:
     try:
         from maxxing import browser_mcp
@@ -1414,32 +1399,8 @@ def effective_mode(meta: dict, cfg: dict) -> str:
             or cfg.get("permission_mode") or "bypass")
 
 
-def stdin_payload(prompt: str, item: dict, root: Path | None = None) -> tuple[str, bool]:
-    """What the claude process reads on stdin -> (payload, json_in). HUD messages carry their images inline
-    (stream-json input): Claude sees the screen in its first step instead of opening each file with Read
-    (one model round trip saved, ~2-3 s). The paths stay listed in the text (Claude annotates copies)."""
-    if not item.get("hud"):
-        return prompt, False
-    if root is None:
-        root = Path(config.load_config().get("workspace") or "/").resolve()
-    blocks: list[dict] = []
-    for raw in item.get("attachments") or []:
-        if len(blocks) >= INLINE_IMAGES:
-            break
-        block = inline_image(str(raw), root)
-        if block:
-            blocks.append(block)
-    if not blocks:
-        return prompt, False
-    msg = {"type": "user", "message": {"role": "user", "content": [{"type": "text", "text": prompt}, *blocks]}}
-    return json.dumps(msg) + "\n", True
-
-
-def user_message(prompt: str, item: dict, root: Path | None = None) -> str:
-    """The prompt as one stream-json user message line (HUD images inline, as stdin_payload)."""
-    payload, json_in = stdin_payload(prompt, item, root)
-    if json_in:
-        return payload
+def user_message(prompt: str) -> str:
+    """The prompt as one stream-json user message line (stream input: stdin stays open for steering)."""
     return json.dumps({"type": "user", "message": {"role": "user", "content": [{"type": "text", "text": prompt}]}}) + "\n"
 
 
@@ -1452,15 +1413,6 @@ PLAN_PREFACE = ("[Plan mode is on: you must not create, edit or delete files nor
 PLAN_APPROVED_PREFACE = ("[The user validated your plan: plan mode is off, you can now edit files and run "
                          "commands. Implement the latest version of the plan you proposed, then report what you "
                          "did.]\n\n")
-
-
-HUD_PREFACE = ("[Sent from the HUD: a small floating window over the user's screen that shows your final answer "
-               "and the images whose absolute paths you write in it. Lead with the result and keep it short. "
-               "The attached images included in this message are already in front of you: do not Read those. "
-               "If a screen capture is attached and pointing at something on it helps (where to click, what is "
-               "wrong), draw on a copy of it - arrows, boxes, numbers in a bright color, e.g. with ImageMagick - "
-               "save it next to the capture with an '-annotated' suffix and write its absolute path in your answer. "
-               "Never edit the original capture.]\n\n")
 
 
 def _idle_compact(m: dict, item: dict, cfg: dict, now: float, window: object = None) -> tuple[str, int] | None:

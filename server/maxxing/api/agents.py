@@ -102,6 +102,7 @@ class AgentIn(BaseModel):
     chat_model: Optional[str] = Field(default=None, max_length=80)   # its model ("" = model)
     mail: Optional[list[dict]] = Field(default=None, max_length=10)    # mailboxes of the E-mail page (mail/access.py)
     browser: Optional[dict] = None          # its own browser (maxxing/browser): {enabled, web, sites, profile, ask, wait_min, downloads}
+    devices: Optional[list[str]] = Field(default=None, max_length=30)   # the person's devices it may use (maxxing/devices)
 
 
 def _fields(body: AgentIn) -> dict:

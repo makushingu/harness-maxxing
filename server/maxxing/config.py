@@ -99,6 +99,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "sidebar_order": [],               # sidebar: the pages in the order the user dragged them (routes; empty = default)
     "browser_feature": False,          # Settings -> Features: the Harness Browser (one Chromium for the user, sessions, agents)
     "browser": {},                     # its settings (maxxing/browser DEFAULTS: sites, sign-ins, asks, sleep)
+    "devices_feature": False,          # Settings -> Features: Devices (Claude uses the user's computers and phones)
     "dashboard": {"order": [], "hidden": []},
     "extensions": {"disabled": [], "pinned": []},
     "telegram": {
@@ -488,6 +489,20 @@ def _path_setting(name: str) -> str | None:
     """A path setting, or None when it is missing or hand-edited to something that is not a string."""
     v = _setting(name)
     return v if isinstance(v, str) and v else None
+
+
+def local_port() -> int:
+    """The port this server listens on (`maxxing serve --port` wins over the config): its local clients (a turn's
+    MCP servers, chrome-devtools-mcp) call it there."""
+    return int(os.environ.get("MAXXING_LISTEN_PORT") or load_config().get("port") or 8787)
+
+
+def local_host() -> str:
+    """The address this server answers on from this machine: 127.0.0.1, or the `bind` address (Tailscale mode)."""
+    bind = str(load_config().get("bind") or "").strip()
+    if not bind or bind in ("0.0.0.0", "::", "localhost"):
+        return "127.0.0.1"
+    return f"[{bind}]" if ":" in bind else bind
 
 
 def workspace() -> Path:

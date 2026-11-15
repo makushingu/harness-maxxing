@@ -52,8 +52,7 @@ from starlette.websockets import WebSocketDisconnect
 
 from .. import agents, browser, bus, config
 from ..browser import asks, exits, navs, pool as pool_mod, replays, unit
-from ..security import COOKIE, cookie_valid, require_auth
-from .pc import _loopback
+from ..security import COOKIE, cookie_valid, loopback as _loopback, require_auth
 
 log = logging.getLogger("maxxing.api.browser")
 router = APIRouter(prefix="/api/browser", tags=["browser"])

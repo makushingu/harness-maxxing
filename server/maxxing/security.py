@@ -224,6 +224,14 @@ def set_cookie(response, request: Request) -> None:
                         samesite="strict", secure=https, path="/")
 
 
+def loopback(conn) -> bool:
+    """A client of this machine reached directly (Caddy adds X-Forwarded-For: anything through it is not local).
+    `conn`: a Request or a WebSocket. For the routes only this server's own processes call (a turn's MCP servers)."""
+    host = conn.client.host if conn.client else ""
+    local = ("127.0.0.1", "::1", config.local_host().strip("[]"))   # + the bind address (Tailscale mode)
+    return host in local and "x-forwarded-for" not in conn.headers and "forwarded" not in conn.headers
+
+
 # ---- throttle ------------------------------------------------------------------------------
 def client_key(request: Request) -> str:
     """Who is asking, for the throttles: an IPv4 address, or the /64 of an IPv6 one (one connection usually owns a

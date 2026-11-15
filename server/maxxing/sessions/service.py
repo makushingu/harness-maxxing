@@ -169,7 +169,8 @@ def public(meta: dict) -> dict:
             "permission_mode": m.get("permission_mode") or "", "approvals": _approvals_waiting(m["id"]),
             "code_repos": [r for r in (m.get("code_repos") or []) if isinstance(r, str)],
             "worktree": _worktree_public(m),
-            "browser_asks": _browser_waiting(m["id"]), "browser_exit": _exit_waiting(m["id"])}
+            "browser_asks": _browser_waiting(m["id"]), "browser_exit": _exit_waiting(m["id"]),
+            "device_asks": _devices_waiting(m["id"])}
 
 
 def _worktree_public(m: dict) -> dict | None:
@@ -185,6 +186,12 @@ def _worktree_public(m: dict) -> dict | None:
 def _browser_waiting(sid: str) -> int:
     """`ask_human` requests of the session waiting for the user (maxxing/browser/asks.py; in memory)."""
     from ..browser import asks
+    return asks.waiting(sid)
+
+
+def _devices_waiting(sid: str) -> int:
+    """`ask_human` requests of the session on the person's devices (maxxing/devices/asks.py; in memory)."""
+    from ..devices import asks
     return asks.waiting(sid)
 
 
@@ -444,7 +451,7 @@ def _enqueue_voice(sid: str, item: dict, audio: str, *, reset_cron: bool = False
 
 
 def send_message(sid: str, text: str, attachments: list[str] | None = None, source: str = "web",
-                 hud: bool = False, voice_path: str | None = None, ref: str | None = None,
+                 voice_path: str | None = None, ref: str | None = None,
                  client_id: str | None = None, silent_ok: bool = False, mentions: list[dict] | None = None,
                  relay: dict | None = None) -> dict:
     """`ref`: an id the caller (Telegram) finds again in the meta of the turn that ran this message
@@ -457,7 +464,7 @@ def send_message(sid: str, text: str, attachments: list[str] | None = None, sour
     audio = _check_voice(voice_path)
     if not (text or "").strip() and not files and not audio:
         raise SessionError(400, "empty", "Empty message")
-    extra: dict[str, Any] = {"hud": True} if hud else {}
+    extra: dict[str, Any] = {}
     if ref:
         extra["refs"] = [str(ref)]
     extra.update(_client_ids(client_id))
@@ -675,7 +682,6 @@ def _merged(mine: list[dict], **extra: Any) -> dict:
                  mine[-1].get("source") or "web", **extra,
                  **({"voice": [v for x in mine for v in x.get("voice") or []]}
                     if any(x.get("voice") for x in mine) else {}),
-                 **({"hud": True} if all(x.get("hud") for x in mine) else {}),
                  **({"client_ids": ids} if (ids := [c for x in mine for c in x.get("client_ids") or []]) else {}),
                  **({"plan_approved": True} if any(x.get("plan_approved") for x in mine) else {}),
                  **({"mentions": ms} if (ms := [mm for x in mine for mm in x.get("mentions") or []]) else {}),

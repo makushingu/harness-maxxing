@@ -20,7 +20,6 @@ ROUTERS = [
     "tasks",
     "crons",
     "telegram",
-    "pc",
     "backup",
     "settings",
     "secrets",
@@ -47,4 +46,5 @@ ROUTERS = [
     "approvals",
     "mail",
     "browser",
+    "devices",
 ]

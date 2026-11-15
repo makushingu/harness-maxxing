@@ -549,7 +549,7 @@ class Pool:
                                     asleep[-1]["url"] if asleep else "about:blank", t.nav,
                                     key=asleep[-1]["key"] if asleep else None)
             t.last_target = tid or t.last_target
-        from ..pcbridge import local_host, local_port
+        from ..config import local_host, local_port
         t.child = await cdm.Child.start(f"ws://{local_host()}:{local_port()}/api/browser/cdp/{b.slug}", t.secret)
         if t.child.tools:
             await asyncio.to_thread(cdm.remember_tools, t.child.tools)
