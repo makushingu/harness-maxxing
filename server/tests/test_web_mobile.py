@@ -179,3 +179,10 @@ def test_the_audio_player_with_a_long_name_stays_on_the_screen():
     src = (WEB / "features" / "files" / "MediaPlayer.tsx").read_text()
     root = re.search(r"cn\('(relative grid w-full max-w-lg [^']*)', className\)\} tabIndex=\{0\}", src)
     assert root and "grid-cols-[minmax(0,1fr)]" in root[1].split()
+
+
+def test_a_settings_card_with_a_long_title_stays_on_the_screen():
+    src = (WEB / "pages" / "settings" / "sections" / "ui.tsx").read_text()
+    head = re.search(r'<div className="([^"]*)">\s*\{title && <h3 className=\{cn\(\'([^\']*)\'', src)
+    assert head and {"min-w-0", "grid-cols-[minmax(0,1fr)]"} <= set(head[1].split())
+    assert "[overflow-wrap:anywhere]" in head[2].split()
