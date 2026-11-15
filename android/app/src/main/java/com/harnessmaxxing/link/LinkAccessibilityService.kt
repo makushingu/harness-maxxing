@@ -144,7 +144,7 @@ class LinkAccessibilityService : AccessibilityService() {
                 latch.countDown()
             }
         })
-        latch.await(5, TimeUnit.SECONDS)
+        latch.await(10, TimeUnit.SECONDS)
         return Taken(bmp, error)
     }
 
