@@ -3777,9 +3777,10 @@ def notify_agent(path: str, text: str, ok: bool = True, thread_msg: str | None =
         if not token() or not tg_config().get("chat_id"):
             return
         body = (text or "").strip()
-        parts = fmt.render(fmt.head(body, REPORT_MAX)) if body else []
+        # A failed turn gets "⚠️ " (3 UTF-16 units) in front of its first message: rendered 3 units shorter
+        parts = fmt.render(fmt.head(body, REPORT_MAX), fmt.LIMIT if ok else fmt.LIMIT - 3) if body else []
         if not ok:
-            parts = [f"⚠️ {parts[0]}" if parts and len(parts[0]) < fmt.LIMIT - 3 else "⚠️"] + parts[1:]
+            parts = [f"⚠️ {parts[0]}" if parts else "⚠️"] + parts[1:]
         if not parts:
             parts = ["✅"]
         try:
