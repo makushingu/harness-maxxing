@@ -119,7 +119,9 @@ def test_the_voice_never_names_the_machinery():
     ("Stop.", "stop"), ("Non non, arrête !", "stop"), ("Arrête tout.", "stop"), ("Stop stop stop", "stop"),
     ("Cancel that.", "stop"),
     ("Tu peux parler en anglais ?", "lang"), ("In English please.", "lang"), ("Speak French.", "lang"),
-    ("Écris l'article en anglais et publie-le sur le blog.", "ask"),     # a request, not a language switch
+    ("Écris l'article en anglais et publie-le sur le blog.", "ask"),
+    ("That we should be able to speak French because I am speaking French.", "lang"),
+    ("Réponds à ce mail en anglais.", "ask"), ("Réponds en anglais.", "lang"),     # a request, not a language switch
     ("Regarde si mon site marche.", "ask"), ("Arrête le serveur de test.", "ask"),
 ])
 def test_sentences_are_sorted_without_a_model(text, kind):
@@ -149,6 +151,7 @@ class _Call(voicecall.LocalCall):
         self.lock, self.hear_lock = threading.Lock(), threading.Lock()
         self.used, self.among, self.language = 0, ("fr", "en"), language
         self.expecting, self.turns, self._phrases, self.open_turn = False, 0, {}, False
+        self.settled = True
         self.asked: list[str] = []
         self.summary = "[Language: fr]. J'ai trouvé deux erreurs. Je les corrige ?"
 
@@ -215,3 +218,20 @@ def test_a_message_said_on_a_call_tells_claude_it_is_on_the_phone():
     from maxxing.sessions import runner
     p = runner.build_prompt({"text": "Regarde le site", "call": "fr"})
     assert p.startswith("[Said by the user on a voice call") and "language: fr" in p and p.endswith("Regarde le site")
+
+
+def test_the_first_sentence_sets_the_language_of_the_call(call, monkeypatch, tmp_path):
+    from maxxing import voice
+    seen = []
+
+    def transcribe(path, language=None, among=()):
+        seen.append(language)
+        return {"text": "Est-ce que tu me reçois bien ?", "language": "fr"}
+
+    monkeypatch.setattr(voice, "transcribe_file", transcribe)
+    call.settled, call.language = False, "en"                 # the interface was in English
+    wav = tmp_path / "a.wav"
+    wav.write_bytes(b"RIFF")
+    assert voicecall.hear(call.id, audio=wav)["language"] == "fr"
+    voicecall.hear(call.id, audio=wav)
+    assert seen == ["auto", "fr"]

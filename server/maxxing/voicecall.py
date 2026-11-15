@@ -353,10 +353,15 @@ def classify(text: str, expecting: bool = False) -> tuple[str, str | None]:
     joined = " ".join(core)
     if joined in _STOP or all(w in ("stop", "arrête", "arrete") for w in core):
         return "stop", None
-    if len(words) <= 9:
-        asked = [lang for lang, names in LANG_NAMES.items() if any(n in words for n in names)]
-        if len(asked) == 1 and (set(words) & _SPEAK_VERBS or core[:1] in (["en"], ["in"])):
-            return "lang", asked[0]
+    # "speak French", "parle en anglais", "can we speak in English": a speak verb right before the language name
+    # ("reply to this mail in English" is a request for the session)
+    for i, w in enumerate(words):
+        lang = next((code for code, names in LANG_NAMES.items() if w in names), None)
+        if not lang:
+            continue
+        before = [x for x in words[max(0, i - 3):i] if x not in ("en", "in", "to", "moi", "me", "us", "nous")]
+        if (before and before[-1] in _SPEAK_VERBS) or (len(core) <= 4 and core[0] in ("en", "in")):
+            return "lang", lang
     if joined in _FILLERS and not expecting:
         return "skip", None
     return "ask", None
@@ -401,6 +406,7 @@ class LocalCall:
         self.used = time.time()
         self.among = call_languages(ui_language)
         self.language = self.among[0] if self.among else "en"   # one language per call (see hear)
+        self.settled = False                               # the first sentence sets it (any language)
         self.expecting = False                             # the last thing said was a question
         self.turns = 0                                     # acknowledgements said, to vary them
         self._phrases: dict[tuple[str, str], dict] = {}
@@ -598,9 +604,13 @@ def hear(cid: str, audio: Path | None = None, text: str | None = None, busy: boo
     with c.hear_lock:
         lang_heard = None
         if audio is not None:
-            out = voice.transcribe_file(audio, c.language, among=c.among)
+            # Forced into the wrong language, Whisper translates: the first sentence is heard in any language and
+            # sets the call's language (the interface language is only a guess).
+            out = voice.transcribe_file(audio, c.language if c.settled else "auto", among=c.among if c.settled else ())
             text = (out.get("text") or "").strip()
             lang_heard = _lang_code(out.get("language"))
+            if not c.settled and text and lang_heard:
+                c.language, c.settled = lang_heard, True
         text = (text or "").strip()
         kind, c.language = sort(text, c.language, c.expecting, lang_heard)
         res: dict[str, Any] = {"text": text, "language": c.language, "kind": kind}

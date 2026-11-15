@@ -14,7 +14,7 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   knowledge, rephrased requests (often in English) and switched language by itself. Now every sentence goes to the
   session word for word: `voicecall.classify` sorts it without any model (Whisper hallucinations on noise, fillers
   skipped unless the last thing said ended with "?", stop words after leading "non / ok / attends", language
-  requests of at most 9 words with a speak verb), `sort` keeps one language per call (changed on request, or when
+  requests = a speak verb right before the language name, or a short "en anglais"), `sort` keeps one language per call (changed on request, or when
   Whisper and `voice.text_language` agree on a sentence of 3 words or more; another language than fr/en on Whisper's
   word from 4 words). Messages carry `call: <lang>` (`MessageIn.call`, queue item `call`, kept by `_merged`):
   `runner.build_prompt` prefixes `CALL_PREFACE` (on a call, answer short and easy to say in that language). Local:
@@ -36,8 +36,9 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   by voice, Telegram, progress spoken unprompted.
 - Voice mode, local: `tts.VOICES` = id -> {model, path, speaker?, lang, name} (several voices in one Piper model,
   e.g. upmc Pierre/Jessica; worker request gains `speaker`; old id `fr_FR-upmc-medium` aliased); `pick_voice` only
-  uses the chosen voice for its language. `voice_call.local_speed` (0.8-1.5, default 1.15). Transcribed in the
-  call's language; when the mean `avg_logprob` is below `voice.WRONG_LANGUAGE_LOGPROB` (-0.4; right language about
+  uses the chosen voice for its language. `voice_call.local_speed` (0.8-1.5, default 1.15). The first sentence
+  of a call is transcribed in any language and sets the call's language (forced into a wrong one, Whisper
+  translates: the interface language is only a guess); then transcribed in the call's language; when the mean `avg_logprob` is below `voice.WRONG_LANGUAGE_LOGPROB` (-0.4; right language about
   -0.2, wrong -0.45 to -0.85 with `small`; `voice.text_language` corrects a French run that copied English), the
   other `call_languages()` (voice setting, browser language sent to `/call/start`, server language, en) are tried and
   the best kept (`transcribe_file(among=...)`; `detect_language` cost +1.3 s on every sentence). Barge-in: while
