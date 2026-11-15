@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name" translatable="false">Harness Link</string>
+    <string name="accessibility_label">Harness Link</string>
+    <string name="accessibility_description">Lets the Claude sessions of your Harness server see this screen and use the phone for you: screenshots, taps, swipes, typing in a text field, the Back / Home / Recents keys, the list of on-screen elements and opening an app. Nothing else: no files, no shell. Use Pause in the notification to stop it at any time.</string>
+    <string name="channel_name">Connection to Harness</string>
+    <string name="channel_description">Permanent notification while the phone is linked to your Harness server, with a Pause button.</string>
+
+    <string name="notif_connected">Connected to Harness</string>
+    <string name="notif_connecting">Connecting to Harness…</string>
+    <string name="notif_claude">Claude is using this phone</string>
+    <string name="notif_human">Controlled from Harness</string>
+    <string name="notif_paused">Paused: Claude cannot use this phone</string>
+    <string name="pause">Pause</string>
+    <string name="resume">Resume</string>
+
+    <string name="status_not_paired">Not paired</string>
+    <string name="status_not_paired_detail">Open the pairing link shown by Harness (Settings → Devices → Add a device → Android), or type the server address and the code below.</string>
+    <string name="status_revoked_detail">This phone was removed from Harness. Pair it again to use it.</string>
+    <string name="status_connected">Connected</string>
+    <string name="status_connected_detail">Claude can use this phone when you ask it to, within the rights set in Harness.</string>
+    <string name="status_claude">Claude is using this phone</string>
+    <string name="status_human">Controlled from Harness</string>
+    <string name="status_connecting">Connecting…</string>
+    <string name="status_offline_detail">Cannot reach the server (%1$s). Retrying.</string>
+    <string name="status_paused">Paused</string>
+    <string name="status_paused_detail">Every request from Harness is refused until you resume.</string>
+    <string name="status_accessibility_off">Accessibility is off</string>
+    <string name="status_accessibility_off_detail">Linked, but Claude cannot see or touch the screen until the Harness Link accessibility service is turned on.</string>
+
+    <string name="accessibility_help">Turn on the Harness Link accessibility service so that the phone can be seen and used: Settings → Accessibility → Harness Link (sometimes under “Installed apps” or “Downloaded apps”).</string>
+    <string name="accessibility_button">Open accessibility settings</string>
+    <string name="restricted_help">If Android says the setting is restricted (app installed from the browser): open App info, tap ⋮ → “Allow restricted settings”, then come back.</string>
+    <string name="app_info_button">App info</string>
+    <string name="notifications_button">Allow notifications</string>
+
+    <string name="pair_help">Pair this phone with your Harness server.</string>
+    <string name="server_hint">Server address</string>
+    <string name="code_hint">Code</string>
+    <string name="pair_button">Pair</string>
+    <string name="pairing">Pairing…</string>
+    <string name="pair_confirm_title">Pair with %1$s?</string>
+    <string name="pair_confirm_text">The Claude sessions of this server will be able to see and use this phone once you accept it in Harness. Only pair with your own server.</string>
+    <string name="pair_confirm_replace">This replaces the server this phone is paired with now.</string>
+    <string name="cancel">Cancel</string>
+    <string name="pair_ok">Paired. Accept the phone in Harness to finish.</string>
+    <string name="pair_bad_server">Invalid server address (https:// is required).</string>
+    <string name="pair_bad_code">Wrong code. Create a new one in Harness.</string>
+    <string name="pair_expired">This code has expired. Create a new one in Harness.</string>
+    <string name="pair_network">Cannot reach the server (%1$s).</string>
+    <string name="pair_server">The server refused the pairing (%1$s).</string>
+
+    <string name="server_label">Server: %1$s</string>
+    <string name="name_hint">Name of this phone in Harness</string>
+    <string name="name_saved">Name saved</string>
+    <string name="forget_button">Forget this server</string>
+    <string name="forget_title">Forget this server?</string>
+    <string name="forget_text">The phone disconnects now and forgets its key. To remove it from the list in Harness too, use Remove in Settings → Devices.</string>
+    <string name="forget_confirm">Forget</string>
+
+    <string name="about_title">What Claude can do here</string>
+    <string name="about_text">Only what you ask for in a Harness session, and only what this app offers: take a screenshot, tap, long-press, swipe and scroll, type into the text field that has the focus, press Back / Home / Recents / Enter, read the list of elements on the screen, list your apps and open one.\n\nIt cannot read your files, run commands, install anything or see screens that apps protect (banking apps, passwords). It does nothing while the phone is locked. Pause in the notification refuses everything until you resume.</string>
+</resources>

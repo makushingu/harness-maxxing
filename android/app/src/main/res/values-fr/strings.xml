@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="accessibility_label">Harness Link</string>
+    <string name="accessibility_description">Permet aux sessions Claude de votre serveur Harness de voir cet écran et d’utiliser le téléphone pour vous : captures d’écran, touchers, glissements, saisie dans un champ de texte, touches Retour / Accueil / Récents, liste des éléments affichés et ouverture d’une appli. Rien d’autre : pas de fichiers, pas de commandes. Pause dans la notification arrête tout à tout moment.</string>
+    <string name="channel_name">Connexion à Harness</string>
+    <string name="channel_description">Notification permanente tant que le téléphone est relié à votre serveur Harness, avec un bouton Pause.</string>
+
+    <string name="notif_connected">Connecté à Harness</string>
+    <string name="notif_connecting">Connexion à Harness…</string>
+    <string name="notif_claude">Claude utilise ce téléphone</string>
+    <string name="notif_human">Piloté depuis Harness</string>
+    <string name="notif_paused">En pause : Claude ne peut pas utiliser ce téléphone</string>
+    <string name="pause">Pause</string>
+    <string name="resume">Reprendre</string>
+
+    <string name="status_not_paired">Non jumelé</string>
+    <string name="status_not_paired_detail">Ouvrez le lien de jumelage affiché par Harness (Réglages → Appareils → Ajouter un appareil → Android), ou saisissez l’adresse du serveur et le code ci-dessous.</string>
+    <string name="status_revoked_detail">Ce téléphone a été retiré de Harness. Jumelez-le à nouveau pour l’utiliser.</string>
+    <string name="status_connected">Connecté</string>
+    <string name="status_connected_detail">Claude peut utiliser ce téléphone quand vous le lui demandez, dans les limites des droits réglés dans Harness.</string>
+    <string name="status_claude">Claude utilise ce téléphone</string>
+    <string name="status_human">Piloté depuis Harness</string>
+    <string name="status_connecting">Connexion…</string>
+    <string name="status_offline_detail">Serveur injoignable (%1$s). Nouvel essai en cours.</string>
+    <string name="status_paused">En pause</string>
+    <string name="status_paused_detail">Toutes les demandes de Harness sont refusées jusqu’à la reprise.</string>
+    <string name="status_accessibility_off">Accessibilité désactivée</string>
+    <string name="status_accessibility_off_detail">Relié, mais Claude ne peut ni voir ni toucher l’écran tant que le service d’accessibilité Harness Link n’est pas activé.</string>
+
+    <string name="accessibility_help">Activez le service d’accessibilité Harness Link pour que le téléphone puisse être vu et utilisé : Paramètres → Accessibilité → Harness Link (parfois sous « Applis installées » ou « Applications téléchargées »).</string>
+    <string name="accessibility_button">Ouvrir les réglages d’accessibilité</string>
+    <string name="restricted_help">Si Android indique que le réglage est limité (appli installée depuis le navigateur) : ouvrez Infos sur l’appli, touchez ⋮ → « Autoriser les paramètres restreints », puis revenez.</string>
+    <string name="app_info_button">Infos sur l’appli</string>
+    <string name="notifications_button">Autoriser les notifications</string>
+
+    <string name="pair_help">Jumelez ce téléphone avec votre serveur Harness.</string>
+    <string name="server_hint">Adresse du serveur</string>
+    <string name="code_hint">Code</string>
+    <string name="pair_button">Jumeler</string>
+    <string name="pairing">Jumelage…</string>
+    <string name="pair_confirm_title">Jumeler avec %1$s ?</string>
+    <string name="pair_confirm_text">Les sessions Claude de ce serveur pourront voir et utiliser ce téléphone une fois que vous l’aurez accepté dans Harness. Ne jumelez qu’avec votre propre serveur.</string>
+    <string name="pair_confirm_replace">Cela remplace le serveur auquel ce téléphone est jumelé.</string>
+    <string name="cancel">Annuler</string>
+    <string name="pair_ok">Jumelé. Acceptez le téléphone dans Harness pour terminer.</string>
+    <string name="pair_bad_server">Adresse de serveur invalide (https:// obligatoire).</string>
+    <string name="pair_bad_code">Code incorrect. Créez-en un nouveau dans Harness.</string>
+    <string name="pair_expired">Ce code a expiré. Créez-en un nouveau dans Harness.</string>
+    <string name="pair_network">Serveur injoignable (%1$s).</string>
+    <string name="pair_server">Le serveur a refusé le jumelage (%1$s).</string>
+
+    <string name="server_label">Serveur : %1$s</string>
+    <string name="name_hint">Nom de ce téléphone dans Harness</string>
+    <string name="name_saved">Nom enregistré</string>
+    <string name="forget_button">Oublier ce serveur</string>
+    <string name="forget_title">Oublier ce serveur ?</string>
+    <string name="forget_text">Le téléphone se déconnecte tout de suite et oublie sa clé. Pour le retirer aussi de la liste dans Harness, utilisez Retirer dans Réglages → Appareils.</string>
+    <string name="forget_confirm">Oublier</string>
+
+    <string name="about_title">Ce que Claude peut faire ici</string>
+    <string name="about_text">Seulement ce que vous demandez dans une session Harness, et seulement ce que propose cette appli : faire une capture d’écran, toucher, appuyer longuement, glisser et faire défiler, écrire dans le champ de texte qui a le focus, appuyer sur Retour / Accueil / Récents / Entrée, lire la liste des éléments de l’écran, lister vos applis et en ouvrir une.\n\nElle ne peut pas lire vos fichiers, lancer des commandes, installer quoi que ce soit ni voir les écrans que les applis protègent (banque, mots de passe). Elle ne fait rien quand le téléphone est verrouillé. Pause dans la notification refuse tout jusqu’à la reprise.</string>
+</resources>

@@ -1,0 +1,34 @@
+package com.harnessmaxxing.link
+
+/**
+ * Text editing done with ACTION_SET_TEXT (the accessibility API cannot type keys):
+ * `type` inserts at the cursor, replacing the selection; at the end when the cursor is unknown.
+ */
+object TextEdit {
+    data class Result(val text: String, val cursor: Int)
+
+    fun insert(current: CharSequence?, showingHint: Boolean, selStart: Int, selEnd: Int, input: String): Result {
+        val text = if (current == null || showingHint) "" else current.toString()
+        val (s, e) = range(text, selStart, selEnd)
+        val out = text.substring(0, s) + input + text.substring(e)
+        return Result(out, s + input.length)
+    }
+
+    fun backspace(current: CharSequence?, showingHint: Boolean, selStart: Int, selEnd: Int): Result {
+        val text = if (current == null || showingHint) "" else current.toString()
+        var (s, e) = range(text, selStart, selEnd)
+        if (s == e) {
+            if (s == 0) return Result(text, 0)
+            s -= 1
+            if (s > 0 && Character.isLowSurrogate(text[s]) && Character.isHighSurrogate(text[s - 1])) s -= 1
+        }
+        return Result(text.substring(0, s) + text.substring(e), s)
+    }
+
+    private fun range(text: String, selStart: Int, selEnd: Int): Pair<Int, Int> {
+        if (selStart < 0 || selEnd < 0 || selStart > text.length || selEnd > text.length) {
+            return text.length to text.length
+        }
+        return minOf(selStart, selEnd) to maxOf(selStart, selEnd)
+    }
+}
