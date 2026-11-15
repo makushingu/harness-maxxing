@@ -220,3 +220,9 @@ def test_the_browser_panel_with_a_long_profile_name_stays_on_the_screen():
     assert root and "grid-cols-[minmax(0,1fr)]" in root[1].split()
     line = re.search(r"<p className=\"([^\"]*)\">\{t\('browser\.panel\.projectProfile'", src)
     assert line and "break-words" in line[1].split()
+
+
+def test_the_profile_settings_link_of_the_browser_panel_is_big_enough_to_touch():
+    src = (WEB / "features" / "browser" / "BrowserPanel.tsx").read_text()
+    link = re.search(r'<Link to=\{`/settings/browser\?[^`]*`\} className="([^"]*)">', src)
+    assert link and {"pointer-coarse:inline-flex", "pointer-coarse:min-h-10"} <= set(link[1].split())
