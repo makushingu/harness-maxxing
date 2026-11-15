@@ -3,7 +3,7 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
-## Unreleased
+## 2.0.0-alpha.154 - 2026-11-15
 
 Added:
 - **Claude: you are told before the sign-in of your server ends.** A sign-in made with `claude` then `/login` on

@@ -5,7 +5,7 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
-## Unreleased
+## 2.0.0-alpha.154 - 2026-11-15
 
 - `agent_guard._probe()` runs its bwrap + nested `unshare --user` in a transient unit (`systemd-run --wait
   --collect`, `spawn.hardening_properties()`), like the turns, unless `MAXXING_SPAWN=direct` or no systemd-run.
