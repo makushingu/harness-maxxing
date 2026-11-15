@@ -35,7 +35,6 @@ import {
 import { Combobox } from '@/components/ui/combobox'
 import { Callout, SettingRow } from '@/features/common'
 import { SettingsCard, SectionStack } from './ui'
-import { PcBrowserCard } from '@/features/pc/PcBrowserCard'
 import { ConnectDialog } from '@/features/mcp/ConnectDialog'
 
 const NAME_RE = /^[A-Za-z0-9_.-]{1,64}$/
@@ -340,7 +339,6 @@ export function McpSection() {
           <Switch id="mx-mcp-auto" checked={data?.auto ?? false} disabled={!data || auto.isPending} onCheckedChange={(on) => auto.mutate(on)} />
         </SettingRow>
       </SettingsCard>
-      <PcBrowserCard />
       <AddDialog open={adding} onOpenChange={setAdding} />
       <ConnectDialog server={connecting} onClose={() => setConnecting(null)} />
     </SectionStack>

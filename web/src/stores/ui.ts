@@ -71,8 +71,6 @@ type UIState = {
   notifySound: boolean
   /** The unread badges (sidebar, tab bar, tree) pulse. */
   badgePulse: boolean
-  /** HUD mode: each session gets a button opening its floating bar (this browser). */
-  hud: boolean
   /** Theme, accent or tint chosen in this browser; until then it shows the server's look (`adoptLook`). */
   lookChosen: boolean
   setTheme: (t: Theme) => void
@@ -94,7 +92,6 @@ type UIState = {
   setTourDone: (done: boolean) => void
   setNotify: (p: Partial<Pick<UIState, 'notifyDone' | 'notifyTeam' | 'teamBubbles' | 'agentPreview' | 'notifySound' | 'badgePulse'>>) => void
   setFeedPanel: (v: boolean) => void
-  setHud: (on: boolean) => void
   adoptLook: (look: Look) => void
 }
 
@@ -132,7 +129,6 @@ export const useUI = create<UIState>()(
       feedPanel: true,
       notifySound: true,
       badgePulse: false,
-      hud: false,
       lookChosen: false,
       setTheme: (theme) => set({ theme, lookChosen: true }),
       setAccent: (accent) => set({ accent, lookChosen: true }),
@@ -153,7 +149,6 @@ export const useUI = create<UIState>()(
       setTourDone: (tourDone) => set({ tourDone }),
       setNotify: (p) => set(p),
       setFeedPanel: (feedPanel) => set({ feedPanel }),
-      setHud: (hud) => set({ hud }),
       adoptLook: ({ theme, accent, tint }) => set({ theme, accent, tint }),
     }),
     {

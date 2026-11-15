@@ -1,12 +1,12 @@
 // Settings sub-navigation (route /settings/:section). Lightweight on purpose: also used by the palette.
 // Sections are grouped under headings in the left column (and in the phone tabs, in the same order).
 // Old ids keep working: SECTION_MOVED sends them to the section that took their content.
-import { UserRound, BarChart3, Globe, Bell, FileInput, History, Info, LayoutGrid, LayoutTemplate, ToggleRight, Bot, Brain, Clock, DatabaseBackup, KeyRound, Mic, Palette, PanelsTopLeft, Plug, Send, Server, Shield, SlidersHorizontal, Sparkles, Trash2, type LucideIcon } from 'lucide-react'
+import { UserRound, BarChart3, Globe, Bell, FileInput, History, Info, LayoutGrid, LayoutTemplate, ToggleRight, Bot, Brain, Clock, DatabaseBackup, KeyRound, Mic, MonitorSmartphone, Palette, PanelsTopLeft, Plug, Send, Server, Shield, SlidersHorizontal, Sparkles, Trash2, type LucideIcon } from 'lucide-react'
 import type { TKey } from '@/i18n'
 
 export type SettingsSectionId =
   | 'general' | 'appearance' | 'profile' | 'security' | 'features'
-  | 'claude' | 'memory' | 'skills' | 'mcp' | 'keys' | 'browser' | 'usage'
+  | 'claude' | 'memory' | 'skills' | 'mcp' | 'keys' | 'browser' | 'devices' | 'usage'
   | 'crons' | 'notifications' | 'telegram' | 'voice'
   | 'widgets' | 'pages'
   | 'templates' | 'import' | 'backup' | 'trash'
@@ -28,13 +28,14 @@ export const SETTINGS_SECTIONS: { id: SettingsSectionId; group: SettingsGroupId;
   { id: 'appearance', group: 'general', label: 'settings.appearance', description: 'settings.appearance.desc', icon: Palette, keywords: 'theme dark light accent color background tint density compact font mono layout touch phone first screen look' },
   { id: 'profile', group: 'general', label: 'settings.profile', description: 'settings.profile.desc', icon: UserRound, keywords: 'pseudo name nickname avatar color emoji identity stay in touch contact news email register counter' },
   { id: 'security', group: 'general', label: 'settings.security', description: 'settings.security.desc', icon: Shield, keywords: 'password sign out 2fa two factor presentation privacy blur hide' },
-  { id: 'features', group: 'general', label: 'settings.features', description: 'settings.features.desc', icon: ToggleRight, keywords: 'features pages options agents tasks team mail email infra git hud tabs maxxing result line cost enable' },
+  { id: 'features', group: 'general', label: 'settings.features', description: 'settings.features.desc', icon: ToggleRight, keywords: 'features pages options agents tasks team mail email infra git devices tabs maxxing result line cost enable' },
   { id: 'claude', group: 'claude', label: 'settings.claude', description: 'settings.claude.desc', icon: Bot, keywords: 'model token api key permission sign in' },
   { id: 'memory', group: 'claude', label: 'settings.memory', description: 'settings.memory.desc', icon: Brain, keywords: 'second brain memory.md clean compaction lines' },
   { id: 'skills', group: 'claude', label: 'settings.skills', description: 'settings.skills.desc', icon: Sparkles, keywords: 'skills skill.md recipes commands slash abilities' },
   { id: 'mcp', group: 'claude', label: 'settings.mcp', description: 'settings.mcp.desc', icon: Plug, keywords: 'mcp servers tools connectors oauth model context protocol' },
   { id: 'keys', group: 'claude', label: 'settings.keys', description: 'settings.keys.desc', icon: KeyRound, keywords: 'secrets vault env api keys' },
   { id: 'browser', group: 'claude', label: 'nav.browser', description: 'browser.settingsDesc', icon: Globe, keywords: 'browser chromium harness browser web pages sign in login captcha profiles connections proxy tailscale phone exit navigateur' },
+  { id: 'devices', group: 'claude', label: 'nav.devices', description: 'devices.settingsDesc', icon: MonitorSmartphone, keywords: 'devices computer phone android mac windows linux harness link computer use screen remote control take over appareils' },
   { id: 'usage', group: 'claude', label: 'settings.usage', description: 'settings.usage.desc', icon: BarChart3, keywords: 'stats usage quota tokens statistics plan limit cost' },
   { id: 'crons', group: 'automate', label: 'nav.crons', description: 'crons.description', icon: Clock, keywords: 'cron jobs schedule scheduled tasks timer recurring once history run' },
   { id: 'notifications', group: 'automate', label: 'settings.notifications', description: 'settings.notifications.desc', icon: Bell, keywords: 'notification alert sound badge pulse finished done feed' },

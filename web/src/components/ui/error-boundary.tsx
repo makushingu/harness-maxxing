@@ -1,4 +1,4 @@
-// A render error stays where it happened: one widget, one message, the file viewer, the HUD - not the whole app.
+// A render error stays where it happened: one widget, one message, the file viewer - not the whole app.
 // `variant`: "inline" (a small line in place of the part), "card" (a widget), "page" (the root, outside the router).
 import * as React from 'react'
 import { RefreshCw, Sparkles, TriangleAlert } from 'lucide-react'

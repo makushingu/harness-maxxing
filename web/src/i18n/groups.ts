@@ -6,7 +6,7 @@
 export const GROUPS = {
   settings: [
     'mcp', 'system', 'stats', 'keys', 'memory', 'trash', 'features', 'security', 'profile', 'fonts', 'accent',
-    'density', 'tint', 'backup', 'import', 'telegram', 'packs', 'pc', 'license', 'register', 'cdef',
+    'density', 'tint', 'backup', 'import', 'telegram', 'packs', 'license', 'register', 'cdef',
     'keyfiles', 'about', 'appearance', 'skills', 'emoji',
   ],
   auth: ['onb', 'setup', 'login', 'pw', 'twofa'],
@@ -17,6 +17,8 @@ export const GROUPS = {
   mail: ['mail'],
   // the Harness Browser (Settings -> Features, topic menu, agent settings, live view)
   browser: ['browser'],
+  // Devices (Settings -> Devices, the session line, the live view window, an agent's devices)
+  devices: ['devices'],
   tasks: ['tasks', 'crons'],
   files: ['files', 'viewer'],
   // the media player: on the first player shown (a conversation shows one only for an audio file or in the viewer)

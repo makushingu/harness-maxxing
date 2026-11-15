@@ -32,6 +32,9 @@ import { UpdatesSection } from './sections/Updates'
 // The browser section: its own chunk (and texts), loaded when it opens.
 const BrowserSection = React.lazy(withGroups(['browser'], () => import('@/features/browser/BrowserSettings').then((m) => ({ default: m.BrowserSettingsSection }))))
 
+// The devices section: its own chunk (and texts), loaded when it opens.
+const DevicesSection = React.lazy(withGroups(['devices'], () => import('@/features/devices/DevicesSettings').then((m) => ({ default: m.DevicesSettingsSection }))))
+
 // The crons section is a whole page (list, history, editor): its own chunk, loaded when it opens.
 const CronsSection = React.lazy(() => import('@/pages/crons'))
 
@@ -61,6 +64,7 @@ const COMPONENTS: Record<SettingsSectionId, React.ComponentType> = {
   updates: UpdatesSection,
   crons: CronsSection,
   browser: BrowserSection,
+  devices: DevicesSection,
 }
 
 export default function SettingsPage() {

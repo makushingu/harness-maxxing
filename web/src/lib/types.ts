@@ -159,6 +159,8 @@ export type Agent = {
   mail?: MailGrant[]
   /** May it use the Harness Browser (maxxing/browser): off unless turned on. */
   browser?: BrowserSwitch
+  /** The person's devices it may use (ids; none unless turned on). */
+  devices?: string[]
   created: number
   session_count: number
   archived_count: number
@@ -322,6 +324,7 @@ export type AgentInput = {
   triggers?: AgentTriggerInput[]
   mail?: MailGrantInput[]
   browser?: BrowserSwitch
+  devices?: string[]
 }
 export type AgentRunResult = { started: boolean; /** the new session (its id in older answers) */ session?: Session | string; reason?: string; /** a reply: the session of that message went on */ continued?: boolean }
 export type AgentWebhookKind = 'generic' | 'stripe' | 'shopify' | 'github'
@@ -378,6 +381,8 @@ export type Session = {
   browser_asks?: number
   /** its browser's exit went down during a turn (the card "go on when it is back") */
   browser_exit?: BrowserWaiter | null
+  /** `ask_human` requests on the person's devices waiting for them (GET /api/devices/session/<id>). */
+  device_asks?: number
 }
 /** A session's separate copy (server: maxxing/worktrees.py). */
 export type SessionCopy = {
@@ -416,7 +421,7 @@ export const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const
 export type Effort = (typeof EFFORTS)[number]
 export type CreateSessionBody = { path: string; message?: string; title?: string; model?: string; effort?: Effort | ''; attachments?: string[]; plan_mode?: boolean; /** Absolute path of a voice message sent directly. */ voice?: string; /** This page's id for the first message (see SendMessageBody). */ client_id?: string; /** Work on a separate copy (Code mode). */ worktree?: { repo: string; base?: string; prepare?: string; copy_env?: boolean; remember?: boolean } }
 export type PatchSessionBody = { title?: string; model?: string; effort?: Effort | ''; archived?: boolean; notify?: boolean; plan_mode?: boolean; favorite?: boolean; /** Move to another topic (idle sessions only). */ path?: string }
-export type SendMessageBody = { text: string; attachments?: string[]; hud?: boolean; /** Absolute path of a voice message sent directly: the server transcribes it, then sends it. */ voice?: string; /** This page's id for the message, found again in `client_ids` of its queue item and its log event (a reload mid-send checks it). */ client_id?: string; /** The @ of the composer: the server tells Claude how to write to each. */ mentions?: Mention[] }
+export type SendMessageBody = { text: string; attachments?: string[]; /** Absolute path of a voice message sent directly: the server transcribes it, then sends it. */ voice?: string; /** This page's id for the message, found again in `client_ids` of its queue item and its log event (a reload mid-send checks it). */ client_id?: string; /** The @ of the composer: the server tells Claude how to write to each. */ mentions?: Mention[] }
 export type SendMessageResult = { queued: boolean; session: Session }
 /** Who the composer's @ can name (GET /api/sessions/{id}/mentions). */
 export type MentionKind = 'session' | 'agent' | 'team'
@@ -491,7 +496,7 @@ export type SessionEventsBackPage = {
 export type SessionStreamEvents = { events: SessionEvent[]; next: number }
 
 /* ---------------------------------------------------------------- Global bus */
-export type BusTopic = 'agents' | 'agents_layout' | 'agent-groups' | 'sessions' | 'workspace' | 'tasks' | 'crons' | 'telegram' | 'backup' | 'health' | 'extensions' | 'trash' | 'feed' | 'profile' | 'register' | 'license' | 'infra' | 'mcp' | 'team' | 'team_live' | 'approvals' | 'open_sessions' | 'browser'
+export type BusTopic = 'agents' | 'agents_layout' | 'agent-groups' | 'sessions' | 'workspace' | 'tasks' | 'crons' | 'telegram' | 'backup' | 'health' | 'extensions' | 'trash' | 'feed' | 'profile' | 'register' | 'license' | 'infra' | 'mcp' | 'team' | 'team_live' | 'approvals' | 'open_sessions' | 'browser' | 'devices'
 
 /* ---------------------------------------------------------------- MCP servers (Settings -> MCP) */
 export type McpState = 'connected' | 'needs_auth' | 'failed' | 'pending' | 'unknown'
@@ -708,26 +713,63 @@ export type TelegramThread = { path: string; thread_id: number; name: string; se
 /** simple = one chat (alerts + sessions as replies); threads = one thread per open session; mirror = threads + web turns copied. */
 export type TelegramMode = 'simple' | 'threads' | 'mirror'
 export type TelegramSettings = { mode: TelegramMode; notify_crons: boolean; notify_system: boolean; login_alerts: boolean; two_factor?: boolean; reply_mode: 'final' | 'progress'; thread_days: number; mirror_web: boolean }
-export type PcBrowser = 'brave' | 'chrome' | 'edge' | 'vivaldi' | 'opera' | 'chromium'
-export type PcOs = 'windows' | 'darwin' | 'linux'
-export type PcStatus = {
-  device: { id: string; name: string; os: string; arch: string; version: string; browsers: PcBrowser[]; browser: PcBrowser; created: number; last_seen: number } | null
+export type DeviceOs = 'linux' | 'darwin' | 'windows' | 'android'
+/** A device running Harness Link (api/devices.py): its record + what its connection says now. */
+export type Device = {
+  id: string
+  name: string
+  os: DeviceOs
+  os_name: string
+  kind: 'desktop' | 'android'
+  arch: string
+  version: string
+  created: number
+  last_seen: number
+  /** false: it paired with a code and waits for the user's Accept / Refuse */
+  confirmed: boolean
+  /** view: Claude looks and guides; control: it clicks and types */
+  mode: 'view' | 'control'
+  /** ["*"] every project and agent, else "project:<name>" / "agent:<path>" */
+  scope: string[]
+  caps: string[]
+  screen: { w: number; h: number; scale?: number } | null
+  note: string
+  ip: string
   online: boolean
-  browser_running: boolean
-  mcp_running: boolean
-  last_use: number | null
-  pairing: { expires_at: number; browser: PcBrowser; os: PcOs } | null
-  /** a PC that used a download code and waits for the user's yes */
-  candidate: { id: string; name: string; os: string; arch: string; version: string; created: number; ip?: string } | null
-  /** a Harness PC can be downloaded from this server (a release is listed, or a local build) */
-  available: boolean
-  mcp_registered: boolean
-  settings: { idle_min: number }
-  browsers: PcBrowser[]
-  targets: string[]
-  actions: { at: number; tool: string; args: Record<string, string>; ok: boolean; ms: number }[]
+  paused: boolean
+  /** the person has it (live view) */
+  human: boolean
+  /** Claude acted on it in the last seconds */
+  claude: boolean
+  used_by: { session: string; owner: string; at: number } | null
+  watched: boolean
+  hello: { v: string; os: string; arch: string; caps: string[]; screen: { w: number; h: number; scale?: number } | null; note: string } | null
 }
-export type PcPairing = { code: string; expires_at: number; expires_in: number; server: string; downloads: Record<string, string>; commands: Record<PcOs, string> }
+export type DeviceAsk = { id: string; session: string; owner: string; device: string; device_name: string; message: string; at: number; expires: number; status: string; note?: string }
+export type DeviceAction = { at: number; device: string; tool: string; args: Record<string, string>; ok: boolean; ms: number; session: string; owner: string; error?: string }
+export type DevicesStatus = {
+  feature: boolean
+  /** download targets this server can hand out (linux-amd64, …, android) */
+  available: string[]
+  latest: string
+  devices: Device[]
+  invites: { os: string; expires_at: number }[]
+  asks: DeviceAsk[]
+  actions: DeviceAction[]
+}
+export type DeviceInvite = {
+  code: string
+  os: string
+  expires_at: number
+  expires_in: number
+  server: string
+  commands: { sh: string; ps1: string }
+  /** the phone's page (QR code) */
+  link: string
+  deeplink: string
+  downloads: Record<string, string>
+}
+export type SessionDevices = { using: { id: string; name: string; os: DeviceOs; online: boolean; human: boolean; at: number }[]; asks: DeviceAsk[] }
 
 export type TelegramStatus = {
   configured: boolean
@@ -834,6 +876,8 @@ export type Settings = {
   sidebar_order?: string[]
   /** Settings -> Features: the Harness Browser (each topic / agent may then be let use it) */
   browser_feature?: boolean
+  /** Settings -> Features: Devices (Claude uses the person's computers and phones running Harness Link) */
+  devices_feature?: boolean
   /** memory-compaction line limit per memory.md (0 = none). */
   memory_max_lines: number
   /** Parts of the line under each answer that are hidden (every browser of the installation). */

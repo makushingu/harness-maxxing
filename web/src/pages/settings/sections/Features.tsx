@@ -7,7 +7,7 @@ import { useT } from '@/i18n'
 import { useSaveSettings, useSettings } from '@/lib/queries'
 import { Skeleton, Switch } from '@/components/ui'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Callout, SettingRow } from '@/features/common'
+import { SettingRow } from '@/features/common'
 import { BrowserBadge, FeaturePages } from '@/features/settings/FeaturePages'
 import { TerminalSetting } from '@/features/terminal/TerminalSetting'
 import { useSessionsUI } from '@/pages/sessions/store'
@@ -15,6 +15,7 @@ import { useTeamUI } from '@/features/team/store'
 import { RESULT_FIELDS, useResultLine } from '@/pages/sessions/resultLine'
 import { SettingsCard, SectionStack } from './ui'
 import { BrowserFeature } from '@/features/browser/BrowserFeature'
+import { DevicesFeature } from '@/features/devices/DevicesFeature'
 
 export function FeaturesSection() {
   const t = useT()
@@ -34,14 +35,6 @@ export function FeaturesSection() {
       <SettingRow label={<>{t('features.tabs')}<BrowserBadge /></>} description={t('features.tabsDesc')} htmlFor="ft-tabs">
         <Switch id="ft-tabs" checked={tabs} onCheckedChange={(v) => useSessionsUI.getState().setTabs(v)} />
       </SettingRow>
-      <SettingRow label={<>{t('hud.enable')}<BrowserBadge /></>} description={t('hud.enableDesc')} htmlFor="ft-hud">
-        <Switch id="ft-hud" checked={ui.hud} onCheckedChange={ui.setHud} />
-      </SettingRow>
-      {ui.hud && !('documentPictureInPicture' in window) && (
-        <div className="py-3">
-          <Callout tone="info">{t('hud.fallback')}</Callout>
-        </div>
-      )}
       <TerminalSetting on={!!s.code_mode} />
       {/* was in General -> Appearance before 2.0.0a132; saved on the server */}
       <div className="grid gap-3 py-4 last:pb-0">
@@ -82,6 +75,7 @@ export function FeaturesSection() {
       </SettingsCard>
 
       <BrowserFeature link />
+      <DevicesFeature link />
     </SectionStack>
   )
 }

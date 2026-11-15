@@ -2,7 +2,7 @@
 // (a bottom sheet on a phone). Switches apply at once and keep it open; an action runs and closes it.
 import * as React from 'react'
 import { Link } from 'react-router'
-import { Archive, ArchiveRestore, Bell, FolderOpen, ListChecks, Minimize2, PictureInPicture2, Sparkles, SquareTerminal, Trash2, type LucideIcon } from 'lucide-react'
+import { Archive, ArchiveRestore, Bell, FolderOpen, ListChecks, Minimize2, Sparkles, SquareTerminal, Trash2, type LucideIcon } from 'lucide-react'
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
@@ -24,7 +24,6 @@ export function SessionOptions({
   onCompact,
   onHandoff,
   onFolder,
-  onHud,
   onTerminal,
   onArchive,
   onDelete,
@@ -43,7 +42,6 @@ export function SessionOptions({
   onCompact: () => void
   onHandoff: () => void
   onFolder?: () => void
-  onHud?: () => void
   /** Open the terminal drawer (Settings -> Features -> Sessions -> Code mode on, not an agent). */
   onTerminal?: () => void
   onArchive: () => void
@@ -89,7 +87,6 @@ export function SessionOptions({
           <Row icon={Minimize2} label={t('sessions.menu.compact')} disabled={!idle} onClick={run(onCompact)} />
           <Row icon={Sparkles} label={t('sessions.menu.handoff')} disabled={!idle} onClick={run(onHandoff)} />
           {onFolder && <Row icon={FolderOpen} label={t('sessions.menu.openFolder')} onClick={run(onFolder)} />}
-          {onHud && <Row icon={PictureInPicture2} label={t('hud.open')} onClick={run(onHud)} />}
           {onTerminal && <Row icon={SquareTerminal} label={t('sessions.options.terminal')} onClick={run(onTerminal)} />}
         </div>
 

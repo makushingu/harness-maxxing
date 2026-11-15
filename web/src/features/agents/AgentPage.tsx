@@ -11,6 +11,7 @@
 // Opening the page marks its results as read (POST /seen).
 import * as React from 'react'
 import { AgentBrowserCard } from '@/features/browser/AgentBrowserCard'
+import { AgentDevicesCard } from '@/features/devices/AgentDevicesCard'
 import { Link, useParams, useSearchParams } from 'react-router'
 import {
   AlertCircle, AlertTriangle, ArrowLeft, Bot, Brain, Check, CheckCircle2, ChevronRight, Clock, ExternalLink, Info, KeyRound, Layers, Loader2, Lock, Mail, Maximize2, MessageSquare, MessageSquarePlus, Pencil, PlayCircle, Reply, Send, Settings2, ShieldCheck, Square, SquareTerminal, StickyNote, UsersRound, X, XCircle, Zap,
@@ -1281,6 +1282,7 @@ function Profile({ agent: a }: { agent: AgentDetail }) {
       <BrokenBanner agent={a} />
       <SandboxBanner agent={a} />
       <AgentBrowserCard path={a.path} who={a.display_name} title={t('agents.panel.browser')} />
+      <AgentDevicesCard path={a.path} devices={a.devices || []} />
 
       <PanelSection title={t('agents.panel.role')}>
         <RoleEditor agent={a} />

@@ -32,15 +32,8 @@ export function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms))
 }
 
-/** The window the user is typing in: the HUD (Document Picture-in-Picture) when it has the focus - the
- * clipboard of an unfocused document refuses to write. */
-function focusedWindow(): Window {
-  const pip = (window as unknown as { documentPictureInPicture?: { window: Window | null } }).documentPictureInPicture?.window
-  return pip && pip.document.hasFocus() ? pip : window
-}
-
 export async function copyText(text: string): Promise<boolean> {
-  const w = focusedWindow()
+  const w = window
   try {
     await w.navigator.clipboard.writeText(text)
     return true
