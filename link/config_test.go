@@ -20,12 +20,12 @@ func makeTrailer(t *testing.T, v any) []byte {
 }
 
 func TestTrailerParsing(t *testing.T) {
-	good := makeTrailer(t, map[string]any{"server": "https://ui.example.com/", "code": "AB12CD34", "browser": "brave", "autostart": true})
+	good := makeTrailer(t, map[string]any{"server": "https://ui.example.com/", "code": "AB12CD34"})
 	tr, err := parseTrailer(good)
 	if err != nil || tr == nil {
 		t.Fatalf("parse: %v %v", tr, err)
 	}
-	if tr.Server != "https://ui.example.com" || tr.Code != "AB12CD34" || tr.Browser != "brave" || !tr.Autostart {
+	if tr.Server != "https://ui.example.com" || tr.Code != "AB12CD34" {
 		t.Fatalf("bad trailer %+v", tr)
 	}
 	// From a file, like the agent reads its own executable.
@@ -44,7 +44,6 @@ func TestTrailerParsing(t *testing.T) {
 	bad := map[string][]byte{
 		"http remote": makeTrailer(t, map[string]any{"server": "http://ui.example.com", "code": "X"}),
 		"no code":     makeTrailer(t, map[string]any{"server": "https://ui.example.com"}),
-		"bad browser": makeTrailer(t, map[string]any{"server": "https://a.b", "code": "X", "browser": "calc"}),
 		"ftp":         makeTrailer(t, map[string]any{"server": "ftp://a.b", "code": "X"}),
 		"userinfo":    makeTrailer(t, map[string]any{"server": "https://u:p@a.b", "code": "X"}),
 		"length lies": append(binary.BigEndian.AppendUint32([]byte("{}"), 999), trailerMagic...),
@@ -66,7 +65,7 @@ func TestTrailerParsing(t *testing.T) {
 
 func TestConfigSaveLoadPerms(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "cfg")
-	c := &Config{Server: "https://ui.example.com", DeviceID: "d1", Token: "secret", Browser: "chrome", Autostart: true, PairedCode: "AB"}
+	c := &Config{Server: "https://ui.example.com", DeviceID: "d1", Token: "secret", PairedCode: "AB"}
 	if err := saveConfig(dir, c); err != nil {
 		t.Fatal(err)
 	}
@@ -137,12 +136,12 @@ func TestLogRotation(t *testing.T) {
 }
 
 func TestAutostartFiles(t *testing.T) {
-	d := desktopEntry(`/home/a b/"x"$y/harness-pc`)
-	if !strings.Contains(d, `Exec="/home/a b/\\"x\\"\\$y/harness-pc"`) {
+	d := desktopEntry(`/home/a b/"x"$y/harness-link`)
+	if !strings.Contains(d, `Exec="/home/a b/\\"x\\"\\$y/harness-link"`) {
 		t.Fatalf("desktop entry: %s", d)
 	}
-	p := launchAgentPlist(`/Users/a&b/HarnessPC/harness-pc`)
-	if !strings.Contains(p, "<string>/Users/a&amp;b/HarnessPC/harness-pc</string>") {
+	p := launchAgentPlist(`/Users/a&b/.local/bin/harness-link`)
+	if !strings.Contains(p, "<string>/Users/a&amp;b/.local/bin/harness-link</string>") || !strings.Contains(p, "com.harnessmaxxing.link") {
 		t.Fatalf("plist: %s", p)
 	}
 }

@@ -32,7 +32,7 @@ func lockInstance(path string) (func(), error) {
 
 func messageBox(text string, flags uint32) {
 	t, _ := windows.UTF16PtrFromString(text)
-	c, _ := windows.UTF16PtrFromString("Harness PC")
+	c, _ := windows.UTF16PtrFromString("Harness Link")
 	windows.MessageBox(0, t, c, flags|mbSetForeground|mbTopmost)
 }
 

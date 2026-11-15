@@ -1,7 +1,7 @@
 //go:build idle && linux
 
-// Manual idle-cost measurement (not part of `go test`): runs dist/harness-pc-linux-amd64 against the fake
-// server for HARNESS_PC_IDLE_SECONDS (default 60) and reports CPU time and RSS.
+// Manual idle-cost measurement (not part of `go test`): runs dist/harness-link-linux-amd64 against the fake
+// server for HARNESS_LINK_IDLE_SECONDS (default 60) and reports CPU time and RSS.
 //
 //	./build.sh && go test -tags idle -run Idle -v
 package main
@@ -18,22 +18,22 @@ import (
 )
 
 func TestIdleCost(t *testing.T) {
-	bin, _ := filepath.Abs("dist/harness-pc-linux-amd64")
+	bin, _ := filepath.Abs("dist/harness-link-linux-amd64")
 	secs := 60
-	if s, err := strconv.Atoi(os.Getenv("HARNESS_PC_IDLE_SECONDS")); err == nil {
+	if s, err := strconv.Atoi(os.Getenv("HARNESS_LINK_IDLE_SECONDS")); err == nil {
 		secs = s
 	}
 	fs := newFakeServer(t)
 	dir := t.TempDir()
-	saveConfig(dir, &Config{Server: fs.URL, DeviceID: "dev1", Token: "tok1", Browser: "chrome"})
+	saveConfig(dir, &Config{Server: fs.URL, DeviceID: "dev1", Token: "tok1"})
 	cmd := exec.Command(bin)
-	cmd.Env = append(os.Environ(), "HARNESS_PC_CONFIG_DIR="+dir)
+	cmd.Env = append(os.Environ(), "HARNESS_LINK_CONFIG_DIR="+dir, "HARNESS_LINK_NO_AUTOSTART=1")
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
 	defer func() { cmd.Process.Kill(); cmd.Wait() }()
 	c := fs.next(t)
-	c.expect(t, "hello")
+	c.recv(t)
 	go func() { // answer pings (coder/websocket answers them inside Read)
 		for {
 			if _, _, err := c.c.Read(t.Context()); err != nil {

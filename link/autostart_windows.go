@@ -16,7 +16,7 @@ func registerAutostart(exe string) error {
 		return err
 	}
 	defer k.Close()
-	return k.SetStringValue("HarnessPC", `"`+exe+`"`)
+	return k.SetStringValue("HarnessLink", `"`+exe+`"`)
 }
 
 func unregisterAutostart() error {
@@ -25,7 +25,7 @@ func unregisterAutostart() error {
 		return nil
 	}
 	defer k.Close()
-	if err := k.DeleteValue("HarnessPC"); err != nil && !errors.Is(err, registry.ErrNotExist) {
+	if err := k.DeleteValue("HarnessLink"); err != nil && !errors.Is(err, registry.ErrNotExist) {
 		return err
 	}
 	return nil

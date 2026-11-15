@@ -15,19 +15,18 @@ import (
 )
 
 const (
-	trailerMagic  = "HMPCCFG1"
+	trailerMagic  = "HMLINK01"
 	maxTrailerLen = 64 << 10
 	configName    = "config.json"
-	logName       = "harness-pc.log"
-	lockName      = "harness-pc.lock"
+	logName       = "harness-link.log"
+	lockName      = "harness-link.lock"
 )
 
 // Trailer is the pairing data the server appends to the generic binary.
+// Layout at the very end of the file: <json utf-8><uint32 big-endian len(json)>HMLINK01, JSON {"server", "code"}.
 type Trailer struct {
-	Server    string `json:"server"`
-	Code      string `json:"code"`
-	Browser   string `json:"browser"`
-	Autostart bool   `json:"autostart"`
+	Server string `json:"server"`
+	Code   string `json:"code"`
 }
 
 // Config is what the agent keeps after pairing (config.json, 0600).
@@ -35,14 +34,12 @@ type Config struct {
 	Server     string `json:"server"`
 	DeviceID   string `json:"device_id"`
 	Token      string `json:"token"`
-	Browser    string `json:"browser"`
-	Autostart  bool   `json:"autostart"`
 	PairedCode string `json:"paired_code,omitempty"`
 }
 
-// configDir returns the per-user directory of the agent (HARNESS_PC_CONFIG_DIR overrides it).
+// configDir returns the per-user directory of the app (HARNESS_LINK_CONFIG_DIR overrides it).
 func configDir() (string, error) {
-	if d := os.Getenv("HARNESS_PC_CONFIG_DIR"); d != "" {
+	if d := os.Getenv("HARNESS_LINK_CONFIG_DIR"); d != "" {
 		return filepath.Abs(d)
 	}
 	base, err := os.UserConfigDir()
@@ -50,9 +47,9 @@ func configDir() (string, error) {
 		return "", err
 	}
 	if runtime.GOOS == "linux" || (runtime.GOOS != "windows" && runtime.GOOS != "darwin") {
-		return filepath.Join(base, "harness-pc"), nil
+		return filepath.Join(base, "harness-link"), nil
 	}
-	return filepath.Join(base, "HarnessPC"), nil
+	return filepath.Join(base, "HarnessLink"), nil
 }
 
 func ensureDir(dir string) error {
@@ -111,9 +108,6 @@ func parseTrailer(data []byte) (*Trailer, error) {
 	t.Server = srv
 	if t.Code == "" || len(t.Code) > 128 {
 		return nil, errors.New("trailer has no pairing code")
-	}
-	if t.Browser != "" && !knownBrowser(t.Browser) {
-		return nil, fmt.Errorf("unknown browser %q", t.Browser)
 	}
 	return &t, nil
 }
@@ -177,9 +171,6 @@ func loadConfig(dir string) (*Config, error) {
 	c.Server = srv
 	if c.Token == "" {
 		return nil, errors.New("config has no token")
-	}
-	if c.Browser != "" && !knownBrowser(c.Browser) {
-		c.Browser = ""
 	}
 	return &c, nil
 }

@@ -13,7 +13,7 @@ func plistPath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(h, "Library", "LaunchAgents", "com.harnessmaxxing.pc.plist"), nil
+	return filepath.Join(h, "Library", "LaunchAgents", "com.harnessmaxxing.link.plist"), nil
 }
 
 // registerAutostart writes the LaunchAgent; launchd loads it at the next login (nothing is executed now).

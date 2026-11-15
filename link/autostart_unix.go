@@ -17,7 +17,7 @@ func desktopPath() (string, error) {
 		}
 		base = filepath.Join(h, ".config")
 	}
-	return filepath.Join(base, "autostart", "harness-pc.desktop"), nil
+	return filepath.Join(base, "autostart", "harness-link.desktop"), nil
 }
 
 func registerAutostart(exe string) error {
