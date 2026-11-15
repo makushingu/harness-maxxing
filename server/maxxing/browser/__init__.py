@@ -136,7 +136,7 @@ def clean_settings(raw: object, strict: bool = False) -> dict:
                 if not lo <= n <= hi:
                     raise ValueError
                 out[key] = n
-            except (TypeError, ValueError):
+            except (TypeError, ValueError, OverflowError):     # OverflowError: int(1e999)
                 _bad(strict, key, f"a whole number between {lo} and {hi}")
     ex_list: list[dict] = []
     for e in (src.get("exits") if isinstance(src.get("exits"), list) else [])[:MAX_EXITS]:

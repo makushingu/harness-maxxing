@@ -1476,3 +1476,12 @@ def test_general_and_system_use_the_general_profile(client, mx):
         assert browser.resolve(f"{project}/topics/inbox")["profile"] == browser.MAIN
     assert browser.resolve("projects/acme/topics/blog", create=True)["profile"] not in ("", browser.MAIN)
     assert all(p.get("project") != "projects/general" for p in browser.profiles())
+
+
+def test_an_infinite_number_in_the_settings_is_refused(mx):
+    from maxxing import browser, config
+    with pytest.raises(browser.BrowserError) as e:
+        browser.set_settings({"max_tabs": float("inf")})      # a raw body {"max_tabs": 1e999}
+    assert e.value.status == 400 and e.value.code == "bad_browser"
+    config.update_config(browser={"exit_wait_s": float("-inf")})   # written by hand: the default, never a crash
+    assert browser.settings()["exit_wait_s"] == browser.DEFAULTS["exit_wait_s"]
