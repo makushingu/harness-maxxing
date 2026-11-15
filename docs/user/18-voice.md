@@ -78,8 +78,9 @@ work and its answer is read out to you. The voice only carries the call: it says
 the answer - short and easy to listen to, since the session knows it is on a call. Everything stays written in the
 session, so nothing happens out of sight.
 
-- **Keep talking while it works**: what you say goes to the session as its next message ("Noted, I'll do it right
-  after"). Say **"stop"** to stop the work. "Ok", "thanks" and noise are not sent (unless the voice just asked you a
+- **Keep talking while it works**: what you say joins the work in progress (the session reads it at its next
+  step: "I'm working on it, I'll take that into account"). When the call is quiet for a while, the voice says what
+  it is doing ("I'm reading the logs"). Say **"stop"** to stop the work. "Ok", "thanks" and noise are not sent (unless the voice just asked you a
   question).
 - **One language per call**: yours (your interface language at first). It changes when you ask ("speak English")
   or when you clearly speak another language.

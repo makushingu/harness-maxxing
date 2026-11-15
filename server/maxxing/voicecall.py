@@ -63,7 +63,8 @@ starts working: "I'm looking.", "On it.", "One second, I'll check.". Say nothing
 - When you receive "[Session finished]", read the outcome out: what it says, nothing more, in one to four short \
 sentences, as what you did ("Done, I changed...", "I found..."), then the question asked, if any. Leave out code, \
 paths, URLs and tables; if you left details out, say once that the details are written.
-- "[Session working]" messages are for you only: say nothing.
+- When you receive "[Session working]" (a note written while the work goes on), say in one short sentence what \
+you are doing now ("I'm reading the logs."), in the present tense, nothing else.
 - One language for the whole call: the user's. Switch only if they ask, or clearly speak another language.
 - Never say the words session, Claude, Claude Code, tool, workspace or Harness.
 - Speak like a person on the phone: short, warm, simple sentences, no lists, no markdown, no emoji."""
@@ -292,17 +293,25 @@ _SENTENCE = re.compile(r"(.+?[.!?…])(\s+|$)", re.S)
 # language gets no acknowledgement (the answer is still read out).
 PHRASES: dict[str, dict[str, tuple[str, ...]]] = {
     "fr": {"ack": ("Je regarde.", "D'accord, je m'en occupe.", "Une seconde, je regarde.", "Je m'en occupe."),
-           "queued": ("Noté, je m'en occupe juste après.", "D'accord, je fais ça juste après."),
+           "queued": ("Je suis en train de travailler, je le prends en compte.", "Je travaille dessus, je l'ajoute."),
            "stop": ("D'accord, j'arrête.",),
            "done": ("C'est fait.",),
            "failed": ("Ça n'a pas marché, tout est écrit dans la session.",),
-           "lang": ("D'accord, je parle français.",)},
+           "lang": ("D'accord, je parle français.",),
+           "tool_read": ("Je lis des fichiers.",), "tool_edit": ("Je modifie des fichiers.",),
+           "tool_run": ("Je lance des commandes.",), "tool_search": ("Je cherche.",),
+           "tool_web": ("Je regarde sur internet.",), "tool_agent": ("Je confie une partie du travail.",),
+           "tool_think": ("Je travaille encore.",)},
     "en": {"ack": ("I'm looking.", "Okay, I'm on it.", "One second, I'll check.", "On it."),
-           "queued": ("Noted, I'll do it right after.", "Okay, I'll do that right after."),
+           "queued": ("I'm working on it, I'll take that into account.", "I'm on it, I'm adding that."),
            "stop": ("Okay, I'm stopping.",),
            "done": ("Done.",),
            "failed": ("That didn't work, it's all written in the session.",),
-           "lang": ("Okay, I'll speak English.",)},
+           "lang": ("Okay, I'll speak English.",),
+           "tool_read": ("I'm reading files.",), "tool_edit": ("I'm changing files.",),
+           "tool_run": ("I'm running commands.",), "tool_search": ("I'm searching.",),
+           "tool_web": ("I'm looking on the web.",), "tool_agent": ("I'm handing part of the work out.",),
+           "tool_think": ("Still working.",)},
 }
 LANG_NAMES = {"fr": ("français", "francais", "french"), "en": ("anglais", "english")}
 _SPEAK_VERBS = {"parle", "parler", "parlons", "parlez", "réponds", "répondre", "répondez", "passe", "passer",
@@ -516,6 +525,8 @@ class LocalCall:
     def prepare(self) -> None:
         """Generate the phrases of the call's language ahead (while the user says their first sentence)."""
         for kind, options in PHRASES.get(self.language, {}).items():
+            if kind.startswith("tool_"):                   # said rarely: generated when first needed
+                continue
             for i in range(len(options)):
                 self.phrase(kind, i)
 
@@ -661,8 +672,29 @@ def _sentences(text: str) -> Iterator[str]:
         text = text[m.end():]
 
 
-def _summary_request(lang: str, answer: str) -> str:
+def _summary_request(lang: str, answer: str, progress: bool = False) -> str:
+    if progress:
+        return (f"Speak {LANG_LABELS.get(lang, lang)}.\n\nThis is a note written while working, not the answer: say "
+                f"in one short sentence what you are doing now, in the present tense.\n\nNote:\n{answer[:3000]}")
     return f"Speak {LANG_LABELS.get(lang, lang)}.\n\nWritten answer:\n{answer[:8000]}"
+
+
+def tool_kind(name: str) -> str:
+    """The kind of a tool, for "I'm reading files" while the session works."""
+    n = (name or "").lower()
+    if n in ("read", "notebookread", "ls"):
+        return "read"
+    if n in ("edit", "write", "multiedit", "notebookedit"):
+        return "edit"
+    if n == "bash":
+        return "run"
+    if n in ("grep", "glob", "toolsearch"):
+        return "search"
+    if n in ("webfetch", "websearch") or "browser" in n:
+        return "web"
+    if n in ("task", "agent"):
+        return "agent"
+    return "think"
 
 
 def _streamed_sentences(pieces: Iterable[str]) -> Iterator[str]:
@@ -684,13 +716,31 @@ def _streamed_sentences(pieces: Iterable[str]) -> Iterator[str]:
         yield buf
 
 
-def speak(cid: str, answer: str = "", outcome: str = "answer") -> Iterator[dict]:
+def speak(cid: str, answer: str = "", outcome: str = "answer", tool: str | None = None) -> Iterator[dict]:
     """The session's answer, read out -> {say, url, seconds} sentence by sentence, then {done}. `outcome`:
-    "answer", "failed" (the turn failed) or "done" (ended without a written answer). A long answer is shortened
-    for the ear by the small model (nothing added); everything stays written in the session."""
+    "answer", "failed" (the turn failed), "done" (ended without a written answer) or "progress" (while it works:
+    `answer` = its last note, said in one sentence, else `tool` = its last tool, "I'm reading files"). A long
+    answer is shortened for the ear by the small model (nothing added); everything stays written in the session."""
     c = _call(cid)
     answer = (answer or "").strip()
     said: list[str] = []
+    if outcome == "progress":
+        items: list[dict] = []
+        if answer:
+            with c.lock:
+                try:
+                    for sentence in _streamed_sentences(c.ask(_summary_request(c.language, answer, progress=True))):
+                        if (item := c.say(sentence)):
+                            items.append(item)
+                        break                                 # one sentence
+                except VoiceError:
+                    items = []
+        if not items and (p := c.phrase(f"tool_{tool_kind(tool or '')}")):
+            items = [p]
+        yield from items
+        c.used = time.time()
+        yield {"done": True}
+        return
     if outcome == "failed" or not answer:
         p = c.phrase("failed" if outcome == "failed" else "done")
         if p:

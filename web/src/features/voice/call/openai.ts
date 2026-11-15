@@ -147,6 +147,11 @@ export class OpenAIVoice implements Voice {
     this.send({ type: 'response.create' })
   }
 
+  progress(note: string, tool: string) {
+    if (this.speaking) return
+    this.sendEvent(`[Session working]\n${note.slice(0, 2000) || `Using the tool ${tool}`}`)
+  }
+
   notify(answer: string, outcome: Outcome) {
     const text = this.relay.finished(answer, outcome)
     if (!text) return

@@ -172,6 +172,11 @@ export class GeminiVoice implements Voice {
     this.ev.phase('thinking')
   }
 
+  progress(note: string, tool: string) {
+    if (this.sources.length) return
+    this.sendEvent(`[Session working]\n${note.slice(0, 2000) || `Using the tool ${tool}`}`)
+  }
+
   notify(answer: string, outcome: Outcome) {
     const text = this.relay.finished(answer, outcome)
     if (!text) return

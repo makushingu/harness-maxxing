@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router'
 import { AudioLines, PhoneOff } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
-import { errorMessage } from '@/lib/api'
+import { api, errorMessage } from '@/lib/api'
 import { Button, Tooltip, toast } from '@/components/ui'
 import { getLog, useLogSelect } from '@/pages/sessions/log'
 import { useUI } from '@/stores/ui'
@@ -56,6 +56,25 @@ function lastOutcome(sid: string, answer: string): Outcome {
 
 const secs = (at: number) => (at > 1e12 ? at / 1000 : at)
 
+/** Where the running turn is: its last note (assistant text) and its last tool, and a key that changes with them. */
+function progressOf(sid: string): { key: string; note: string; tool: string } {
+  const items = getLog(sid).items
+  let note = ''
+  let tool = ''
+  let key = ''
+  for (let i = items.length - 1; i >= 0; i--) {
+    const it = items[i]
+    if (it.kind === 'user') break
+    if (!key) key = it.key
+    if (!tool && it.kind === 'tool') tool = it.use.name
+    if (!note && !tool && it.kind === 'assistant' && !it.ev.error && it.ev.text) note = it.ev.text
+  }
+  return { key, note, tool }
+}
+
+const PROGRESS_FIRST_MS = 15_000 // quiet for this long while the session works: the voice says what it does
+const PROGRESS_EVERY_MS = 25_000
+
 /** One line on the session for the voice: working or not, since when, its last steps, the messages waiting. */
 function sessionLine(sid: string, running: boolean, queue: number): string {
   const items = getLog(sid).items
@@ -87,6 +106,9 @@ export function VoiceCall({ sid, running, queueCount, onSend, onStop }: Props) {
   live.current = { running, queueCount, onSend, onStop }
   const resultKey = useLogSelect(sid, lastResultKey)
   const seenKey = React.useRef(resultKey)
+  const lastSaid = React.useRef(0) // last time the call did anything but listen
+  const progressKey = React.useRef('')
+  const progressCount = React.useRef(0)
 
   const hangUp = React.useCallback(() => {
     voice.current?.close()
@@ -99,6 +121,26 @@ export function VoiceCall({ sid, running, queueCount, onSend, onStop }: Props) {
   }, [])
 
   React.useEffect(() => hangUp, [hangUp, sid])
+
+  // While the session works and the call is quiet, the voice says now and then what it does.
+  React.useEffect(() => {
+    if (phase === 'off') return
+    const timer = window.setInterval(() => {
+      if (!voice.current || !live.current.running) {
+        progressCount.current = 0
+        return
+      }
+      const quiet = Date.now() - lastSaid.current
+      if (quiet < (progressCount.current ? PROGRESS_EVERY_MS : PROGRESS_FIRST_MS)) return
+      const p = progressOf(sid)
+      if (!p.key || p.key === progressKey.current) return
+      progressKey.current = p.key
+      progressCount.current++
+      lastSaid.current = Date.now()
+      voice.current.progress(p.note, p.tool)
+    }, 3000)
+    return () => window.clearInterval(timer)
+  }, [phase === 'off', sid]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // A turn of the session ended during the call: the voice reads it out.
   React.useEffect(() => {
@@ -117,6 +159,11 @@ export function VoiceCall({ sid, running, queueCount, onSend, onStop }: Props) {
       const busy = live.current.running
       const ok = await live.current.onSend(request.trim(), [], lang).catch(() => false)
       if (!ok) return 'The message could not be sent to the session.'
+      // Talking while it works: the sentence joins the running turn (read at its next step) instead of waiting.
+      if (busy) {
+        const r = await api.post<{ injected: boolean }>(`/api/sessions/${encodeURIComponent(sid)}/inject`).catch(() => null)
+        if (r?.injected) return 'Added to the work in progress.'
+      }
       return busy ? 'Queued: the session is busy and will do it right after its current work.' : 'Sent: the session is working on it.'
     },
     busy: () => live.current.running,
@@ -137,11 +184,16 @@ export function VoiceCall({ sid, running, queueCount, onSend, onStop }: Props) {
     }
     setPhase('connecting')
     seenKey.current = resultKey
+    lastSaid.current = Date.now()
+    progressCount.current = 0
     try {
       const ui = useUI.getState().language
       const c = await startCall(sid, ui)
       const events = {
-        phase: (p: CallPhase) => setPhase((cur) => (cur === 'off' ? cur : p)),
+        phase: (p: CallPhase) => {
+          if (p !== 'listening') lastSaid.current = Date.now()
+          setPhase((cur) => (cur === 'off' ? cur : p))
+        },
         caption: (who: 'you' | 'voice', text: string) => setCaption({ who, text }),
         error: (m: string) => toast.error(t('vmode.failed'), m),
         level: (l: number) => setLevel(l),

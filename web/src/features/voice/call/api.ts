@@ -93,10 +93,10 @@ async function failure(r: Response): Promise<string> {
 }
 
 /** Local call: the session's answer read out, the NDJSON lines as they come. */
-export async function* speak(call: string, answer: string, outcome: string, signal: AbortSignal): AsyncGenerator<SayLine> {
+export async function* speak(call: string, answer: string, outcome: string, signal: AbortSignal, tool?: string): AsyncGenerator<SayLine> {
   const r = await fetch(`/api/voice/call/${call}/speak`, {
     method: 'POST',
-    body: JSON.stringify({ answer: answer.slice(0, 60000), outcome }),
+    body: JSON.stringify({ answer: answer.slice(0, 60000), outcome, ...(tool ? { tool: tool.slice(0, 120) } : {}) }),
     credentials: 'same-origin',
     headers: { 'X-Maxxing': '1', 'Content-Type': 'application/json' },
     signal,

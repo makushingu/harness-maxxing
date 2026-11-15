@@ -225,7 +225,8 @@ async def call_start(body: CallStartIn):
 
 class CallSayIn(BaseModel):
     answer: str = Field(default="", max_length=60_000)
-    outcome: Literal["answer", "failed", "done"] = "answer"
+    outcome: Literal["answer", "failed", "done", "progress"] = "answer"
+    tool: Optional[str] = Field(default=None, max_length=120)   # progress: the session's last tool
 
 
 class CallSortIn(BaseModel):
@@ -279,7 +280,7 @@ async def call_speak(cid: str, body: CallSayIn):
 
     def lines():
         try:
-            for item in voicecall.speak(cid, body.answer, body.outcome):
+            for item in voicecall.speak(cid, body.answer, body.outcome, body.tool):
                 yield json.dumps(item, ensure_ascii=False) + "\n"
         except VoiceError as e:
             yield json.dumps({"error": e.message, "code": e.code}, ensure_ascii=False) + "\n"

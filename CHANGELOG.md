@@ -9,7 +9,7 @@ New:
 - **Voice mode: talk with your session out loud.** The new button in the bar of a session starts a call. Everything
   you say goes to the session word for word (the same Claude, files and tools), a voice says "I'm looking" at once,
   then reads the answer out, short and easy to listen to; everything stays written in the session. Keep talking
-  while it works (your words become its next message), say "stop" to stop it; noise and "ok" are not sent, and
+  while it works (your words join the work in progress, and it tells you now and then what it is doing), say "stop" to stop it; noise and "ok" are not sent, and
   speaking over the voice only pauses it. One language per call, yours, until you ask for another. By default the
   voice runs on your server (free, private, several French and English voices and their speed); in Settings ->
   Voice you can switch to a realtime voice from OpenAI or Gemini on your own key, which Harness finds in the Keys

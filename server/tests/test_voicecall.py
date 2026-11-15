@@ -189,7 +189,7 @@ def test_hear_sorts_and_acknowledges_at_once(call):
     out = voicecall.hear(call.id, text="Regarde si mon site marche.")
     assert out["kind"] == "ask" and out["text"] == "Regarde si mon site marche." and out["language"] == "fr"
     assert out["say"]["say"] == "Je regarde." and out["say"]["url"].startswith("/api/voice/said/")
-    assert voicecall.hear(call.id, text="Et la base de données aussi.", busy=True)["say"]["say"].endswith("juste après.")
+    assert voicecall.hear(call.id, text="Et la base de données aussi.", busy=True)["say"]["say"].startswith(("Je suis en train de travailler", "Je travaille dessus"))
     n = len(call.made)
     voicecall.hear(call.id, text="Je regarde encore une fois le site.")
     assert len(call.made) == n + 1
@@ -235,3 +235,13 @@ def test_the_first_sentence_sets_the_language_of_the_call(call, monkeypatch, tmp
     assert voicecall.hear(call.id, audio=wav)["language"] == "fr"
     voicecall.hear(call.id, audio=wav)
     assert seen == ["auto", "fr"]
+
+
+def test_progress_is_one_sentence_or_the_kind_of_the_last_tool(call):
+    call.summary = "Je lis les journaux du serveur. Puis autre chose."
+    out = list(voicecall.speak(call.id, "Let me check the server logs first.", "progress"))
+    assert [x.get("say") for x in out] == ["Je lis les journaux du serveur.", None]
+    assert "note written while working" in call.asked[-1]
+    out = list(voicecall.speak(call.id, "", "progress", tool="Bash"))
+    assert out[0]["say"] == "Je lance des commandes."
+    assert voicecall.tool_kind("mcp__maxxing-browser__open") == "web" and voicecall.tool_kind("Edit") == "edit"

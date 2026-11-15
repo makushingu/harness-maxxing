@@ -4,7 +4,7 @@
 export type CallPhase = 'connecting' | 'listening' | 'hearing' | 'thinking' | 'speaking' | 'paused'
 
 /** How a turn of the session ended: its answer, a failure, or no written answer. */
-export type Outcome = 'answer' | 'failed' | 'done'
+export type Outcome = 'answer' | 'failed' | 'done' | 'progress'
 
 /** What the voice can do on the session (run by the browser, see VoiceCall.tsx). */
 export interface Brain {
@@ -30,6 +30,9 @@ export interface Voice {
   start(): Promise<void>
   /** A turn of the session ended: the voice reads it out. */
   notify(answer: string, outcome: Outcome): void
+  /** The session is still working: say in one sentence what it does (its last note, else its last tool), when the
+   * voice has nothing else to say. */
+  progress(note: string, tool: string): void
   /** Stop talking now and listen. */
   interrupt(): void
   close(): void

@@ -26,6 +26,10 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   voice per answer. Browser (`call/local.ts`): speech over the voice pauses it (`audio.pause()`; stopped for good after 1 s of speech, `SURE_SPEECH_MS`), resumed when the
   sentence is `empty` / `skip`, dropped (with the answer being read) on a real one; sentences are heard in order
   (promise chain); the end of a turn the user stopped is not read (`muteNext`); answers wait while the user talks.
+  Said while the session works: sent, then injected into the running turn (`/inject`). Progress (`VoiceCall.tsx`):
+  every 3 s, when the session works and the call did nothing for 15 s (then 25 s) and the log moved, `progress(note,
+  tool)`: local = `/speak` `outcome:"progress"` (the last note in one sentence by the summarizer, else
+  `PHRASES["tool_<kind>"]`, `voicecall.tool_kind`), cloud = a `[Session working]` message.
   Cloud (`call/cloud.ts` `Relay`): the provider's input transcription is sorted by `/call/sort` and sent the same
   way; its prompt says it only acknowledges and reads `[Session finished]` messages out; tools left:
   `session_status`, `stop_session`, `read_last_answer`. Piper (piper-tts, GPL) lives in its own venv under

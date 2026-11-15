@@ -28,7 +28,7 @@ export class LocalVoice implements Voice {
   private playing = false // a sentence is playing (or paused in the middle)
   private paused = false // paused while the user speaks
   private reading: AbortController | null = null // the answer being read out
-  private answers: { answer: string; outcome: Outcome }[] = []
+  private answers: { answer: string; outcome: Outcome; tool?: string }[] = []
   private hearing = 0 // sentences sent to the server, not sorted yet
   private heardChain: Promise<void> = Promise.resolve()
   private muteNext = false // the turn the user stopped: its end is not read out
@@ -202,13 +202,13 @@ export class LocalVoice implements Voice {
     else if (this.phaseNow !== 'listening') this.phase('listening')
   }
 
-  private async read({ answer, outcome }: { answer: string; outcome: Outcome }) {
+  private async read({ answer, outcome, tool }: { answer: string; outcome: Outcome; tool?: string }) {
     const ctrl = new AbortController()
     this.reading = ctrl
     this.phase('thinking')
     let said = ''
     try {
-      for await (const line of speak(this.call, answer, outcome, ctrl.signal)) {
+      for await (const line of speak(this.call, answer, outcome, ctrl.signal, tool)) {
         if (ctrl.signal.aborted || this.closed) return
         this.enqueue(line)
         if (line.say) said += (said ? ' ' : '') + line.say
@@ -231,6 +231,11 @@ export class LocalVoice implements Voice {
     }
     this.answers.push({ answer, outcome })
     this.settle()
+  }
+
+  progress(note: string, tool: string) {
+    if (this.closed || this.playing || this.paused || this.rec || this.hearing || this.reading || this.answers.length) return
+    void this.read({ answer: note, outcome: 'progress', tool })
   }
 
   interrupt() {
