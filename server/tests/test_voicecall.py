@@ -110,6 +110,7 @@ def test_a_call_listens_for_the_interface_language_and_english(state):
     cfg["language"] = "fr"
     config.write_json(config.config_path(), cfg)
     assert voicecall.call_languages() == ("fr", "en")
+    assert voicecall.call_languages("de-DE") == ("de", "fr", "en")      # the browser's language comes first
 
 
 def test_the_voice_never_names_the_machinery():

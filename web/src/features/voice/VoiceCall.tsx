@@ -9,6 +9,7 @@ import { useT } from '@/i18n'
 import { errorMessage } from '@/lib/api'
 import { Button, Tooltip, toast } from '@/components/ui'
 import { getLog, useLogSelect } from '@/pages/sessions/log'
+import { useUI } from '@/stores/ui'
 import { endCall, startCall, useCallStatus } from './call/api'
 import { LocalVoice } from './call/local'
 import { GeminiVoice } from './call/gemini'
@@ -124,7 +125,7 @@ export function VoiceCall({ sid, running, queueCount, onSend, onStop }: Props) {
     setPhase('connecting')
     seenKey.current = resultKey
     try {
-      const c = await startCall(sid)
+      const c = await startCall(sid, useUI.getState().language)
       const events = {
         phase: (p: CallPhase) => setPhase((cur) => (cur === 'off' ? cur : p)),
         caption: (who: 'you' | 'voice', text: string) => setCaption({ who, text }),

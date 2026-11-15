@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .. import config, voice
 from ..security import require_auth
@@ -163,6 +163,7 @@ class CallSettingsIn(BaseModel):
 
 class CallStartIn(BaseModel):
     session: str
+    language: str | None = Field(default=None, max_length=12)   # the interface language of the browser
 
 
 @router.get("/tts")
@@ -217,7 +218,7 @@ async def call_start(body: CallStartIn):
         if mode == "cloud":
             out = await asyncio.to_thread(voicecall.cloud_token)
             return {"mode": "cloud", **out}
-        return await asyncio.to_thread(voicecall.start_local, body.session)
+        return await asyncio.to_thread(voicecall.start_local, body.session, body.language)
     except VoiceError as e:
         raise _http(e) from None
 

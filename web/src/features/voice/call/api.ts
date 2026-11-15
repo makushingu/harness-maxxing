@@ -60,7 +60,7 @@ export function useSaveCallKey() {
   })
 }
 
-export const startCall = (session: string) => api.post<CallStart>('/api/voice/call/start', { session })
+export const startCall = (session: string, language?: string) => api.post<CallStart>('/api/voice/call/start', { session, language })
 export const endCall = (call: string) => api.post(`/api/voice/call/${call}/end`, {}).catch(() => {})
 
 export type TurnLine = { heard?: string; action?: { type: 'ask'; request: string } | { type: 'stop' }; say?: string; url?: string; seconds?: number; error?: string; code?: string; done?: boolean; empty?: boolean }

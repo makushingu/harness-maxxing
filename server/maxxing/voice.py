@@ -331,6 +331,10 @@ def _engine_local(wav: Path, language: str, s: dict) -> dict:
             t2, s2, i2 = run(other)
             if t2 and s2 > score:
                 text, score, info, language = t2, s2, i2, other
+        if score < WRONG_LANGUAGE_LOGPROB:                 # none of them: whatever language Whisper hears
+            t2, s2, i2 = run("auto")
+            if t2 and s2 > score:
+                text, score, info, language = t2, s2, i2, "auto"
     _last_used = time.time()
     _arm_unload()
     return {"text": text, "language": getattr(info, "language", None) or (None if language == "auto" else language),

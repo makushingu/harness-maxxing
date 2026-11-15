@@ -284,12 +284,13 @@ def cloud_token() -> dict:
     return _openai_token(s, key) if provider == "openai" else _gemini_token(s, key)
 
 
-def call_languages() -> tuple[str, ...]:
-    """The languages a call listens for: the one set in Settings -> Voice (if any), the interface's, and English."""
+def call_languages(ui: str | None = None) -> tuple[str, ...]:
+    """The languages a call listens for: the one set in Settings -> Voice (if any), the interface's (the browser's,
+    else the server's), and English. The first one is expected first."""
     out: list[str] = []
-    for lang in (voice.settings().get("language"), config.load_config().get("language"), "en"):
+    for lang in (voice.settings().get("language"), ui, config.load_config().get("language"), "en"):
         lang = str(lang or "").split("-")[0].lower()
-        if lang and lang != "auto" and lang not in out:
+        if re.fullmatch(r"[a-z]{2,3}", lang) and lang not in out:
             out.append(lang)
     return tuple(out)
 
@@ -301,7 +302,7 @@ _SENTENCE = re.compile(r"(.+?[.!?…:;])(\s+|$)", re.S)
 class LocalCall:
     """One call: a `claude` process (the talker) kept running, fed one message per user turn."""
 
-    def __init__(self, sid: str, model: str, voice_id: str | None, speed: float = 1.0):
+    def __init__(self, sid: str, model: str, voice_id: str | None, speed: float = 1.0, ui_language: str | None = None):
         from .sessions import spawn
         self.id = uuid.uuid4().hex[:12]
         self.sid, self.voice_id, self.speed = sid, voice_id, speed
@@ -316,7 +317,7 @@ class LocalCall:
                                      env=spawn.claude_env(None, "default"))
         self.lines: queue.Queue[str | None] = queue.Queue()
         self.open_turn = False
-        self.among = call_languages()
+        self.among = call_languages(ui_language)
         self.language: str | None = None                   # the language of the user's last sentence
         threading.Thread(target=self._read, daemon=True, name=f"voicecall-{self.id}").start()
 
@@ -406,7 +407,7 @@ def _reap() -> None:
                 threading.Thread(target=c.close, daemon=True).start()
 
 
-def start_local(sid: str) -> dict:
+def start_local(sid: str, ui_language: str | None = None) -> dict:
     st = status()
     if not st["local"]["ready"]:
         reason = st["local"]["reason"]
@@ -424,7 +425,7 @@ def start_local(sid: str) -> dict:
             _calls.pop(oldest.id, None)
             threading.Thread(target=oldest.close, daemon=True).start()
         call = LocalCall(sid, s["talker_model"], None if s["local_voice"] == "auto" else s["local_voice"],
-                         s["local_speed"])
+                         s["local_speed"], ui_language)
         _calls[call.id] = call
     threading.Thread(target=_warm_up, daemon=True, name="voicecall-warmup").start()
     return {"mode": "local", "call": call.id}
