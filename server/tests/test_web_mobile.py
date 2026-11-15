@@ -165,3 +165,9 @@ def test_the_links_under_a_git_block_are_big_enough_to_tap():
     for m in (code, page, github):
         assert m and "pointer-coarse:min-h-10" in m[1].split()
     assert "pointer-coarse:min-w-10" in github[1].split()
+
+
+def test_the_error_of_a_browser_exit_breaks_inside_the_card():
+    src = (WEB / "features" / "browser" / "Exits.tsx").read_text()
+    err = re.search(r"exit\.state === 'down' && <span className=\"([^\"]*)\">· \{exit\.error\}", src)
+    assert err and {"min-w-0", "[overflow-wrap:anywhere]"} <= set(err[1].split())

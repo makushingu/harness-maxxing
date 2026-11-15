@@ -143,7 +143,7 @@ export function ExitPanel({ exit }: { exit: BrowserExit }) {
         <span className={cn('size-2 rounded-full', exitTone(exit))} />
         <span>{t(`browser.exit.state.${exit.state}`)}</span>
         <span className="text-muted-foreground">{exitLine(exit, t)}</span>
-        {exit.error && exit.state === 'down' && <span className="text-warning">· {exit.error}</span>}
+        {exit.error && exit.state === 'down' && <span className="min-w-0 text-warning [overflow-wrap:anywhere]">· {exit.error}</span>}
       </div>
       <NameField exit={exit} />
       {exit.type === 'tailscale' && <TailscaleWizard exit={exit} />}
