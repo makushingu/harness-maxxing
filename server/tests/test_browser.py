@@ -1516,3 +1516,23 @@ def test_a_json_file_nested_too_deep_reads_as_empty(mx):
     assert browser_mcp.read(browser.home() / "deep.json") is None
     assert exits._waiters() == [] and turns.read_turn(sid) is None
     assert navs.person()[0]["id"] == navs.ME
+
+
+def test_turns_waiting_for_an_exit_at_the_same_time_are_all_kept(mx, monkeypatch):
+    from maxxing import bus, config
+    from maxxing.browser import exits
+    real = config.write_json
+
+    def slow(*a, **kw):
+        time.sleep(0.05)
+        return real(*a, **kw)
+    monkeypatch.setattr(config, "write_json", slow)
+    monkeypatch.setattr(bus, "invalidate", lambda *a: None)
+    monkeypatch.setattr("maxxing.feed.post", lambda *a, **kw: None)
+    e, prof = {"id": "phone", "name": "Phone"}, {"id": "main", "name": "Main"}
+    ts = [threading.Thread(target=exits.wait_down, args=(f"t{i}", "session:x", e, prof)) for i in range(2)]
+    for t in ts:
+        t.start()
+    for t in ts:
+        t.join()
+    assert sorted(w["session"] for w in exits._waiters()) == ["t0", "t1"]

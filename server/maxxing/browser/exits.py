@@ -813,6 +813,7 @@ def _waiting_file() -> Path:
 
 
 _wcache: tuple[float, list[dict]] = (0.0, [])
+_wlock = config.ProcessLock("browser-waiting")  # waiting.json: read, change, write (routes, the runner, the watch)
 
 
 def _waiters() -> list[dict]:
@@ -846,10 +847,11 @@ def waiting_for(sid: str) -> dict | None:
 def wait_down(sid: str, owner: str, e: dict, profile: dict) -> None:
     """A turn stopped because its profile's exit is down: remember it (the session shows a card), tell the user once
     per exit going down (Notifications: Retry now / Go on when it is back)."""
-    items = [w for w in _waiters() if w["session"] != sid]
-    items.append({"session": sid, "owner": owner, "exit": e["id"], "profile": profile["id"], "at": time.time(),
-                  "resume": False})
-    _save_waiters(items)
+    with _wlock:
+        items = [w for w in _waiters() if w["session"] != sid]
+        items.append({"session": sid, "owner": owner, "exit": e["id"], "profile": profile["id"], "at": time.time(),
+                      "resume": False})
+        _save_waiters(items)
     bus.invalidate("browser", "sessions")
     who = browser.owner_path(owner).rsplit("/", 1)[-1]
     try:
@@ -868,20 +870,22 @@ def wait_down(sid: str, owner: str, e: dict, profile: dict) -> None:
 
 def set_resume(sid: str | None = None, eid: str | None = None, on: bool = True) -> int:
     """Go on when it is back (a session's card, or every turn waiting for that exit)."""
-    items = _waiters()
-    n = 0
-    for w in items:
-        if (sid and w["session"] == sid) or (eid and w["exit"] == eid):
-            w["resume"] = on
-            n += 1
-    _save_waiters(items)
+    with _wlock:
+        items = _waiters()
+        n = 0
+        for w in items:
+            if (sid and w["session"] == sid) or (eid and w["exit"] == eid):
+                w["resume"] = on
+                n += 1
+        _save_waiters(items)
     bus.invalidate("browser", "sessions")
     return n
 
 
 def drop_waiter(sid: str) -> None:
-    items = [w for w in _waiters() if w["session"] != sid]
-    _save_waiters(items)
+    with _wlock:
+        items = [w for w in _waiters() if w["session"] != sid]
+        _save_waiters(items)
     bus.invalidate("browser", "sessions")
 
 
@@ -889,11 +893,12 @@ def _resume_waiters(eid: str) -> None:
     """The exit is back: the turns that asked to go on get a message (as typed in their session); the others only
     lose their card."""
     keep, go = [], []
-    for w in _waiters():
-        (go if w["exit"] == eid else keep).append(w)
-    if not go:
-        return
-    _save_waiters(keep)
+    with _wlock:
+        for w in _waiters():
+            (go if w["exit"] == eid else keep).append(w)
+        if not go:
+            return
+        _save_waiters(keep)
     bus.invalidate("browser", "sessions")
     from ..sessions import service, store
     for w in go:
