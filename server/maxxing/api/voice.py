@@ -139,3 +139,51 @@ async def transcribe(audio: UploadFile = File(...), path: Optional[str] = Form(N
         raise _http(e) from None
     finally:
         tmp.unlink(missing_ok=True)
+
+
+# ---- spoken replies (hands-free voice mode, experimental; see maxxing/tts.py) ----------------------------------
+class SpeakIn(BaseModel):
+    text: str
+    condensed: bool = True
+    voice: Optional[str] = None
+    speed: float = 1.0
+
+
+class TTSInstallIn(BaseModel):
+    voices: Optional[list[str]] = None
+
+
+@router.get("/tts")
+async def get_tts():
+    from .. import tts
+    return await asyncio.to_thread(tts.status)
+
+
+@router.post("/tts/install")
+async def tts_install(body: TTSInstallIn | None = None):
+    from .. import tts
+    return await asyncio.to_thread(tts.start_install, body.voices if body else None)
+
+
+@router.post("/speak")
+async def speak(body: SpeakIn):
+    from .. import tts
+    try:
+        out = await asyncio.to_thread(tts.speak, body.text, condensed=body.condensed, voice_id=body.voice,
+                                      speed=body.speed)
+    except VoiceError as e:
+        raise _http(e) from None
+    out["url"] = f"/api/voice/said/{out['file']}"
+    return out
+
+
+@router.get("/said/{name}")
+async def said(name: str):
+    from fastapi.responses import FileResponse
+    from .. import tts
+    if not name.startswith("say-") or not name.endswith(".mp3") or "/" in name or ".." in name:
+        raise HTTPException(404)
+    f = tts.out_dir() / name
+    if not f.is_file():
+        raise HTTPException(404)
+    return FileResponse(f, media_type="audio/mpeg", headers={"Cache-Control": "private, max-age=600"})

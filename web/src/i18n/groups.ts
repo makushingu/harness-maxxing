@@ -50,6 +50,8 @@ export const GROUPS = {
   mood: ['mood'],
   // who takes the processor (the CPU meter's window, components/shell/HealthIndicator.tsx): loaded when it opens
   cpuwho: ['cpuwho'],
+  // the hands-free voice mode of a session (features/voice/VoiceMode.tsx): on its first text asked
+  vmode: ['vmode'],
 } as const satisfies Record<string, readonly string[]>
 
 export type Group = keyof typeof GROUPS

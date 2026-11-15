@@ -85,6 +85,7 @@ import { EASE_OUT, reducedMotion } from '@/lib/presence'
 import { focusComposer, groupAt, MAX_STACK, outboxMove, saveDraft, saveQuotes, seedComposer, useSessionsUI, usePending, usePendingFor, type Col, type OutboxEntry, type Seed } from './store'
 import { Thread, type ThreadHandle } from './Thread'
 import { Composer, type ComposerHandle } from './Composer'
+import { VoiceMode } from '@/features/voice/VoiceMode'
 import { CopyBar, CopyMark } from '@/features/code/CopyBar'
 import { NewCopy, useNewCopy } from '@/features/code/NewCopy'
 import { QuotePill } from './Quote'
@@ -916,6 +917,7 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
                 <>
                   <ModelPicker chosen={session.model} real={session.real_model} contextTokens={session.context_tokens} onChange={actions.model} effort={session.effort || ''} onEffort={actions.effort} />
                   {session.plan_mode && <PlanChip session={session} />}
+                  <VoiceMode sid={sid} running={running} onSendVoice={onSendVoice} />
                 </>
               ) : (
                 <Skeleton className="h-6 w-24" />
