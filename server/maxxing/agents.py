@@ -651,6 +651,8 @@ MANAGER_NEW = ("You are a new agent: you have no role yet. Your owner tells you 
                "telling you. ")
 MANAGER_BOX = ("Your runs (schedules, webhooks, mail, feed) work in your sandbox (your domains, no secrets); here, with "
                "your owner, you are not in it: what the owner asks needs no approval. ")
+MANAGER_FREE = ("Here, with your owner, what the owner asks needs no approval: do it directly. Your runs (schedules, "
+                "webhooks, mail, feed) keep your settings (approvals, tool lists). ")
 
 
 def _has_role(path: str) -> bool:
@@ -709,7 +711,7 @@ def run_settings(path: str, outside: bool = False, session: str | None = None, g
                 "approvals": False, "approvals_forced": False, "manager": True,
                 "approval_timeout_s": a["limits"]["approval_timeout_s"], "keys": a["keys"],
                 # its change requests answered since its last turn (said once, whatever box the owner typed in)
-                "system_note": "\n\n".join(x for x in (MANAGER_NOTE.format(box=MANAGER_BOX if box else "", path=path),
+                "system_note": "\n\n".join(x for x in (MANAGER_NOTE.format(box=MANAGER_BOX if box else MANAGER_FREE, path=path),
                                                         schedule_zone_note(),
                                                         MANAGER_NEW if not _has_role(path) else "",
                                                         _take_chat_notes(path)) if x)}

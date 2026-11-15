@@ -67,6 +67,35 @@ def test_the_conversation_is_the_manager_and_the_runs_keep_their_rules(client, t
     assert note["status"] == "changed_chat"
 
 
+def test_the_conversation_takes_the_topics_mode_not_the_agents(client, topic, mx):
+    """An agent in accept edits (a Protected one always is): the owner's conversation still runs in the topic's mode
+    (bypass here), else its commands and MCP tools are refused with nobody to ask."""
+    from maxxing import workspace
+    _on(client)
+    _create(client, permission_mode="acceptEdits")
+    assert agents.load(A)["permission_mode"] == "acceptEdits"
+    wait_idle(client, _say(client, "hi")["session"]["id"])
+    argv = _calls()[-1]["argv"]
+    assert "--dangerously-skip-permissions" in argv and "--permission-prompt-tool" not in argv
+    run = agents.fire(A, trigger="cron:c_1", prompt="NOTOOL routine", source="cron")
+    wait_idle(client, run["session"]["id"])
+    argv = _calls()[-1]["argv"]                                                 # its runs keep its own mode
+    assert "--dangerously-skip-permissions" not in argv and argv[argv.index("--permission-mode") + 1] == "acceptEdits"
+    # the topic's own mode is the one of the conversation, as for a session of the topic
+    workspace.update_topic("acme", "blog", permission_mode="acceptEdits")
+    wait_idle(client, _say(client, "again")["session"]["id"])
+    argv = _calls()[-1]["argv"]
+    assert "--dangerously-skip-permissions" not in argv and argv[argv.index("--permission-mode") + 1] == "acceptEdits"
+
+
+def test_a_free_agent_is_told_it_needs_no_approval_here(client, topic, mx):
+    _on(client)
+    assert _create_any(client, approvals=True)["sandbox"] is False
+    note = agents.run_settings(A, manager=True)["system_note"]
+    assert "needs no approval: do it directly" in note and "keep your settings" in note
+    assert "needs no approval" not in agents.run_settings(A)["system_note"]      # not in its runs
+
+
 def test_a_safety_change_waits_for_the_owner(client, topic, mx):
     from maxxing import approvals
     _on(client)

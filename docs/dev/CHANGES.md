@@ -5,8 +5,17 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
-## Unreleased
+## 2.0.0-alpha.153 - 2026-11-15
 
+- Owner's conversation with an agent (`manager_turn`): `runner` computed its mode with `effective_mode({**meta,
+  "permission_mode": ""})`, but `meta.path` is the agent folder, and `workspace.topic_permission_mode` of an agent
+  path returns the agent's own mode (`agent.json`). An agent in `acceptEdits` / `default` (all sandboxed agents:
+  `agent_guard.mode`) ran its conversation in that mode, without the approval tool (`approvals` False): Bash and
+  every MCP tool not in `allowed_tools` were refused ("haven't granted it yet" / "requires approval"). The
+  conversation now passes `path = agents.topic_of(path)`: the topic's mode, else the global one (bypass by default).
+  Runs unchanged. Test: `test_the_conversation_takes_the_topics_mode_not_the_agents`.
+- `agents.MANAGER_FREE`: the manager note of an agent without sandbox now says that what the owner asks needs no
+  approval and that its runs keep their settings (`MANAGER_BOX` already said it for a sandboxed one).
 - Runner, Claude's input closed too early (messages waiting, inject refused, steer killing the process). Two
   sequences of the real CLI: (A) a `--resume` after a kill first prints the notification of a background task the
   previous process left and runs an empty turn for it (`init`, `result` with `origin.kind` "task-notification",

@@ -465,7 +465,8 @@ class Runner:
                                     manager=agents.manager_turn(meta))
         model = (meta.get("model") or agent.get("model") or cfg.get("default_model") or "").strip()
         if agent.get("manager") and not plan:           # the owner's conversation with an agent: like a session of
-            mode = effective_mode({**meta, "permission_mode": ""}, cfg)   # its topic, not the mode of its runs
+            # its topic, not the mode of its runs (the agent folder's path would give the agent's own mode back)
+            mode = effective_mode({**meta, "permission_mode": "", "path": agents.topic_of(meta.get("path") or "")}, cfg)
         approval: list[str] = []                        # the agent asks before risky tools: Allow / Deny in the UI
         ask = mode == "ask"                             # the topic's mode `ask`: the same, for any session
         if ask:

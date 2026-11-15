@@ -3,9 +3,14 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
-## Unreleased
+## 2.0.0-alpha.153 - 2026-11-15
 
 Fixed:
+- **Agents: your conversation with an agent is really free again.** An agent in **accept edits** or **default**
+  (every Protected agent runs in accept edits) took that mode into your conversation too: its commands and its
+  MCP tools were refused there, with nobody to ask, so it could not do what you had just asked. Your conversation
+  now runs in the mode of the agent's topic, like any session of that topic, as intended; its runs keep their own
+  mode, sandbox and approvals. The agent is also told, in your conversation, that what you ask needs no approval.
 - **Sessions: a message sent while background work runs reaches the task, "Add to plan" works again there.** When
   the last background command or sub-agent of a turn ended, Claude started a short turn by itself - and sometimes
   new background work - but the task could no longer receive anything: a message waited until all of it was over,
