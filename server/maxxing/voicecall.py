@@ -398,7 +398,20 @@ def start_local(sid: str) -> dict:
             threading.Thread(target=oldest.close, daemon=True).start()
         call = LocalCall(sid, s["talker_model"], None if s["local_voice"] == "auto" else s["local_voice"])
         _calls[call.id] = call
+    threading.Thread(target=_warm_up, daemon=True, name="voicecall-warmup").start()
     return {"mode": "local", "call": call.id}
+
+
+def _warm_up() -> None:
+    """Load the speech-to-text model and start Piper while the user says their first sentence."""
+    try:
+        vs = voice.settings()
+        if vs["engine"] == "local" and voice.local_installed() and voice.model_present(vs["model"]):
+            voice._load(vs["model"])
+            voice._arm_unload()
+        tts.synth("ok")
+    except Exception:
+        log.debug("voice call warm-up failed", exc_info=True)
 
 
 def end_local(cid: str) -> None:
