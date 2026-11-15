@@ -150,7 +150,7 @@ class _Call(voicecall.LocalCall):
         self.used, self.among, self.language = 0, ("fr", "en"), language
         self.expecting, self.turns, self._phrases, self.open_turn = False, 0, {}, False
         self.asked: list[str] = []
-        self.summary = "J'ai trouvé deux erreurs. Je les corrige ?"
+        self.summary = "[Language: fr]. J'ai trouvé deux erreurs. Je les corrige ?"
 
     def alive(self):
         return True
@@ -192,6 +192,8 @@ def test_hear_sorts_and_acknowledges_at_once(call):
     assert len(call.made) == n + 1
     voicecall.hear(call.id, text="Je regarde encore une fois le site.")   # phrases are generated once per call
     assert "say" not in voicecall.hear(call.id, text="Merci.")
+    out = voicecall.hear(call.id, text="Salut, ça va ?")
+    assert out["kind"] == "ask" and "say" not in out             # sent, without "I'm looking"
     assert voicecall.hear(call.id, text="Arrête !")["say"]["say"] == "D'accord, j'arrête."
 
 
@@ -203,7 +205,7 @@ def test_a_short_answer_is_read_as_it_is_a_long_one_is_shortened(call):
     assert voicecall.hear(call.id, text="Ok")["kind"] == "ask"
     long = "Voici le détail :\n\n```\nerror: x\n```\n" + "Une ligne de plus. " * 40
     out = list(voicecall.speak(call.id, long))
-    assert call.asked[0].startswith("[Language: fr]\n")
+    assert call.asked[0].startswith("Speak French.\n\nWritten answer:\n")
     assert [x.get("say") for x in out if "say" in x] == ["J'ai trouvé deux erreurs.", "Je les corrige ?"]
     assert all(lang == "fr" for _, lang in call.made)    # one voice, the call's language
     assert list(voicecall.speak(call.id, "", "failed"))[0]["say"].startswith("Ça n'a pas marché")

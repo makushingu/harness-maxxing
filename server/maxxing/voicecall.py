@@ -317,6 +317,9 @@ _STOP = {"stop", "arrête", "arrete", "arrêtez", "arrête tout", "arrête toi",
          "cancel", "cancel that", "cancel it", "halt", "never mind", "forget it"}
 _LEAD = {"non", "no", "ok", "okay", "attends", "wait", "hé", "hey", "euh", "bon", "allez", "please", "stp", "s'il",
          "te", "plaît", "plait"}
+# A short greeting goes to the session without an acknowledgement ("I'm looking" would sound odd).
+_GREETING = re.compile(r"^(?:(?:salut|bonjour|bonsoir|coucou|hello|hi|hey|hé|yo|allo|allô)\b.*|ça va|how are you"
+                       r"|tu es là|t'es là|are you there)$")
 # What Whisper writes on noise or silence (it was trained on subtitled videos).
 _HALLUCINATION = re.compile(r"amara\.org|sous-titr|thanks? (?:you )?for watching|merci d'avoir regardé|"
                             r"abonnez-vous|subscribe to|^\W*(?:\.\.\.|…)\W*$", re.I)
@@ -369,14 +372,17 @@ def _lang_code(lang: Any) -> str | None:
 SUMMARY_PROMPT = """You turn a written answer into what is said aloud on a phone call. The answer was written \
 by the user's assistant; you are that assistant's voice.
 
-Say what the answer says, nothing more: never add facts, advice, opinions or questions that are not in it, never \
-answer it, never comment on it. Keep the result, what was done, the figures that matter and the question asked at \
+Say what the answer says, nothing more: never add facts, names, figures, advice, opinions or questions that are \
+not written in it (never guess what a vague phrase like "the others" covers), never answer it, never comment on it. Keep the result, what was done, the figures that matter and the question asked at \
 the end, if any. Leave out code, file paths, URLs, tables, long lists and details; if you left details out, say \
 once that the details are written. Speak in the first person, as the one who did the work ("I changed...", \
 "I found...").
 
-Answer in the language given on the first line ("[Language: xx]"), even if the answer is written in another one. \
-One to four short spoken sentences, plain text, no markdown, no emoji, nothing before or after them."""
+Each message gives the language to speak, then the written answer. Speak that language, even if the answer is \
+written in another one. One to four short spoken sentences, plain text, no markdown, no emoji, nothing before or \
+after them: never repeat the language line."""
+LANG_LABELS = {"fr": "French", "en": "English", "es": "Spanish", "de": "German", "it": "Italian", "pt": "Portuguese"}
+_ECHO = re.compile(r"^\s*(?:\[[^\]]{0,40}\]|(?:language|langue)\s*:\s*\w+)\s*[.:]?\s*", re.I)
 
 SHORT_CHARS = 320          # an answer this short (once cleaned for the ear) is read as it is
 SUMMARY_TIMEOUT_S = 30
@@ -598,7 +604,9 @@ def hear(cid: str, audio: Path | None = None, text: str | None = None, busy: boo
         text = (text or "").strip()
         kind, c.language = sort(text, c.language, c.expecting, lang_heard)
         res: dict[str, Any] = {"text": text, "language": c.language, "kind": kind}
-        if kind in ("ask", "stop", "lang"):
+        if kind == "ask" and len(_words(_norm(text))) <= 4 and _GREETING.match(_norm(text)):
+            c.expecting = False
+        elif kind in ("ask", "stop", "lang"):
             c.expecting = False
             said = c.phrase("queued" if kind == "ask" and busy else "ack" if kind == "ask" else kind)
             if kind == "ask":
@@ -643,10 +651,18 @@ def _sentences(text: str) -> Iterator[str]:
         text = text[m.end():]
 
 
+def _summary_request(lang: str, answer: str) -> str:
+    return f"Speak {LANG_LABELS.get(lang, lang)}.\n\nWritten answer:\n{answer[:8000]}"
+
+
 def _streamed_sentences(pieces: Iterable[str]) -> Iterator[str]:
-    buf = ""
+    buf, head = "", True
     for piece in pieces:
         buf += piece
+        if head:                                           # an echo of the request is never said
+            if len(buf) < 24 and not buf.strip().endswith(("]", ".")):
+                continue
+            buf, head = _ECHO.sub("", buf, count=1), False
         while True:
             m = _SENTENCE.match(buf)
             if not m or not m.group(2):                    # the end of a sentence is known once a space follows
@@ -675,7 +691,7 @@ def speak(cid: str, answer: str = "", outcome: str = "answer") -> Iterator[dict]
             plain = _plain(answer)
             try:
                 parts = (_sentences(tts.spoken_text(answer)) if plain
-                         else _streamed_sentences(c.ask(f"[Language: {c.language}]\n{answer[:8000]}")))
+                         else _streamed_sentences(c.ask(_summary_request(c.language, answer))))
                 for sentence in parts:
                     if (item := c.say(sentence)):
                         said.append(item["say"])
