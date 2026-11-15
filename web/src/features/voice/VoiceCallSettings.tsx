@@ -84,18 +84,6 @@ function LocalSettings({ st }: { st: CallStatus }) {
             ]}
           />
         </SettingRow>
-        <SettingRow label={t('vmode.set.turns')} description={t(s.turn_mode === 'call' ? 'vmode.set.turnsCallDesc' : 'vmode.set.turnsDesc')}>
-          <Segmented
-            size="sm"
-            aria-label={t('vmode.set.turns')}
-            value={s.turn_mode}
-            onChange={(v) => save.mutate({ turn_mode: v as 'turns' | 'call' })}
-            options={[
-              { value: 'turns', label: t('vmode.set.turnsTurns') },
-              { value: 'call', label: t('vmode.set.turnsCall') },
-            ]}
-          />
-        </SettingRow>
         <SettingRow label={t('vmode.set.silence')} description={t('vmode.set.silenceDesc')}>
           <Segmented
             size="sm"

@@ -160,7 +160,6 @@ class CallSettingsIn(BaseModel):
     talker_model: Optional[Literal["haiku", "sonnet"]] = None
     local_voice: Optional[str] = None
     local_speed: Optional[float] = None
-    turn_mode: Optional[Literal["turns", "call"]] = None
     silence_ms: Optional[int] = None
 
 

@@ -45,8 +45,7 @@ DEFAULTS = {"mode": "local", "provider": None, "openai_key": None, "gemini_key":
             "openai_model": "gpt-realtime-2.1", "openai_voice": "cedar",
             "gemini_model": "gemini-3.8-live", "gemini_voice": "Charon",
             "talker_model": "sonnet", "local_voice": "auto", "local_speed": 1.15,
-            "turn_mode": "turns", "silence_ms": 1800}
-TURN_MODES = ("turns", "call")   # turns: the mic is off while the voice speaks (tap to cut it); call: speak over it
+            "silence_ms": 1800}
 SILENCE_RANGE = (800, 5000)      # silence that ends a sentence (ms)
 SPEED_RANGE = (0.8, 1.5)
 OPENAI_API = "https://api.openai.com/v1"
@@ -158,8 +157,6 @@ def settings() -> dict:
         out["provider"] = None
     if out["talker_model"] not in TALKER_MODELS:
         out["talker_model"] = "sonnet"
-    if out["turn_mode"] not in TURN_MODES:
-        out["turn_mode"] = "turns"
     try:
         out["silence_ms"] = int(min(SILENCE_RANGE[1], max(SILENCE_RANGE[0], int(out["silence_ms"]))))
     except (TypeError, ValueError):
@@ -190,8 +187,6 @@ def update_settings(**kw: Any) -> dict:
         changes["local_voice"] = tts.ALIASES.get(changes["local_voice"], changes["local_voice"])
     if "local_voice" in changes and changes["local_voice"] not in ("auto", *tts.VOICES):
         raise VoiceError(400, "invalid_voice", "unknown local voice")
-    if "turn_mode" in changes and changes["turn_mode"] not in TURN_MODES:
-        raise VoiceError(400, "invalid_turn_mode", f"turn_mode must be one of {', '.join(TURN_MODES)}")
     if "silence_ms" in changes:
         try:
             ms = int(changes["silence_ms"])
@@ -409,6 +404,11 @@ _GREETING = re.compile(r"^(?:(?:salut|bonjour|bonsoir|coucou|hello|hi|hey|hé|yo
 _HALLUCINATION = re.compile(r"amara\.org|sous-titr|thanks? (?:you )?for watching|merci d'avoir regardé|"
                             r"abonnez-vous|subscribe to|^\W*(?:\.\.\.|…)\W*$", re.I)
 
+# Said over the voice, these only show the user listens: the voice is not cut ("oui", "non" may answer it: they cut).
+_BACKCHANNEL = _FILLERS | {"ouais", "ouais ouais", "ah ouais", "ah oui", "ah", "ah ok", "mh", "mmh", "hm", "hmm",
+                           "hum", "ok ok ok", "voilà", "exactement", "carrément", "yeah", "yeah yeah", "uh huh",
+                           "mhm", "right", "exactly", "sure"}
+
 
 def _norm(text: str) -> str:
     low = text.lower().replace("’", "'").replace("-", " ")
@@ -530,6 +530,7 @@ class LocalCall:
         """Send one message to the voice; yields its reply as text pieces until the end of its turn."""
         if self.open_turn:                                 # the previous reply was cut (the user spoke over it)
             self._finish_turn()
+            text = "[They went on before your reply ended: answer what they said as a whole]\n" + text
         msg = {"type": "user", "message": {"role": "user", "content": [{"type": "text", "text": text}]}}
         self.proc.stdin.write(json.dumps(msg) + "\n")      # type: ignore[union-attr]
         self.proc.stdin.flush()                            # type: ignore[union-attr]
@@ -635,7 +636,7 @@ def start_local(sid: str, ui_language: str | None = None) -> dict:
                          s["local_speed"], ui_language)
         _calls[call.id] = call
     threading.Thread(target=_warm_up, args=(call,), daemon=True, name="voicecall-warmup").start()
-    return {"mode": "local", "call": call.id, "language": call.language, "turn_mode": s["turn_mode"],
+    return {"mode": "local", "call": call.id, "language": call.language,
             "silence_ms": s["silence_ms"]}
 
 
@@ -811,6 +812,8 @@ def local_turn(cid: str, *, audio: Path | None = None, text: str | None = None, 
             if saying and is_echo(text, saying):
                 text = ""                                     # the voice heard itself: it goes on
             kind, c.language = sort(text, c.language, c.expecting, lang_heard)
+            if kind not in ("empty", "stop") and saying and _norm(text) in _BACKCHANNEL:
+                kind = "empty"                                # a "yeah" over the voice: it says its sentence again
             if kind == "skip":
                 kind = "ask"                                  # "ok", "thanks": the voice answers, nothing handed over
             yield {"heard": text, "kind": kind, "language": c.language}

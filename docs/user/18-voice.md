@@ -81,12 +81,12 @@ Everything handed over appears in the session as your messages, so nothing happe
   joins the work in progress. Now and then the voice tells you what it is doing. Say **"stop"** to stop the work.
 - **One language per call**: the one of your first sentence. It changes when you ask ("speak English") or when you
   clearly speak another language.
-- **Turn-taking** (Settings -> Voice -> Voice mode):
-  - **Each in turn** (default): the mic waits while the voice speaks; **tap the call** to cut it and speak.
-  - **Phone call**: speak over the voice to cut it. Best with headphones; on loudspeakers it may need you to speak
-    a little louder than it.
-  - **Pause before your sentence ends**: how long a silence lasts before the voice answers (1.8 s by default; raise
-    it if you get cut while thinking).
+- **Cut the voice by speaking**: as soon as you speak it lowers its volume; once it is sure it is you (under a
+  second of real speech) it stops and listens to the end. If it was only noise, its own echo or a mere "yeah", it
+  says its sentence again. While you speak it says nothing new: what you add joins what you said before and gets one
+  answer. **Tapping the call** cuts it too.
+- **Pause before your sentence ends** (Settings -> Voice -> Voice mode): how long a silence lasts before the voice
+  answers (1.8 s by default; raise it if you get cut while thinking).
 - **Hang up** with the red button.
 - **Settings -> Voice -> Voice mode** also chooses the voice:
   - **On this server** (default): free and private. It hears you with the engine above, talks with a Claude model

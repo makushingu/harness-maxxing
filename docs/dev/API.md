@@ -398,7 +398,7 @@ their transcriptions are sorted by `/call/sort`.
 ```
 CallStatus = {settings:{mode:"local"|"cloud", provider:"openai"|"gemini"|null, openai_key, gemini_key (vault names|null),
     openai_model, openai_voice, gemini_model, gemini_voice, talker_model:"haiku"|"sonnet" (default sonnet), local_voice:"auto"|<voice id>,
-    local_speed:0.8-1.5 (default 1.15), turn_mode:"turns"|"call" (default turns), silence_ms:800-5000 (default 1800)},   // local_voice is used for sentences in its own language only
+    local_speed:0.8-1.5 (default 1.15), silence_ms:800-5000 (default 1800)},   // local_voice is used for sentences in its own language only
   provider,            // used in cloud mode: chosen, else the only one with a key
   keys:{openai|gemini:{found:[vault names that look like its key], using:name|null}},
   local:{ready, reason:"stt"|"tts"|null, tts:{ready, voices:[ids installed], catalogue:[{id, name, lang}], install:{state, error}}},
@@ -406,7 +406,7 @@ CallStatus = {settings:{mode:"local"|"cloud", provider:"openai"|"gemini"|null, o
 ```
 | GET | `/api/voice/call` | – | `CallStatus` |
 | PUT | `/api/voice/call/settings` | partial settings (`provider: ""` = none) | `CallStatus` · `400 invalid_*` |
-| POST | `/api/voice/call/start` | `{session, language?}` (the interface language: listened for first, then English) | local: `{mode:"local", call, language, turn_mode, silence_ms}` (starts the voice: `claude -p --input-format stream-json`, no tools, kept for the call, max 3, hung up after 10 min idle; phrases said without it generated ahead); the key never leaves the server · `409 local_not_ready\|cloud_not_ready` · `502 bad_key\|provider_error` |
+| POST | `/api/voice/call/start` | `{session, language?}` (the interface language: listened for first, then English) | local: `{mode:"local", call, language, silence_ms}` (starts the voice: `claude -p --input-format stream-json`, no tools, kept for the call, max 3, hung up after 10 min idle; phrases said without it generated ahead); the key never leaves the server · `409 local_not_ready\|cloud_not_ready` · `502 bad_key\|provider_error` |
 | POST | `/api/voice/call/{call}/turn` | multipart: `audio` (WAV) or `text` = a sentence of the user, with `context` (the session's state line), `busy`, `saying` (the sentence the voice was saying when the user started: a transcript made mostly of its words is its echo); or `event` (the answer of an ended turn) + `outcome:"answer"\|"failed"\|"done"`; or `outcome:"progress"` + `note` (the running turn's last text) / `tool` (its last tool) | NDJSON stream: `{heard, kind:"ask"\|"stop"\|"lang"\|"empty", language}` first for a sentence (`empty`: nothing follows), `{action:{type:"ask", request}}` (`request` = the user's own words since the last hand-over, with the voice's question when they answered one) or `{action:{type:"stop"}}`, `{say, url, seconds}` per sentence (WAV, `/api/voice/said/<name>`, in the call's language), `{error, code}` (the voice failed: a sentence of the user is handed over anyway), `{language}` (changed), `{done, empty?}` |
 | POST | `/api/voice/call/sort` | `{text, language, expecting?}` | `{kind, language}` — the same sorting, for a sentence transcribed by a cloud voice |
 | POST | `/api/voice/call/{call}/end` | – | `{ok}` |

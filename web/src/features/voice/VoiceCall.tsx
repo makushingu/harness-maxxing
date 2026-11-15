@@ -202,7 +202,7 @@ export function VoiceCall({ sid, running, queueCount, onSend, onStop }: Props) {
       let v: Voice
       if (c.mode === 'local') {
         callId.current = c.call
-        v = new LocalVoice(c.call, c.language, c.turn_mode, c.silence_ms, brain, events)
+        v = new LocalVoice(c.call, c.language, c.silence_ms, brain, events)
       } else {
         const lang = (ui || navigator.language || 'en').split('-')[0].toLowerCase()
         v = c.provider === 'gemini' ? new GeminiVoice(c, brain, events, lang) : new OpenAIVoice(c, brain, events, lang)

@@ -18,7 +18,6 @@ export type CallSettings = {
   talker_model: 'haiku' | 'sonnet'
   local_voice: string
   local_speed: number
-  turn_mode: 'turns' | 'call'
   silence_ms: number
 }
 export type CallStatus = {
@@ -33,7 +32,7 @@ export type CallStatus = {
   silence_range: [number, number]
 }
 export type CallStart =
-  | { mode: 'local'; call: string; language: string; turn_mode: 'turns' | 'call'; silence_ms: number }
+  | { mode: 'local'; call: string; language: string; silence_ms: number }
   | { mode: 'cloud'; provider: CallProvider; token: string; model: string; url: string }
 
 export const callKey = ['voice', 'call'] as const

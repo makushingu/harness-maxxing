@@ -23,10 +23,13 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   saying), `sort` (one language per call; the first sentence is transcribed in "auto" and sets it, `settled`). If the
   voice fails, a sentence is handed over anyway with a phrase of `PHRASES`. Messages carry `call: <lang>`
   (`MessageIn.call`, queue item `call`, kept by `_merged`, `runner.CALL_PREFACE`); said while the session works ->
-  `/inject`. Browser (`call/local.ts`): `turn_mode` "turns" = the mic does not count while the voice plays (tap =
-  `interrupt()`), "call" = barge-in (pause, stopped for good after `SURE_SPEECH_MS` 1 s of speech well over the
-  echo, resumed after `empty`); end of a sentence after `silence_ms` (default 1800); a reply not started yet is
-  aborted when the user goes on (the server keeps what was not handed over); ends of turns wait for the voice to be
+  `/inject`. Browser (`call/local.ts`), one barge-in behaviour (no `turn_mode`): a sound over the voice ducks it
+  (`DUCK_VOLUME` 0.3), 0.8 s of speech well over the echo (`CONFIRM_MS`, `CONFIRM_FRAMES`; `DUCK_MAX_MS` 3 s) pauses
+  it, quiet again within `DUCK_QUIET_MS` = it was noise; `empty` (noise, `is_echo`, `_BACKCHANNEL` words said over
+  the voice: "ouais", "hm", "ok"...) says the cut sentence again from its start; tap = `interrupt()`. End of a
+  sentence after `silence_ms` (default 1800). Nothing new is played while the user speaks or while their transcript
+  is pending (`hearing`); a reply not started yet is aborted when the user goes on (the server keeps what was not
+  handed over, and a cut reply makes the next message start with "[They went on before your reply ended…]"); ends of turns wait for the voice to be
   free, the end of a stopped turn is not told (`muteNext`). Progress (`VoiceCall.tsx`): every 3 s, when the session
   works, the call did nothing for 15 s (then 25 s) and the log moved: `/turn` `outcome=progress` (`note` = last
   assistant text, `tool`). Cloud (`call/cloud.ts` `Relay`): the provider's transcription is kept (pending) and sorted

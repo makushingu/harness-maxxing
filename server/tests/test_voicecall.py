@@ -15,7 +15,7 @@ def state(mx):
 def test_defaults_are_local(state):
     s = voicecall.settings()
     assert s["mode"] == "local" and s["provider"] is None and s["talker_model"] == "sonnet"
-    assert s["turn_mode"] == "turns" and s["silence_ms"] == 1800
+    assert s["silence_ms"] == 1800 and "turn_mode" not in s
 
 
 def test_keys_are_detected_and_chosen(state):
@@ -225,6 +225,8 @@ def test_stop_noise_and_echo_need_no_model(call):
     assert _turn(call, text="Euh...")[-1] == {"done": True, "empty": True}
     saying = "J'ai vérifié les trois sites et le site b répond maintenant."
     assert _turn(call, text="vérifié les trois sites et le site", saying=saying)[0]["kind"] == "empty"
+    # a "yeah" said over the voice does not cut it: it says its sentence again
+    assert _turn(call, text="Ouais.", saying=saying)[-1] == {"done": True, "empty": True}
     assert not call.asked
 
 
@@ -259,13 +261,10 @@ def test_action_lines_are_never_said():
 
 
 def test_turn_settings(state):
-    voicecall.update_settings(turn_mode="call", silence_ms=2500)
-    s = voicecall.settings()
-    assert s["turn_mode"] == "call" and s["silence_ms"] == 2500
+    voicecall.update_settings(silence_ms=2500)
+    assert voicecall.settings()["silence_ms"] == 2500
     with pytest.raises(voicecall.VoiceError):
         voicecall.update_settings(silence_ms=100)
-    with pytest.raises(voicecall.VoiceError):
-        voicecall.update_settings(turn_mode="walkie")
 
 
 def test_a_message_said_on_a_call_tells_claude_it_is_on_the_phone():
