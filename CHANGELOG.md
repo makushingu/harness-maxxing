@@ -3,6 +3,16 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## Unreleased
+
+New:
+- **Voice mode: talk with Harness out loud.** The new button in the bar of a session starts a call: a voice answers
+  you at once, hands the real work to the session (the same Claude, files and tools), keeps you company while it
+  works ("where are you at?", "stop") and tells you the outcome when it is done. Everything it asks appears in the
+  session as usual. By default the voice runs on your server (free, private); in Settings -> Voice you can switch
+  to a realtime voice from OpenAI or Gemini (faster and more natural, on your own key, which Harness finds in the
+  Keys vault).
+
 ## 2.0.0-alpha.155 - 2026-11-15
 
 Fixed:

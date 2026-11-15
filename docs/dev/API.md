@@ -382,6 +382,26 @@ VoiceStatus = {settings:{engine:"off"|"local"|"groq"|"openai", model:"tiny"|"bas
 Telegram: voice notes and video notes in a session thread (not audio files: attachments) are downloaded, transcribed, echoed as
 `🎤 <transcript>` and sent to the session as the user message (attachment = the audio file). Engine off → a hint.
 
+## Voice mode
+A call in a session: a voice (the talker) talks with the user, the session (the thinker) does the work. The browser runs
+the call and the voice's tools on the session (`ask_session`, `session_status`, `stop_session`, `read_last_answer`, through
+the usual send / stop routes); the end of a turn is told to the voice (`[Session finished]` + the answer).
+```
+CallStatus = {settings:{mode:"local"|"cloud", provider:"openai"|"gemini"|null, openai_key, gemini_key (vault names|null),
+    openai_model, openai_voice, gemini_model, gemini_voice, talker_model:"haiku"|"sonnet", local_voice:"auto"|<piper id>},
+  provider,            // used in cloud mode: chosen, else the only one with a key
+  keys:{openai|gemini:{found:[vault names that look like its key], using:name|null}},
+  local:{ready, reason:"stt"|"tts"|null, tts:{ready, voices, catalogue, install:{state, error}}},
+  cloud:{ready, reason:"choose"|"choose_key"|"no_key"|null}, ready, voices:{openai, gemini, local}}
+```
+| GET | `/api/voice/call` | – | `CallStatus` |
+| PUT | `/api/voice/call/settings` | partial settings (`provider: ""` = none) | `CallStatus` · `400 invalid_*` |
+| POST | `/api/voice/call/start` | `{session}` | local: `{mode:"local", call}` (starts the talker: `claude -p --input-format stream-json`, kept for the call, max 3, hung up after 10 min idle) · cloud: `{mode:"cloud", provider, token, model, url}` — a short-lived token minted with the vault key (OpenAI `POST /v1/realtime/client_secrets`, Gemini `POST /v1beta/auth_tokens` with the whole setup locked in, `uses: 1`); the key never leaves the server · `409 local_not_ready\|cloud_not_ready` · `502 bad_key\|provider_error` |
+| POST | `/api/voice/call/{call}/turn` | multipart `audio`? (WAV), `text`?, `event`? (answer of an ended turn), `context`? (the session's state line), `language`? | NDJSON stream: `{heard}` (transcript), `{action:{type:"ask", request}\|{type:"stop"}}`, `{say, url, seconds}` per sentence (WAV, `/api/voice/said/<name>`), `{error, code}`, `{done, empty?}` |
+| POST | `/api/voice/call/{call}/end` | – | `{ok}` |
+| GET | `/api/voice/tts` · POST `/api/voice/tts/install` `{voices?}` | – | Piper status · install in `<state>/voice/tts` (own venv, GPL program run apart: `tts_worker.py` keeps the voices loaded) |
+| GET | `/api/voice/said/{name}` | – | a generated sentence (`audio/wav`, kept 10 min) |
+
 ## System
 | GET | `/api/system/health` | – | `{ok, issues:[{level, code, text}], cpu_pct, cpu_pressure:{avg10,avg60,avg300}|null, cpu_waiting, load, mem:{total,avail}, disk:{total,free,pct}, uptime_s, claude_auth, claude_auth_error, claude_checked_at, backup_age_h, failed_logins_1h, at}` (each issue also has `id` and `seen`; issue `claude_auth`: "Claude is not connected" or "Claude sign-in expired…"; issue `cpu_pressure`: CPU pressure `avg60 >= 40` for 10 min, naming the top unit) (cached 30 s, `?force=1`) |
 | GET | `/api/system/cpu` | – | `{enabled, pressure:{avg10, avg60, avg300}\|null, waiting, top:[{unit, kind, name, label, level, pct}], at}` - CPU priorities (`cpu_priorities`) and the units using the processor most (`maxxing/cpu.py`): `pressure` = `some` line of `/proc/pressure/cpu` (null without PSI), `waiting` = `avg10 >= 20`, `top` = 6 units from their cgroup `cpu.stat` (`pct` of the whole machine; Docker containers in one row), `kind` harness / session / agent / heavy / job / browser / docker / other, `level` live / normal / background / other (cached 3 s, `?force=1`; the first call samples 0.5 s) |

@@ -5,6 +5,19 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## Unreleased
+
+- Voice mode (`voicecall.py`, `tts.py`, `tts_worker.py`, `api/voice.py` `/call*` `/tts*` `/said`, web
+  `features/voice/{VoiceCall,VoiceCallSettings}.tsx` + `features/voice/call/*`, i18n group `vmode`). Config key
+  `voice_call` (see API.md#voice-mode). Local talker = one `claude -p --input-format stream-json
+  --include-partial-messages --tools ""` per call (cwd `<state>/claude-titles`), actions as leading `@ask:` / `@stop`
+  lines, the session state prefixed to each user message; a reply cut by the user is drained to its `result` before
+  the next one. Piper (piper-tts, GPL) lives in its own venv under `<state>/voice/tts`, run apart; `tts_worker.py` is
+  executed by that venv's Python (`-I`), never imported. Cloud: tokens only (OpenAI client_secrets, Gemini
+  auth_tokens with the full `bidiGenerateContentSetup`, so a client cannot change the instructions or tools); the
+  browser talks to the provider directly (WebRTC / WebSocket). Mic capture by ScriptProcessor (an AudioWorklet from a
+  Blob is refused by the app's script-src). Not done: approvals by voice, Telegram, progress spoken unprompted.
+
 ## 2.0.0-alpha.155 - 2026-11-15
 
 - Web: `lib/updateReload.ts` (`isChunkError`, `reloadForUpdate()`: reload at most once a minute, guard

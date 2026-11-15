@@ -71,6 +71,22 @@ Send a **voice note** or a **round video note** in a session thread (an audio fi
 
 If voice messages are off, the bot replies with a short hint instead.
 
+## Voice mode (talk with Harness)
+The **voice mode** button (sound waves, in the bar of a session) starts a call. You talk; a voice answers at once
+and hands the real work to the session - the same Claude, with its files and tools - then tells you the outcome when
+the session is done. Meanwhile you can ask "where are you at?", say "stop", or talk about something else.
+Everything the voice asks for appears in the session as your messages, so nothing happens out of sight.
+
+- **Tap the call** while Harness speaks to stop it; just speak over it to cut it off. **Hang up** with the red button.
+- **Settings -> Voice -> Voice mode** chooses the voice:
+  - **On this server** (default): free and private. It hears you with the engine above, thinks with a small Claude
+    model (Haiku) and speaks with Piper (install it from the card: about 150 MB). About 2 to 3 s before it answers.
+  - **Cloud (realtime)**: OpenAI Realtime or Gemini Live, under a second, very natural, about 1 to 5 cents a minute
+    on your own key. Harness finds the keys in the Keys vault (`OPENAI_API_KEY`, `GEMINI_API_KEY`, or any key whose
+    name contains OPENAI / GEMINI) and asks which one to use when there are several. Your key never leaves the server:
+    each call gets a short-lived token. The audio goes to that provider.
+- Use headphones in a noisy place: the voice may otherwise hear itself.
+
 ## From the terminal
 ```
 maxxing voice status                 # engine, model, readiness

@@ -1,12 +1,12 @@
-"""Spoken replies (text-to-speech) for the hands-free voice mode of a session. Experimental.
+"""Text-to-speech on this server for the voice mode (local voice).
 
 Engine: Piper (https://github.com/OHF-Voice/piper1-gpl), run as a separate program from its own virtual
 environment in state_dir('voice/tts') (it is GPL: never imported into this process). Voices are ONNX files
 from the rhasspy/piper-voices catalogue, downloaded next to it. All public functions are blocking: call them
 from a worker thread.
 
-What is said is not the whole answer: code blocks, tables, links and markdown are removed (`spoken_text`),
-and a long answer is condensed into a few sentences by a small Claude model (`condense`).
+Used by the local voice of the voice mode (maxxing/voicecall.py), which says its replies sentence by sentence.
+`spoken_text` turns markdown into plain sentences worth saying.
 """
 from __future__ import annotations
 
@@ -36,15 +36,6 @@ VOICES = {
 DEFAULT_VOICE = {"fr": "fr_FR-tom-medium", "en": "en_US-ryan-medium"}
 PIPER_SPEC = "piper-tts>=1.3,<2"
 MAX_CHARS = 4000            # input of one request
-SHORT_CHARS = 420           # longer spoken text -> condensed
-CONDENSE_MODEL = "haiku"
-CONDENSE_TIMEOUT_S = 40
-CONDENSE_PROMPT = (
-    "You turn an assistant's written answer into what it would SAY out loud to the user, who is listening "
-    "hands-free. 1 to 3 short sentences, same language as the answer, plain words: the outcome first, then any "
-    "question the answer asks the user. No code, no file paths, no URLs, no lists, no markdown, no emoji. "
-    "Output only the sentences."
-)
 KEEP_S = 600                # generated audio files are deleted after this
 
 _lock = threading.Lock()
@@ -155,24 +146,6 @@ def spoken_text(md: str) -> str:
     return re.sub(r"\s{2,}", " ", s).strip()
 
 
-def condense(text: str) -> str:
-    """A long answer -> 1-3 sentences by a small Claude model; the start of the text when that fails."""
-    from .sessions import spawn
-    cmd = [spawn.claude_bin(), "-p", "--output-format", "json", "--model", CONDENSE_MODEL, "--tools", "",
-           "--no-session-persistence", "--strict-mcp-config", "--disable-slash-commands",
-           "--system-prompt", CONDENSE_PROMPT]
-    try:
-        r = subprocess.run(cmd, input=text[:MAX_CHARS], capture_output=True, text=True, timeout=CONDENSE_TIMEOUT_S,
-                           cwd=config.state_dir("claude-titles"), env=spawn.claude_env(None, "default"))
-        data = json.loads(r.stdout.strip().splitlines()[-1]) if r.stdout.strip() else {}
-        out = str(data.get("result") or "").strip() if isinstance(data, dict) and not data.get("is_error") else ""
-        if r.returncode == 0 and out:
-            return spoken_text(out)
-    except (subprocess.SubprocessError, OSError, ValueError):
-        log.exception("condensing a spoken reply failed")
-    return _cut(text, SHORT_CHARS)
-
-
 def _cut(text: str, n: int) -> str:
     if len(text) <= n:
         return text
@@ -191,7 +164,7 @@ def _lang(text: str) -> str:
 def out_dir() -> Path:
     d = config.state_dir("voice", "tts", "out")
     now = time.time()
-    for f in d.glob("*.mp3"):
+    for f in [*d.glob("*.mp3"), *d.glob("*.wav")]:
         try:
             if now - f.stat().st_mtime > KEEP_S:
                 f.unlink()
@@ -200,37 +173,83 @@ def out_dir() -> Path:
     return d
 
 
-def speak(text: str, *, condensed: bool = True, voice_id: str | None = None, speed: float = 1.0) -> dict:
-    """Markdown answer -> {text: what is said, file: mp3 name in out_dir(), seconds}. Raises TTSError."""
-    st = status()
-    if not st["ready"]:
+def pick_voice(text: str, wanted: str | None = None) -> str:
+    """The voice to use: `wanted` when installed, else the default voice of the text's language."""
+    have = installed_voices()
+    if not have:
         raise TTSError(409, "tts_not_ready", "Spoken replies are not installed")
-    said = spoken_text(text[:MAX_CHARS * 3])
-    if not said:
-        raise TTSError(422, "nothing_to_say", "Nothing to say")
-    if condensed and len(said) > SHORT_CHARS:
-        said = condense(said)
-    vid = voice_id if voice_id in st["voices"] else DEFAULT_VOICE.get(_lang(said))
-    if vid not in st["voices"]:
-        vid = st["voices"][0]
-    name = f"say-{time.time_ns()}"
-    wav, mp3 = out_dir() / f"{name}.wav", out_dir() / f"{name}.mp3"
-    length = 1.0 / max(0.6, min(1.6, speed or 1.0))
+    if wanted in have:
+        return wanted
+    vid = DEFAULT_VOICE.get(_lang(text))
+    return vid if vid in have else have[0]
+
+
+_worker: subprocess.Popen | None = None
+_worker_used = 0.0
+WORKER_IDLE_S = 600
+
+
+def _stop_worker() -> None:
+    global _worker
+    w, _worker = _worker, None
+    if w is not None:
+        try:
+            w.stdin.close()  # type: ignore[union-attr]
+            w.wait(timeout=3)
+        except Exception:
+            w.kill()
+
+
+def _reap_worker() -> None:
     with _lock:
-        p = subprocess.run([str(piper_bin()), "-m", str(voice_file(vid)), "-f", str(wav), "--length-scale",
-                            f"{length:.2f}", "--sentence-silence", "0.25"], input=said, capture_output=True,
-                           text=True, timeout=120)
-    if p.returncode != 0 or not wav.is_file():
-        raise TTSError(500, "tts_failed", (p.stderr or "").strip()[-300:] or "the voice could not be generated")
-    q = subprocess.run([voice.ffmpeg_bin() or "ffmpeg", "-nostdin", "-loglevel", "error", "-y", "-i", str(wav),
-                        "-ac", "1", "-b:a", "64k", str(mp3)], capture_output=True, text=True, timeout=120)
+        if _worker is not None and time.time() - _worker_used > WORKER_IDLE_S:
+            _stop_worker()
+    if _worker is not None:
+        t = threading.Timer(60, _reap_worker)
+        t.daemon = True
+        t.start()
+
+
+def _get_worker() -> subprocess.Popen:
+    """The Piper worker (tts_worker.py), started on first use and stopped after WORKER_IDLE_S without use."""
+    global _worker
+    if _worker is None or _worker.poll() is not None:
+        script = Path(__file__).with_name("tts_worker.py")
+        _worker = subprocess.Popen([str(root() / "venv" / "bin" / "python"), "-I", str(script)],
+                                   stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                                   text=True, bufsize=1, cwd=str(root()))
+        t = threading.Timer(60, _reap_worker)
+        t.daemon = True
+        t.start()
+    return _worker
+
+
+def synth(text: str, voice_id: str | None = None, speed: float = 1.0) -> dict:
+    """Plain text (one or a few sentences) -> {file: WAV name in out_dir(), seconds, voice}. Raises TTSError."""
+    global _worker_used
+    if not (root() / "venv" / "bin" / "python").is_file():
+        raise TTSError(409, "tts_not_ready", "Spoken replies are not installed")
+    vid = pick_voice(text, voice_id)
+    wav = out_dir() / f"say-{time.time_ns()}.wav"
+    req = {"text": " ".join(text[:MAX_CHARS].split()), "model": str(voice_file(vid)), "out": str(wav),
+           "length": round(1.0 / max(0.6, min(1.6, speed or 1.0)), 2)}
+    with _lock:
+        _worker_used = time.time()
+        for attempt in (1, 2):                       # a dead worker is started again once
+            w = _get_worker()
+            try:
+                w.stdin.write(json.dumps(req) + "\n")  # type: ignore[union-attr]
+                w.stdin.flush()                      # type: ignore[union-attr]
+                line = w.stdout.readline()           # type: ignore[union-attr]
+            except (OSError, ValueError):
+                line = ""
+            if line:
+                break
+            _stop_worker()
     try:
-        import wave
-        with wave.open(str(wav)) as w:
-            seconds = w.getnframes() / float(w.getframerate() or 1)
-    except Exception:
-        seconds = 0.0
-    wav.unlink(missing_ok=True)
-    if q.returncode != 0 or not mp3.is_file():
-        raise TTSError(500, "tts_failed", (q.stderr or "").strip()[-300:] or "the audio could not be encoded")
-    return {"text": said, "file": mp3.name, "voice": vid, "seconds": round(seconds, 1)}
+        out = json.loads(line or "{}")
+    except ValueError:
+        out = {}
+    if not out.get("ok") or not wav.is_file():
+        raise TTSError(500, "tts_failed", str(out.get("error") or "the voice could not be generated")[:300])
+    return {"file": wav.name, "seconds": out.get("seconds") or 0, "voice": vid}

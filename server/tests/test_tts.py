@@ -11,9 +11,9 @@ def test_cut_stops_at_a_sentence():
     assert tts._cut("One. Two three four. Five six seven eight nine.", 25) == "One. Two three four."
 
 
-def test_speak_needs_the_engine(tmp_path, monkeypatch):
+def test_synth_needs_the_engine(tmp_path, monkeypatch):
     monkeypatch.setenv("MAXXING_STATE", str(tmp_path))
     import pytest
     with pytest.raises(tts.TTSError) as e:
-        tts.speak("hello")
+        tts.synth("hello")
     assert e.value.code == "tts_not_ready"
