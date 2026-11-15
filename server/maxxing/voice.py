@@ -21,6 +21,7 @@ import importlib
 import importlib.util
 import logging
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -305,15 +306,57 @@ def _load(name: str) -> Any:
         return _model
 
 
+_FR_WORDS = re.compile(r"\b(?:le|la|les|des|est|une|pour|que|qui|pas|tu|je|et|du|sur|avec|ce|ça|mon|ma|on)\b")
+_EN_WORDS = re.compile(r"\b(?:the|is|are|and|you|to|of|with|for|not|it|this|can|what|my|we|do|i)\b")
+
+
+def text_language(text: str) -> str | None:
+    """French or English from common words, None when it cannot tell (short, other language)."""
+    low = text.lower()
+    fr, en = len(_FR_WORDS.findall(low)), len(_EN_WORDS.findall(low))
+    if fr + en < 2 or fr == en:
+        return None
+    return "fr" if fr > en else "en"
+
+
+# Mean log-probability of a transcript below which the language is doubted (right language about -0.2 to -0.4,
+# wrong one -0.45 to -0.85 with the small model).
+WRONG_LANGUAGE_LOGPROB = -0.4
+
+
 def _engine_local(wav: Path, language: str, s: dict) -> dict:
     global _last_used
     model = _load(s["model"])
-    segments, info = model.transcribe(str(wav), language=None if language == "auto" else language,
-                                      beam_size=1, vad_filter=True, condition_on_previous_text=False)
-    text = " ".join(seg.text.strip() for seg in segments).strip()
+    among = [lang for lang in (s.get("among") or ()) if lang != language]
+
+    def run(lang: str) -> tuple[str, float, Any]:
+        segments, info = model.transcribe(str(wav), language=None if lang == "auto" else lang,
+                                          beam_size=1, vad_filter=True, condition_on_previous_text=False)
+        segs = list(segments)
+        n = sum(len(seg.text) for seg in segs) or 1
+        score = sum(seg.avg_logprob * len(seg.text) for seg in segs) / n if segs else 0.0
+        return " ".join(seg.text.strip() for seg in segs).strip(), score, info
+
+    text, score, info = run(language)
+    if among and language != "auto" and text and score < WRONG_LANGUAGE_LOGPROB:
+        # Heard in the expected language with a poor confidence: the user may have switched. The other likely
+        # languages are tried and the most confident transcript is kept (costs time only on such sentences).
+        for other in among:
+            t2, s2, i2 = run(other)
+            if t2 and s2 > score:
+                text, score, info, language = t2, s2, i2, other
+        if score < WRONG_LANGUAGE_LOGPROB:                 # none of them: whatever language Whisper hears
+            t2, s2, i2 = run("auto")
+            if t2 and s2 > score:
+                text, score, info, language = t2, s2, i2, "auto"
+    lang_out = getattr(info, "language", None) or (None if language == "auto" else language)
+    # Forced into French, Whisper may copy an English sentence as it is (good score): the text tells.
+    if among and lang_out in ("fr", "en") and text_language(text) not in (None, lang_out) \
+            and text_language(text) in (*among, language):
+        lang_out = text_language(text)
     _last_used = time.time()
     _arm_unload()
-    return {"text": text, "language": getattr(info, "language", None) or (None if language == "auto" else language),
+    return {"text": text, "language": lang_out,
             "model": s["model"]}
 
 
@@ -377,11 +420,14 @@ _ENGINES: dict[str, Callable[[Path, str, dict], dict]] = {
 
 
 # ---- public entry point ---------------------------------------------------------------------
-def transcribe_file(src: Path, language: str | None = None, engine: str | None = None) -> dict:
-    """Blocking. -> {text, language, duration_s, engine, model, ms}. Raises VoiceError."""
+def transcribe_file(src: Path, language: str | None = None, engine: str | None = None,
+                    among: tuple[str, ...] = ()) -> dict:
+    """Blocking. -> {text, language, duration_s, engine, model, ms}. Raises VoiceError.
+    `among`: other likely languages; the local engine tries them when the transcript in `language` is doubtful."""
     s = settings()
     if engine:
         s["engine"] = engine
+    s["among"] = tuple(among)
     ready, reason = readiness(s)
     if not ready:
         msgs = {"off": "voice messages are off (Settings → Voice)",

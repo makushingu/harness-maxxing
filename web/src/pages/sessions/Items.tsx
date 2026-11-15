@@ -303,7 +303,7 @@ export function UserMessage({
   from?: { session: string; title: string }
   /** The @ it names: drawn as chips (with the "/" command it starts with). */
   mentions?: SentMention[]
-  /** Added to a running turn (Add to plan). */
+  /** Added to a running turn (Add to task). */
   injected?: boolean
   pending?: boolean
   queued?: boolean
@@ -357,7 +357,11 @@ export function UserMessage({
             ) : (
               source && source !== 'web' && <span className="rounded bg-muted px-1">{sourceLabel(source, t)}</span>
             )}
-            {injected && <span className="rounded bg-muted px-1">{t('sessions.msg.injected')}</span>}
+            {injected && (
+              <Tooltip content={t('sessions.msg.injectedTip')}>
+                <span className="rounded bg-muted px-1">{t('sessions.msg.injected')}</span>
+              </Tooltip>
+            )}
             {at ? <time className="opacity-0 transition-opacity group-hover/msg:opacity-100 max-md:opacity-100 pointer-coarse:opacity-100">{fmtDate(at, lang, tz, { dateStyle: undefined, timeStyle: 'short' })}</time> : null}
             {onEdit && (
               <Tooltip content={t('sessions.msg.edit')}>

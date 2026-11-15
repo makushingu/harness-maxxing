@@ -382,6 +382,37 @@ VoiceStatus = {settings:{engine:"off"|"local"|"groq"|"openai", model:"tiny"|"bas
 Telegram: voice notes and video notes in a session thread (not audio files: attachments) are downloaded, transcribed, echoed as
 `🎤 <transcript>` and sent to the session as the user message (attachment = the audio file). Engine off → a hint.
 
+## Voice mode
+A call in a session: a voice talks with the user and hands real work to the session. The voice converses itself (small
+talk, news of the work, what the last answer said) and decides when the session works; then the session gets **the
+user's own words**, never a rewrite, through the usual send route with `call: <language>` (`POST
+/api/sessions/{id}/messages`: the turn's prompt gets `runner.CALL_PREFACE`, "answer short and easy to say, in that
+language", not shown in the log); while the session works the browser then calls `POST /api/sessions/{id}/inject` so
+the message joins the running turn. Without any model the server sets aside noise and what Whisper makes up on silence,
+the voice's own echo, "stop" (stops the work at once) and language requests (`voicecall.classify` / `sort`), and keeps
+one language per call (set by the first sentence, heard in any language; then changed on request or when a whole
+sentence of 3 words or more is clearly in another one). The end of each turn of the session is given to the voice to
+tell, and news of a long one now and then. Cloud voices get the same rules as tools (`ask_session` takes no argument:
+the browser sends the provider's transcription of the user; `session_status`, `stop_session`, `read_last_answer`);
+their transcriptions are sorted by `/call/sort`.
+```
+CallStatus = {settings:{mode:"local"|"cloud", provider:"openai"|"gemini"|null, openai_key, gemini_key (vault names|null),
+    openai_model, openai_voice, gemini_model, gemini_voice, talker_model:"haiku"|"sonnet" (default sonnet), local_voice:"auto"|<voice id>,
+    local_speed:0.8-1.5 (default 1.15), silence_ms:800-5000 (default 1800)},   // local_voice is used for sentences in its own language only
+  provider,            // used in cloud mode: chosen, else the only one with a key
+  keys:{openai|gemini:{found:[vault names that look like its key], using:name|null}},
+  local:{ready, reason:"stt"|"tts"|null, tts:{ready, voices:[ids installed], catalogue:[{id, name, lang}], install:{state, error}}},
+  cloud:{ready, reason:"choose"|"choose_key"|"no_key"|null}, ready, voices:{openai, gemini, local}, speed_range:[0.8, 1.5], silence_range:[800, 5000]}
+```
+| GET | `/api/voice/call` | – | `CallStatus` |
+| PUT | `/api/voice/call/settings` | partial settings (`provider: ""` = none) | `CallStatus` · `400 invalid_*` |
+| POST | `/api/voice/call/start` | `{session, language?, resume?}` (`resume`: cloud reconnection of the same call, Gemini's resumption handle or empty) (the interface language: listened for first, then English) | local: `{mode:"local", call, language, silence_ms}` (starts the voice: `claude -p --input-format stream-json`, no tools, kept for the call, max 3, hung up after 10 min idle; phrases said without it generated ahead); the key never leaves the server · `409 local_not_ready\|cloud_not_ready` · `502 bad_key\|provider_error` |
+| POST | `/api/voice/call/{call}/turn` | multipart: `audio` (WAV) or `text` = a sentence of the user, with `context` (the session's state line), `busy`, `saying` (the sentence the voice was saying when the user started: a transcript made mostly of its words is its echo); or `event` (the answer of an ended turn) + `outcome:"answer"\|"failed"\|"done"`; or `outcome:"progress"` + `note` (the running turn's last text) / `tool` (its last tool) | NDJSON stream: `{heard, kind:"ask"\|"stop"\|"lang"\|"empty", language}` first for a sentence (`empty`: nothing follows), `{action:{type:"ask", request}}` (`request` = the user's own words since the last hand-over, with the voice's question when they answered one) or `{action:{type:"stop"}}`, `{say, url, seconds}` per sentence (WAV, `/api/voice/said/<name>`, in the call's language), `{error, code}` (the voice failed: a sentence of the user is handed over anyway), `{language}` (changed), `{done, empty?}` |
+| POST | `/api/voice/call/sort` | `{text, language, expecting?}` | `{kind, language}` — the same sorting, for a sentence transcribed by a cloud voice |
+| POST | `/api/voice/call/{call}/end` | – | `{ok}` |
+| GET | `/api/voice/tts` · POST `/api/voice/tts/install` `{voices?}` | – | Piper status · install in `<state>/voice/tts` (own venv, GPL program run apart: `tts_worker.py` keeps the voices loaded) |
+| GET | `/api/voice/said/{name}` | – | a generated sentence (`audio/wav`, kept 10 min) |
+
 ## System
 | GET | `/api/system/health` | – | `{ok, issues:[{level, code, text}], cpu_pct, cpu_pressure:{avg10,avg60,avg300}|null, cpu_waiting, load, mem:{total,avail}, disk:{total,free,pct}, uptime_s, claude_auth, claude_auth_error, claude_checked_at, backup_age_h, failed_logins_1h, at}` (each issue also has `id` and `seen`; issue `claude_auth`: "Claude is not connected" or "Claude sign-in expired…"; issue `cpu_pressure`: CPU pressure `avg60 >= 40` for 10 min, naming the top unit) (cached 30 s, `?force=1`) |
 | GET | `/api/system/cpu` | – | `{enabled, pressure:{avg10, avg60, avg300}\|null, waiting, top:[{unit, kind, name, label, level, pct}], at}` - CPU priorities (`cpu_priorities`) and the units using the processor most (`maxxing/cpu.py`): `pressure` = `some` line of `/proc/pressure/cpu` (null without PSI), `waiting` = `avg10 >= 20`, `top` = 6 units from their cgroup `cpu.stat` (`pct` of the whole machine; Docker containers in one row), `kind` harness / session / agent / heavy / job / browser / docker / other, `level` live / normal / background / other (cached 3 s, `?force=1`; the first call samples 0.5 s) |

@@ -7,6 +7,55 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Wording only: `sessions.queue.inject` "Add to task", `sessions.msg.injected` "added to the running task" +
+  `sessions.msg.injectedTip` (Items.tsx tooltip); no API change.
+- Voice mode (`voicecall.py`, `tts.py`, `tts_worker.py`, `api/voice.py` `/call*` `/tts*` `/said`, web
+  `features/voice/{VoiceCall,VoiceCallSettings}.tsx` + `features/voice/call/*`, i18n group `vmode`). Config key
+  `voice_call` (see API.md#voice-mode). Design after two tries: (1) a small model that answered and rewrote requests
+  (`@ask: <request>`) answered from its own knowledge, rephrased in English and switched language; (2) every
+  sentence sent to the session with canned acknowledgements was slow and robotic ("I'm taking it into account" on
+  each fragment, sentences cut after 0.9 s of silence). Now: the voice converses (`talker_model`, default sonnet;
+  `claude -p --input-format stream-json --include-partial-messages --tools ""` per call, cwd `<state>/claude-titles`)
+  and decides with a bare `@ask` / `@stop` line (`reply_parts`: an "@" line is never said, an echo of the bracketed
+  lines is dropped); `@ask` hands over `_handover(c)` = the user's own sentences since the last hand-over (earlier
+  ones only when they answered a question of the voice, small talk left out, `MAX_PENDING` 4). Each message to the
+  voice: `[Work: <state line>]` + `[Language: xx]` + the sentence, or `[Work finished|failed|in progress]`.
+  Without a model: `classify` (Whisper hallucinations, noise, stop words after "non / ok / attends", language
+  requests = a speak verb right before the language name), `is_echo` (60 % of the words of the sentence the voice was
+  saying), `sort` (one language per call; the first sentence is transcribed in "auto" and sets it, `settled`). If the
+  voice fails, a sentence is handed over anyway with a phrase of `PHRASES`. Messages carry `call: <lang>`
+  (`MessageIn.call`, queue item `call`, kept by `_merged`, `runner.CALL_PREFACE`); said while the session works ->
+  `/inject`. Browser (`call/local.ts`), one barge-in behaviour (no `turn_mode`): a sound over the voice ducks it
+  (`DUCK_VOLUME` 0.3), 0.8 s of speech well over the echo (`CONFIRM_MS`, `CONFIRM_FRAMES`; `DUCK_MAX_MS` 3 s) pauses
+  it, quiet again within `DUCK_QUIET_MS` = it was noise; `empty` (noise, `is_echo`, `_BACKCHANNEL` words said over
+  the voice: "ouais", "hm", "ok"...) says the cut sentence again from its start; tap = `interrupt()`. End of a
+  sentence after `silence_ms` (default 1800). Nothing new is played while the user speaks or while their transcript
+  is pending (`hearing`); a reply not started yet is aborted when the user goes on (the server keeps what was not
+  handed over, and a cut reply makes the next message start with "[They went on before your reply ended…]"); ends of turns wait for the voice to be
+  free, the end of a stopped turn is not told (`muteNext`). Progress (`VoiceCall.tsx`): every 3 s, when the session
+  works, the call did nothing for 15 s (then 25 s) and the log moved: `/turn` `outcome=progress` (`note` = last
+  assistant text, `tool`). Cloud (`call/cloud.ts` `Relay`): the provider's transcription is kept (pending) and sorted
+  by `/call/sort` (stop, noise); `ask_session()` (no argument) sends the pending words.
+  Reconnection: `/call/start` `resume` = a new token for the same call; Gemini's setup has `sessionResumption` (the
+  browser keeps the last `sessionResumptionUpdate.newHandle` and reconnects on `goAway` or a close, with the handle,
+  without it after a refusal, then with `Relay.recap()` = the last 16 lines); OpenAI reconnects on a failed peer
+  connection (or 4 s disconnected) or a closed data channel and is given the recap. A tap on a Gemini call mutes the
+  reply under way to its `turnComplete` (Live has no cancel); OpenAI: `response.cancel` + `output_audio_buffer.clear`. Piper (piper-tts, GPL) lives
+  in its own venv under `<state>/voice/tts`, run apart; `tts_worker.py` is executed by that venv's Python (`-I`),
+  never imported. Cloud tokens only (OpenAI client_secrets, Gemini auth_tokens with the full
+  `bidiGenerateContentSetup`, so a client cannot change the instructions or tools); the browser talks to the provider
+  directly (WebRTC / WebSocket). Mic capture by ScriptProcessor (an AudioWorklet from a Blob is refused by the app's
+  script-src). Not done: approvals by voice, Telegram.
+- Voice mode, local: `tts.VOICES` = id -> {model, path, speaker?, lang, name} (several voices in one Piper model,
+  e.g. upmc Pierre/Jessica; worker request gains `speaker`; old id `fr_FR-upmc-medium` aliased); `pick_voice` only
+  uses the chosen voice for its language. `voice_call.local_speed` (0.8-1.5, default 1.15). The first sentence
+  of a call is transcribed in any language and sets the call's language (forced into a wrong one, Whisper
+  translates: the interface language is only a guess); then transcribed in the call's language; when the mean `avg_logprob` is below `voice.WRONG_LANGUAGE_LOGPROB` (-0.4; right language about
+  -0.2, wrong -0.45 to -0.85 with `small`; `voice.text_language` corrects a French run that copied English), the
+  other `call_languages()` (voice setting, browser language sent to `/call/start`, server language, en) are tried and
+  the best kept (`transcribe_file(among=...)`; `detect_language` cost +1.3 s on every sentence). Barge-in ("call"
+  mode): while speaking, the threshold follows the echo heard by the mic (`max(0.07, floor*2.5, echo*1.6)`, 4 frames)
+  instead of a fixed 0.32.
 - Web: `features/composer/MessageBox.tsx` = the shared shell of every message box (`MessageBox`: slots `above`, `menu`,
   `top`, `backdrop`, `toolbar`, `actions`, `voice`, `send`, `reason`, `closed`, `boxProps`, `compact`,
   `widthClassName`; `TuckedCard` / `TuckedHead` = the cards tucked under the top of the box, rise and sink, last

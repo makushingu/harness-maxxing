@@ -2,14 +2,16 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+import re
 import shutil
 import time
 from pathlib import Path
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .. import config, voice
 from ..security import require_auth
@@ -139,3 +141,156 @@ async def transcribe(audio: UploadFile = File(...), path: Optional[str] = Form(N
         raise _http(e) from None
     finally:
         tmp.unlink(missing_ok=True)
+
+
+# ---- voice mode (a voice talks, the session works; see maxxing/voicecall.py) -------------------------------------
+class TTSInstallIn(BaseModel):
+    voices: Optional[list[str]] = None
+
+
+class CallSettingsIn(BaseModel):
+    mode: Optional[Literal["local", "cloud"]] = None
+    provider: Optional[Literal["openai", "gemini", ""]] = None
+    openai_key: Optional[str] = None
+    gemini_key: Optional[str] = None
+    openai_model: Optional[str] = None
+    openai_voice: Optional[str] = None
+    gemini_model: Optional[str] = None
+    gemini_voice: Optional[str] = None
+    talker_model: Optional[Literal["haiku", "sonnet"]] = None
+    local_voice: Optional[str] = None
+    local_speed: Optional[float] = None
+    silence_ms: Optional[int] = None
+
+
+class CallStartIn(BaseModel):
+    session: str
+    language: str | None = Field(default=None, max_length=12)   # the interface language of the browser
+    resume: str | None = Field(default=None, max_length=4000)  # cloud: a new token for the same call (reconnection)
+
+
+@router.get("/tts")
+async def get_tts():
+    from .. import tts
+    return await asyncio.to_thread(tts.status)
+
+
+@router.post("/tts/install")
+async def tts_install(body: TTSInstallIn | None = None):
+    from .. import tts
+    return await asyncio.to_thread(tts.start_install, body.voices if body else None)
+
+
+@router.get("/said/{name}")
+async def said(name: str):
+    from fastapi.responses import FileResponse
+    from .. import tts
+    if not re.fullmatch(r"say-\d+\.wav", name):
+        raise HTTPException(404)
+    f = tts.out_dir() / name
+    if not f.is_file():
+        raise HTTPException(404)
+    return FileResponse(f, media_type="audio/wav", headers={"Cache-Control": "private, max-age=600"})
+
+
+@router.get("/call")
+async def call_status():
+    from .. import voicecall
+    return await asyncio.to_thread(voicecall.status)
+
+
+@router.put("/call/settings")
+async def call_settings(body: CallSettingsIn):
+    from .. import voicecall
+    changes = body.model_dump(exclude_unset=True)
+    if changes.get("provider") == "":
+        changes["provider"] = None
+    try:
+        await asyncio.to_thread(voicecall.update_settings, **changes)
+    except VoiceError as e:
+        raise _http(e) from None
+    return await asyncio.to_thread(voicecall.status)
+
+
+@router.post("/call/start")
+async def call_start(body: CallStartIn):
+    """Local voice: starts the talker of this session's call. Cloud voice: a short-lived token for the browser."""
+    from .. import voicecall
+    try:
+        mode = (await asyncio.to_thread(voicecall.settings))["mode"]
+        if mode == "cloud":
+            out = await asyncio.to_thread(voicecall.cloud_token, body.resume)
+            return {"mode": "cloud", **out}
+        return await asyncio.to_thread(voicecall.start_local, body.session, body.language)
+    except VoiceError as e:
+        raise _http(e) from None
+
+
+class CallSortIn(BaseModel):
+    text: str = Field(max_length=10_000)
+    language: str = Field(default="en", pattern=r"^[a-z]{2,3}$")
+    expecting: bool = False
+
+
+@router.post("/call/sort")
+async def call_sort(body: CallSortIn):
+    """Cloud voice: what a sentence transcribed by the provider is (as /hear), and the call's language after it."""
+    from .. import voicecall
+    kind, language = voicecall.sort(body.text, body.language, body.expecting)
+    return {"kind": kind, "language": language}
+
+
+def _cid(cid: str) -> None:
+    if not re.fullmatch(r"[0-9a-f]{12}", cid):
+        raise HTTPException(404)
+
+
+@router.post("/call/{cid}/turn")
+async def call_turn(cid: str, audio: Optional[UploadFile] = File(None), text: Optional[str] = Form(None),
+                    event: Optional[str] = Form(None), outcome: str = Form("answer"),
+                    note: Optional[str] = Form(None), tool: Optional[str] = Form(None),
+                    context: Optional[str] = Form(None), busy: bool = Form(False),
+                    saying: Optional[str] = Form(None)):
+    """One exchange of a local call, streamed as NDJSON lines: {heard, kind, language}, {action}, {say, url,
+    seconds}, {error, code}, {language}, {done, empty?}."""
+    from fastapi.responses import StreamingResponse
+    from .. import voicecall
+    _cid(cid)
+    if outcome not in ("answer", "failed", "done", "progress"):
+        raise HTTPException(400, "outcome must be answer, failed, done or progress")
+    tmp: Path | None = None
+    if audio is not None:
+        tmp = config.state_dir("voice", "tmp") / f"call-{time.time_ns()}{_ext(audio)}"
+        try:
+            size = await asyncio.to_thread(_save, audio, tmp)
+            if size > voicecall.MAX_AUDIO_BYTES:
+                raise VoiceError(413, "too_large", "audio too long")
+        except VoiceError as e:
+            tmp.unlink(missing_ok=True)
+            raise _http(e) from None
+
+    def lines():
+        try:
+            for item in voicecall.local_turn(cid, audio=tmp, text=text, event=event, outcome=outcome,
+                                             note=(note or "")[:3000], tool=(tool or "")[:120],
+                                             context=(context or "")[:1000], busy=busy,
+                                             saying=(saying or "")[:2000]):
+                yield json.dumps(item, ensure_ascii=False) + "\n"
+        except VoiceError as e:
+            yield json.dumps({"error": e.message, "code": e.code}, ensure_ascii=False) + "\n"
+        except Exception as e:  # never cut the stream without a word
+            log.exception("voice call turn failed")
+            yield json.dumps({"error": str(e) or "failed", "code": "failed"}) + "\n"
+        finally:
+            if tmp is not None:
+                tmp.unlink(missing_ok=True)
+
+    return StreamingResponse(lines(), media_type="application/x-ndjson",
+                             headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
+
+
+@router.post("/call/{cid}/end")
+async def call_end(cid: str):
+    from .. import voicecall
+    await asyncio.to_thread(voicecall.end_local, cid)
+    return {"ok": True}

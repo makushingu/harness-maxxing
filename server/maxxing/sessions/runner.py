@@ -1181,6 +1181,8 @@ def build_prompt(item: dict) -> str:
         text = (text + "\n\n" if text else "") + "Attached files:\n" + "\n".join(f"- {p}" for p in files)
     if item.get("hud"):
         text = HUD_PREFACE + text
+    if item.get("call"):
+        text = CALL_PREFACE.format(lang=item["call"]) + text
     if item.get("plan_approved"):
         text = PLAN_APPROVED_PREFACE + text
     if item.get("steer"):
@@ -1454,6 +1456,10 @@ PLAN_APPROVED_PREFACE = ("[The user validated your plan: plan mode is off, you c
                          "did.]\n\n")
 
 
+CALL_PREFACE = ("[Said by the user on a voice call (speech-to-text, language: {lang}): your answer is read out to "
+                "them. Do the work as usual, then answer in that language, short and easy to say: the result first, "
+                "plain sentences, no tables, no code, no lists, no paths or URLs unless asked, one question at a "
+                "time. The transcript may have small errors: read it for its meaning.]\n\n")
 HUD_PREFACE = ("[Sent from the HUD: a small floating window over the user's screen that shows your final answer "
                "and the images whose absolute paths you write in it. Lead with the result and keep it short. "
                "The attached images included in this message are already in front of you: do not Read those. "
