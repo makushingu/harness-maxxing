@@ -5,7 +5,7 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
-## Unreleased
+## 2.0.0-alpha.155 - 2026-11-15
 
 - Web: `lib/updateReload.ts` (`isChunkError`, `reloadForUpdate()`: reload at most once a minute, guard
   `sessionStorage['mx-chunk-reload']`) shared by `vite:preloadError` (main.tsx), `ErrorBoundary.componentDidCatch` and

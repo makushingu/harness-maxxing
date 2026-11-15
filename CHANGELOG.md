@@ -3,7 +3,7 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
-## Unreleased
+## 2.0.0-alpha.155 - 2026-11-15
 
 Fixed:
 - **An app left open over an update reloads by itself.** Opening the phone app (or a tab left open) after the server
