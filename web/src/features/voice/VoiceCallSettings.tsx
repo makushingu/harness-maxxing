@@ -11,6 +11,7 @@ import { useCallSettings, useCallStatus, useInstallLocalVoice, useSaveCallKey, t
 const PROVIDER_NAME: Record<CallProvider, string> = { openai: 'OpenAI Realtime', gemini: 'Gemini Live' }
 const STD_KEY: Record<CallProvider, string> = { openai: 'OPENAI_API_KEY', gemini: 'GEMINI_API_KEY' }
 const SPEEDS = [1, 1.15, 1.3, 1.45]
+const SILENCES = [1200, 1800, 2500, 3500]
 
 export function VoiceCallSettings() {
   const t = useT()
@@ -81,6 +82,27 @@ function LocalSettings({ st }: { st: CallStatus }) {
               { value: 'haiku', label: t('vmode.set.haiku') },
               { value: 'sonnet', label: t('vmode.set.sonnet') },
             ]}
+          />
+        </SettingRow>
+        <SettingRow label={t('vmode.set.turns')} description={t(s.turn_mode === 'call' ? 'vmode.set.turnsCallDesc' : 'vmode.set.turnsDesc')}>
+          <Segmented
+            size="sm"
+            aria-label={t('vmode.set.turns')}
+            value={s.turn_mode}
+            onChange={(v) => save.mutate({ turn_mode: v as 'turns' | 'call' })}
+            options={[
+              { value: 'turns', label: t('vmode.set.turnsTurns') },
+              { value: 'call', label: t('vmode.set.turnsCall') },
+            ]}
+          />
+        </SettingRow>
+        <SettingRow label={t('vmode.set.silence')} description={t('vmode.set.silenceDesc')}>
+          <Segmented
+            size="sm"
+            aria-label={t('vmode.set.silence')}
+            value={String(SILENCES.reduce((a, b) => (Math.abs(b - s.silence_ms) < Math.abs(a - s.silence_ms) ? b : a)))}
+            onChange={(v) => save.mutate({ silence_ms: Number(v) })}
+            options={SILENCES.map((v) => ({ value: String(v), label: `${(v / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 })} s` }))}
           />
         </SettingRow>
         <SettingRow label={t('vmode.set.voice')} description={t('vmode.set.localVoiceDesc')} htmlFor="vmode-lvoice">

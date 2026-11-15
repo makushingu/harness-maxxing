@@ -1,17 +1,19 @@
-"""Voice mode of a session: the user talks with their session on a voice call. The session does the thinking; the
-voice only carries it. See docs/dev/API.md#voice-mode.
+"""Voice mode of a session: a call where a voice talks with the user and the session does the real work.
+See docs/dev/API.md#voice-mode.
 
-The browser runs the call: every sentence the user says goes to the session word for word, in their language
-(`sort` / `hear` set aside noise, "ok", "stop" and language requests without any model), a short acknowledgement is
-said at once, and the end of each turn of the session is read out. Two kinds of voice:
+The voice converses on its own (small talk, news of the work, what the last answer said) and hands over anything
+real: the session then gets the user's own words, never a rewrite, with `call: <language>` (it answers short, for
+the ear). Without any model, this server sets aside noise, the voice's own echo, "stop" and language requests, and
+keeps one language per call. The browser runs the call: it sends the messages, stops the work, and tells the voice
+when a turn ended (read out) or how it goes (said now and then). Two kinds of voice:
 
-- `local` (default): speech-to-text with the engine of Settings -> Voice, Piper for what is said (maxxing/tts.py),
-  and a small Claude model kept running for the whole call (`claude -p --input-format stream-json`, no tools) that
-  only shortens a long answer for the ear.
-- `cloud`: a realtime speech-to-speech model, OpenAI Realtime (WebRTC) or Gemini Live (WebSocket), used as the voice
-  (its transcription of the user is what the session gets). This server only mints a short-lived token with the
-  instructions, the tools and the voice locked in; the API key never leaves it and the audio goes straight from
-  the browser to the provider.
+- `local` (default): speech-to-text with the engine of Settings -> Voice, a Claude model kept running for the whole
+  call (`claude -p --input-format stream-json`, no tools; actions as "@ask" / "@stop" lines) and Piper for what is
+  said, sentence by sentence (maxxing/tts.py). Turn-taking: "turns" (the mic is off while the voice speaks, a tap
+  cuts it) or "call" (speak over it), and the silence that ends a sentence (`silence_ms`).
+- `cloud`: a realtime speech-to-speech model, OpenAI Realtime (WebRTC) or Gemini Live (WebSocket), with the same
+  rules as tools. This server only mints a short-lived token with the instructions, the tools and the voice locked
+  in; the API key never leaves it and the audio goes straight from the browser to the provider.
 
 All public functions are blocking: call them from a worker thread.
 """
@@ -42,7 +44,10 @@ GEMINI_VOICES = ("Charon", "Puck", "Fenrir", "Orus", "Kore", "Aoede", "Leda", "Z
 DEFAULTS = {"mode": "local", "provider": None, "openai_key": None, "gemini_key": None,
             "openai_model": "gpt-realtime-2.1", "openai_voice": "cedar",
             "gemini_model": "gemini-3.8-live", "gemini_voice": "Charon",
-            "talker_model": "haiku", "local_voice": "auto", "local_speed": 1.15}
+            "talker_model": "sonnet", "local_voice": "auto", "local_speed": 1.15,
+            "turn_mode": "turns", "silence_ms": 1800}
+TURN_MODES = ("turns", "call")   # turns: the mic is off while the voice speaks (tap to cut it); call: speak over it
+SILENCE_RANGE = (800, 5000)      # silence that ends a sentence (ms)
 SPEED_RANGE = (0.8, 1.5)
 OPENAI_API = "https://api.openai.com/v1"
 GEMINI_API = "https://generativelanguage.googleapis.com/v1beta"
@@ -54,26 +59,85 @@ MAX_AUDIO_BYTES = 20 * 1024 * 1024
 http_transport: Any = None
 
 PROMPT = """You are Harness, the user's assistant, on a voice call with them. You hear them and they hear you. \
-You are only the voice: every sentence the user says is passed, word for word, to the one who does the work (your \
-workspace: it reaches their projects, files, server and accounts). For the user it is all you: you are one person.
+Behind you, your workspace does the real work: it has their projects, files, code, server, accounts, tools and the \
+web, and it remembers the conversation it had with them in writing. For the user it is all you: you are one person.
 
-- Never answer a request or a question yourself, never make up a result, never pretend the work is done: you know \
-nothing on your own. After the user speaks, say only a few natural words that show you heard, as a person who \
-starts working: "I'm looking.", "On it.", "One second, I'll check.". Say nothing after "ok", "thanks" or noise.
-- When you receive "[Session finished]", read the outcome out: what it says, nothing more, in one to four short \
-sentences, as what you did ("Done, I changed...", "I found..."), then the question asked, if any. Leave out code, \
-paths, URLs and tables; if you left details out, say once that the details are written.
-- When you receive "[Session working]" (a note written while the work goes on), say in one short sentence what \
-you are doing now ("I'm reading the logs."), in the present tense, nothing else.
-- One language for the whole call: the user's. Switch only if they ask, or clearly speak another language.
-- Never say the words session, Claude, Claude Code, tool, workspace or Harness.
-- Speak like a person on the phone: short, warm, simple sentences, no lists, no markdown, no emoji."""
+Each time the user speaks, decide:
+- Answer yourself: greetings, small talk, thanks, how the work is going (from what you are told about it), what \
+the last finished work said (it is in this conversation), or one short question when the request is too vague to \
+start.
+- Hand it over: anything to look up, check, do, change, create, send, find or remember, and any question about \
+their projects, files, server, accounts, code, figures or news. When in doubt, hand it over: you know nothing about \
+their world on your own. Their own words are handed over as they are; never rewrite them. Then say a few natural \
+words, as a person who starts working ("I'm looking.", "On it."), and stop talking.
+- Something said while the work goes on ("also check the blog", "no, rather the other one"): hand it over too, it \
+joins the work at once.
+- Stop the work when they ask for it.
+Never make up a result and never say something is done before you are told the work finished.
+
+When the work finished: tell what the written answer says, nothing more, in one to four short sentences, as what \
+you did ("I changed...", "I found..."), then its question, if any. Leave out code, paths, URLs and tables; if you \
+left details out, say once that the details are written. When it failed: say so in one sentence and what the \
+written answer gives as the reason. While the work goes on and you are asked for news: one short sentence, in the \
+present tense, on what you are doing now.
+
+Language: always speak the language you are told (the language of the call), whatever language the work is \
+written in.
+Never say the words session, Claude, Claude Code, tool, workspace, prompt or Harness.
+Speak like a person on the phone: short, warm, simple sentences, no lists, no markdown, no emoji, no URLs. One \
+question at a time. Do not repeat what the user just said."""
 
 PROMPT_TOOLS = """
-Tools, only when the user asks how it is going or asks to stop: session_status() tells whether the work is going \
-on and on what; stop_session() stops it; read_last_answer() gives the last written answer, to repeat it."""
+Tools: ask_session() hands over what the user just said (their own words, you give none); session_status() tells \
+whether the work is going and on what; stop_session() stops it; read_last_answer() gives the last written answer. \
+"[Session finished]" / "[Session finished: it failed]" messages tell you the work ended; "[Session working]" \
+messages ask for one sentence of news."""
+
+PROMPT_LOCAL = """
+Your reply is exactly what the user hears: never explain your reasoning, never describe what you are deciding, \
+never read the bracketed lines out.
+
+To hand over, put "@ask" alone on the first line, then your few words on the next line. To stop the work: "@stop" \
+alone on the first line. Nothing else ever goes on an "@" line.
+
+Each message starts with bracketed lines: "[Work: ...]" (how the work is going) and "[Language: xx]" (the language \
+to speak) before what the user said; "[Work finished]", "[Work failed]" or "[Work in progress]" when it comes from \
+your workspace, not from the user.
+
+Examples:
+User: [Work: idle]
+[Language: fr]
+Tu peux regarder si mon site marche ?
+You: @ask
+Je regarde, une seconde.
+
+User: [Work: idle]
+[Language: fr]
+Salut, ça va ?
+You: Ça va bien, merci. Qu'est-ce que je peux faire pour toi ?
+
+User: [Work: working for 40 s; last steps: Bash: curl -I https://example.com]
+[Language: fr]
+Et regarde aussi le blog.
+You: @ask
+D'accord, j'ajoute le blog.
+
+User: [Work: working for 2 min]
+[Language: en]
+Where are you at?
+You: I'm still checking the server, almost there.
+
+User: [Work finished]
+[Language: fr]
+## Result
+The site answers in 200 ms. The SSL certificate expires in 12 days: renew it?
+You: Le site répond bien, en deux cents millisecondes. Par contre, le certificat expire dans douze jours. Tu veux \
+que je le renouvelle ?"""
 
 TOOLS = [
+    {"name": "ask_session", "description": "Hand over what the user just said, in their own words (it is sent "
+     "as it is): the work starts, or joins the work in progress. Returns at once; the answer comes later as a "
+     "[Session finished] message.", "parameters": {"type": "object", "properties": {}}},
     {"name": "session_status", "description": "Whether the work is going on, for how long, its last steps and "
      "the messages waiting.", "parameters": {"type": "object", "properties": {}}},
     {"name": "stop_session", "description": "Stop the current work.",
@@ -92,7 +156,13 @@ def settings() -> dict:
     if out["provider"] not in PROVIDERS:
         out["provider"] = None
     if out["talker_model"] not in TALKER_MODELS:
-        out["talker_model"] = "haiku"
+        out["talker_model"] = "sonnet"
+    if out["turn_mode"] not in TURN_MODES:
+        out["turn_mode"] = "turns"
+    try:
+        out["silence_ms"] = int(min(SILENCE_RANGE[1], max(SILENCE_RANGE[0], int(out["silence_ms"]))))
+    except (TypeError, ValueError):
+        out["silence_ms"] = DEFAULTS["silence_ms"]
     out["local_voice"] = tts.ALIASES.get(out["local_voice"], out["local_voice"])
     if out["local_voice"] not in ("auto", *tts.VOICES):
         out["local_voice"] = "auto"
@@ -119,6 +189,16 @@ def update_settings(**kw: Any) -> dict:
         changes["local_voice"] = tts.ALIASES.get(changes["local_voice"], changes["local_voice"])
     if "local_voice" in changes and changes["local_voice"] not in ("auto", *tts.VOICES):
         raise VoiceError(400, "invalid_voice", "unknown local voice")
+    if "turn_mode" in changes and changes["turn_mode"] not in TURN_MODES:
+        raise VoiceError(400, "invalid_turn_mode", f"turn_mode must be one of {', '.join(TURN_MODES)}")
+    if "silence_ms" in changes:
+        try:
+            ms = int(changes["silence_ms"])
+        except (TypeError, ValueError):
+            ms = 0
+        if not SILENCE_RANGE[0] <= ms <= SILENCE_RANGE[1]:
+            raise VoiceError(400, "invalid_silence", f"silence_ms must be between {SILENCE_RANGE[0]} and {SILENCE_RANGE[1]}")
+        changes["silence_ms"] = ms
     if "local_speed" in changes:
         try:
             sp = float(changes["local_speed"])
@@ -186,7 +266,7 @@ def status() -> dict:
             "cloud": {"ready": cloud_reason is None, "reason": cloud_reason},
             "ready": (local_reason if s["mode"] == "local" else cloud_reason) is None,
             "voices": {"openai": list(OPENAI_VOICES), "gemini": list(GEMINI_VOICES), "local": list(tts.VOICES)},
-            "speed_range": list(SPEED_RANGE)}
+            "speed_range": list(SPEED_RANGE), "silence_range": list(SILENCE_RANGE)}
 
 
 # ---- cloud: short-lived tokens ----------------------------------------------------------------------------------
@@ -282,15 +362,10 @@ def call_languages(ui: str | None = None) -> tuple[str, ...]:
 
 
 # ---- local: the call --------------------------------------------------------------------------------------------
-# The session does the thinking. Every sentence the user says goes to it word for word, in their language (the
-# browser sends it, see web/src/features/voice/VoiceCall.tsx). This server only carries the voice: it hears
-# (speech-to-text), sets aside what is not for the session (noise, "ok", "stop"...) without any model, says a short
-# acknowledgement ready in advance, and reads the session's answers out (a small Claude model shortens a long one
-# for the ear, adding nothing).
 _SENTENCE = re.compile(r"(.+?[.!?…])(\s+|$)", re.S)
 
-# Said at once, while the session works. One language per call: French and English have their phrases; another
-# language gets no acknowledgement (the answer is still read out).
+# Said without the voice: on "stop" (at once), when the voice failed ("ack"), for news of a tool. French and
+# English; another language gets none.
 PHRASES: dict[str, dict[str, tuple[str, ...]]] = {
     "fr": {"ack": ("Je regarde.", "D'accord, je m'en occupe.", "Une seconde, je regarde.", "Je m'en occupe."),
            "queued": ("Je suis en train de travailler, je le prends en compte.", "Je travaille dessus, je l'ajoute."),
@@ -383,46 +458,34 @@ def _lang_code(lang: Any) -> str | None:
     return s if re.fullmatch(r"[a-z]{2,3}", s) else None
 
 
-SUMMARY_PROMPT = """You turn a written answer into what is said aloud on a phone call. The answer was written \
-by the user's assistant; you are that assistant's voice.
-
-Say what the answer says, nothing more: never add facts, names, figures, advice, opinions or questions that are \
-not written in it (never guess what a vague phrase like "the others" covers), never answer it, never comment on it. Keep the result, what was done, the figures that matter and the question asked at \
-the end, if any. Leave out code, file paths, URLs, tables, long lists and details; if you left details out, say \
-once that the details are written. Speak in the first person, as the one who did the work ("I changed...", \
-"I found...").
-
-Each message gives the language to speak, then the written answer. Speak that language, even if the answer is \
-written in another one. One to four short spoken sentences, plain text, no markdown, no emoji, nothing before or \
-after them: never repeat the language line."""
 LANG_LABELS = {"fr": "French", "en": "English", "es": "Spanish", "de": "German", "it": "Italian", "pt": "Portuguese"}
-_ECHO = re.compile(r"^\s*(?:\[[^\]]{0,40}\]|(?:language|langue)\s*:\s*\w+)\s*[.:]?\s*", re.I)
-
-SHORT_CHARS = 320          # an answer this short (once cleaned for the ear) is read as it is
-SUMMARY_TIMEOUT_S = 30
+_ECHO = re.compile(r"^\s*(?:\[[^\]]{0,60}\]|(?:language|langue)\s*:\s*\w+)\s*[.:]?\s*", re.I)
+TURN_TIMEOUT_S = 60
+MAX_PENDING = 4            # user sentences kept to hand over with the next one (after a question of the voice)
 
 
 class LocalCall:
-    """One call: its language, the acknowledgements ready to play, and a small `claude` process kept running
-    (no tools) that shortens long answers for the ear."""
+    """One call: its language, a few phrases kept ready, and the voice (a `claude` process kept running, no tools)
+    that talks with the user and decides when the session works."""
 
     def __init__(self, sid: str, model: str, voice_id: str | None, speed: float = 1.0, ui_language: str | None = None):
         from .sessions import spawn
         self.id = uuid.uuid4().hex[:12]
         self.sid, self.voice_id, self.speed = sid, voice_id, speed
-        self.lock = threading.Lock()                       # the summarizer: one answer at a time
-        self.hear_lock = threading.Lock()
+        self.lock = threading.Lock()                       # one exchange with the voice at a time
         self.used = time.time()
         self.among = call_languages(ui_language)
-        self.language = self.among[0] if self.among else "en"   # one language per call (see hear)
+        self.language = self.among[0] if self.among else "en"   # one language per call
         self.settled = False                               # the first sentence sets it (any language)
-        self.expecting = False                             # the last thing said was a question
-        self.turns = 0                                     # acknowledgements said, to vary them
+        self.expecting = False                             # the voice's last line was a question
+        self.last_said = ""                                # the voice's last line
+        self.pending: list[tuple[str, str]] = []           # (the voice's question before, what the user said)
+        self.turns = 0
         self._phrases: dict[tuple[str, str], dict] = {}
         cmd = [spawn.claude_bin(), "-p", "--input-format", "stream-json", "--output-format", "stream-json",
                "--verbose", "--include-partial-messages", "--model", model, "--tools", "",
                "--no-session-persistence", "--strict-mcp-config", "--disable-slash-commands",
-               "--system-prompt", SUMMARY_PROMPT]
+               "--system-prompt", PROMPT + PROMPT_LOCAL]
         self.proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                                      text=True, bufsize=1, cwd=config.state_dir("claude-titles"),
                                      env=spawn.claude_env(None, "default"))
@@ -439,15 +502,13 @@ class LocalCall:
 
     def _finish_turn(self) -> None:
         """Skip what is left of a reply nobody listens to any more (up to its end)."""
-        end = time.time() + SUMMARY_TIMEOUT_S
+        end = time.time() + TURN_TIMEOUT_S
         while time.time() < end:
             try:
                 line = self.lines.get(timeout=max(0.1, end - time.time()))
             except queue.Empty:
                 break
-            if line is None:
-                break
-            if '"type":"result"' in line.replace(" ", ""):
+            if line is None or '"type":"result"' in line.replace(" ", ""):
                 break
         self.open_turn = False
 
@@ -465,14 +526,14 @@ class LocalCall:
             self.proc.kill()
 
     def ask(self, text: str) -> Iterator[str]:
-        """Send one message to the summarizer; yields its reply as text pieces until the end of its turn."""
+        """Send one message to the voice; yields its reply as text pieces until the end of its turn."""
         if self.open_turn:                                 # the previous reply was cut (the user spoke over it)
             self._finish_turn()
         msg = {"type": "user", "message": {"role": "user", "content": [{"type": "text", "text": text}]}}
         self.proc.stdin.write(json.dumps(msg) + "\n")      # type: ignore[union-attr]
         self.proc.stdin.flush()                            # type: ignore[union-attr]
         self.open_turn = True
-        end = time.time() + SUMMARY_TIMEOUT_S
+        end = time.time() + TURN_TIMEOUT_S
         streamed = False
         while time.time() < end:
             try:
@@ -504,8 +565,8 @@ class LocalCall:
 
     # -- what is said --
     def phrase(self, kind: str, index: int | None = None) -> dict | None:
-        """A phrase of PHRASES in the call's language, as audio (kept ready: generated once per call, again when
-        its file expired)."""
+        """A phrase of PHRASES in the call's language, as audio (generated once per call, again when its file
+        expired)."""
         options = PHRASES.get(self.language, {}).get(kind)
         if not options:
             return None
@@ -523,11 +584,9 @@ class LocalCall:
         return {"say": text, "url": self._phrases[key]["url"], "seconds": out["seconds"]}
 
     def prepare(self) -> None:
-        """Generate the phrases of the call's language ahead (while the user says their first sentence)."""
-        for kind, options in PHRASES.get(self.language, {}).items():
-            if kind.startswith("tool_"):                   # said rarely: generated when first needed
-                continue
-            for i in range(len(options)):
+        """Generate the phrases said without the voice ahead (while the user says their first sentence)."""
+        for kind in ("stop", "ack"):
+            for i in range(len(PHRASES.get(self.language, {}).get(kind) or ())):
                 self.phrase(kind, i)
 
     def say(self, sentence: str) -> dict | None:
@@ -575,7 +634,8 @@ def start_local(sid: str, ui_language: str | None = None) -> dict:
                          s["local_speed"], ui_language)
         _calls[call.id] = call
     threading.Thread(target=_warm_up, args=(call,), daemon=True, name="voicecall-warmup").start()
-    return {"mode": "local", "call": call.id, "language": call.language}
+    return {"mode": "local", "call": call.id, "language": call.language, "turn_mode": s["turn_mode"],
+            "silence_ms": s["silence_ms"]}
 
 
 def _warm_up(call: LocalCall) -> None:
@@ -606,36 +666,13 @@ def _call(cid: str) -> LocalCall:
     return c
 
 
-def hear(cid: str, audio: Path | None = None, text: str | None = None, busy: bool = False) -> dict:
-    """One sentence of the user -> {text, language, kind, say?}. `kind`: see classify; "ask" = the browser sends
-    `text` to the session (in `language`), "stop" = it stops the work, "empty" / "skip" = nothing to do (the voice
-    goes on where it was). `say`: the acknowledgement to play at once ({say, url, seconds}), if any. `busy`: the
-    session is working (the sentence waits for its turn: "I'll do it right after")."""
-    c = _call(cid)
-    with c.hear_lock:
-        lang_heard = None
-        if audio is not None:
-            # Forced into the wrong language, Whisper translates: the first sentence is heard in any language and
-            # sets the call's language (the interface language is only a guess).
-            out = voice.transcribe_file(audio, c.language if c.settled else "auto", among=c.among if c.settled else ())
-            text = (out.get("text") or "").strip()
-            lang_heard = _lang_code(out.get("language"))
-            if not c.settled and text and lang_heard:
-                c.language, c.settled = lang_heard, True
-        text = (text or "").strip()
-        kind, c.language = sort(text, c.language, c.expecting, lang_heard)
-        res: dict[str, Any] = {"text": text, "language": c.language, "kind": kind}
-        if kind == "ask" and len(_words(_norm(text))) <= 4 and _GREETING.match(_norm(text)):
-            c.expecting = False
-        elif kind in ("ask", "stop", "lang"):
-            c.expecting = False
-            said = c.phrase("queued" if kind == "ask" and busy else "ack" if kind == "ask" else kind)
-            if kind == "ask":
-                c.turns += 1
-            if said:
-                res["say"] = said
-        c.used = time.time()
-        return res
+def is_echo(text: str, saying: str) -> bool:
+    """The mic heard the voice itself: most words of the transcript are words of the sentence it was saying."""
+    heard = _words(_norm(text))
+    said = set(_words(_norm(saying)))
+    if not heard or not said:
+        return False
+    return sum(w in said for w in heard) / len(heard) >= 0.6
 
 
 def sort(text: str, current: str, expecting: bool = False, heard: str | None = None) -> tuple[str, str]:
@@ -652,31 +689,6 @@ def sort(text: str, current: str, expecting: bool = False, heard: str | None = N
         if heard and heard not in ("fr", "en") and heard != current and len(_words(_norm(text))) >= 4:
             return kind, heard                              # a language the words cannot tell: the engine's word
     return kind, current
-
-
-def _plain(answer: str) -> bool:
-    """Short and made of sentences: read as it is."""
-    if "```" in answer or re.search(r"(?m)^\s*\|.*\|\s*$", answer):
-        return False
-    return len(tts.spoken_text(answer)) <= SHORT_CHARS
-
-
-def _sentences(text: str) -> Iterator[str]:
-    text = " ".join(text.split())
-    while text:
-        m = _SENTENCE.match(text)
-        if not m:
-            yield text
-            return
-        yield m.group(1)
-        text = text[m.end():]
-
-
-def _summary_request(lang: str, answer: str, progress: bool = False) -> str:
-    if progress:
-        return (f"Speak {LANG_LABELS.get(lang, lang)}.\n\nThis is a note written while working, not the answer: say "
-                f"in one short sentence what you are doing now, in the present tense.\n\nNote:\n{answer[:3000]}")
-    return f"Speak {LANG_LABELS.get(lang, lang)}.\n\nWritten answer:\n{answer[:8000]}"
 
 
 def tool_kind(name: str) -> str:
@@ -697,73 +709,159 @@ def tool_kind(name: str) -> str:
     return "think"
 
 
-def _streamed_sentences(pieces: Iterable[str]) -> Iterator[str]:
-    buf, head = "", True
+def parse_action(line: str) -> dict | None:
+    m = re.match(r"\s*@(ask|stop)\b", line, re.I)
+    return {"type": m.group(1).lower()} if m else None
+
+
+_INLINE_ACTION = re.compile(r"(?<=\S)[ \t]+(@(?:ask|stop)\b)", re.I)
+
+
+def reply_parts(pieces: Iterable[str]) -> Iterator[tuple[str, Any]]:
+    """The voice's streamed reply -> ("action", {"type": "ask"|"stop"}) for every action line, wherever it is, and
+    ("say", sentence) for the rest, sentence by sentence as soon as each one is complete. A line starting with "@" is
+    never said (an "@ask: ..." request text is dropped: the user's own words are handed over); an echo of the
+    bracketed lines ("[Language: fr]") neither."""
+    buf, bol, head = "", True, True
+
+    def drain(final: bool) -> Iterator[tuple[str, Any]]:
+        nonlocal buf, bol
+        while buf:
+            if bol and buf.lstrip().startswith("@"):
+                if "\n" not in buf and not final:
+                    return                                    # wait for the whole line
+                line, _, buf = buf.partition("\n")
+                if (act := parse_action(line)):
+                    yield "action", act
+                continue
+            line, nl, rest = buf.partition("\n")
+            m = _SENTENCE.match(line)
+            if m and len(m.group(1).strip()) >= 2:
+                yield "say", m.group(1).strip()
+                buf = line[m.end():].lstrip(" \t") + nl + rest
+                bol = True                                    # "Sure. @stop": an action may follow a sentence
+                continue
+            if nl or final:
+                if line.strip():
+                    yield "say", line.strip()
+                buf, bol = rest, True
+                if not nl:
+                    return
+                continue
+            bol = bol and not line.strip()
+            return
+
     for piece in pieces:
         buf += piece
-        if head:                                           # an echo of the request is never said
-            if len(buf) < 24 and not buf.strip().endswith(("]", ".")):
+        if head:
+            if len(buf) < 24 and not buf.rstrip().endswith(("]", ".", "\n")):
                 continue
-            buf, head = _ECHO.sub("", buf, count=1), False
-        while True:
-            m = _SENTENCE.match(buf)
-            if not m or not m.group(2):                    # the end of a sentence is known once a space follows
-                break
-            if len(m.group(1).strip()) >= 2:
-                yield m.group(1)
-            buf = buf[m.end():]
-    if buf.strip():
-        yield buf
+            buf, head = _ECHO.sub("", buf, count=1).lstrip(" \t"), False
+        buf = _INLINE_ACTION.sub(r"\n\1", buf)                # "Sure. @ask" on one line: the action on its own
+        yield from drain(False)
+    yield from drain(True)
 
 
-def speak(cid: str, answer: str = "", outcome: str = "answer", tool: str | None = None) -> Iterator[dict]:
-    """The session's answer, read out -> {say, url, seconds} sentence by sentence, then {done}. `outcome`:
-    "answer", "failed" (the turn failed), "done" (ended without a written answer) or "progress" (while it works:
-    `answer` = its last note, said in one sentence, else `tool` = its last tool, "I'm reading files"). A long
-    answer is shortened for the ear by the small model (nothing added); everything stays written in the session."""
+def _small(text: str) -> bool:
+    n = _norm(text)
+    return len(_words(n)) < 3 or bool(_GREETING.match(n)) or n in _FILLERS
+
+
+def _handover(c: LocalCall) -> str:
+    """What goes to the session on "@ask": the user's own words, never a rewrite. When they were answering a
+    question of the voice, what they said before (not small talk) comes first, with that question."""
+    items = c.pending[-MAX_PENDING:]
+    c.pending = []
+    if not items:
+        return ""
+    kept = [it for it in items[:-1] if not _small(it[1])] + [items[-1]]
+    out: list[str] = []
+    for i, (question, words) in enumerate(kept):
+        if i and question:
+            out.append(f'(I asked: "{question}")')
+        out.append(words)
+    return "\n".join(out)
+
+
+def local_turn(cid: str, *, audio: Path | None = None, text: str | None = None, event: str | None = None,
+               outcome: str = "answer", note: str | None = None, tool: str | None = None, context: str = "",
+               busy: bool = False, saying: str = "") -> Iterator[dict]:
+    """One exchange of a local call -> NDJSON items. The user's audio (or text): {heard, kind, language} first
+    (kind as `classify`; "empty" = noise or the voice's own echo, nothing else follows), then the voice's reply:
+    {action: {type: "ask", request} | {type: "stop"}}, {say, url, seconds} sentence by sentence, {done}. `request`
+    is the user's own words. Or an event: `event` = the session's answer of an ended turn (`outcome` "answer" /
+    "failed" / "done"), or `outcome` "progress" (`note`, `tool`: what the running turn does) -> what the voice says.
+    `context`: the session's state line. `saying`: the sentence the voice was saying when the user started."""
     c = _call(cid)
-    answer = (answer or "").strip()
-    said: list[str] = []
-    if outcome == "progress":
-        items: list[dict] = []
-        if answer:
-            with c.lock:
-                try:
-                    for sentence in _streamed_sentences(c.ask(_summary_request(c.language, answer, progress=True))):
-                        if (item := c.say(sentence)):
-                            items.append(item)
-                        break                                 # one sentence
-                except VoiceError:
-                    items = []
-        if not items and (p := c.phrase(f"tool_{tool_kind(tool or '')}")):
-            items = [p]
-        yield from items
+    with c.lock:
+        lang = c.language
+        if audio is not None or text is not None:
+            lang_heard = None
+            if audio is not None:
+                # Forced into the wrong language Whisper translates: the first sentence is heard in any language and
+                # sets the call's language (the interface language is only a guess).
+                out = voice.transcribe_file(audio, c.language if c.settled else "auto",
+                                            among=c.among if c.settled else ())
+                text = (out.get("text") or "").strip()
+                lang_heard = _lang_code(out.get("language"))
+                if not c.settled and text and lang_heard:
+                    c.language, c.settled = lang_heard, True
+            text = (text or "").strip()
+            if saying and is_echo(text, saying):
+                text = ""                                     # the voice heard itself: it goes on
+            kind, c.language = sort(text, c.language, c.expecting, lang_heard)
+            if kind == "skip":
+                kind = "ask"                                  # "ok", "thanks": the voice answers, nothing handed over
+            yield {"heard": text, "kind": kind, "language": c.language}
+            if kind == "empty":
+                yield {"done": True, "empty": True}
+                return
+            if kind == "stop":
+                c.pending = []
+                yield {"action": {"type": "stop"}}
+                if (p := c.phrase("stop")):
+                    yield p
+                c.expecting = False
+                yield {"done": True}
+                return
+            c.pending.append((c.last_said if c.expecting else "", text))
+            work = context.strip() or ("working" if busy else "idle")
+            message = f"[Work: {work}]\n[Language: {c.language}]\n{text}"
+        elif outcome == "progress":
+            what = (note or "").strip()[:1500] or f"using the tool {tool or 'unknown'}"
+            message = f"[Work in progress]\n[Language: {c.language}]\nLast note: {what}"
+        else:
+            body = (event or "").strip()[:8000]
+            head = {"failed": "[Work failed]", "done": "[Work finished]"}.get(outcome, "[Work finished]")
+            message = f"{head}\n[Language: {c.language}]\n" + (body or "(Done, no written answer.)")
+        said: list[str] = []
+        handed = False
+        try:
+            for kind, value in reply_parts(c.ask(message)):
+                if kind == "action":
+                    if value["type"] == "ask" and not handed and c.pending:
+                        handed = True
+                        yield {"action": {"type": "ask", "request": _handover(c)}}
+                    elif value["type"] == "stop":
+                        c.pending = []
+                        yield {"action": {"type": "stop"}}
+                elif (item := c.say(value)):
+                    said.append(item["say"])
+                    yield item
+        except VoiceError as e:
+            # The voice failed: what the user said still goes to the session, with a phrase said without the voice.
+            if (audio is not None or text) and not handed and c.pending:
+                yield {"action": {"type": "ask", "request": _handover(c)}}
+                if (p := c.phrase("ack")):
+                    yield p
+            yield {"error": e.message, "code": e.code}
+        if said:
+            c.last_said = said[-1]
+            c.expecting = said[-1].rstrip().endswith("?")
+        if (audio is not None or text) and not handed and not c.expecting:
+            c.pending = []                                    # small talk the voice answered: nothing to hand over
+        if lang != c.language:
+            yield {"language": c.language}
         c.used = time.time()
+        c.turns += 1
         yield {"done": True}
-        return
-    if outcome == "failed" or not answer:
-        p = c.phrase("failed" if outcome == "failed" else "done")
-        if p:
-            said.append(p["say"])
-            yield p
-    else:
-        with c.lock:
-            plain = _plain(answer)
-            try:
-                parts = (_sentences(tts.spoken_text(answer)) if plain
-                         else _streamed_sentences(c.ask(_summary_request(c.language, answer))))
-                for sentence in parts:
-                    if (item := c.say(sentence)):
-                        said.append(item["say"])
-                        yield item
-            except VoiceError:
-                if said or plain:
-                    raise
-                log.info("voice call: no summary, the start of the answer is read", exc_info=True)
-                for sentence in list(_sentences(tts.spoken_text(answer)))[:3]:
-                    if (item := c.say(sentence)):
-                        said.append(item["say"])
-                        yield item
-    c.expecting = bool(said) and said[-1].rstrip().endswith("?")
-    c.used = time.time()
-    yield {"done": True}

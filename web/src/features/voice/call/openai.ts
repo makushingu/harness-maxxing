@@ -1,6 +1,6 @@
 // OpenAI Realtime voice: WebRTC straight to OpenAI with the short-lived token from this server (the instructions, the
 // tools and the voice are locked in it). Audio both ways over the peer connection; events and tool calls over the
-// "oai-events" data channel. It is only the voice: what it transcribes of the user goes to the session (Relay).
+// "oai-events" data channel. It converses and hands the user's own words over with ask_session (Relay).
 import type { CallStart } from './api'
 import { Relay } from './cloud'
 import { openMic } from '../mic'
@@ -134,7 +134,7 @@ export class OpenAIVoice implements Voice {
     }
     let output: string
     try {
-      output = await runTool(this.brain, name, args)
+      output = name === 'ask_session' ? await this.relay.handOver() : await runTool(this.brain, name, args)
     } catch (e) {
       output = `Failed: ${(e as Error)?.message || e}`
     }

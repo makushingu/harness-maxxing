@@ -1,19 +1,22 @@
-// Cloud voices (OpenAI Realtime, Gemini Live) follow the same rule as the local one: the provider is only the voice.
-// Each sentence it transcribes goes to the session word for word (sorted on the server first: noise, "ok", "stop",
-// language requests), and the end of each turn of the session is given to it to read out.
+// Cloud voices (OpenAI Realtime, Gemini Live) follow the same rules as the local one: the model converses and hands
+// work over with the tool ask_session(), which sends the user's own words (its transcription of them), never a
+// rewrite. "Stop", noise and language requests are sorted on the server, without the model.
 import { sortSentence } from './api'
 import type { Brain, Outcome } from './types'
+
+const MAX_PENDING = 4
 
 export class Relay {
   private expecting = false
   private muteNext = false
+  private pending: string[] = [] // what the user said since the last hand-over
 
   constructor(
     private brain: Brain,
     public language: string,
   ) {}
 
-  /** What the voice just said: a question makes the next "ok" an answer for the session. */
+  /** What the voice just said: a question makes the next "ok" an answer. */
   said(text: string) {
     this.expecting = text.trim().endsWith('?')
   }
@@ -22,14 +25,25 @@ export class Relay {
   async heard(text: string) {
     text = text.trim()
     if (!text) return
+    this.pending.push(text) // at once: the model may call ask_session before the sorting comes back
+    this.pending = this.pending.slice(-MAX_PENDING)
     const s = await sortSentence(text, this.language, this.expecting).catch(() => ({ kind: 'ask' as const, language: this.language }))
     this.language = s.language
-    if (s.kind === 'empty' || s.kind === 'skip') return
-    this.expecting = false
+    if (s.kind === 'empty' || s.kind === 'stop') this.pending = this.pending.filter((t) => t !== text)
     if (s.kind === 'stop') {
       if (this.brain.busy()) this.muteNext = true
       await this.brain.stop()
-    } else if (s.kind === 'ask') await this.brain.ask(text, this.language)
+    }
+  }
+
+  /** ask_session(): the user's own words go to the session. */
+  async handOver(): Promise<string> {
+    // the provider's transcription of the user may come just after its tool call
+    for (let i = 0; i < 15 && !this.pending.length; i++) await new Promise((r) => setTimeout(r, 100))
+    const words = this.pending.join('\n')
+    this.pending = []
+    if (!words) return 'Nothing new was said to hand over.'
+    return this.brain.ask(words, this.language)
   }
 
   /** The message given to the voice when a turn of the session ends; null when the user stopped that turn. */

@@ -1,6 +1,7 @@
-// Voice mode of a session: a call with this session (voice: local, OpenAI or Gemini, Settings -> Voice -> Voice mode).
-// The session does the thinking, the voice only carries it: every sentence the user says is sent to the session
-// word for word (as a message of the composer, marked as said on a call), and the end of each turn is read out.
+// Voice mode of a session: a call (voice: local, OpenAI or Gemini, Settings -> Voice -> Voice mode). The voice talks
+// with the user and hands real work to this session in the user's own words (a message of the composer, marked as
+// said on a call; while it works, the message joins the running turn); the end of each turn is read out by the
+// voice, and news of a long one is said now and then.
 import * as React from 'react'
 import { useNavigate } from 'react-router'
 import { AudioLines, PhoneOff } from 'lucide-react'
@@ -201,7 +202,7 @@ export function VoiceCall({ sid, running, queueCount, onSend, onStop }: Props) {
       let v: Voice
       if (c.mode === 'local') {
         callId.current = c.call
-        v = new LocalVoice(c.call, c.language, brain, events)
+        v = new LocalVoice(c.call, c.language, c.turn_mode, c.silence_ms, brain, events)
       } else {
         const lang = (ui || navigator.language || 'en').split('-')[0].toLowerCase()
         v = c.provider === 'gemini' ? new GeminiVoice(c, brain, events, lang) : new OpenAIVoice(c, brain, events, lang)

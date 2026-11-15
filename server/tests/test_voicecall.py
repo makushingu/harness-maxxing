@@ -14,7 +14,8 @@ def state(mx):
 
 def test_defaults_are_local(state):
     s = voicecall.settings()
-    assert s["mode"] == "local" and s["provider"] is None and s["talker_model"] == "haiku"
+    assert s["mode"] == "local" and s["provider"] is None and s["talker_model"] == "sonnet"
+    assert s["turn_mode"] == "turns" and s["silence_ms"] == 1800
 
 
 def test_keys_are_detected_and_chosen(state):
@@ -57,7 +58,7 @@ def test_gemini_token_locks_the_setup(state):
     setup = seen["body"]["bidiGenerateContentSetup"]
     assert setup["model"] == "models/gemini-3.8-live" and seen["body"]["uses"] == 1
     names = [f["name"] for f in setup["tools"][0]["functionDeclarations"]]
-    assert names == ["session_status", "stop_session", "read_last_answer"]     # the voice never hands work over
+    assert names == ["ask_session", "session_status", "stop_session", "read_last_answer"]
     assert "g-key" not in json.dumps(out)
 
 
@@ -109,7 +110,7 @@ def test_a_call_listens_for_the_interface_language_and_english(state):
 
 def test_the_voice_never_names_the_machinery():
     p = voicecall.PROMPT.lower()
-    assert "never say the words session" in p and "never answer a request" in p
+    assert "never say the words session" in p and "their own words are handed over" in p
 
 
 @pytest.mark.parametrize("text,kind", [
@@ -143,17 +144,17 @@ def test_one_language_per_call():
 
 
 class _Call(voicecall.LocalCall):
-    """A call without the small model's process."""
+    """A call without the voice's process: `replies` are what the voice says, one per exchange."""
 
     def __init__(self, language="fr"):
         import threading
         self.id, self.sid, self.voice_id, self.speed = "abcdef012345", "s1", None, 1.0
-        self.lock, self.hear_lock = threading.Lock(), threading.Lock()
-        self.used, self.among, self.language = 0, ("fr", "en"), language
-        self.expecting, self.turns, self._phrases, self.open_turn = False, 0, {}, False
-        self.settled = True
+        self.lock = threading.Lock()
+        self.used, self.among, self.language, self.settled = 0, ("fr", "en"), language, True
+        self.expecting, self.last_said, self.pending, self.turns = False, "", [], 0
+        self._phrases, self.open_turn = {}, False
         self.asked: list[str] = []
-        self.summary = "[Language: fr]. J'ai trouvé deux erreurs. Je les corrige ?"
+        self.replies: list[str] = []
 
     def alive(self):
         return True
@@ -163,7 +164,8 @@ class _Call(voicecall.LocalCall):
 
     def ask(self, text):
         self.asked.append(text)
-        yield from (self.summary[i:i + 4] for i in range(0, len(self.summary), 4))
+        reply = self.replies.pop(0) if self.replies else "D'accord."
+        yield from (reply[i:i + 3] for i in range(0, len(reply), 3))
 
 
 @pytest.fixture
@@ -185,33 +187,85 @@ def call(state, monkeypatch):
     voicecall._calls.pop(c.id, None)
 
 
-def test_hear_sorts_and_acknowledges_at_once(call):
-    out = voicecall.hear(call.id, text="Regarde si mon site marche.")
-    assert out["kind"] == "ask" and out["text"] == "Regarde si mon site marche." and out["language"] == "fr"
-    assert out["say"]["say"] == "Je regarde." and out["say"]["url"].startswith("/api/voice/said/")
-    assert voicecall.hear(call.id, text="Et la base de données aussi.", busy=True)["say"]["say"].startswith(("Je suis en train de travailler", "Je travaille dessus"))
-    n = len(call.made)
-    voicecall.hear(call.id, text="Je regarde encore une fois le site.")
-    assert len(call.made) == n + 1
-    voicecall.hear(call.id, text="Je regarde encore une fois le site.")   # phrases are generated once per call
-    assert "say" not in voicecall.hear(call.id, text="Merci.")
-    out = voicecall.hear(call.id, text="Salut, ça va ?")
-    assert out["kind"] == "ask" and "say" not in out             # sent, without "I'm looking"
-    assert voicecall.hear(call.id, text="Arrête !")["say"]["say"] == "D'accord, j'arrête."
+def _turn(call, **kw):
+    return list(voicecall.local_turn(call.id, **kw))
 
 
-def test_a_short_answer_is_read_as_it_is_a_long_one_is_shortened(call):
-    out = list(voicecall.speak(call.id, "C'est **fait** : le site répond. Tu veux que je publie ?"))
-    assert [x.get("say") for x in out] == ["C'est fait : le site répond.", "Tu veux que je publie ?", None]
-    assert out[-1] == {"done": True} and not call.asked
-    assert call.expecting                                  # "oui" / "ok" now goes to the session
-    assert voicecall.hear(call.id, text="Ok")["kind"] == "ask"
-    long = "Voici le détail :\n\n```\nerror: x\n```\n" + "Une ligne de plus. " * 40
-    out = list(voicecall.speak(call.id, long))
-    assert call.asked[0].startswith("Speak French.\n\nWritten answer:\n")
-    assert [x.get("say") for x in out if "say" in x] == ["J'ai trouvé deux erreurs.", "Je les corrige ?"]
-    assert all(lang == "fr" for _, lang in call.made)    # one voice, the call's language
-    assert list(voicecall.speak(call.id, "", "failed"))[0]["say"].startswith("Ça n'a pas marché")
+def test_a_real_request_is_handed_over_in_the_users_own_words(call):
+    call.replies = ["@ask: Check the website status\nJe regarde, une seconde."]
+    out = _turn(call, text="Tu peux regarder si mon site marche ?", context="idle")
+    assert out[0] == {"heard": "Tu peux regarder si mon site marche ?", "kind": "ask", "language": "fr"}
+    assert {"action": {"type": "ask", "request": "Tu peux regarder si mon site marche ?"}} in out   # never a rewrite
+    assert [x["say"] for x in out if "say" in x] == ["Je regarde, une seconde."]
+    assert call.asked[0] == "[Work: idle]\n[Language: fr]\nTu peux regarder si mon site marche ?"
+    assert all(lang == "fr" for _, lang in call.made)           # one voice, the call's language
+
+
+def test_small_talk_is_answered_by_the_voice_and_not_handed_over(call):
+    call.replies = ["Ça va bien, merci. Et toi ?", "Super. Qu'est-ce que je peux faire ?",
+                    "@ask\nJe regarde."]
+    assert not any("action" in x for x in _turn(call, text="Salut, ça va ?"))
+    assert not any("action" in x for x in _turn(call, text="Ça va."))
+    out = _turn(call, text="Regarde le blog.")
+    asks = [x["action"]["request"] for x in out if "action" in x]
+    assert asks == ["Regarde le blog."]                          # the small talk before is not handed over
+
+
+def test_an_answer_to_the_voices_question_carries_what_came_before(call):
+    call.replies = ["Quel site, le blog ou la boutique ?", "@ask\nJe regarde la boutique."]
+    _turn(call, text="Regarde si le site marche.")
+    out = _turn(call, text="La boutique.")
+    req = [x["action"]["request"] for x in out if "action" in x][0]
+    assert req.startswith("Regarde si le site marche.") and req.endswith("La boutique.") and "I asked" in req
+
+
+def test_stop_noise_and_echo_need_no_model(call):
+    out = _turn(call, text="Non non, arrête !")
+    assert out[1] == {"action": {"type": "stop"}} and out[2]["say"] == "D'accord, j'arrête." and not call.asked
+    assert _turn(call, text="Euh...")[-1] == {"done": True, "empty": True}
+    saying = "J'ai vérifié les trois sites et le site b répond maintenant."
+    assert _turn(call, text="vérifié les trois sites et le site", saying=saying)[0]["kind"] == "empty"
+    assert not call.asked
+
+
+def test_the_end_of_the_work_and_its_news_go_through_the_voice(call):
+    call.replies = ["[Language: fr]. J'ai trouvé deux erreurs. Je les corrige ?", "Je lis les journaux."]
+    out = _turn(call, event="Found 2 errors in the log. Fix them?")
+    assert call.asked[0].startswith("[Work finished]\n[Language: fr]\nFound 2 errors")
+    assert [x["say"] for x in out if "say" in x] == ["J'ai trouvé deux erreurs.", "Je les corrige ?"]
+    assert call.expecting
+    out = _turn(call, outcome="progress", note="Let me read the server logs.")
+    assert call.asked[1].startswith("[Work in progress]") and out[0]["say"] == "Je lis les journaux."
+    _turn(call, event="Boom", outcome="failed")
+    assert call.asked[2].startswith("[Work failed]")
+
+
+def test_when_the_voice_fails_the_words_still_go_to_the_session(call, monkeypatch):
+    def broken(text):
+        raise voicecall.VoiceError(504, "talker_timeout", "The voice did not answer")
+        yield ""
+
+    monkeypatch.setattr(call, "ask", broken)
+    out = _turn(call, text="Regarde le serveur.")
+    assert {"action": {"type": "ask", "request": "Regarde le serveur."}} in out
+    assert any(x.get("code") == "talker_timeout" for x in out)
+
+
+def test_action_lines_are_never_said():
+    parts = lambda t: list(voicecall.reply_parts(t[i:i + 3] for i in range(0, len(t), 3)))  # noqa: E731
+    assert parts("@ask: check the site\nJe regarde.") == [("action", {"type": "ask"}), ("say", "Je regarde.")]
+    assert parts("Sure, stopping. @stop") == [("say", "Sure, stopping."), ("action", {"type": "stop"})]
+    assert parts("[Work: idle] Bonjour.") == [("say", "Bonjour.")]
+
+
+def test_turn_settings(state):
+    voicecall.update_settings(turn_mode="call", silence_ms=2500)
+    s = voicecall.settings()
+    assert s["turn_mode"] == "call" and s["silence_ms"] == 2500
+    with pytest.raises(voicecall.VoiceError):
+        voicecall.update_settings(silence_ms=100)
+    with pytest.raises(voicecall.VoiceError):
+        voicecall.update_settings(turn_mode="walkie")
 
 
 def test_a_message_said_on_a_call_tells_claude_it_is_on_the_phone():
@@ -232,16 +286,10 @@ def test_the_first_sentence_sets_the_language_of_the_call(call, monkeypatch, tmp
     call.settled, call.language = False, "en"                 # the interface was in English
     wav = tmp_path / "a.wav"
     wav.write_bytes(b"RIFF")
-    assert voicecall.hear(call.id, audio=wav)["language"] == "fr"
-    voicecall.hear(call.id, audio=wav)
+    assert _turn(call, audio=wav)[0]["language"] == "fr"
+    _turn(call, audio=wav)
     assert seen == ["auto", "fr"]
 
 
-def test_progress_is_one_sentence_or_the_kind_of_the_last_tool(call):
-    call.summary = "Je lis les journaux du serveur. Puis autre chose."
-    out = list(voicecall.speak(call.id, "Let me check the server logs first.", "progress"))
-    assert [x.get("say") for x in out] == ["Je lis les journaux du serveur.", None]
-    assert "note written while working" in call.asked[-1]
-    out = list(voicecall.speak(call.id, "", "progress", tool="Bash"))
-    assert out[0]["say"] == "Je lance des commandes."
+def test_tool_kinds():
     assert voicecall.tool_kind("mcp__maxxing-browser__open") == "web" and voicecall.tool_kind("Edit") == "edit"

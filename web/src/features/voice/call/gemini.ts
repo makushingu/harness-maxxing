@@ -1,6 +1,6 @@
 // Gemini Live voice: a WebSocket straight to Google with the short-lived token from this server (the instructions,
 // the tools and the voice are locked in it). In: 16 kHz PCM; out: 24 kHz PCM played as it comes; the model hears
-// the user over itself (barge-in). It is only the voice: what it transcribes of the user goes to the session (Relay).
+// the user over itself (barge-in). It converses and hands the user's own words over with ask_session (Relay).
 import type { CallStart } from './api'
 import { Relay } from './cloud'
 import { startCapture, toBase64, type Capture } from './capture'
@@ -110,7 +110,7 @@ export class GeminiVoice implements Voice {
     for (const fc of calls) {
       let result: string
       try {
-        result = await runTool(this.brain, fc.name, fc.args || {})
+        result = fc.name === 'ask_session' ? await this.relay.handOver() : await runTool(this.brain, fc.name, fc.args || {})
       } catch (e) {
         result = `Failed: ${(e as Error)?.message || e}`
       }
