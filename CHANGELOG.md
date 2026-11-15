@@ -19,6 +19,9 @@ Fixed:
   costs 8 $ / 40 $ and its cache reads 0.20 $, so such a turn weighed up to five times too much on the agent's
   daily budget.
 - Before the list of models is first read from Anthropic, the Fable offered is Fable 5.2.
+- **Agents: no more false "The sandbox cannot run on this server" warning.** Since 2.0.0-alpha.152 the check ran
+  inside the Harness service, whose own protections stop it, so every sandboxed agent showed the red banner
+  ("Missing: user namespaces") while its runs worked. The check now runs where the runs do.
 
 ## 2.0.0-alpha.153 - 2026-11-15
 

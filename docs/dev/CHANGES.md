@@ -7,6 +7,12 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- `agent_guard._probe()` runs its bwrap + nested `unshare --user` in a transient unit (`systemd-run --wait
+  --collect`, `spawn.hardening_properties()`), like the turns, unless `MAXXING_SPAWN=direct` or no systemd-run.
+  Run in the service process, the install's drop-in `10-hardening.conf` (`ProtectKernelTunables=yes`) made bwrap
+  fail on `--proc /proc` ("Can't mount proc"): `available()` said `missing: ["user namespaces"]` on every
+  install although turn units, without that hardening, sandboxed fine. Test
+  `test_the_sandbox_is_tried_in_a_unit_like_the_turns`.
 - `claude_auth.record(..., ends)`: the runner (`res["credential_expires_at"]`) and the test / background check
   (`api/claude.run_test`, `--output-format json`) pass Claude Code's `credential_expires_at` (2.1.318+, ISO date,
   present only with a stored claude.ai sign-in; seen on 2.1.325: `"2026-11-18T21:05:20.730Z"`). Kept as `ends`

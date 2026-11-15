@@ -55,6 +55,24 @@ def test_the_sandbox_is_tried_not_only_looked_for(monkeypatch):
     monkeypatch.setattr(agent_guard, "_avail", None)
 
 
+def test_the_sandbox_is_tried_in_a_unit_like_the_turns(monkeypatch):
+    # the service's own hardening (ProtectKernelTunables) fails bubblewrap; turn units do not have it
+    seen = []
+
+    class R:
+        returncode = 0
+
+    monkeypatch.setattr(agent_guard.shutil, "which", lambda b: f"/usr/bin/{b}")
+    monkeypatch.setattr("subprocess.run", lambda cmd, **kw: seen.append(cmd) or R())
+    monkeypatch.delenv("MAXXING_SPAWN", raising=False)
+    assert agent_guard._probe() is True
+    assert seen[-1][:2] == ["systemd-run", "--wait"] and "bwrap" in seen[-1]
+    assert "ProtectKernelTunables=yes" not in seen[-1]
+    monkeypatch.setenv("MAXXING_SPAWN", "direct")
+    agent_guard._probe()
+    assert seen[-1][0] == "bwrap"
+
+
 def test_a_deleted_agent_takes_its_webhook_with_it(client, topic):
     from maxxing import feedhooks
     _on(client)

@@ -117,14 +117,20 @@ def _distro_profile_loaded() -> bool:
 
 def _probe() -> bool:
     """What Claude Code's sandbox does first, in small: a user namespace inside bubblewrap's. False = every command
-    of a sandboxed turn would fail there. True when it cannot be tried (no `unshare`): the run says it then."""
+    of a sandboxed turn would fail there. True when it cannot be tried (no `unshare`): the run says it then.
+    Tried where the turns run: in a transient unit like theirs (spawn), not in this process - the service's own
+    hardening (ProtectKernelTunables) keeps bubblewrap from mounting /proc, which turn units never have."""
     import subprocess
     if not shutil.which("unshare"):
         return True
+    cmd = ["bwrap", "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--unshare-user", "--unshare-pid",
+           "--die-with-parent", "--", "unshare", "--user", "--map-root-user", "true"]
+    if os.environ.get("MAXXING_SPAWN") != "direct" and shutil.which("systemd-run"):
+        from .sessions import spawn
+        cmd = ["systemd-run", "--wait", "--quiet", "--collect", "--description", "Harness Maxxing sandbox check",
+               *spawn.hardening_properties(), "--", *cmd]
     try:
-        r = subprocess.run(["bwrap", "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--unshare-user",
-                            "--unshare-pid", "--die-with-parent", "--", "unshare", "--user", "--map-root-user",
-                            "true"], capture_output=True, timeout=10)
+        r = subprocess.run(cmd, capture_output=True, timeout=20)
         return r.returncode == 0
     except (OSError, subprocess.SubprocessError):
         return False
