@@ -159,3 +159,93 @@ def test_a_message_after_a_settings_change_starts_a_new_process(client, topic, m
     assert [x.get("continued", False) for x in c] == [False, False]
     assert "other-model" in c[1]["argv"]
     assert not any(e.get("same") for e in all_events(client, sid) if e["type"] == "init")   # the task was cut
+
+
+def _own_turn_started_another(mx, sid: str) -> bool:
+    raw = _raw(mx, sid)
+    return any(e.get("subtype") == "task_started" and e.get("task_id") == "bg_two" for e in raw) \
+        and sum(1 for e in raw if e["type"] == "result") == 2
+
+
+@pytest.mark.parametrize("how", ["send", "steer", "inject"])
+def test_a_message_reaches_the_process_whose_last_task_ended_and_which_started_another(client, topic, mx,
+                                                                                      monkeypatch, how):
+    """The last background task ends: Claude starts a turn by itself a moment later, and that turn may start new
+    background work. Its input was closed in between: a message then waited for that work to end, "Add to plan"
+    did nothing and a steer killed the whole process (the work with it)."""
+    monkeypatch.setenv("FAKE_CLAUDE_BG_S_one", "1")
+    monkeypatch.setenv("FAKE_CLAUDE_BG_THEN", "two")
+    monkeypatch.setenv("FAKE_CLAUDE_BG_S_two", "6")
+    sid = client.post("/api/sessions", json={"path": topic, "message": "BGTASK:one NOTOOL"}).json()["id"]
+    wait_for(lambda: _own_turn_started_another(mx, sid), 15)
+    assert client.get(f"/api/sessions/{sid}").json()["state"] == "running"           # the second task runs
+    client.post(f"/api/sessions/{sid}/messages", json={"text": "status? NOTOOL"})
+    if how == "steer":
+        assert client.post(f"/api/sessions/{sid}/steer").json()["steered"] is True
+    elif how == "inject":
+        client.post(f"/api/sessions/{sid}/inject")
+    wait_for(lambda: sum(1 for e in _raw(mx, sid) if e["type"] == "mx_user") == 2, 4)
+    assert not (mx["fake_dir"] / "bg-two.done").exists()                             # answered while it still runs
+    s = wait_idle(client, sid, 30)
+    assert (mx["fake_dir"] / "bg-two.done").exists() and s["error"] is None and s["turns"] == 2
+    assert [x.get("continued", False) for x in calls(mx)] == [False, True]           # ONE claude process
+    evs = all_events(client, sid)
+    assert not any(e["type"] == "note" and (e["text"] == "Stopped." or "could not be added" in e["text"])
+                   for e in evs)
+    assert [e["code"] for e in _raw(mx, sid) if e["type"] == "mx_done"] == [0, 0]
+
+
+def test_the_process_ends_once_its_last_task_ended_and_claude_said_so(client, topic, mx, monkeypatch):
+    monkeypatch.setenv("FAKE_CLAUDE_BG_S", "1")
+    t0 = time.time()
+    sid = client.post("/api/sessions", json={"path": topic, "message": "BGTASK:one NOTOOL"}).json()["id"]
+    s = wait_idle(client, sid, 20)
+    assert time.time() - t0 < 8 and s["error"] is None and s["turns"] == 1
+    assert any("Background task one finished" in e["text"] for e in all_events(client, sid) if e["type"] == "assistant")
+
+
+def _proc() -> runner_mod._Proc:
+    return runner_mod._Proc(p=None, stdin=None, lines=iter(()), err_chunks=[], t_err=None)   # type: ignore[arg-type]
+
+
+def test_the_result_of_a_turn_claude_started_itself_is_not_the_answer_to_the_prompt(monkeypatch):
+    own = {"type": "result", "origin": {"kind": "task-notification"}, "num_turns": 0}
+    init = {"type": "system", "subtype": "init"}
+    monkeypatch.setattr(runner_mod, "TASK_SETTLE_S", 0.2)
+    pr = _proc()
+    pr.sent()
+    for ev in (init, own):                               # a task the previous process left, told at the resume
+        pr.track(ev)
+    assert pr.turn_done is False and pr.settle() is False
+    pr.track(init)
+    pr.track({"type": "result"})
+    assert pr.turn_done is True and pr.owed is False
+    time.sleep(0.25)
+    assert pr.settle() is True
+    # no prompt waiting: Claude's own turn ends like any turn, the input closes once nothing else can start
+    pr.track(init)
+    pr.track(own)
+    assert pr.turn_done is True and pr.settle() is False
+    time.sleep(0.25)
+    assert pr.settle() is True
+    # the prompt was read inside Claude's own turn (no turn of its own follows): over after the wait, never stuck
+    pr.sent()
+    pr.track(own)
+    assert pr.turn_done is False
+    time.sleep(0.25)
+    assert pr.settle() is True and pr.turn_done is True and pr.owed is False
+
+
+def test_the_input_stays_open_a_moment_after_a_background_task_ended(monkeypatch):
+    monkeypatch.setattr(runner_mod, "TASK_SETTLE_S", 0.2)
+    pr = _proc()
+    pr.sent()
+    pr.track({"type": "system", "subtype": "task_started", "task_id": "t1", "is_backgrounded": True})
+    pr.track({"type": "result"})
+    time.sleep(0.25)
+    assert pr.turn_done and pr.tasks == {"t1"} and pr.settle() is True
+    pr.track({"type": "system", "subtype": "background_tasks_changed", "tasks": []})
+    assert not pr.tasks and pr.settle() is False        # Claude is about to start a turn by itself
+    pr.track({"type": "system", "subtype": "task_notification", "task_id": "other"})   # not one of its tasks
+    time.sleep(0.25)
+    assert pr.settle() is True

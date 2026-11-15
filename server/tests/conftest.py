@@ -83,6 +83,7 @@ def mx(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict:
     monkeypatch.setenv("MAXXING_CLAUDE_BIN", str(FAKE_CLAUDE))
     monkeypatch.setenv("FAKE_CLAUDE_DIR", str(tmp_path / "fake-claude"))
     monkeypatch.setenv("FAKE_CLAUDE_DELAY", "0.02")
+    monkeypatch.setenv("MAXXING_TASK_SETTLE_S", "1")   # (8 s for real) the fake starts its own turn at once
     # upload_min_free_mb 0: tmp_path often sits on a small tmpfs; tests/test_uploads.py covers the reserve
     config.save_config({"workspace": str(ws), "files_root": str(files), "upload_min_free_mb": 0})
     return {"state": state, "ws": ws, "files": files, "tmp": tmp_path, "fake_dir": tmp_path / "fake-claude"}

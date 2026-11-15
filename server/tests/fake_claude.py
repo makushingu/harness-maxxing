@@ -31,7 +31,12 @@ Behaviour is driven by the prompt (read from stdin, or a positional argument):
   WRITEFILE:<p> writes "changed by the fake\n" to <p> (relative to the turn's folder) with a Write tool call
   BGTASK:<name> starts a background command (task_started / background_tasks_changed) that ends after
                 $FAKE_CLAUDE_BG_S s (default 3): writes $FAKE_CLAUDE_DIR/bg-<name>.done, task_notification, then a
-                turn by itself ("Background task <name> finished.") - like Claude Code
+                turn by itself ("Background task <name> finished.", its result has `origin.kind`
+                "task-notification") - like Claude Code. $FAKE_CLAUDE_BG_S_<name>: this task's own duration;
+                $FAKE_CLAUDE_BG_THEN=<name2>: that turn starts the background task <name2>
+  STALETASK     before the turn, the notification of a background task a previous process left (stopped with it)
+                and the empty turn Claude Code runs for it: init, then a result with `origin.kind`
+                "task-notification" and `num_turns` 0 - what a `--resume` prints after a steer killed the process
 With `--input-format stream-json`, stdin is read line by line like the real CLI: each user message is a turn,
 `{"type":"control_request","request":{"subtype":"interrupt"}}` cuts the running turn short (SLOW / PAUSE stop,
 result `error_during_execution`; background tasks keep running), and the process exits once stdin is closed and
@@ -125,6 +130,7 @@ EMIT_LOCK = threading.Lock()
 INTERRUPT = threading.Event()
 CONTROL: queue.Queue = queue.Queue()                   # the host's control_response lines (ASKNET)
 EVENTS: queue.Queue = queue.Queue()                    # ("user", text, images) / ("bgdone", name) / ("eof",)
+OWN_TURN = False                                       # the turn that runs was started by a task that ended
 BG: dict[str, str] = {}                                # background tasks running: task id -> description
 BG_LOCK = threading.Lock()
 MIDTURN = threading.Event()                            # a WAITMSG turn takes the next user message itself
@@ -194,7 +200,7 @@ def _bg_task(sid: str, model: str, name: str) -> None:
         "parent_tool_use_id": None, "session_id": sid})
 
     def run() -> None:
-        time.sleep(float(os.environ.get("FAKE_CLAUDE_BG_S", "3")))
+        time.sleep(float(os.environ.get(f"FAKE_CLAUDE_BG_S_{name}") or os.environ.get("FAKE_CLAUDE_BG_S", "3")))
         (STORE / f"bg-{name}.done").write_text("ok")
         with BG_LOCK:                                    # the turn it starts waits for these lines
             EVENTS.put(("bgdone", name))
@@ -245,6 +251,8 @@ def result(sid: str, model: str, text: str, ok: bool = True, errors: list | None
          "permission_denials": [], "uuid": str(uuid.uuid4())}
     if errors:
         r["errors"] = errors
+    if OWN_TURN:
+        r["origin"] = {"kind": "task-notification"}
     return r
 
 
@@ -412,6 +420,15 @@ def main() -> int:
             return 1
         (STORE / sid).write_text(prompt)
 
+    global OWN_TURN
+    if "STALETASK" in prompt and o["format"] == "stream-json":
+        emit({"type": "system", "subtype": "task_notification", "task_id": "bg_stale", "status": "stopped",
+              "summary": "sleep", "session_id": sid})
+        emit({"type": "system", "subtype": "init", "cwd": os.getcwd(), "session_id": sid, "tools": [], "model": model})
+        OWN_TURN = True
+        r = result(sid, model, "", t0=t0, keep=False)  # no model call: it costs nothing
+        emit({**r, "num_turns": 0, "stop_reason": None, "total_cost_usd": round(r["total_cost_usd"] - 0.0123, 6)})
+        OWN_TURN = False
     rc = turn(o, sid, model, prompt, t0)
     if rc is not None or o["format"] != "stream-json":
         return rc or 0
@@ -428,7 +445,11 @@ def main() -> int:
         else:
             with BG_LOCK:
                 pass
-            rc = turn(o, sid, model, f"Background task {ev[1]} finished. NOTOOL", time.time())
+            then = os.environ.get("FAKE_CLAUDE_BG_THEN") or ""
+            OWN_TURN = True
+            rc = turn(o, sid, model, f"Background task {ev[1]} finished. NOTOOL"
+                      + (f" BGTASK:{then}" if then and then != ev[1] else ""), time.time())
+            OWN_TURN = False
         if rc is not None:
             return rc
 

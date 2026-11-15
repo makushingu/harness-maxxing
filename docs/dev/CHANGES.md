@@ -5,6 +5,23 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## Unreleased
+
+- Runner, Claude's input closed too early (messages waiting, inject refused, steer killing the process). Two
+  sequences of the real CLI: (A) a `--resume` after a kill first prints the notification of a background task the
+  previous process left and runs an empty turn for it (`init`, `result` with `origin.kind` "task-notification",
+  `num_turns` 0), THEN the prompt's turn: that first `result` set `turn_done` with no task left -> stdin closed
+  before the prompt's turn started; (B) the last background task ends while only tasks ran (`turn_done`): stdin
+  closed at `background_tasks_changed: []`, a moment before the `init` of the turn Claude starts by itself, which
+  may start new tasks (the process then lives on with a closed input). Now `_Proc.sent()` marks a prompt as owed:
+  a "task-notification" result does not end the turn while one is (`own_at`: if no `init` follows within
+  `TASK_SETTLE_S`, 8 s, `MAXXING_TASK_SETTLE_S`, the prompt was read inside that turn: over); `_Proc.settle()`
+  keeps stdin open `TASK_SETTLE_S` after a tracked task ended or such a result; a queued message is handed to the
+  process whenever `turn_done` and stdin is open (no longer only while tasks run). A turn without background
+  work ends as before, at once. Fake claude: `STALETASK`, `FAKE_CLAUDE_BG_THEN`, `FAKE_CLAUDE_BG_S_<name>`, the
+  own turn's result carries `origin`; tests set `MAXXING_TASK_SETTLE_S=1`. Tests `test_steer_background.py`,
+  `test_inject.py`.
+
 ## 2.0.0-alpha.152 - 2026-11-15
 
 - Harness Browser: `rules.json` blocks the `DOMStorage` and `Storage` domains (a turn could read or write any

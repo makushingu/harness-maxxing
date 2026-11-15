@@ -3,6 +3,17 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## Unreleased
+
+Fixed:
+- **Sessions: a message sent while background work runs reaches the task, "Add to plan" works again there.** When
+  the last background command or sub-agent of a turn ended, Claude started a short turn by itself - and sometimes
+  new background work - but the task could no longer receive anything: a message waited until all of it was over,
+  **Add to plan** did nothing or said the message "could not be added to the running turn", and **Steer** (or
+  sending with it) stopped the task and its background work to start again. Same after such a stop: nothing could be
+  added to the whole next turn. The message now goes to the running task in both cases, and the background work
+  goes on.
+
 ## 2.0.0-alpha.152 - 2026-11-15
 
 New:

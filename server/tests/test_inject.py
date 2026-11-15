@@ -135,3 +135,25 @@ def test_ended_turn_ignores_injected_messages():
            {"type": "user", "at": 2.0, "injected": True}, {"type": "assistant", "text": "b"},
            {"type": "result"}, {"type": "user", "at": 3.0}]
     assert service._ended_turn(evs, 1.0, False) == (1, 5)
+
+
+def test_inject_after_a_resume_that_first_tells_a_task_the_previous_process_left(client, topic, mx):
+    """A steer or a stop killed the process and a background task with it: the next process first runs an empty
+    turn for that task (a `result` of its own), then the message. That result closed Claude's input: nothing could
+    be added to the whole turn ("could not be added to the running turn"), and a steer killed it again."""
+    sid = client.post("/api/sessions", json={"path": topic, "message": "hello NOTOOL"}).json()["id"]
+    wait_idle(client, sid, 20)
+    client.post(f"/api/sessions/{sid}/messages", json={"text": "STALETASK WAITMSG long job NOTOOL"})
+    wait_for(lambda: _waiting(sid), 10)
+    client.post(f"/api/sessions/{sid}/messages", json={"text": "also check X"})
+    assert client.post(f"/api/sessions/{sid}/inject").json()["injected"] is True
+    s = wait_idle(client, sid, 20)
+    assert s["state"] == "idle" and s["error"] is None and s["turns"] == 2 and s["queue"] == 0
+    evs = all_events(client, sid)
+    users = [e for e in evs if e["type"] == "user"]
+    assert [u["text"] for u in users] == ["hello NOTOOL", "STALETASK WAITMSG long job NOTOOL", "also check X"]
+    assert users[2].get("injected") is True
+    assert any("Read mid-turn: also check X" in e["text"] for e in evs if e["type"] == "assistant")
+    assert not any(e["type"] == "note" and "could not be added" in e["text"] for e in evs)
+    assert [x.get("continued", False) for x in calls(mx)] == [False, False, True]
+    assert s["cost_usd"] == 0.0246                      # the empty turn cost nothing

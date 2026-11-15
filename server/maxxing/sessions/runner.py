@@ -10,8 +10,8 @@ session's queue turn after turn, then exits:
   3. runs `claude -p --input-format stream-json --output-format stream-json --verbose [--model M] <flags>`
      with `--session-id <csid>` on a fresh thread, `--resume <csid>` afterwards. The prompt goes
      through stdin as a user message (no argv size limit, no option parsing of a leading "-"); stdin stays
-     open until the turn is really over (a `result` and no background task left), so a steer can reach
-     the same process;
+     open until the turn is really over (the `result` of the prompt, no background task left, and none that
+     just ended: Claude then starts a turn by itself - `_Proc.settle`), so a steer can reach the same process;
   4. copies every stream-json line into the log (with an `mx_at` timestamp added, tool outputs
      clipped by clip.py) and keeps
      cost / real model / context size / last assistant text in the meta;
@@ -168,18 +168,31 @@ class _Proc:
     oom_before: int | None = None
     stream: bool = True                                # stream-json input: messages can be added while it runs
     turn_done: bool = False                            # a `result` came since Claude last started working
+    owed: bool = False                                 # a prompt was written, the `result` of its turn has not come
+    own_at: float | None = None                        # (monotonic) such a prompt waits behind a turn Claude started
+                                                       # by itself, whose `result` came then
+    task_at: float = 0.0                               # (monotonic) a background task ended / such a turn ended:
+                                                       # Claude may start a turn by itself right after
     tasks: set[str] = field(default_factory=set)       # background tasks still running (Bash, agents, Monitor...)
     interrupt_at: float | None = None                  # monotonic time the interrupt request was sent
     inits: int = 0                                     # turns this process started (`init` lines)
 
     def track(self, ev: dict) -> None:
         t, st = ev.get("type"), ev.get("subtype")
+        had = len(self.tasks)
         if t == "result":
-            self.turn_done = True
+            if (ev.get("origin") or {}).get("kind") == "task-notification":
+                # the turn Claude started by itself when a background task ended (also one a previous process
+                # left, told at the resume) - not the answer to a prompt written meanwhile: that turn comes next
+                self.task_at = time.monotonic()
+                self.own_at = self.task_at if self.owed else None
+                self.turn_done = not self.owed
+            else:
+                self.turn_done, self.owed, self.own_at = True, False, None
         elif t != "system":
             return
         elif st == "init":                             # Claude starts a turn (also by itself, when a task ends)
-            self.turn_done = False
+            self.turn_done, self.own_at = False, None
             self.inits += 1
         elif st == "background_tasks_changed" and isinstance(ev.get("tasks"), list):
             self.tasks = {str(x.get("task_id")) for x in ev["tasks"] if isinstance(x, dict)}
@@ -188,6 +201,22 @@ class _Proc:
         elif st == "task_notification" or (st == "task_updated"
                                            and str((ev.get("patch") or {}).get("status")) in TASK_ENDED):
             self.tasks.discard(str(ev.get("task_id")))
+        if len(self.tasks) < had:
+            self.task_at = time.monotonic()
+
+    def sent(self) -> None:
+        """A prompt was written to Claude: the turn is over at ITS result."""
+        self.turn_done, self.owed, self.own_at = False, True, None
+
+    def settle(self) -> bool:
+        """True when Claude is not about to start a turn by itself (a background task that ends makes it start one
+        a moment later). Until then its input stays open: closed, that turn would still run - it may even start new
+        background tasks - but no message could be added to it, and a steer could only kill the whole process."""
+        now = time.monotonic()
+        if self.own_at is not None and now - self.own_at >= TASK_SETTLE_S:
+            # the prompt's own turn never started: it was read inside Claude's turn, which answered it
+            self.turn_done, self.owed, self.own_at = True, False, None
+        return now - self.task_at >= TASK_SETTLE_S
 
     def alive(self) -> bool:
         return self.p.poll() is None
@@ -756,6 +785,7 @@ class Runner:
         if self.stop_flag.is_set():                    # stop arrived while starting
             self._kill_child()
         pr.stdin.send(prompt)
+        pr.sent()
         if not pr.stream:                              # plain text prompt: Claude reads to EOF
             pr.stdin.close()
         return self._read(pr, a, timeout_s, hold)
@@ -763,7 +793,8 @@ class Runner:
     def _attempt_in(self, pr: _Proc, prompt: str, timeout_s: object, csid: str, prev_total: float) -> Attempt:
         """The steered message, written to the claude process the interrupted turn ran in."""
         a = Attempt(csid=csid, prev_total=prev_total, t0=time.time(), saw_init=True)
-        pr.turn_done, pr.interrupt_at = False, None
+        pr.interrupt_at = None
+        pr.sent()
         if not pr.stdin.send(prompt):                  # closed meanwhile: the reading ends with the process
             a.stderr = "Claude's input was closed before the message could be sent."
         return self._read(pr, a, timeout_s, hold=False)
@@ -827,12 +858,14 @@ class Runner:
                     return a                       # (stderr: reported once, when the process ends)
                 if self.inject_pending and (a.saw_init or not hold):   # (a resume that may still fail: wait)
                     self._inject_step(pr)
-                if pr.stream and pr.turn_done and not pr.tasks and not pr.stdin.closed:
+                settled = pr.settle()
+                if pr.stream and pr.turn_done and not pr.tasks and settled and not pr.stdin.closed:
                     pr.stdin.close()                   # the turn is over: Claude exits (as with a text prompt)
-                elif pr.stream and pr.turn_done and pr.tasks and not pr.stdin.closed and pr.alive() \
+                elif pr.stream and pr.turn_done and not pr.stdin.closed and pr.alive() \
                         and not self.stop_flag.is_set() and time.monotonic() - looked >= 1.0:
-                    # Claude answered, only background tasks run (a dev server may never end): a message sent
-                    # meanwhile goes to the same process at once instead of waiting in the queue for the tasks.
+                    # Claude answered, only background tasks run (a dev server may never end) or the last one
+                    # just ended: a message sent meanwhile goes to the same process at once instead of waiting
+                    # in the queue for the tasks.
                     looked = time.monotonic()
                     if self._queued():
                         for h in a.held:
@@ -1469,6 +1502,7 @@ STDOUT_GRACE_S = float(os.environ.get("MAXXING_STDOUT_GRACE_S") or 10)
 # MAXXING_STREAM_INPUT=0 = the old way (text prompt, stdin closed at once; a steer kills the turn).
 STREAM_INPUT = os.environ.get("MAXXING_STREAM_INPUT", "1") != "0"
 INTERRUPT_WAIT_S = float(os.environ.get("MAXXING_INTERRUPT_WAIT_S") or 15)
+TASK_SETTLE_S = float(os.environ.get("MAXXING_TASK_SETTLE_S") or 8)   # see _Proc.settle
 TASK_ENDED = ("completed", "failed", "killed", "stopped", "cancelled", "error")
 
 
