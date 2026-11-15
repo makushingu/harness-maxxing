@@ -53,6 +53,9 @@ new invitation: an invitation never replaces an existing contact.
   options. Click again to take your vote back.
 - **Reactions**, **Reply** on hover of a message. Your own messages can be **edited** or **deleted** for everyone
   (Up arrow in an empty message box edits your last one).
+- **The message box** is the same as in a session: the message you reply to or edit shows as a card on top of it
+  (Esc cancels), the microphone dictates at the cursor, Enter sends (a new line on a phone, where the button sends),
+  Shift+Enter goes to a new line.
 - **Seen** under your last message, **writing…** while someone types, and each friend's presence (online, or seen
   5 min ago): it shows while their Harness is open in a browser.
 - **New messages** of the chats you are not looking at pop up as messages: who wrote, what they wrote, and a box to

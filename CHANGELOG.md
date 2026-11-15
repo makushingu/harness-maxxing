@@ -3,6 +3,17 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## Unreleased
+
+Improved:
+- **One message box everywhere.** Sessions, agents, agent groups and Team chats now share the same box: the same
+  look, the same keys, the same file chips, Send in the same place. Each keeps its own tools: the model in a session or
+  with an agent, the recipients in a group, polls in Team. With an agent, **Stop** and **New conversation** sit next to
+  Send; replying to a run or to a Team message shows as a card on top of the box; Team gets dictation.
+- **Compaction gauge.** Next to the model, in the message box of a session or an agent: how close the conversation is
+  to its next automatic compaction (a bar with the tokens when there is room, a ring with the percentage on a phone
+  or in a narrow column). It replaces the context gauge of the session header.
+
 ## 2.0.0-alpha.155 - 2026-11-15
 
 Fixed:
