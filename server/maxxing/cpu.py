@@ -298,6 +298,8 @@ def top(n: int = TOP_N) -> list[dict]:
     """The units that used the processor most since the previous call (a 0.5 s sample on the first call or after
     30 s): [{unit, kind, name, label, level, pct}], pct = share of the whole machine (all cores)."""
     t1, cur = _sample()
+    if not cur:                         # no readable cgroup (container, cgroup v1): nothing to wait 0.5 s for
+        return []
     t0, prev = _prev["t"], _prev["usage"]
     if not prev or t1 - t0 > 30 or t1 - t0 < 0.2:
         _sleep(0.5)

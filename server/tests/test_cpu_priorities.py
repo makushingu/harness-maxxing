@@ -196,6 +196,15 @@ def test_top_reads_the_cgroups(mx, tmp_path, monkeypatch):
                                                                     ("docker", "other", 3.0)]   # containers in one row
 
 
+def test_top_never_waits_without_a_readable_cgroup(mx, tmp_path, monkeypatch):
+    # an empty sample left `prev` empty: every call slept 0.5 s (holding the lock) to return nothing
+    monkeypatch.setattr(cpu, "CGROUP_ROOT", tmp_path / "none")
+    sleeps = []
+    monkeypatch.setattr(cpu, "_sleep", sleeps.append)
+    monkeypatch.setitem(cpu._prev, "usage", {})
+    assert [cpu.top() for _ in range(3)] == [[], [], []]
+    assert sleeps == []
+
 def test_cpu_endpoint_and_setting(client, monkeypatch):
     monkeypatch.setattr(cpu, "top", lambda n=cpu.TOP_N: [])
     r = client.get("/api/system/cpu", params={"force": 1}).json()
