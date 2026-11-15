@@ -108,7 +108,7 @@ def personalised(target: str, code: str, server_url: str) -> tuple[str, Path, by
 
 
 def install_script(kind: str, code: str, server_url: str) -> str:
-    """The script `curl … | sh` / `irm … | iex` runs: download the app (with its pairing trailer), start it."""
+    """The script the pasted command (`commands()`) runs: download the app (with its pairing trailer), start it."""
     store.invite(code)
     c = store.normalize_code(code)
     base = f"{server_url}/api/devices/download"
