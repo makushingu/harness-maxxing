@@ -52,6 +52,7 @@ CHECK_EVERY = 30.0
 SEEN_FRESH = 60.0                                  # an exit looked at (Settings -> Browser) is checked again after this
 RETEST_EVERY = 3600.0                              # ... and its address tested again after this (no speed: no 2 MB)
 UPSTREAM_KEEP = 20.0
+DOWN_KEEP = 5.0                 # an exit found down answers so for this long before it is asked again
 CONNECT_TIMEOUT = 15.0
 TEST_IP_URL = "http://ip-api.com/json/?fields=status,message,country,countryCode,city,isp,org,as,mobile,proxy,hosting,query"
 TEST_SPEED = ("speed.cloudflare.com", "/__down?bytes=2000000")
@@ -555,6 +556,8 @@ class Runtime:
         self.state: dict[str, dict] = {}
         self.tests: dict[str, dict] = _load_tests()     # the last test of each exit survives a restart
         self._up: dict[str, tuple[float, Upstream]] = {}
+        self._down: dict[str, tuple[float, str]] = {}      # the last ExitDown of each exit, kept DOWN_KEEP s
+        self._making: dict[str, threading.Lock] = {}       # one _upstream at a time per exit: the others wait for it
         self._task: asyncio.Task | None = None
         self._refreshing: set[str] = set()
 
@@ -563,6 +566,7 @@ class Runtime:
         if self.tests.pop(eid, None) is not None:
             _save_tests(self.tests)
         self._up.pop(eid, None)
+        self._down.pop(eid, None)
 
     def _keep_test(self, eid: str, out: dict) -> None:
         old = self.tests.get(eid) or {}
@@ -603,13 +607,34 @@ class Runtime:
 
     def upstream(self, e: dict) -> Upstream:
         """The exit as an upstream proxy (starts its runtime; kept UPSTREAM_KEEP s while it works: the proxy asks for
-        each connection). ExitDown when it cannot carry traffic."""
-        hit = self._up.get(e["id"])
-        if hit and time.time() - hit[0] < UPSTREAM_KEEP and (self.state.get(e["id"]) or {}).get("ok", True):
+        each connection). ExitDown when it cannot carry traffic. A page opens dozens of connections at once: they share
+        one computation (Tailscale runs commands), and an exit found down is not asked again for DOWN_KEEP s."""
+        eid = e["id"]
+        up = self._known(eid)
+        if up is not None:
+            return up
+        with self._making.setdefault(eid, threading.Lock()):
+            up = self._known(eid)
+            if up is not None:
+                return up
+            try:
+                up = self._upstream(e)
+            except ExitDown as ex:
+                self._down[eid] = (time.time(), str(ex))
+                raise
+            self._down.pop(eid, None)
+            self._up[eid] = (time.time(), up)
+            return up
+
+    def _known(self, eid: str) -> Upstream | None:
+        """The upstream kept for this exit, None to compute it; ExitDown again while its last one is recent."""
+        hit = self._up.get(eid)
+        if hit and time.time() - hit[0] < UPSTREAM_KEEP and (self.state.get(eid) or {}).get("ok", True):
             return hit[1]
-        up = self._upstream(e)
-        self._up[e["id"]] = (time.time(), up)
-        return up
+        down = self._down.get(eid)
+        if down and time.time() - down[0] < DOWN_KEEP:
+            raise ExitDown(down[1])
+        return None
 
     def _upstream(self, e: dict) -> Upstream:
         from .. import vault
@@ -635,6 +660,7 @@ class Runtime:
             return False
         t0 = time.monotonic()
         why = ""
+        self._down.pop(eid, None)                          # a check (Retry now, Test) always asks the exit again
         try:
             up = await asyncio.to_thread(self.upstream, e)
             r, w = await open_via(up, *CHECK_HOST, timeout=10)

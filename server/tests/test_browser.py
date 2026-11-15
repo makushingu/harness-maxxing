@@ -1536,3 +1536,30 @@ def test_turns_waiting_for_an_exit_at_the_same_time_are_all_kept(mx, monkeypatch
     for t in ts:
         t.join()
     assert sorted(w["session"] for w in exits._waiters()) == ["t0", "t1"]
+
+
+@pytest.mark.parametrize("down", [True, False], ids=["down", "cold"])
+def test_connections_through_an_exit_share_one_lookup(mx, monkeypatch, down):
+    from maxxing.browser import exits
+    rt, calls = exits.Runtime(), []
+
+    def lookup(e):
+        calls.append(e["id"])
+        time.sleep(0.1)                                   # Tailscale: systemctl, tailscale status
+        if down:
+            raise exits.ExitDown("the Tailscale exit is not ready")
+        return exits.Upstream("socks5", "127.0.0.1", 1080)
+    monkeypatch.setattr(rt, "_upstream", lookup)
+    out: list = []
+
+    def connect():
+        try:
+            out.append(rt.upstream({"id": "ts", "type": "tailscale"}))
+        except exits.ExitDown as ex:
+            out.append(str(ex))
+    ts = [threading.Thread(target=connect) for _ in range(30)]
+    for t in ts:
+        t.start()
+    for t in ts:
+        t.join()
+    assert len(out) == 30 and len(calls) == 1
