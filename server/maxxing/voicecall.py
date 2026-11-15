@@ -25,7 +25,7 @@ import time
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any, Iterable, Iterator
 
 from . import config, tts, voice
 from .voice import VoiceError
@@ -77,10 +77,32 @@ Tools: ask_session(request) hands work to the session; session_status() tells wh
 stop_session() stops it; read_last_answer() gives its last written answer."""
 
 PROMPT_LOCAL = """
-Your actions: start your reply with a line "@ask: <instruction>" to hand a request over, or "@stop" to stop the \
-work, then say your sentence on the next line. Every user message starts with "[Session: ...]", the current state \
-of the work, and "[Language: xx]", the language the user just spoke: use them, never read them out. Messages \
-starting with "[Session finished]" come from your workspace, not from the user."""
+Your reply is exactly what the user hears, nothing else: never explain your reasoning, never describe what you are \
+doing or why ("the user switched language", "this is a real request"), never read the bracketed lines out.
+
+To act, put the action alone on the first line, then your sentence on the next line:
+- "@ask: <the request, in the user's words and language>" hands a request over;
+- "@stop" stops the work.
+Each user message starts with "[Session: ...]" (how the work is going) and may have "[Language: xx]" (the language \
+the user just spoke). Messages starting with "[Session finished]" come from your workspace, not from the user.
+
+Examples:
+User: [Session: idle]
+[Language: fr]
+Tu peux regarder si mon site marche ?
+You: @ask: Regarde si mon site marche.
+Je regarde, une seconde.
+
+User: [Session: working for 40 s]
+[Language: en]
+Can we switch to English?
+You: Sure, let's speak English.
+
+User: [Session: working for 2 min, running tests]
+[Language: fr]
+Arrête tout.
+You: @stop
+D'accord, j'arrête."""
 
 TOOLS = [
     {"name": "ask_session", "description": "Hand a request or a task to the Claude Code session (it does the real "
@@ -470,6 +492,59 @@ def parse_action(line: str) -> dict | None:
     return {"type": "stop"}
 
 
+_INLINE_ACTION = re.compile(r"(?<=\S)[ \t]+(@(?:ask|stop)\b)", re.I)
+
+
+def reply_parts(pieces: Iterable[str]) -> Iterator[tuple[str, Any]]:
+    """The voice's streamed reply -> ("action", {...}) for every action line, wherever it is, and ("say", sentence)
+    for the rest, sentence by sentence as soon as each one is complete. An action line is never said: "@ask:" alone
+    on its line takes the next line as its request; any other line starting with "@" is dropped."""
+    buf, bol, pending_ask = "", True, False
+
+    def drain(final: bool) -> Iterator[tuple[str, Any]]:
+        nonlocal buf, bol, pending_ask
+        while buf:
+            if bol and (pending_ask or buf.lstrip().startswith("@")):
+                if "\n" not in buf and not final:
+                    return                                    # wait for the whole line
+                line, _, buf = buf.partition("\n")
+                if not line.strip():
+                    continue
+                if pending_ask and not line.lstrip().startswith("@"):
+                    pending_ask = False
+                    yield "action", {"type": "ask", "request": line.strip()}
+                    continue
+                act = parse_action(line)
+                if act:
+                    pending_ask = False
+                    yield "action", act
+                elif re.match(r"\s*@ask\b", line, re.I):
+                    pending_ask = True
+                continue
+            line, nl, rest = buf.partition("\n")
+            m = _SENTENCE.match(line)
+            if m and len(m.group(1).strip()) >= 2:
+                yield "say", m.group(1)
+                buf = line[m.end():].lstrip(" \t") + nl + rest
+                bol = True                                    # "Sure. @stop": an action may follow a sentence
+                continue
+            if nl or final:
+                if line.strip():
+                    yield "say", line
+                buf, bol = rest, True
+                if not nl:
+                    return
+                continue
+            bol = bol and not line.strip()
+            return
+
+    for piece in pieces:
+        buf += piece
+        buf = _INLINE_ACTION.sub(r"\n\1", buf)                # "Sure. @ask: ..." on one line: the action on its own
+        yield from drain(False)
+    yield from drain(True)
+
+
 def local_turn(cid: str, *, audio: Path | None = None, text: str | None = None, event: str | None = None,
                context: str = "", language: str | None = None) -> Iterator[dict]:
     """One exchange: the user's audio (or text), or an event from Harness -> the voice's reply.
@@ -498,36 +573,11 @@ def local_turn(cid: str, *, audio: Path | None = None, text: str | None = None, 
         else:
             yield {"done": True, "empty": True}
             return
-        buf, head_done = "", False
-        for piece in c.ask(message):
-            buf += piece
-            if not head_done:                                 # action lines come first
-                while "\n" in buf:
-                    first, rest = buf.split("\n", 1)
-                    act = parse_action(first)
-                    if act is None and first.strip():
-                        head_done = True
-                        break
-                    if act:
-                        yield {"action": act}
-                    buf = rest
-                if not head_done:
-                    if buf.lstrip().startswith("@") or not buf.strip():
-                        continue
-                    head_done = True
-            while True:
-                m = _SENTENCE.match(buf)
-                if not m or len(m.group(1).strip()) < 2:
-                    break
-                yield from _say(c, m.group(1))
-                buf = buf[m.end():]
-        if not head_done and buf.strip():
-            act = parse_action(buf)
-            if act:
-                yield {"action": act}
-                buf = ""
-        if buf.strip():
-            yield from _say(c, buf)
+        for kind, value in reply_parts(c.ask(message)):
+            if kind == "action":
+                yield {"action": value}
+            else:
+                yield from _say(c, value)
         c.used = time.time()
         yield {"done": True}
 

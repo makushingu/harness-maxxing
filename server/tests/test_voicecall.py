@@ -116,3 +116,18 @@ def test_a_call_listens_for_the_interface_language_and_english(state):
 def test_the_voice_never_names_the_machinery():
     p = voicecall.PROMPT.lower()
     assert "never say the words session" in p and "switch at once" in p
+
+
+def _parts(text, size=3):
+    return list(voicecall.reply_parts(text[i:i + size] for i in range(0, len(text), size)))
+
+
+def test_action_lines_are_never_said_wherever_they_are():
+    assert _parts("@ask: check the site\nJe regarde. Un instant.") == [
+        ("action", {"type": "ask", "request": "check the site"}), ("say", "Je regarde."), ("say", "Un instant.")]
+    # reasoning first, the action alone on its line, its request on the next one
+    out = _parts("Okay.\n@ask:\nCheck whether the site is up.\nI'm looking.")
+    assert ("action", {"type": "ask", "request": "Check whether the site is up."}) in out
+    assert not any(k == "say" and "@" in v for k, v in out)
+    assert _parts("Sure, stopping. @stop") == [("say", "Sure, stopping."), ("action", {"type": "stop"})]
+    assert _parts("Hello there") == [("say", "Hello there")]

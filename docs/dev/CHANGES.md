@@ -26,6 +26,10 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   talker as `[Language: xx]`. Prompt: the voice is
   one person and never says session / Claude / tool. Barge-in: while speaking, the threshold follows the echo heard by
   the mic (`max(0.09, floor*2.5, echo*2.2)`, 4 frames) instead of a fixed 0.32.
+  The reply is parsed by `voicecall.reply_parts`: an action line is never said, wherever it comes (`@ask:` alone takes
+  the next line as its request, `Sure. @stop` is split); the local prompt has examples and forbids narrated
+  reasoning (Haiku said "The user switched to English..." aloud). The call start sends the browser's language
+  (`{session, language}`): listened for first.
 
 ## 2.0.0-alpha.155 - 2026-11-15
 
