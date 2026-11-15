@@ -23,7 +23,7 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   characters, no fence / table, is read as it is; a longer one goes to the summarizer, one `claude -p
   --input-format stream-json --include-partial-messages --tools ""` per call with `SUMMARY_PROMPT`, streamed sentence
   by sentence; its start is read if it fails). Every sentence is said with `tts.synth(lang=<call language>)`: one
-  voice per answer. Browser (`call/local.ts`): speech over the voice pauses it (`audio.pause()`), resumed when the
+  voice per answer. Browser (`call/local.ts`): speech over the voice pauses it (`audio.pause()`; stopped for good after 1 s of speech, `SURE_SPEECH_MS`), resumed when the
   sentence is `empty` / `skip`, dropped (with the answer being read) on a real one; sentences are heard in order
   (promise chain); the end of a turn the user stopped is not read (`muteNext`); answers wait while the user talks.
   Cloud (`call/cloud.ts` `Relay`): the provider's input transcription is sorted by `/call/sort` and sent the same

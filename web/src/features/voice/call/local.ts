@@ -2,7 +2,7 @@
 // sentence of the user as a WAV to the server, which transcribes and sorts it. A real sentence goes to the session
 // word for word, and a short acknowledgement ready in advance plays at once; the session's answer is read out
 // sentence by sentence (Piper). Speaking over the voice pauses it: it resumes where it was when it was only noise
-// or "ok", and stops when the user really said something.
+// or "ok", and stops when the user really said something (at once when they speak on for a second).
 import { endCall, hear, speak, type SayLine } from './api'
 import { startCapture, toWav, type Capture } from './capture'
 import type { Brain, CallPhase, Outcome, Voice, VoiceEvents } from './types'
@@ -16,6 +16,9 @@ const BARGE_MIN = 0.09
 const BARGE_OVER_ECHO = 2.2
 const END_SILENCE_MS = 900
 const MIN_SPEECH_MS = 300
+// Speaking over the voice pauses it; speech that goes on this long is surely the user, not noise: the voice stops
+// for good at once, without waiting for the transcript.
+const SURE_SPEECH_MS = 1000
 const MAX_SPEECH_MS = 60_000
 
 export class LocalVoice implements Voice {
@@ -72,6 +75,7 @@ export class LocalVoice implements Voice {
       this.rec.push(pcm)
       if (level >= start * 0.6) this.lastLoud = now
       const long = now - this.recStart
+      if (this.paused && long >= SURE_SPEECH_MS && now - this.lastLoud < 300) this.dropSpeech()
       if (now - this.lastLoud >= END_SILENCE_MS || long >= MAX_SPEECH_MS) this.endUtterance(long)
       return
     }
