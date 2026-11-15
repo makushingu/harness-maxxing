@@ -74,7 +74,9 @@ export class LocalVoice implements Voice {
     // Unlocks playback on phones: this runs from the tap that started the call.
     this.audio.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA='
     void this.audio.play().catch(() => {})
-    this.cap = await startCapture((pcm, level) => this.frame(pcm, level))
+    const cap = await startCapture((pcm, level) => this.frame(pcm, level))
+    if (this.closed) return cap.stop() // hung up while the mic was being opened
+    this.cap = cap
     this.phase('listening')
   }
 

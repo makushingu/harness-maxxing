@@ -24,6 +24,8 @@ export interface VoiceEvents {
   caption(who: 'you' | 'voice', text: string): void
   error(message: string): void
   level?(level: number): void
+  /** The call cannot go on (its connection could not be renewed): the page hangs it up. */
+  ended?(): void
 }
 
 export interface Voice {

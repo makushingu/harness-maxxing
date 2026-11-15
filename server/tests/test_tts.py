@@ -25,3 +25,26 @@ def test_a_voice_only_reads_its_language(tmp_path, monkeypatch):
     assert tts.pick_voice("I am looking at it, give me a second.", "fr_FR-upmc-pierre") == "en_US-ryan-medium"
     assert tts.pick_voice("Je regarde ça.", "fr_FR-upmc-medium") == "fr_FR-upmc-pierre"   # old id
     assert tts.VOICES["fr_FR-upmc-pierre"]["speaker"] == 1
+
+
+def test_a_hanging_voice_worker_fails_the_sentence_instead_of_blocking(tmp_path, monkeypatch):
+    """A Piper worker that never answers: the sentence fails after SYNTH_TIMEOUT_S, the worker is stopped and the
+    next sentence is not stuck behind it (the lock is free)."""
+    import stat
+    import time
+    import pytest
+    monkeypatch.setattr(tts, "root", lambda: tmp_path / "tts")
+    monkeypatch.setattr(tts, "out_dir", lambda: tmp_path)
+    py = tts.root() / "venv" / "bin" / "python"
+    py.parent.mkdir(parents=True)
+    py.write_text("#!/bin/sh\nexec sleep 30\n")
+    py.chmod(py.stat().st_mode | stat.S_IXUSR)
+    monkeypatch.setattr(tts, "SYNTH_TIMEOUT_S", 0.5)
+    monkeypatch.setattr(tts, "pick_voice", lambda *a, **k: next(iter(tts.VOICES)))
+    t0 = time.time()
+    with pytest.raises(tts.TTSError) as e:
+        tts.synth("bonjour")
+    assert e.value.code == "tts_timeout" and time.time() - t0 < 5
+    assert tts._lock.acquire(timeout=1)
+    tts._lock.release()
+    assert tts._worker is None or tts._worker.poll() is not None

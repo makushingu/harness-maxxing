@@ -12,6 +12,13 @@ def state(mx):
     voicecall.http_transport = None
 
 
+def test_a_hand_edited_voice_config_still_loads(state):
+    from maxxing import config
+    config.update_config(voice_call={"local_voice": ["x"], "provider": {"a": 1}, "mode": 3})
+    s = voicecall.settings()
+    assert s["local_voice"] == "auto" and s["provider"] is None and s["mode"] == "local"
+
+
 def test_defaults_are_local(state):
     s = voicecall.settings()
     assert s["mode"] == "local" and s["provider"] is None and s["talker_model"] == "sonnet"

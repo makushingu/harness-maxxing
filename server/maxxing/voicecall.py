@@ -152,6 +152,9 @@ TOOLS = [
 def settings() -> dict:
     raw = config.load_config().get("voice_call") or {}
     out = {**DEFAULTS, **{k: raw[k] for k in DEFAULTS if k in raw}}
+    for k in ("mode", "provider", "talker_model", "local_voice", "openai_voice", "gemini_voice"):
+        if out[k] is not None and not isinstance(out[k], str):
+            out[k] = DEFAULTS[k]                          # a hand-edited config never breaks the voice settings
     if out["mode"] not in MODES:
         out["mode"] = "local"
     if out["provider"] not in PROVIDERS:

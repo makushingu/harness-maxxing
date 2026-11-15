@@ -47,9 +47,11 @@ export class GeminiVoice implements Voice {
     this.out = new AC({ sampleRate: 24000 })
     await this.out.resume().catch(() => {})
     await this.connect(this.c)
-    this.cap = await startCapture((pcm, level) => {
+    if (this.closed) return this.close() // hung up while connecting
+    const cap = await startCapture((pcm, level) => {
       this.ev.level?.(level)
       this.batch.push(pcm)
+      if (this.batch.length > 25) this.batch.shift() // reconnecting: about the last second is kept, not the whole wait
       if (this.batch.length < 3 || !this.ws || this.ws.readyState !== WebSocket.OPEN) return
       const n = this.batch.reduce((a, b) => a + b.length, 0)
       const all = new Int16Array(n)
@@ -58,6 +60,8 @@ export class GeminiVoice implements Voice {
       this.batch = []
       this.ws.send(JSON.stringify({ realtimeInput: { audio: { data: toBase64(all), mimeType: 'audio/pcm;rate=16000' } } }))
     })
+    if (this.closed) return cap.stop()
+    this.cap = cap
     this.ev.phase('listening')
   }
 
@@ -67,6 +71,13 @@ export class GeminiVoice implements Voice {
     return new Promise<void>((resolve, reject) => {
       const ws = new WebSocket(`${c.url}?access_token=${encodeURIComponent(c.token)}`)
       this.ws = ws
+      // no setup answer: an error (the reconnection tries again), never a wait forever
+      const timer = window.setTimeout(() => {
+        if (!this.ready && this.ws === ws) {
+          reject(new Error('Gemini: no answer'))
+          ws.close()
+        }
+      }, 15_000)
       ws.onopen = () => ws.send(JSON.stringify({ setup: { model: `models/${c.model}` } }))
       ws.onerror = () => reject(new Error('Gemini: connection failed'))
       ws.onclose = (e) => {
@@ -79,6 +90,7 @@ export class GeminiVoice implements Voice {
         const text = typeof m.data === 'string' ? m.data : await (m.data as Blob).text()
         const msg = JSON.parse(text)
         if (msg.setupComplete && !this.ready) {
+          window.clearTimeout(timer)
           this.ready = true
           resolve()
           return
@@ -100,6 +112,10 @@ export class GeminiVoice implements Voice {
       /* closed */
     }
     this.flushCaptions()
+    // what the old connection was saying is over: its end never comes on the new one
+    this.stopAudio()
+    this.muted = this.replying = false
+    this.heard = this.said = ''
     while (!this.closed) {
       try {
         const c = await this.renew(this.handle)
@@ -115,6 +131,7 @@ export class GeminiVoice implements Voice {
         if (this.handle) this.handle = ''
         else if (++this.failures >= 3) {
           this.ev.error(`Gemini: ${reason || (e as Error)?.message || 'the call ended'}`)
+          this.ev.ended?.()
           break
         }
         await new Promise((r) => setTimeout(r, 1000 * this.failures))

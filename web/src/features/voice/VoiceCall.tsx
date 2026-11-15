@@ -109,6 +109,7 @@ export function VoiceCall({ sid, callKey, stream, running, queueCount, onSend, o
   const [caption, setCaption] = React.useState<{ who: 'you' | 'voice'; text: string } | null>(null)
   const voice = React.useRef<Voice | null>(null)
   const callId = React.useRef<string | null>(null)
+  const attempt = React.useRef(0) // the call being started: a hang up during its start ends that one
   const live = React.useRef({ sid, running, queueCount, onSend, onStop })
   live.current = { sid, running, queueCount, onSend, onStop }
   const key = callKey || sid
@@ -121,6 +122,7 @@ export function VoiceCall({ sid, callKey, stream, running, queueCount, onSend, o
   const progressCount = React.useRef(0)
 
   const hangUp = React.useCallback(() => {
+    attempt.current++
     if (voice.current) chimeOff()
     voice.current?.close()
     voice.current = null
@@ -201,6 +203,7 @@ export function VoiceCall({ sid, callKey, stream, running, queueCount, onSend, o
       return
     }
     unlockChime()
+    const mine = ++attempt.current
     setPhase('connecting')
     seenKey.current = resultKey
     lastSaid.current = Date.now()
@@ -208,6 +211,11 @@ export function VoiceCall({ sid, callKey, stream, running, queueCount, onSend, o
     try {
       const ui = useUI.getState().language
       const c = await startCall(key, ui)
+      if (attempt.current !== mine) {
+        // hung up while it was asked for: the local call already started on the server is ended
+        if (c.mode === 'local') void endCall(c.call)
+        return
+      }
       const events = {
         phase: (p: CallPhase) => {
           if (p !== 'listening') lastSaid.current = Date.now()
@@ -215,6 +223,9 @@ export function VoiceCall({ sid, callKey, stream, running, queueCount, onSend, o
         },
         caption: (who: 'you' | 'voice', text: string) => setCaption({ who, text }),
         error: (m: string) => toast.error(t('vmode.failed'), m),
+        ended: () => {
+          if (attempt.current === mine) hangUp()
+        },
         level: (l: number) => setLevel(l),
       }
       let v: Voice
@@ -233,8 +244,9 @@ export function VoiceCall({ sid, callKey, stream, running, queueCount, onSend, o
       }
       voice.current = v
       await v.start()
-      if (voice.current === v) chimeOn()
+      if (voice.current === v && attempt.current === mine) chimeOn()
     } catch (e) {
+      if (attempt.current !== mine) return // hung up meanwhile: nothing failed
       hangUp()
       toast.error(t('vmode.failed'), errorMessage(e))
     }

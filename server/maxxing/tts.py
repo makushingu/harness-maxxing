@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import select
 import shutil
 import subprocess
 import threading
@@ -245,6 +246,9 @@ def _get_worker() -> subprocess.Popen:
     return _worker
 
 
+SYNTH_TIMEOUT_S = 30                                 # one sentence (the first one also loads its model)
+
+
 def synth(text: str, voice_id: str | None = None, speed: float = 1.0, lang: str | None = None) -> dict:
     """Plain text (one or a few sentences) -> {file: WAV name in out_dir(), seconds, voice}. Raises TTSError."""
     global _worker_used
@@ -261,6 +265,11 @@ def synth(text: str, voice_id: str | None = None, speed: float = 1.0, lang: str 
             try:
                 w.stdin.write(json.dumps(req) + "\n")  # type: ignore[union-attr]
                 w.stdin.flush()                      # type: ignore[union-attr]
+                # A worker that hangs never holds the lock (and every call's voice) for good
+                ready, _, _ = select.select([w.stdout], [], [], SYNTH_TIMEOUT_S)
+                if not ready:
+                    _stop_worker()
+                    raise TTSError(504, "tts_timeout", "The voice took too long to answer")
                 line = w.stdout.readline()           # type: ignore[union-attr]
             except (OSError, ValueError):
                 line = ""

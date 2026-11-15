@@ -21,6 +21,7 @@ export class OpenAIVoice implements Voice {
   private meter = 0
   private relay: Relay
   private renewing = false
+  private meterCtx: AudioContext | null = null
   private lostTimer = 0
 
   constructor(
@@ -35,9 +36,12 @@ export class OpenAIVoice implements Voice {
   }
 
   async start() {
-    this.mic = await openMic()
-    this.levels(this.mic)
+    const mic = await openMic()
+    if (this.closed) return mic.getTracks().forEach((t) => t.stop()) // hung up while the mic was being opened
+    this.mic = mic
+    this.levels(mic)
     await this.connect(this.c)
+    if (this.closed) return this.close()
     this.ev.phase('listening')
   }
 
@@ -53,27 +57,43 @@ export class OpenAIVoice implements Voice {
     const dc = pc.createDataChannel('oai-events')
     this.dc = dc
     dc.onmessage = (m) => this.event(JSON.parse(m.data))
-    const opened = new Promise<void>((resolve) => (dc.onopen = () => resolve()))
+    // Opened, or failed: a connection that never opens (ICE failed, no answer) is an error, never a wait forever.
+    let live = false
+    let fail: (e: Error) => void = () => {}
+    const opened = new Promise<void>((resolve, reject) => {
+      dc.onopen = () => resolve()
+      fail = reject
+    })
+    const openTimer = window.setTimeout(() => fail(new Error('OpenAI: the connection did not open')), 15_000)
     const offer = await pc.createOffer()
     await pc.setLocalDescription(offer)
     const r = await fetch(c.url, {
       method: 'POST',
       body: offer.sdp,
       headers: { Authorization: `Bearer ${c.token}`, 'Content-Type': 'application/sdp' },
+      signal: AbortSignal.timeout(15_000),
     })
     if (!r.ok) throw new Error(`OpenAI: ${(await r.text()).slice(0, 200) || r.status}`)
     await pc.setRemoteDescription({ type: 'answer', sdp: await r.text() })
     pc.onconnectionstatechange = () => {
       if (this.closed || this.pc !== pc) return
       window.clearTimeout(this.lostTimer)
-      if (pc.connectionState === 'failed') void this.reconnect()
+      if (!live) {
+        if (pc.connectionState === 'failed' || pc.connectionState === 'closed') fail(new Error('OpenAI: the connection failed'))
+      } else if (pc.connectionState === 'failed') void this.reconnect()
       // "disconnected" often comes back by itself: replaced only if it lasts
       else if (pc.connectionState === 'disconnected') this.lostTimer = window.setTimeout(() => void this.reconnect(), 4000)
     }
     dc.onclose = () => {
-      if (!this.closed && this.pc === pc) void this.reconnect()
+      if (!live) fail(new Error('OpenAI: the connection closed'))
+      else if (!this.closed && this.pc === pc) void this.reconnect()
     }
-    await opened
+    try {
+      await opened
+    } finally {
+      window.clearTimeout(openTimer)
+    }
+    live = true
   }
 
   private async reconnect() {
@@ -99,6 +119,7 @@ export class OpenAIVoice implements Voice {
         this.pc = null
         if (attempt >= 3) {
           this.ev.error(`OpenAI: ${(e as Error)?.message || 'the call was cut'}`)
+          this.ev.ended?.()
           break
         }
         await new Promise((r) => setTimeout(r, 1000 * attempt))
@@ -112,6 +133,7 @@ export class OpenAIVoice implements Voice {
     try {
       const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
       const ctx = new AC()
+      this.meterCtx = ctx
       const an = ctx.createAnalyser()
       an.fftSize = 512
       ctx.createMediaStreamSource(s).connect(an)
@@ -216,6 +238,8 @@ export class OpenAIVoice implements Voice {
     this.closed = true
     window.clearTimeout(this.lostTimer)
     cancelAnimationFrame(this.meter)
+    void this.meterCtx?.close().catch(() => {})
+    this.meterCtx = null
     this.dc?.close()
     this.pc?.close()
     this.mic?.getTracks().forEach((t) => t.stop())

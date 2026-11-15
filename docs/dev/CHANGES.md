@@ -7,6 +7,13 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Voice mode hardening (Radar check): `tts.synth` waits at most `SYNTH_TIMEOUT_S` (30 s, `select`) for the Piper
+  worker, then stops it (`504 tts_timeout`) instead of holding `tts._lock` and the call; `voicecall.settings()`
+  resets a non-string value of a hand-edited `voice_call`. Browser: a hang up while a call starts closes what it
+  opened (mic, peer connection; `VoiceCall` `attempt` counter, `closed` checks after each await); OpenAI's open
+  waits at most 15 s and fails on ICE failure (no reconnection stuck), its level meter's AudioContext is closed;
+  Gemini's setup waits at most 15 s, a reconnection resets `muted` / captions, the mic buffer is capped while
+  disconnected; a call whose connection cannot be renewed is hung up (`VoiceEvents.ended`).
 - Voice mode on an agent's page: `VoiceCall` gets `callKey` (`agent:<path>`, the call's own key for `/call/start`;
   `sid` = `chat_session`, '' before the first message, followed when a new conversation starts) and `stream` (the
   call follows that session's log). `RunIn.call` -> `agents.fire(call=)` -> `send_message` / `create_session(call=)`
