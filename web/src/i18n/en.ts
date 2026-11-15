@@ -219,6 +219,8 @@ export const en = {
   'sessions.unarchived': 'Session restored',
   'sessions.archivedBanner': 'This session is archived.',
   'sessions.compacting': 'Compacting the context…',
+  'cgauge.tip': 'Automatic compaction at {at} tokens: {left} left. Context now {used} (model window {window}). Settings → Claude.',
+  'cgauge.off': 'Automatic compaction is off (Settings → Claude). Context: {used} / {window} tokens ({pct} %).',
   'sessions.context': 'Context: {used} / {max} tokens ({pct} %)',
   'sessions.result.model': 'Model',
   'sessions.result.duration': 'Duration',

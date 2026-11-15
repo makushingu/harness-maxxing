@@ -29,7 +29,7 @@ import { useCompact, useMediaQuery } from '@/stores/media'
 import {
   Badge, Button, EmptyState, Sensitive, Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle, Skeleton, StatusDot, Switch, Textarea, Tooltip, toast,
 } from '@/components/ui'
-import { ModelPicker } from '@/pages/sessions/Widgets'
+import { CompactGauge, ModelPicker } from '@/pages/sessions/Widgets'
 import { Page, PageHeader } from '@/components/shell/Page'
 import { absTopicDir, filesUrl, fmtCost, modelLabel, relPaths, toolIcon, type PathBases } from '@/pages/sessions/util'
 import { AgentMenuButton } from './AgentMenu'
@@ -1229,8 +1229,9 @@ function Composer({ agent: a, replyTo, onCancelReply, onSend, ref }: { agent: Ag
         )}
       </div>
       {a.enabled && !replyTo && (
-        <div className="mx-auto mt-1 flex max-w-3xl items-center gap-2 px-1" data-testid="agent-chat-bar">
+        <div className="@container mx-auto mt-1 flex max-w-3xl items-center gap-2 px-1" data-testid="agent-chat-bar">
           <ModelPicker chosen={model} defaultModel={setting || undefined} real={chat?.real_model} contextTokens={chat?.context_tokens} onChange={onModel} effort={effort} onEffort={onEffort} />
+          <CompactGauge tokens={chat?.context_tokens} window={chat?.context_window} model={model || chat?.model} realModel={chat?.real_model} />
           {a.chat_session && (
             <Tooltip content={t('agents.chat.newHint')}>
               <Button variant="ghost" size="sm" className="ml-auto h-7 text-xs text-muted-foreground" onClick={() => fresh.mutate({ path: a.path })} loading={fresh.isPending} data-testid="agent-new-chat">

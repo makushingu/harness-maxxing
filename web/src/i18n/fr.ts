@@ -217,6 +217,8 @@ export const fr: Record<keyof typeof en, string> = {
   'sessions.unarchived': 'Session restaurée',
   'sessions.archivedBanner': 'Cette session est archivée.',
   'sessions.compacting': 'Compactage du contexte…',
+  'cgauge.tip': 'Compaction automatique à {at} jetons : encore {left}. Contexte actuel {used} (fenêtre du modèle {window}). Réglages → Claude.',
+  'cgauge.off': 'Compaction automatique désactivée (Réglages → Claude). Contexte : {used} / {window} jetons ({pct} %).',
   'sessions.context': 'Contexte : {used} / {max} jetons ({pct} %)',
   'sessions.result.model': 'Modèle',
   'sessions.result.duration': 'Durée',

@@ -91,7 +91,7 @@ import { QuotePill } from './Quote'
 import { FileMenu } from './FileMenu'
 import { ItemContext } from './Items'
 import { CutContext, type CutActions } from './Cut'
-import { ContextGauge, ModelPicker, StateBadge } from './Widgets'
+import { CompactGauge, ModelPicker, StateBadge } from './Widgets'
 import { useSlashCommands } from './slashCommands'
 import { SessionOptions, type OptionAction } from './SessionOptions'
 import { QUOTE_EVENT } from '@/features/code/api'
@@ -915,6 +915,7 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
               session ? (
                 <>
                   <ModelPicker chosen={session.model} real={session.real_model} contextTokens={session.context_tokens} onChange={actions.model} effort={session.effort || ''} onEffort={actions.effort} />
+                  <CompactGauge tokens={session.context_tokens} window={session.context_window} model={session.model} realModel={session.real_model} />
                   {session.plan_mode && <PlanChip session={session} />}
                 </>
               ) : (
@@ -1005,7 +1006,6 @@ function ColumnHeader({
                     </span>
                   </Tooltip>
                 )}
-                <ContextGauge ring tokens={session.context_tokens} window={session.context_window} model={session.model} realModel={session.real_model} />
               </span>
             </>
           ) : (
@@ -1025,7 +1025,6 @@ function ColumnHeader({
           {slim && session && (
             <span className="mr-1 flex items-center gap-1.5">
               <SessionMarks session={session} className="size-3.5" />
-              <ContextGauge ring tokens={session.context_tokens} window={session.context_window} model={session.model} realModel={session.real_model} />
             </span>
           )}
           {menu}
@@ -1057,7 +1056,6 @@ function ColumnHeader({
                   </span>
                 </Tooltip>
               )}
-              <ContextGauge tokens={session.context_tokens} window={session.context_window} model={session.model} realModel={session.real_model} />
             </span>
           </>
         ) : (
