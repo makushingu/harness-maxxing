@@ -7,6 +7,8 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Wording only: `sessions.queue.inject` "Add to task", `sessions.msg.injected` "added to the running task" +
+  `sessions.msg.injectedTip` (Items.tsx tooltip); no API change.
 - Voice mode (`voicecall.py`, `tts.py`, `tts_worker.py`, `api/voice.py` `/call*` `/tts*` `/said`, web
   `features/voice/{VoiceCall,VoiceCallSettings}.tsx` + `features/voice/call/*`, i18n group `vmode`). Config key
   `voice_call` (see API.md#voice-mode). Design after two tries: (1) a small model that answered and rewrote requests

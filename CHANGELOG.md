@@ -17,6 +17,10 @@ New:
   Settings -> Voice you can switch to a realtime voice from OpenAI or Gemini on your own key, which Harness finds in
   the Keys vault; a long cloud call goes on by itself when the provider renews its connection.
 
+Improved:
+- **Clearer words for a message added to a running task**: the button is now **Add to task** and the message is
+  marked *added to the running task*, with a tip saying what it means (it was "added to the plan").
+
 ## 2.0.0-alpha.155 - 2026-11-15
 
 Fixed:
