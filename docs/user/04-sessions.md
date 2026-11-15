@@ -237,7 +237,7 @@ into another app, the content arrives as plain text (a file as its path).
   keeps playing when you scroll away, switch session or open another page; come back to the message to pause it.
   **GIFs** move in the thread (up to 8 MB; a bigger one shows a still, marked GIF).
   Thumbnails follow the files: when Claude rewrites a picture under the same name, the new version shows as soon as
-  the tool has run (also in the viewer and the HUD).
+  the tool has run (also in the viewer).
 - **Right click** a picture, a video, an attachment or a file path (long press on Android): **Open**, **Download**,
   **Quote** (adds the file to your next message as one line with its path - Claude reads it only if needed, the
   picture does not fill the context) and **Copy path**.
@@ -273,9 +273,8 @@ commands that modify anything in this mode.
   - **Validate**: posts *Plan validated - go ahead.*, plan mode goes off and Claude carries out the latest
     version of the plan.
   - **×**: leave plan mode without running the plan.
-- The HUD shows the plan as the answer and has a **Validate the plan** button.
 - Plan mode applies to every message of the session, Telegram included; validate the plan from the web
-  app or the HUD. Compact and hand off still work normally.
+  app. Compact and hand off still work normally.
 
 ## Maxxing mode
 
@@ -301,29 +300,6 @@ the switch, the bar and the shortcut below only appear then (turning it off ther
 - The **liquid bar** next to it (always gently moving, green to orange) is a game: over the last 10 minutes, 70 %
   the time your sessions worked rather than waited for you, 30 % how fast you answered (30 s target). Faster than that and it overflows, up to 110 %. Hover
   it for the details; it stays in this browser and starts again on reload.
-
-## HUD mode
-
-A small floating bar to drive one session while you work in other apps. Turn it on in
-**Settings → Features → HUD mode**, then pick **Open the HUD** in a session's **…** window.
-
-- While Claude works, it shows your prompt and Claude's **last three steps** (tools, thinking).
-  When it is done, it shows **the answer** with its images - one at a time, ‹ › to go through them;
-  a click opens the file in the app. The arrow next to the send button folds it into a slim bar
-  (steps only) and back.
-- **Enter** sends; during a turn the message waits in the queue: **Add to plan** hands it to the running task, **Steer** interrupts and sends it right away.
-  The square button stops the turn.
-- **Share my screen** (the screen icon): pick a screen or a window once; from then on a capture is
-  attached to every message you send from the HUD, so Claude sees what you see. When it helps, Claude
-  answers with a copy of the capture annotated (arrows, boxes) to show you where to look. The capture
-  usually goes straight to Claude with your message, so it sees your screen from its very first step.
-  Captures are saved with the session's attachments (`<topic>/attachments/`). Click the icon again, or
-  use the browser's *Stop sharing*, to stop.
-- At the top: **Back to the app** brings the main window forward, **×** closes the HUD; hover the answer
-  to copy it.
-- In **Chrome and Edge** the bar stays on top of every app and can be moved anywhere, a second
-  screen included, and it closes with the app tab. Other browsers open it in a small window of its own.
-- The HUD only talks to Claude: it does not control your computer. It is not available on a phone.
 
 ## Models
 
@@ -410,7 +386,7 @@ browser's own menu (and the **Quote** button), a file keeps its own menu (Open, 
 
 The **…** of a session (or a right-click on its header, a long press on a phone) opens its window: the
 *Plan mode* and *Notify me on Telegram* switches (they apply at once), then **Compact context**,
-**Summarise & restart**, **Open topic folder in Files**, the HUD, then on a computer the column actions (**Detach**, **Stack**,
+**Summarise & restart**, **Open topic folder in Files**, then on a computer the column actions (**Detach**, **Stack**,
 **Layout**), and **Archive** / **Delete** at the bottom.
 
 - **Notify me on Telegram** (in the session's **…** window; a small bell next to the topic while it is on): when a turn that did not come from Telegram ends, a short message rings on Telegram - in the

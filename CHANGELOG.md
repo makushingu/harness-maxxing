@@ -3,6 +3,21 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## Unreleased
+
+New:
+- **Devices: Claude uses your own computers and phones.** Install the small Harness Link app on a Windows, Mac or
+  Linux computer (one command to paste) or an Android phone (a QR code), accept it, and Claude can look at its
+  screen, click, type and open apps, for what only exists there. Per device: **View only** (Claude looks and guides
+  you) or **Control**, and which projects and agents may use it. Watch it live, take over at any time and hand it
+  back with a word; Claude asks you for passwords, codes and captchas. Off by default: Settings -> Features ->
+  Devices. [Show me](#show:devices)
+
+Changed:
+- **The HUD is gone.** The floating bar that showed one session over your other apps and shared your screen is
+  replaced by Devices: add your computer in **View only** and Claude sees your screen and guides you, without ever
+  clicking.
+
 ## 2.0.0-alpha.155 - 2026-11-15
 
 Fixed:

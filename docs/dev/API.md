@@ -105,6 +105,7 @@ Session = {
   permission_mode: string,            // set by its cron ("" = the topic's, else the global mode)
   plan_ready: bool,                   // a plan-mode turn finished OK: its plan waits for POST /plan/approve
   approvals: int,                     // tool calls waiting for the user's Allow / Deny (agent with `approvals`)
+  device_asks: int,                   // ask_human requests on the person's devices waiting for them (Devices)
   code_repos: [str]                   // git repositories its turns changed (Changes view, terminal tabs), at most 8
 }
 ```
@@ -112,9 +113,9 @@ Session = {
 | POST | `/api/sessions` | `{path, message?, title?, model?, effort?, attachments?:[filepath], plan_mode?:bool, voice?:filepath, client_id?}` (`client_id`: as for `/messages`, for the first message) | `Session` (starts the first turn if message or voice) |
 | GET | `/api/sessions/{id}` | – | `Session` |
 | PATCH | `/api/sessions/{id}` | `{title?, model?, effort?, archived?, notify?, plan_mode?, favorite?, path?}` | `Session` (`plan_mode:false` also clears `plan_ready`; `favorite` is carried over by a hand-off; `path` moves the session to another topic and its Claude transcript with it - `400 bad_path`, `409 busy` while a turn runs or messages wait; `model`: an id of letters, digits and `._:@/[]-`, 100 characters at most, not starting with `-`, else `400 bad_model`, also on create; `effort`: `low|medium|high|xhigh|max` or `""` (Claude Code's default) -> `claude --effort`, else `400 bad_effort`, kept by a hand-off) |
-| POST | `/api/sessions/{id}/plan/approve` | `{text?}` (shown in the thread as the user's message) | `{queued:bool, session:Session}` — plan mode off, then a turn that tells Claude to implement its latest plan (queue item flag `plan_approved`, kept by steer like `hud`) |
+| POST | `/api/sessions/{id}/plan/approve` | `{text?}` (shown in the thread as the user's message) | `{queued:bool, session:Session}` — plan mode off, then a turn that tells Claude to implement its latest plan (queue item flag `plan_approved`, kept by steer) |
 | DELETE | `/api/sessions/{id}` | – | `{ok}` (stops a running turn, moves the session to the trash) |
-| POST | `/api/sessions/{id}/messages` | `{text, attachments?:[filepath], hud?:bool, voice?:filepath, client_id?, mentions?:[{kind: session|agent|team, ref}]}` (`mentions`: the @ of the composer, refs from `/mentions` below; the server resolves them (unknown ones and the session itself dropped, at most 8) and adds to the prompt, not to the displayed message, the command that writes to each (`maxxing sessions send` / `agents send` / `team send`); its `user` event keeps `mentions: [{kind, ref, label, group?, avatar?}]` (never the command), drawn as chips; `client_id`: the sender's own id for the message, `[A-Za-z0-9_-]{1,64}`, kept in `client_ids` of its queue item (`queue_items`) and of its `user` event, so a page reloaded mid-send can tell whether it arrived; `hud`: sent from the HUD - the prompt gets a short preface: answer short, annotate the screen capture if useful; `voice`: a voice message sent directly - uploaded first with `/api/uploads`, queued at once, transcribed by the server, then its transcript is the prompt) | `{queued:bool, session:Session}` · `409 voice_off` (transcription not ready) |
+| POST | `/api/sessions/{id}/messages` | `{text, attachments?:[filepath], voice?:filepath, client_id?, mentions?:[{kind: session|agent|team, ref}]}` (`mentions`: the @ of the composer, refs from `/mentions` below; the server resolves them (unknown ones and the session itself dropped, at most 8) and adds to the prompt, not to the displayed message, the command that writes to each (`maxxing sessions send` / `agents send` / `team send`); its `user` event keeps `mentions: [{kind, ref, label, group?, avatar?}]` (never the command), drawn as chips; `client_id`: the sender's own id for the message, `[A-Za-z0-9_-]{1,64}`, kept in `client_ids` of its queue item (`queue_items`) and of its `user` event, so a page reloaded mid-send can tell whether it arrived; `voice`: a voice message sent directly - uploaded first with `/api/uploads`, queued at once, transcribed by the server, then its transcript is the prompt) | `{queued:bool, session:Session}` · `409 voice_off` (transcription not ready) |
 | GET | `/api/sessions/{id}/mentions` | - | `{items:[{kind: session|agent|team, ref, label, hint, state?, avatar?, group?}]}`: who the composer's @ can name - the other sessions (running first, then the most recent 60, not archived, no agent chats), the agents (Agents page on), the Team contacts and groups (Team page on) |
 | DELETE | `/api/sessions/{id}/queue` | – | clears queued messages |
 | POST | `/api/sessions/{id}/ask` | `{question}` | `{answer, cost_usd, duration_ms}` — side question: Claude answers from a throwaway copy of the session's thread (read-only, nothing saved: the running turn, queue and log are untouched). 409 `no_thread` (never answered yet) / `busy` (one already running for this session), 429 (2 running), 504 (240 s) |
@@ -294,7 +295,7 @@ health problems itself every 60 s (not `cron_failed` nor
 | DELETE | `/api/backup` | – | forget repo + token (`409 busy` while a backup or restore runs) |
 
 ## Settings & secrets
-| GET / PUT | `/api/settings` | `{timezone, language:"en"\|"fr", public_url, files_root, presentation_default?, usage_widget:bool, git_page:bool, infra_page:bool, mail_page:bool, maxxing_mode:bool, memory_max_lines:int, cpu_priorities:bool, result_line_hidden:["model"\|"duration"\|"cost"\|"tokens"\|"cache"], donation_hidden:bool}` (`donation_hidden`: hides the donation links of What's new, Feedback and Settings -> License for every browser, default false; the Support card of Settings -> About stays) (`result_line_hidden`: parts of the line under each answer that are hidden, default `[]`, unknown values = 422, stored in canonical order) (`git_page`: the Git page `/git` and its sidebar entry, default false) (`maxxing_mode`: beta, Maxxing mode of the Sessions page - its switch, meter, driver and Alt+M -, default false) (`memory_max_lines`: 0 = no limit, else 50-5000, default 200) (`cpu_priorities`: CPU weights of the server / turns / jobs slices, default true; a change rewrites the slices at once, `cmd_core.ensure_cpu_slices`) — a new `timezone` also switches the server zone (`timedatectl`, cron restarted); PUT ignores the fields equal to the stored config (neither checked nor applied: the web app sends the whole object) |
+| GET / PUT | `/api/settings` | `{timezone, language:"en"\|"fr", public_url, files_root, presentation_default?, usage_widget:bool, git_page:bool, infra_page:bool, mail_page:bool, devices_feature:bool, maxxing_mode:bool, memory_max_lines:int, cpu_priorities:bool, result_line_hidden:["model"\|"duration"\|"cost"\|"tokens"\|"cache"], donation_hidden:bool}` (`donation_hidden`: hides the donation links of What's new, Feedback and Settings -> License for every browser, default false; the Support card of Settings -> About stays) (`result_line_hidden`: parts of the line under each answer that are hidden, default `[]`, unknown values = 422, stored in canonical order) (`git_page`: the Git page `/git` and its sidebar entry, default false) (`maxxing_mode`: beta, Maxxing mode of the Sessions page - its switch, meter, driver and Alt+M -, default false) (`memory_max_lines`: 0 = no limit, else 50-5000, default 200) (`cpu_priorities`: CPU weights of the server / turns / jobs slices, default true; a change rewrites the slices at once, `cmd_core.ensure_cpu_slices`) — a new `timezone` also switches the server zone (`timedatectl`, cron restarted); PUT ignores the fields equal to the stored config (neither checked nor applied: the web app sends the whole object) |
 | PUT | `/api/settings/look` | `{theme:"dark"\|"light"\|"system", accent:"blue"\|"clay"\|"violet"\|"green"\|"amber"\|"rose", tint?:"neutral"\|"tinted"}` | `{ok, look}` · sent by the web app 600 ms after a change of theme / accent / tint (config `look`) · `422` bad value |
 | GET / PUT | `/api/settings/profile` | `{name ≤32, color: "clay"\|"blue"\|"violet"\|"green"\|"amber"\|"rose"\|"teal"\|"zinc", emoji}` | `Profile` `{name, color, emoji, photo, photo_url}` (bus `profile`; PUT keeps the photo; `photo` = 16 hex of the photo's SHA-256, `""` = none) · `400 invalid_color\|invalid_emoji\|invalid_name` (a lone surrogate in `name` or `emoji` is refused) |
 | GET / PUT / DELETE | `/api/settings/profile/photo` | PUT: the image bytes (JPEG, PNG or WebP by their first bytes, ≤ 512 KB; the UI sends a 256 px square) | GET the photo (`?v=` = version, cached for good); PUT / DELETE `Profile` · `400` `too_large` / `not_an_image` / `empty` (`maxxing/profile_photo.py`; Team contacts get the new version) |
@@ -332,36 +333,58 @@ McpServer = {id:"<scope>|<folder>|<name>", name, scope:"user"|"local"|"project",
 | POST | `/api/mcp/login/{login}` | `{redirect}` (the localhost callback URL) | `{ok, message}` · `400 bad_redirect\|login_failed`, `404 login_expired` (also cancelled meanwhile), `409 busy` (already being finished), `504 timeout` |
 | DELETE | `/api/mcp/login/{login}` | – | `{ok}` |
 
-## Browser of my PC
-`maxxing/pcbridge.py` + `api/pc.py`. One paired PC runs the Harness PC agent (`pc-agent/`, contract
-`pc-agent/PROTOCOL.md`); Claude reaches its browser through the user-scope MCP `harness-pc`.
+## Devices
+`maxxing/devices/` + `api/devices.py`, feature `devices_feature` (Settings -> Features, off by default). The person's
+computers and phones run Harness Link (`link/`, `android/`; contract `link/PROTOCOL.md`, v2) and connect OUT to this
+server; Claude uses them through the per-turn MCP `harness-devices` (`devices_mcp.py`, stdio, given by the runner to a
+turn that sees at least one device).
 ```
-PcStatus = {available, device:{id,name,os,arch,browser,browsers,version,created,last_seen}|null, online,
-  browser_running, mcp_running, last_use|null, mcp_registered, pairing:{expires_at,browser,os}|null,
-  candidate, settings:{idle_min}, browsers:[…], targets:[…], actions:[{at,tool,ok,ms,args:{url?,…}}]}   (newest first, 20)
-available = a Harness PC can be downloaded (MAXXING_PC_BIN_DIR, or files listed in pc_agent.json); the UI hides the
-  card while it is false and no PC is paired
-candidate = {id,name,os,arch,version,created,ip}|null in PcStatus: a PC that paired with a code and waits for the user
-PcPairing = {code, expires_at, expires_in, server, downloads:{<target>:url}, commands:{windows,darwin,linux}}
-target = windows-amd64|windows-arm64|darwin-arm64|darwin-amd64|linux-amd64|linux-arm64
+Device = {id:"dev_<8 hex>", name, os:"linux"|"darwin"|"windows"|"android", os_name, kind:"desktop"|"android", arch,
+  version, created, last_seen, confirmed:bool, mode:"view"|"control", scope:["*"] | ["project:<name>", "agent:<path>"],
+  caps:[…], screen:{w,h,scale}|null, note, ip,
+  online, paused, human (the person has it), claude (Claude acted in the last 15 s), used_by:{session,owner,at}|null,
+  watched, hello:{v,os,arch,caps,screen,note}|null}
+DevicesStatus = {feature, available:[<target>…] (what can be downloaded now), latest (link.json version), devices:[Device],
+  invites:[{os, expires_at}] (codes not used yet), asks:[DeviceAsk], actions:[{at,device,tool,args,ok,ms,session,owner,error?}]}
+DeviceInvite = {code (8 characters, once, 15 min), os, expires_at, expires_in, server, commands:{sh, ps1}, link
+  (<server>/link/<code>, the phone's page = the QR code), deeplink (harnesslink://pair?s=<server>&c=<code>),
+  downloads:{<target>: url}}
+DeviceAsk = {id, session, owner:"session:<path>"|"agent:<path>", device, device_name, message, at, expires, status, note}
+target = linux-amd64|linux-arm64|darwin-amd64|darwin-arm64|windows-amd64|windows-arm64|android
 ```
+Who sees a device: its `scope` (a session of project `acme`: `*` or `project:acme`), and an agent turn only the ids of
+its agent.json `devices` (a free agent also the devices whose scope names it: `agent:<path>`). `mode: view`: Claude
+gets `devices`, `screenshot`, `zoom`, `ui_tree`, `ask_human`, `wait` only. Downloads: `MAXXING_LINK_BIN_DIR` (a local
+build), else the release of `maxxing/link.json` (`{version, url, files:{<name>: sha256}}`, cached in
+`<state>/devices/bin/`, checked). A desktop binary is sent with the trailer `<json {server, code}><uint32 BE
+len>HMLINK01`; the APK as it is. The public code routes count wrong codes per client: 20 in 10 min -> `429 throttled`.
+They answer `404 off` while the feature is off.
+
 | Method | Path | Body | Response |
 |---|---|---|---|
-| GET | `/api/pc` | – | `PcStatus` |
-| POST | `/api/pc/pairing` | `{browser, os, autostart?}` | `PcPairing` (code valid 15 min, replaces the previous one) · `422 invalid`, `409 no_agent` (nothing to download) |
-| POST | `/api/pc/confirm` | `{id, ok?:true}` | `{ok}` - yes: the candidate becomes the PC (replaces the previous one, MCP registered); no: its agent gets `unpair` · `ok:false` when it is not the candidate or expired (15 min) |
-| PUT | `/api/pc/settings` | `{idle_min}` (1–240) | `{idle_min}` |
-| POST | `/api/pc/stop` | – | `{ok}` - closes the browser and the tools |
-| POST | `/api/pc/wipe` | – | `{ok}` · `409 offline`, `502 pc_error` |
-| POST | `/api/pc/test` | – | `{ok, text}` (`list_pages` through the MCP path) |
-| POST | `/api/pc/mcp/register` | – | `{ok}` · `409 not_paired` |
-| DELETE | `/api/pc` | – | `{ok}` - unpairs (the agent removes its autostart and exits), MCP removed |
-| POST | `/api/pc/pair` | `{code, name, os, arch, version, browsers}` | `{device_id, token}` - the PC is a `candidate` until `/confirm` · public, `403 bad_code\|expired` |
-| GET | `/api/pc/download/{target}?code=` | – | the agent binary + config trailer, streamed from the cached agent (`Content-Length` set) · public, `403`, `404` |
-| GET | `/api/pc/install.ps1\|sh?code=&target=` | – | install script (downloads, starts) · public |
-| WS | `/api/pc/ws` | `Authorization: Bearer <device token>` | agent control + DevTools frames (PROTOCOL.md) · close `4401` |
-| WS | `/api/pc/cdp` | `X-PC-Secret` | loopback only: DevTools relay for chrome-devtools-mcp · close `4403` |
-| POST | `/api/pc/mcp` | JSON-RPC, `Authorization: Bearer <mcp secret>` | loopback only: MCP (streamable HTTP, JSON) `initialize`, `ping`, `tools/list`, `tools/call` · `403` - a `url` of the PC itself or its local network (localhost, private / link-local IPs in any IPv4 form, bare names, `.local`, `.lan`…) is refused like `file:` |
+| GET | `/api/devices` | – | `DevicesStatus` |
+| POST | `/api/devices/invites` | `{os?}` | `DeviceInvite` · `409 off` (feature off), `429 too_many` (10 codes waiting) |
+| POST | `/api/devices/{id}/confirm` | `{ok}` | `{ok}` - yes: the device may be used; no: it is dropped and its app gets `unpair` · `ok:false` when it does not wait |
+| PUT | `/api/devices/{id}` | `{name?, mode?: view\|control, scope?}` | `Device` · `400 bad_scope`, `404`, `422` |
+| DELETE | `/api/devices/{id}` | – | `{ok}` - its token is revoked at once, its app gets `unpair` (forgets this server, stops), its requests are skipped |
+| GET | `/api/devices/session/{sid}` | – | `{using:[{id,name,os,online,human,at}], asks:[DeviceAsk]}` - the session's line ("Claude is using …") |
+| GET | `/api/devices/asks?session=` | – | `{asks:[DeviceAsk]}` (pending) |
+| POST | `/api/devices/asks/{id}` | `{action: done\|skip, note?}` | `DeviceAsk` (decided; the person's control is released) · `404`, `409 decided` |
+| POST | `/api/devices/live-token` | – | `{token}` (30 s, one use) for `WS /api/devices/{id}/live?t=` |
+| WS | `/api/devices/{id}/live?t=` | the signed-in cookie + a live token | binary JPEG pictures (~3/s, only while someone watches) + `{"t":"state", device: Device, me, asks}`; in: `{"t":"input", a, x, y, x2?, y2?, sw, sh, button?, double?, dx?, dy?, text?, keys?, ms?}` (pixels of the picture shown, `sw`/`sh` its size: the person takes over), `{"t":"take"}`, `{"t":"release", done?: true\|"skip", note?}` (answers the device's pending requests) · close `4403`, `4404` |
+| GET | `/api/devices/install/<code>.sh\|ps1` | – | install script: downloads the app with its trailer, starts it (sh: `~/.local/bin/harness-link`, quarantine removed on macOS; ps1: `%LOCALAPPDATA%\HarnessLink\HarnessLink.exe`) · public, `400 bad_code`, `410 expired`, `429` |
+| GET | `/api/devices/download/{target}?code=` | – | the app (desktop: + pairing trailer; `Content-Length` set; android: the APK) · public, `400`, `404 not_available`, `410`, `429` |
+| POST | `/api/devices/pair` | `{code, name, os, arch, version, caps}` | `{device_id, token}` - the code is used up, the device waits for `/confirm` · public, `400 bad_code`, `410 expired`, `409 too_many`, `422`, `429` |
+| WS | `/api/devices/ws` | `Authorization: Bearer <device token>` | Harness Link protocol v2 (PROTOCOL.md); a device not accepted yet is held, then gets `unpair` if refused or after 15 min · unknown / revoked token: refused before the handshake (HTTP 403) |
+| POST | `/api/devices/mcp/{sid}` | JSON-RPC, `Authorization: Bearer <the turn's token>` | loopback only: `tools/list`, `tools/call` of the turn (`<state>/devices/turns/<sid>.json`) · `403` |
+
+`GET /link/<code>` (public, not under /api): the phone's pairing page - Download the app (APK), Open in Harness Link
+(the deep link), the server and the code to type by hand; `410` when the code expired or was used, no script.
+
+Server -> device frames (v2) and what the server adds: `shot {id, max_w, quality}` (+ `crop:{x,y,w,h}`, `sw`, `sh` for
+`zoom`: a region in the space of the last picture; an app that ignores it sends the whole screen), `input {id, a, x, y,
+x2, y2, sw, sh, button, double, dx, dy, text, keys, ms}`, `tree {id, sw, sh}`, `tap_node {id, node}`, `set_text {id,
+node, text}`, `apps {id}`, `open {id, app}`, `state {busy, by: "claude"|"human"|null}`, `unpair`.
 
 ## Voice (speech-to-text)
 Claude cannot listen: audio is transcribed on the server (web mic button + Telegram voice notes).

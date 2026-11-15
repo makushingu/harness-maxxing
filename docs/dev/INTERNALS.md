@@ -669,27 +669,38 @@ optional auth scheme word) or a `PLAIN_HEADERS` header; URL userinfo and query v
 `.claude.json` / `.mcp.json` goes through `_dict()` (hand-edited files). `.claude.json` rewrites use a unique
 0600 temp file + `os.replace`.
 
-## maxxing.pcbridge  (owner: organisation) - Browser of my PC
-State `<state>/pc/devices.json` (0600): `device` (token kept as sha256), `pairing` (code hash, 15 min, single use),
-`settings.idle_min`, `mcp_secret`, `cdp_secret`; `actions.jsonl` (last 500), `tools.json` (tool list cache), `bin/`
-(agent binaries), `tools/chrome-devtools-mcp-<v>/` (npm `--ignore-scripts`, installed on first use).
-Path of a tool call: Claude Code -> `POST /api/pc/mcp` (user-scope MCP `harness-pc`, type http, loopback + Bearer
-secret) -> `tools_call` -> `Hub.get_child()` = `chrome-devtools-mcp` (stdio JSON-RPC, `CDM_ARGS`: performance /
-emulation / memory / network categories off, no usage statistics) started with `--wsEndpoint
-ws://127.0.0.1:<port>/api/pc/cdp` -> `Hub.channel()` opens a channel on the agent's websocket (`open` / `data` /
-`end`) -> the agent's local DevTools socket. `ensure_browser()` sends `launch` first (40 s). Nothing runs until the
-first call; `_idle_watch` (30 s) closes the browser (`close`) and stops the child after `idle_min` without a call;
-an agent disconnect ends every channel and the child. `BLOCKED_TOOLS` (upload_file, screencast, lighthouse) and
-unknown names are refused; the offline answer is a normal tool result (`isError`). One retry when the child dies
-mid-call. Agent binaries: `MAXXING_PC_BIN_DIR`, else `bin/`, else the release in `pc_agent.json` (sha256 checked);
-`personalised()` appends `<json><uint32 BE len>HMPCCFG1` (server, pairing code, browser, autostart).
-`pc_tools.json` = the tool list shipped for `tools/list` before the first start.
-Security boundaries: `pair()` stores a `candidate` (15 min); `WS /api/pc/ws` holds a candidate's socket
-(`_wait_confirmation`, nothing relayed) until `confirm()`, else sends `unpair`. `tools/list` drops `filePath` /
-`sourcePath` (files of this server), `tools_call` drops them too and refuses a `url` that is not http(s) /
-about:blank / data. The authoritative check is in the agent (`pc-agent/cdpfilter.go`): every DevTools command is
-filtered (downloads, file inputs, drag of files, permissions, PWA / Extensions, non-page URLs). `actions.jsonl` keeps
-URLs without query / fragment / userinfo. A channel with more than 64 MB waiting for the local socket is ended.
+## maxxing.devices  (owner: organisation) - Devices
+The person's computers and phones running Harness Link (API.md "Devices", user doc 34, protocol `link/PROTOCOL.md`
+v2). Off unless `devices_feature`. Modules:
+- `store`: `<state>/devices/devices.json` (0600, `_lock` around every read-modify-write): `devices` (token kept as
+  sha256, `confirmed`, `mode`, `scope`), `invites` (code hash, 15 min, `used` after one pairing; kept a day so an old
+  code answers `expired`). A device not confirmed within `CANDIDATE_TTL` (15 min) is dropped by the next read.
+  `actions.jsonl` (500 lines, typed text replaced by its length).
+- `dist`: `available()`, `app_file(target)` (`MAXXING_LINK_BIN_DIR`, else the cache `bin/<version>-<name>`, else the
+  release of `maxxing/link.json`, sha256 checked), `personalised()` (desktop: trailer `<json {server, code}><uint32 BE
+  len>HMLINK01`; APK: none), `install_script(sh|ps1)`, `link_page()` (the phone's HTML page, no script, own CSP).
+- `hub`: one `Conn` per online device (`serve()` = the websocket loop; a second connection of the same device replaces
+  the first). `request()` sends `{t, id}` and waits for `ok` / `err` (`DeviceError(code)`; `Offline`; timeouts per
+  kind). `human` = who holds a device in the live view (Claude's input refused meanwhile); `claude_acted()` marks
+  Claude's use (`used_by`: the session line) and sends `state {busy, by}` when it changes; `_tick` (3 s) clears
+  "Claude is using it" after `CLAUDE_BUSY_S` and unpairs a connected device removed from elsewhere (the CLI).
+  `watch()` / `unwatch()`: the live pictures (`_pictures`, ~3/s, only while someone watches).
+- `tools`: `TOOLS` (MCP specs) and `call(turn, sid, name, args, alive)`: the device is looked up among
+  `devices.visible(turn.path)` on every call (access changes apply at once); `view` mode allows `VIEW_TOOLS` only;
+  coordinates are in the space of the last picture Claude got (`hub.shots`, else the screen scaled to 1280 wide) and
+  sent with `sw`/`sh`; an action answers with a new picture after `SETTLE_S`.
+- `asks`: `ask_human` held in memory: the tool call (`POST /api/devices/mcp/<sid>`) waits on a future until the person
+  hands back (`decide_device` from the live view, `decide` from a card or the feed button `devask:<id>`), `ASK_WAIT_S`
+  (600 s) or the turn is gone (`alive()`: the HTTP client still there and `turns.turn_alive`). Feed event + a line in
+  an agent's thread.
+- `turns`: `<state>/devices/turns/<sid>.json` {owner, path, token} + `.mcp.json` (`mcp_args`, called by
+  `runner.devices_args`; removed by `runner.devices_done`, stale ones by `clear_turns` at startup).
+Visibility (`devices.visible(path)`): confirmed, `in_scope` (`*`, `project:<name>`, `agent:<path>`) and, for an agent
+folder, `agent_allows` (in its agent.json `devices`; a free agent also when the scope names it). `devices` is in
+`agents.SECURITY_FIELDS`: the manager asks to add one, removing one applies at once. `agent_guard.check_cli` refuses
+`maxxing devices add|confirm|remove|rename|access|mode|enable|disable` in an agent turn.
+Security boundaries: the app runs nothing but the protocol's commands (no shell, no files, no URL). A pairing code
+alone gives nothing (the user accepts the device); wrong codes are throttled per client (`api/devices._fails`).
 
 ## maxxing.browser  (owner: organisation) - Harness Browser
 Chromium on this server for the user, their sessions and their agents (API.md "Harness Browser", user doc 33). Off
@@ -961,7 +972,7 @@ To set them on the service: `systemctl edit claude-maxxing` -> `[Service]` `Envi
 ## Environment overrides (tests / development - never needed in production)
 - `MAXXING_WEB_DIST` serve the UI from another build folder (dev)
 - `MAXXING_STATE` state dir · `MAXXING_CLAUDE_BIN` claude executable (tests: server/tests/fake_claude.py)
-- `MAXXING_PC_BIN_DIR` folder of Harness PC agent binaries (tests, local builds of `pc-agent/`) instead of the release
+- `MAXXING_LINK_BIN_DIR` folder of Harness Link builds (tests, trials: `harness-link-linux-amd64`, …, `harness-link.apk`) instead of the release
 - `MAXXING_SPAWN=direct` run turns as detached subprocesses instead of systemd-run units
 - `MAXXING_CRONTAB_FILE` write the managed crontab block into this file instead of `crontab -`
 - `MAXXING_SYSTEM_TZ=0` never switch the system time zone when the time zone setting changes (also skipped when `MAXXING_CRONTAB_FILE` is set)

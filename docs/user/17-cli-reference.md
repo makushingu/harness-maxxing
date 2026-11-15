@@ -282,6 +282,21 @@ OAuth sign-ins (state "To connect") are done in Settings -> MCP -> **Connect**. 
 
 See [Harness Browser](33-browser.md).
 
+## Devices
+
+| Command | Purpose |
+|---|---|
+| `maxxing devices enable` / `disable` | switch the feature on or off (as Settings -> Features) |
+| `maxxing devices list [--json]` | the devices (online or not, mode, who may use them), the codes not used yet, the devices waiting for your OK |
+| `maxxing devices add [--os windows\|darwin\|linux\|android]` | a one-time code to connect a device (15 minutes), with the command to paste on it or the link for a phone |
+| `maxxing devices confirm ID [--refuse]` | accept a device waiting for your OK, or refuse it (it is disconnected and forgets this server) |
+| `maxxing devices remove ID` | remove a device: Claude can no longer use it, Harness Link there forgets this server |
+| `maxxing devices rename ID NAME` | rename a device |
+| `maxxing devices mode ID view\|control` | View only (Claude looks) or Control (Claude clicks and types) |
+| `maxxing devices access ID [--all] [--project NAME]... [--agent PATH]...` | who may use it: every project and agent, some projects, some agents (`projects/<p>/topics/<t>/agents/<a>`); none of them = nobody |
+
+`ID` = the device's id (`dev_…`) or its name. An agent also needs the device in its own settings. See [Devices](34-devices.md).
+
 ## Memory and sessions
 
 | Command | Purpose |

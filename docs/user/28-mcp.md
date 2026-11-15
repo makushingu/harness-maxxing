@@ -80,46 +80,13 @@ such as an ads account adds a few thousand) and time at the start of each turn (
 When Claude needs a server it was not given, it runs `maxxing mcp load <name>` (it knows which ones exist) and stops;
 Harness continues by itself with the server loaded (at most twice in a row), and the topic keeps it from then on.
 When a message needs a **claude.ai connector** (Google Drive, Gmail...), that message loads every server, as before
-(Claude Code loads connectors only all together). The **Browser of my PC** is always loaded.
+(Claude Code loads connectors only all together). The tools of the [Harness Browser](browser) and of your
+[Devices](devices) are always loaded when a turn may use them.
 
 A message sent while Claude still has commands or agents running in the background goes to that same Claude, with
 the servers it started with: what the topic used meanwhile is loaded once that work is over. Only a server you name
 in the message, or one Claude asked for, starts Claude again at once (its background work stops, and the
 conversation says so).
-
-## Browser of my PC
-
-**Settings -> MCP -> Browser of my PC** lets Claude use a browser on **your own computer** (Windows, Mac or Linux):
-open a site you are signed in to, fill a form, read a page, take a screenshot... It uses a **separate profile** of
-your browser (Brave, Chrome, Edge, Vivaldi, Opera or Chromium): your usual tabs, passwords and history are never
-touched. Sign in to the sites Claude needs once, in the window it opens. (The card appears once Harness PC can be
-downloaded from your server.)
-
-1. Choose your computer and your browser (Harness guesses them from the browser you are using), then **Get Harness PC**.
-2. Download **Harness PC** (already linked to this server, valid 15 minutes) and open it - or paste the command shown
-   in PowerShell / a terminal. On Windows, SmartScreen may say "Windows protected your PC": **More info** -> **Run
-   anyway** (Harness PC is not signed by a publisher yet). It needs no administrator rights.
-3. The card then asks **"`<your PC>` wants to connect"**, with the address it connected from: click **Yes, it is my PC**. Until then nothing reaches that
-   computer - if you do not recognise the name (someone else used your download link), click **Refuse**: it is
-   disconnected and forgets your server. Every session can then use the browser tools (`harness-pc`).
-
-**Only while Claude uses it.** Harness PC waits in the background (no window, almost no CPU or memory) and opens the
-browser window at Claude's first browser action; after **10 minutes** without one (Settings: 5 to 60 min) the
-browser and its tools stop. **Stop now** closes it at once. When the PC is off, asleep or Harness PC is not running,
-Claude is told "the PC is offline" and carries on.
-
-**Start with the computer** (on by default) adds Harness PC to your session's startup (Windows: Run key, Mac: login
-item, Linux: autostart file), without administrator rights. **Disconnect** stops it and removes it from startup on
-the PC; **Erase the profile** deletes the cookies and sign-ins of Claude's profile; **Reinstall / other PC** pairs
-again (one PC at a time). The last actions (tool, page) are listed on the card.
-
-Security: Harness PC only connects out to your Harness (nothing listens on your network); the browser's control port
-stays on `127.0.0.1` of the PC and web pages cannot reach it. Harness PC itself checks every command it relays, so
-even a hijacked server could not use it to reach your files: only web pages (http, https) can be opened - no
-`file:`, `chrome:` or settings pages, and Claude cannot open addresses of your PC or your home network (localhost,
-192.168.x.x, your router, a NAS) -, downloads cannot be sent to another folder, no file of the PC can be given
-to a page, and no permission or app can be installed. Claude cannot upload files from the PC or record its screen.
-The list of recent actions keeps addresses without their query part (sign-in codes are not kept).
 
 ## Backup and new server
 

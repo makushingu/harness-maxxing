@@ -20,7 +20,7 @@ _Coming soon: dashboard, sessions (desktop and mobile), files, tasks, crons, onb
 
 - **Sessions** - project -> topic -> any number of persistent sessions. Columns side by side, live
   streaming, tool calls as cards, diffs, attachments (drag & drop, paste), message queue (steer, edit,
-  side questions that do not interrupt), plan mode, HUD mode, stop, model per session (showing the model
+  side questions that do not interrupt), plan mode, stop, model per session (showing the model
   that really answered), cost and context gauge, compact and hand-off, archive, move to another topic,
   full-text search, command palette, keyboard shortcuts. Sessions list in three layouts with favorites,
   recent sessions and an emoji per project.
@@ -54,6 +54,9 @@ _Coming soon: dashboard, sessions (desktop and mobile), files, tasks, crons, onb
   live (take over, hand back); profiles with their own sign-ins and sites, exits by a phone (Tailscale), a rented
   proxy or WireGuard instead of the server's data-center address; Claude asks you for captchas and sign-ins
   (`maxxing browser`).
+- **Devices** (optional) - Claude uses your own computers (Windows, Mac, Linux) and Android phones through the
+  Harness Link app: screen, clicks, typing, apps; View only or Control per device, chosen projects and agents, watched
+  live (take over, hand back); Claude asks you for passwords and codes (`maxxing devices`).
 - **Tasks** (optional) - kanban and list on a plain `tasks.json` that Claude can edit too.
 - **Crons** - shell commands or Harness prompts on a schedule, run history, Telegram reports.
 - **Telegram** - built-in gateway: one thread per open session, the same sessions as the web UI, photos

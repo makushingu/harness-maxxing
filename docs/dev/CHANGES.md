@@ -5,6 +5,38 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## Unreleased
+
+- **Devices** (`maxxing/devices/`, contract in `docs/dev/API.md` "Devices", `INTERNALS.md` "maxxing.devices"): the
+  person's computers and phones run Harness Link (`link/` Go, `android/`), connect out to `WS /api/devices/ws`
+  (Bearer device token, protocol v2: `hello`/`paused`/`ok`/`err` up; `shot`, `input`, `tree`, `tap_node`,
+  `set_text`, `apps`, `open`, `state`, `unpair` down; `shot` also carries `crop` + `sw`/`sh`, `tree` `sw`/`sh`).
+  Pairing: `POST /api/devices/invites` -> 8-char code (15 min, single use, hashed) -> `POST /api/devices/pair`
+  (public, 20 wrong codes / 10 min per client then 429) -> candidate until `POST /{id}/confirm` (dropped after
+  15 min). Desktop downloads carry a trailer `<json {server, code}><u32 BE len>HMLINK01`; `GET /install/<code>.sh|.ps1`,
+  `GET /download/<target>?code=`, `GET /link/<code>` (phone page, route added to Caddy's UI routes). Binaries come
+  from `server/maxxing/link.json` (GitHub release `link-v<version>`, sha256 checked, cached) or
+  `MAXXING_LINK_BIN_DIR`. State `<state>/devices/devices.json` (sha256 of tokens), `actions.jsonl` (typed text kept
+  as its length only).
+- Turns: `runner.devices_args()` adds the stdio MCP `harness-devices` (`maxxing/devices_mcp.py`, stdlib) only when the
+  turn sees a device (`devices.visible()`: device `scope` `["*"]` / `project:<p>` / `agent:<path>`, and for an agent
+  its `agent.json` `devices` list; a free agent also sees `agent:<its path>`). It relays to the loopback-only
+  `POST /api/devices/mcp/<sid>` with a per-turn token (`<state>/devices/turns/`, cleared at startup). One
+  `--allowedTools` per turn: merged into the browser's. View mode exposes only `devices`, `screenshot`, `zoom`,
+  `ui_tree`, `ask_human`, `wait`. Coordinates = pixels of the last `shot` of that device.
+- `ask_human` waits in memory (asyncio future, 10 min, turn liveness checked every 2 s), feed ref `devask:<id>`
+  (`feed.HANDLERS`), `Session.device_asks`, agent waiting count. Human input over `WS /api/devices/<id>/live`
+  (one-time `POST /live-token`; JPEG frames ~3 fps only while watched, JSON `state`) takes the device; Claude's
+  input is refused meanwhile, `release` answers the ask (`done` / `skip`) with the person's note.
+- `agent.json` `devices` is a security field (adding waits for the owner's OK, removing applies at once);
+  `agent_guard` keeps it owner-only. Settings `devices_feature` (off, restorable), doctor `check_devices`,
+  CLI `maxxing devices`, bus topic `devices`, settings section `/settings/devices`, showcase `devices`.
+- Removed: "Browser of my PC" (`pcbridge.py`, `api/pc.py`, `pc_tools.json`, `pc_agent.json`, `/api/pc/*`,
+  `mcp.has_user_server`, `spawn.ensure_mcp_soon`, web `features/pc`, `lib/queries/pc.ts`); `config.local_port()` /
+  `local_host()` and `security.loopback()` moved out of it. The HUD: `MessageIn.hud`, `runner.HUD_PREFACE`, inline
+  screen captures (`stdin_payload`, `inline_image`), web `Hud.tsx`, route `/hud`, `ui.hud`; Caddy route `hud` -> `link`.
+  The `display-capture=()` Permissions-Policy stays.
+
 ## 2.0.0-alpha.155 - 2026-11-15
 
 - Web: `lib/updateReload.ts` (`isChunkError`, `reloadForUpdate()`: reload at most once a minute, guard

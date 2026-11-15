@@ -43,7 +43,7 @@ missing and never re-create a project or topic you deleted.
 
 - **Sessions**: several conversations side by side, live streaming, attachments, message queue
   (steer, add to the plan, edit, or ask a side question without interrupting), plan mode (validate before any change),
-  HUD mode, model choice per session, stop, compact, hand off, archive, full-text search, move a
+  model choice per session, stop, compact, hand off, archive, full-text search, move a
   session to another topic.
 - **Code**: when Claude changes a git repository, a button under its answer opens the diff; undo a file, revert to
   before a message, commit (Claude proposes the message), push and open a pull request, and a terminal under the
@@ -67,6 +67,9 @@ missing and never re-create a project or topic you deleted.
   pages, clicks and fills forms, you watch it live and take over for a captcha or a sign-in. Profiles keep sign-ins
   apart, and an exit can send a profile's pages out by your phone or a proxy instead of the server's address. See
   [Harness Browser](browser).
+- **Devices** (Settings -> Features): Claude uses your own computers and phones with the Harness Link app - it sees
+  the screen, clicks, types and opens apps; you choose View only or Control per device, watch it live and take over.
+  See [Devices](devices).
 - **Tasks** (optional, **Settings -> Features**): a kanban board stored in `tasks.json`, which Claude can read and update.
 - **Crons** (in **Settings**): scheduled shell commands or Harness prompts, with history and Telegram reports.
 - **Telegram**: talk to the same sessions from your phone, one thread per open session.
