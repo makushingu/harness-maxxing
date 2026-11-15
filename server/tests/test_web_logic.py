@@ -86,3 +86,68 @@ def test_save_a_copy_never_picks_the_name_of_a_hidden_file():
     page = (WEB / "pages" / "files" / "index.tsx").read_text(encoding="utf-8")
     assert "const taken = new Set((folder ?? siblings).map((s) => s.name))" in view
     assert re.search(r"<FileView [^>]*folder=\{list\?\.entries\}", page)
+
+
+NAV_PICTURE = WEB / "features" / "browser" / "useNavPicture.ts"
+
+
+def _nav_picture(tmp_path: Path, script: str):
+    """Run useNavPicture with a stubbed React (one effect at a time), fetch and blob URLs; `script` returns the value."""
+    src = NAV_PICTURE.read_text(encoding="utf-8")
+    src = src.replace("import * as React from 'react'", "const React = (globalThis as any).R")
+    src = src.replace("import { seg } from '@/lib/api'", "const seg = encodeURIComponent")
+    (tmp_path / "hook.ts").write_text(src, encoding="utf-8")
+    stubs = """
+let cleanup
+const sets = [], created = [], revoked = []
+let n = 0
+globalThis.R = { useState: (v) => [v, (x) => sets.push(x)], useEffect: (f) => { cleanup = f() } }
+globalThis.document = { visibilityState: 'visible' }
+URL.createObjectURL = () => { const u = 'blob:' + ++n; created.push(u); return u }
+URL.revokeObjectURL = (u) => revoked.push(u)
+const wait = () => new Promise((r) => setTimeout(r, 10))
+const { useNavPicture } = await import('./hook.ts')
+"""
+    return _run_main(tmp_path, stubs + script)
+
+
+def _run_main(tmp_path: Path, body: str):
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node not installed")
+    (tmp_path / "main.mjs").write_text(f"{body}\nconsole.log(JSON.stringify(out))\nprocess.exit(0)\n", encoding="utf-8")
+    r = subprocess.run([node, "--experimental-strip-types", "--no-warnings", "main.mjs"], cwd=tmp_path,
+                       capture_output=True, text=True, timeout=60)
+    if r.returncode and ("strip-types" in r.stderr or "Unknown file extension" in r.stderr):
+        pytest.skip("this node cannot strip types")
+    assert r.returncode == 0, r.stderr
+    return json.loads(r.stdout)
+
+
+def test_a_nav_picture_closed_while_it_downloads_leaves_no_blob_url(tmp_path):
+    out = _nav_picture(tmp_path, """
+let release
+globalThis.fetch = async () => ({ status: 200, blob: () => new Promise((r) => (release = () => r(new Blob(['x'])))) })
+useNavPicture('p1', 'me', true)
+await wait()
+cleanup()            // the panel is closed while the picture is still downloading
+release()
+await wait()
+const out = { leaked: created.filter((u) => !revoked.includes(u)), shown: sets.filter(Boolean) }
+""")
+    assert out == {"leaked": [], "shown": []}
+
+
+def test_a_nav_picture_never_shows_the_revoked_picture_of_the_previous_profile(tmp_path):
+    out = _nav_picture(tmp_path, """
+globalThis.fetch = async (u) => u.includes('/p1/') ? { status: 200, blob: async () => new Blob(['x']) } : { status: 503 }
+useNavPicture('p1', 'me', true)
+await wait()
+cleanup()
+useNavPicture('p2', 'me', true)      // p2 is still starting: no picture yet
+await wait()
+cleanup()
+const last = sets[sets.length - 1]
+const out = { last, revoked: revoked.includes(last) }
+""")
+    assert out == {"last": None, "revoked": False}
