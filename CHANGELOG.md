@@ -14,7 +14,7 @@ New:
   after your sentence gets one answer for the whole. The pause before your sentence ends is yours to set. One language per call, yours.
   By default the voice runs on your server (free, private, several French and English voices and their speed); in
   Settings -> Voice you can switch to a realtime voice from OpenAI or Gemini on your own key, which Harness finds in
-  the Keys vault.
+  the Keys vault; a long cloud call goes on by itself when the provider renews its connection.
 
 ## 2.0.0-alpha.155 - 2026-11-15
 

@@ -166,6 +166,7 @@ class CallSettingsIn(BaseModel):
 class CallStartIn(BaseModel):
     session: str
     language: str | None = Field(default=None, max_length=12)   # the interface language of the browser
+    resume: str | None = Field(default=None, max_length=4000)  # cloud: a new token for the same call (reconnection)
 
 
 @router.get("/tts")
@@ -218,7 +219,7 @@ async def call_start(body: CallStartIn):
     try:
         mode = (await asyncio.to_thread(voicecall.settings))["mode"]
         if mode == "cloud":
-            out = await asyncio.to_thread(voicecall.cloud_token)
+            out = await asyncio.to_thread(voicecall.cloud_token, body.resume)
             return {"mode": "cloud", **out}
         return await asyncio.to_thread(voicecall.start_local, body.session, body.language)
     except VoiceError as e:

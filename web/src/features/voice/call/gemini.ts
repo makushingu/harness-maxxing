@@ -1,6 +1,9 @@
 // Gemini Live voice: a WebSocket straight to Google with the short-lived token from this server (the instructions,
 // the tools and the voice are locked in it). In: 16 kHz PCM; out: 24 kHz PCM played as it comes; the model hears
 // the user over itself (barge-in). It converses and hands the user's own words over with ask_session (Relay).
+// Google ends a connection after about 10 minutes (goAway): a new one is opened with a new token and the handle of
+// the last state (session resumption), so the conversation goes on. A tap mutes the reply under way to its end (Live
+// has no "cancel": what it still sends of that reply is dropped).
 import type { CallStart } from './api'
 import { Relay } from './cloud'
 import { startCapture, toBase64, type Capture } from './capture'
@@ -23,12 +26,18 @@ export class GeminiVoice implements Voice {
   private pending: string[] = []
   private idleTimer = 0
   private relay: Relay
+  private handle = '' // Gemini's handle of the last state, to resume after a reconnection
+  private renewing = false
+  private failures = 0
+  private muted = false // tapped: the rest of the current reply is not played
+  private replying = false // a reply of the model is coming (between its first part and turnComplete)
 
   constructor(
     private c: Cloud,
     private brain: Brain,
     private ev: VoiceEvents,
     language: string,
+    private renew: (resume?: string) => Promise<Cloud>,
   ) {
     this.relay = new Relay(brain, language)
   }
@@ -37,26 +46,7 @@ export class GeminiVoice implements Voice {
     const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
     this.out = new AC({ sampleRate: 24000 })
     await this.out.resume().catch(() => {})
-    await new Promise<void>((resolve, reject) => {
-      const ws = new WebSocket(`${this.c.url}?access_token=${encodeURIComponent(this.c.token)}`)
-      this.ws = ws
-      ws.onopen = () => ws.send(JSON.stringify({ setup: { model: `models/${this.c.model}` } }))
-      ws.onerror = () => reject(new Error('Gemini: connection failed'))
-      ws.onclose = (e) => {
-        if (!this.ready) reject(new Error(`Gemini: ${e.reason || 'connection closed'}`))
-        else if (!this.closed) this.ev.error(`Gemini: ${e.reason || 'the call ended'}`)
-      }
-      ws.onmessage = async (m) => {
-        const text = typeof m.data === 'string' ? m.data : await (m.data as Blob).text()
-        const msg = JSON.parse(text)
-        if (msg.setupComplete && !this.ready) {
-          this.ready = true
-          resolve()
-          return
-        }
-        this.message(msg)
-      }
-    })
+    await this.connect(this.c)
     this.cap = await startCapture((pcm, level) => {
       this.ev.level?.(level)
       this.batch.push(pcm)
@@ -71,24 +61,99 @@ export class GeminiVoice implements Voice {
     this.ev.phase('listening')
   }
 
+  /** One connection to Gemini; resolves once its setup is done. */
+  private connect(c: Cloud): Promise<void> {
+    this.ready = false
+    return new Promise<void>((resolve, reject) => {
+      const ws = new WebSocket(`${c.url}?access_token=${encodeURIComponent(c.token)}`)
+      this.ws = ws
+      ws.onopen = () => ws.send(JSON.stringify({ setup: { model: `models/${c.model}` } }))
+      ws.onerror = () => reject(new Error('Gemini: connection failed'))
+      ws.onclose = (e) => {
+        if (this.ws !== ws) return // an older connection, already replaced
+        if (!this.ready) reject(new Error(`Gemini: ${e.reason || 'connection closed'}`))
+        else if (!this.closed) void this.reconnect(e.reason)
+      }
+      ws.onmessage = async (m) => {
+        if (this.ws !== ws) return
+        const text = typeof m.data === 'string' ? m.data : await (m.data as Blob).text()
+        const msg = JSON.parse(text)
+        if (msg.setupComplete && !this.ready) {
+          this.ready = true
+          resolve()
+          return
+        }
+        this.message(msg)
+      }
+    })
+  }
+
+  /** The connection ended (time limit, network): a new one, the conversation carried over. */
+  private async reconnect(reason?: string) {
+    if (this.renewing || this.closed) return
+    this.renewing = true
+    const old = this.ws
+    this.ws = null
+    try {
+      old?.close()
+    } catch {
+      /* closed */
+    }
+    this.flushCaptions()
+    while (!this.closed) {
+      try {
+        const c = await this.renew(this.handle)
+        if (this.closed) break
+        await this.connect(c)
+        // No handle (cut before Gemini gave one): the new connection is told what was said.
+        const recap = this.handle ? null : this.relay.recap()
+        if (recap) (this.ws as WebSocket | null)?.send(JSON.stringify({ clientContent: { turns: [{ role: 'user', parts: [{ text: recap }] }], turnComplete: false } }))
+        this.failures = 0
+        break
+      } catch (e) {
+        // a handle refused (expired): start again without it, from the recap
+        if (this.handle) this.handle = ''
+        else if (++this.failures >= 3) {
+          this.ev.error(`Gemini: ${reason || (e as Error)?.message || 'the call ended'}`)
+          break
+        }
+        await new Promise((r) => setTimeout(r, 1000 * this.failures))
+      }
+    }
+    this.renewing = false
+  }
+
   private message(msg: {
     serverContent?: { modelTurn?: { parts?: { inlineData?: { data: string } }[] }; interrupted?: boolean; turnComplete?: boolean; inputTranscription?: { text?: string }; outputTranscription?: { text?: string } }
     toolCall?: { functionCalls?: FnCall[] }
     goAway?: unknown
+    sessionResumptionUpdate?: { newHandle?: string; resumable?: boolean }
   }) {
+    const ru = msg.sessionResumptionUpdate
+    if (ru?.resumable && ru.newHandle) this.handle = ru.newHandle
     const sc = msg.serverContent
-    if (sc) {
+    if (sc && this.muted) {
+      // the reply the user cut by a tap: dropped to its end
+      if (sc.inputTranscription?.text) this.heard += sc.inputTranscription.text
+      if (sc.turnComplete || sc.interrupted) {
+        this.muted = false
+        this.said = ''
+        this.flushCaptions()
+      }
+    } else if (sc) {
       if (sc.inputTranscription?.text) {
         this.heard += sc.inputTranscription.text
         this.ev.phase('hearing')
       }
       if (sc.outputTranscription?.text) this.said += sc.outputTranscription.text
+      if (sc.modelTurn?.parts?.length) this.replying = true
       for (const p of sc.modelTurn?.parts || []) if (p.inlineData?.data) this.play(p.inlineData.data)
       if (sc.interrupted) this.stopAudio()
+      if (sc.turnComplete || sc.interrupted) this.replying = false
       if (sc.turnComplete || sc.interrupted) this.flushCaptions()
     }
     if (msg.toolCall?.functionCalls?.length) void this.tools(msg.toolCall.functionCalls)
-    if (msg.goAway) this.ev.error('Gemini: the call is about to end (time limit)')
+    if (msg.goAway) void this.reconnect() // the time limit of this connection: the next one carries the call on
   }
 
   private flushCaptions() {
@@ -187,6 +252,8 @@ export class GeminiVoice implements Voice {
 
   interrupt() {
     this.stopAudio()
+    if (this.replying) this.muted = true
+    this.replying = false
     this.ev.phase('listening' as CallPhase)
   }
 

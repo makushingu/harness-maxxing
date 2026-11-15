@@ -205,7 +205,13 @@ export function VoiceCall({ sid, running, queueCount, onSend, onStop }: Props) {
         v = new LocalVoice(c.call, c.language, c.silence_ms, brain, events)
       } else {
         const lang = (ui || navigator.language || 'en').split('-')[0].toLowerCase()
-        v = c.provider === 'gemini' ? new GeminiVoice(c, brain, events, lang) : new OpenAIVoice(c, brain, events, lang)
+        // the provider ends a connection now and then: a new token for the same call
+        const renew = async (resume?: string) => {
+          const n = await startCall(sid, ui, resume ?? '')
+          if (n.mode !== 'cloud') throw new Error('The voice settings changed during the call')
+          return n
+        }
+        v = c.provider === 'gemini' ? new GeminiVoice(c, brain, events, lang, renew) : new OpenAIVoice(c, brain, events, lang, renew)
       }
       voice.current = v
       await v.start()

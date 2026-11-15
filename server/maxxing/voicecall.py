@@ -301,7 +301,7 @@ def _openai_token(s: dict, key: str) -> dict:
     return {"provider": "openai", "token": token, "model": s["openai_model"], "url": f"{OPENAI_API}/realtime/calls"}
 
 
-def _gemini_token(s: dict, key: str) -> dict:
+def _gemini_token(s: dict, key: str, resume: str | None = None) -> dict:
     setup = {
         "model": f"models/{s['gemini_model']}",
         "generationConfig": {"responseModalities": ["AUDIO"], "speechConfig": {
@@ -311,6 +311,9 @@ def _gemini_token(s: dict, key: str) -> dict:
             {**t, "parameters": t["parameters"] if t["parameters"]["properties"] else None} for t in TOOLS]}],
         "inputAudioTranscription": {}, "outputAudioTranscription": {},
         "contextWindowCompression": {"slidingWindow": {}},          # calls longer than 15 minutes
+        # Google ends a connection after about 10 minutes (goAway): the browser opens a new one with the handle of
+        # the last state and the conversation goes on where it was.
+        "sessionResumption": {"handle": resume} if resume else {},
     }
     for f in setup["tools"][0]["functionDeclarations"]:
         if f["parameters"] is None:
@@ -331,7 +334,8 @@ def _gemini_token(s: dict, key: str) -> dict:
                    "GenerativeService.BidiGenerateContentConstrained"}
 
 
-def cloud_token() -> dict:
+def cloud_token(resume: str | None = None) -> dict:
+    """A short-lived token for the browser. `resume`: Gemini's handle of a connection that ended (same call)."""
     st = status()
     if not st["cloud"]["ready"]:
         raise VoiceError(409, "cloud_not_ready", {"choose": "Choose OpenAI or Gemini in Settings -> Voice",
@@ -343,7 +347,7 @@ def cloud_token() -> dict:
     if not key:
         raise VoiceError(409, "cloud_not_ready", "The key is empty")
     s = st["settings"]
-    return _openai_token(s, key) if provider == "openai" else _gemini_token(s, key)
+    return _openai_token(s, key) if provider == "openai" else _gemini_token(s, key, resume)
 
 
 def call_languages(ui: str | None = None) -> tuple[str, ...]:

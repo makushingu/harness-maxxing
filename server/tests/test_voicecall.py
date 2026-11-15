@@ -57,6 +57,9 @@ def test_gemini_token_locks_the_setup(state):
     assert seen["url"].endswith("/v1beta/auth_tokens") and seen["key"] == "g-key"
     setup = seen["body"]["bidiGenerateContentSetup"]
     assert setup["model"] == "models/gemini-3.8-live" and seen["body"]["uses"] == 1
+    assert setup["sessionResumption"] == {}
+    voicecall.cloud_token(resume="h-1")                  # a reconnection of the same call goes on from its handle
+    assert seen["body"]["bidiGenerateContentSetup"]["sessionResumption"] == {"handle": "h-1"}
     names = [f["name"] for f in setup["tools"][0]["functionDeclarations"]]
     assert names == ["ask_session", "session_status", "stop_session", "read_last_answer"]
     assert "g-key" not in json.dumps(out)

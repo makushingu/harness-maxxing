@@ -1,6 +1,8 @@
 // OpenAI Realtime voice: WebRTC straight to OpenAI with the short-lived token from this server (the instructions, the
 // tools and the voice are locked in it). Audio both ways over the peer connection; events and tool calls over the
 // "oai-events" data channel. It converses and hands the user's own words over with ask_session (Relay).
+// A connection that fails (network, the session's time limit) is replaced by a new one with a new token; OpenAI does
+// not carry the conversation over, so the new one is told the last lines of the call (Relay.recap).
 import type { CallStart } from './api'
 import { Relay } from './cloud'
 import { openMic } from '../mic'
@@ -18,45 +20,91 @@ export class OpenAIVoice implements Voice {
   private closed = false
   private meter = 0
   private relay: Relay
+  private renewing = false
+  private lostTimer = 0
 
   constructor(
     private c: Cloud,
     private brain: Brain,
     private ev: VoiceEvents,
     language: string,
+    private renew: (resume?: string) => Promise<Cloud>,
   ) {
     this.audio.autoplay = true
     this.relay = new Relay(brain, language)
   }
 
   async start() {
+    this.mic = await openMic()
+    this.levels(this.mic)
+    await this.connect(this.c)
+    this.ev.phase('listening')
+  }
+
+  /** One peer connection to OpenAI; resolves once its event channel is open. */
+  private async connect(c: Cloud) {
     const pc = new RTCPeerConnection()
     this.pc = pc
     pc.ontrack = (e) => {
       this.audio.srcObject = e.streams[0]
       void this.audio.play().catch(() => {})
     }
-    this.mic = await openMic()
-    this.mic.getTracks().forEach((t) => pc.addTrack(t, this.mic!))
-    this.levels(this.mic)
+    this.mic!.getTracks().forEach((t) => pc.addTrack(t, this.mic!))
     const dc = pc.createDataChannel('oai-events')
     this.dc = dc
     dc.onmessage = (m) => this.event(JSON.parse(m.data))
     const opened = new Promise<void>((resolve) => (dc.onopen = () => resolve()))
     const offer = await pc.createOffer()
     await pc.setLocalDescription(offer)
-    const r = await fetch(this.c.url, {
+    const r = await fetch(c.url, {
       method: 'POST',
       body: offer.sdp,
-      headers: { Authorization: `Bearer ${this.c.token}`, 'Content-Type': 'application/sdp' },
+      headers: { Authorization: `Bearer ${c.token}`, 'Content-Type': 'application/sdp' },
     })
     if (!r.ok) throw new Error(`OpenAI: ${(await r.text()).slice(0, 200) || r.status}`)
     await pc.setRemoteDescription({ type: 'answer', sdp: await r.text() })
     pc.onconnectionstatechange = () => {
-      if (!this.closed && (pc.connectionState === 'failed' || pc.connectionState === 'disconnected')) this.ev.error('OpenAI: the call was cut')
+      if (this.closed || this.pc !== pc) return
+      window.clearTimeout(this.lostTimer)
+      if (pc.connectionState === 'failed') void this.reconnect()
+      // "disconnected" often comes back by itself: replaced only if it lasts
+      else if (pc.connectionState === 'disconnected') this.lostTimer = window.setTimeout(() => void this.reconnect(), 4000)
+    }
+    dc.onclose = () => {
+      if (!this.closed && this.pc === pc) void this.reconnect()
     }
     await opened
-    this.ev.phase('listening')
+  }
+
+  private async reconnect() {
+    if (this.renewing || this.closed) return
+    this.renewing = true
+    window.clearTimeout(this.lostTimer)
+    const old = this.pc
+    this.pc = null
+    this.dc = null
+    old?.close()
+    this.speaking = false
+    for (let attempt = 1; !this.closed; attempt++) {
+      try {
+        const c = await this.renew()
+        if (this.closed) break
+        await this.connect(c)
+        const recap = this.relay.recap()
+        if (recap) this.send({ type: 'conversation.item.create', item: { type: 'message', role: 'user', content: [{ type: 'input_text', text: recap }] } })
+        this.ev.phase('listening')
+        break
+      } catch (e) {
+        ;(this.pc as RTCPeerConnection | null)?.close()
+        this.pc = null
+        if (attempt >= 3) {
+          this.ev.error(`OpenAI: ${(e as Error)?.message || 'the call was cut'}`)
+          break
+        }
+        await new Promise((r) => setTimeout(r, 1000 * attempt))
+      }
+    }
+    this.renewing = false
   }
 
   /** Level meter of the microphone (the peer connection does not give one). */
@@ -166,6 +214,7 @@ export class OpenAIVoice implements Voice {
 
   close() {
     this.closed = true
+    window.clearTimeout(this.lostTimer)
     cancelAnimationFrame(this.meter)
     this.dc?.close()
     this.pc?.close()

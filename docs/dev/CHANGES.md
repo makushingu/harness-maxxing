@@ -33,7 +33,12 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   free, the end of a stopped turn is not told (`muteNext`). Progress (`VoiceCall.tsx`): every 3 s, when the session
   works, the call did nothing for 15 s (then 25 s) and the log moved: `/turn` `outcome=progress` (`note` = last
   assistant text, `tool`). Cloud (`call/cloud.ts` `Relay`): the provider's transcription is kept (pending) and sorted
-  by `/call/sort` (stop, noise); `ask_session()` (no argument) sends the pending words. Piper (piper-tts, GPL) lives
+  by `/call/sort` (stop, noise); `ask_session()` (no argument) sends the pending words.
+  Reconnection: `/call/start` `resume` = a new token for the same call; Gemini's setup has `sessionResumption` (the
+  browser keeps the last `sessionResumptionUpdate.newHandle` and reconnects on `goAway` or a close, with the handle,
+  without it after a refusal, then with `Relay.recap()` = the last 16 lines); OpenAI reconnects on a failed peer
+  connection (or 4 s disconnected) or a closed data channel and is given the recap. A tap on a Gemini call mutes the
+  reply under way to its `turnComplete` (Live has no cancel); OpenAI: `response.cancel` + `output_audio_buffer.clear`. Piper (piper-tts, GPL) lives
   in its own venv under `<state>/voice/tts`, run apart; `tts_worker.py` is executed by that venv's Python (`-I`),
   never imported. Cloud tokens only (OpenAI client_secrets, Gemini auth_tokens with the full
   `bidiGenerateContentSetup`, so a client cannot change the instructions or tools); the browser talks to the provider

@@ -97,6 +97,8 @@ Everything handed over appears in the session as your messages, so nothing happe
     on your own key, with the same rules. Harness finds the keys in the Keys vault (`OPENAI_API_KEY`,
     `GEMINI_API_KEY`, or any key whose name contains OPENAI / GEMINI) and asks which one to use when there are
     several. Your key never leaves the server: each call gets a short-lived token. The audio goes to that provider.
+    A long call goes on by itself when the provider renews its connection (Gemini every 10 minutes or so), and
+    tapping the call cuts the voice for good.
 
 ## From the terminal
 ```

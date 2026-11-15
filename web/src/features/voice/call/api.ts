@@ -63,7 +63,9 @@ export function useSaveCallKey() {
   })
 }
 
-export const startCall = (session: string, language?: string) => api.post<CallStart>('/api/voice/call/start', { session, language })
+/** `resume`: a cloud call reconnecting (Gemini's handle of its last state, '' for OpenAI): a new token, same call. */
+export const startCall = (session: string, language?: string, resume?: string) =>
+  api.post<CallStart>('/api/voice/call/start', { session, language, resume: resume || undefined })
 export const endCall = (call: string) => api.post(`/api/voice/call/${call}/end`, {}).catch(() => {})
 
 export type TurnLine = {
