@@ -191,3 +191,24 @@ def test_the_links_of_the_browser_settings_are_big_enough_to_tap():
     assert add and back and more and len(ts) == 2
     for cls in (add[1], back[1], more[1], *ts):
         assert "pointer-coarse:min-h-10" in cls.split()
+
+
+def test_a_confirmation_with_a_long_name_stays_on_the_screen():
+    src = (WEB / "components" / "ui" / "alert-dialog.tsx").read_text()
+    content = re.search(r"'mx-glass fixed z-50 grid ([^']*)'", src)
+    title = re.search(r"<AD\.Title className=\{cn\('([^']*)'", src)
+    assert content and "grid-cols-[minmax(0,1fr)]" in content[1].split()
+    assert title and "[overflow-wrap:anywhere]" in title[1].split()
+
+
+def test_the_audio_player_with_a_long_name_stays_on_the_screen():
+    src = (WEB / "features" / "files" / "MediaPlayer.tsx").read_text()
+    root = re.search(r"cn\('(relative grid w-full max-w-lg [^']*)', className\)\} tabIndex=\{0\}", src)
+    assert root and "grid-cols-[minmax(0,1fr)]" in root[1].split()
+
+
+def test_a_settings_card_with_a_long_title_stays_on_the_screen():
+    src = (WEB / "pages" / "settings" / "sections" / "ui.tsx").read_text()
+    head = re.search(r'<div className="([^"]*)">\s*\{title && <h3 className=\{cn\(\'([^\']*)\'', src)
+    assert head and {"min-w-0", "grid-cols-[minmax(0,1fr)]"} <= set(head[1].split())
+    assert "[overflow-wrap:anywhere]" in head[2].split()

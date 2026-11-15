@@ -8,8 +8,8 @@ export function SettingsCard({ title, description, actions, children, className,
     <Card className={cn('gap-0', danger && 'border-destructive/30', className)}>
       {(title || actions) && (
         <div className="flex flex-wrap items-start justify-between gap-3 px-[var(--pad-card)] pt-[var(--pad-card)]">
-          <div className="grid gap-1">
-            {title && <h3 className={cn('text-[15px] font-semibold tracking-tight', danger && 'text-destructive')}>{title}</h3>}
+          <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-1">
+            {title && <h3 className={cn('text-[15px] font-semibold tracking-tight [overflow-wrap:anywhere]', danger && 'text-destructive')}>{title}</h3>}
             {description && <p className="max-w-2xl text-[13px] text-muted-foreground">{description}</p>}
           </div>
           {actions && <div className="flex max-w-full flex-wrap items-center gap-2">{actions}</div>}

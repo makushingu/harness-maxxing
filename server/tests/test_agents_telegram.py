@@ -240,3 +240,17 @@ async def test_approval_buttons_answer_the_request(api, tg, monkeypatch):
     gateway.notify_approval(request("c" * 16))
     await wait_for(lambda: "c" * 16 in gateway._approval_msgs, what="third message")
     assert tg.sent()[-1]["message_thread_id"] == gateway.tg_config()["threads"]["#alerts"]
+
+
+@pytest.mark.parametrize("body", ["x" * 4094, "😀" * 2046 + "ab"], ids=["ascii", "emoji"])
+def test_a_failed_turn_keeps_its_text_within_the_telegram_limit(monkeypatch, body):
+    """A nearly full first message: the error text is still sent after ⚠️, and no part goes over 4096 UTF-16 units."""
+    sent: list[list[str]] = []
+    monkeypatch.setattr(gateway, "token", lambda: TG_TOKEN)
+    monkeypatch.setattr(gateway, "tg_config", lambda: {"chat_id": 1})
+    monkeypatch.setattr(gateway, "_agent_send_sync", lambda path, parts, silent, thread_msg: sent.append(parts))
+    gateway.notify_agent(A, body, ok=False)
+    parts = sent[0]
+    assert parts[0].startswith("⚠️ ") and parts[0] != "⚠️"
+    assert "".join(parts).replace("⚠️ ", "", 1).replace("\n", "") == body
+    assert all(gateway._u16(p) <= 4096 for p in parts)

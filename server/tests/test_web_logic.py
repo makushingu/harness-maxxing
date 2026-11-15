@@ -78,3 +78,11 @@ def test_a_group_limit_keeps_what_is_typed_until_the_field_is_left():
     assert "value={String(f.limits[k])}" not in src
     field = re.search(r"function LimitInput\(.*?\n}\n", src, re.S)
     assert field and "value={text}" in field[0] and "onBlur={() => setText(String(value))}" in field[0]
+
+
+def test_save_a_copy_never_picks_the_name_of_a_hidden_file():
+    """The copy is written without a mtime check: its name must avoid hidden files too, not only the shown ones."""
+    view = (WEB / "pages" / "files" / "FileView.tsx").read_text(encoding="utf-8")
+    page = (WEB / "pages" / "files" / "index.tsx").read_text(encoding="utf-8")
+    assert "const taken = new Set((folder ?? siblings).map((s) => s.name))" in view
+    assert re.search(r"<FileView [^>]*folder=\{list\?\.entries\}", page)
