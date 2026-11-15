@@ -5,7 +5,7 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
-## Unreleased
+## 2.0.0-alpha.152 - 2026-11-15
 
 - Harness Browser: `rules.json` blocks the `DOMStorage` and `Storage` domains (a turn could read or write any
   site's local storage of the shared profile by origin, without opening it; `IndexedDB` / `CacheStorage` were already

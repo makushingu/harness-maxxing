@@ -3,7 +3,7 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
-## Unreleased
+## 2.0.0-alpha.152 - 2026-11-15
 
 New:
 - **Git: start a session from a repository, a branch or a commit.** Right click a repository in the list of the
