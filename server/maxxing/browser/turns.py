@@ -49,7 +49,7 @@ def read_turn(sid: str) -> dict | None:
     try:
         d = json.loads(turn_file(sid).read_text())
         return d if isinstance(d, dict) and d.get("owner") and d.get("token") else None
-    except (OSError, ValueError):
+    except (OSError, ValueError, RecursionError):       # RecursionError: JSON nested too deep
         return None
 
 

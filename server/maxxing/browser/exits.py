@@ -828,7 +828,7 @@ def _waiters() -> list[dict]:
             d = json.loads(f.read_text())
             items = [w for w in d if isinstance(w, dict) and w.get("session") and w.get("exit")] \
                 if isinstance(d, list) else []
-        except (OSError, ValueError):
+        except (OSError, ValueError, RecursionError):   # RecursionError: JSON nested too deep
             items = []
         _wcache = (mtime, items)
     return [dict(w) for w in _wcache[1]]

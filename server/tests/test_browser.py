@@ -1501,3 +1501,18 @@ def test_profiles_made_at_the_same_time_are_all_kept(mx, monkeypatch):
     for t in ts:
         t.join()
     assert sorted(p["id"] for p in browser.profiles()) == ["main"] + [f"prof{i}" for i in range(8)]
+
+
+def test_a_json_file_nested_too_deep_reads_as_empty(mx):
+    from maxxing import browser, browser_mcp
+    from maxxing.browser import exits, navs, turns
+    deep = "[" * 100000 + "]" * 100000
+    browser.home().mkdir(parents=True, exist_ok=True)
+    sid = "0" * 8 + "-0000-0000-0000-" + "0" * 12
+    for f in (browser.home() / "deep.json", browser.home() / "waiting.json", browser.home() / "navigators.json",
+              turns.turn_file(sid)):
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(deep)
+    assert browser_mcp.read(browser.home() / "deep.json") is None
+    assert exits._waiters() == [] and turns.read_turn(sid) is None
+    assert navs.person()[0]["id"] == navs.ME

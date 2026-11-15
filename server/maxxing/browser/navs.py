@@ -61,7 +61,7 @@ def person() -> list[dict]:
     try:
         d = json.loads(_file().read_text())
         raw = d.get("navigators") if isinstance(d, dict) else None
-    except (OSError, ValueError):
+    except (OSError, ValueError, RecursionError):       # RecursionError: JSON nested too deep
         raw = None
     me = next((n for n in (raw if isinstance(raw, list) else []) if isinstance(n, dict) and n.get("id") == ME), {})
     pid = str(me.get("profile") or browser.MAIN)

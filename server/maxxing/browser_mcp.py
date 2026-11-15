@@ -80,7 +80,7 @@ def read(f: Path) -> dict | None:
     try:
         d = json.loads(f.read_text())
         return d if isinstance(d, dict) else None
-    except (OSError, ValueError):
+    except (OSError, ValueError, RecursionError):       # RecursionError: JSON nested too deep
         return None
 
 
