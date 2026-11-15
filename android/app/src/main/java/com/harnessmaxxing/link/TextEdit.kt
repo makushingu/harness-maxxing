@@ -25,6 +25,18 @@ object TextEdit {
         return Result(text.substring(0, s) + text.substring(e), s)
     }
 
+    fun deleteForward(current: CharSequence?, showingHint: Boolean, selStart: Int, selEnd: Int): Result {
+        val text = if (current == null || showingHint) "" else current.toString()
+        val (s, e0) = range(text, selStart, selEnd)
+        var e = e0
+        if (s == e) {
+            if (e >= text.length) return Result(text, s)
+            e += 1
+            if (e < text.length && Character.isHighSurrogate(text[e - 1]) && Character.isLowSurrogate(text[e])) e += 1
+        }
+        return Result(text.substring(0, s) + text.substring(e), s)
+    }
+
     private fun range(text: String, selStart: Int, selEnd: Int): Pair<Int, Int> {
         if (selStart < 0 || selEnd < 0 || selStart > text.length || selEnd > text.length) {
             return text.length to text.length

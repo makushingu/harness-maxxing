@@ -6,7 +6,6 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
 /** `POST <server>/api/devices/pair` -> `{device_id, token}`, saved in [Config]. Blocking. */
@@ -44,11 +43,8 @@ object Pairing {
                         config.savePairing(server, r.deviceId, r.token)
                         Result.Ok
                     }
-                    resp.code == 410 -> Result.Failed(Reason.EXPIRED)
-                    resp.code == 400 || resp.code == 404 -> {
-                        val err = try { JSONObject(text).optString("detail", "") } catch (_: Exception) { "" }
-                        if (err.contains("expired")) Result.Failed(Reason.EXPIRED) else Result.Failed(Reason.BAD_CODE)
-                    }
+                    resp.code == 410 || Protocol.pairError(text).contains("expired") -> Result.Failed(Reason.EXPIRED)
+                    resp.code in 400..499 -> Result.Failed(Reason.BAD_CODE)
                     else -> Result.Failed(Reason.SERVER, "HTTP ${resp.code}")
                 }
             }

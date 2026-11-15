@@ -99,12 +99,13 @@ class LinkAccessibilityService : AccessibilityService() {
 
     // ---- shot -----------------------------------------------------------------------------
 
-    fun shot(maxW: Int?, quality: Int?): JSONObject {
+    /** `crop` = `{x,y,w,h}` in capture space `sw` x `sh` (zoom), cut from the full-size capture. */
+    fun shot(maxW: Int?, quality: Int?, crop: JSONObject?, sw: Int?, sh: Int?): JSONObject {
         checkUsable()
         var attempt = 0
         while (true) {
             val r = takeOnce()
-            if (r.bitmap != null) return encode(r.bitmap, maxW, quality)
+            if (r.bitmap != null) return encode(r.bitmap, maxW, quality, crop, sw, sh)
             when (r.error) {
                 ERROR_TAKE_SCREENSHOT_INTERVAL_TIME_SHORT -> if (attempt++ < 4) {
                     SystemClock.sleep(350); continue
@@ -112,8 +113,8 @@ class LinkAccessibilityService : AccessibilityService() {
                 ERROR_TAKE_SCREENSHOT_SECURE_WINDOW_COMPAT ->
                     throw CmdError(Protocol.Err.PROTECTED, "This app protects its screen (secure window): no capture")
                 ERROR_TAKE_SCREENSHOT_NO_ACCESSIBILITY_ACCESS ->
-                    throw CmdError(Protocol.Err.NO_ACCESSIBILITY, "Screen capture is not allowed for the accessibility service")
-                -1 -> throw CmdError(Protocol.Err.TIMEOUT, "The system did not return the screenshot")
+                    throw CmdError(Protocol.Err.PERMISSION, "Screen capture is not allowed for the accessibility service")
+                -1 -> throw CmdError(Protocol.Err.FAILED, "The system did not return the screenshot")
             }
             throw CmdError(Protocol.Err.FAILED, "Screenshot failed (code ${r.error})")
         }
@@ -147,18 +148,28 @@ class LinkAccessibilityService : AccessibilityService() {
         return Taken(bmp, error)
     }
 
-    private fun encode(full: Bitmap, maxW: Int?, quality: Int?): JSONObject {
-        val size = Geometry.captureSize(full.width, full.height, maxW)
-        val scaled = if (size.w == full.width) full else Bitmap.createScaledBitmap(full, size.w, size.h, true)
+    private fun encode(full: Bitmap, maxW: Int?, quality: Int?, crop: JSONObject?, sw: Int?, sh: Int?): JSONObject {
+        var part = full
+        if (crop != null) {
+            val box = Geometry.crop(
+                crop.optDouble("x", 0.0), crop.optDouble("y", 0.0), crop.optDouble("w", 0.0), crop.optDouble("h", 0.0),
+                sw ?: 0, sh ?: 0, full.width, full.height,
+            )
+            if (box == null) { full.recycle(); throw CmdError(Protocol.Err.BAD_REQUEST, "crop is outside the screen") }
+            part = Bitmap.createBitmap(full, box[0], box[1], box[2], box[3])
+        }
+        val size = Geometry.captureSize(part.width, part.height, maxW)
+        val scaled = if (size.w == part.width) part else Bitmap.createScaledBitmap(part, size.w, size.h, true)
         val out = ByteArrayOutputStream(256 * 1024)
         scaled.compress(Bitmap.CompressFormat.JPEG, Geometry.quality(quality), out)
         val o = JSONObject()
             .put("jpeg", Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP))
             .put("w", size.w).put("h", size.h)
             .put("sw_screen", full.width).put("sh_screen", full.height)
-        if (scaled !== full) scaled.recycle()
+        if (scaled !== part) scaled.recycle()
+        if (part !== full) part.recycle()
         full.recycle()
-        lastShot = size
+        if (crop == null) lastShot = size
         return o
     }
 
@@ -173,28 +184,38 @@ class LinkAccessibilityService : AccessibilityService() {
         when (a) {
             "click" -> {
                 val x = px("x"); val y = py("y")
-                if (f.str("button") == "right") {
-                    press(x, y, 800)
+                val button = f.str("button") ?: "left"
+                if (button !in setOf("left", "right", "middle")) throw CmdError(Protocol.Err.BAD_REQUEST, "Unknown button: $button")
+                if (button == "right") {
+                    press(x, y, 600) // a long press opens the context menu on Android
                 } else {
                     press(x, y, TAP_MS)
                     if (f.bool("double")) { SystemClock.sleep(90); press(x, y, TAP_MS) }
                 }
             }
-            "long_press" -> press(px("x"), py("y"), (f.int("ms") ?: 800).toLong().coerceIn(400, 10_000))
+            "long_press" -> press(px("x"), py("y"), (f.int("ms") ?: 600).toLong().coerceIn(400, 10_000))
             "drag" -> {
                 val path = Path().apply { moveTo(px("x"), py("y")); lineTo(px("x2"), py("y2")) }
-                val ms = (f.int("ms") ?: 400).toLong().coerceIn(50, 10_000)
+                val ms = (f.int("ms") ?: 300).toLong().coerceIn(50, 10_000)
                 gesture(GestureDescription.StrokeDescription(path, 0, ms))
             }
             "scroll" -> scroll(f, m)
-            "type" -> type(f.str("text") ?: throw CmdError(Protocol.Err.BAD_REQUEST, "missing text"))
+            "type" -> typeText(f.str("text") ?: throw CmdError(Protocol.Err.BAD_REQUEST, "missing text"))
             "key" -> {
-                val keys = f.keys()
-                if (keys.isEmpty()) throw CmdError(Protocol.Err.BAD_REQUEST, "missing keys")
-                keys.forEach { key(it) }
+                val combos = f.keys()
+                if (combos.isEmpty()) throw CmdError(Protocol.Err.BAD_REQUEST, "missing keys")
+                if (combos.size > 32) throw CmdError(Protocol.Err.BAD_REQUEST, "at most 32 keys")
+                val actions = combos.map { it to Keys.map(it) }
+                // Refuse the whole request before pressing anything.
+                actions.forEach { (c, k) ->
+                    if (k is KeyAction.Bad) throw CmdError(Protocol.Err.BAD_REQUEST, "Unknown key: $c")
+                    if (k is KeyAction.Unsupported) throw CmdError(
+                        Protocol.Err.UNSUPPORTED, "Key not available on Android: $c (keys: ${Keys.SUPPORTED})")
+                }
+                actions.forEach { (c, k) -> key(c, k) }
             }
             "move" -> throw CmdError(Protocol.Err.UNSUPPORTED, "A phone has no pointer: use click, long_press or drag")
-            else -> throw CmdError(Protocol.Err.UNSUPPORTED, "Unknown input action: $a")
+            else -> throw CmdError(Protocol.Err.BAD_REQUEST, "Unknown input action: $a")
         }
     }
 
@@ -204,19 +225,35 @@ class LinkAccessibilityService : AccessibilityService() {
     }
 
     /**
-     * `scroll` has mouse-wheel semantics, like on a computer: `dy > 0` shows what is further
-     * down (the finger moves up), `dx > 0` what is further right. Distances in capture space.
-     * The finger holds still for a moment at the end so the list does not fling past the target.
+     * `scroll`: `dx`, `dy` in wheel notches like on a computer: `dy > 0` shows what is further down
+     * (the finger moves up), `dx > 0` what is further right. One notch = a tenth of the screen;
+     * long scrolls are cut into swipes of at most half a screen. The finger holds still a moment
+     * at the end of each swipe so the list does not fling past the target.
      */
     private fun scroll(f: Protocol.Frame, m: Geometry.Mapper) {
         val real = realSize()
+        val nx = Geometry.notches(f.num("dx"))
+        val ny = Geometry.notches(f.num("dy"))
+        if (nx == 0 && ny == 0) throw CmdError(Protocol.Err.BAD_REQUEST, "missing dx/dy")
         val x = f.num("x")?.let { m.x(it) } ?: (real.w / 2f)
         val y = f.num("y")?.let { m.y(it) } ?: (real.h / 2f)
-        val dx = m.dx(f.num("dx") ?: 0.0)
-        val dy = m.dy(f.num("dy") ?: 0.0)
-        if (dx == 0f && dy == 0f) throw CmdError(Protocol.Err.BAD_REQUEST, "missing dx/dy")
-        val ex = (x - dx).coerceIn(1f, real.w - 2f)
-        val ey = (y - dy).coerceIn(1f, real.h - 2f)
+        var restX = nx * real.w / 10f
+        var restY = ny * real.h / 10f
+        val stepX = real.w / 2f
+        val stepY = real.h / 2f
+        var swipes = 0
+        while ((restX != 0f || restY != 0f) && swipes < 20) {
+            val sx = restX.coerceIn(-stepX, stepX)
+            val sy = restY.coerceIn(-stepY, stepY)
+            // Start far enough from the edge for the whole swipe to fit on the screen.
+            val x0 = if (sx > 0) x.coerceIn(sx + 1f, real.w - 2f) else x.coerceIn(1f, real.w - 2f + sx)
+            val y0 = if (sy > 0) y.coerceIn(sy + 1f, real.h - 2f) else y.coerceIn(1f, real.h - 2f + sy)
+            swipe(x0, y0, x0 - sx, y0 - sy)
+            restX -= sx; restY -= sy; swipes++
+        }
+    }
+
+    private fun swipe(x: Float, y: Float, ex: Float, ey: Float) {
         val dist = hypot((ex - x).toDouble(), (ey - y).toDouble())
         val ms = max(250.0, dist * 1.2).roundToInt().toLong().coerceAtMost(3_000)
         val move = Path().apply { moveTo(x, y); lineTo(ex, ey) }
@@ -236,7 +273,7 @@ class LinkAccessibilityService : AccessibilityService() {
         }, null)
         if (!sent) throw CmdError(Protocol.Err.FAILED, "The system refused the gesture")
         if (!latch.await(stroke.duration + 5_000, TimeUnit.MILLISECONDS)) {
-            throw CmdError(Protocol.Err.TIMEOUT, "The gesture did not finish")
+            throw CmdError(Protocol.Err.FAILED, "The gesture did not finish")
         }
         if (!done) throw CmdError(Protocol.Err.FAILED, "The gesture was cancelled (the screen changed or the user touched it)")
     }
@@ -245,16 +282,30 @@ class LinkAccessibilityService : AccessibilityService() {
 
     private fun focusedField(): AccessibilityNodeInfo {
         val n = findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
-        if (n == null || !n.isEditable) throw CmdError(Protocol.Err.NO_FOCUS, "No text field has the focus: tap one first")
+        if (n == null || !n.isEditable) throw CmdError(Protocol.Err.FAILED, "No text field has the focus: tap one first")
         return n
     }
 
     /**
-     * `type`: inserts the text at the cursor of the focused field (replacing the selection),
-     * at the end when the field gives no cursor. Password fields are filled whole (their
-     * current text cannot be read).
+     * `type`: inserts the text at the cursor of the focused field (replacing the selection), at
+     * the end when the field gives no cursor. `\n` = Enter: a new line in a multi-line field, else
+     * the keyboard action (send, search...). Password fields are filled whole (their text cannot
+     * be read). ACTION_SET_TEXT does not depend on the keyboard layout.
      */
-    fun type(text: String) {
+    fun typeText(text: String) {
+        checkUsable()
+        if (text.toByteArray().size > 20_000) throw CmdError(Protocol.Err.BAD_REQUEST, "text is over 20000 bytes")
+        val lines = text.split('\n')
+        lines.forEachIndexed { i, line ->
+            if (line.isNotEmpty()) insert(line)
+            if (i < lines.size - 1) {
+                val n = focusedField()
+                if (n.isMultiLine) insert("\n") else key("enter", KeyAction.Enter)
+            }
+        }
+    }
+
+    private fun insert(text: String) {
         val n = focusedField()
         val r = if (n.isPassword) TextEdit.Result(text, text.length)
         else TextEdit.insert(n.text, n.isShowingHintText, n.textSelectionStart, n.textSelectionEnd, text)
@@ -275,28 +326,50 @@ class LinkAccessibilityService : AccessibilityService() {
         n.performAction(AccessibilityNodeInfo.ACTION_SET_SELECTION, sel)
     }
 
-    fun key(name: String) {
-        when (val k = Keys.map(name)) {
+    private fun key(name: String, k: KeyAction) {
+        if (k !is KeyAction.Global) checkUsable() // never type into the lock screen
+        when (k) {
             is KeyAction.Global -> if (!performGlobalAction(k.action)) {
                 throw CmdError(Protocol.Err.FAILED, "The system refused the key $name")
             }
             KeyAction.Enter -> {
-                checkUsable()
                 val n = focusedField()
                 if (!n.performAction(AccessibilityAction.ACTION_IME_ENTER.id)) {
                     throw CmdError(Protocol.Err.FAILED, "The field has no enter action")
                 }
             }
-            KeyAction.Backspace -> {
-                checkUsable()
+            KeyAction.Backspace, KeyAction.Delete -> {
                 val n = focusedField()
-                val r = if (n.isPassword) TextEdit.Result("", 0)
-                else TextEdit.backspace(n.text, n.isShowingHintText, n.textSelectionStart, n.textSelectionEnd)
+                val r = when {
+                    n.isPassword -> TextEdit.Result("", 0)
+                    k == KeyAction.Backspace ->
+                        TextEdit.backspace(n.text, n.isShowingHintText, n.textSelectionStart, n.textSelectionEnd)
+                    else -> TextEdit.deleteForward(n.text, n.isShowingHintText, n.textSelectionStart, n.textSelectionEnd)
+                }
                 setTextOn(n, r)
             }
-            is KeyAction.Unsupported -> throw CmdError(
-                Protocol.Err.UNSUPPORTED, "Key not available on Android: ${k.name} (keys: ${Keys.SUPPORTED})"
-            )
+            KeyAction.SelectAll -> {
+                val n = focusedField()
+                val len = if (n.isShowingHintText) 0 else n.text?.length ?: 0
+                val sel = Bundle().apply {
+                    putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT, 0)
+                    putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_END_INT, len)
+                }
+                if (!n.performAction(AccessibilityNodeInfo.ACTION_SET_SELECTION, sel)) {
+                    throw CmdError(Protocol.Err.FAILED, "The field refused the selection")
+                }
+            }
+            KeyAction.Copy, KeyAction.Cut, KeyAction.Paste -> {
+                val n = focusedField()
+                val action = when (k) {
+                    KeyAction.Copy -> AccessibilityNodeInfo.ACTION_COPY
+                    KeyAction.Cut -> AccessibilityNodeInfo.ACTION_CUT
+                    else -> AccessibilityNodeInfo.ACTION_PASTE
+                }
+                if (!n.performAction(action)) throw CmdError(Protocol.Err.FAILED, "The field refused $name")
+            }
+            is KeyAction.Text -> insert(k.text)
+            is KeyAction.Unsupported, is KeyAction.Bad -> throw CmdError(Protocol.Err.BAD_REQUEST, "Unknown key: $name")
         }
     }
 
@@ -357,8 +430,8 @@ class LinkAccessibilityService : AccessibilityService() {
 
     private fun node(id: Int?): AccessibilityNodeInfo {
         val n = lastNodes[id ?: throw CmdError(Protocol.Err.BAD_REQUEST, "missing node")]
-            ?: throw CmdError(Protocol.Err.STALE, "Unknown node $id: ask for a new tree")
-        if (!n.refresh() || !n.isVisibleToUser) throw CmdError(Protocol.Err.STALE, "Node $id is gone: ask for a new tree")
+            ?: throw CmdError(Protocol.Err.BAD_REQUEST, "Unknown node $id: ask for a new tree")
+        if (!n.refresh() || !n.isVisibleToUser) throw CmdError(Protocol.Err.BAD_REQUEST, "Node $id is gone: ask for a new tree")
         return n
     }
 
@@ -421,19 +494,17 @@ object Apps {
         return found.map { App(it.activityInfo.packageName, it.loadLabel(pm).toString()) }
             .distinctBy { it.id }
             .sortedBy { it.name.lowercase() }
+            .take(1000)
     }
 
-    /** `app` = a package id from `apps`, or a name ("Settings", "whatsapp"). */
+    /** `app` = exact package id from `apps`, then an id or a name ignoring case ("settings"). */
     fun launchIntent(context: Context, app: String): Intent? {
         val pm = context.packageManager
         val wanted = app.trim()
         if (wanted.isEmpty()) return null
         val pkg = pm.getLaunchIntentForPackage(wanted)?.let { wanted } ?: run {
             val all = list(context)
-            val w = wanted.lowercase()
-            (all.firstOrNull { it.name.lowercase() == w }
-                ?: all.firstOrNull { it.name.lowercase().startsWith(w) }
-                ?: all.firstOrNull { it.name.lowercase().contains(w) })?.id
+            (all.firstOrNull { it.id.equals(wanted, true) } ?: all.firstOrNull { it.name.equals(wanted, true) })?.id
         } ?: return null
         return pm.getLaunchIntentForPackage(pkg)?.addFlags(
             Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED

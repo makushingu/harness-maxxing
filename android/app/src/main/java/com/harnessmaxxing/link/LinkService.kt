@@ -12,6 +12,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
+import android.os.SystemClock
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -24,6 +25,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Foreground service (type specialUse) that keeps the websocket to the Harness server open,
@@ -46,7 +48,17 @@ class LinkService : Service() {
     private var ws: WebSocket? = null
     private var generation = 0
     private var stopped = false
+    private var connectedAt = 0L
+    private var lastHello: String? = null
+    private val waiting = AtomicInteger(0)
     private val reconnect = Runnable { connect() }
+    /** The hello is sent again whenever it changes (rotation, accessibility, name, pause). */
+    private val helloCheck = object : Runnable {
+        override fun run() {
+            sendHelloIfChanged()
+            loop.postDelayed(this, 30_000)
+        }
+    }
 
     private val netCallback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) {
@@ -91,8 +103,8 @@ class LinkService : Service() {
             ACTION_RESUME -> setPaused(false)
             ACTION_FORGET -> { config.forget(); shutdown(null); return }
             ACTION_RECONNECT, ACTION_ACCESSIBILITY_CHANGED -> {
-                // A new hello carries the new name / accessibility note.
-                if (ws != null) { closeSocket(); connectSoon(300) } else { backoff.reset(); connectSoon(0) }
+                if (ws != null && LinkState.conn == LinkState.Conn.CONNECTED) sendHelloIfChanged()
+                else { backoff.reset(); connectSoon(0) }
                 return
             }
         }
@@ -115,32 +127,43 @@ class LinkService : Service() {
         ws = client.newWebSocket(req, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) = loop.post {
                 if (gen != generation) return@post
-                backoff.reset()
+                connectedAt = SystemClock.elapsedRealtime()
                 LinkState.set(LinkState.Conn.CONNECTED)
-                webSocket.send(hello())
+                lastHello = hello()
+                webSocket.send(lastHello!!)
                 if (config.paused) webSocket.send(Protocol.paused(true))
+                loop.removeCallbacks(helloCheck)
+                loop.postDelayed(helloCheck, 30_000)
             }.let {}
 
             override fun onMessage(webSocket: WebSocket, text: String) {
                 if (gen != generation) return
                 val f = Protocol.parse(text) ?: return
-                worker.execute { handle(webSocket, gen, f) }
+                // Run one at a time, in order; at most 16 waiting.
+                if (f.id != null && f.t in COMMANDS && waiting.get() >= MAX_WAITING) {
+                    webSocket.send(Protocol.err(f.id, Protocol.Err.BUSY, "Too many requests waiting"))
+                    return
+                }
+                waiting.incrementAndGet()
+                worker.execute {
+                    try { handle(webSocket, gen, f) } finally { waiting.decrementAndGet() }
+                }
             }
 
             override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
                 webSocket.close(1000, null)
-                loop.post { if (gen == generation) onDown(code == 4401 || code == 4403, "closed $code") }
+                loop.post { if (gen == generation && ws === webSocket) onDown(code == 4401 || code == 4403, "closed $code") }
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-                loop.post { if (gen == generation) onDown(code == 4401 || code == 4403, "closed $code") }
+                loop.post { if (gen == generation && ws === webSocket) onDown(code == 4401 || code == 4403, "closed $code") }
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 val code = response?.code
                 response?.close()
                 loop.post {
-                    if (gen != generation) return@post
+                    if (gen != generation || ws !== webSocket) return@post
                     onDown(code == 401 || code == 403, if (code != null) "HTTP $code" else t.javaClass.simpleName)
                 }
             }
@@ -149,6 +172,10 @@ class LinkService : Service() {
 
     private fun onDown(revoked: Boolean, why: String) {
         ws = null
+        loop.removeCallbacks(helloCheck)
+        // The backoff starts over only after a connection that lasted 30 s.
+        if (connectedAt > 0 && SystemClock.elapsedRealtime() - connectedAt >= 30_000) backoff.reset()
+        connectedAt = 0
         if (revoked) {
             Log.i(TAG, "token refused by the server ($why): forgetting the pairing")
             config.forget()
@@ -171,19 +198,31 @@ class LinkService : Service() {
         ws = null
     }
 
+    private fun sendHelloIfChanged() {
+        val socket = ws ?: return
+        if (LinkState.conn != LinkState.Conn.CONNECTED) return
+        val h = hello()
+        if (h != lastHello) {
+            lastHello = h
+            socket.send(h)
+        }
+    }
+
     private fun hello(): String {
         val size = Screen.realSize(this)
+        val a11y = LinkAccessibilityService.enabled
         val note = when {
-            !LinkAccessibilityService.enabled -> "Accessibility service is off: the phone cannot be seen or used until it is turned on in Harness Link"
+            !a11y -> "Accessibility is off: the phone cannot be seen or used until the person turns on the Harness Link accessibility service"
             config.paused -> "Paused on the phone"
             else -> ""
         }
+        val caps = if (a11y) Protocol.CAPS else listOf("apps")
         return Protocol.hello(
             name = config.name,
             arch = Build.SUPPORTED_ABIS.firstOrNull() ?: "unknown",
             appVersion = BuildConfig.VERSION_NAME,
             model = Config.defaultName(),
-            sdk = Build.VERSION.SDK_INT,
+            sdk = Build.VERSION.SDK_INT, caps = caps,
             screenW = size.w, screenH = size.h, scale = Screen.density(this),
             note = note, paused = config.paused,
         )
@@ -204,7 +243,7 @@ class LinkService : Service() {
     }
 
     private fun svc(): LinkAccessibilityService = LinkAccessibilityService.instance
-        ?: throw CmdError(Protocol.Err.NO_ACCESSIBILITY, "The accessibility service of Harness Link is off: the person must turn it on in the app")
+        ?: throw CmdError(Protocol.Err.PERMISSION, "The accessibility service of Harness Link is off: the person must turn it on in the app")
 
     /** Returns the reply frame, or null for messages without a reply. */
     private fun run(f: Protocol.Frame): String? {
@@ -224,7 +263,7 @@ class LinkService : Service() {
         }
         if (config.paused) throw CmdError(Protocol.Err.PAUSED, "The person paused Harness Link on the phone")
         val extra: JSONObject? = when (f.t) {
-            "shot" -> svc().shot(f.int("max_w"), f.int("quality"))
+            "shot" -> svc().shot(f.int("max_w"), f.int("quality"), f.obj("crop"), f.int("sw"), f.int("sh"))
             "input" -> { svc().input(f); null }
             "tree" -> svc().tree(f.int("sw"), f.int("sh"))
             "tap_node" -> { svc().tapNode(f.int("node")); null }
@@ -249,6 +288,7 @@ class LinkService : Service() {
     private fun setPaused(on: Boolean) {
         config.paused = on
         ws?.send(Protocol.paused(on))
+        sendHelloIfChanged()
         LinkState.notifyChanged()
     }
 
@@ -333,6 +373,7 @@ class LinkService : Service() {
         const val ACTION_FORGET = "com.harnessmaxxing.link.FORGET"
         const val ACTION_RECONNECT = "com.harnessmaxxing.link.RECONNECT"
         const val ACTION_ACCESSIBILITY_CHANGED = "com.harnessmaxxing.link.ACCESSIBILITY"
+        private const val MAX_WAITING = 16
         private val COMMANDS = setOf("shot", "input", "tree", "tap_node", "set_text", "apps", "open")
 
         fun start(context: Context, action: String? = null) {

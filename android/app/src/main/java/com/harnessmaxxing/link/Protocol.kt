@@ -12,19 +12,17 @@ object Protocol {
     const val VERSION = 2
     val CAPS = listOf("screen", "input", "tree", "apps")
 
-    /** Error codes sent in `{"t":"err"}` replies. */
+    /** Error codes of `{"t":"err"}` replies (table of link/PROTOCOL.md). */
     object Err {
-        const val PAUSED = "paused"                  // the user pressed Pause on the phone
-        const val NO_ACCESSIBILITY = "no_accessibility" // the accessibility service is off
-        const val PROTECTED = "protected"            // FLAG_SECURE window: the screen cannot be captured
-        const val LOCKED = "locked"                  // keyguard with PIN/pattern, or screen off
-        const val BAD_REQUEST = "bad_request"        // missing or invalid field
-        const val UNSUPPORTED = "unsupported"        // unknown command, action or key
-        const val NO_FOCUS = "no_focus"              // `type` / `key enter` without a focused text field
-        const val STALE = "stale"                    // node id unknown or gone: ask for a new tree
-        const val NOT_FOUND = "not_found"            // `open`: no such app
-        const val TIMEOUT = "timeout"                // the system did not answer in time
-        const val FAILED = "failed"                  // the system refused the action
+        const val BAD_REQUEST = "bad_request"   // missing / invalid field, unknown action, key, button or node
+        const val UNSUPPORTED = "unsupported"   // not possible on a phone (move, ctrl+s...), unknown request
+        const val PERMISSION = "permission"     // the accessibility service is off (see the hello note)
+        const val PROTECTED = "protected"       // FLAG_SECURE window: cannot be captured
+        const val LOCKED = "locked"             // keyguard with PIN / pattern, or screen off
+        const val NOT_FOUND = "not_found"       // `open`: no such app
+        const val BUSY = "busy"                 // more than 16 requests waiting
+        const val PAUSED = "paused"             // the person pressed Pause on the phone
+        const val FAILED = "failed"             // anything else (the message says what)
     }
 
     fun ok(id: Any?, extra: JSONObject? = null): String {
@@ -40,23 +38,29 @@ object Protocol {
 
     fun paused(on: Boolean): String = JSONObject().put("t", "paused").put("on", on).toString()
 
+    /**
+     * `v` = app version (as the desktop app), `kind` = "android". `caps` and `note` follow the
+     * accessibility service; `screen` is absent when it is off. Sent again whenever it changes.
+     */
     fun hello(
-        name: String, arch: String, appVersion: String, model: String, sdk: Int,
+        name: String, arch: String, appVersion: String, model: String, sdk: Int, caps: List<String>,
         screenW: Int, screenH: Int, scale: Double, note: String, paused: Boolean,
-    ): String = JSONObject()
-        .put("t", "hello")
-        .put("v", VERSION)
-        .put("os", "android")
-        .put("arch", arch)
-        .put("name", name)
-        .put("version", appVersion)
-        .put("model", model)
-        .put("sdk", sdk)
-        .put("caps", JSONArray(CAPS))
-        .put("screen", JSONObject().put("w", screenW).put("h", screenH).put("scale", scale))
-        .put("note", note)
-        .put("paused", paused)
-        .toString()
+    ): String {
+        val o = JSONObject()
+            .put("t", "hello")
+            .put("v", appVersion)
+            .put("os", "android")
+            .put("kind", "android")
+            .put("arch", arch)
+            .put("name", name)
+            .put("model", model)
+            .put("sdk", sdk)
+            .put("caps", JSONArray(caps))
+            .put("paused", paused)
+        if ("screen" in caps) o.put("screen", JSONObject().put("w", screenW).put("h", screenH).put("scale", scale))
+        if (note.isNotEmpty()) o.put("note", note)
+        return o.toString()
+    }
 
     /** Body of `POST /api/devices/pair`. */
     fun pairBody(code: String, name: String, arch: String, appVersion: String): String = JSONObject()
@@ -69,6 +73,14 @@ object Protocol {
         .toString()
 
     data class PairResult(val deviceId: String, val token: String)
+
+    /** `error` of a 4xx pairing reply (`bad_code`, `expired`), or "". */
+    fun pairError(body: String): String = try {
+        val o = JSONObject(body)
+        o.optString("error", "").ifEmpty { o.opt("detail")?.toString().orEmpty() }
+    } catch (_: Exception) {
+        ""
+    }
 
     fun parsePairReply(body: String): PairResult? = try {
         val o = JSONObject(body)
@@ -97,12 +109,16 @@ object Protocol {
             is String -> v == "true" || v == "1"
             else -> false
         }
-        /** `keys` may be a string ("enter") or a list (["enter"]). */
-        fun keys(): List<String> = when (val v = raw.opt("keys") ?: raw.opt("key") ?: raw.opt("text")) {
-            is JSONArray -> (0 until v.length()).map { v.optString(it) }.filter { it.isNotBlank() }
-            is String -> if (v.isBlank()) emptyList() else listOf(v)
-            else -> emptyList()
+        /** `keys`: a string of combos separated by spaces ("ctrl+a delete"), or a list of combos. */
+        fun keys(): List<String> {
+            val parts = when (val v = raw.opt("keys") ?: raw.opt("key")) {
+                is JSONArray -> (0 until v.length()).map { v.optString(it) }
+                is String -> listOf(v)
+                else -> emptyList()
+            }
+            return parts.flatMap { it.trim().split(Regex("\\s+")) }.filter { it.isNotEmpty() }
         }
+        fun obj(key: String): JSONObject? = raw.optJSONObject(key)
     }
 
     /** Parse a text frame; null when it is not a JSON object with a `t`. */

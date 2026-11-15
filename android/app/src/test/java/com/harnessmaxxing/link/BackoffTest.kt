@@ -11,7 +11,7 @@ class BackoffTest {
         val bases = listOf(1_000L, 2_000, 4_000, 8_000, 16_000, 32_000, 60_000, 60_000, 60_000)
         for (base in bases) {
             val d = b.next()
-            assertTrue("$d for $base", d >= base && d <= base + base / 4)
+            assertTrue("$d for $base", d >= base && d <= base + base / 5)
         }
     }
 
@@ -19,7 +19,7 @@ class BackoffTest {
         val b = Backoff(random = Random(1))
         repeat(10) { b.next() }
         b.reset()
-        assertTrue(b.next() <= 1_250)
+        assertTrue(b.next() <= 1_200)
     }
 
     @Test fun noJitterSource() {

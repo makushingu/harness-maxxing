@@ -30,4 +30,11 @@ class TextEditTest {
         assertEquals(TextEdit.Result("abc", 0), TextEdit.backspace("abc", false, 0, 0))
         assertEquals(TextEdit.Result("a", 1), TextEdit.backspace("a😀", false, 3, 3)) // emoji = 2 chars
     }
+
+    @Test fun deleteForward() {
+        assertEquals(TextEdit.Result("helo", 3), TextEdit.deleteForward("hello", false, 3, 3))
+        assertEquals(TextEdit.Result("hello", 5), TextEdit.deleteForward("hello", false, 5, 5))
+        assertEquals(TextEdit.Result("ho", 1), TextEdit.deleteForward("hello", false, 1, 4))
+        assertEquals(TextEdit.Result("a", 1), TextEdit.deleteForward("a😀", false, 1, 1))
+    }
 }

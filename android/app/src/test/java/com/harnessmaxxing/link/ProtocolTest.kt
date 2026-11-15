@@ -35,10 +35,17 @@ class ProtocolTest {
         assertNull(Protocol.parse("[1,2]"))
     }
 
-    @Test fun keysAcceptStringOrList() {
+    @Test fun keysAreCombosSeparatedBySpacesOrAList() {
         assertEquals(listOf("enter"), Protocol.parse("""{"t":"input","a":"key","keys":"enter"}""")!!.keys())
+        assertEquals(listOf("ctrl+a", "delete"), Protocol.parse("""{"t":"input","a":"key","keys":" ctrl+a  delete "}""")!!.keys())
         assertEquals(listOf("back", "home"), Protocol.parse("""{"t":"input","a":"key","keys":["back","home"]}""")!!.keys())
         assertEquals(emptyList<String>(), Protocol.parse("""{"t":"input","a":"key"}""")!!.keys())
+    }
+
+    @Test fun cropObject() {
+        val f = Protocol.parse("""{"t":"shot","id":1,"crop":{"x":1,"y":2,"w":3,"h":4},"sw":540,"sh":1170}""")!!
+        assertEquals(3, f.obj("crop")!!.getInt("w"))
+        assertNull(Protocol.parse("""{"t":"shot","id":1}""")!!.obj("crop"))
     }
 
     @Test fun errorFrame() {
@@ -50,16 +57,24 @@ class ProtocolTest {
     }
 
     @Test fun helloMatchesTheContract() {
-        val h = JSONObject(Protocol.hello("Pixel 7", "arm64-v8a", "1.0.0", "Google Pixel 7", 35, 1080, 2400, 2.625, "Accessibility service is off", false))
+        val h = JSONObject(Protocol.hello("Pixel 7", "arm64-v8a", "1.0.0", "Google Pixel 7", 35, Protocol.CAPS, 1080, 2400, 2.625, "", false))
         assertEquals("hello", h.getString("t"))
-        assertEquals(2, h.getInt("v"))
+        assertEquals("1.0.0", h.getString("v"))
         assertEquals("android", h.getString("os"))
+        assertEquals("android", h.getString("kind"))
         assertEquals("arm64-v8a", h.getString("arch"))
         assertEquals("Pixel 7", h.getString("name"))
         assertEquals(listOf("screen", "input", "tree", "apps"), h.getJSONArray("caps").let { a -> (0 until a.length()).map { a.getString(it) } })
         val s = h.getJSONObject("screen")
         assertEquals(1080, s.getInt("w")); assertEquals(2400, s.getInt("h")); assertEquals(2.625, s.getDouble("scale"), 0.0)
-        assertEquals("Accessibility service is off", h.getString("note"))
+        assertFalse(h.has("note"))
+    }
+
+    @Test fun helloWithoutAccessibilityHasNoScreen() {
+        val h = JSONObject(Protocol.hello("P", "x86_64", "1.0.0", "M", 35, listOf("apps"), 1080, 2400, 2.0, "Accessibility is off", false))
+        assertFalse(h.has("screen"))
+        assertEquals(1, h.getJSONArray("caps").length())
+        assertEquals("Accessibility is off", h.getString("note"))
     }
 
     @Test fun pairBodyAndReply() {
@@ -70,6 +85,8 @@ class ProtocolTest {
         assertEquals(Protocol.PairResult("d_1", "tok"), Protocol.parsePairReply("""{"device_id":"d_1","token":"tok"}"""))
         assertNull(Protocol.parsePairReply("""{"device_id":"d_1"}"""))
         assertNull(Protocol.parsePairReply("<html>"))
+        assertEquals("expired", Protocol.pairError("""{"error":"expired","message":"..."}"""))
+        assertEquals("", Protocol.pairError("<html>"))
     }
 
     @Test fun pausedFrame() {
