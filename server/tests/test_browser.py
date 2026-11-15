@@ -1485,3 +1485,19 @@ def test_an_infinite_number_in_the_settings_is_refused(mx):
     assert e.value.status == 400 and e.value.code == "bad_browser"
     config.update_config(browser={"exit_wait_s": float("-inf")})   # written by hand: the default, never a crash
     assert browser.settings()["exit_wait_s"] == browser.DEFAULTS["exit_wait_s"]
+
+
+def test_profiles_made_at_the_same_time_are_all_kept(mx, monkeypatch):
+    from maxxing import browser, config
+    real = config.update_config
+
+    def slow(**kw):
+        time.sleep(0.05)
+        return real(**kw)
+    monkeypatch.setattr(config, "update_config", slow)
+    ts = [threading.Thread(target=browser.set_profile, args=({"name": f"prof{i}"},)) for i in range(8)]
+    for t in ts:
+        t.start()
+    for t in ts:
+        t.join()
+    assert sorted(p["id"] for p in browser.profiles()) == ["main"] + [f"prof{i}" for i in range(8)]

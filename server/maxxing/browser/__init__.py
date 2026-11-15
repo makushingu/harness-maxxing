@@ -59,6 +59,7 @@ MAX_PROFILES = 40
 MAX_EXITS = 10
 NAME_MAX = 40
 _plock = threading.Lock()                       # a project's profile is made once, whoever asks first
+_slock = config.ProcessLock("browser-settings")  # read, change and save the settings in one go (routes, commands)
 
 
 class BrowserError(Exception):
@@ -174,8 +175,9 @@ def _save(out: dict) -> dict:
 
 def set_settings(values: dict) -> dict:
     """Merge the global values (not profiles / exits: see set_profile, exits.set_exit) and save them."""
-    known = {k: v for k, v in (values or {}).items() if k in DEFAULTS}
-    return _save({**settings(), **known})
+    with _slock:
+        known = {k: v for k, v in (values or {}).items() if k in DEFAULTS}
+        return _save({**settings(), **known})
 
 
 def profiles() -> list[dict]:
@@ -189,26 +191,27 @@ def profile(pid: str, s: dict | None = None) -> dict | None:
 def set_profile(values: dict, pid: str | None = None, *, new_exit: bool = True) -> dict:
     """Create (pid None) or change a profile; returns it. new_exit: `exit` is a choice of now (it must exist), not one
     copied from another profile (kept as it is, even gone: that profile waits too)."""
-    s = settings()
-    values = {k: v for k, v in (values or {}).items() if k in PROFILE_DEFAULTS}
-    ex = values.get("exit")
-    if new_exit and ex is not None and str(ex) != DIRECT and str(ex) not in {e["id"] for e in s["exits"]}:
-        raise BrowserError(400, "bad_browser", f"browser.exit: no exit {str(ex)[:40]!r}")
-    if pid is None:
-        if len(s["profiles"]) >= MAX_PROFILES:
-            raise BrowserError(409, "too_many", f"At most {MAX_PROFILES} profiles")
-        name = _name(values.get("name"))
-        if not name:
-            raise BrowserError(400, "bad_browser", "A profile needs a name")
-        pid = new_id(name, {p["id"] for p in s["profiles"]})
-        s["profiles"].append({**PROFILE_DEFAULTS, **values, "id": pid, "name": name})
-    else:
-        cur = profile(pid, s)
-        if cur is None:
-            raise BrowserError(404, "no_profile", "No such profile")
-        cur.update(values)
-    out = _save(s)
-    return profile(pid, out)  # type: ignore[return-value]
+    with _slock:
+        s = settings()
+        values = {k: v for k, v in (values or {}).items() if k in PROFILE_DEFAULTS}
+        ex = values.get("exit")
+        if new_exit and ex is not None and str(ex) != DIRECT and str(ex) not in {e["id"] for e in s["exits"]}:
+            raise BrowserError(400, "bad_browser", f"browser.exit: no exit {str(ex)[:40]!r}")
+        if pid is None:
+            if len(s["profiles"]) >= MAX_PROFILES:
+                raise BrowserError(409, "too_many", f"At most {MAX_PROFILES} profiles")
+            name = _name(values.get("name"))
+            if not name:
+                raise BrowserError(400, "bad_browser", "A profile needs a name")
+            pid = new_id(name, {p["id"] for p in s["profiles"]})
+            s["profiles"].append({**PROFILE_DEFAULTS, **values, "id": pid, "name": name})
+        else:
+            cur = profile(pid, s)
+            if cur is None:
+                raise BrowserError(404, "no_profile", "No such profile")
+            cur.update(values)
+        out = _save(s)
+        return profile(pid, out)  # type: ignore[return-value]
 
 
 def project_profile(project: str, s: dict | None = None) -> dict | None:
@@ -251,16 +254,17 @@ def project_gone(p: dict) -> bool:
 
 
 def delete_profile(pid: str) -> None:
-    if pid == MAIN:
-        raise BrowserError(409, "main", "The main profile cannot be deleted")
-    s = settings()
-    p = profile(pid, s)
-    if p is None:
-        raise BrowserError(404, "no_profile", "No such profile")
-    if p.get("project") and not project_gone(p):
-        raise BrowserError(409, "project", "A project's profile stays as long as its project: forget its sign-ins instead")
-    s["profiles"] = [p for p in s["profiles"] if p["id"] != pid]
-    _save(s)
+    with _slock:
+        if pid == MAIN:
+            raise BrowserError(409, "main", "The main profile cannot be deleted")
+        s = settings()
+        p = profile(pid, s)
+        if p is None:
+            raise BrowserError(404, "no_profile", "No such profile")
+        if p.get("project") and not project_gone(p):
+            raise BrowserError(409, "project", "A project's profile stays as long as its project: forget its sign-ins instead")
+        s["profiles"] = [p for p in s["profiles"] if p["id"] != pid]
+        _save(s)
 
 
 def agent_sites(owner: str) -> list[str] | None:

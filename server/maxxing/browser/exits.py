@@ -127,45 +127,47 @@ def set_exit(values: dict, eid: str | None = None, secret: str | None = None) ->
     """Create (eid None) or change an exit; `secret` (a proxy's password, a WireGuard config, a Tailscale auth key)
     goes to the vault, never to config.json. Returns it."""
     from .. import vault
-    s = browser.settings()
-    values = {k: v for k, v in (values or {}).items() if k in ("name", "type", "url", "user", "node", "login_server")}
-    if eid is None:
-        if len(s["exits"]) >= browser.MAX_EXITS:
-            raise browser.BrowserError(409, "too_many", f"At most {browser.MAX_EXITS} exits")
-        name = browser._name(values.get("name")) or str(values.get("type") or "exit")
-        eid = browser.new_id(name, {e["id"] for e in s["exits"]} | {p["id"] for p in s["profiles"]})
-        c = clean_exit({**values, "id": eid, "name": name}, strict=True)
-        s["exits"].append(c)
-    else:
-        cur = get(eid, s)
-        if cur is None:
-            raise browser.BrowserError(404, "no_exit", "No such exit")
-        values.pop("type", None)
-        cur.update(clean_exit({**cur, **values}, strict=True) or {})
-    if secret:
-        try:
-            vault.put(secret_name(eid), secret, note=f"Harness Browser: exit {eid}", expose=False)
-        except vault.VaultError as e:
-            raise browser.BrowserError(400, "bad_secret", str(e)) from None
-    browser._save(s)
-    runtime().forget(eid)
-    return get(eid)  # type: ignore[return-value]
+    with browser._slock:
+        s = browser.settings()
+        values = {k: v for k, v in (values or {}).items() if k in ("name", "type", "url", "user", "node", "login_server")}
+        if eid is None:
+            if len(s["exits"]) >= browser.MAX_EXITS:
+                raise browser.BrowserError(409, "too_many", f"At most {browser.MAX_EXITS} exits")
+            name = browser._name(values.get("name")) or str(values.get("type") or "exit")
+            eid = browser.new_id(name, {e["id"] for e in s["exits"]} | {p["id"] for p in s["profiles"]})
+            c = clean_exit({**values, "id": eid, "name": name}, strict=True)
+            s["exits"].append(c)
+        else:
+            cur = get(eid, s)
+            if cur is None:
+                raise browser.BrowserError(404, "no_exit", "No such exit")
+            values.pop("type", None)
+            cur.update(clean_exit({**cur, **values}, strict=True) or {})
+        if secret:
+            try:
+                vault.put(secret_name(eid), secret, note=f"Harness Browser: exit {eid}", expose=False)
+            except vault.VaultError as e:
+                raise browser.BrowserError(400, "bad_secret", str(e)) from None
+        browser._save(s)
+        runtime().forget(eid)
+        return get(eid)  # type: ignore[return-value]
 
 
 def delete_exit(eid: str) -> None:
     from .. import vault
-    s = browser.settings()
-    if get(eid, s) is None:
-        raise browser.BrowserError(404, "no_exit", "No such exit")
-    users = [p["name"] or p["id"] for p in s["profiles"] if p["exit"] == eid]
-    if users:
-        raise browser.BrowserError(409, "in_use", "Used by the profile(s): " + ", ".join(users))
-    s["exits"] = [e for e in s["exits"] if e["id"] != eid]
-    browser._save(s)
-    vault.delete(secret_name(eid))
-    runtime().forget(eid)
-    stop_unit_sync(eid)
-    shutil.rmtree(browser.exits_dir() / eid, ignore_errors=True)
+    with browser._slock:
+        s = browser.settings()
+        if get(eid, s) is None:
+            raise browser.BrowserError(404, "no_exit", "No such exit")
+        users = [p["name"] or p["id"] for p in s["profiles"] if p["exit"] == eid]
+        if users:
+            raise browser.BrowserError(409, "in_use", "Used by the profile(s): " + ", ".join(users))
+        s["exits"] = [e for e in s["exits"] if e["id"] != eid]
+        browser._save(s)
+        vault.delete(secret_name(eid))
+        runtime().forget(eid)
+        stop_unit_sync(eid)
+        shutil.rmtree(browser.exits_dir() / eid, ignore_errors=True)
 
 
 # ---- the upstream proxy ----------------------------------------------------------------------------------------------
