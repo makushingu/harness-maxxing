@@ -97,7 +97,8 @@ PROMPT_LOCAL = """
 Your reply is exactly what the user hears: never explain your reasoning, never describe what you are deciding, \
 never read the bracketed lines out.
 
-To hand over, put "@ask" alone on the first line, then your few words on the next line. To stop the work: "@stop" \
+To hand over, put "@ask" alone on the first line, then your few words on the next line (never the user's words: \
+they are handed over by themselves). To stop the work: "@stop" \
 alone on the first line. Nothing else ever goes on an "@" line.
 
 Each message starts with bracketed lines: "[Work: ...]" (how the work is going) and "[Language: xx]" (the language \
@@ -836,6 +837,7 @@ def local_turn(cid: str, *, audio: Path | None = None, text: str | None = None, 
             message = f"{head}\n[Language: {c.language}]\n" + (body or "(Done, no written answer.)")
         said: list[str] = []
         handed = False
+        user_words = _norm(text or "") if (audio is not None or text) else ""
         try:
             for kind, value in reply_parts(c.ask(message)):
                 if kind == "action":
@@ -845,6 +847,9 @@ def local_turn(cid: str, *, audio: Path | None = None, text: str | None = None, 
                     elif value["type"] == "stop":
                         c.pending = []
                         yield {"action": {"type": "stop"}}
+                elif user_words and (nv := _norm(value)) and (nv == user_words
+                                                               or (len(nv.split()) >= 3 and nv in user_words)):
+                    continue                                  # the voice repeating the user's words
                 elif (item := c.say(value)):
                     said.append(item["say"])
                     yield item
