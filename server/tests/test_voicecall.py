@@ -91,3 +91,27 @@ def test_actions_are_parsed():
     assert voicecall.parse_action("@ask: fix the mic button") == {"type": "ask", "request": "fix the mic button"}
     assert voicecall.parse_action("@stop") == {"type": "stop"}
     assert voicecall.parse_action("Sure, on it.") is None
+
+
+def test_local_speed_and_voice_settings(state):
+    assert voicecall.settings()["local_speed"] == 1.15
+    voicecall.update_settings(local_speed=1.3, local_voice="fr_FR-upmc-pierre")
+    s = voicecall.settings()
+    assert s["local_speed"] == 1.3 and s["local_voice"] == "fr_FR-upmc-pierre"
+    with pytest.raises(voicecall.VoiceError):
+        voicecall.update_settings(local_speed=3)
+    voicecall.update_settings(local_voice="fr_FR-upmc-medium")    # old id of a voice with several speakers
+    assert voicecall.settings()["local_voice"] == "fr_FR-upmc-pierre"
+
+
+def test_a_call_listens_for_the_interface_language_and_english(state):
+    from maxxing import config
+    cfg = config.load_config()
+    cfg["language"] = "fr"
+    config.write_json(config.config_path(), cfg)
+    assert voicecall.call_languages() == ("fr", "en")
+
+
+def test_the_voice_never_names_the_machinery():
+    p = voicecall.PROMPT.lower()
+    assert "never say the words session" in p and "switch at once" in p

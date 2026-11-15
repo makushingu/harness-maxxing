@@ -25,14 +25,22 @@ from . import config, voice
 log = logging.getLogger("maxxing.tts")
 
 VOICES_URL = "https://huggingface.co/rhasspy/piper-voices/resolve/main"
-# id -> path in the catalogue (language/locale/name/quality/file stem)
-VOICES = {
-    "fr_FR-tom-medium": "fr/fr_FR/tom/medium",
-    "fr_FR-upmc-medium": "fr/fr_FR/upmc/medium",
-    "fr_FR-siwis-medium": "fr/fr_FR/siwis/medium",
-    "en_US-ryan-medium": "en/en_US/ryan/medium",
-    "en_US-amy-medium": "en/en_US/amy/medium",
+# Voice id -> its model in the rhasspy/piper-voices catalogue (language/locale/name/quality), the speaker inside a
+# model holding several, the language it speaks and a short name shown in Settings.
+VOICES: dict[str, dict] = {
+    "fr_FR-tom-medium": {"model": "fr_FR-tom-medium", "path": "fr/fr_FR/tom/medium", "lang": "fr", "name": "Tom"},
+    "fr_FR-upmc-pierre": {"model": "fr_FR-upmc-medium", "path": "fr/fr_FR/upmc/medium", "speaker": 1, "lang": "fr",
+                          "name": "Pierre"},
+    "fr_FR-upmc-jessica": {"model": "fr_FR-upmc-medium", "path": "fr/fr_FR/upmc/medium", "speaker": 0,
+                           "lang": "fr", "name": "Jessica"},
+    "fr_FR-siwis-medium": {"model": "fr_FR-siwis-medium", "path": "fr/fr_FR/siwis/medium", "lang": "fr",
+                           "name": "Siwis"},
+    "fr_FR-gilles-low": {"model": "fr_FR-gilles-low", "path": "fr/fr_FR/gilles/low", "lang": "fr", "name": "Gilles"},
+    "en_US-ryan-medium": {"model": "en_US-ryan-medium", "path": "en/en_US/ryan/medium", "lang": "en", "name": "Ryan"},
+    "en_US-amy-medium": {"model": "en_US-amy-medium", "path": "en/en_US/amy/medium", "lang": "en", "name": "Amy"},
 }
+# Old ids (one model with several speakers was one voice): still accepted in settings.
+ALIASES = {"fr_FR-upmc-medium": "fr_FR-upmc-pierre"}
 DEFAULT_VOICE = {"fr": "fr_FR-tom-medium", "en": "en_US-ryan-medium"}
 PIPER_SPEC = "piper-tts>=1.3,<2"
 MAX_CHARS = 4000            # input of one request
@@ -55,16 +63,21 @@ def piper_bin() -> Path:
 
 
 def voice_file(vid: str) -> Path:
-    return root() / "voices" / f"{vid}.onnx"
+    vid = ALIASES.get(vid, vid)
+    return root() / "voices" / f"{VOICES[vid]['model'] if vid in VOICES else vid}.onnx"
 
 
 def installed_voices() -> list[str]:
     return [v for v in VOICES if voice_file(v).is_file() and voice_file(v).with_suffix(".onnx.json").is_file()]
 
 
+def catalogue() -> list[dict]:
+    return [{"id": v, "name": d["name"], "lang": d["lang"]} for v, d in VOICES.items()]
+
+
 def status() -> dict:
     ready = piper_bin().is_file() and bool(installed_voices()) and bool(voice.ffmpeg_bin())
-    return {"ready": ready, "engine": "piper", "voices": installed_voices(), "catalogue": list(VOICES),
+    return {"ready": ready, "engine": "piper", "voices": installed_voices(), "catalogue": catalogue(),
             "install": dict(_install)}
 
 
@@ -85,7 +98,8 @@ def _download(url: str, dest: Path) -> None:
 
 def install(voices: list[str] | None = None) -> dict:
     """Create the Piper environment (once) and download the voices. Blocking (about 1 minute)."""
-    want = [v for v in (voices or list(DEFAULT_VOICE.values())) if v in VOICES]
+    want = [ALIASES.get(v, v) for v in (voices or list(DEFAULT_VOICE.values()))]
+    want = [v for v in want if v in VOICES]
     _install.update(state="running", started=time.time(), error=None)
     try:
         if not piper_bin().is_file():
@@ -95,10 +109,11 @@ def install(voices: list[str] | None = None) -> dict:
                            check=True, capture_output=True, timeout=600)
         (root() / "voices").mkdir(parents=True, exist_ok=True)
         for vid in want:
+            m = VOICES[vid]
             for suf in (".onnx", ".onnx.json"):
-                dest = root() / "voices" / f"{vid}{suf}"
+                dest = root() / "voices" / f"{m['model']}{suf}"
                 if not dest.is_file():
-                    _download(f"{VOICES_URL}/{VOICES[vid]}/{vid}{suf}", dest)
+                    _download(f"{VOICES_URL}/{m['path']}/{m['model']}{suf}", dest)
         _install.update(state="done", ended=time.time())
     except subprocess.CalledProcessError as e:
         _install.update(state="failed", error=(e.stderr or b"").decode(errors="replace")[-400:] or str(e))
@@ -173,15 +188,21 @@ def out_dir() -> Path:
     return d
 
 
-def pick_voice(text: str, wanted: str | None = None) -> str:
-    """The voice to use: `wanted` when installed, else the default voice of the text's language."""
+def pick_voice(text: str, wanted: str | None = None, lang: str | None = None) -> str:
+    """The voice to use for `text`: `wanted` when installed and it speaks the text's language, else the default
+    voice of that language (an English sentence is never read by a French voice)."""
     have = installed_voices()
     if not have:
         raise TTSError(409, "tts_not_ready", "Spoken replies are not installed")
-    if wanted in have:
+    lang = lang if lang in DEFAULT_VOICE else _lang(text)
+    wanted = ALIASES.get(wanted or "", wanted)
+    if wanted in have and VOICES[wanted]["lang"] == lang:
         return wanted
-    vid = DEFAULT_VOICE.get(_lang(text))
-    return vid if vid in have else have[0]
+    vid = DEFAULT_VOICE.get(lang)
+    if vid in have:
+        return vid
+    same = [v for v in have if VOICES[v]["lang"] == lang]
+    return same[0] if same else (wanted if wanted in have else have[0])
 
 
 _worker: subprocess.Popen | None = None
@@ -224,15 +245,15 @@ def _get_worker() -> subprocess.Popen:
     return _worker
 
 
-def synth(text: str, voice_id: str | None = None, speed: float = 1.0) -> dict:
+def synth(text: str, voice_id: str | None = None, speed: float = 1.0, lang: str | None = None) -> dict:
     """Plain text (one or a few sentences) -> {file: WAV name in out_dir(), seconds, voice}. Raises TTSError."""
     global _worker_used
     if not (root() / "venv" / "bin" / "python").is_file():
         raise TTSError(409, "tts_not_ready", "Spoken replies are not installed")
-    vid = pick_voice(text, voice_id)
+    vid = pick_voice(text, voice_id, lang)
     wav = out_dir() / f"say-{time.time_ns()}.wav"
     req = {"text": " ".join(text[:MAX_CHARS].split()), "model": str(voice_file(vid)), "out": str(wav),
-           "length": round(1.0 / max(0.6, min(1.6, speed or 1.0)), 2)}
+           "length": round(1.0 / max(0.6, min(1.6, speed or 1.0)), 2), "speaker": VOICES[vid].get("speaker")}
     with _lock:
         _worker_used = time.time()
         for attempt in (1, 2):                       # a dead worker is started again once

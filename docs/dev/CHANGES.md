@@ -17,6 +17,15 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   auth_tokens with the full `bidiGenerateContentSetup`, so a client cannot change the instructions or tools); the
   browser talks to the provider directly (WebRTC / WebSocket). Mic capture by ScriptProcessor (an AudioWorklet from a
   Blob is refused by the app's script-src). Not done: approvals by voice, Telegram, progress spoken unprompted.
+- Voice mode, local: `tts.VOICES` = id -> {model, path, speaker?, lang, name} (several voices in one Piper model,
+  e.g. upmc Pierre/Jessica; worker request gains `speaker`; old id `fr_FR-upmc-medium` aliased); `pick_voice` only
+  uses the chosen voice for its language. `voice_call.local_speed` (0.8-1.5, default 1.15). Language per utterance: transcribed
+  in the last one heard; when the mean `avg_logprob` is below `voice.WRONG_LANGUAGE_LOGPROB` (-0.55; right language
+  about -0.2, wrong about -0.8 with `small`), the other `call_languages()` (voice setting, UI language, en) are tried
+  and the best kept (`transcribe_file(among=...)`; `detect_language` cost +1.3 s on every sentence). Passed to the
+  talker as `[Language: xx]`. Prompt: the voice is
+  one person and never says session / Claude / tool. Barge-in: while speaking, the threshold follows the echo heard by
+  the mic (`max(0.09, floor*2.5, echo*2.2)`, 4 frames) instead of a fixed 0.32.
 
 ## 2.0.0-alpha.155 - 2026-11-15
 

@@ -11,7 +11,8 @@ New:
   works ("where are you at?", "stop") and tells you the outcome when it is done. Everything it asks appears in the
   session as usual. By default the voice runs on your server (free, private); in Settings -> Voice you can switch
   to a realtime voice from OpenAI or Gemini (faster and more natural, on your own key, which Harness finds in the
-  Keys vault).
+  Keys vault). On your server you choose among several French and English voices and their speed; it follows you
+  when you switch language, and you cut it off by just speaking over it.
 
 ## 2.0.0-alpha.155 - 2026-11-15
 

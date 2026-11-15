@@ -2,7 +2,7 @@
 separate program, never imported by the server. Keeps the voices loaded between requests.
 
 Protocol (one JSON object per line):
-  stdin  {"text": "...", "model": "/path/voice.onnx", "out": "/path/out.wav", "length": 1.0}
+  stdin  {"text": "...", "model": "/path/voice.onnx", "out": "/path/out.wav", "length": 1.0, "speaker": null}
   stdout {"ok": true, "seconds": 2.4} | {"ok": false, "error": "..."}
 """
 import json
@@ -21,7 +21,9 @@ def main() -> None:
             v = voices.get(req["model"])
             if v is None:
                 v = voices[req["model"]] = PiperVoice.load(req["model"])
-            cfg = SynthesisConfig(length_scale=float(req.get("length") or 1.0))
+            spk = req.get("speaker")
+            cfg = SynthesisConfig(length_scale=float(req.get("length") or 1.0),
+                                  speaker_id=int(spk) if spk is not None else None)
             with wave.open(req["out"], "wb") as w:
                 v.synthesize_wav(req["text"], w, syn_config=cfg)
             with wave.open(req["out"], "rb") as r:

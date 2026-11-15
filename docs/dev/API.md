@@ -388,11 +388,12 @@ the call and the voice's tools on the session (`ask_session`, `session_status`, 
 the usual send / stop routes); the end of a turn is told to the voice (`[Session finished]` + the answer).
 ```
 CallStatus = {settings:{mode:"local"|"cloud", provider:"openai"|"gemini"|null, openai_key, gemini_key (vault names|null),
-    openai_model, openai_voice, gemini_model, gemini_voice, talker_model:"haiku"|"sonnet", local_voice:"auto"|<piper id>},
+    openai_model, openai_voice, gemini_model, gemini_voice, talker_model:"haiku"|"sonnet", local_voice:"auto"|<voice id>,
+    local_speed:0.8-1.5 (default 1.15)},   // local_voice is used for sentences in its own language only
   provider,            // used in cloud mode: chosen, else the only one with a key
   keys:{openai|gemini:{found:[vault names that look like its key], using:name|null}},
-  local:{ready, reason:"stt"|"tts"|null, tts:{ready, voices, catalogue, install:{state, error}}},
-  cloud:{ready, reason:"choose"|"choose_key"|"no_key"|null}, ready, voices:{openai, gemini, local}}
+  local:{ready, reason:"stt"|"tts"|null, tts:{ready, voices:[ids installed], catalogue:[{id, name, lang}], install:{state, error}}},
+  cloud:{ready, reason:"choose"|"choose_key"|"no_key"|null}, ready, voices:{openai, gemini, local}, speed_range:[0.8, 1.5]}
 ```
 | GET | `/api/voice/call` | – | `CallStatus` |
 | PUT | `/api/voice/call/settings` | partial settings (`provider: ""` = none) | `CallStatus` · `400 invalid_*` |

@@ -40,7 +40,8 @@ GEMINI_VOICES = ("Charon", "Puck", "Fenrir", "Orus", "Kore", "Aoede", "Leda", "Z
 DEFAULTS = {"mode": "local", "provider": None, "openai_key": None, "gemini_key": None,
             "openai_model": "gpt-realtime-2.1", "openai_voice": "cedar",
             "gemini_model": "gemini-3.8-live", "gemini_voice": "Charon",
-            "talker_model": "haiku", "local_voice": "auto"}
+            "talker_model": "haiku", "local_voice": "auto", "local_speed": 1.15}
+SPEED_RANGE = (0.8, 1.5)
 OPENAI_API = "https://api.openai.com/v1"
 GEMINI_API = "https://generativelanguage.googleapis.com/v1beta"
 MAX_CALLS = 3
@@ -51,37 +52,35 @@ MAX_AUDIO_BYTES = 20 * 1024 * 1024
 # Tests: httpx transport for the providers (httpx.MockTransport).
 http_transport: Any = None
 
-PROMPT = """You are the voice of Harness, a control room for Claude Code. You talk with the user out loud, in the \
-user's language (answer in French when they speak French).
+PROMPT = """You are Harness, the user's assistant, on a voice call with them. You hear them and they hear you.
 
-You do not do the work yourself: a Claude Code session ("the session") does it. It can read and change files, run \
-commands, search the web, write code and answer questions about the user's projects and server.
+Language: always answer in the language the user speaks to you now. If they switch language, or ask you to speak \
+another language, switch at once and stay in it.
 
-Rules:
-- Small talk, confirmations, repeating something, questions about the progress of the work you handed over: answer \
-yourself.
-- You know nothing else: not the user's sessions, projects, files, server, accounts or the news. Never answer such a \
-question yourself, even partly: hand it to the session.
-- Any real request (a question about their projects, files, code or server, a fact you are not sure of, anything to \
-do): hand it to the session at once, as an instruction in the user's language that keeps their words. Add nothing \
-of your own: you do not know their files, folders or server, the session does. Then say in a few words that it is \
-on it. Never make up a result and never pretend the work is done.
-- When you receive "[Session finished]" with the session's answer: tell the user the outcome in one to three \
-sentences, what was done first, then any question the session asks. If the session asks something, the user's \
-answer goes back to the session.
-- To stop the session's work when the user asks: stop it.
-- Speak like a person on the phone: short sentences, no lists, no markdown, no code, no file paths, no URLs, no \
-emoji. One question at a time."""
+How you work: the real work (their projects, files, code, server, accounts, anything to look up or to do) is done \
+by your workspace, which you reach through your actions. For the user it is all you: you are one person.
+- Small talk, confirmations, repeating something, how the work is going: answer yourself.
+- You know nothing else on your own: not their projects, files, server, accounts or the news. Any real question or \
+request: hand it over at once, as an instruction in the user's language that keeps their words, adding nothing of \
+your own. Then say a few natural words, as a person who starts working: "I'm looking.", "Give me a second, I'll \
+check.", "On it.", in the user's language. Never make up a result and never pretend the work is done.
+- When you receive "[Session finished]": tell the outcome in one to three sentences as what you did ("Done, I \
+changed...", "I found..."), then the question asked, if any. The user's answer to that question is handed over too.
+- To stop the work when the user asks: stop it.
+- Never say the words session, Claude, Claude Code, tool, instruction, task handed over, workspace or Harness \
+finished: say "I", "I'm looking", "I'm on it", "I've finished".
+- Speak like a person on the phone: short, warm, simple sentences, no lists, no markdown, no code, no file paths, \
+no URLs, no emoji. One question at a time. Do not repeat what the user just said."""
 
 PROMPT_TOOLS = """
 Tools: ask_session(request) hands work to the session; session_status() tells whether it is working and on what; \
 stop_session() stops it; read_last_answer() gives its last written answer."""
 
 PROMPT_LOCAL = """
-How to act: start your reply with a line "@ask: <instruction>" to hand work to the session, or "@stop" to stop it, \
-then say your sentence on the next line. Every user message starts with "[Session: ...]", the current state of the \
-session: use it to answer questions about progress. Messages starting with "[Session finished]" come from Harness, \
-not from the user."""
+Your actions: start your reply with a line "@ask: <instruction>" to hand a request over, or "@stop" to stop the \
+work, then say your sentence on the next line. Every user message starts with "[Session: ...]", the current state \
+of the work, and "[Language: xx]", the language the user just spoke: use them, never read them out. Messages \
+starting with "[Session finished]" come from your workspace, not from the user."""
 
 TOOLS = [
     {"name": "ask_session", "description": "Hand a request or a task to the Claude Code session (it does the real "
@@ -108,6 +107,13 @@ def settings() -> dict:
         out["provider"] = None
     if out["talker_model"] not in TALKER_MODELS:
         out["talker_model"] = "haiku"
+    out["local_voice"] = tts.ALIASES.get(out["local_voice"], out["local_voice"])
+    if out["local_voice"] not in ("auto", *tts.VOICES):
+        out["local_voice"] = "auto"
+    try:
+        out["local_speed"] = round(min(SPEED_RANGE[1], max(SPEED_RANGE[0], float(out["local_speed"]))), 2)
+    except (TypeError, ValueError):
+        out["local_speed"] = DEFAULTS["local_speed"]
     return out
 
 
@@ -123,8 +129,18 @@ def update_settings(**kw: Any) -> dict:
         raise VoiceError(400, "invalid_voice", "unknown OpenAI voice")
     if "gemini_voice" in changes and changes["gemini_voice"] not in GEMINI_VOICES:
         raise VoiceError(400, "invalid_voice", "unknown Gemini voice")
+    if "local_voice" in changes:
+        changes["local_voice"] = tts.ALIASES.get(changes["local_voice"], changes["local_voice"])
     if "local_voice" in changes and changes["local_voice"] not in ("auto", *tts.VOICES):
         raise VoiceError(400, "invalid_voice", "unknown local voice")
+    if "local_speed" in changes:
+        try:
+            sp = float(changes["local_speed"])
+        except (TypeError, ValueError):
+            sp = 0.0
+        if not SPEED_RANGE[0] <= sp <= SPEED_RANGE[1]:
+            raise VoiceError(400, "invalid_speed", f"local_speed must be between {SPEED_RANGE[0]} and {SPEED_RANGE[1]}")
+        changes["local_speed"] = round(sp, 2)
     for k in ("openai_model", "gemini_model"):
         if k in changes and not re.fullmatch(r"[A-Za-z0-9._-]{3,80}", str(changes[k] or "")):
             raise VoiceError(400, "invalid_model", f"{k} is not a model id")
@@ -183,7 +199,8 @@ def status() -> dict:
                       "tts": t},
             "cloud": {"ready": cloud_reason is None, "reason": cloud_reason},
             "ready": (local_reason if s["mode"] == "local" else cloud_reason) is None,
-            "voices": {"openai": list(OPENAI_VOICES), "gemini": list(GEMINI_VOICES), "local": list(tts.VOICES)}}
+            "voices": {"openai": list(OPENAI_VOICES), "gemini": list(GEMINI_VOICES), "local": list(tts.VOICES)},
+            "speed_range": list(SPEED_RANGE)}
 
 
 # ---- cloud: short-lived tokens ----------------------------------------------------------------------------------
@@ -267,6 +284,16 @@ def cloud_token() -> dict:
     return _openai_token(s, key) if provider == "openai" else _gemini_token(s, key)
 
 
+def call_languages() -> tuple[str, ...]:
+    """The languages a call listens for: the one set in Settings -> Voice (if any), the interface's, and English."""
+    out: list[str] = []
+    for lang in (voice.settings().get("language"), config.load_config().get("language"), "en"):
+        lang = str(lang or "").split("-")[0].lower()
+        if lang and lang != "auto" and lang not in out:
+            out.append(lang)
+    return tuple(out)
+
+
 # ---- local: the talker process ----------------------------------------------------------------------------------
 _SENTENCE = re.compile(r"(.+?[.!?…:;])(\s+|$)", re.S)
 
@@ -274,10 +301,10 @@ _SENTENCE = re.compile(r"(.+?[.!?…:;])(\s+|$)", re.S)
 class LocalCall:
     """One call: a `claude` process (the talker) kept running, fed one message per user turn."""
 
-    def __init__(self, sid: str, model: str, voice_id: str | None):
+    def __init__(self, sid: str, model: str, voice_id: str | None, speed: float = 1.0):
         from .sessions import spawn
         self.id = uuid.uuid4().hex[:12]
-        self.sid, self.voice_id = sid, voice_id
+        self.sid, self.voice_id, self.speed = sid, voice_id, speed
         self.lock = threading.Lock()
         self.used = time.time()
         cmd = [spawn.claude_bin(), "-p", "--input-format", "stream-json", "--output-format", "stream-json",
@@ -289,8 +316,8 @@ class LocalCall:
                                      env=spawn.claude_env(None, "default"))
         self.lines: queue.Queue[str | None] = queue.Queue()
         self.open_turn = False
-        lang = voice.settings().get("language") or "auto"
-        self.language: str | None = None if lang == "auto" else lang
+        self.among = call_languages()
+        self.language: str | None = None                   # the language of the user's last sentence
         threading.Thread(target=self._read, daemon=True, name=f"voicecall-{self.id}").start()
 
     def _read(self) -> None:
@@ -396,7 +423,8 @@ def start_local(sid: str) -> dict:
             oldest = min(_calls.values(), key=lambda c: c.used)
             _calls.pop(oldest.id, None)
             threading.Thread(target=oldest.close, daemon=True).start()
-        call = LocalCall(sid, s["talker_model"], None if s["local_voice"] == "auto" else s["local_voice"])
+        call = LocalCall(sid, s["talker_model"], None if s["local_voice"] == "auto" else s["local_voice"],
+                         s["local_speed"])
         _calls[call.id] = call
     threading.Thread(target=_warm_up, daemon=True, name="voicecall-warmup").start()
     return {"mode": "local", "call": call.id}
@@ -448,10 +476,15 @@ def local_turn(cid: str, *, audio: Path | None = None, text: str | None = None, 
     c = _call(cid)
     with c.lock:
         if audio is not None:
-            out = voice.transcribe_file(audio, language or c.language)
+            # Heard in the language of the last sentence; when it sounds wrong, the user's other likely languages
+            # are tried: they can switch language at any time.
+            if language:
+                out = voice.transcribe_file(audio, language)
+            else:
+                out = voice.transcribe_file(audio, c.language or (c.among[0] if c.among else "auto"), among=c.among)
             text = (out.get("text") or "").strip()
-            if text and not c.language and len(text) > 12 and out.get("language"):
-                c.language = str(out["language"])          # detected once: the next sentences go faster
+            if text and out.get("language"):
+                c.language = str(out["language"])
             yield {"heard": text}
             if not text:
                 yield {"done": True, "empty": True}
@@ -459,7 +492,8 @@ def local_turn(cid: str, *, audio: Path | None = None, text: str | None = None, 
         if event:
             message = f"[Session finished]\n{event.strip()[:6000]}"
         elif text:
-            message = f"[Session: {context.strip() or 'unknown'}]\n{text.strip()}"
+            lang = f"\n[Language: {c.language}]" if c.language else ""
+            message = f"[Session: {context.strip() or 'unknown'}]{lang}\n{text.strip()}"
         else:
             yield {"done": True, "empty": True}
             return
@@ -502,7 +536,7 @@ def _say(c: LocalCall, sentence: str) -> Iterator[dict]:
     if not said:
         return
     try:
-        out = tts.synth(said, c.voice_id)
+        out = tts.synth(said, c.voice_id, c.speed)
     except VoiceError as e:
         yield {"say": said, "error": e.message}
         return

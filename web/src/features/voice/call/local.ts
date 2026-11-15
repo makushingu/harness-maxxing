@@ -7,6 +7,11 @@ import type { Brain, CallPhase, Voice, VoiceEvents } from './types'
 
 const PREROLL_FRAMES = 10 // ~0.4 s at 2048 samples / 48 kHz
 const START_FRAMES = 3 // frames above the threshold before it counts as speech
+// While the voice speaks the microphone also hears it (less with echo cancellation, almost nothing with headphones):
+// the threshold follows what the microphone picks up of the voice, so speaking normally over it cuts it.
+const BARGE_FRAMES = 4 // ~0.17 s: a short echo peak is not the user
+const BARGE_MIN = 0.09
+const BARGE_OVER_ECHO = 2.2
 const END_SILENCE_MS = 900
 const MIN_SPEECH_MS = 300
 const MAX_SPEECH_MS = 60_000
@@ -20,6 +25,7 @@ export class LocalVoice implements Voice {
   private turnOpen = false
   private pending: string[] = []
   private floor = 0.04
+  private echo = 0
   private above = 0
   private preroll: Int16Array[] = []
   private rec: Int16Array[] | null = null
@@ -55,7 +61,9 @@ export class LocalVoice implements Voice {
     this.ev.level?.(level)
     const now = performance.now()
     const busySpeaking = this.playing
-    const start = Math.max(busySpeaking ? 0.32 : 0.12, this.floor * (busySpeaking ? 4 : 2.5))
+    const start = busySpeaking
+      ? Math.max(BARGE_MIN, this.floor * 2.5, this.echo * BARGE_OVER_ECHO)
+      : Math.max(0.12, this.floor * 2.5)
     if (this.rec) {
       this.rec.push(pcm)
       if (level >= start * 0.6) this.lastLoud = now
@@ -66,7 +74,7 @@ export class LocalVoice implements Voice {
     this.preroll.push(pcm)
     if (this.preroll.length > PREROLL_FRAMES) this.preroll.shift()
     if (level >= start) {
-      if (++this.above >= START_FRAMES) {
+      if (++this.above >= (busySpeaking ? BARGE_FRAMES : START_FRAMES)) {
         // The user speaks: whatever the voice was saying or preparing stops.
         if (this.playing || this.turnOpen) this.interrupt()
         this.rec = [...this.preroll]
@@ -79,6 +87,8 @@ export class LocalVoice implements Voice {
     } else {
       this.above = 0
       if (!busySpeaking) this.floor = this.floor * 0.97 + level * 0.03
+      // What the microphone hears of the voice: rises fast, falls slowly.
+      else this.echo = level > this.echo ? this.echo * 0.7 + level * 0.3 : this.echo * 0.98 + level * 0.02
     }
   }
 
@@ -137,6 +147,7 @@ export class LocalVoice implements Voice {
       if (!this.turnOpen && !this.rec) this.afterTurn()
       return
     }
+    if (!this.playing) this.echo = this.floor
     this.playing = true
     this.phase('speaking')
     this.audio.src = next

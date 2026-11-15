@@ -16,13 +16,14 @@ export type CallSettings = {
   gemini_voice: string
   talker_model: 'haiku' | 'sonnet'
   local_voice: string
+  local_speed: number
 }
 export type CallStatus = {
   settings: CallSettings
   /** The provider used in cloud mode: chosen, else the only one with a key. */
   provider: CallProvider | null
   keys: Record<CallProvider, { found: string[]; using: string | null }>
-  local: { ready: boolean; reason: 'stt' | 'tts' | null; tts: { ready: boolean; voices: string[]; catalogue: string[]; install: { state: string; error?: string | null } } }
+  local: { ready: boolean; reason: 'stt' | 'tts' | null; tts: { ready: boolean; voices: string[]; catalogue: { id: string; name: string; lang: string }[]; install: { state: string; error?: string | null } } }
   cloud: { ready: boolean; reason: 'choose' | 'choose_key' | 'no_key' | null }
   ready: boolean
   voices: { openai: string[]; gemini: string[]; local: string[] }

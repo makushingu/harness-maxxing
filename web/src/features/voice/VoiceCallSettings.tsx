@@ -4,12 +4,13 @@ import * as React from 'react'
 import { Link } from 'react-router'
 import { Check, Cloud, Cpu, Download } from 'lucide-react'
 import { useT } from '@/i18n'
-import { Badge, Button, Input, SecretInput, Select, Spinner, toast } from '@/components/ui'
+import { Badge, Button, Input, SecretInput, Segmented, Select, Spinner, toast } from '@/components/ui'
 import { Callout, OptionCard, SettingRow } from '@/features/common'
 import { useCallSettings, useCallStatus, useInstallLocalVoice, useSaveCallKey, type CallProvider, type CallStatus } from './call/api'
 
 const PROVIDER_NAME: Record<CallProvider, string> = { openai: 'OpenAI Realtime', gemini: 'Gemini Live' }
 const STD_KEY: Record<CallProvider, string> = { openai: 'OPENAI_API_KEY', gemini: 'GEMINI_API_KEY' }
+const SPEEDS = [1, 1.15, 1.3, 1.45]
 
 export function VoiceCallSettings() {
   const t = useT()
@@ -91,9 +92,21 @@ function LocalSettings({ st }: { st: CallStatus }) {
               save.mutate({ local_voice: v })
               if (v !== 'auto' && !tts.voices.includes(v)) install.mutate([v])
             }}
-            options={[{ value: 'auto', label: t('vmode.set.auto') }, ...tts.catalogue.map((v) => ({ value: v, label: `${v}${tts.voices.includes(v) ? '' : ' ↓'}` }))]}
+            options={[
+              { value: 'auto', label: t('vmode.set.auto') },
+              ...tts.catalogue.map((v) => ({ value: v.id, label: `${v.name} (${v.lang.toUpperCase()})${tts.voices.includes(v.id) ? '' : ' ↓'}` })),
+            ]}
           />
           {running && <Spinner className="size-4" />}
+        </SettingRow>
+        <SettingRow label={t('vmode.set.speed')} description={t('vmode.set.speedDesc')}>
+          <Segmented
+            size="sm"
+            aria-label={t('vmode.set.speed')}
+            value={String(SPEEDS.reduce((a, b) => (Math.abs(b - s.local_speed) < Math.abs(a - s.local_speed) ? b : a)))}
+            onChange={(v) => save.mutate({ local_speed: Number(v) })}
+            options={SPEEDS.map((v) => ({ value: String(v), label: t(`vmode.set.speed${String(v).replace('.', '')}` as 'vmode.set.speed1') }))}
+          />
         </SettingRow>
       </div>
     </div>

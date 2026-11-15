@@ -80,12 +80,16 @@ Everything the voice asks for appears in the session as your messages, so nothin
 - **Tap the call** while Harness speaks to stop it; just speak over it to cut it off. **Hang up** with the red button.
 - **Settings -> Voice -> Voice mode** chooses the voice:
   - **On this server** (default): free and private. It hears you with the engine above, thinks with a small Claude
-    model (Haiku) and speaks with Piper (install it from the card: about 150 MB). About 2 to 3 s before it answers.
+    model (Haiku) and speaks with Piper (install it from the card: about 150 MB). About 3 to 5 s before it answers.
+    Choose its **voice** (several French and English voices, each downloaded when chosen) and its **speed**. It
+    listens in your interface language and in English, sentence by sentence: switch language, or ask it to speak
+    another one, and it follows (a sentence in another language is read by a voice of that language).
   - **Cloud (realtime)**: OpenAI Realtime or Gemini Live, under a second, very natural, about 1 to 5 cents a minute
     on your own key. Harness finds the keys in the Keys vault (`OPENAI_API_KEY`, `GEMINI_API_KEY`, or any key whose
     name contains OPENAI / GEMINI) and asks which one to use when there are several. Your key never leaves the server:
     each call gets a short-lived token. The audio goes to that provider.
-- Use headphones in a noisy place: the voice may otherwise hear itself.
+- Speak normally over the voice to cut it off. With headphones it is instant; on loudspeakers the voice may need
+  you to speak a little louder than it, and in a noisy place it may hear itself.
 
 ## From the terminal
 ```

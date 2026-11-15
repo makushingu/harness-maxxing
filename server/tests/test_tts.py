@@ -17,3 +17,11 @@ def test_synth_needs_the_engine(tmp_path, monkeypatch):
     with pytest.raises(tts.TTSError) as e:
         tts.synth("hello")
     assert e.value.code == "tts_not_ready"
+
+
+def test_a_voice_only_reads_its_language(tmp_path, monkeypatch):
+    monkeypatch.setattr(tts, "installed_voices", lambda: ["fr_FR-upmc-pierre", "fr_FR-tom-medium", "en_US-ryan-medium"])
+    assert tts.pick_voice("Je regarde ça tout de suite.", "fr_FR-upmc-pierre") == "fr_FR-upmc-pierre"
+    assert tts.pick_voice("I am looking at it, give me a second.", "fr_FR-upmc-pierre") == "en_US-ryan-medium"
+    assert tts.pick_voice("Je regarde ça.", "fr_FR-upmc-medium") == "fr_FR-upmc-pierre"   # old id
+    assert tts.VOICES["fr_FR-upmc-pierre"]["speaker"] == 1
