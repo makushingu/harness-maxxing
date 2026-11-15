@@ -1563,3 +1563,12 @@ def test_connections_through_an_exit_share_one_lookup(mx, monkeypatch, down):
     for t in ts:
         t.join()
     assert len(out) == 30 and len(calls) == 1
+
+
+def test_a_lone_surrogate_in_a_tool_argument_never_breaks_the_journal(mx):
+    from maxxing.browser import replays
+    replays.log_action("main", {"at": 1, "tool": "click", "args": replays.summary("click", {"uid": "\ud800"})})
+    replays.log_action("main", {"at": 2, "tool": "navigate_page", "args": replays.summary("navigate_page", {"url": "about:\ud800"})})
+    got = replays.actions("main")
+    assert [e["at"] for e in got] == [2, 1]
+    assert got[1]["args"]["uid"] == "?"

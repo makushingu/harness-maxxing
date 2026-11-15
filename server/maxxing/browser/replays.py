@@ -35,11 +35,16 @@ def summary(name: str, args: dict) -> dict:
 
 
 def log_action(slug: str, entry: dict) -> None:
+    """Never raises: a journal that cannot be written must not break the tool call it records."""
     d = browser.actions_dir()
-    d.mkdir(parents=True, exist_ok=True)
     f = d / f"{slug}.jsonl"
-    with f.open("a") as fh:
-        fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    try:
+        d.mkdir(parents=True, exist_ok=True)
+        line = json.dumps(entry, ensure_ascii=False).encode("utf-8", "replace").decode("utf-8")
+        with f.open("a", encoding="utf-8") as fh:
+            fh.write(line + "\n")
+    except (OSError, ValueError):
+        return
     try:
         if f.stat().st_size > 400_000:
             lines = f.read_text().splitlines()[-MAX_ACTIONS:]
