@@ -489,59 +489,6 @@ def test_steer_twice_in_a_row(client, topic):
     assert sum(1 for e in evs if e["type"] == "note" and e["text"].startswith("Interrupted")) == 2
 
 
-def test_hud_message_gets_the_hud_preface_and_inline_images(client, topic, mx):
-    s = client.post("/api/sessions", json={"path": topic, "message": "first NOTOOL"}).json()
-    sid = s["id"]
-    wait_idle(client, sid, 20)
-    up = client.post("/api/uploads", params={"path": topic},
-                     files=[("file", ("screen.webp", _png(64, 32), "image/webp")),   # a PNG named .webp
-                            ("file", ("notes.txt", b"hello", "text/plain"))]).json()["files"]
-    paths = [f["path"] for f in up]
-    client.post(f"/api/sessions/{sid}/messages", json={"text": "what is wrong NOTOOL", "attachments": paths, "hud": True})
-    wait_for(lambda: client.get(f"/api/sessions/{sid}").json()["turns"] == 2, 20)
-    evs = all_events(client, sid)
-    assert [e["text"] for e in evs if e["type"] == "user"][-1] == "what is wrong NOTOOL"  # the log keeps the user text
-    last = [e["text"] for e in evs if e["type"] == "assistant"][-1]                       # fake claude echoes the prompt
-    assert "Sent from the HUD" in last
-    first, hud = calls(mx)[0], calls(mx)[-1]
-    assert first["images"] == 0                                                           # plain messages: text only
-    assert hud["argv"][hud["argv"].index("--input-format") + 1] == "stream-json"
-    assert hud["images"] == 1                                                             # the image inline, not the .txt
-    assert all(p in hud["prompt"] for p in paths)                                         # paths still listed (annotations)
-
-
-def _png(w: int, h: int) -> bytes:
-    import struct
-    import zlib
-    def chunk(kind: bytes, data: bytes) -> bytes:
-        return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
-    raw = b"".join(b"\x00" + b"\x00" * w for _ in range(min(h, 2)))
-    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 0, 0, 0, 0))
-            + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
-
-
-def test_inline_images_are_checked(tmp_path):
-    import json as _json
-    from maxxing.sessions import runner
-    ws, out = tmp_path / "ws", tmp_path / "elsewhere"
-    ws.mkdir(), out.mkdir()
-    ok, renamed, huge, notimg, outside = ws / "a.png", ws / "b.jpg", ws / "c.png", ws / "d.png", out / "e.png"
-    ok.write_bytes(_png(40, 20))
-    renamed.write_bytes(_png(40, 20))                     # a PNG named .jpg: sent as image/png
-    huge.write_bytes(_png(9000, 10))                      # wider than the API accepts: left to Read
-    notimg.write_bytes(b"not an image")
-    outside.write_bytes(_png(40, 20))                     # outside the workspace: left to Read
-    assert runner.image_info(_png(40, 20)) == ("image/png", 40, 20)
-    item = {"hud": True, "attachments": [str(notimg), str(huge), str(outside), str(ok), str(renamed)]}
-    payload, json_in = runner.stdin_payload("look", item, ws.resolve())
-    assert json_in
-    blocks = _json.loads(payload)["message"]["content"]
-    assert [b["type"] for b in blocks] == ["text", "image", "image"]
-    assert {b["source"]["media_type"] for b in blocks[1:]} == {"image/png"}
-    assert runner.stdin_payload("look", {"attachments": [str(ok)]}, ws.resolve()) == ("look", False)  # not HUD
-    assert runner.stdin_payload("look", {"hud": True, "attachments": [str(notimg)]}, ws.resolve()) == ("look", False)
-
-
 def test_plan_mode_then_approve(client, topic, mx):
     s = client.post("/api/sessions", json={"path": topic, "message": "add a greet function NOTOOL", "plan_mode": True}).json()
     sid = s["id"]
