@@ -6,10 +6,8 @@ import { seg } from '@/lib/api'
 export function useNavPicture(pid: string, nav: string, running: boolean, every = 2000, width = 640): string | null {
   const [src, setSrc] = React.useState<string | null>(null)
   React.useEffect(() => {
-    if (!running || !pid) {
-      setSrc(null)
-      return
-    }
+    setSrc(null)      // the previous profile's picture is revoked by the cleanup: never show it broken
+    if (!running || !pid) return
     let stop = false
     let url: string | null = null
     let timer: ReturnType<typeof setTimeout> | undefined

@@ -137,3 +137,17 @@ const out = { leaked: created.filter((u) => !revoked.includes(u)), shown: sets.f
 """)
     assert out == {"leaked": [], "shown": []}
 
+
+def test_a_nav_picture_never_shows_the_revoked_picture_of_the_previous_profile(tmp_path):
+    out = _nav_picture(tmp_path, """
+globalThis.fetch = async (u) => u.includes('/p1/') ? { status: 200, blob: async () => new Blob(['x']) } : { status: 503 }
+useNavPicture('p1', 'me', true)
+await wait()
+cleanup()
+useNavPicture('p2', 'me', true)      // p2 is still starting: no picture yet
+await wait()
+cleanup()
+const last = sets[sets.length - 1]
+const out = { last, revoked: revoked.includes(last) }
+""")
+    assert out == {"last": None, "revoked": False}
