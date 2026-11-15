@@ -13,7 +13,7 @@
 - [ ] Tests added or updated for this change (a bug fix comes with a test that fails without it)
 - [ ] Web changes only: `cd web && npm ci && npm run typecheck && npm run build`, and the rebuilt `web/dist` is committed
 - [ ] No web change: `web/dist` is not in the diff
-- [ ] `pc-agent/` touched: `cd pc-agent && go test ./...` passes
+- [ ] `link/` touched: `cd link && go test ./...` passes; `android/` touched: `cd android && ./gradlew testDebugUnitTest` passes
 - [ ] `CHANGELOG.md` (public, plain language) and `docs/dev/CHANGES.md` (maintainers) updated
 - [ ] User docs (`docs/user/`) updated for every visible change; UI texts in English and French
 - [ ] No personal data, secrets, real domains or server paths

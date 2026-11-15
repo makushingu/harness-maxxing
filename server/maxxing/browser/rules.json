@@ -1,5 +1,5 @@
 {
-  "comment": "DevTools commands the Harness Browser never gets, whoever sends them (chrome-devtools-mcp, the live view). Cookies and the sites' storage (local storage, IndexedDB, cache, shared storage) cannot be read, set or cleared over DevTools (one browser, everybody's sign-ins: only the page itself sees its own). Read by server/maxxing/browser/rules.py; the PC agent (pc-agent/cdpfilter.go) keeps the same list.",
+  "comment": "DevTools commands the Harness Browser never gets, whoever sends them (chrome-devtools-mcp, the live view). Cookies and the sites' storage (local storage, IndexedDB, cache, shared storage) cannot be read, set or cleared over DevTools (one browser, everybody's sign-ins: only the page itself sees its own). Read by server/maxxing/browser/rules.py.",
   "blocked_methods": [
     "Browser.setDownloadBehavior",
     "Page.setDownloadBehavior",

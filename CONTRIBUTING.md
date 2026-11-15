@@ -40,9 +40,10 @@ the UI rules [docs/dev/DESIGN.md](docs/dev/DESIGN.md): change the contract docs 
   ```bash
   cd web && npm ci && npm run typecheck && npm run build
   ```
-- **PC agent** (Go), only if you touched `pc-agent/`:
+- **Harness Link** (devices), only if you touched `link/` (Go) or `android/` (Kotlin):
   ```bash
-  cd pc-agent && go test ./...
+  cd link && go test ./...
+  cd android && ./gradlew testDebugUnitTest
   ```
 - A dev server: `MAXXING_STATE=/tmp/hm-dev uv run maxxing serve --port 8801` (each contributor its own port
   8801-8809 and its own state folder).

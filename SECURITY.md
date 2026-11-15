@@ -32,7 +32,7 @@ version first). Update with
 
 ## Scope
 
-In scope: the server (`server/`), the web UI (`web/`), the installer (`install.sh`), the PC agent (`pc-agent/`),
+In scope: the server (`server/`), the web UI (`web/`), the installer (`install.sh`), the Harness Link apps (`link/`, `android/`),
 the shipped skills and templates. Out of scope: what Claude Code does with the permissions you gave it on your own
 server, vulnerabilities of third-party components that are already fixed upstream (tell us if we ship an old
 version), and reports from automated scanners without a demonstrated impact.

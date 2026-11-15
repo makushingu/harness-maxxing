@@ -10,7 +10,7 @@ Run it when you add or upgrade a dependency. Standard library only (Python >= 3.
 - JavaScript: the production `dependencies` of `web/package.json` and everything they pull in (`web/package-lock.json`),
   bundled into `web/dist`, plus the build-time code Vite and Tailwind embed in it; texts from `web/node_modules`
   (`cd web && npm ci`); the fonts of `web/dist` come from the `@fontsource-variable/*` packages (SIL OFL 1.1);
-- Go: the modules of `pc-agent/go.mod`; texts from the Go module cache when present (`go mod download`).
+- Go: the modules of `link/go.mod`; texts from the Go module cache when present (`go mod download`).
 The output is sorted and has no date or local path: the same inputs give the same file.
 """
 from __future__ import annotations
@@ -251,7 +251,7 @@ def _go_cache() -> Path | None:
 
 
 def go_packages() -> list[dict]:
-    mod = read_text(ROOT / "pc-agent" / "go.mod")
+    mod = read_text(ROOT / "link" / "go.mod")
     reqs = re.findall(r"^\s*(?:require\s+)?([\w.\-]+(?:/[\w.\-~]+)+)\s+(v[\w.\-+]+)", mod, re.M)
     cache = _go_cache()
     out = []
@@ -260,7 +260,7 @@ def go_packages() -> list[dict]:
         d = cache / f"{esc}@{version}" if cache else None
         texts = [(f.name, read_text(f)) for f in license_files(d)] if d else []
         lic = next((license_from_text(t) for _, t in texts if license_from_text(t)), "") or GO_KNOWN.get(name, "")
-        out.append({"eco": "Go", "name": name, "version": version, "group": "compiled into the PC agent", "license": lic,
+        out.append({"eco": "Go", "name": name, "version": version, "group": "compiled into Harness Link (desktop)", "license": lic,
                     "texts": texts, "url": f"https://pkg.go.dev/{name}@{version}?tab=licenses"})
     return out
 
@@ -281,7 +281,7 @@ def render(items: list[dict]) -> str:
         "",
         "- **JavaScript**: bundled into the web interface (`web/dist`), fonts included (SIL Open Font License 1.1).",
         "- **Python**: installed from PyPI into the server's virtual environment by the installer and `maxxing update`.",
-        "- **Go**: compiled into the optional PC agent (`pc-agent/`).",
+        "- **Go**: compiled into the optional Harness Link desktop app (`link/`).",
         "",
         "Tools the installer downloads from their publishers (Claude Code, uv, Python, Node.js, Caddy, Chromium, ...)",
         "are not part of this list: they come with their own licenses.",
