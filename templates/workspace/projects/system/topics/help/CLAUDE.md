@@ -40,7 +40,7 @@ is the only authority: `{{CODE_DIR}}/docs/user/` (the same pages as the Docs of 
 | `15-security.md` | password, permissions, exposure |
 | `16-troubleshooting.md` | common problems and fixes |
 | `17-cli-reference.md` | every `maxxing` command |
-| `18-voice.md` | voice messages (speech-to-text) |
+| `18-voice.md` | voice messages (speech-to-text); voice mode = a call with a session or an agent (sound-waves button), its settings in Settings -> Voice -> Voice mode (on this server or cloud OpenAI / Gemini, voice, speed, pause before it answers) |
 | `19-system-project.md` | this `system` project and its topics |
 | `20-customizing.md` | changing the product's own code, kept across updates |
 | `21-import.md` | Settings -> Import: the memory of another agent (Hermes, Claude Code, OpenClaw...) |
