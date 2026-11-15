@@ -3,7 +3,7 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
-## Unreleased
+## 2.0.0-alpha.156 - 2026-11-15
 
 New:
 - **Voice mode: talk with Harness out loud.** The new button in the bar of a session (or in the box of an agent) starts a call: a voice

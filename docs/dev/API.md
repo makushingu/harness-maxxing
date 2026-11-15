@@ -410,7 +410,8 @@ CallStatus = {settings:{mode:"local"|"cloud", provider:"openai"|"gemini"|null, o
 | POST | `/api/voice/call/{call}/turn` | multipart: `audio` (WAV) or `text` = a sentence of the user, with `context` (the session's state line), `busy`, `saying` (the sentence the voice was saying when the user started: a transcript made mostly of its words is its echo); or `event` (the answer of an ended turn) + `outcome:"answer"\|"failed"\|"done"`; or `outcome:"progress"` + `note` (the running turn's last text) / `tool` (its last tool) | NDJSON stream: `{heard, kind:"ask"\|"stop"\|"lang"\|"empty", language}` first for a sentence (`empty`: nothing follows), `{action:{type:"ask", request}}` (`request` = the user's own words since the last hand-over, with the voice's question when they answered one) or `{action:{type:"stop"}}`, `{say, url, seconds}` per sentence (WAV, `/api/voice/said/<name>`, in the call's language), `{error, code}` (the voice failed: a sentence of the user is handed over anyway), `{language}` (changed), `{done, empty?}` |
 | POST | `/api/voice/call/sort` | `{text, language, expecting?}` | `{kind, language}` — the same sorting, for a sentence transcribed by a cloud voice |
 | POST | `/api/voice/call/{call}/end` | – | `{ok}` |
-| GET | `/api/voice/tts` · POST `/api/voice/tts/install` `{voices?}` | – | Piper status · install in `<state>/voice/tts` (own venv, GPL program run apart: `tts_worker.py` keeps the voices loaded) |
+| GET | `/api/voice/tts` | – | Piper status `{ready, engine, voices, catalogue, install}` |
+| POST | `/api/voice/tts/install` | `{voices?}` | starts the install in `<state>/voice/tts` (own venv, GPL program run apart: `tts_worker.py` keeps the voices loaded) -> the status, `install.state` "running" |
 | GET | `/api/voice/said/{name}` | – | a generated sentence (`audio/wav`, kept 10 min) |
 
 ## System
