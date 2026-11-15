@@ -29,6 +29,39 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   `getpgid(pid) == getpgrp()` (`setsid -c` has not run yet: the child is still in the server's group), `killpg`
   after. Before, a terminal closed in its first milliseconds sent SIGHUP + SIGTERM to the server's whole group (seen
   as a full test suite ending silently in `test_terminal.py`).
+- Agents benchmark of 2026-11-14 (tests `test_agents_bench_fixes.py`):
+  - `agent_guard.available()` runs `_probe()` (bwrap + a nested `unshare --user`) once the binaries are there:
+    `missing` gains `apparmor` (Ubuntu's `bwrap-userns-restrict` loaded: its `unpriv_bwrap` child profile denies the
+    capabilities Claude Code's `apply-seccomp` needs) or `user namespaces`. `setup()` (`sandbox-setup` only) calls
+    `drop_distro_profile()`: link in `/etc/apparmor.d/disable/` + `apparmor_parser -R`. `_bwrap_profile_loaded()`
+    matches by name (`:glycin:bwrap` no longer counts).
+  - `spawn.upper_memory(cwd, workspace)`: the `memory.md` of the levels above the turn's folder whose `CLAUDE.md`
+    imports it, appended to the turn's single `--append-system-prompt` (runner `hint`). Skipped outside the
+    workspace, for a file without facts (`_has_facts`: headings, comments, template lines) and when
+    `projects[cwd].hasClaudeMdExternalIncludesApproved` is set in `.claude.json` (Claude Code loads them itself).
+    We do not set that flag ourselves: Claude Code rewrites the file, and it would also follow any other import.
+  - `agent_guard.settings()`: `topic_read()` (`Read(//<topic>/**)`) allowed for sandboxed agents and for the new
+    branch "no sandbox, acceptEdits / default" (deny: the topic's `.env`, `topic_edit_denied()` when `writable`;
+    allow: `FREE_CLI` = `Bash(maxxing agents:*)`, `Bash(maxxing feed:*)` unless approvals). `add_dirs()` no longer
+    needs the sandbox. `check_cli`: `OWNER_ONLY` (`sessions new|send`, `cron run|restore`) refused in an agent turn
+    that is not the manager.
+  - `agents`: snapshots keep the text of `agent.json` (`agent`, <= 100 kB) and fingerprint `WATCHED_FILES`
+    (+ `.mcp.json`, `.claude/settings*.json`); `on_turn_end` -> `_pop_snapshot` / `_changed_since` / `_put_back`
+    (not for the manager's turns); the note has `restored: ["agent.json"]`. `owner_at` is now stamped by `_save()`
+    (every server write of `agent.json`: webhook, mailbox removal... no longer taken for the run's edit).
+  - The waiting queue (`owner_wait` in the agent state) also takes the busy starts of `manual` / `telegram` /
+    `agent:*` triggers that are not the owner's message: items with `auto: true`, `text` (cut at `EVENT_MAX`) and
+    `depth`; their thread message has `waiting` without `owner` and does not count in `_runs_last_hour`. `fire`
+    answers `{started: true, waiting: true}` (CLI: `waiting <path>…`, exit 0). Crons and `wait=True` callers are
+    unchanged.
+  - `TASK_MAX` = 100 000 characters of `prompt`: reason `too_long` (skip in the thread), `POST …/run` -> 413.
+  - `workspace._delete`: `agents.hook_ids()` before the move, `agents.drop_hooks()` after (a restored agent's
+    webhook trigger is "dead": `agents webhook` gives it a new URL).
+  - `agent_format.parse_md`: `bypassPermissions` -> `acceptEdits`, listed in `ignored`. Templates `uptime`,
+    `orders`, `sales`, `mail-sort`: `model: haiku` (`agent_templates.fields`).
+  - Left as they are, on purpose: a limit under its minimum is still cut (tested behaviour), any model name is
+    accepted (gateways), unknown PATCH fields are ignored, the generic webhook takes plain text, group turns skip a
+    busy member.
 - Git page: `GitNav` (second sidebar) lists the repositories under each source again (`RepoRow`, a `<Link>` so the
   peeked list and the touch drawer close on a pick); a source head is a plain button that folds its section
   (`mx-git-folded` in localStorage), not a page: `SourceCards` / `LocalRow` / `GithubRow` and `?source=` / `?account=`

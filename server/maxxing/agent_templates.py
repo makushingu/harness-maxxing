@@ -63,7 +63,7 @@ TEMPLATES: list[dict[str, Any]] = [
         "cron": {"schedule": "0 20 * * *", "prompt": {"en": "Sum up today's sales.", "fr": "Résume les ventes d'aujourd'hui."}},
         "permission_mode": "default", "approvals": False, "allowed_tools": READ + ["Bash(curl:*)"],
         "domains": ["api.stripe.com", "*.myshopify.com"], "keys": ["STRIPE_RESTRICTED_KEY", "SHOPIFY_TOKEN", "SHOPIFY_ADMIN_TOKEN"],
-        "limits": {"usd_per_day": 1.0, "runs_per_hour": 2},
+        "model": "haiku", "limits": {"usd_per_day": 1.0, "runs_per_hour": 2},
         "needs": {"en": "A read-only API key in Settings -> Keys (a Stripe restricted key, a Shopify token with read scopes), checked in its keys.",
                   "fr": "Une clé d'API en lecture seule dans Réglages -> Clés (clé restreinte Stripe, jeton Shopify en lecture), cochée dans ses clés."},
     },
@@ -85,7 +85,7 @@ TEMPLATES: list[dict[str, Any]] = [
         "cron": {"schedule": "0 9 * * 1-6", "prompt": {"en": "List the orders waiting today.", "fr": "Liste les commandes en attente aujourd'hui."}},
         "permission_mode": "default", "approvals": False, "allowed_tools": READ + ["Bash(curl:*)"],
         "domains": ["*.myshopify.com"], "keys": ["SHOPIFY_TOKEN", "SHOPIFY_ADMIN_TOKEN"],
-        "limits": {"usd_per_day": 1.0, "runs_per_hour": 2},
+        "model": "haiku", "limits": {"usd_per_day": 1.0, "runs_per_hour": 2},
         "needs": {"en": "A Shopify token with read scopes in Settings -> Keys, checked in its keys.",
                   "fr": "Un jeton Shopify en lecture dans Réglages -> Clés, coché dans ses clés."},
     },
@@ -173,7 +173,7 @@ TEMPLATES: list[dict[str, Any]] = [
                   "dans ta mémoire). Tu ne fais que lire.\n\nSites à vérifier :\n- "},
         "cron": {"schedule": "7 * * * *", "prompt": {"en": "Check the sites.", "fr": "Vérifie les sites."}},
         "permission_mode": "default", "approvals": False, "allowed_tools": READ + ["Bash(curl:*)", "WebFetch"],
-        "keys": [], "limits": {"usd_per_day": 1.0, "runs_per_hour": 2},
+        "keys": [], "model": "haiku", "limits": {"usd_per_day": 1.0, "runs_per_hour": 2},
         "needs": {"en": "The list of sites at the end of its role, and their host names on its page: Settings -> Safety -> Domains it can reach.", "fr": "La liste des sites à la fin de son rôle, et leurs noms d'hôte sur sa page : Réglages -> Sécurité -> Domaines qu'il peut joindre."},
     },
     {
@@ -220,7 +220,7 @@ TEMPLATES: list[dict[str, Any]] = [
         "mail": {"rights": ["read", "move"], "approve_send": "always",
                  "trigger": {"prompt": {"en": "File these new mails.", "fr": "Range ces nouveaux mails."}}},
         "permission_mode": "default", "approvals": False, "allowed_tools": MAIL,
-        "keys": [], "limits": {"usd_per_day": 2.0, "runs_per_hour": 12},
+        "keys": [], "model": "haiku", "limits": {"usd_per_day": 2.0, "runs_per_hour": 12},
         "needs": {"en": "A mailbox of the E-mail page.", "fr": "Une boîte de la page E-mail."},
     },
     {
@@ -320,6 +320,8 @@ def fields(t: dict, keys_present: list[str] | None = None, mail_account: str = "
            "permission_mode": t["permission_mode"], "approvals": t["approvals"],
            "allowed_tools": list(t["allowed_tools"]), "keys": [k for k in t["keys"] if k in have],
            "limits": dict(t["limits"]), "domains": list(t.get("domains") or [])}
+    if t.get("model"):                      # a job that only reads and sums up: the small model
+        out["model"] = t["model"]
     if t.get("writable"):
         out["writable"] = list(t["writable"])
     if t.get("mail") and mail_account:

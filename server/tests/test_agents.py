@@ -168,23 +168,29 @@ def test_runs_side_by_side_never_share_the_budget_or_the_hour(client, topic, mon
     monkeypatch.setenv("FAKE_CLAUDE_DELAY", "0.3")
     first = agents.fire(A, trigger="manual", source="command line", prompt="NOTOOL a")
     assert first["started"]
-    assert agents.fire(A, trigger="manual", source="command line", prompt="NOTOOL b") == {"started": False, "reason": "busy"}
+    assert agents.fire(A, trigger="cron:c_1", source="cron", prompt="NOTOOL b") == {"started": False, "reason": "busy"}
     assert agents.fire(A, trigger="feed:t_1", prompt="NOTOOL c", wait=True) == {"started": False, "reason": "busy"}
     assert [m["reason"] for m in agents.thread(A) if m["kind"] == "skip"] == ["busy"]   # wait: nothing posted
+    # asked by hand or handed by another agent: it waits for the run in progress, then starts with what is left
+    assert agents.fire(A, trigger="manual", source="command line", prompt="NOTOOL d") == {"started": True, "waiting": True}
+    assert agents.fire(A, trigger="agent:session", source="session", text="NOTOOL e", depth=1) == {"started": True, "waiting": True}
+    assert [(m["text"], m.get("owner")) for m in agents.thread(A) if m.get("waiting")] == [("NOTOOL d", None), ("NOTOOL e", None)]
+    assert [(q.get("text"), q.get("depth")) for q in agents._read_state(A)["owner_wait"]] == [("", 0), ("NOTOOL e", 1)]
+    assert agents._runs_last_hour(A) == 1                                              # a run that waits is not one yet
     from maxxing import feed
     assert not feed.find(agents._ref(A, "budget"))                                      # not a budget alert
     wait_idle(client, first["session"]["id"])
-    argv = _calls()[-1]["argv"]
+    argv = _calls()[0]["argv"]
     assert argv[argv.index("--max-budget-usd") + 1] == "2.00"
-    wait_for(lambda: not agents._read_state(A).get("held"))                            # released at the turn end
     monkeypatch.setenv("FAKE_CLAUDE_DELAY", "0.02")
-    again = agents.fire(A, trigger="manual", source="command line", prompt="NOTOOL d")
-    assert again["started"]
-    wait_idle(client, again["session"]["id"])
-    argv = _calls()[-1]["argv"]
-    assert argv[argv.index("--max-budget-usd") + 1] == "1.99"                          # 2 - the first run's 0.0123
+    wait_for(lambda: not agents._read_state(A).get("owner_wait") and not agents._read_state(A).get("held")
+             and len([m for m in agents.thread(A) if m["kind"] == "result"]) == 3)     # each in its turn
+    assert not [m for m in agents.thread(A) if m.get("waiting")]
+    calls = _calls()
+    assert [c["argv"][c["argv"].index("--max-budget-usd") + 1] for c in calls] == ["2.00", "1.99", "1.98"]
+    assert "DATA from outside" in calls[2]["prompt"] and "NOTOOL e" in calls[2]["prompt"]   # still framed
     # runs per hour: two triggers at the same moment, one slot left -> one run
-    client.patch("/api/agents/acme/blog/writer", json={"limits": {"usd_per_day": 0, "runs_per_hour": 3}})
+    client.patch("/api/agents/acme/blog/writer", json={"limits": {"usd_per_day": 0, "runs_per_hour": 4}})
     out: list = []
     ts = [threading.Thread(target=lambda: out.append(agents.fire(A, trigger="manual", source="command line", prompt="NOTOOL e")))
           for _ in range(2)]
@@ -210,7 +216,7 @@ def test_the_end_of_a_turn_keeps_the_hold_of_the_next_queued_turn(client, topic,
     wait_for(lambda: any(m["kind"] == "result" for m in agents.thread(A)), timeout=5)   # turn 1's end was handled
     assert (store.read(sid) or {}).get("state") == "running"                            # turn 2 runs
     assert sid in (agents._read_state(A).get("held") or {})
-    assert agents.fire(A, trigger="manual", source="command line", prompt="NOTOOL other") == {"started": False, "reason": "busy"}
+    assert agents.fire(A, trigger="cron:c_1", source="cron", prompt="NOTOOL other") == {"started": False, "reason": "busy"}
     wait_idle(client, sid, timeout=20)
     wait_for(lambda: not agents._read_state(A).get("held"))                            # released at its own end
 

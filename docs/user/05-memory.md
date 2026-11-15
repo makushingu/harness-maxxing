@@ -19,7 +19,8 @@ organises that memory in plain markdown files that Claude Code loads automatical
 
 Claude Code loads every `CLAUDE.md` from the session folder up to the workspace root, and each
 `CLAUDE.md` contains the line `@memory.md`, which imports its memory file. A session in
-`projects/acme/topics/blog/` therefore reads all six files.
+`projects/acme/topics/blog/` therefore reads all six files. (Claude Code itself only follows the import of the
+session's own folder; Harness passes the memory of the levels above with each turn, so nothing has to be approved.)
 
 | File | Contains | Who writes it |
 |---|---|---|
