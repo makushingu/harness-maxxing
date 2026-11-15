@@ -2112,7 +2112,7 @@ def run_timeout(a: dict, asked: int | None = None) -> int:
 def fire(path: str, *, trigger: str, text: str = "", prompt: str = "", source: str = "manual",
          attachments: list[str] | None = None, depth: int = 0, cron_env: dict | None = None,
          timeout_s: int | None = None, reply_to: str | None = None, wait: bool = False, model: str | None = None,
-         effort: str | None = None, voice: str | None = None) -> dict:
+         effort: str | None = None, voice: str | None = None, call: str | None = None) -> dict:
     """Start a new session of the agent -> {started: bool, session?, reason?, continued?}.
     trigger: "manual", "cron:<job id>", "feed:<trigger id>", "telegram", "agent:<from path>".
     reply_to: the id of a thread message; its session goes on with this message (no new session).
@@ -2120,21 +2120,23 @@ def fire(path: str, *, trigger: str, text: str = "", prompt: str = "", source: s
     model, effort: those of a new conversation of the owner (picked by the owner; default chat_model, then model).
     voice: a voice message of the owner sent directly (a file under <agent>/attachments/): its session transcribes
     it (sessions/voicejobs.py) and the transcript fills its message of the thread (voice_heard).
+    call: said by the owner on a voice call, in that language (the turn is told it is on the phone).
     The guards and the start are one step under _lock: triggers arriving together never pass the same guard."""
     text, prompt = _utf8(text or ""), _utf8(prompt or "")    # a lone surrogate could not be stored (500)
     with _lock:
         return _fire(path, trigger=trigger, text=text, prompt=prompt, source=source, attachments=attachments,
                      depth=depth, cron_env=cron_env, timeout_s=timeout_s, reply_to=reply_to, wait=wait,
-                     model=model, effort=effort, voice=voice)
+                     model=model, effort=effort, voice=voice, call=call)
 
 
 def _fire(path: str, *, trigger: str, text: str, prompt: str, source: str, attachments: list[str] | None,
           depth: int, cron_env: dict | None, timeout_s: int | None, reply_to: str | None, wait: bool,
           model: str | None = None, waited: str | None = None, effort: str | None = None,
-          voice: str | None = None) -> dict:
+          voice: str | None = None, call: str | None = None) -> dict:
     """waited: the id of the owner's message that waited (_owner_wait): its run message is already in the thread."""
     owner = _owner_chat(trigger, source, text)
     voice = voice if owner else None                     # only the owner's own words are sent as a recording
+    call = call if owner else None
     if depth > MAX_DEPTH:
         reason = "depth"
     elif len(prompt) > TASK_MAX:
@@ -2148,7 +2150,7 @@ def _fire(path: str, *, trigger: str, text: str, prompt: str, source: str, attac
             _drain_owner(path)                          # the owner's messages that waited go first, in order
         if reason == "busy" or _read_state(path).get("owner_wait"):
             r = _owner_wait(path, trigger=trigger, prompt=prompt, source=source, attachments=attachments,
-                            reply_to=reply_to, model=model, effort=effort, voice=voice)
+                            reply_to=reply_to, model=model, effort=effort, voice=voice, call=call)
             if r:
                 return r
     if reason == "busy" and wait:
@@ -2192,7 +2194,8 @@ def _fire(path: str, *, trigger: str, text: str, prompt: str, source: str, attac
     heard = {"voice": [voice]} if voice else {}
     cap = CHAT_TEXT_MAX if owner else 600
     if sid:
-        r = service.send_message(sid, message, attachments=attachments, source="agent", ref=ref, voice_path=voice)
+        r = service.send_message(sid, message, attachments=attachments, source="agent", ref=ref, voice_path=voice,
+                                 call=call)
         _hold_left(path, a, sid)
         _snapshot(path, sid)
         if chat and not reply_to:
@@ -2222,7 +2225,7 @@ def _fire(path: str, *, trigger: str, text: str, prompt: str, source: str, attac
                                attachments=attachments, source="agent", notify=False, cron=True, env=env,
                                timeout_s=run_timeout(a, timeout_s),
                                permission_mode=a["permission_mode"], ref=ref, voice_path=voice,
-                               effort=(effort if chat else None) or None)
+                               effort=(effort if chat else None) or None, call=call)
     _hold_left(path, a, s["id"])
     _snapshot(path, s["id"])
     if chat:
@@ -2247,7 +2250,7 @@ _waiting_seeded = False
 
 def _owner_wait(path: str, *, trigger: str, prompt: str, source: str, attachments: list[str] | None,
                 reply_to: str | None, model: str | None, effort: str | None = None,
-                voice: str | None = None, text: str = "", depth: int = 0) -> dict | None:
+                voice: str | None = None, text: str = "", depth: int = 0, call: str | None = None) -> dict | None:
     """Keeps the owner's message until the run in progress ends -> the answer of fire, None = no room (refused).
     text: a run that is not the owner's message (by hand, from another agent) with its outside text and its hops."""
     own = _owner_chat(trigger, source, text)
@@ -2261,7 +2264,7 @@ def _owner_wait(path: str, *, trigger: str, prompt: str, source: str, attachment
                **({"attachments": list(attachments)} if attachments else {}), **({"voice": [voice]} if voice else {}))
     q.append({"id": msg["id"], "trigger": trigger, "source": source, "prompt": prompt,
               "attachments": list(attachments or []), "reply_to": reply_to or "", "model": model or "",
-              "effort": effort or "", "voice": voice or "", "at": msg["at"],
+              "effort": effort or "", "voice": voice or "", "at": msg["at"], **({"call": call} if call else {}),
               **({} if own else {"text": text[:EVENT_MAX + 1], "depth": depth, "auto": True})})
     st = _read_state(path)
     st["owner_wait"] = q
@@ -2295,7 +2298,7 @@ def _drain_owner(path: str) -> int:
                   attachments=it.get("attachments") or None, depth=int(it.get("depth") or 0),
                   cron_env=None, timeout_s=None, reply_to=it.get("reply_to") or None, wait=False,
                   model=it.get("model") or None, waited=str(it.get("id") or ""), effort=it.get("effort") or None,
-                  voice=it.get("voice") or None)
+                  voice=it.get("voice") or None, call=it.get("call") or None)
             n += 1
         except Exception:  # noqa: BLE001 - one bad message never blocks the next ones
             log.exception("agent %s: waiting message", path)

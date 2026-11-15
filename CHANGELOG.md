@@ -6,7 +6,7 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 ## Unreleased
 
 New:
-- **Voice mode: talk with Harness out loud.** The new button in the bar of a session starts a call: a voice
+- **Voice mode: talk with Harness out loud.** The new button in the bar of a session (or in the box of an agent) starts a call: a voice
   answers you at once, hands real work to the session in your own words (the same Claude, files and tools), tells
   you now and then what it is doing and reads the outcome out when it is done; what you add while it works joins
   the work in progress, and "stop" stops it. Speak to cut the voice: it lowers its volume at once, stops when it is

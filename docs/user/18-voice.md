@@ -72,7 +72,7 @@ Send a **voice note** or a **round video note** in a session thread (an audio fi
 If voice messages are off, the bot replies with a short hint instead.
 
 ## Voice mode (talk with Harness)
-The **voice mode** button (sound waves, in the bar of a session) starts a call. A voice answers you at once and
+The **voice mode** button (sound waves, in the bar of a session, or next to *Send* on an agent's page) starts a call. A voice answers you at once and
 talks with you; anything real (look something up, check, change, create...) it hands to the session - the same
 Claude, with its files and tools - **in your own words**, and tells you the outcome when the session is done.
 Everything handed over appears in the session as your messages, so nothing happens out of sight.

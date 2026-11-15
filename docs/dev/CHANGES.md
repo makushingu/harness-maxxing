@@ -7,6 +7,10 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Voice mode on an agent's page: `VoiceCall` gets `callKey` (`agent:<path>`, the call's own key for `/call/start`;
+  `sid` = `chat_session`, '' before the first message, followed when a new conversation starts) and `stream` (the
+  call follows that session's log). `RunIn.call` -> `agents.fire(call=)` -> `send_message` / `create_session(call=)`
+  (and kept by `owner_wait`).
 - Wording only: `sessions.queue.inject` "Add to task", `sessions.msg.injected` "added to the running task" +
   `sessions.msg.injectedTip` (Items.tsx tooltip); no API change.
 - Voice mode (`voicecall.py`, `tts.py`, `tts_worker.py`, `api/voice.py` `/call*` `/tts*` `/said`, web

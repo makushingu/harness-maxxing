@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
 import { api, errorMessage } from '@/lib/api'
 import { Button, Tooltip, toast } from '@/components/ui'
-import { getLog, useLogSelect } from '@/pages/sessions/log'
+import { getLog, useLogSelect, useSessionStream } from '@/pages/sessions/log'
 import { useUI } from '@/stores/ui'
 import { endCall, startCall, useCallStatus } from './call/api'
 import { LocalVoice } from './call/local'
@@ -20,7 +20,12 @@ import type { Brain, CallPhase, Outcome, Voice } from './call/types'
 import { LevelMeter } from './VoiceButton'
 
 type Props = {
+  /** The session the call talks to ('' while there is none yet: an agent's first message creates it). */
   sid: string
+  /** What the call belongs to (one call each; it hangs up when this changes): the session, or `agent:<path>`. */
+  callKey?: string
+  /** The page does not follow the session's log by itself (an agent's page): the call does. */
+  stream?: boolean
   running: boolean
   queueCount: number
   /** `call`: the call's language (Claude is told it is on the phone). */
@@ -95,7 +100,7 @@ function sessionLine(sid: string, running: boolean, queue: number): string {
   return `working for ${since} s${steps.length ? `; last steps: ${steps.join(' | ')}` : '; thinking'}${queue ? `; ${queue} message(s) waiting` : ''}`
 }
 
-export function VoiceCall({ sid, running, queueCount, onSend, onStop }: Props) {
+export function VoiceCall({ sid, callKey, stream, running, queueCount, onSend, onStop }: Props) {
   const t = useT()
   const navigate = useNavigate()
   const { data: st } = useCallStatus()
@@ -104,10 +109,13 @@ export function VoiceCall({ sid, running, queueCount, onSend, onStop }: Props) {
   const [caption, setCaption] = React.useState<{ who: 'you' | 'voice'; text: string } | null>(null)
   const voice = React.useRef<Voice | null>(null)
   const callId = React.useRef<string | null>(null)
-  const live = React.useRef({ running, queueCount, onSend, onStop })
-  live.current = { running, queueCount, onSend, onStop }
-  const resultKey = useLogSelect(sid, lastResultKey)
+  const live = React.useRef({ sid, running, queueCount, onSend, onStop })
+  live.current = { sid, running, queueCount, onSend, onStop }
+  const key = callKey || sid
+  useSessionStream(stream && phase !== 'off' && sid ? sid : null)
+  const resultKey = useLogSelect(sid || null, lastResultKey)
   const seenKey = React.useRef(resultKey)
+  const seenSid = React.useRef(sid)
   const lastSaid = React.useRef(0) // last time the call did anything but listen
   const progressKey = React.useRef('')
   const progressCount = React.useRef(0)
@@ -123,7 +131,7 @@ export function VoiceCall({ sid, running, queueCount, onSend, onStop }: Props) {
     setLevel(0)
   }, [])
 
-  React.useEffect(() => hangUp, [hangUp, sid])
+  React.useEffect(() => hangUp, [hangUp, key])
 
   // While the session works and the call is quiet, the voice says now and then what it does.
   React.useEffect(() => {
@@ -147,6 +155,12 @@ export function VoiceCall({ sid, running, queueCount, onSend, onStop }: Props) {
 
   // A turn of the session ended during the call: the voice reads it out.
   React.useEffect(() => {
+    if (seenSid.current !== sid) {
+      // the call moved to another session (an agent's new conversation): only its next ends are read out
+      seenSid.current = sid
+      seenKey.current = resultKey
+      return
+    }
     if (resultKey === seenKey.current) return
     seenKey.current = resultKey
     if (!voice.current || !resultKey) return
@@ -163,20 +177,21 @@ export function VoiceCall({ sid, running, queueCount, onSend, onStop }: Props) {
       const ok = await live.current.onSend(request.trim(), [], lang).catch(() => false)
       if (!ok) return 'The message could not be sent to the session.'
       // Talking while it works: the sentence joins the running turn (read at its next step) instead of waiting.
-      if (busy) {
+      const sid = live.current.sid
+      if (busy && sid) {
         const r = await api.post<{ injected: boolean }>(`/api/sessions/${encodeURIComponent(sid)}/inject`).catch(() => null)
         if (r?.injected) return 'Added to the work in progress.'
       }
       return busy ? 'Queued: the session is busy and will do it right after its current work.' : 'Sent: the session is working on it.'
     },
     busy: () => live.current.running,
-    status: () => sessionLine(sid, live.current.running, live.current.queueCount),
+    status: () => sessionLine(live.current.sid, live.current.running, live.current.queueCount),
     stop: async () => {
       if (!live.current.running) return 'The session was not working.'
       live.current.onStop?.()
       return 'Stopped.'
     },
-    lastAnswer: () => lastAnswer(sid).slice(0, 6000),
+    lastAnswer: () => lastAnswer(live.current.sid).slice(0, 6000),
   }
 
   const start = async () => {
@@ -192,7 +207,7 @@ export function VoiceCall({ sid, running, queueCount, onSend, onStop }: Props) {
     progressCount.current = 0
     try {
       const ui = useUI.getState().language
-      const c = await startCall(sid, ui)
+      const c = await startCall(key, ui)
       const events = {
         phase: (p: CallPhase) => {
           if (p !== 'listening') lastSaid.current = Date.now()
@@ -210,7 +225,7 @@ export function VoiceCall({ sid, running, queueCount, onSend, onStop }: Props) {
         const lang = (ui || navigator.language || 'en').split('-')[0].toLowerCase()
         // the provider ends a connection now and then: a new token for the same call
         const renew = async (resume?: string) => {
-          const n = await startCall(sid, ui, resume ?? '')
+          const n = await startCall(key, ui, resume ?? '')
           if (n.mode !== 'cloud') throw new Error('The voice settings changed during the call')
           return n
         }

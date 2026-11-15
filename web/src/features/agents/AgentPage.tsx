@@ -44,6 +44,7 @@ import { BrowserWindow } from '@/features/browser/BrowserWindow'
 import { bringBackDraft, insertAtCaret, useAttachments, useDraftText, withQuote } from './attach'
 import { agentDraftKey } from '@/lib/drafts'
 import { VoiceButton } from '@/features/voice/VoiceButton'
+import { VoiceCall } from '@/features/voice/VoiceCall'
 import { MessageBox, StopButton, TuckedCard, TuckedHead } from '@/features/composer/MessageBox'
 import { AttachmentStrip, MessageMedia, useMessageMenu, VoiceNote } from '@/pages/sessions/Items'
 import { useSlashCommands } from '@/pages/sessions/slashCommands'
@@ -1233,6 +1234,24 @@ function Composer({ agent: a, replyTo, onCancelReply, onSend, ref }: { agent: Ag
                 <MessageSquarePlus />
               </Button>
             </Tooltip>
+          )}
+          {a.enabled && (
+            // A voice call with the agent: what is said goes to its conversation (as typed here), its answers are
+            // read out. The call follows the conversation when a new one starts.
+            <VoiceCall
+              sid={a.chat_session || ''}
+              callKey={`agent:${a.path}`}
+              stream
+              running={chat?.state === 'running'}
+              queueCount={chat?.queue || 0}
+              onSend={(said, _atts, call) =>
+                run.mutateAsync({ path: a.path, text: said, call, ...nextPick() }).then(
+                  (r) => !!r.started,
+                  () => false,
+                )
+              }
+              onStop={chat ? () => stopChat.mutate(chat.id) : undefined}
+            />
           )}
           {chat && chat.state === 'running' && <StopButton onClick={() => stopChat.mutate(chat.id)} busy={stopChat.isPending} label={t('sessions.stop')} />}
         </>

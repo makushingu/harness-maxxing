@@ -342,12 +342,12 @@ def create_session(path: str, message: str | None = None, title: str | None = No
                    env: dict | None = None, timeout_s: int | None = None, plan_mode: bool = False,
                    permission_mode: str = "", auto_title: bool = False, voice_path: str | None = None,
                    client_id: str | None = None, silent_ok: bool = False, ref: str | None = None,
-                   effort: str | None = None, worktree: dict | None = None) -> dict:
+                   effort: str | None = None, worktree: dict | None = None, call: str | None = None) -> dict:
     """`worktree` = {repo, base?, prepare?, copy_env?, pr?}: the session works on a separate copy (worktrees.py),
     made before its first turn.
     `auto_title`: `title` was made from the first message by the caller (Telegram) - still worth a short title.
     `silent_ok`: a scheduled job that reports every run - its turn may answer [SILENT] (runner, spawn.CRON_SILENT).
-    `ref`: as send_message's, for the first message."""
+    `ref`, `call`: as send_message's, for the first message."""
     try:
         p = workspace.normalize_path(path)
         workspace.topic_dir(p)
@@ -385,7 +385,8 @@ def create_session(path: str, message: str | None = None, title: str | None = No
             worktrees.undo(meta["id"], meta["worktree"])
         raise
     first = _item((message or "").strip(), files, source, **_client_ids(client_id),
-                  **({"silent_ok": True} if silent_ok else {}), **({"refs": [str(ref)]} if ref else {}))
+                  **({"silent_ok": True} if silent_ok else {}), **({"refs": [str(ref)]} if ref else {}),
+                  **({"call": call} if call else {}))
     if audio:
         _enqueue_voice(meta["id"], first, audio)
     elif (message or "").strip() or files:
