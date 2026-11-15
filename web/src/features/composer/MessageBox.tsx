@@ -106,6 +106,8 @@ export type MessageBoxProps = {
   /** A narrow panel (Team beside another page): less padding, no reading width. */
   compact?: boolean
   className?: string
+  /** The width of the box (default: the reading width of a session). */
+  widthClassName?: string
 }
 
 export function MessageBox(p: MessageBoxProps) {
@@ -122,7 +124,7 @@ export function MessageBox(p: MessageBoxProps) {
   }, [n])
   return (
     <div className={cn('shrink-0', p.compact ? 'p-2' : 'px-3 pt-1 pb-3 max-md:pb-[calc(0.5rem+var(--safe-bottom-ui))]', p.className)}>
-      <div className={cn('mx-auto w-full', !p.compact && 'max-w-(--mx-read,860px)')}>
+      <div className={cn('mx-auto w-full', !p.compact && (p.widthClassName || 'max-w-(--mx-read,860px)'))}>
         {p.above}
         <div
           {...boxRest}
