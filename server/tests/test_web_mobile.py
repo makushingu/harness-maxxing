@@ -165,3 +165,11 @@ def test_the_links_under_a_git_block_are_big_enough_to_tap():
     for m in (code, page, github):
         assert m and "pointer-coarse:min-h-10" in m[1].split()
     assert "pointer-coarse:min-w-10" in github[1].split()
+
+
+def test_a_confirmation_with_a_long_name_stays_on_the_screen():
+    src = (WEB / "components" / "ui" / "alert-dialog.tsx").read_text()
+    content = re.search(r"'mx-glass fixed z-50 grid ([^']*)'", src)
+    title = re.search(r"<AD\.Title className=\{cn\('([^']*)'", src)
+    assert content and "grid-cols-[minmax(0,1fr)]" in content[1].split()
+    assert title and "[overflow-wrap:anywhere]" in title[1].split()
