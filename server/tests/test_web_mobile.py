@@ -173,3 +173,9 @@ def test_a_confirmation_with_a_long_name_stays_on_the_screen():
     title = re.search(r"<AD\.Title className=\{cn\('([^']*)'", src)
     assert content and "grid-cols-[minmax(0,1fr)]" in content[1].split()
     assert title and "[overflow-wrap:anywhere]" in title[1].split()
+
+
+def test_the_audio_player_with_a_long_name_stays_on_the_screen():
+    src = (WEB / "features" / "files" / "MediaPlayer.tsx").read_text()
+    root = re.search(r"cn\('(relative grid w-full max-w-lg [^']*)', className\)\} tabIndex=\{0\}", src)
+    assert root and "grid-cols-[minmax(0,1fr)]" in root[1].split()

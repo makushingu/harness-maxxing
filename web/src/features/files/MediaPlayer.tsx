@@ -886,7 +886,7 @@ export function MediaPlayer({ path, kind, version, onError, onOpen, keepAlive, w
 
   if (!video)
     return (
-      <div className={cn('relative grid w-full max-w-lg gap-3 rounded-xl border bg-card p-4 shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring', className)} tabIndex={0} onKeyDown={onKey} data-media-player>
+      <div className={cn('relative grid w-full max-w-lg grid-cols-[minmax(0,1fr)] gap-3 rounded-xl border bg-card p-4 shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring', className)} tabIndex={0} onKeyDown={onKey} data-media-player>
         <div className="flex items-center gap-3">
           <button
             type="button"
