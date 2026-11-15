@@ -1053,7 +1053,7 @@ class Runner:
                 err = auth_err
                 claude_auth.record(False, auth_err, "turn")
             elif ok and a.result is not None:
-                claude_auth.record(True, None, "turn")
+                claude_auth.record(True, None, "turn", res.get("credential_expires_at"))
         cost = a.turn_cost if a.turn_cost is not None else res.get("total_cost_usd")
         with store.edit(self.sid) as m:
             if a.thread_total is not None and a.csid:

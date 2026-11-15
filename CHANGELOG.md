@@ -3,6 +3,23 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## Unreleased
+
+Added:
+- **Claude: you are told before the sign-in of your server ends.** A sign-in made with `claude` then `/login` on
+  the server now has an end date, and every session stops on that day. Ten days before, the bell (and Telegram)
+  and `maxxing doctor` give the date and what to do: sign in again, or paste a long-lived token in Settings ->
+  Claude. Needs Claude Code 2.1.318 or newer (it updates by itself); a token or an API key is not concerned.
+- **Sub-agents can run at their own effort**: `CLAUDE_CODE_SUBAGENT_EFFORT` (Claude Code 2.1.316+) set on the
+  service now reaches the sessions, like the other Claude tuning variables.
+
+Fixed:
+- **Agents: a turn cut short on Fable 5.2, Fable 5.1 or Sonnet 5.5 is counted at its real price.** The estimate
+  used the price of the first Fable (10 $ / 50 $ per million tokens, cache reads 1 $) for every Fable: Fable 5.2
+  costs 8 $ / 40 $ and its cache reads 0.20 $, so such a turn weighed up to five times too much on the agent's
+  daily budget.
+- Before the list of models is first read from Anthropic, the Fable offered is Fable 5.2.
+
 ## 2.0.0-alpha.153 - 2026-11-15
 
 Fixed:

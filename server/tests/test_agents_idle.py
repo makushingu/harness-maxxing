@@ -40,13 +40,18 @@ def test_last_turn_prices_a_turn_without_result():
             json.dumps({"type": "mx_done", "code": 143, "stopped": False, "timed_out": True, "at": 50})]
     done, usage, usd = agent_cost.last_turn(old + turn)
     assert done["timed_out"] and usage["cache_read_input_tokens"] == 3_000_000 and usage["output_tokens"] == 1000
-    assert usd == round(0.2 + 0.5 + 0.02 + 0.4, 6)      # opus: read 0.2, write 5, out 20 / sonnet: read 0.2
+    assert usd == round(0.2 + 0.5 + 0.02 + 0.2, 6)      # opus: read 0.2, write 5, out 20 / sonnet 5.5: read 0.1
     # a turn that reported its cost, one stopped by the owner, one still running: nothing to estimate
     assert agent_cost.last_turn(old)[0] is None
     stopped = turn[:-1] + [json.dumps({"type": "mx_done", "code": 143, "stopped": True, "timed_out": False})]
     assert agent_cost.last_turn(old + stopped)[0] is None
     assert agent_cost.last_turn(old + turn[:-1])[0] is None
     assert agent_cost.price("claude-unknown-9") == agent_cost.PRICES[-1][1]
+    # list prices of platform.claude.com (2026-11): a newer Fable costs less, its cache reads 0.025x the input
+    assert agent_cost.price("claude-fable-5-2") == (8.0, 40.0, 0.2, 10.0)
+    assert agent_cost.price("claude-fable-5-1") == (10.0, 50.0, 0.25, 12.5)
+    assert agent_cost.price("claude-fable-5") == (10.0, 50.0, 1.0, 12.5)
+    assert agent_cost.price("claude-sonnet-5-5")[2] == 0.1 and agent_cost.price("claude-sonnet-5")[2] == 0.2
 
 
 def test_last_turn_keeps_the_tokens_before_a_message_added_to_the_turn():

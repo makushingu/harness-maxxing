@@ -10,7 +10,7 @@ def test_status_with_fake_claude(client, mx, monkeypatch, tmp_path):
     r = client.get("/api/claude/status").json()
     assert r["installed"] is True and r["version"] == "2.1.0"
     assert r["auth"] == {"ok": False, "method": None, "detail": "Not connected", "checked_at": None,
-                         "error": None}
+                         "error": None, "ends_at": None}
     assert r["permission_mode"] == "bypass" and r["default_model"] == ""
     ids = [m["id"] for m in r["models"]]
     assert "claude-opus-5-5" in ids and "claude-haiku-5-5" in ids

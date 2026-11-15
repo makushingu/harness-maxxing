@@ -97,9 +97,14 @@ Python modules call each other only through these functions. Keep signatures sta
 - `pending(sid) -> bool` - a short title is being made (between `schedule` and the end of its thread) or meta
   `title_auto` is set: the Telegram sync waits for it (60 s at most) before creating the session's thread.
 ## maxxing.claude_auth  (stdlib only, also used by the runner)
-- `record(ok, error=None, source="turn"|"test"|"check")` - outcome of a real call; `detect(text) -> str|None`
-  finds a sign-in error; `status() -> {ok, method, detail, checked_at, error}` (GET /api/claude/status `auth`,
-  health, doctor); `needs_check()` - no verification in the last 6 h (background check in api/claude.py).
+- `record(ok, error=None, source="turn"|"test"|"check", ends=None)` - outcome of a real call; `detect(text) ->
+  str|None` finds a sign-in error; `status() -> {ok, method, detail, checked_at, error, ends_at}` (GET
+  /api/claude/status `auth`, health, doctor); `needs_check()` - no verification in the last 6 h (background check
+  in api/claude.py).
+- `ends` = the `credential_expires_at` of Claude Code's `result` (2.1.318+, ISO date; only a stored `claude`
+  sign-in has one, a setup-token or an API key has none), kept as `ends` (epoch) in claude-auth.json by turns, tests
+  and checks. `ending(status)` -> its local date when it is within `ENDS_WARN_S` (10 days): health issue
+  `claude_login_ends` (warn; so the bell and Telegram), doctor `claude_auth` WARN.
 
 ## maxxing.auto_update
 - Harness updates itself while nobody uses it. Off by default (config `auto_update`, Settings -> System -> Updates,
@@ -944,7 +949,8 @@ administers the host; units started with systemd-run are created by PID 1 and do
 ## Claude tuning variables (production)
 
 `sessions/spawn.TUNING_ENV` - `CLAUDE_CODE_EFFORT_LEVEL`, `MAX_THINKING_TOKENS`,
-`CLAUDE_CODE_PROMPT_CACHE_TTL`, `CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL`, `FORCE_PROMPT_CACHING_5M`,
+`CLAUDE_CODE_PROMPT_CACHE_TTL`, `CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL`, `CLAUDE_CODE_SUBAGENT_EFFORT`,
+`FORCE_PROMPT_CACHING_5M`,
 `ENABLE_PROMPT_CACHING_1H`, `DISABLE_PROMPT_CACHING`, `ENABLE_TOOL_SEARCH`,
 `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS` (names checked in the Claude Code binary) - set on the
 `claude-maxxing` service, reach every turn runner in direct and systemd modes (as `--setenv`, so

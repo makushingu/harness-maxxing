@@ -12,12 +12,14 @@ import math
 import os
 import re
 import time
+from datetime import datetime
 from pathlib import Path
 
 from . import config
 from .sessions import spawn
 
 CHECK_EVERY_S = 6 * 3600
+ENDS_WARN_S = 10 * 86400            # a stored sign-in that ends within this is told (Claude Code warns from 10 days too)
 AUTH_ERROR = re.compile(
     r"oauth (?:session|token)[^\n]{0,60}(?:expired|revoked|invalid)|could not be refreshed|"
     r"invalid api key|invalid x-api-key|please run /login|authentication_error|authentication failed|"
@@ -84,10 +86,24 @@ def last() -> dict:
     return d if isinstance(d, dict) else {}
 
 
-def record(ok: bool, error: str | None = None, source: str = "turn") -> None:
-    """Remember the outcome of a real call (atomic, safe across processes)."""
+def _epoch(v: object) -> float | None:
+    """Claude Code's `credential_expires_at` ("2026-11-18T21:05:20.730Z") -> epoch."""
+    if not isinstance(v, str) or not v:
+        return None
+    try:
+        return datetime.fromisoformat(v.replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        return None
+
+
+def record(ok: bool, error: str | None = None, source: str = "turn", ends: object = None) -> None:
+    """Remember the outcome of a real call (atomic, safe across processes). `ends`: the `credential_expires_at`
+    of Claude Code's result (2.1.318+), the day a stored `claude` sign-in stops working."""
     data = {"ok": bool(ok), "at": time.time(), "error": None if ok else (error or "unknown error")[:400],
             "source": source, "method": auth_method()[0]}
+    end = _epoch(ends) if data["method"] == "credentials" else None
+    if end is not None:
+        data["ends"] = end
     p = state_file()
     try:
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -120,19 +136,31 @@ def _relevant(rec: dict, method: str | None) -> bool:
 
 
 def status() -> dict:
-    """{ok, method, detail, checked_at, error}: ok = a method is configured and the last real call
-    with it did not fail on authentication (checked_at None = not verified yet)."""
+    """{ok, method, detail, checked_at, error, ends_at}: ok = a method is configured and the last real call
+    with it did not fail on authentication (checked_at None = not verified yet). ends_at: the epoch a stored
+    `claude` sign-in ends, as its last real call said (None: another method, or not said)."""
     method, detail = auth_method()
     rec = last()
-    out = {"ok": method is not None, "method": method, "detail": detail, "checked_at": None, "error": None}
+    out = {"ok": method is not None, "method": method, "detail": detail, "checked_at": None, "error": None,
+           "ends_at": None}
     if method is None or not _relevant(rec, method):
         return out
     out["checked_at"] = rec.get("at")
+    if isinstance(rec.get("ends"), (int, float)):
+        out["ends_at"] = float(rec["ends"])
     if rec.get("ok") is False:
         err = rec.get("error") or "unknown error"
         prefix = "Last test failed" if rec.get("source") == "test" else "Claude sign-in failed"
         out.update(ok=False, error=err, detail=f"{prefix}: {err}")
     return out
+
+
+def ending(st: dict, now: float | None = None) -> str | None:
+    """"2026-11-18 22:05" when the sign-in of `status()` works and ends within ENDS_WARN_S, else None."""
+    end = st.get("ends_at")
+    if not st.get("ok") or not end or end - (now or time.time()) > ENDS_WARN_S:
+        return None
+    return time.strftime("%Y-%m-%d %H:%M", time.localtime(end))
 
 
 def needs_check(now: float | None = None) -> bool:

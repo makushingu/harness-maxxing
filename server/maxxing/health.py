@@ -390,6 +390,13 @@ def _collect() -> dict:
     elif not auth:
         issues.append(_issue("error", "claude_auth", "Claude sign-in expired - sign in again in Settings > Claude"
                              + (f" ({ast['error'][:160]})" if ast.get("error") else "")))
+    else:
+        from . import claude_auth as ca
+        ends = ca.ending(ast)
+        if ends:
+            issues.append(_issue("warn", "claude_login_ends", f"The Claude sign-in of this server ends on {ends}: "
+                                 "sign in again (`claude`, then /login) or paste a long-lived token in "
+                                 "Settings > Claude"))
     age_h = None
     if backup_configured():
         last = last_backup()

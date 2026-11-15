@@ -48,7 +48,7 @@ Single source of truth between `server/` and `web/`. Change it here first, then 
 | POST | `/api/onboarding/complete` | – | `{ok, jobs_enabled:[cron_id]}` (Claude signed in: the default jobs created off until then - Memory compaction - are turned on, once) |
 
 ## Claude
-| GET | `/api/claude/status` | – | `{installed, version, auth:{ok, method:"oauth_token"\|"credentials"\|"api_key"\|null, detail, checked_at:float\|null, error:string\|null}, default_model, permission_mode, auto_compact_tokens, idle_compact_tokens, idle_compact_after_s, smart_resume_tokens, protect_secrets:bool, short_titles:bool, short_titles_model:bool, auto_update:{enabled:bool, checked_at:float\|null, latest:string\|null, last:{from, to, at:float, ok:bool, error:string\|null}\|null}, models:[{id,label,context_window:int\|null}]}` (`context_window`: as last reported by Claude Code on this server, null if never seen) |
+| GET | `/api/claude/status` | – | `{installed, version, auth:{ok, method:"oauth_token"\|"credentials"\|"api_key"\|null, detail, checked_at:float\|null, error:string\|null, ends_at:float\|null}, default_model, permission_mode, auto_compact_tokens, idle_compact_tokens, idle_compact_after_s, smart_resume_tokens, protect_secrets:bool, short_titles:bool, short_titles_model:bool, auto_update:{enabled:bool, checked_at:float\|null, latest:string\|null, last:{from, to, at:float, ok:bool, error:string\|null}\|null}, models:[{id,label,context_window:int\|null}]}` (`context_window`: as last reported by Claude Code on this server, null if never seen) |
 | POST | `/api/claude/auth` | `{kind:"oauth_token"\|"api_key", value}` | stores the secret then runs a test call → `{ok, error?}`; 400 `invalid` if `value` is shorter than 10 characters or not printable ASCII without spaces |
 | DELETE | `/api/claude/auth` | – | removes stored token/key |
 | POST | `/api/claude/test` | – | `{ok, model, ms, error?}` (real one-line call) |
@@ -59,9 +59,9 @@ current method (success → `ok`, `checked_at`; a sign-in error such as "OAuth s
 key" → `ok:false`, `error`). A new `claude /login` (credentials file rewritten) or a new token clears an old
 failure. With no recent result the server verifies in the background (`claude -p`, cheapest model, 60 s timeout)
 at startup and at most every 6 h; a background timeout/network error does not mark the sign-in as failed.
-`checked_at:null` = configured but not verified yet.
+`checked_at:null` = configured but not verified yet. `ends_at` = when a stored `claude` sign-in ends (epoch; null for a token or a key, or when Claude Code did not say).
 
-`models` = the newest model of each family read from Anthropic once a day (`claude_models`; before the first read claude-opus-5-5, claude-sonnet-5-5, claude-haiku-5-5, claude-fable-5-1) + ids observed in logs.
+`models` = the newest model of each family read from Anthropic once a day (`claude_models`; before the first read claude-opus-5-5, claude-sonnet-5-5, claude-haiku-5-5, claude-fable-5-2) + ids observed in logs.
 
 ## Workspace
 | GET | `/api/workspace/tree` | – | `{root, projects:[Project]}` |

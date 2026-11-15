@@ -124,3 +124,32 @@ def test_doctor_reports_expired_sign_in(mx, tmp_path, monkeypatch):
     c = cmd_core.check_claude_auth(False)
     assert c["level"] == "fail" and c["title"] == "Claude sign-in expired" and EXPIRED in c["detail"]
     assert health.claude_auth() is False
+
+
+def test_stored_sign_in_about_to_end_is_told(mx, tmp_path, monkeypatch):
+    """Claude Code 2.1.318+ says in each result when a stored sign-in ends: told 10 days ahead (bell, doctor)."""
+    from maxxing import cmd_core
+    _creds(tmp_path, monkeypatch)
+    monkeypatch.setattr(cmd_core, "home", lambda: tmp_path / "home")
+    codes = lambda: [i["code"] for i in health.collect(True)["issues"]]
+    far = time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime(time.time() + 40 * 86400))
+    claude_auth.record(True, None, "turn", far)
+    assert claude_auth.status()["ends_at"] and "claude_login_ends" not in codes()
+    assert cmd_core.check_claude_auth(False)["level"] == "ok"
+    soon = time.time() + 3 * 86400
+    claude_auth.record(True, None, "turn", time.strftime("%Y-%m-%dT%H:%M:%S.730Z", time.gmtime(soon)))
+    st = claude_auth.status()
+    assert abs(st["ends_at"] - soon) < 2 and st["ok"]
+    day = time.strftime("%Y-%m-%d %H:%M", time.localtime(st["ends_at"]))
+    issue = next(i for i in health.collect(True)["issues"] if i["code"] == "claude_login_ends")
+    assert issue["level"] == "warn" and day in issue["text"]
+    c = cmd_core.check_claude_auth(False)
+    assert c["level"] == "warn" and day in c["title"]
+    claude_auth.record(True, None, "check", "not a date")          # an older Claude Code: nothing said
+    assert claude_auth.status()["ends_at"] is None and "claude_login_ends" not in codes()
+
+
+def test_a_token_has_no_end_date(mx, tmp_path, monkeypatch):
+    config.set_secret("claude_oauth_token", "sk-ant-oat01-x")
+    claude_auth.record(True, None, "turn", "2026-11-18T21:05:20.730Z")
+    assert claude_auth.status()["ends_at"] is None

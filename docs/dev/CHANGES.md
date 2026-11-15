@@ -5,6 +5,21 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## Unreleased
+
+- `claude_auth.record(..., ends)`: the runner (`res["credential_expires_at"]`) and the test / background check
+  (`api/claude.run_test`, `--output-format json`) pass Claude Code's `credential_expires_at` (2.1.318+, ISO date,
+  present only with a stored claude.ai sign-in; seen on 2.1.325: `"2026-11-18T21:05:20.730Z"`). Kept as `ends`
+  (epoch) in claude-auth.json, only for the `credentials` method; a call that says nothing clears it (older CLI).
+  `status()` gains `ends_at`; `ending(status)` gives the local date within `ENDS_WARN_S` (10 days) -> health issue
+  `claude_login_ends` (warn, server text, no web change) and doctor `claude_auth` WARN. Follows `_relevant`: after
+  the credentials file is rewritten (a token refresh outside a turn, a new login) the date is unknown until the
+  next real call.
+- `agent_cost.PRICES`: rows `fable-5-2` / `mythos-5-2` (8, 40, 0.2, 10), `fable-5-1` / `mythos-5-1` (10, 50,
+  0.25, 12.5), `sonnet-5-5` (cache read 0.1), before the family rows (first match wins). Haiku 5.5 over 100k
+  tokens of prompt (5x) is still priced at the low rate.
+- `spawn.TUNING_ENV` + `CLAUDE_CODE_SUBAGENT_EFFORT`; `claude_models.FALLBACK` -> `claude-fable-5-2`.
+
 ## 2.0.0-alpha.153 - 2026-11-15
 
 - Owner's conversation with an agent (`manager_turn`): `runner` computed its mode with `effective_mode({**meta,

@@ -25,8 +25,13 @@ log = logging.getLogger("maxxing.agent_cost")
 # unknown model gets the last row (Opus list price: rather too much than a budget that never stops).
 PRICES: tuple[tuple[str, tuple[float, float, float, float]], ...] = (
     ("opus-5-5", (4.0, 20.0, 0.2, 5.0)),
+    ("sonnet-5-5", (2.0, 10.0, 0.1, 2.5)),
     ("sonnet-5", (2.0, 10.0, 0.2, 2.5)),
     ("haiku-5", (0.1, 0.5, 0.01, 0.125)),
+    ("fable-5-2", (8.0, 40.0, 0.2, 10.0)),
+    ("mythos-5-2", (8.0, 40.0, 0.2, 10.0)),
+    ("fable-5-1", (10.0, 50.0, 0.25, 12.5)),
+    ("mythos-5-1", (10.0, 50.0, 0.25, 12.5)),
     ("fable", (10.0, 50.0, 1.0, 12.5)),
     ("mythos", (10.0, 50.0, 1.0, 12.5)),
     ("haiku", (1.0, 5.0, 0.1, 1.25)),

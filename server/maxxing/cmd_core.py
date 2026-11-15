@@ -952,6 +952,11 @@ def check_claude_auth(live: bool = False) -> Check:
             return _c("claude_auth", FAIL, "Claude sign-in expired", st.get("error") or st["detail"],
                       "run `claude` then /login on the server, or `claude setup-token` and paste the token "
                       "in Settings -> Claude (`maxxing doctor --live` re-tests)")
+        ends = ca.ending(st) if st["method"] == method else None
+        if ends:
+            return _c("claude_auth", WARN, f"Claude sign-in ends on {ends}", detail,
+                      "run `claude` then /login on the server again, or `claude setup-token` and paste the "
+                      "long-lived token in Settings -> Claude")
         when = (f", verified {time.strftime('%Y-%m-%d %H:%M', time.localtime(st['checked_at']))}"
                 if st["method"] == method and st.get("checked_at") else ", not verified yet")
         return _c("claude_auth", OK, f"Claude auth: {method}{when}", detail)

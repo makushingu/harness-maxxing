@@ -98,15 +98,15 @@ def run_test(model: str = TEST_MODEL, source: str = "test", timeout_s: int = TES
             out["model"] = next(iter(mu))
     else:
         out["error"] = (text or r.stderr or r.stdout or f"exit code {r.returncode}").strip()[-400:]
-    return _remember(out, source)
+    return _remember(out, source, data.get("credential_expires_at"))
 
 
-def _remember(out: dict, source: str) -> dict:
+def _remember(out: dict, source: str, ends: object = None) -> dict:
     """Record the outcome. A background check only flips the state on a real sign-in error
     (a timeout or a network glitch is not "signed out"); an explicit test always does."""
     err = out.get("error")
     if out["ok"]:
-        claude_auth.record(True, None, source)
+        claude_auth.record(True, None, source, ends)
     elif source == "test" or claude_auth.detect(err):
         claude_auth.record(False, claude_auth.detect(err) or err, source)
     return out
