@@ -33,7 +33,7 @@ export function BrowserPanel({ path, live = true, who }: { path: string; live?: 
   const current = profiles.find((p) => p.id === o.profile)
 
   return (
-    <div className="grid min-w-0 gap-4" data-testid="browser-panel">
+    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4" data-testid="browser-panel">
       {!o.feature && (
         <Callout tone="info">
           {t('browser.featureOff')}{' '}
@@ -69,7 +69,7 @@ export function BrowserPanel({ path, live = true, who }: { path: string; live?: 
           </SettingRow>
         )}
       </div>
-      {!agent && <p className="text-[12px] text-muted-foreground">{t('browser.panel.projectProfile', { name: projectName })}</p>}
+      {!agent && <p className="break-words text-[12px] text-muted-foreground">{t('browser.panel.projectProfile', { name: projectName })}</p>}
 
       <div className="grid gap-2">
         <p className="flex min-w-0 items-center gap-2 text-[12px] text-muted-foreground">

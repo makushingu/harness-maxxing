@@ -212,3 +212,11 @@ def test_a_settings_card_with_a_long_title_stays_on_the_screen():
     head = re.search(r'<div className="([^"]*)">\s*\{title && <h3 className=\{cn\(\'([^\']*)\'', src)
     assert head and {"min-w-0", "grid-cols-[minmax(0,1fr)]"} <= set(head[1].split())
     assert "[overflow-wrap:anywhere]" in head[2].split()
+
+
+def test_the_browser_panel_with_a_long_profile_name_stays_on_the_screen():
+    src = (WEB / "features" / "browser" / "BrowserPanel.tsx").read_text()
+    root = re.search(r'<div className="([^"]*)" data-testid="browser-panel">', src)
+    assert root and "grid-cols-[minmax(0,1fr)]" in root[1].split()
+    line = re.search(r"<p className=\"([^\"]*)\">\{t\('browser\.panel\.projectProfile'", src)
+    assert line and "break-words" in line[1].split()
