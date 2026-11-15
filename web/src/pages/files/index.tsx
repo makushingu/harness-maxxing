@@ -420,7 +420,7 @@ export default function FilesPage() {
                   }
                 />
               ) : (
-                <FileView key={file} path={file} siblings={visible} entry={entry} actions={viewActions} />
+                <FileView key={file} path={file} siblings={visible} folder={list?.entries} entry={entry} actions={viewActions} />
               )
             ) : kindQ.data ? (
               <EmptyState

@@ -56,7 +56,8 @@ export type FileViewActions = {
   ask: (path: string) => void
 }
 
-export function FileView({ path, siblings, actions, entry }: { path: string; siblings: FileEntry[]; actions: FileViewActions; entry?: FileEntry }) {
+/** siblings: the entries shown (hidden files may be filtered out); folder: every entry of the folder, hidden ones too. */
+export function FileView({ path, siblings, folder, actions, entry }: { path: string; siblings: FileEntry[]; folder?: FileEntry[]; actions: FileViewActions; entry?: FileEntry }) {
   const t = useT()
   const lang = useLang()
   const qc = useQueryClient()
@@ -162,7 +163,8 @@ export function FileView({ path, siblings, actions, entry }: { path: string; sib
         setSavedFlash(true)
       }
     } else {
-      const taken = new Set(siblings.map((s) => s.name))
+      // every name of the folder, hidden ones too: the copy is written without a check and would replace one
+      const taken = new Set((folder ?? siblings).map((s) => s.name))
       const copyName = uniqueName(name, (n) => taken.has(n), t('files.copySuffix'))
       const target = joinPath(dirname(path), copyName)
       const r = await write({ as: target })
