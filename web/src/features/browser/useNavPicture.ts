@@ -18,8 +18,9 @@ export function useNavPicture(pid: string, nav: string, running: boolean, every 
       if (document.visibilityState === 'visible') {
         try {
           const r = await fetch(`/api/browser/profiles/${seg(pid)}/picture?w=${width}&nav=${encodeURIComponent(nav)}`, { credentials: 'same-origin', cache: 'no-store' })
-          if (r.status === 200 && !stop) {
-            const next = URL.createObjectURL(await r.blob())
+          const blob = r.status === 200 && !stop ? await r.blob() : null
+          if (blob && !stop) {      // closed while it downloaded: no URL that the cleanup can no longer revoke
+            const next = URL.createObjectURL(blob)
             if (url) URL.revokeObjectURL(url)
             url = next
             setSrc(next)
