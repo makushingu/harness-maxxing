@@ -43,7 +43,7 @@ export function ProfilePage({ pid }: { pid: string }) {
           maxLength={40}
           aria-label={t('browser.profile.rename')}
           title={t('browser.profile.rename')}
-          className="h-8 w-56 min-w-0 rounded-md border border-transparent bg-transparent px-2 text-sm font-semibold outline-none hover:border-border focus:border-ring"
+          className="h-8 w-full min-w-0 rounded-md border sm:w-56 pointer-coarse:h-10 border-transparent bg-transparent px-2 text-sm font-semibold outline-none hover:border-border focus:border-ring"
           data-testid="browser-profile-name"
         />
         {where && <span className="truncate text-[12px] text-muted-foreground">{where}</span>}

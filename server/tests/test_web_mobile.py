@@ -171,3 +171,9 @@ def test_the_error_of_a_browser_exit_breaks_inside_the_card():
     src = (WEB / "features" / "browser" / "Exits.tsx").read_text()
     err = re.search(r"exit\.state === 'down' && <span className=\"([^\"]*)\">· \{exit\.error\}", src)
     assert err and {"min-w-0", "[overflow-wrap:anywhere]"} <= set(err[1].split())
+
+
+def test_the_name_of_a_browser_profile_takes_the_width_of_a_phone():
+    src = (WEB / "features" / "browser" / "ProfilePage.tsx").read_text()
+    field = re.search(r'className="([^"]*)"\s+data-testid="browser-profile-name"', src)
+    assert field and {"w-full", "sm:w-56", "pointer-coarse:h-10"} <= set(field[1].split()) and "w-56" not in field[1].split()
