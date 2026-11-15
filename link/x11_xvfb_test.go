@@ -63,7 +63,7 @@ func TestX11Real(t *testing.T) {
 	}
 
 	// screenshot: real size, downscaled copy, not uniform (the xterm is drawn on the black root)
-	s, err := doShot(be, 640, 70)
+	s, err := doShot(be, 640, 70, nil, 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

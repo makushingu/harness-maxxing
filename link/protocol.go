@@ -22,8 +22,9 @@ type request struct {
 	ID json.RawMessage `json:"id,omitempty"`
 
 	// shot
-	MaxW    int `json:"max_w"`
-	Quality int `json:"quality"`
+	MaxW    int       `json:"max_w"`
+	Quality int       `json:"quality"`
+	Crop    *cropRect `json:"crop"` // zoom: part of the screen, in the capture space sw x sh
 
 	// input
 	A      string   `json:"a"`
@@ -48,6 +49,8 @@ type request struct {
 	Busy *bool  `json:"busy"`
 	By   string `json:"by"`
 }
+
+type cropRect struct{ X, Y, W, H float64 }
 
 // opError is answered as {"t":"err","id","code","message"}.
 type opError struct{ Code, Message string }
@@ -86,7 +89,7 @@ func (a *agent) serve(r request) map[string]any {
 	switch r.T {
 	case "shot":
 		var s *shotResult
-		if s, err = doShot(a.be, r.MaxW, r.Quality); err == nil {
+		if s, err = doShot(a.be, r.MaxW, r.Quality, r.Crop, r.SW, r.SH); err == nil {
 			return ok("jpeg", base64.StdEncoding.EncodeToString(s.JPEG), "w", s.W, "h", s.H,
 				"sw_screen", s.SW, "sh_screen", s.SH)
 		}
@@ -126,7 +129,7 @@ type shotResult struct {
 	W, H, SW, SH int
 }
 
-func doShot(be backend, maxW, quality int) (*shotResult, error) {
+func doShot(be backend, maxW, quality int, crop *cropRect, sw, sh float64) (*shotResult, error) {
 	if err := need(be, capScreen); err != nil {
 		return nil, err
 	}
@@ -135,7 +138,21 @@ func doShot(be backend, maxW, quality int) (*shotResult, error) {
 		return nil, err
 	}
 	b := img.Bounds()
-	out := downscale(img, maxW)
+	var src image.Image = img
+	if crop != nil {
+		r, err := cropToScreen(*crop, sw, sh, b)
+		if err != nil {
+			return nil, err
+		}
+		si, ok := img.(interface {
+			SubImage(image.Rectangle) image.Image
+		})
+		if !ok {
+			return nil, &opError{"failed", "cannot crop this capture"}
+		}
+		src = si.SubImage(r)
+	}
+	out := downscale(src, maxW)
 	if quality <= 0 {
 		quality = 70
 	}
@@ -146,6 +163,31 @@ func doShot(be backend, maxW, quality int) (*shotResult, error) {
 	}
 	ob := out.Bounds()
 	return &shotResult{JPEG: buf.Bytes(), W: ob.Dx(), H: ob.Dy(), SW: b.Dx(), SH: b.Dy()}, nil
+}
+
+// cropToScreen converts a crop given in a capture of size sw x sh to a rectangle of the full-size capture b.
+func cropToScreen(c cropRect, sw, sh float64, b image.Rectangle) (image.Rectangle, error) {
+	for _, v := range []float64{c.X, c.Y, c.W, c.H} {
+		if math.IsNaN(v) || math.IsInf(v, 0) {
+			return image.Rectangle{}, badRequest("bad crop")
+		}
+	}
+	if c.W <= 0 || c.H <= 0 {
+		return image.Rectangle{}, badRequest("crop w and h must be positive")
+	}
+	fx, fy := 1.0, 1.0
+	if sw > 0 {
+		fx = float64(b.Dx()) / sw
+	}
+	if sh > 0 {
+		fy = float64(b.Dy()) / sh
+	}
+	r := image.Rect(int(math.Floor(c.X*fx)), int(math.Floor(c.Y*fy)),
+		int(math.Ceil((c.X+c.W)*fx)), int(math.Ceil((c.Y+c.H)*fy))).Add(b.Min).Intersect(b)
+	if r.Dx() < 1 || r.Dy() < 1 {
+		return image.Rectangle{}, badRequest("crop is outside the screen")
+	}
+	return r, nil
 }
 
 // downscale returns img reduced to maxW pixels wide (aspect kept); never enlarges. maxW <= 0 = full size.

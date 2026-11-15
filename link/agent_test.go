@@ -250,6 +250,23 @@ func TestProtocol(t *testing.T) {
 		t.Fatalf("left half should be red: %v", img.At(100, 100))
 	}
 
+	// zoom: a crop given in capture space, cut from the full-size capture (the red half / the black half)
+	m = c.call(t, map[string]any{"t": "shot", "max_w": 1280, "crop": map[string]any{"x": 600, "y": 0, "w": 80, "h": 45}, "sw": 1280, "sh": 720})
+	if m["t"] != "ok" || m["w"] != 120.0 || m["h"] != 68.0 || m["sw_screen"] != 1920.0 {
+		t.Fatalf("crop %v %v %v %v", m["t"], m["w"], m["h"], m["message"])
+	}
+	raw, _ = base64.StdEncoding.DecodeString(m["jpeg"].(string))
+	img, _ = jpeg.Decode(bytes.NewReader(raw))
+	if r, _, _, _ := img.At(5, 30).RGBA(); r>>8 < 200 {
+		t.Fatalf("crop left should be red")
+	}
+	if r, _, _, _ := img.At(115, 30).RGBA(); r>>8 > 60 {
+		t.Fatalf("crop right should be black")
+	}
+	if m := c.call(t, map[string]any{"t": "shot", "crop": map[string]any{"x": 5000, "y": 0, "w": 10, "h": 10}, "sw": 1280, "sh": 720}); m["code"] != "bad_request" {
+		t.Fatalf("crop outside %v", m)
+	}
+
 	// input, coordinates in capture space (1280x720) scaled to the 1920x1080 screen
 	cases := []struct {
 		req  map[string]any

@@ -51,6 +51,8 @@ Requests are run one at a time, in order (input never interleaves). At most 16 m
   `{"t":"ok","id","jpeg":"<base64>","w":1280,"h":720,"sw_screen":2560,"sh_screen":1440}`.
   The image is reduced to `max_w` pixels wide, aspect kept, never enlarged (`max_w` 0 or absent = full size);
   `quality` 20-95 (default 70). `w`,`h` = the JPEG; `sw_screen`,`sh_screen` = the full screen in pixels.
+  Zoom: `"crop":{"x","y","w","h"}` with `sw`,`sh` (same space as input coordinates) -> only that part of the
+  screen, cut from the full-size capture then reduced to `max_w`; outside the screen -> `bad_request`.
   Desktop: the primary / main display only.
 - `{"t":"input","id","a":<action>, ...}` -> `{"t":"ok","id"}`. Coordinates `x`,`y` (`x2`,`y2`) are in the
   space of a capture of size `sw` x `sh` (send back the `w`,`h` of the screenshot the coordinates come from);
