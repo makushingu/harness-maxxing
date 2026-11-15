@@ -45,6 +45,9 @@ profile bwrap-maxxing /usr/bin/bwrap flags=(unconfined) {
 """
 USERNS_SYSCTL = Path("/proc/sys/kernel/apparmor_restrict_unprivileged_userns")
 APPARMOR_PROFILES = Path("/sys/kernel/security/apparmor/profiles")
+DISTRO_FILE = Path("/etc/apparmor.d/bwrap-userns-restrict")     # Ubuntu's own profile over bubblewrap...
+DISTRO_OFF = Path("/etc/apparmor.d/disable/bwrap-userns-restrict")
+DISTRO_CHILD = "unpriv_bwrap"                                   # ...and the profile of what bwrap starts
 
 # `maxxing` sub-commands a sandboxed agent turn may run (anything else is refused): its own work, nothing that
 # changes the server (a cron or an MCP server would run outside the sandbox).
@@ -64,7 +67,9 @@ _avail: tuple[float, dict] | None = None
 
 
 def available(fresh: bool = False) -> dict:
-    """{ok, missing: [...]} - what the sandbox needs on this server (cached 60 s)."""
+    """{ok, missing: [...]} - what the sandbox needs on this server (cached 60 s). The binaries being there is not
+    enough: a bubblewrap that cannot nest a user namespace (an AppArmor profile over it) fails every command of a
+    sandboxed turn, so one is really started (_probe)."""
     global _avail
     if _avail and not fresh and time.time() - _avail[0] < 60:
         return _avail[1]
@@ -75,6 +80,8 @@ def available(fresh: bool = False) -> dict:
         missing.append("linux")
     elif _userns_restricted() and not _bwrap_profile_loaded():
         missing.append("apparmor")
+    elif "bwrap" not in missing and not _probe():
+        missing.append("apparmor" if _distro_profile_loaded() else "user namespaces")
     out = {"ok": not missing, "missing": missing}
     _avail = (time.time(), out)
     return out
@@ -87,11 +94,40 @@ def _userns_restricted() -> bool:
         return False
 
 
+def _profiles() -> list[str]:
+    return APPARMOR_PROFILES.read_text().splitlines()
+
+
 def _bwrap_profile_loaded() -> bool:
     try:
-        return any("bwrap" in ln for ln in APPARMOR_PROFILES.read_text().splitlines())
+        # by its name: a profile of another namespace (":glycin:bwrap") is not over /usr/bin/bwrap
+        return any(ln.startswith("bwrap") for ln in _profiles())
     except OSError:
         return APPARMOR_FILE.is_file()             # profiles list unreadable (not root): trust the file
+
+
+def _distro_profile_loaded() -> bool:
+    """The distribution's own profile over bubblewrap (Ubuntu's bwrap-userns-restrict): what bwrap starts runs as
+    `unpriv_bwrap`, without capabilities in its user namespace, so Claude Code's sandbox cannot nest its own."""
+    try:
+        return any(ln.split(" ")[0] == DISTRO_CHILD for ln in _profiles())
+    except OSError:
+        return False
+
+
+def _probe() -> bool:
+    """What Claude Code's sandbox does first, in small: a user namespace inside bubblewrap's. False = every command
+    of a sandboxed turn would fail there. True when it cannot be tried (no `unshare`): the run says it then."""
+    import subprocess
+    if not shutil.which("unshare"):
+        return True
+    try:
+        r = subprocess.run(["bwrap", "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--unshare-user",
+                            "--unshare-pid", "--die-with-parent", "--", "unshare", "--user", "--map-root-user",
+                            "true"], capture_output=True, timeout=10)
+        return r.returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
 
 
 def setup() -> list[str]:
@@ -105,10 +141,38 @@ def setup() -> list[str]:
         env = {**os.environ, "DEBIAN_FRONTEND": "noninteractive"}
         subprocess.run(["apt-get", "install", "-y", "-q", *pkgs], check=True, env=env, stdout=subprocess.DEVNULL)
         done.append("installed " + ", ".join(pkgs))
+    if _distro_profile_loaded() and not _probe() and drop_distro_profile():
+        done.append(f"AppArmor profile {DISTRO_FILE} switched off (it kept the sandbox from starting; "
+                    f"back: rm {DISTRO_OFF} && apparmor_parser -r {DISTRO_FILE})")
     if load_profile():
         done.append(f"AppArmor profile {APPARMOR_FILE}")
     available(fresh=True)
     return done
+
+
+def drop_distro_profile() -> bool:
+    """Switch the distribution's profile over bubblewrap off (root, `sandbox-setup` only: never by itself), the way
+    AppArmor documents it: a link in disable/ and the profile unloaded. True = done now."""
+    import subprocess
+    if not DISTRO_FILE.is_file():
+        return False
+    DISTRO_OFF.parent.mkdir(exist_ok=True)
+    made = not DISTRO_OFF.exists()
+    if made:
+        DISTRO_OFF.symlink_to(DISTRO_FILE)
+    try:
+        subprocess.run([_parser(), "-R", str(DISTRO_FILE)], check=True)
+    except (OSError, subprocess.SubprocessError):
+        if made:                                    # never half done: off at the next boot but still loaded now
+            DISTRO_OFF.unlink(missing_ok=True)
+        raise
+    return True
+
+
+def _parser() -> str:
+    """apparmor_parser lives in /usr/sbin, which is not on every PATH (a unit, a cron, a sudo without -i)."""
+    return (shutil.which("apparmor_parser") or shutil.which("apparmor_parser", path="/usr/sbin:/sbin")
+            or "apparmor_parser")
 
 
 def load_profile() -> bool:
@@ -119,7 +183,7 @@ def load_profile() -> bool:
     if not _userns_restricted() or _bwrap_profile_loaded():
         return False
     APPARMOR_FILE.write_text(APPARMOR_PROFILE)
-    subprocess.run(["apparmor_parser", "-r", str(APPARMOR_FILE)], check=True)
+    subprocess.run([_parser(), "-r", str(APPARMOR_FILE)], check=True)
     return True
 
 
@@ -480,11 +544,37 @@ def settings(path: str, a: dict, approvals: bool = False, manager: bool = False)
         out["permissions"] = {"deny": deny,
                               "allow": ([] if approvals and not manager else ["Bash(maxxing:*)"])
                               + [f"WebFetch(domain:{d})" for d in a.get("domains") or []]
-                              + ([f"Edit(/{p}/**)" for p in write] + list(MANAGER_SAFE) if manager else [])}
+                              + ([f"Edit(/{p}/**)" for p in write] + list(MANAGER_SAFE) if manager else [])
+                              + topic_read(path)}
+    elif a.get("permission_mode") in ("acceptEdits", "default"):
+        # no sandbox, and not free (bypass): Write/Edit reach its `writable` folders (--add-dir), so the files that
+        # are the owner's keep off them as in the sandbox (its own role stays the manager's to write); the topic is
+        # read without asking, its .env files excepted
+        topic = folder.parent.parent
+        deny = [f"Read(/{topic}/{g})" for g in ENV_GLOBS]
+        if a.get("writable"):
+            deny += [r for r in topic_edit_denied(path)
+                     if not (manager and r == f"Edit(/{folder.parent}/*/CLAUDE.md)")]
+        out["permissions"] = {"deny": deny,
+                              "allow": topic_read(path) + ([] if approvals and not manager else list(FREE_CLI))}
     if a.get("rules"):
         cmd = hook_command(path)
         out["hooks"] = {"PreToolUse": [{"matcher": "*", "hooks": [{"type": "command", "command": cmd}]}]}
     return out
+
+
+# Without a sandbox and without bypass (acceptEdits, default), a command asks, i.e. is refused when nobody answers:
+# these `maxxing` ones are let through, so the agent can still hand work over, post to the feed and, in the owner's
+# conversation, change itself (check_cli says which of them an agent turn may run, and on whom).
+FREE_CLI = ("Bash(maxxing agents:*)", "Bash(maxxing feed:*)")
+
+
+def topic_read(path: str) -> list[str]:
+    """`permissions.allow`: the files tools read the agent's topic without asking (its work is there; the deny rules
+    of the secrets and private paths still win). Else a turn that is not in bypass is refused each file outside its
+    own folder, and one started by outside text asks for every one of them."""
+    topic = (config.workspace() / path).parent.parent
+    return [f"Read(/{topic}/**)"]
 
 
 def hook_command(path: str) -> str:
@@ -496,9 +586,8 @@ def hook_command(path: str) -> str:
 
 
 def add_dirs(path: str, a: dict) -> list[str]:
-    """`--add-dir` for the `writable` folders: acceptEdits then lets Write/Edit work there too."""
-    if not a.get("sandbox"):
-        return []
+    """`--add-dir` for the `writable` folders: acceptEdits then lets Write/Edit work there too (with or without the
+    sandbox: without it and without bypass, they are the only way the agent writes in its topic)."""
     topic = (config.workspace() / path).parent.parent
     dirs = writable_dirs(path, a)
     if "." in (a.get("writable") or []):            # the whole topic: Write/Edit keep to it (topic_edit_denied)
@@ -626,6 +715,11 @@ AGENT_OWNER_ONLY = {"create", "cron", "webhook", "watch", "on", "off", "silent",
 AGENT_MANAGER = {"cron", "webhook", "watch", "on", "off", "silent", "loud", "set", "show", "run"}
 
 
+# ...and so is what starts something with the owner's rights outside the agent's guards (a session of any topic,
+# a scheduled job now): an agent hands work to another agent (`maxxing agents send`), which keeps its own
+OWNER_ONLY = {"sessions": {"new", "send"}, "cron": {"run", "restore"}}
+
+
 def _manages(turn: dict, words: list[str], argv: list[str]) -> bool:
     """`maxxing agents <sub> <agent>` run by the manager of that very agent. The target is read by the command's own
     parser (an option value such as `--name writer` is not the agent)."""
@@ -677,10 +771,14 @@ def check_cli(argv: list[str]) -> str | None:
         return (f"`maxxing agents {words[1]}` is not allowed in an agent turn: an agent never changes agents (its own "
                 "triggers, settings or role included). Say what should change in your answer; the owner applies it "
                 "from the agent page or a session.")
+    cmd, sub = words[0], (words[1] if len(words) > 1 else "")
+    if turn["path"] and not turn.get("manager") and sub in OWNER_ONLY.get(cmd, ()):
+        return (f"`maxxing {cmd} {sub}` is not allowed in an agent run: it would start work with the owner's rights, "
+                "outside this agent's budget and guards. Hand it to another agent (`maxxing agents send`) or say "
+                "what should be done in your answer.")
     path = sandboxed_turn()
     if not path:
         return None
-    cmd, sub = words[0], (words[1] if len(words) > 1 else "")
     allowed = CLI_ALLOWED.get(cmd, set())
     if allowed is None or sub in (allowed or set()):
         return None

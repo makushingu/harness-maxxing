@@ -140,11 +140,15 @@ def parse_md(text: str) -> dict:
     if model and model != "inherit":
         fields["model"] = model
     mode = str(head.get("permissionMode") or "").strip()
+    lowered = []
     if mode in MODES_IN:
         fields["permission_mode"] = MODES_IN[mode]
+        if fields["permission_mode"] == "bypass":       # a file from elsewhere never gives itself every right: the
+            fields["permission_mode"] = "acceptEdits"   # owner sets it on the agent page
+            lowered = [f"permissionMode: {mode} (set to acceptEdits)"]
     role = body if not desc or " ".join(desc.split()) in " ".join(body.split()) else f"{desc}\n\n{body}".strip()
     return {"name": slug, "description": role or desc, "fields": fields,
-            "ignored": sorted(k for k in head if k not in KNOWN)}
+            "ignored": sorted(k for k in head if k not in KNOWN) + lowered}
 
 
 def import_md(topic_path: str, text: str, name: str | None = None) -> dict:

@@ -459,12 +459,14 @@ class Runner:
             "timeout": _approval_timeout(agent.get("approval_timeout_s") or cfg.get("approval_timeout_s"))}
         mcp_plan = mcp_auto.plan(self.sid, cfg, meta, cwd, item.get("text") or "")   # MCP servers this turn needs
         copy = _copy_note(meta, cwd)
+        memory = spawn.upper_memory(cwd, cfg.get("workspace") or "")   # the levels above: never loaded otherwise
         allow = [] if agent or mode != "default" else workspace_allowed(meta.get("path") or "")
         effort = str(meta.get("effort") or "").strip()
         from maxxing import pcbridge                    # not at import: the runner starts with stdlib-only modules
 
         def argv(mcp: mcp_auto.Plan) -> list[str]:
-            hint = "\n\n".join(x for x in (mcp.hint, spawn.CRON_SILENT if item.get("silent_ok") else "", copy) if x)
+            hint = "\n\n".join(x for x in (mcp.hint, spawn.CRON_SILENT if item.get("silent_ok") else "", copy,
+                                           memory) if x)
             b = [spawn.claude_bin(), "-p", "--output-format", "stream-json", "--verbose"]
             b += spawn.permission_args(mode)[0] + spawn.settings_args(cfg, agent.get("settings"), allow)
             b += spawn.agents_args(cfg, "\n\n".join(x for x in (agent.get("system_note"), hint) if x))

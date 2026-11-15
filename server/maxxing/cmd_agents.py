@@ -192,7 +192,11 @@ def _print_fire(path: str, r: dict, as_json: bool) -> int:
             out["session"] = r["session"].get("id")
         if r.get("reason"):
             out["reason"] = r["reason"]
+        if r.get("waiting"):
+            out["waiting"] = True
         print(json.dumps(out))
+    elif r.get("waiting"):
+        print(f"waiting {path}: starts when its run in progress ends")
     elif r.get("started"):
         print(f"started {path}: session {r['session']['id']}")
     else:
@@ -339,6 +343,16 @@ def _create(a) -> int:
             extra["webhook"] = hook.get("url")
         except Exception as e:  # noqa: BLE001
             print(f"webhook not added: {e}", file=sys.stderr)
+    try:
+        from . import vault
+        known = {s["name"] for s in vault.list_secrets()}
+        absent = [k for k in r.get("keys") or [] if k not in known]
+    except Exception:  # noqa: BLE001 - a warning only
+        absent = []
+    if absent:
+        print(f"not in the Keys vault yet (Settings -> Keys): {', '.join(absent)}", file=sys.stderr)
+    if r.get("sandbox") and r.get("permission_mode") == "bypass":
+        print("sandbox on: its runs use acceptEdits, never bypass", file=sys.stderr)
     if a.json:
         print(json.dumps({"agent": r["path"], **extra}))
     else:

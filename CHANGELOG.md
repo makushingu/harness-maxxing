@@ -27,6 +27,29 @@ Changed:
   **GitHub** link too (before, only a right click offered it).
 
 Fixed:
+- **Agents: the sandbox is tried for real.** On recent Ubuntu versions, the system's own AppArmor profile over
+  bubblewrap made every command of a Protected agent fail, while the agent page, `maxxing doctor` and `maxxing
+  agents sandbox-setup` said the sandbox was ready. The check now starts it, says what is wrong, and `maxxing agents
+  sandbox-setup` (as root) repairs it and prints how to undo it.
+- **Memory: the project's and the workspace's memory are read again.** Claude Code only loaded the `memory.md` of
+  the session's own folder: the memory of the levels above (project and workspace; the topic's too for an agent)
+  was never read, in sessions as in agents' runs. Harness now passes it with each turn.
+- **Agents: an agent in "accept edits" can work without the sandbox.** It could neither read its topic's files nor
+  write in its writable folders. It now reads its topic, writes in its folder and its writable folders, and can hand
+  work to another agent or post to the feed. A Protected agent reads its topic with Claude's own tools too, and a
+  run started by outside text no longer asks for each file it reads there.
+- **Agents: a run no longer gives itself rights.** A run that changed its own settings (`agent.json`: budget, keys,
+  permissions) kept them for its next runs. The file is now put back as it was and the conversation says so;
+  changes of its `.mcp.json` and `.claude/settings.json` are reported too. A run can no longer start a session or a
+  scheduled job with your rights (`maxxing sessions new|send`, `maxxing cron run|restore`).
+- **Agents: a run asked while another holds the budget waits.** `maxxing agents run`, **Run now** and work handed
+  by another agent were refused ("the rest of today's budget is held by the run in progress"); they now wait and
+  start when that run ends.
+- **Agents: smaller fixes.** Deleting an agent removes its webhook (its URL kept answering); a task is 100,000
+  characters at most (a huge text was sent, and paid, whole); an imported Claude Code agent file that asks for
+  bypass is created in accept edits; the ready-made agents that only check or sum up (uptime, orders, sales, mail
+  sorting) run on the small model, about 18 times cheaper per run; `maxxing agents create` warns about a key that
+  is not in the vault.
 - **Git: test repositories no longer fill "On this server".** A repository left in a `tmp`, `temp` or `scratch`
   folder (the trial clones a session or an audit makes) was listed like a project, at the top when it was the most
   recent: names like `r3` on `master` nobody recognised. They are no longer listed (a graph of such a

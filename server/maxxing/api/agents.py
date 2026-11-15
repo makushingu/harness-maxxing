@@ -308,6 +308,8 @@ def run_agent(project: str, topic: str, name: str, body: RunIn):
         raise HTTPException(e.status, detail={"error": e.code, "message": e.message}) from None
     if files and not text and not voice:
         text = "See the attached files."
+    if len(text) > agents.TASK_MAX:
+        raise HTTPException(413, detail={"error": "too_long", "message": agents.SKIP_TEXT["too_long"]})
     if not text and not voice and not body.reply_to:
         # Run now (no words): a run of its routine, like a schedule's - never a message of the conversation
         return agents.fire(path, trigger="manual", source=agents.RUN_NOW_SOURCE)

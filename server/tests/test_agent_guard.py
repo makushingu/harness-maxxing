@@ -54,7 +54,8 @@ def test_sandboxed_agents_never_bypass(client, topic, mx):
     assert str(config.STATE) in sb["filesystem"]["denyRead"]
     deny = s["permissions"]["deny"]
     assert f"Read(/{config.STATE}/**)" in deny and any(r.startswith("Edit(/") and ".maxxing.json" in r for r in deny)
-    assert s["permissions"]["allow"] == ["Bash(maxxing:*)", "WebFetch(domain:api.github.com)", "WebFetch(domain:*.example.com)"]
+    assert s["permissions"]["allow"] == ["Bash(maxxing:*)", "WebFetch(domain:api.github.com)", "WebFetch(domain:*.example.com)",
+                                         f"Read(/{root}/projects/acme/topics/blog/**)"]   # its topic: read without asking
     assert argv[argv.index("--add-dir") + 1] == f"{root}/projects/acme/topics/blog"     # "." holds drafts
     # switched off: the agent's own mode, no sandbox
     client.patch("/api/agents/acme/blog/writer", json={"sandbox": False})
@@ -201,8 +202,10 @@ def test_claude_code_agent_file_export_and_import(client, topic, mx):
     assert r.status_code == 200, r.text
     a = r.json()
     assert a["path"] == "projects/acme/topics/blog/agents/code-reviewer" and a["display_name"] == "Code Reviewer"
-    assert a["allowed_tools"] == ["Read", "Grep"] and a["model"] == "" and a["permission_mode"] == "bypass"
-    assert a["sandbox"] is False and a["ignored"] == ["mcpServers", "memory"]           # free like any new one
+    # a file from elsewhere never gives itself every right: bypass is lowered, and said
+    assert a["allowed_tools"] == ["Read", "Grep"] and a["model"] == "" and a["permission_mode"] == "acceptEdits"
+    assert a["sandbox"] is False
+    assert a["ignored"] == ["mcpServers", "memory", "permissionMode: bypassPermissions (set to acceptEdits)"]
     assert a["description"] == "Reviews code: quality, security\n\nYou are a senior reviewer."
     assert client.post("/api/agents/import", json={"topic_path": "projects/acme/topics/blog",
                                                    "markdown": "no front matter"}).status_code == 400
@@ -316,6 +319,17 @@ def test_an_agent_never_changes_its_own_settings(client, topic, mx, monkeypatch)
     client.patch("/api/agents/acme/blog/writer", json={"limits": {"usd_per_day": 9}})
     assert agents._changed_during(A, "sid-2") == []
     assert agents._changed_during(A, "unknown") == []
+    # its own settings are put back as they were (a run never gives itself a budget or a key); what decides the tools
+    # of its next runs is reported too
+    before = (agents.folder(A) / "agent.json").read_text()
+    agents._snapshot(A, "sid-3")
+    (agents.folder(A) / "agent.json").write_text(before.replace('"usd_per_day": 9', '"usd_per_day": 77'))
+    (agents.folder(A) / ".mcp.json").write_text('{"mcpServers": {}}')
+    snap = agents._pop_snapshot(A, "sid-3")
+    assert agents._changed_since(A, snap) == ["agent.json", ".mcp.json"]
+    assert agents._put_back(A, snap) and (agents.folder(A) / "agent.json").read_text() == before
+    assert agents.load(A)["limits"]["usd_per_day"] == 9
+    assert agents._changed_since(A, {"files": {"agent.json": "x"}}) == ["agent.json"]   # an older snapshot: its files only
 
 
 def test_domain_wildcards_name_a_site_not_an_extension(client, topic, mx):

@@ -82,6 +82,7 @@ TRIGGER_KINDS = ("feed",)                      # stored in agent.json; cron trig
 MAX_TRIGGERS = 10
 PROMPT_MAX = 4000
 EVENT_MAX = 8000                               # characters of trigger text sent to Claude
+TASK_MAX = 100_000                             # characters of a task (the words of a run): longer goes in a file
 THREAD_KEEP = 500                              # messages of its automations kept in an agent's thread
 CHAT_KEEP = 500                                # ...and, apart, of the owner's conversation (_kept_lines)
 TEXT_MAX = 4000                                # characters of an automation's result kept in the thread
@@ -560,6 +561,10 @@ def _save(path: str, data: dict) -> None:
     f = folder(path) / AGENT_FILE
     workspace._forget(f)
     config.write_json(f, clean(data))
+    with _lock:                                         # the owner's change (page, CLI, its conversation's `set`):
+        st = _read_state(path)                          # never taken for a run's own edit (_changed_since)
+        st["owner_at"] = time.time()
+        _write_state(path, st)
 
 
 def exists(path: str) -> bool:
@@ -1210,10 +1215,6 @@ def update(path: str, fields: dict) -> dict:
     if data["sandbox"] and not cur["sandbox"]:
         from . import agent_guard
         agent_guard.ensure_profile()
-    with _lock:
-        st = _read_state(path)
-        st["owner_at"] = time.time()
-        _write_state(path, st)
     if description is not None:
         workspace._write_claude_md(folder(path), "agent", parse(path)[2], _utf8(str(description)))
     if boxed:
@@ -1248,6 +1249,27 @@ def delete(path: str) -> None:
     for ext in ("json", "jsonl"):
         _state_file(path, ext).unlink(missing_ok=True)
     _invalidate()
+
+
+def hook_ids(paths: list[str]) -> list[str]:
+    """The feed hooks behind the webhooks of these agents (read before their folders go to the Trash)."""
+    out = []
+    for path in paths:
+        try:
+            out += [str(t["hook_id"]) for t in load(path)["triggers"] if t.get("hook_id")]
+        except Exception:  # noqa: BLE001 - an unreadable agent never stops a delete
+            log.exception("agent %s: webhooks not listed", path)
+    return out
+
+
+def drop_hooks(ids: list[str]) -> None:
+    """Deleted agents: their webhook URLs stop answering (a restored agent gets a new one: `agents webhook`)."""
+    from . import feedhooks
+    for hid in ids:
+        try:
+            feedhooks.remove(hid)
+        except Exception:  # noqa: BLE001 - already removed in Settings -> Notifications
+            pass
 
 
 def _drop_triggers(paths: list[str]) -> None:
@@ -1524,11 +1546,14 @@ def _write_state(path: str, st: dict) -> None:
 
 # ---- what the owner set: a run that changes it is reported ------------------------------------------------
 OWNED_FILES = (AGENT_FILE, "CLAUDE.md")
+# ...and what decides the tools and rights of its next runs (Claude Code reads them from its folder)
+WATCHED_FILES = OWNED_FILES + (".mcp.json", ".claude/settings.json", ".claude/settings.local.json")
+KEPT_MAX = 100_000              # bytes of agent.json kept in a snapshot (put back when a run changed it)
 
 
 def _fingerprint(path: str) -> dict[str, str]:
     out = {}
-    for n in OWNED_FILES:
+    for n in WATCHED_FILES:
         try:
             out[n] = hashlib.sha1((folder(path) / n).read_bytes()).hexdigest()
         except OSError:
@@ -1540,29 +1565,65 @@ def _snapshot(path: str, sid: str) -> None:
     """At the start of a run: what its settings and role look like (compared at its end, on_turn_end)."""
     try:
         files = _fingerprint(path)
+        try:
+            kept = (folder(path) / AGENT_FILE).read_text(encoding="utf-8")
+        except (OSError, ValueError):
+            kept = None
         with _lock:                                     # the server and the runners write this file
             st = _read_state(path)
             snaps = {k: v for k, v in (st.get("snapshots") or {}).items()
                      if isinstance(v, dict) and time.time() - float(v.get("at") or 0) < 2 * 86400}
-            snaps[sid] = {"at": time.time(), "files": files}
+            snaps[sid] = {"at": time.time(), "files": files,
+                          **({"agent": kept} if kept and len(kept) <= KEPT_MAX else {})}
             st["snapshots"] = snaps
             _write_state(path, st)
     except Exception:  # noqa: BLE001 - never stops a run
         log.exception("agent %s: snapshot", path)
 
 
-def _changed_during(path: str, sid: str) -> list[str]:
-    """The owned files a run changed (the owner's own changes meanwhile, from the page or the CLI, excepted)."""
+def _pop_snapshot(path: str, sid: str) -> dict | None:
+    """The snapshot of a run that ended, None when the owner changed the agent meanwhile (page, CLI)."""
     with _lock:
         st = _read_state(path)
         snap = (st.get("snapshots") or {}).pop(sid, None)
         if not isinstance(snap, dict):
-            return []
+            return None
         _write_state(path, st)
     if float(st.get("owner_at") or 0) >= float(snap.get("at") or 0):
-        return []
+        return None
+    return snap
+
+
+def _changed_since(path: str, snap: dict | None) -> list[str]:
+    files = (snap or {}).get("files") or {}
     now = _fingerprint(path)
-    return [n for n in OWNED_FILES if (snap.get("files") or {}).get(n) != now.get(n)]
+    return [n for n in WATCHED_FILES if n in files and files[n] != now.get(n)]   # a file an older snapshot never saw
+
+
+def _changed_during(path: str, sid: str) -> list[str]:
+    """The watched files a run changed (the owner's own changes meanwhile, from the page or the CLI, excepted)."""
+    return _changed_since(path, _pop_snapshot(path, sid))
+
+
+def _put_back(path: str, snap: dict) -> bool:
+    """agent.json as it was when the run started: a run never gives itself a budget, a key or a right (its other
+    files are the owner's to check). False: the snapshot did not keep it."""
+    import os
+    from . import workspace
+    kept = snap.get("agent")
+    if not isinstance(kept, str) or not kept:
+        return False
+    f = folder(path) / AGENT_FILE
+    try:
+        tmp = f.with_name(f".{AGENT_FILE}.{_secrets.token_hex(4)}.tmp")
+        tmp.write_text(kept, encoding="utf-8")
+        os.replace(tmp, f)
+    except OSError:
+        log.exception("agent %s: %s not put back", path, AGENT_FILE)
+        return False
+    workspace._forget(f)
+    _invalidate()
+    return True
 
 
 # ---- budget and rate ----------------------------------------------------------------------------------
@@ -1645,7 +1706,8 @@ def day_cost(path: str, when: float | None = None, metas: list[dict] | None = No
 def _runs_last_hour(path: str, msgs: list[dict] | None = None) -> int:
     cutoff = time.time() - 3600
     return sum(1 for m in (thread(path, 500) if msgs is None else msgs)    # a group's turns: the group's limits
-               if m.get("kind") == "run" and not m.get("group") and not m.get("owner") and (m.get("at") or 0) > cutoff)
+               if m.get("kind") == "run" and not m.get("group") and not m.get("owner") and not m.get("waiting")
+               and (m.get("at") or 0) > cutoff)
 
 
 def status(path: str, metas: list[dict] | None = None) -> dict:
@@ -1877,7 +1939,8 @@ def hand_over(path: str, sid: str) -> None:
 SKIP_TEXT = {"disabled": "The agent is switched off", "budget": "Daily budget reached",
              "busy": "The rest of today's budget is held by the run in progress",
              "rate": "Too many runs in the last hour", "missing": "The agent no longer exists",
-             "depth": "Too many hops between agents"}
+             "depth": "Too many hops between agents",
+             "too_long": f"The task is too long (over {TASK_MAX:,} characters): put it in a file and give its path"}
 
 
 # ---- fire ----------------------------------------------------------------------------------------------
@@ -2045,6 +2108,8 @@ def _fire(path: str, *, trigger: str, text: str, prompt: str, source: str, attac
     voice = voice if owner else None                     # only the owner's own words are sent as a recording
     if depth > MAX_DEPTH:
         reason = "depth"
+    elif len(prompt) > TASK_MAX:
+        reason = "too_long"
     else:
         reason = gate(path, owner=owner)
     if reason == "busy" and owner and _joins_running(path, reply_to):
@@ -2059,6 +2124,11 @@ def _fire(path: str, *, trigger: str, text: str, prompt: str, source: str, attac
                 return r
     if reason == "busy" and wait:
         return {"started": False, "reason": reason}
+    if reason == "busy" and not owner and not waited and (trigger in CONVERSATIONAL or trigger.startswith("agent:")):
+        r = _owner_wait(path, trigger=trigger, prompt=prompt, source=source, attachments=attachments,
+                        reply_to=reply_to, model=model, text=text, depth=depth)
+        if r:
+            return r
     if reason:
         if reason != "missing":
             post(path, "skip", SKIP_TEXT.get(reason, reason), trigger=trigger, reason=reason, source=source)
@@ -2137,8 +2207,9 @@ def _fire(path: str, *, trigger: str, text: str, prompt: str, source: str, attac
 
 
 # ---- the owner's messages that wait: the budget is held by a run in progress (busy) ----------------------------
-# Only the owner's own words (page, Telegram, a reply of his) wait here; they start, in order, when the hold is
-# released (on_turn_end, flush_waiting). Automations keep the hold rule: refused busy, or tried again (`wait`).
+# The owner's own words (page, Telegram, a reply of his) wait here, and the runs asked by hand or handed by another
+# agent (`agents run`, Run now, `agents send`); they start, in order, when the hold is released (on_turn_end,
+# flush_waiting). Schedules and feed events keep the hold rule: refused busy, or tried again (`wait`).
 # Any other reason (budget, disabled, rate, depth) is never a wait.
 OWNER_WAIT_MAX = 20
 _waiting: set[str] = set()      # agents with messages waiting (seeded from their state at the first flush_waiting)
@@ -2147,18 +2218,22 @@ _waiting_seeded = False
 
 def _owner_wait(path: str, *, trigger: str, prompt: str, source: str, attachments: list[str] | None,
                 reply_to: str | None, model: str | None, effort: str | None = None,
-                voice: str | None = None) -> dict | None:
-    """Keeps the owner's message until the run in progress ends -> the answer of fire, None = no room (refused)."""
+                voice: str | None = None, text: str = "", depth: int = 0) -> dict | None:
+    """Keeps the owner's message until the run in progress ends -> the answer of fire, None = no room (refused).
+    text: a run that is not the owner's message (by hand, from another agent) with its outside text and its hops."""
+    own = _owner_chat(trigger, source, text)
     st = _read_state(path)
     q = st.get("owner_wait") if isinstance(st.get("owner_wait"), list) else []
     if len(q) >= OWNER_WAIT_MAX:
         return None
-    msg = post(path, "run", prompt, cap=CHAT_TEXT_MAX, trigger=trigger, source=source, owner=True, waiting=True,
+    msg = post(path, "run", prompt if own else text or prompt, cap=CHAT_TEXT_MAX if own else 600, trigger=trigger,
+               source=source, waiting=True, **({"owner": True} if own else {}),
                **({"reply_to": reply_to} if reply_to else {}),
                **({"attachments": list(attachments)} if attachments else {}), **({"voice": [voice]} if voice else {}))
     q.append({"id": msg["id"], "trigger": trigger, "source": source, "prompt": prompt,
               "attachments": list(attachments or []), "reply_to": reply_to or "", "model": model or "",
-              "effort": effort or "", "voice": voice or "", "at": msg["at"]})
+              "effort": effort or "", "voice": voice or "", "at": msg["at"],
+              **({} if own else {"text": text[:EVENT_MAX + 1], "depth": depth, "auto": True})})
     st = _read_state(path)
     st["owner_wait"] = q
     _write_state(path, st)
@@ -2180,13 +2255,15 @@ def _drain_owner(path: str) -> int:
             _write_state(path, st)
             continue
         it = q[0]
-        if gate(path, owner=True) == "busy" and not _joins_running(path, it.get("reply_to") or None):
+        auto = bool(it.get("auto"))
+        if gate(path, owner=not auto) == "busy" and (auto or not _joins_running(path, it.get("reply_to") or None)):
             return n
         st["owner_wait"] = q[1:]                         # saved first: a crash never starts it twice
         _write_state(path, st)
         try:
-            _fire(path, trigger=str(it.get("trigger") or "manual"), text="", prompt=str(it.get("prompt") or ""),
-                  source=str(it.get("source") or "manual"), attachments=it.get("attachments") or None, depth=0,
+            _fire(path, trigger=str(it.get("trigger") or "manual"), text=str(it.get("text") or ""),
+                  prompt=str(it.get("prompt") or ""), source=str(it.get("source") or "manual"),
+                  attachments=it.get("attachments") or None, depth=int(it.get("depth") or 0),
                   cron_env=None, timeout_s=None, reply_to=it.get("reply_to") or None, wait=False,
                   model=it.get("model") or None, waited=str(it.get("id") or ""), effort=it.get("effort") or None,
                   voice=it.get("voice") or None)
@@ -2483,13 +2560,21 @@ def on_turn_end(session: dict, result: dict | None) -> None:
     except Exception:  # noqa: BLE001 - the feed is a nicety here
         log.exception("agent %s: feed alert", path)
     try:
-        changed = _changed_during(path, session["id"])
+        snap = _pop_snapshot(path, session["id"])
+        changed = _changed_since(path, snap)
         if changed and manager_turn(meta):           # the conversation may change its role: said, not a warning
             post(path, "note", f"The conversation changed {' and '.join(changed)}.", status="changed_chat",
                  session=session["id"], files=changed)
         elif changed:
-            post(path, "note", f"This run changed {' and '.join(changed)} (its own settings or role): check them on "
-                               "the agent page.", status="changed", session=session["id"], files=changed)
+            back = AGENT_FILE in changed and _put_back(path, snap)
+            rest = [n for n in changed if not (back and n == AGENT_FILE)]
+            said = ([f"This run changed {AGENT_FILE} (its own settings): it was put back as it was before the run."]
+                    if back else [])
+            if rest:
+                said.append(f"This run changed {' and '.join(rest)} (its role, settings or tools): check them on "
+                            "the agent page.")
+            post(path, "note", " ".join(said), status="changed", session=session["id"], files=changed,
+                 **({"restored": [AGENT_FILE]} if back else {}))
     except Exception:  # noqa: BLE001
         log.exception("agent %s: changed files check", path)
     a = load(path)

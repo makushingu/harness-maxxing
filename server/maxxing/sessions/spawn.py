@@ -182,6 +182,63 @@ CRON_SILENT = ("This turn was started by a scheduled job. If there is nothing wo
                "exactly [SILENT] and nothing else: no report is then sent.")
 
 
+# Every level's CLAUDE.md imports its memory (`@memory.md`), but Claude Code follows an import from outside the
+# working folder only once the user approved it by hand in that folder (hasClaudeMdExternalIncludesApproved), which
+# a turn started by Harness never does: the memory of the levels above was never read. It is passed with the turn.
+UPPER_MEMORY = ("The CLAUDE.md files above this folder import their memory (`@memory.md`); Claude Code does not load "
+                "those imports in this turn, so here is what they hold, with the same standing as these CLAUDE.md "
+                "files (as written when this turn started):")
+UPPER_MEMORY_MAX = 12_000       # characters of one level's memory.md (the memory skill keeps them far shorter)
+
+
+def _includes_approved(cwd: Path) -> bool:
+    env = base_env()
+    own = env.get("CLAUDE_CONFIG_DIR")
+    try:
+        f = Path(own) / ".claude.json" if own else Path(env.get("HOME") or Path.home()) / ".claude.json"
+        d = json.loads(f.read_text(encoding="utf-8"))
+        return bool(d["projects"][str(cwd)].get("hasClaudeMdExternalIncludesApproved"))
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return False
+
+
+def _has_facts(text: str) -> bool:
+    """False for a memory.md nobody wrote in yet: headings, comments and the lines of the workspace template only."""
+    try:
+        blank = set((config.TEMPLATES_DIR / "workspace" / "memory.md").read_text(encoding="utf-8").splitlines())
+    except OSError:
+        blank = set()
+    body = re.sub(r"<!--.*?-->", "", text, flags=re.S)
+    return any(ln.strip() and not ln.startswith("#") and ln not in blank for ln in body.splitlines())
+
+
+def upper_memory(cwd: str, root: str) -> str:
+    """The memory.md of the levels above the working folder, up to the workspace (project and workspace for a topic;
+    the topic too for an agent), for `--append-system-prompt`. "" outside the workspace, when there is none, or when
+    Claude Code loads them itself (imports approved for this folder)."""
+    try:
+        here, top = Path(cwd).resolve(), Path(root or "/").resolve()
+        if top == Path("/") or here == top or top not in here.parents or _includes_approved(here):
+            return ""
+    except OSError:
+        return ""
+    out, d = [], here.parent
+    while True:
+        try:
+            if "@memory.md" in (d / "CLAUDE.md").read_text(encoding="utf-8", errors="replace"):
+                text = (d / "memory.md").read_text(encoding="utf-8", errors="replace").strip()
+                if len(text) > UPPER_MEMORY_MAX:
+                    text = text[:UPPER_MEMORY_MAX] + "\n[... cut: read the file]"
+                if _has_facts(text):
+                    out.append(f"Contents of {d / 'memory.md'}:\n\n{text}")
+        except OSError:
+            pass
+        if d == top:
+            break
+        d = d.parent
+    return "\n\n".join([UPPER_MEMORY] + out[::-1]) if out else ""
+
+
 def agents_args(cfg: dict, extra: str = "") -> list[str]:
     """`--append-system-prompt` asking for foreground subagents, unless config `background_agents` is on, followed by
     `extra` (the MCP servers not loaded, mcp_auto.py). One flag only: Claude Code keeps the last of several."""
