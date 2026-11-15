@@ -383,9 +383,15 @@ Telegram: voice notes and video notes in a session thread (not audio files: atta
 `🎤 <transcript>` and sent to the session as the user message (attachment = the audio file). Engine off → a hint.
 
 ## Voice mode
-A call in a session: a voice (the talker) talks with the user, the session (the thinker) does the work. The browser runs
-the call and the voice's tools on the session (`ask_session`, `session_status`, `stop_session`, `read_last_answer`, through
-the usual send / stop routes); the end of a turn is told to the voice (`[Session finished]` + the answer).
+A call with a session: the session does the thinking, the voice only carries it. The browser runs the call: each
+sentence of the user is sorted without any model (`voicecall.classify`: `empty` = noise or what Whisper makes up on
+silence, `skip` = "ok" / "thanks" unless the voice just asked a question, `stop`, `lang` = "speak English", `ask` =
+anything else) and an `ask` is sent to the session word for word through the usual send route with `call: <language>`
+(`POST /api/sessions/{id}/messages`: the turn's prompt gets `runner.CALL_PREFACE`, "answer short and easy to say, in that
+language", not shown in the log); `stop` uses the stop route. One language per call: it changes when the user asks or
+when a whole sentence (3 words or more) is clearly in another one. The end of each turn is read out (local) or given
+to the cloud voice (`[Session finished]` / `[Session finished: it failed]` + the answer). Cloud voices only keep the
+tools `session_status`, `stop_session`, `read_last_answer`; their transcription of the user is sorted by `/call/sort`.
 ```
 CallStatus = {settings:{mode:"local"|"cloud", provider:"openai"|"gemini"|null, openai_key, gemini_key (vault names|null),
     openai_model, openai_voice, gemini_model, gemini_voice, talker_model:"haiku"|"sonnet", local_voice:"auto"|<voice id>,
@@ -397,8 +403,10 @@ CallStatus = {settings:{mode:"local"|"cloud", provider:"openai"|"gemini"|null, o
 ```
 | GET | `/api/voice/call` | – | `CallStatus` |
 | PUT | `/api/voice/call/settings` | partial settings (`provider: ""` = none) | `CallStatus` · `400 invalid_*` |
-| POST | `/api/voice/call/start` | `{session, language?}` (the interface language: listened for first, then English) | local: `{mode:"local", call}` (starts the talker: `claude -p --input-format stream-json`, kept for the call, max 3, hung up after 10 min idle) · cloud: `{mode:"cloud", provider, token, model, url}` — a short-lived token minted with the vault key (OpenAI `POST /v1/realtime/client_secrets`, Gemini `POST /v1beta/auth_tokens` with the whole setup locked in, `uses: 1`); the key never leaves the server · `409 local_not_ready\|cloud_not_ready` · `502 bad_key\|provider_error` |
-| POST | `/api/voice/call/{call}/turn` | multipart `audio`? (WAV), `text`?, `event`? (answer of an ended turn), `context`? (the session's state line), `language`? | NDJSON stream: `{heard}` (transcript), `{action:{type:"ask", request}\|{type:"stop"}}`, `{say, url, seconds}` per sentence (WAV, `/api/voice/said/<name>`), `{error, code}`, `{done, empty?}` |
+| POST | `/api/voice/call/start` | `{session, language?}` (the interface language: listened for first, then English) | local: `{mode:"local", call, language}` (the call's first language; starts the summarizer `claude -p --input-format stream-json`, no tools, kept for the call, max 3, hung up after 10 min idle, and generates the acknowledgements ahead) · cloud: `{mode:"cloud", provider, token, model, url}` — a short-lived token minted with the vault key (OpenAI `POST /v1/realtime/client_secrets`, Gemini `POST /v1beta/auth_tokens` with the whole setup locked in, `uses: 1`); the key never leaves the server · `409 local_not_ready\|cloud_not_ready` · `502 bad_key\|provider_error` |
+| POST | `/api/voice/call/{call}/hear` | multipart `audio` (WAV) or `text`, `busy` (the session is working) | `{text, language, kind:"ask"\|"stop"\|"lang"\|"skip"\|"empty", say?:{say, url, seconds}}` — `say` = the acknowledgement to play at once ("I'm looking.", "Noted, I'll do it right after." when `busy`, "Okay, I'm stopping."; French and English, generated once per call) |
+| POST | `/api/voice/call/{call}/speak` | `{answer, outcome:"answer"\|"failed"\|"done"}` | NDJSON stream: `{say, url, seconds}` per sentence (WAV, `/api/voice/said/<name>`, in the call's language), `{error, code}`, `{done}` — an answer up to 320 characters once cleaned for the ear (no code block, no table) is read as it is, a longer one is shortened by the summarizer (nothing added; its start is read if it fails) |
+| POST | `/api/voice/call/sort` | `{text, language, expecting?}` | `{kind, language}` — the same sorting, for a sentence transcribed by a cloud voice |
 | POST | `/api/voice/call/{call}/end` | – | `{ok}` |
 | GET | `/api/voice/tts` · POST `/api/voice/tts/install` `{voices?}` | – | Piper status · install in `<state>/voice/tts` (own venv, GPL program run apart: `tts_worker.py` keeps the voices loaded) |
 | GET | `/api/voice/said/{name}` | – | a generated sentence (`audio/wav`, kept 10 min) |

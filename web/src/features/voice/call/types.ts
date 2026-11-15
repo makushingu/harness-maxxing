@@ -1,11 +1,17 @@
-// The voice mode's two halves: a Voice (talker: local, OpenAI or Gemini) and the Brain it drives (the session).
+// The voice mode's two halves: a Voice (local, OpenAI or Gemini: it only carries the call) and the Brain it carries
+// (the session, which does the thinking: every sentence of the user goes to it).
 
 export type CallPhase = 'connecting' | 'listening' | 'hearing' | 'thinking' | 'speaking' | 'paused'
 
+/** How a turn of the session ended: its answer, a failure, or no written answer. */
+export type Outcome = 'answer' | 'failed' | 'done'
+
 /** What the voice can do on the session (run by the browser, see VoiceCall.tsx). */
 export interface Brain {
-  /** Sends a message to the session (queued when it is busy). */
-  ask(request: string): Promise<string>
+  /** Sends what the user said to the session, word for word (queued when it is busy). `lang`: the call's language. */
+  ask(text: string, lang?: string): Promise<string>
+  /** Whether the session is working now. */
+  busy(): boolean
   /** One line: working or not, for how long, its last steps, the messages waiting. */
   status(): string
   stop(): Promise<string>
@@ -22,15 +28,14 @@ export interface VoiceEvents {
 
 export interface Voice {
   start(): Promise<void>
-  /** A turn of the session ended: the voice tells the user. */
-  notify(answer: string): void
+  /** A turn of the session ended: the voice reads it out. */
+  notify(answer: string, outcome: Outcome): void
   /** Stop talking now and listen. */
   interrupt(): void
   close(): void
 }
 
-export function runTool(brain: Brain, name: string, args: Record<string, unknown>): Promise<string> | string {
-  if (name === 'ask_session') return brain.ask(String(args.request || ''))
+export function runTool(brain: Brain, name: string, _args: Record<string, unknown>): Promise<string> | string {
   if (name === 'session_status') return brain.status()
   if (name === 'stop_session') return brain.stop()
   if (name === 'read_last_answer') return brain.lastAnswer() || 'No answer yet.'

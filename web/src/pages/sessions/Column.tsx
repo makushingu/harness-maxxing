@@ -492,7 +492,7 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
     if (session) trimQueued(sid, session.queue)
   }, [session?.queue, sid, trimQueued]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const onSend = async (text: string, attachments: string[], clientId?: string, named?: SentMention[]) => {
+  const onSend = async (text: string, attachments: string[], clientId?: string, named?: SentMention[], call?: string) => {
     const add = usePending.getState().add
     const remove = usePending.getState().remove
     const mentions = named?.map((m) => ({ kind: m.kind, ref: m.ref }))
@@ -500,7 +500,7 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
     thread.current?.scrollToBottom()
     notifySent(sid)
     try {
-      const r = await send.mutateAsync({ id: sid, text, attachments, client_id: clientId, mentions })
+      const r = await send.mutateAsync({ id: sid, text, attachments, client_id: clientId, mentions, ...(call ? { call } : {}) })
       if (r.queued !== running) {
         remove(sid, lid)
         add(sid, { text, attachments, queued: r.queued, mentions: named })
@@ -917,7 +917,7 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
                 <>
                   <ModelPicker chosen={session.model} real={session.real_model} contextTokens={session.context_tokens} onChange={actions.model} effort={session.effort || ''} onEffort={actions.effort} />
                   {session.plan_mode && <PlanChip session={session} />}
-                  <VoiceCall sid={sid} running={running} queueCount={session.queue || 0} onSend={(text, atts) => onSend(text, atts)} onStop={onStop} />
+                  <VoiceCall sid={sid} running={running} queueCount={session.queue || 0} onSend={(text, atts, call) => onSend(text, atts, undefined, undefined, call)} onStop={onStop} />
                 </>
               ) : (
                 <Skeleton className="h-6 w-24" />

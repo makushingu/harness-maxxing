@@ -223,40 +223,69 @@ async def call_start(body: CallStartIn):
         raise _http(e) from None
 
 
-@router.post("/call/{cid}/turn")
-async def call_turn(cid: str, audio: Optional[UploadFile] = File(None), text: Optional[str] = Form(None),
-                    event: Optional[str] = Form(None), context: Optional[str] = Form(None),
-                    language: Optional[str] = Form(None)):
-    """One exchange of a local call, streamed as NDJSON lines: {heard}, {action}, {say, url, seconds}, {error},
-    {done}."""
-    from fastapi.responses import StreamingResponse
+class CallSayIn(BaseModel):
+    answer: str = Field(default="", max_length=60_000)
+    outcome: Literal["answer", "failed", "done"] = "answer"
+
+
+class CallSortIn(BaseModel):
+    text: str = Field(max_length=10_000)
+    language: str = Field(default="en", pattern=r"^[a-z]{2,3}$")
+    expecting: bool = False
+
+
+@router.post("/call/sort")
+async def call_sort(body: CallSortIn):
+    """Cloud voice: what a sentence transcribed by the provider is (as /hear), and the call's language after it."""
     from .. import voicecall
+    kind, language = voicecall.sort(body.text, body.language, body.expecting)
+    return {"kind": kind, "language": language}
+
+
+def _cid(cid: str) -> None:
     if not re.fullmatch(r"[0-9a-f]{12}", cid):
         raise HTTPException(404)
+
+
+@router.post("/call/{cid}/hear")
+async def call_hear(cid: str, audio: Optional[UploadFile] = File(None), text: Optional[str] = Form(None),
+                    busy: bool = Form(False)):
+    """One sentence of the user (audio, or text) -> {text, language, kind, say?}: the browser sends `text` to the
+    session when `kind` is "ask", and plays `say` at once."""
+    from .. import voicecall
+    _cid(cid)
     tmp: Path | None = None
-    if audio is not None:
-        tmp = config.state_dir("voice", "tmp") / f"call-{time.time_ns()}{_ext(audio)}"
-        try:
+    try:
+        if audio is not None:
+            tmp = config.state_dir("voice", "tmp") / f"call-{time.time_ns()}{_ext(audio)}"
             size = await asyncio.to_thread(_save, audio, tmp)
             if size > voicecall.MAX_AUDIO_BYTES:
                 raise VoiceError(413, "too_large", "audio too long")
-        except VoiceError as e:
+        return await asyncio.to_thread(voicecall.hear, cid, tmp, text, busy)
+    except VoiceError as e:
+        raise _http(e) from None
+    finally:
+        if tmp is not None:
             tmp.unlink(missing_ok=True)
-            raise _http(e) from None
+
+
+@router.post("/call/{cid}/speak")
+async def call_speak(cid: str, body: CallSayIn):
+    """The session's answer read out, streamed as NDJSON lines: {say, url, seconds} sentence by sentence, {error},
+    then {done}."""
+    from fastapi.responses import StreamingResponse
+    from .. import voicecall
+    _cid(cid)
 
     def lines():
         try:
-            for item in voicecall.local_turn(cid, audio=tmp, text=text, event=event, context=context or "",
-                                             language=language or None):
+            for item in voicecall.speak(cid, body.answer, body.outcome):
                 yield json.dumps(item, ensure_ascii=False) + "\n"
         except VoiceError as e:
             yield json.dumps({"error": e.message, "code": e.code}, ensure_ascii=False) + "\n"
         except Exception as e:  # never cut the stream without a word
-            log.exception("voice call turn failed")
+            log.exception("voice call speak failed")
             yield json.dumps({"error": str(e) or "failed", "code": "failed"}) + "\n"
-        finally:
-            if tmp is not None:
-                tmp.unlink(missing_ok=True)
 
     return StreamingResponse(lines(), media_type="application/x-ndjson",
                              headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})

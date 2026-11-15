@@ -1,9 +1,10 @@
 // OpenAI Realtime voice: WebRTC straight to OpenAI with the short-lived token from this server (the instructions, the
 // tools and the voice are locked in it). Audio both ways over the peer connection; events and tool calls over the
-// "oai-events" data channel.
+// "oai-events" data channel. It is only the voice: what it transcribes of the user goes to the session (Relay).
 import type { CallStart } from './api'
+import { Relay } from './cloud'
 import { openMic } from '../mic'
-import { runTool, type Brain, type Voice, type VoiceEvents } from './types'
+import { runTool, type Brain, type Outcome, type Voice, type VoiceEvents } from './types'
 
 type Cloud = Extract<CallStart, { mode: 'cloud' }>
 
@@ -16,13 +17,16 @@ export class OpenAIVoice implements Voice {
   private pending: string[] = []
   private closed = false
   private meter = 0
+  private relay: Relay
 
   constructor(
     private c: Cloud,
     private brain: Brain,
     private ev: VoiceEvents,
+    language: string,
   ) {
     this.audio.autoplay = true
+    this.relay = new Relay(brain, language)
   }
 
   async start() {
@@ -91,10 +95,16 @@ export class OpenAIVoice implements Voice {
         this.ev.phase('thinking')
         break
       case 'conversation.item.input_audio_transcription.completed':
-        if (e.transcript?.trim()) this.ev.caption('you', e.transcript.trim())
+        if (e.transcript?.trim()) {
+          this.ev.caption('you', e.transcript.trim())
+          void this.relay.heard(e.transcript)
+        }
         break
       case 'response.output_audio_transcript.done':
-        if (e.transcript?.trim()) this.ev.caption('voice', e.transcript.trim())
+        if (e.transcript?.trim()) {
+          this.ev.caption('voice', e.transcript.trim())
+          this.relay.said(e.transcript)
+        }
         break
       case 'output_audio_buffer.started':
         this.speaking = true
@@ -132,14 +142,16 @@ export class OpenAIVoice implements Voice {
     this.send({ type: 'response.create' })
   }
 
-  private sendEvent(answer: string) {
-    this.send({ type: 'conversation.item.create', item: { type: 'message', role: 'user', content: [{ type: 'input_text', text: `[Session finished]\n${answer.slice(0, 6000)}` }] } })
+  private sendEvent(text: string) {
+    this.send({ type: 'conversation.item.create', item: { type: 'message', role: 'user', content: [{ type: 'input_text', text }] } })
     this.send({ type: 'response.create' })
   }
 
-  notify(answer: string) {
-    if (this.speaking) this.pending.push(answer)
-    else this.sendEvent(answer)
+  notify(answer: string, outcome: Outcome) {
+    const text = this.relay.finished(answer, outcome)
+    if (!text) return
+    if (this.speaking) this.pending.push(text)
+    else this.sendEvent(text)
   }
 
   interrupt() {

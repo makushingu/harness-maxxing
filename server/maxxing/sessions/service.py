@@ -446,18 +446,20 @@ def _enqueue_voice(sid: str, item: dict, audio: str, *, reset_cron: bool = False
 def send_message(sid: str, text: str, attachments: list[str] | None = None, source: str = "web",
                  hud: bool = False, voice_path: str | None = None, ref: str | None = None,
                  client_id: str | None = None, silent_ok: bool = False, mentions: list[dict] | None = None,
-                 relay: dict | None = None) -> dict:
+                 relay: dict | None = None, call: str | None = None) -> dict:
     """`ref`: an id the caller (Telegram) finds again in the meta of the turn that ran this message
     (`turn_refs` while it runs, `last_turn.refs` once it ended; see live_refs). `client_id`: the web page's own id
     for it, kept in its queue item and its log line (`client_ids`). `mentions`: the @ of the composer ({kind, ref},
     see mentions.resolve): Claude reads with the message how to write to each. `relay`: sent by another session's
-    turn (relay_message)."""
+    turn (relay_message). `call`: sent during a voice call, in that language (runner.CALL_PREFACE)."""
     _require(sid)
     files = _check_attachments(attachments)
     audio = _check_voice(voice_path)
     if not (text or "").strip() and not files and not audio:
         raise SessionError(400, "empty", "Empty message")
     extra: dict[str, Any] = {"hud": True} if hud else {}
+    if call:
+        extra["call"] = call
     if ref:
         extra["refs"] = [str(ref)]
     extra.update(_client_ids(client_id))
@@ -676,6 +678,7 @@ def _merged(mine: list[dict], **extra: Any) -> dict:
                  **({"voice": [v for x in mine for v in x.get("voice") or []]}
                     if any(x.get("voice") for x in mine) else {}),
                  **({"hud": True} if all(x.get("hud") for x in mine) else {}),
+                 **({"call": calls[-1]} if (calls := [x["call"] for x in mine if x.get("call")]) else {}),
                  **({"client_ids": ids} if (ids := [c for x in mine for c in x.get("client_ids") or []]) else {}),
                  **({"plan_approved": True} if any(x.get("plan_approved") for x in mine) else {}),
                  **({"mentions": ms} if (ms := [mm for x in mine for mm in x.get("mentions") or []]) else {}),

@@ -1,4 +1,5 @@
-// Voice mode API (docs/dev/API.md#voice-mode): settings and keys, start / end a call, one turn of a local call.
+// Voice mode API (docs/dev/API.md#voice-mode): settings and keys, start / end a call, hear the user and read the
+// session's answers out (local call), sort a sentence (cloud call).
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { useMut } from '@/lib/queries/util'
@@ -29,7 +30,7 @@ export type CallStatus = {
   voices: { openai: string[]; gemini: string[]; local: string[] }
 }
 export type CallStart =
-  | { mode: 'local'; call: string }
+  | { mode: 'local'; call: string; language: string }
   | { mode: 'cloud'; provider: CallProvider; token: string; model: string; url: string }
 
 export const callKey = ['voice', 'call'] as const
@@ -63,26 +64,44 @@ export function useSaveCallKey() {
 export const startCall = (session: string, language?: string) => api.post<CallStart>('/api/voice/call/start', { session, language })
 export const endCall = (call: string) => api.post(`/api/voice/call/${call}/end`, {}).catch(() => {})
 
-export type TurnLine = { heard?: string; action?: { type: 'ask'; request: string } | { type: 'stop' }; say?: string; url?: string; seconds?: number; error?: string; code?: string; done?: boolean; empty?: boolean }
+export type SayLine = { say?: string; url?: string; seconds?: number; error?: string; code?: string; done?: boolean }
+/** A sentence of the user, sorted on the server: "ask" = send `text` to the session, "stop" = stop its work,
+ * "lang" = the call's language changed, "empty" / "skip" = nothing to do (the voice goes on where it was). */
+export type Heard = { text: string; language: string; kind: 'ask' | 'stop' | 'lang' | 'skip' | 'empty'; say?: SayLine }
 
-/** One turn of a local call: POST, then the NDJSON lines as they come. */
-export async function* callTurn(call: string, body: { audio?: Blob; text?: string; event?: string; context?: string }, signal: AbortSignal): AsyncGenerator<TurnLine> {
+/** Local call: one sentence of the user (WAV) -> what it is, and the acknowledgement to play at once. */
+export async function hear(call: string, audio: Blob, busy: boolean, signal?: AbortSignal): Promise<Heard> {
   const fd = new FormData()
-  if (body.audio) fd.append('audio', body.audio, 'turn.wav')
-  if (body.text) fd.append('text', body.text)
-  if (body.event) fd.append('event', body.event)
-  if (body.context) fd.append('context', body.context)
-  const r = await fetch(`/api/voice/call/${call}/turn`, { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'X-Maxxing': '1' }, signal })
-  if (!r.ok || !r.body) {
-    let msg = `HTTP ${r.status}`
-    try {
-      const j = await r.json()
-      msg = j?.detail?.message || j?.detail || msg
-    } catch {
-      /* not JSON */
-    }
-    throw new Error(String(msg))
+  fd.append('audio', audio, 'turn.wav')
+  fd.append('busy', busy ? 'true' : 'false')
+  const r = await fetch(`/api/voice/call/${call}/hear`, { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'X-Maxxing': '1' }, signal })
+  if (!r.ok) throw new Error(await failure(r))
+  return (await r.json()) as Heard
+}
+
+/** Cloud call: the same sorting for a sentence transcribed by the provider. */
+export const sortSentence = (text: string, language: string, expecting: boolean) =>
+  api.post<{ kind: Heard['kind']; language: string }>('/api/voice/call/sort', { text, language, expecting })
+
+async function failure(r: Response): Promise<string> {
+  try {
+    const j = await r.json()
+    return String(j?.detail?.message || j?.detail || `HTTP ${r.status}`)
+  } catch {
+    return `HTTP ${r.status}`
   }
+}
+
+/** Local call: the session's answer read out, the NDJSON lines as they come. */
+export async function* speak(call: string, answer: string, outcome: string, signal: AbortSignal): AsyncGenerator<SayLine> {
+  const r = await fetch(`/api/voice/call/${call}/speak`, {
+    method: 'POST',
+    body: JSON.stringify({ answer: answer.slice(0, 60000), outcome }),
+    credentials: 'same-origin',
+    headers: { 'X-Maxxing': '1', 'Content-Type': 'application/json' },
+    signal,
+  })
+  if (!r.ok || !r.body) throw new Error(await failure(r))
   const reader = r.body.pipeThrough(new TextDecoderStream()).getReader()
   let buf = ''
   for (;;) {
@@ -93,8 +112,8 @@ export async function* callTurn(call: string, body: { audio?: Blob; text?: strin
     while ((i = buf.indexOf('\n')) >= 0) {
       const line = buf.slice(0, i).trim()
       buf = buf.slice(i + 1)
-      if (line) yield JSON.parse(line) as TurnLine
+      if (line) yield JSON.parse(line) as SayLine
     }
   }
-  if (buf.trim()) yield JSON.parse(buf) as TurnLine
+  if (buf.trim()) yield JSON.parse(buf) as SayLine
 }

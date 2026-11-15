@@ -1,9 +1,10 @@
 // Gemini Live voice: a WebSocket straight to Google with the short-lived token from this server (the instructions,
 // the tools and the voice are locked in it). In: 16 kHz PCM; out: 24 kHz PCM played as it comes; the model hears
-// the user over itself (barge-in) and calls the session's tools.
+// the user over itself (barge-in). It is only the voice: what it transcribes of the user goes to the session (Relay).
 import type { CallStart } from './api'
+import { Relay } from './cloud'
 import { startCapture, toBase64, type Capture } from './capture'
-import { runTool, type Brain, type CallPhase, type Voice, type VoiceEvents } from './types'
+import { runTool, type Brain, type CallPhase, type Outcome, type Voice, type VoiceEvents } from './types'
 
 type Cloud = Extract<CallStart, { mode: 'cloud' }>
 type FnCall = { id: string; name: string; args?: Record<string, unknown> }
@@ -21,12 +22,16 @@ export class GeminiVoice implements Voice {
   private said = ''
   private pending: string[] = []
   private idleTimer = 0
+  private relay: Relay
 
   constructor(
     private c: Cloud,
     private brain: Brain,
     private ev: VoiceEvents,
-  ) {}
+    language: string,
+  ) {
+    this.relay = new Relay(brain, language)
+  }
 
   async start() {
     const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
@@ -87,8 +92,14 @@ export class GeminiVoice implements Voice {
   }
 
   private flushCaptions() {
-    if (this.heard.trim()) this.ev.caption('you', this.heard.trim())
-    if (this.said.trim()) this.ev.caption('voice', this.said.trim())
+    if (this.heard.trim()) {
+      this.ev.caption('you', this.heard.trim())
+      void this.relay.heard(this.heard)
+    }
+    if (this.said.trim()) {
+      this.ev.caption('voice', this.said.trim())
+      this.relay.said(this.said)
+    }
     this.heard = this.said = ''
   }
 
@@ -156,15 +167,17 @@ export class GeminiVoice implements Voice {
     this.until = 0
   }
 
-  private sendEvent(answer: string) {
-    this.ws?.send(JSON.stringify({ clientContent: { turns: [{ role: 'user', parts: [{ text: `[Session finished]\n${answer.slice(0, 6000)}` }] }], turnComplete: true } }))
+  private sendEvent(text: string) {
+    this.ws?.send(JSON.stringify({ clientContent: { turns: [{ role: 'user', parts: [{ text }] }], turnComplete: true } }))
     this.ev.phase('thinking')
   }
 
-  notify(answer: string) {
+  notify(answer: string, outcome: Outcome) {
+    const text = this.relay.finished(answer, outcome)
+    if (!text) return
     // Not over its own sentence: a clientContent cuts what the model is saying.
-    if (this.sources.length) this.pending.push(answer)
-    else this.sendEvent(answer)
+    if (this.sources.length) this.pending.push(text)
+    else this.sendEvent(text)
   }
 
   interrupt() {

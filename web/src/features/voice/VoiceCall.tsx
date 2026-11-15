@@ -1,6 +1,6 @@
-// Voice mode of a session: a call with a voice (local, OpenAI or Gemini: Settings -> Voice -> Voice mode) that talks
-// with the user while this session does the work. The voice's tools act on the session through the same paths as the
-// composer (send, stop), and the end of each turn is told to the voice, which says the outcome.
+// Voice mode of a session: a call with this session (voice: local, OpenAI or Gemini, Settings -> Voice -> Voice mode).
+// The session does the thinking, the voice only carries it: every sentence the user says is sent to the session
+// word for word (as a message of the composer, marked as said on a call), and the end of each turn is read out.
 import * as React from 'react'
 import { useNavigate } from 'react-router'
 import { AudioLines, PhoneOff } from 'lucide-react'
@@ -14,14 +14,15 @@ import { endCall, startCall, useCallStatus } from './call/api'
 import { LocalVoice } from './call/local'
 import { GeminiVoice } from './call/gemini'
 import { OpenAIVoice } from './call/openai'
-import type { Brain, CallPhase, Voice } from './call/types'
+import type { Brain, CallPhase, Outcome, Voice } from './call/types'
 import { LevelMeter } from './VoiceButton'
 
 type Props = {
   sid: string
   running: boolean
   queueCount: number
-  onSend: (text: string, attachments: string[]) => Promise<boolean>
+  /** `call`: the call's language (Claude is told it is on the phone). */
+  onSend: (text: string, attachments: string[], call?: string) => Promise<boolean>
   onStop?: () => void
 }
 
@@ -40,6 +41,17 @@ function lastAnswer(sid: string): string {
 const lastResultKey = (st: ReturnType<typeof getLog>) => {
   for (let i = st.items.length - 1; i >= 0; i--) if (st.items[i].kind === 'result' || st.items[i].kind === 'note') return st.items[i].key
   return ''
+}
+
+/** How the last turn ended: a failure (its card), else its answer, else nothing written. */
+function lastOutcome(sid: string, answer: string): Outcome {
+  const items = getLog(sid).items
+  for (let i = items.length - 1; i >= 0; i--) {
+    const it = items[i]
+    if (it.kind === 'result') return it.cut || !it.ev.ok ? 'failed' : answer ? 'answer' : 'done'
+    if (it.kind === 'note') return it.cut ? 'failed' : answer ? 'answer' : 'done'
+  }
+  return answer ? 'answer' : 'done'
 }
 
 const secs = (at: number) => (at > 1e12 ? at / 1000 : at)
@@ -88,25 +100,26 @@ export function VoiceCall({ sid, running, queueCount, onSend, onStop }: Props) {
 
   React.useEffect(() => hangUp, [hangUp, sid])
 
-  // A turn of the session ended during the call: the voice tells its outcome.
+  // A turn of the session ended during the call: the voice reads it out.
   React.useEffect(() => {
     if (resultKey === seenKey.current) return
     seenKey.current = resultKey
     if (!voice.current || !resultKey) return
     const answer = lastAnswer(sid)
-    voice.current.notify(answer || '(the session ended its turn without a written answer)')
+    voice.current.notify(answer, lastOutcome(sid, answer))
   }, [resultKey, sid])
 
   if (!st) return null
 
   const brain: Brain = {
-    ask: async (request) => {
+    ask: async (request, lang) => {
       if (!request.trim()) return 'Nothing to send.'
       const busy = live.current.running
-      const ok = await live.current.onSend(request.trim(), []).catch(() => false)
+      const ok = await live.current.onSend(request.trim(), [], lang).catch(() => false)
       if (!ok) return 'The message could not be sent to the session.'
       return busy ? 'Queued: the session is busy and will do it right after its current work.' : 'Sent: the session is working on it.'
     },
+    busy: () => live.current.running,
     status: () => sessionLine(sid, live.current.running, live.current.queueCount),
     stop: async () => {
       if (!live.current.running) return 'The session was not working.'
@@ -125,7 +138,8 @@ export function VoiceCall({ sid, running, queueCount, onSend, onStop }: Props) {
     setPhase('connecting')
     seenKey.current = resultKey
     try {
-      const c = await startCall(sid, useUI.getState().language)
+      const ui = useUI.getState().language
+      const c = await startCall(sid, ui)
       const events = {
         phase: (p: CallPhase) => setPhase((cur) => (cur === 'off' ? cur : p)),
         caption: (who: 'you' | 'voice', text: string) => setCaption({ who, text }),
@@ -135,8 +149,11 @@ export function VoiceCall({ sid, running, queueCount, onSend, onStop }: Props) {
       let v: Voice
       if (c.mode === 'local') {
         callId.current = c.call
-        v = new LocalVoice(c.call, brain, events)
-      } else v = c.provider === 'gemini' ? new GeminiVoice(c, brain, events) : new OpenAIVoice(c, brain, events)
+        v = new LocalVoice(c.call, c.language, brain, events)
+      } else {
+        const lang = (ui || navigator.language || 'en').split('-')[0].toLowerCase()
+        v = c.provider === 'gemini' ? new GeminiVoice(c, brain, events, lang) : new OpenAIVoice(c, brain, events, lang)
+      }
       voice.current = v
       await v.start()
     } catch (e) {

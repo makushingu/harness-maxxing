@@ -6,13 +6,14 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 ## Unreleased
 
 New:
-- **Voice mode: talk with Harness out loud.** The new button in the bar of a session starts a call: a voice answers
-  you at once, hands the real work to the session (the same Claude, files and tools), keeps you company while it
-  works ("where are you at?", "stop") and tells you the outcome when it is done. Everything it asks appears in the
-  session as usual. By default the voice runs on your server (free, private); in Settings -> Voice you can switch
-  to a realtime voice from OpenAI or Gemini (faster and more natural, on your own key, which Harness finds in the
-  Keys vault). On your server you choose among several French and English voices and their speed; it follows you
-  when you switch language, and you cut it off by just speaking over it.
+- **Voice mode: talk with your session out loud.** The new button in the bar of a session starts a call. Everything
+  you say goes to the session word for word (the same Claude, files and tools), a voice says "I'm looking" at once,
+  then reads the answer out, short and easy to listen to; everything stays written in the session. Keep talking
+  while it works (your words become its next message), say "stop" to stop it; noise and "ok" are not sent, and
+  speaking over the voice only pauses it. One language per call, yours, until you ask for another. By default the
+  voice runs on your server (free, private, several French and English voices and their speed); in Settings ->
+  Voice you can switch to a realtime voice from OpenAI or Gemini on your own key, which Harness finds in the Keys
+  vault.
 
 ## 2.0.0-alpha.155 - 2026-11-15
 

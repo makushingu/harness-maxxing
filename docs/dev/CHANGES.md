@@ -9,27 +9,40 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 - Voice mode (`voicecall.py`, `tts.py`, `tts_worker.py`, `api/voice.py` `/call*` `/tts*` `/said`, web
   `features/voice/{VoiceCall,VoiceCallSettings}.tsx` + `features/voice/call/*`, i18n group `vmode`). Config key
-  `voice_call` (see API.md#voice-mode). Local talker = one `claude -p --input-format stream-json
-  --include-partial-messages --tools ""` per call (cwd `<state>/claude-titles`), actions as leading `@ask:` / `@stop`
-  lines, the session state prefixed to each user message; a reply cut by the user is drained to its `result` before
-  the next one. Piper (piper-tts, GPL) lives in its own venv under `<state>/voice/tts`, run apart; `tts_worker.py` is
-  executed by that venv's Python (`-I`), never imported. Cloud: tokens only (OpenAI client_secrets, Gemini
-  auth_tokens with the full `bidiGenerateContentSetup`, so a client cannot change the instructions or tools); the
-  browser talks to the provider directly (WebRTC / WebSocket). Mic capture by ScriptProcessor (an AudioWorklet from a
-  Blob is refused by the app's script-src). Not done: approvals by voice, Telegram, progress spoken unprompted.
+  `voice_call` (see API.md#voice-mode). **The session does the thinking, the voice only carries it**: a first design
+  where a small model answered and handed work over (`@ask:` lines, `ask_session` tool) answered from its own
+  knowledge, rephrased requests (often in English) and switched language by itself. Now every sentence goes to the
+  session word for word: `voicecall.classify` sorts it without any model (Whisper hallucinations on noise, fillers
+  skipped unless the last thing said ended with "?", stop words after leading "non / ok / attends", language
+  requests of at most 9 words with a speak verb), `sort` keeps one language per call (changed on request, or when
+  Whisper and `voice.text_language` agree on a sentence of 3 words or more; another language than fr/en on Whisper's
+  word from 4 words). Messages carry `call: <lang>` (`MessageIn.call`, queue item `call`, kept by `_merged`):
+  `runner.build_prompt` prefixes `CALL_PREFACE` (on a call, answer short and easy to say in that language). Local:
+  `/call/{id}/hear` (transcribe + sort + acknowledgement from `PHRASES`, generated once per call by `prepare()` at
+  start, regenerated when their file expired) and `/call/{id}/speak` (an answer up to `SHORT_CHARS` 320 cleaned
+  characters, no fence / table, is read as it is; a longer one goes to the summarizer, one `claude -p
+  --input-format stream-json --include-partial-messages --tools ""` per call with `SUMMARY_PROMPT`, streamed sentence
+  by sentence; its start is read if it fails). Every sentence is said with `tts.synth(lang=<call language>)`: one
+  voice per answer. Browser (`call/local.ts`): speech over the voice pauses it (`audio.pause()`), resumed when the
+  sentence is `empty` / `skip`, dropped (with the answer being read) on a real one; sentences are heard in order
+  (promise chain); the end of a turn the user stopped is not read (`muteNext`); answers wait while the user talks.
+  Cloud (`call/cloud.ts` `Relay`): the provider's input transcription is sorted by `/call/sort` and sent the same
+  way; its prompt says it only acknowledges and reads `[Session finished]` messages out; tools left:
+  `session_status`, `stop_session`, `read_last_answer`. Piper (piper-tts, GPL) lives in its own venv under
+  `<state>/voice/tts`, run apart; `tts_worker.py` is executed by that venv's Python (`-I`), never imported. Cloud
+  tokens only (OpenAI client_secrets, Gemini auth_tokens with the full `bidiGenerateContentSetup`, so a client
+  cannot change the instructions or tools); the browser talks to the provider directly (WebRTC / WebSocket). Mic
+  capture by ScriptProcessor (an AudioWorklet from a Blob is refused by the app's script-src). Not done: approvals
+  by voice, Telegram, progress spoken unprompted.
 - Voice mode, local: `tts.VOICES` = id -> {model, path, speaker?, lang, name} (several voices in one Piper model,
   e.g. upmc Pierre/Jessica; worker request gains `speaker`; old id `fr_FR-upmc-medium` aliased); `pick_voice` only
-  uses the chosen voice for its language. `voice_call.local_speed` (0.8-1.5, default 1.15). Language per utterance: transcribed
-  in the last one heard; when the mean `avg_logprob` is below `voice.WRONG_LANGUAGE_LOGPROB` (-0.4; right language
-  about -0.2, wrong -0.45 to -0.85 with `small`; `voice.text_language` corrects a French run that copied English), the other `call_languages()` (voice setting, UI language, en) are tried
-  and the best kept (`transcribe_file(among=...)`; `detect_language` cost +1.3 s on every sentence). Passed to the
-  talker as `[Language: xx]`. Prompt: the voice is
-  one person and never says session / Claude / tool. Barge-in: while speaking, the threshold follows the echo heard by
-  the mic (`max(0.09, floor*2.5, echo*2.2)`, 4 frames) instead of a fixed 0.32.
-  The reply is parsed by `voicecall.reply_parts`: an action line is never said, wherever it comes (`@ask:` alone takes
-  the next line as its request, `Sure. @stop` is split); the local prompt has examples and forbids narrated
-  reasoning (Haiku said "The user switched to English..." aloud). The call start sends the browser's language
-  (`{session, language}`): listened for first.
+  uses the chosen voice for its language. `voice_call.local_speed` (0.8-1.5, default 1.15). Transcribed in the
+  call's language; when the mean `avg_logprob` is below `voice.WRONG_LANGUAGE_LOGPROB` (-0.4; right language about
+  -0.2, wrong -0.45 to -0.85 with `small`; `voice.text_language` corrects a French run that copied English), the
+  other `call_languages()` (voice setting, browser language sent to `/call/start`, server language, en) are tried and
+  the best kept (`transcribe_file(among=...)`; `detect_language` cost +1.3 s on every sentence). Barge-in: while
+  speaking, the threshold follows the echo heard by the mic (`max(0.09, floor*2.5, echo*2.2)`, 4 frames) instead of
+  a fixed 0.32.
 
 ## 2.0.0-alpha.155 - 2026-11-15
 

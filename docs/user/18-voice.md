@@ -72,24 +72,30 @@ Send a **voice note** or a **round video note** in a session thread (an audio fi
 If voice messages are off, the bot replies with a short hint instead.
 
 ## Voice mode (talk with Harness)
-The **voice mode** button (sound waves, in the bar of a session) starts a call. You talk; a voice answers at once
-and hands the real work to the session - the same Claude, with its files and tools - then tells you the outcome when
-the session is done. Meanwhile you can ask "where are you at?", say "stop", or talk about something else.
-Everything the voice asks for appears in the session as your messages, so nothing happens out of sight.
+The **voice mode** button (sound waves, in the bar of a session) starts a call with the session itself. Everything
+you say goes to the session, word for word, as your messages: the same Claude, with its files and tools, does the
+work and its answer is read out to you. The voice only carries the call: it says "I'm looking" at once, then reads
+the answer - short and easy to listen to, since the session knows it is on a call. Everything stays written in the
+session, so nothing happens out of sight.
 
-- **Tap the call** while Harness speaks to stop it; just speak over it to cut it off. **Hang up** with the red button.
+- **Keep talking while it works**: what you say goes to the session as its next message ("Noted, I'll do it right
+  after"). Say **"stop"** to stop the work. "Ok", "thanks" and noise are not sent (unless the voice just asked you a
+  question).
+- **One language per call**: yours (your interface language at first). It changes when you ask ("speak English")
+  or when you clearly speak another language.
+- **Speak over the voice** and it pauses; if it was only noise, it goes on where it was. **Tap the call** to stop it
+  talking. **Hang up** with the red button.
 - **Settings -> Voice -> Voice mode** chooses the voice:
-  - **On this server** (default): free and private. It hears you with the engine above, thinks with a small Claude
-    model (Haiku) and speaks with Piper (install it from the card: about 150 MB). About 3 to 5 s before it answers.
-    Choose its **voice** (several French and English voices, each downloaded when chosen) and its **speed**. It
-    listens in your interface language and in English, sentence by sentence: switch language, or ask it to speak
-    another one, and it follows (a sentence in another language is read by a voice of that language).
-  - **Cloud (realtime)**: OpenAI Realtime or Gemini Live, under a second, very natural, about 1 to 5 cents a minute
-    on your own key. Harness finds the keys in the Keys vault (`OPENAI_API_KEY`, `GEMINI_API_KEY`, or any key whose
-    name contains OPENAI / GEMINI) and asks which one to use when there are several. Your key never leaves the server:
-    each call gets a short-lived token. The audio goes to that provider.
-- Speak normally over the voice to cut it off. With headphones it is instant; on loudspeakers the voice may need
-  you to speak a little louder than it, and in a noisy place it may hear itself.
+  - **On this server** (default): free and private. It hears you with the engine above and speaks with Piper
+    (install it from the card: about 150 MB); a small Claude model (Haiku) only shortens a long answer for the ear.
+    Choose its **voice** (several French and English voices, each downloaded when chosen) and its **speed**.
+  - **Cloud (realtime)**: OpenAI Realtime or Gemini Live, very natural, about 1 to 5 cents a minute on your own key.
+    It is only the voice too: what it hears of you goes to the session. Harness finds the keys in the Keys vault
+    (`OPENAI_API_KEY`, `GEMINI_API_KEY`, or any key whose name contains OPENAI / GEMINI) and asks which one to use
+    when there are several. Your key never leaves the server: each call gets a short-lived token. The audio goes to
+    that provider.
+- With headphones it is instant; on loudspeakers the voice may need you to speak a little louder than it, and in a
+  noisy place it may hear itself.
 
 ## From the terminal
 ```
