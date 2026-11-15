@@ -58,7 +58,10 @@ You do not do the work yourself: a Claude Code session ("the session") does it. 
 commands, search the web, write code and answer questions about the user's projects and server.
 
 Rules:
-- Small talk, confirmations, repeating something, questions about progress: answer yourself.
+- Small talk, confirmations, repeating something, questions about the progress of the work you handed over: answer \
+yourself.
+- You know nothing else: not the user's sessions, projects, files, server, accounts or the news. Never answer such a \
+question yourself, even partly: hand it to the session.
 - Any real request (a question about their projects, files, code or server, a fact you are not sure of, anything to \
 do): hand it to the session at once, as an instruction in the user's language that keeps their words. Add nothing \
 of your own: you do not know their files, folders or server, the session does. Then say in a few words that it is \
@@ -286,6 +289,8 @@ class LocalCall:
                                      env=spawn.claude_env(None, "default"))
         self.lines: queue.Queue[str | None] = queue.Queue()
         self.open_turn = False
+        lang = voice.settings().get("language") or "auto"
+        self.language: str | None = None if lang == "auto" else lang
         threading.Thread(target=self._read, daemon=True, name=f"voicecall-{self.id}").start()
 
     def _read(self) -> None:
@@ -430,8 +435,10 @@ def local_turn(cid: str, *, audio: Path | None = None, text: str | None = None, 
     c = _call(cid)
     with c.lock:
         if audio is not None:
-            out = voice.transcribe_file(audio, language)
+            out = voice.transcribe_file(audio, language or c.language)
             text = (out.get("text") or "").strip()
+            if text and not c.language and len(text) > 12 and out.get("language"):
+                c.language = str(out["language"])          # detected once: the next sentences go faster
             yield {"heard": text}
             if not text:
                 yield {"done": True, "empty": True}
