@@ -15,6 +15,7 @@ import { endCall, startCall, useCallStatus } from './call/api'
 import { LocalVoice } from './call/local'
 import { GeminiVoice } from './call/gemini'
 import { OpenAIVoice } from './call/openai'
+import { chimeOff, chimeOn, unlockChime } from './call/chime'
 import type { Brain, CallPhase, Outcome, Voice } from './call/types'
 import { LevelMeter } from './VoiceButton'
 
@@ -112,6 +113,7 @@ export function VoiceCall({ sid, running, queueCount, onSend, onStop }: Props) {
   const progressCount = React.useRef(0)
 
   const hangUp = React.useCallback(() => {
+    if (voice.current) chimeOff()
     voice.current?.close()
     voice.current = null
     if (callId.current) void endCall(callId.current)
@@ -183,6 +185,7 @@ export function VoiceCall({ sid, running, queueCount, onSend, onStop }: Props) {
       navigate('/settings/voice')
       return
     }
+    unlockChime()
     setPhase('connecting')
     seenKey.current = resultKey
     lastSaid.current = Date.now()
@@ -215,6 +218,7 @@ export function VoiceCall({ sid, running, queueCount, onSend, onStop }: Props) {
       }
       voice.current = v
       await v.start()
+      if (voice.current === v) chimeOn()
     } catch (e) {
       hangUp()
       toast.error(t('vmode.failed'), errorMessage(e))

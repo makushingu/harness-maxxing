@@ -87,6 +87,7 @@ Everything handed over appears in the session as your messages, so nothing happe
   answer. **Tapping the call** cuts it too.
 - **Pause before your sentence ends** (Settings -> Voice -> Voice mode): how long a silence lasts before the voice
   answers (1.8 s by default; raise it if you get cut while thinking).
+- A short rising tone tells you the call is connected, a falling one that it ended.
 - **Hang up** with the red button.
 - **Settings -> Voice -> Voice mode** also chooses the voice:
   - **On this server** (default): free and private. It hears you with the engine above, talks with a Claude model
