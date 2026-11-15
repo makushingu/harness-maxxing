@@ -53,8 +53,9 @@ export const en = {
   'error.part': 'This part could not be displayed.',
   'error.reload': 'Reload',
   'error.title': 'This page crashed',
-  'error.updated': 'A new version is available',
-  'error.updatedDesc': 'The app was updated on the server. Reload to continue.',
+  'error.updated': 'Harness was updated',
+  'error.updatedDesc': 'Reload to use the new version.',
+  'error.updating': 'Loading the new version…',
 
   // navigation & shell
   'nav.teamPanel': 'Open the chats',

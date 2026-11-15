@@ -5,6 +5,7 @@ import { bindCompact } from '@/stores/media'
 import { loadLanguage } from '@/i18n'
 import { initPWA } from '@/pwa'
 import { bootPrefetch } from '@/lib/boot'
+import { reloadForUpdate } from '@/lib/updateReload'
 import { App, queryClient } from './App'
 
 // A browser that never picked a look takes the server's as soon as the early auth check (index.html) answers,
@@ -18,16 +19,7 @@ bootPrefetch(queryClient)
 // A part of the app built before an update is gone from the server (a tab left open over `maxxing update`): reload
 // once to get the new build instead of an error screen. Once a minute at most (no loop if the server is broken).
 window.addEventListener('vite:preloadError', (e) => {
-  let last = 0
-  try {
-    last = Number(sessionStorage.getItem('mx-chunk-reload') || 0)
-    if (Date.now() - last < 60_000) return
-    sessionStorage.setItem('mx-chunk-reload', String(Date.now()))
-  } catch {
-    return // no storage: cannot tell a loop apart, keep the error screen (it offers Reload)
-  }
-  e.preventDefault()
-  window.location.reload()
+  if (reloadForUpdate()) e.preventDefault()
 })
 initPWA()
 // A language change loads its dictionary (useT re-renders once it is there); the active one is loaded before the

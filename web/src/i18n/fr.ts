@@ -52,8 +52,9 @@ export const fr: Record<keyof typeof en, string> = {
   'error.part': 'Cette partie n’a pas pu s’afficher.',
   'error.reload': 'Recharger',
   'error.title': 'Cette page a planté',
-  'error.updated': 'Une nouvelle version est disponible',
-  'error.updatedDesc': 'L’application a été mise à jour sur le serveur. Rechargez pour continuer.',
+  'error.updated': 'Harness a été mis à jour',
+  'error.updatedDesc': 'Rechargez pour utiliser la nouvelle version.',
+  'error.updating': 'Chargement de la nouvelle version…',
 
   'nav.teamPanel': 'Ouvrir les discussions',
   'nav.teamPanelClose': 'Fermer les discussions',
