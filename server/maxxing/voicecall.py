@@ -90,7 +90,8 @@ PROMPT_TOOLS = """
 Tools: ask_session() hands over what the user just said (their own words, you give none); session_status() tells \
 whether the work is going and on what; stop_session() stops it; read_last_answer() gives the last written answer. \
 "[Session finished]" / "[Session finished: it failed]" messages tell you the work ended; "[Session working]" \
-messages ask for one sentence of news."""
+messages ask for one sentence of news.
+The language of the call is the one the user speaks to you. When they ask for another one, switch to it; when they then speak their own language again for a whole sentence, switch back to it. Never stay in a language they no longer speak."""
 
 PROMPT_LOCAL = """
 Your reply is exactly what the user hears: never explain your reasoning, never describe what you are deciding, \
