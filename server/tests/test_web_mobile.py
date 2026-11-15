@@ -177,3 +177,17 @@ def test_the_name_of_a_browser_profile_takes_the_width_of_a_phone():
     src = (WEB / "features" / "browser" / "ProfilePage.tsx").read_text()
     field = re.search(r'className="([^"]*)"\s+data-testid="browser-profile-name"', src)
     assert field and {"w-full", "sm:w-56", "pointer-coarse:h-10"} <= set(field[1].split()) and "w-56" not in field[1].split()
+
+
+def test_the_links_of_the_browser_settings_are_big_enough_to_tap():
+    browser = WEB / "features" / "browser"
+    settings = (browser / "BrowserSettings.tsx").read_text()
+    add = re.search(r"function AddRow[^\n]*\n  const cls = '([^']*)'", settings)
+    back = re.search(r'<Link to=\{BROWSER_SETTINGS\} className="([^"]*)"', settings)
+    more = re.search(r'<button type="button" className="([^"]*)" onClick=\{\(\) => setMore\(!more\)\}',
+                     (browser / "BrowserFeature.tsx").read_text())
+    ts = re.findall(r'<button type="button" className="([^"]*)" onClick=\{\(\) => (?:setAdvanced\(true\)|set\.mutate\(\{ id: exit\.id, action: \'logout\' \}\))\}',
+                    (browser / "Exits.tsx").read_text())
+    assert add and back and more and len(ts) == 2
+    for cls in (add[1], back[1], more[1], *ts):
+        assert "pointer-coarse:min-h-10" in cls.split()

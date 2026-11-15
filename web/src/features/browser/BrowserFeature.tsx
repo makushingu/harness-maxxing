@@ -92,7 +92,7 @@ export function BrowserSettingsForm() {
         </SettingRow>
       </div>
       <div>
-        <button type="button" className="inline-flex items-center gap-1 text-[13px] font-medium text-muted-foreground hover:text-foreground" onClick={() => setMore(!more)} aria-expanded={more} data-testid="browser-more">
+        <button type="button" className="inline-flex items-center gap-1 text-[13px] font-medium text-muted-foreground hover:text-foreground pointer-coarse:min-h-10" onClick={() => setMore(!more)} aria-expanded={more} data-testid="browser-more">
           <ChevronDown className={more ? 'size-4 rotate-180 transition-transform' : 'size-4 transition-transform'} /> {t('browser.more')}
         </button>
         {more && (

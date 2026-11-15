@@ -387,12 +387,12 @@ function TailscaleWizard({ exit }: { exit: BrowserExit }) {
             <Input id="ts-server" value={server} onChange={(e) => setServer(e.target.value)} onBlur={() => server !== (exit.login_server || '') && save.mutate({ id: exit.id, login_server: server.trim() })} placeholder="https://headscale.example.com" className="font-mono text-[12px]" />
           </div>
         ) : (
-          <button type="button" className="text-left text-[12px] text-muted-foreground underline-offset-2 hover:underline" onClick={() => setAdvanced(true)}>
+          <button type="button" className="text-left text-[12px] text-muted-foreground underline-offset-2 hover:underline pointer-coarse:min-h-10" onClick={() => setAdvanced(true)}>
             {t('browser.ts.advanced')}
           </button>
         )}
         {linked && (
-          <button type="button" className="text-left text-[12px] text-muted-foreground underline-offset-2 hover:underline" onClick={() => set.mutate({ id: exit.id, action: 'logout' })}>
+          <button type="button" className="text-left text-[12px] text-muted-foreground underline-offset-2 hover:underline pointer-coarse:min-h-10" onClick={() => set.mutate({ id: exit.id, action: 'logout' })}>
             {t('browser.ts.logout')}
           </button>
         )}

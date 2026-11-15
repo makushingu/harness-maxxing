@@ -63,7 +63,7 @@ export function BrowserSettingsSection() {
   })
 
   const back = (
-    <Link to={BROWSER_SETTINGS} className="inline-flex items-center gap-1.5 justify-self-start text-[13px] text-muted-foreground hover:text-foreground" data-testid="browser-settings-back">
+    <Link to={BROWSER_SETTINGS} className="inline-flex items-center gap-1.5 justify-self-start text-[13px] text-muted-foreground hover:text-foreground pointer-coarse:min-h-10" data-testid="browser-settings-back">
       <ArrowLeft className="size-4" /> {t('nav.browser')}
     </Link>
   )
@@ -188,7 +188,7 @@ function Row({ to, tone, title, right, testid, children }: { to: string; tone: s
 }
 
 function AddRow({ label, testid, onClick, to }: { label: string; testid: string; onClick?: () => void; to?: string }) {
-  const cls = 'mt-0.5 inline-flex items-center gap-1.5 justify-self-start rounded-md px-2.5 py-1.5 text-[13px] text-primary hover:bg-accent'
+  const cls = 'mt-0.5 inline-flex items-center gap-1.5 justify-self-start rounded-md px-2.5 py-1.5 text-[13px] text-primary hover:bg-accent pointer-coarse:min-h-10'
   return to ? (
     <Link to={to} className={cls} data-testid={testid}>
       <Plus className="size-3.5" /> {label}
