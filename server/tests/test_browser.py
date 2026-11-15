@@ -1572,3 +1572,18 @@ def test_a_lone_surrogate_in_a_tool_argument_never_breaks_the_journal(mx):
     got = replays.actions("main")
     assert [e["at"] for e in got] == [2, 1]
     assert got[1]["args"]["uid"] == "?"
+
+
+def test_a_running_profile_never_waits_behind_another_profile_starting(mx):
+    from types import SimpleNamespace
+    p, b = _browser()
+    b.state = "running"
+    b.watcher = SimpleNamespace(cdp=SimpleNamespace(closed=False))
+
+    async def go():
+        await p._start_lock.acquire()                  # another profile is starting (up to 30 s)
+        try:
+            return await asyncio.wait_for(p.ensure("main"), 2)
+        finally:
+            p._start_lock.release()
+    assert asyncio.run(go()) is b

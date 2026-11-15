@@ -147,10 +147,12 @@ class Pool:
         p = browser.profile(pid)
         if p is None:
             raise browser.BrowserError(404, "no_profile", "No such browser profile")
+        b = self.browsers.get(pid)
+        if self._live(b):                           # already up: never wait behind another profile's start
+            return b
         async with self._start_lock:
             b = self.browsers.get(pid)
-            if b and b.state == "running" and (b.proc is None or b.proc.returncode is None) and b.watcher \
-                    and b.watcher.cdp and not b.watcher.cdp.closed:
+            if self._live(b):
                 return b
             if b:
                 await self._stop_locked(pid, "restart")
@@ -163,6 +165,11 @@ class Pool:
                 raise
         self._changed()
         return b
+
+    @staticmethod
+    def _live(b: Browser | None) -> bool:
+        return bool(b and b.state == "running" and (b.proc is None or b.proc.returncode is None) and b.watcher
+                    and b.watcher.cdp and not b.watcher.cdp.closed)
 
     async def _make_room(self, pid: str) -> None:
         """At most `max_active_profiles` running: the one unused for the longest sleeps; none free -> refused."""
