@@ -15,6 +15,7 @@ import { fromDraftAtt, toDraftAtts, type Att } from '@/pages/sessions/Composer'
 import { loadAtts, loadDraft, saveAtts, saveDraft } from '@/pages/sessions/store'
 import { pastedFile, pastedName } from '@/pages/sessions/pasteAsFile'
 import { quotesMarkdown } from '@/pages/sessions/util'
+export { insertAtCaret } from '@/features/composer/text'
 
 /** Files a message (the server's agents.ATTACH_MAX). */
 export const MAX_FILES = 10
@@ -122,16 +123,6 @@ export function useDraftText(key: string) {
     }
   }, [])
   return { text, setText }
-}
-
-/** `heard` (a dictation) put at the caret of `el` in `text`, with a space on each side when needed. */
-export function insertAtCaret(el: HTMLTextAreaElement | null, text: string, heard: string): { text: string; caret: number } {
-  const start = el ? el.selectionStart : text.length
-  const end = el ? el.selectionEnd : text.length
-  const before = text.slice(0, start)
-  const after = text.slice(end)
-  const ins = (before && !/\s$/.test(before) ? ' ' : '') + heard + (after && !/^\s/.test(after) ? ' ' : '')
-  return { text: before + ins + after, caret: before.length + ins.length }
 }
 
 /** `text` with `quote` (a selection of the conversation) added as a Markdown quote at its end: the reply goes after it.

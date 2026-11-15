@@ -6,6 +6,7 @@ import { Sensitive } from '@/components/ui'
 import { fmtBytes } from '@/lib/format'
 import { isImage } from '@/pages/sessions/util'
 
+/** `progress`: 0..1 while uploading, below 0 when the upload gives no progress. */
 export type Att = { lid: string; name: string; size: number; path: string | null; progress: number; error: string | null; preview: string | null }
 
 export function AttachmentChip({ att, onRemove }: { att: Att; onRemove: () => void }) {
@@ -25,10 +26,10 @@ export function AttachmentChip({ att, onRemove }: { att: Att; onRemove: () => vo
           <Sensitive length={8}>{att.name}</Sensitive>
         </span>
         <span className={cn('truncate text-[11px]', att.error ? 'text-destructive' : 'text-muted-foreground')}>
-          {att.error ? t('common.failed') : done ? (att.size ? fmtBytes(att.size) : '') : `${Math.round(att.progress * 100)} %`}
+          {att.error ? t('common.failed') : done ? (att.size ? fmtBytes(att.size) : '') : att.progress < 0 ? '…' : `${Math.round(att.progress * 100)} %`}
         </span>
       </span>
-      {!done && !att.error && <span className="absolute bottom-0 left-0 h-0.5 bg-primary transition-[width]" style={{ width: `${Math.round(att.progress * 100)}%` }} />}
+      {!done && !att.error && att.progress >= 0 && <span className="absolute bottom-0 left-0 h-0.5 bg-primary transition-[width]" style={{ width: `${Math.round(att.progress * 100)}%` }} />}
       <button
         type="button"
         onClick={onRemove}
