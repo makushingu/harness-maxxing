@@ -11,7 +11,7 @@
 import * as React from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router'
 import {
-  ArrowLeft, AtSign, Bot, FolderOpen, MoreHorizontal, Pause, Pencil, Play, PlayCircle, RotateCcw, Send, ShieldCheck, Square, Trash2, UsersRound, WandSparkles,
+  ArrowLeft, AtSign, Bot, FolderOpen, MoreHorizontal, Pause, Pencil, Play, PlayCircle, RotateCcw, ShieldCheck, Square, Trash2, UsersRound, WandSparkles,
 } from 'lucide-react'
 import { useLang, useT, type TFn } from '@/i18n'
 import { errorMessage } from '@/lib/api'
@@ -25,7 +25,7 @@ import { cn } from '@/lib/utils'
 import { useCompact } from '@/stores/media'
 import {
   Badge, Button, Checkbox, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DropdownMenu, DropdownMenuContent, DropdownMenuItem,
-  DropdownMenuSeparator, DropdownMenuTrigger, EmptyState, Sensitive, Sheet, SheetBody, SheetContent, SheetDescription, SheetHeader, SheetTitle, Skeleton, StatusDot, Textarea,
+  DropdownMenuSeparator, DropdownMenuTrigger, EmptyState, Sensitive, Sheet, SheetBody, SheetContent, SheetDescription, SheetHeader, SheetTitle, Skeleton, StatusDot,
   Tooltip, confirm,
 } from '@/components/ui'
 import { Page, PageHeader } from '@/components/shell/Page'
@@ -38,10 +38,11 @@ import { draftUrl } from './EditWithClaude'
 import { AgentsOff, reasonText, useAgentsOn } from './parts'
 import { MentionChip, mentionComponents, mentionNodes, mentionSpans, namedIn, useMentionMap, type MentionMap } from './mentions'
 import { ChipBackdrop } from '@/features/chips/Chip'
-import { AttachButton, AttachList, bringBackDraft, insertAtCaret, useAttachments, useDraftText, withQuote } from './attach'
+import { bringBackDraft, insertAtCaret, useAttachments, useDraftText, withQuote } from './attach'
 import { QuotePill } from '@/pages/sessions/Quote'
 import { agentDraftKey } from '@/lib/drafts'
 import { VoiceButton } from '@/features/voice/VoiceButton'
+import { MessageBox } from '@/features/composer/MessageBox'
 import { AttachmentStrip, MessageMedia, useMessageMenu } from '@/pages/sessions/Items'
 import { AnswerContext, AnswerText } from './answer'
 import { groupUrl } from '@/lib/queries'
@@ -732,9 +733,10 @@ function Composer({ group: g, ref, first }: { group: AgentGroup; ref?: React.Ref
   const track = (e: React.SyntheticEvent<HTMLTextAreaElement>) => setCaret(e.currentTarget.selectionStart ?? 0)
 
   return (
-    <div className="shrink-0 border-t bg-background px-3 py-3 md:px-8">
-      <div className="relative mx-auto flex max-w-3xl flex-col rounded-xl border bg-card p-1.5 focus-within:border-primary/50" {...(ready ? files.dropProps : {})}>
-        {popup && (
+    <MessageBox
+      widthClassName="max-w-3xl md:px-5"
+      menu={
+        popup && (
           <div role="listbox" aria-label={t('groups.mention.title')} className="absolute inset-x-0 bottom-full z-20 mb-1.5 grid max-h-64 gap-0.5 overflow-y-auto rounded-xl border bg-popover p-1 shadow-lg" data-testid="group-mention-list">
             {picks.map((p, i) => (
               <button
@@ -758,56 +760,54 @@ function Composer({ group: g, ref, first }: { group: AgentGroup; ref?: React.Ref
               </button>
             ))}
           </div>
-        )}
-        {!ready ? (
-          <p className="px-2 py-1.5 text-sm text-muted-foreground" data-testid="group-not-ready">
-            {t('groups.notReady')}
-          </p>
-        ) : (
-          <>
-          {to.length > 0 && (
-            <div className="flex flex-wrap items-center gap-1 px-1.5 pt-1 text-xs text-muted-foreground" data-testid="group-to">
-              <span>{t('groups.to')}</span>
-              {to.map((m) => (
-                <MentionChip key={m.path} member={m} handle={m.handle} />
-              ))}
-            </div>
-          )}
-          <AttachList atts={files.atts} onRemove={files.remove} />
-          <div className="flex items-end gap-1">
-            <AttachButton onFiles={files.add} />
-            <ChipBackdrop text={text} spans={mentionSpans(text, names, '')} target={inputEl} />
-            <Textarea
-              ref={setInput}
-              value={text}
-              onPaste={files.onPaste}
-              onChange={(e) => {
-                setText(e.target.value)
-                setCaret(e.target.selectionStart ?? e.target.value.length)
-                setClosed(false)
-              }}
-              onKeyDown={onKey}
-              onSelect={track}
-              onClick={track}
-              onBlur={() => setClosed(true)}
-              onFocus={() => setClosed(false)}
-              minRows={1}
-              maxRows={8}
-              placeholder={first && !g.goal.trim() ? t('groups.placeholderGoal') : t('groups.placeholder')}
-              aria-label={t('groups.placeholder')}
-              aria-expanded={popup}
-              aria-autocomplete="list"
-              className="relative min-h-8 flex-1 resize-none border-0 bg-transparent px-1.5 py-1.5 text-[14px] shadow-none focus-visible:ring-0 dark:bg-transparent"
-              data-testid="group-text"
-            />
-            <VoiceButton onTranscript={onTranscript} />
-            <Button size="icon-sm" onClick={() => submit()} disabled={!canSend} loading={say.isPending} aria-label={t('groups.send')} data-testid="group-send">
-              <Send />
-            </Button>
+        )
+      }
+      closed={
+        !ready ? (
+          <span data-testid="group-not-ready">{t('groups.notReady')}</span>
+        ) : null
+      }
+      top={
+        to.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-1 px-3.5 pt-2.5 text-xs text-muted-foreground" data-testid="group-to">
+            <span>{t('groups.to')}</span>
+            {to.map((m) => (
+              <MentionChip key={m.path} member={m} handle={m.handle} />
+            ))}
           </div>
-          </>
-        )}
-      </div>
-    </div>
+        ) : null
+      }
+      atts={files.atts}
+      onRemoveAtt={files.remove}
+      attsTestId="agent-attachments"
+      backdrop={<ChipBackdrop text={text} spans={mentionSpans(text, names, '')} target={inputEl} />}
+      textareaRef={setInput}
+      textarea={{
+        value: text,
+        onPaste: files.onPaste,
+        onChange: (e) => {
+          setText(e.target.value)
+          setCaret(e.target.selectionStart ?? e.target.value.length)
+          setClosed(false)
+        },
+        onKeyDown: onKey,
+        onSelect: track,
+        onClick: track,
+        onBlur: () => setClosed(true),
+        onFocus: () => setClosed(false),
+        maxRows: 8,
+        placeholder: first && !g.goal.trim() ? t('groups.placeholderGoal') : t('groups.placeholder'),
+        'aria-label': t('groups.placeholder'),
+        'aria-expanded': popup,
+        'aria-autocomplete': 'list',
+        'data-testid': 'group-text',
+      }}
+      onFiles={files.add}
+      attachTestId="agent-attach"
+      voice={<VoiceButton onTranscript={onTranscript} />}
+      send={{ onClick: () => submit(), disabled: !canSend, busy: say.isPending, label: t('groups.send'), testId: 'group-send' }}
+      reason={files.uploading ? t('sessions.composer.uploading') : null}
+      boxProps={ready ? files.dropProps : undefined}
+    />
   )
 }
