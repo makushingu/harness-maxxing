@@ -6,16 +6,16 @@
 //   a message being sent leaves it at once and comes back (before what was typed meanwhile) if the send fails;
 // - the same keys: Enter sends (a newline on a touch keyboard), Shift+Enter = newline, Ctrl/⌘+Enter sends, Esc leaves.
 import * as React from 'react'
-import { Paperclip } from 'lucide-react'
 import { loadGroups, useT, type TFn } from '@/i18n'
-import { Button, Tooltip, toast } from '@/components/ui'
+import { toast } from '@/components/ui'
 import { uploadAttachment } from '@/lib/queries'
 import { api, errorMessage, isApiError } from '@/lib/api'
 import { busyEnd, busyStart } from '@/lib/busy'
-import { AttachmentChip, fromDraftAtt, toDraftAtts, type Att } from '@/pages/sessions/Composer'
+import { fromDraftAtt, toDraftAtts, type Att } from '@/pages/sessions/Composer'
 import { loadAtts, loadDraft, saveAtts, saveDraft } from '@/pages/sessions/store'
 import { pastedFile, pastedName } from '@/pages/sessions/pasteAsFile'
 import { quotesMarkdown } from '@/pages/sessions/util'
+export { insertAtCaret } from '@/features/composer/text'
 
 /** Files a message (the server's agents.ATTACH_MAX). */
 export const MAX_FILES = 10
@@ -123,16 +123,6 @@ export function useDraftText(key: string) {
     }
   }, [])
   return { text, setText }
-}
-
-/** `heard` (a dictation) put at the caret of `el` in `text`, with a space on each side when needed. */
-export function insertAtCaret(el: HTMLTextAreaElement | null, text: string, heard: string): { text: string; caret: number } {
-  const start = el ? el.selectionStart : text.length
-  const end = el ? el.selectionEnd : text.length
-  const before = text.slice(0, start)
-  const after = text.slice(end)
-  const ins = (before && !/\s$/.test(before) ? ' ' : '') + heard + (after && !/^\s/.test(after) ? ' ' : '')
-  return { text: before + ins + after, caret: before.length + ins.length }
 }
 
 /** `text` with `quote` (a selection of the conversation) added as a Markdown quote at its end: the reply goes after it.
@@ -297,39 +287,4 @@ export function useAttachments(path: string, url?: string, opts: { draftKey?: st
     },
   }
   return { atts, add, remove, clear, uploading, paths, onPaste, keyAction, dropProps, dismissNotices }
-}
-
-export function AttachList({ atts, onRemove }: { atts: Att[]; onRemove: (lid: string) => void }) {
-  if (!atts.length) return null
-  return (
-    <div data-testid="agent-attachments" className="flex max-h-[6.75rem] flex-wrap gap-1.5 overflow-y-auto overscroll-contain px-1 pt-1 pb-1.5 [scrollbar-width:thin]">
-      {atts.map((a) => (
-        <AttachmentChip key={a.lid} att={a} onRemove={() => onRemove(a.lid)} />
-      ))}
-    </div>
-  )
-}
-
-export function AttachButton({ onFiles }: { onFiles: (files: File[]) => void }) {
-  const t = useT()
-  const input = React.useRef<HTMLInputElement>(null)
-  return (
-    <>
-      <input
-        ref={input}
-        type="file"
-        multiple
-        hidden
-        onChange={(e) => {
-          onFiles(Array.from(e.target.files || []))
-          e.target.value = ''
-        }}
-      />
-      <Tooltip content={t('sessions.composer.attach')}>
-        <Button variant="ghost" size="icon-sm" aria-label={t('sessions.composer.attach')} onClick={() => input.current?.click()} data-testid="agent-attach">
-          <Paperclip />
-        </Button>
-      </Tooltip>
-    </>
-  )
 }

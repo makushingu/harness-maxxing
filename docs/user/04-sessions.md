@@ -245,9 +245,11 @@ into another app, the content arrives as plain text (a file as its path).
   (**app · 3 files · +12 −4**); click it to review the diff, undo a file, commit, push or open a pull request. Right
   click one of your messages for **Revert to before this message**. See [Code in a session](35-code.md).
 - File paths are clickable and open the **file viewer**: ← / → go through every file of the conversation (see [Files](06-files.md#the-file-viewer)).
-- The header shows the **model that actually answered**, the **cost** and a **context gauge**
-  (how full Claude's context window is, measured against the real window of the model in use - it
-  follows when you switch model).
+- The header shows the **model that actually answered** and the **cost**. Next to the model, in the message box, the
+  **compaction gauge** shows how close the conversation is to its next automatic compaction (the threshold of
+  Settings -> Claude, capped by the window of the model in use): a bar with "63 % · 188k / 300k" when there is room,
+  a ring with "63 %" on a phone or in a narrow column. Hover it for the tokens left. With automatic compaction off,
+  it measures the model's whole window.
 - A line under each answer shows the model, the time it took, its **cost**, the tokens (input → output) and the
   share of input served from cache. Hover (or tap) any of them to see what it means: the token count splits
   uncached input, cache reads, cache writes and output.

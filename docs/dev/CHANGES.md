@@ -5,6 +5,24 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## Unreleased
+
+- Web: `features/composer/MessageBox.tsx` = the shared shell of every message box (`MessageBox`: slots `above`, `menu`,
+  `top`, `backdrop`, `toolbar`, `actions`, `voice`, `send`, `reason`, `closed`, `boxProps`, `compact`,
+  `widthClassName`; `TuckedCard` / `TuckedHead` = the cards tucked under the top of the box, rise and sink, last
+  content kept 220 ms; `CloseButton`, `StopButton`). `AttachmentChip` + `Att` moved to `features/composer/AttachmentChip.tsx`
+  (re-exported by `pages/sessions/Composer`; `progress < 0` = no progress known, "…"), `insertAtCaret` to
+  `features/composer/text.ts` (re-exported by `features/agents/attach`). Users: `pages/sessions/Composer` (no visible
+  change), the agent box (`AgentPage` `Composer`: toolbar `ModelPicker` + `CompactGauge`, actions New conversation +
+  Stop of the chat session via `useStopSession`, reply = `TuckedCard`; the separate `agent-chat-bar` is gone), the group
+  box (`GroupPage`: recipients in `top`, the `@` list in `menu`), the Team box (`team/Chat` `Composer`: poll in
+  `toolbar`, reply / edit = `TuckedCard`, `VoiceButton` dictation, Enter = newline on `pointer: coarse` like the other
+  boxes). `attach.tsx`: `AttachList` / `AttachButton` removed (the shell draws them).
+- Web: `CompactGauge` (`pages/sessions/Widgets.tsx`, replaces `ContextGauge`) in the toolbar of the session and agent
+  boxes, removed from the session header. Threshold `compactAt(auto_compact_tokens, window)` mirrors
+  `runner._auto_compact` (setting raised to 100k, `resume.fit`: min(limit, max(window - 70k, window / 2))); off = the
+  model's window. Wide / narrow from the toolbar's `@container` (`@md`). Tooltip texts `cgauge.*` in the `composer` i18n group.
+
 ## 2.0.0-alpha.155 - 2026-11-15
 
 - Web: `lib/updateReload.ts` (`isChunkError`, `reloadForUpdate()`: reload at most once a minute, guard

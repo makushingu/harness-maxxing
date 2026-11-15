@@ -1,15 +1,13 @@
 // Message composer: autosize textarea, drafts, attachments (button / drop / paste), queue stack, quotes,
 // send / stop. Enter sends, Shift+Enter = newline, Ctrl/⌘+Enter sends, Esc blurs.
 import * as React from 'react'
-import { ArrowUp, Clock, CornerDownRight, FileText, ListPlus, MessageCircleQuestion, Paperclip, Pencil, Quote, Square, X } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { Clock, CornerDownRight, ListPlus, MessageCircleQuestion, Pencil, Quote, X } from 'lucide-react'
 import { loadGroups, useT } from '@/i18n'
-import { Button, Sensitive, Spinner, Textarea, Tooltip, toast } from '@/components/ui'
+import { Button, Sensitive, Spinner, Tooltip, toast } from '@/components/ui'
 import { uploadAttachment, useMentionTargets } from '@/lib/queries'
 import { errorMessage } from '@/lib/api'
 import { DRAFT_EVENT, leftOutbox, loadAtts, loadDraft, loadQuotes, onSeed, outboxAdd, outboxDone, outboxMove, registerComposer, saveAtts, saveDraft, saveQuotes, takeSeed, type DraftAtt, type OutboxEntry, type Pending, type Seed } from './store'
 import { busyEnd, busyStart } from '@/lib/busy'
-import { fmtBytes } from '@/lib/format'
 import type { MentionTarget, QueueItem, SentMention } from '@/lib/types'
 import { baseName, isImage, quotedFile, quotesMarkdown, thumbUrl } from './util'
 import { QuotedFile } from './QuotedFile'
@@ -18,10 +16,12 @@ import { VoiceButton } from '@/features/voice/VoiceButton'
 import { SlashMenu, slashAction, slashItems, type MenuRow, type SlashCommand } from './SlashMenu'
 import { mentionAt, mentionRows, targetChip, usedMentions } from './mentions'
 import { ChipBackdrop, findCommand, findNames } from '@/features/chips/Chip'
+import { AttachmentChip, type Att } from '@/features/composer/AttachmentChip'
+import { CloseButton, MessageBox, StopButton, TuckedCard } from '@/features/composer/MessageBox'
 
 const NO_ITEMS: QueueItem[] = []
 
-export type Att = { lid: string; name: string; size: number; path: string | null; progress: number; error: string | null; preview: string | null }
+export { AttachmentChip, type Att }
 export const fromDraftAtt = (a: DraftAtt): Att => ({ lid: Math.random().toString(36).slice(2), name: a.name, size: a.size, path: a.path, progress: 1, error: null, preview: isImage(a.path) ? thumbUrl(a.path, 160) : null })
 export const toDraftAtts = (atts: Att[]): DraftAtt[] => atts.filter((a) => a.path && !a.error).map((a) => ({ path: a.path!, name: a.name, size: a.size }))
 
@@ -80,7 +80,6 @@ export const Composer = React.forwardRef<ComposerHandle, {
   const [atts, setAtts] = React.useState<Att[]>(() => loadAtts(draftKey).map(fromDraftAtt))
   const [sending, setSending] = React.useState(false)
   const ta = React.useRef<HTMLTextAreaElement | null>(null)
-  const fileInput = React.useRef<HTMLInputElement>(null)
   const ctrls = React.useRef(new Map<string, AbortController>())
   const previews = React.useRef(new Set<string>())
   const live = React.useRef({ text, quotes, atts, draftKey })
@@ -305,14 +304,6 @@ export const Composer = React.forwardRef<ComposerHandle, {
       setTaking(false)
     }
   }
-
-  // New files go at the end of the strip: keep them in view.
-  const attBox = React.useRef<HTMLDivElement>(null)
-  const attCount = React.useRef(atts.length)
-  React.useEffect(() => {
-    if (atts.length > attCount.current) attBox.current?.scrollTo({ top: attBox.current.scrollHeight, behavior: 'smooth' })
-    attCount.current = atts.length
-  }, [atts.length])
 
   const uploading = atts.some((a) => !a.path && !a.error)
   const failedUpload = atts.find((a) => a.error)
@@ -595,322 +586,172 @@ export const Composer = React.forwardRef<ComposerHandle, {
     if (autoFocus && window.matchMedia('(pointer: fine)').matches) focusAtEnd(ta.current) // after a pre-filled draft
   }, [autoFocus])
 
-  // The queue stack rises from behind the composer and sinks back when it empties: the last content stays
-  // rendered during the exit (220 ms), the height animates with grid rows (no jump of the thread above).
-  const [stack, setStack] = React.useState({ count: queueCount, items: queued, server: queueItems, leaving: false })
-  const shownCount = taken ? 0 : queueCount
-  React.useEffect(() => {
-    if (shownCount > 0) {
-      setStack({ count: shownCount, items: queued, server: queueItems, leaving: false })
-      return
-    }
-    setStack((s) => (s.count > 0 ? { ...s, leaving: true } : s))
-    const id = setTimeout(() => setStack((s) => (s.leaving ? { count: 0, items: [], server: NO_ITEMS, leaving: false } : s)), 220)
-    return () => clearTimeout(id)
-  }, [shownCount, queued, queueItems])
-  const stackCount = stack.count
-
-  // The notice (e.g. "plan ready") rises and sinks back the same way; it waits while the queue is shown.
-  // (Keyed on a boolean: `notice` is a new element every render; the live one is shown, the last one while leaving.)
-  const hasNotice = !!notice && stackCount === 0
-  const lastNotice = React.useRef<React.ReactNode>(null)
-  if (hasNotice) lastNotice.current = notice
-  const [noticeState, setNoticeState] = React.useState<'hidden' | 'shown' | 'leaving'>(hasNotice ? 'shown' : 'hidden')
-  React.useEffect(() => {
-    if (hasNotice) {
-      setNoticeState('shown')
-      return
-    }
-    setNoticeState((s) => (s === 'shown' ? 'leaving' : s))
-    const id = setTimeout(() => setNoticeState((s) => (s === 'leaving' ? 'hidden' : s)), 220)
-    return () => clearTimeout(id)
-  }, [hasNotice])
-  const shownNotice = { node: noticeState === 'hidden' && !hasNotice ? null : hasNotice ? notice : lastNotice.current, leaving: noticeState === 'leaving' && !hasNotice }
-  // The server lists every waiting message: shown as is, so a message queued before a reload (or from another
-  // tab, Telegram, a cron) shows its text. Older servers send only the count: the messages typed here, then "+ n".
-  // (the server sends the last 20 at most: the older ones are the "+ n")
-  const fromServer = stackCount > 0 && stack.server.length >= Math.min(stackCount, 20)
+  // The queue card rises from behind the box and sinks back when it empties (TuckedCard keeps its last content
+  // while it leaves). The server lists every waiting message: shown as is, so a message queued before a reload (or
+  // from another tab, Telegram, a cron) shows its text. Older servers send only the count: the messages typed here,
+  // then "+ n". (the server sends the last 20 at most: the older ones are the "+ n")
+  const stackCount = taken ? 0 : queueCount
+  const fromServer = stackCount > 0 && queueItems.length >= Math.min(stackCount, 20)
   const queuedShown: { key: string; text: string; from?: string }[] = fromServer
-    ? stack.server.slice(-stackCount).map((q, i) => ({
+    ? queueItems.slice(-stackCount).map((q, i) => ({
         key: `s${i}`,
         text: q.voice ? `🎤 ${[t('voice.message'), q.text].filter(Boolean).join(' · ')}` : q.text || t('sessions.queue.files', { count: q.attachments }),
         from: q.source === 'telegram' || q.source === 'cron' || q.source === 'system' ? t(`sessions.queue.from.${q.source}`) : undefined,
         // the server's own messages (summary before a compaction, handoff) are long internal prompts: their name only
         ...(q.source === 'system' && (q.kind === 'compact' || q.kind === 'handoff') ? { text: t(`sessions.queue.kind.${q.kind}`) } : {}),
       }))
-    : stack.items.slice(-stackCount).map((p) => ({ key: p.lid, text: p.voice ? `🎤 ${t('voice.message')}` : p.text || p.attachments.map(baseName).join(', ') }))
+    : queued.slice(-stackCount).map((p) => ({ key: p.lid, text: p.voice ? `🎤 ${t('voice.message')}` : p.text || p.attachments.map(baseName).join(', ') }))
   const extraQueued = Math.max(0, stackCount - queuedShown.length)
-
-  // The quotes card sits right on top of the composer (under the queue stack and the notice), same rise and
-  // sink; the last quotes stay rendered while it leaves.
-  const hasQuotes = quotes.length > 0
-  const lastQuotes = React.useRef(quotes)
-  if (hasQuotes) lastQuotes.current = quotes
-  const [quotesState, setQuotesState] = React.useState<'hidden' | 'shown' | 'leaving'>(hasQuotes ? 'shown' : 'hidden')
-  React.useEffect(() => {
-    if (hasQuotes) {
-      setQuotesState('shown')
-      return
-    }
-    setQuotesState((s) => (s === 'shown' ? 'leaving' : s))
-    const id = setTimeout(() => setQuotesState((s) => (s === 'leaving' ? 'hidden' : s)), 220)
-    return () => clearTimeout(id)
-  }, [hasQuotes])
-  const shownQuotes = hasQuotes ? quotes : quotesState === 'hidden' ? [] : lastQuotes.current
-  const quotesLeaving = !hasQuotes && quotesState === 'leaving'
+  // The notice (e.g. "plan ready") waits while the queue is shown; the quotes card sits right on top of the box.
+  const hasNotice = !!notice && stackCount === 0
   const removeQuote = (q: string) => setQuotes((cur) => cur.filter((x) => x !== q))
+  const small = 'h-7 px-2 text-xs max-md:h-8 pointer-coarse:h-10 max-md:pointer-coarse:h-10 pointer-coarse:min-w-10'
 
-  return (
-    <div className="shrink-0 px-3 pt-1 pb-3 max-md:pb-[calc(0.5rem+var(--safe-bottom-ui))]">
-      <div className="mx-auto w-full max-w-(--mx-read,860px)">
-        <div className={cn('grid transition-[grid-template-rows] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none', stackCount > 0 && !stack.leaving ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}>
-        <div className="min-h-0 overflow-hidden" inert={stackCount === 0 || stack.leaving ? true : undefined}>
-        {stackCount > 0 && (
-          // Same surface as the composer (card, border, shadow) so it reads as part of it; the theme color is
-          // only on the icon and the Steer button (like the send button). Tucks under the composer (-mb-3).
-          <div
-            className={cn('relative z-0 -mb-3 rounded-t-xl border border-b-0 bg-card shadow-xs', stack.leaving ? 'mx-queue-out' : 'mx-queue-in')}
-            aria-live="polite"
-          >
-            <div className="flex items-center gap-1.5 px-3 pt-2 text-xs text-muted-foreground">
-              {steerPending ? <Spinner className="size-3.5 text-primary" /> : <Clock className="size-3.5 shrink-0 text-primary" />}
-              <span className="min-w-0 truncate">
-                {steerPending ? t('sessions.queue.steering') : `${t('sessions.queue.count', { count: stackCount })} — ${t('sessions.queue.headline')}`}
-              </span>
-              {onClearQueue && !steerPending && (
-                <Tooltip content={t('sessions.queue.clear')}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      // instant: the stack sinks now, comes back if the server refuses
-                      setTaken(true)
-                      Promise.resolve(onClearQueue()).then(
-                        () => window.setTimeout(() => setTaken(false), 3000),
-                        () => setTaken(false),
-                      )
-                    }}
-                    disabled={clearingQueue}
-                    aria-label={t('sessions.queue.clear')}
-                    className="relative ml-auto -mr-1 flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground pointer-coarse:before:absolute pointer-coarse:before:-inset-2 pointer-coarse:before:content-[''] hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                  >
-                    <X className="size-3.5" />
-                  </button>
-                </Tooltip>
-              )}
-            </div>
-            <div className="flex items-center gap-2 px-3 pt-1 pb-5">
-              <ol className="grid min-w-0 flex-1 gap-0.5 text-[14px] leading-relaxed text-foreground">
-                {queuedShown.map((p) => (
-                  <li key={p.key} className="line-clamp-2 break-words">
-                    {p.from && <span className="mr-1.5 text-xs font-normal text-muted-foreground">{p.from} ·</span>}
-                    <Sensitive length={12}>{p.text}</Sensitive>
-                  </li>
-                ))}
-                {extraQueued > 0 && <li className="text-xs font-normal text-muted-foreground">{t('sessions.queue.other', { count: extraQueued })}</li>}
-              </ol>
-              <span className="flex shrink-0 items-center gap-1.5">
-                {onTakeQueue && (
-                  <Tooltip content={t('sessions.queue.editTip')}>
-                    <Button size="sm" variant="ghost" className="h-7 px-2 text-xs max-md:h-8 pointer-coarse:h-10 max-md:pointer-coarse:h-10 pointer-coarse:min-w-10" onClick={() => void editQueue()} loading={taking} disabled={steerPending}>
-                      <Pencil className="size-3.5" /> <span className="max-sm:sr-only">{t('sessions.queue.edit')}</span>
-                    </Button>
-                  </Tooltip>
-                )}
-                {onAsk && running && (
-                  <Tooltip content={t('aside.askTip')}>
-                    <Button size="sm" variant="ghost" className="h-7 px-2 text-xs max-md:h-8 pointer-coarse:h-10 max-md:pointer-coarse:h-10 pointer-coarse:min-w-10" onClick={onAsk} loading={asking} disabled={steerPending}>
-                      <MessageCircleQuestion className="size-3.5" /> <span className="max-sm:sr-only">{t('aside.ask')}</span>
-                    </Button>
-                  </Tooltip>
-                )}
-                {onInject && running && (
-                  <Tooltip content={t('sessions.queue.injectTip')}>
-                    <Button size="sm" variant="ghost" className="h-7 px-2 text-xs max-md:h-8 pointer-coarse:h-10 max-md:pointer-coarse:h-10 pointer-coarse:min-w-10" onClick={onInject} loading={injecting} disabled={steerPending}>
-                      <ListPlus className="size-3.5" /> <span className="max-sm:sr-only">{t('sessions.queue.inject')}</span>
-                    </Button>
-                  </Tooltip>
-                )}
-                {onSteer && running && (
-                  <Tooltip content={t('sessions.queue.steerTip')}>
-                    <Button size="sm" className="h-7 px-2.5 text-xs max-md:h-8 pointer-coarse:h-10 max-md:pointer-coarse:h-10" onClick={onSteer} loading={steering || steerPending} disabled={steerPending}>
-                      <CornerDownRight className="size-3.5" /> {t('sessions.queue.steerShort')}
-                    </Button>
-                  </Tooltip>
-                )}
-              </span>
-            </div>
-          </div>
-        )}
-        </div>
-        </div>
-        <div className={cn('grid transition-[grid-template-rows] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none', noticeState === 'shown' && hasNotice ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}>
-          <div className="min-h-0 overflow-hidden" inert={!shownNotice.node || shownNotice.leaving ? true : undefined}>
-            {shownNotice.node && (
-              <div className={cn('relative z-0 -mb-3 rounded-t-xl border border-b-0 bg-card shadow-xs', shownNotice.leaving ? 'mx-queue-out' : 'mx-queue-in')}>
-                <div className="flex min-h-7 items-center gap-1.5 px-3 pt-1.5 pb-4.5 text-xs text-muted-foreground">{shownNotice.node}</div>
-              </div>
-            )}
-          </div>
-        </div>
-        <div className={cn('grid transition-[grid-template-rows] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none', hasQuotes ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}>
-          <div className="min-h-0 overflow-hidden" inert={!hasQuotes ? true : undefined}>
-            {shownQuotes.length > 0 && (
-              <div className={cn('relative z-0 -mb-3 rounded-t-xl border border-b-0 bg-card shadow-xs', quotesLeaving ? 'mx-queue-out' : 'mx-queue-in')}>
-                <div className="flex items-center gap-1.5 px-3 pt-2 text-xs text-muted-foreground">
-                  <Quote className="size-3.5 shrink-0 text-primary" />
-                  <span className="min-w-0 truncate">{t('sessions.quote.card', { count: shownQuotes.length })}</span>
-                  <Tooltip content={t('sessions.quote.clear')}>
-                    <button
-                      type="button"
-                      onClick={() => setQuotes([])}
-                      aria-label={t('sessions.quote.clear')}
-                      className="relative ml-auto -mr-1 flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground pointer-coarse:before:absolute pointer-coarse:before:-inset-2 pointer-coarse:before:content-[''] hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                    >
-                      <X className="size-3.5" />
-                    </button>
-                  </Tooltip>
-                </div>
-                <ul className="grid gap-2 px-3 pt-1.5 pb-5">
-                  {shownQuotes.slice(0, 3).map((q) => (
-                    <li key={q} className="group/quote flex items-start gap-1">
-                      {quotedFile(q) ? (
-                        <div className="min-w-0 flex-1 border-l-2 border-primary/60 pl-2">
-                          <QuotedFile path={quotedFile(q)!} className="pr-2" />
-                        </div>
-                      ) : (
-                        <blockquote className="line-clamp-3 min-w-0 flex-1 border-l-2 border-primary/60 pl-3 text-[15px] leading-relaxed break-words whitespace-pre-wrap text-foreground/85">
-                          <Sensitive length={16}>{q}</Sensitive>
-                        </blockquote>
-                      )}
-                      <Tooltip content={t('sessions.quote.remove')}>
-                        <button
-                          type="button"
-                          onClick={() => removeQuote(q)}
-                          aria-label={t('sessions.quote.remove')}
-                          className="-mr-1 flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 group-hover/quote:opacity-100 hover:bg-accent hover:text-foreground focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none pointer-coarse:opacity-100"
-                        >
-                          <X className="size-3.5" />
-                        </button>
-                      </Tooltip>
-                    </li>
-                  ))}
-                  {shownQuotes.length > 3 && <li className="pl-3.5 text-xs text-muted-foreground">{t('sessions.quote.other', { count: shownQuotes.length - 3 })}</li>}
-                </ul>
-              </div>
-            )}
-          </div>
-        </div>
-        <div
-          data-tour="composer"
-          data-kbd-box=""
-          className={cn(
-            'mx-lg relative z-10 rounded-xl border bg-card shadow-xs transition-[border-color,box-shadow] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/20',
-            disabledReason && 'opacity-80',
-          )}
-        >
-          {menu && <SlashMenu items={menu.items} active={active} stage={menu.stage} onPick={(i) => pickSlash(i)} onHover={setSlashAt} />}
-          {!menu && atRows.length > 0 && (
-            <SlashMenu items={atRows} active={active} stage="arg" label={t('mention.label')} keys={t('mention.keys')} onPick={pickMention} onHover={setSlashAt} />
-          )}
-          {atts.length > 0 && (
-            // Many files: a small scrolling strip (two rows) instead of a composer that eats the conversation.
-            <div ref={attBox} data-testid="composer-attachments" className="flex max-h-[6.75rem] flex-wrap gap-1.5 overflow-y-auto overscroll-contain px-2.5 pt-2.5 [scrollbar-width:thin]">
-              {atts.map((a) => (
-                <AttachmentChip key={a.lid} att={a} onRemove={() => removeAtt(a.lid)} />
-              ))}
-            </div>
-          )}
-          <ChipBackdrop text={text} spans={chipSpans} target={taEl} />
-          <Textarea
-            ref={setRef}
-            value={text}
-            onChange={(e) => {
-              setText(e.target.value)
-              setCaret(e.target.selectionStart)
-            }}
-            onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
-            onKeyDown={onKeyDown}
-            onPaste={onPaste}
-            minRows={1}
-            maxRows={maxRows}
-            placeholder={placeholder || t('sessions.composer.placeholder')}
-            aria-label={t('sessions.composer.label')}
-            data-kbd-cap=""
-            className="relative border-0 bg-transparent px-3.5 pt-3 pb-1 shadow-none focus-visible:ring-0 dark:bg-transparent"
-          />
-          <div className="@container flex min-w-0 items-center gap-1 px-1.5 pb-1.5">
-            <input
-              ref={fileInput}
-              type="file"
-              multiple
-              hidden
-              onChange={(e) => {
-                addFiles(Array.from(e.target.files || []))
-                e.target.value = ''
+  const above = (
+    <>
+      {/* Same surface as the box (card, border, shadow) so it reads as part of it; the theme color is only on the
+          icon and the Steer button (like the send button). */}
+      <TuckedCard open={stackCount > 0} aria-live="polite">
+        <div className="flex items-center gap-1.5 px-3 pt-2 text-xs text-muted-foreground">
+          {steerPending ? <Spinner className="size-3.5 text-primary" /> : <Clock className="size-3.5 shrink-0 text-primary" />}
+          <span className="min-w-0 truncate">
+            {steerPending ? t('sessions.queue.steering') : `${t('sessions.queue.count', { count: stackCount })} — ${t('sessions.queue.headline')}`}
+          </span>
+          {onClearQueue && !steerPending && (
+            <CloseButton
+              label={t('sessions.queue.clear')}
+              disabled={clearingQueue}
+              onClick={() => {
+                // instant: the stack sinks now, comes back if the server refuses
+                setTaken(true)
+                Promise.resolve(onClearQueue()).then(
+                  () => window.setTimeout(() => setTaken(false), 3000),
+                  () => setTaken(false),
+                )
               }}
             />
-            <Tooltip content={t('sessions.composer.attach')}>
-              <Button variant="ghost" size="icon-sm" aria-label={t('sessions.composer.attach')} onClick={() => fileInput.current?.click()}>
-                <Paperclip />
-              </Button>
-            </Tooltip>
-            {toolbar}
-            <div className="ml-auto flex min-w-0 items-center gap-1.5">
-              {reason && <span className="truncate text-[11px] text-muted-foreground max-sm:hidden">{reason}</span>}
-              {running && onStop && (
-                <Tooltip content={t('sessions.stop')}>
-                  <Button variant="outline" size="icon-sm" aria-label={t('sessions.stop')} onClick={onStop} loading={stopping} className="max-md:size-11 max-md:rounded-full">
-                    <Square className="fill-current" />
-                  </Button>
-                </Tooltip>
-              )}
-              <VoiceButton onTranscript={onVoice} onVoiceMessage={props.onSendVoice ? onVoiceMessage : undefined} />
-              <Tooltip content={running ? t('sessions.composer.queue') : t('sessions.composer.send')}>
-                <Button size="icon-sm" aria-label={running ? t('sessions.composer.queue') : t('sessions.composer.send')} disabled={!!blocked || empty} onClick={() => send()} className="rounded-lg max-md:size-11 max-md:rounded-full max-md:[&_svg]:size-5">
-                  {sending ? <Spinner className="size-4" /> : <ArrowUp />}
+          )}
+        </div>
+        <div className="flex items-center gap-2 px-3 pt-1 pb-5">
+          <ol className="grid min-w-0 flex-1 gap-0.5 text-[14px] leading-relaxed text-foreground">
+            {queuedShown.map((p) => (
+              <li key={p.key} className="line-clamp-2 break-words">
+                {p.from && <span className="mr-1.5 text-xs font-normal text-muted-foreground">{p.from} ·</span>}
+                <Sensitive length={12}>{p.text}</Sensitive>
+              </li>
+            ))}
+            {extraQueued > 0 && <li className="text-xs font-normal text-muted-foreground">{t('sessions.queue.other', { count: extraQueued })}</li>}
+          </ol>
+          <span className="flex shrink-0 items-center gap-1.5">
+            {onTakeQueue && (
+              <Tooltip content={t('sessions.queue.editTip')}>
+                <Button size="sm" variant="ghost" className={small} onClick={() => void editQueue()} loading={taking} disabled={steerPending}>
+                  <Pencil className="size-3.5" /> <span className="max-sm:sr-only">{t('sessions.queue.edit')}</span>
                 </Button>
               </Tooltip>
-            </div>
-          </div>
+            )}
+            {onAsk && running && (
+              <Tooltip content={t('aside.askTip')}>
+                <Button size="sm" variant="ghost" className={small} onClick={onAsk} loading={asking} disabled={steerPending}>
+                  <MessageCircleQuestion className="size-3.5" /> <span className="max-sm:sr-only">{t('aside.ask')}</span>
+                </Button>
+              </Tooltip>
+            )}
+            {onInject && running && (
+              <Tooltip content={t('sessions.queue.injectTip')}>
+                <Button size="sm" variant="ghost" className={small} onClick={onInject} loading={injecting} disabled={steerPending}>
+                  <ListPlus className="size-3.5" /> <span className="max-sm:sr-only">{t('sessions.queue.inject')}</span>
+                </Button>
+              </Tooltip>
+            )}
+            {onSteer && running && (
+              <Tooltip content={t('sessions.queue.steerTip')}>
+                <Button size="sm" className="h-7 px-2.5 text-xs max-md:h-8 pointer-coarse:h-10 max-md:pointer-coarse:h-10" onClick={onSteer} loading={steering || steerPending} disabled={steerPending}>
+                  <CornerDownRight className="size-3.5" /> {t('sessions.queue.steerShort')}
+                </Button>
+              </Tooltip>
+            )}
+          </span>
         </div>
-        {reason && <p className="mt-1 truncate text-[11px] text-muted-foreground sm:hidden">{reason}</p>}
-      </div>
-    </div>
+      </TuckedCard>
+      <TuckedCard open={hasNotice}>
+        <div className="flex min-h-7 items-center gap-1.5 px-3 pt-1.5 pb-4.5 text-xs text-muted-foreground">{notice}</div>
+      </TuckedCard>
+      <TuckedCard open={quotes.length > 0}>
+        <div className="flex items-center gap-1.5 px-3 pt-2 text-xs text-muted-foreground">
+          <Quote className="size-3.5 shrink-0 text-primary" />
+          <span className="min-w-0 truncate">{t('sessions.quote.card', { count: quotes.length })}</span>
+          <CloseButton label={t('sessions.quote.clear')} onClick={() => setQuotes([])} />
+        </div>
+        <ul className="grid gap-2 px-3 pt-1.5 pb-5">
+          {quotes.slice(0, 3).map((q) => (
+            <li key={q} className="group/quote flex items-start gap-1">
+              {quotedFile(q) ? (
+                <div className="min-w-0 flex-1 border-l-2 border-primary/60 pl-2">
+                  <QuotedFile path={quotedFile(q)!} className="pr-2" />
+                </div>
+              ) : (
+                <blockquote className="line-clamp-3 min-w-0 flex-1 border-l-2 border-primary/60 pl-3 text-[15px] leading-relaxed break-words whitespace-pre-wrap text-foreground/85">
+                  <Sensitive length={16}>{q}</Sensitive>
+                </blockquote>
+              )}
+              <Tooltip content={t('sessions.quote.remove')}>
+                <button
+                  type="button"
+                  onClick={() => removeQuote(q)}
+                  aria-label={t('sessions.quote.remove')}
+                  className="-mr-1 flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 group-hover/quote:opacity-100 hover:bg-accent hover:text-foreground focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none pointer-coarse:opacity-100"
+                >
+                  <X className="size-3.5" />
+                </button>
+              </Tooltip>
+            </li>
+          ))}
+          {quotes.length > 3 && <li className="pl-3.5 text-xs text-muted-foreground">{t('sessions.quote.other', { count: quotes.length - 3 })}</li>}
+        </ul>
+      </TuckedCard>
+    </>
+  )
+
+  return (
+    <MessageBox
+      above={above}
+      menu={
+        menu ? (
+          <SlashMenu items={menu.items} active={active} stage={menu.stage} onPick={(i) => pickSlash(i)} onHover={setSlashAt} />
+        ) : atRows.length > 0 ? (
+          <SlashMenu items={atRows} active={active} stage="arg" label={t('mention.label')} keys={t('mention.keys')} onPick={pickMention} onHover={setSlashAt} />
+        ) : null
+      }
+      atts={atts}
+      onRemoveAtt={removeAtt}
+      backdrop={<ChipBackdrop text={text} spans={chipSpans} target={taEl} />}
+      textareaRef={setRef}
+      textarea={{
+        value: text,
+        onChange: (e) => {
+          setText(e.target.value)
+          setCaret(e.target.selectionStart)
+        },
+        onSelect: (e) => setCaret(e.currentTarget.selectionStart),
+        onKeyDown,
+        onPaste,
+        maxRows,
+        placeholder: placeholder || t('sessions.composer.placeholder'),
+        'aria-label': t('sessions.composer.label'),
+        'data-kbd-cap': '',
+      }}
+      onFiles={addFiles}
+      toolbar={toolbar}
+      actions={running && onStop ? <StopButton onClick={onStop} busy={stopping} label={t('sessions.stop')} /> : null}
+      voice={<VoiceButton onTranscript={onVoice} onVoiceMessage={props.onSendVoice ? onVoiceMessage : undefined} />}
+      send={{ onClick: () => send(), disabled: !!blocked || empty, busy: sending, label: running ? t('sessions.composer.queue') : t('sessions.composer.send') }}
+      reason={reason}
+      dimmed={!!disabledReason}
+      boxProps={{ 'data-tour': 'composer', 'data-kbd-box': '' }}
+    />
   )
 })
-
-export function AttachmentChip({ att, onRemove }: { att: Att; onRemove: () => void }) {
-  const t = useT()
-  const done = !!att.path
-  return (
-    <div className={cn('group relative flex h-12 max-w-52 items-center gap-2 overflow-hidden rounded-lg border bg-background pr-7 pl-1 pointer-coarse:pr-10', att.error && 'border-destructive/50')}>
-      {att.preview && isImage(att.name) ? (
-        <img src={att.preview} alt="" className="size-10 shrink-0 rounded-md object-cover" />
-      ) : (
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-muted">
-          <FileText className="size-4 text-muted-foreground" />
-        </span>
-      )}
-      <span className="grid min-w-0 text-xs leading-tight">
-        <span className="truncate font-medium">
-          <Sensitive length={8}>{att.name}</Sensitive>
-        </span>
-        <span className={cn('truncate text-[11px]', att.error ? 'text-destructive' : 'text-muted-foreground')}>
-          {att.error ? t('common.failed') : done ? (att.size ? fmtBytes(att.size) : '') : `${Math.round(att.progress * 100)} %`}
-        </span>
-      </span>
-      {!done && !att.error && <span className="absolute bottom-0 left-0 h-0.5 bg-primary transition-[width]" style={{ width: `${Math.round(att.progress * 100)}%` }} />}
-      <button
-        type="button"
-        onClick={onRemove}
-        aria-label={t('common.remove')}
-        className="absolute top-1 right-1 flex size-5 items-center justify-center rounded-md text-muted-foreground pointer-coarse:top-0 pointer-coarse:right-0 pointer-coarse:h-full pointer-coarse:w-10 pointer-coarse:rounded-none before:absolute before:-inset-2.5 before:content-[''] hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-      >
-        <X className="size-3.5" />
-      </button>
-    </div>
-  )
-}
 
 /** Focus with the cursor after the text (a draft pre-filled by a link ends where the user goes on typing). */
 function focusAtEnd(el: HTMLTextAreaElement | null) {

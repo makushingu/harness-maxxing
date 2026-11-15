@@ -136,12 +136,15 @@ The page is **one flow**, like a chat, with the box to write to it at the bottom
 agent's answers on the left with its avatar, and what its automations did, all in the order it happened (a line
 between days).
 
+The box is a session's: the model and the compaction gauge sit in its bar, **Stop** next to Send while the agent
+answers you, and the message of a run you reply to shows as a card on top of it.
+
 - **You see it work**: each command and file it uses shows as a line while it
   works (**Stop** stops the turn), then its answer, whole, with the model, the time and the cost. A request it asked
   you to allow (a web search, a site outside its list) stays a line in the flow once answered.
 - **It is one conversation**: your messages, here or on Telegram, go on in **the same session**. The agent remembers
   everything you said and what it already read or did, so it answers faster and costs less. **New conversation**
-  (under the box) starts a fresh one; a new one also starts by itself after 6 hours without a message (**New
+  (the speech-bubble button next to Send) starts a fresh one; a new one also starts by itself after 6 hours without a message (**New
   conversation after**, in Settings -> Limits; 0 = never) or when the last one failed. A new conversation gets the
   agent's last results as context, so "and the second point?" still makes sense.
   A long conversation is summarized like a session's (Settings -> Claude, **Automatic compaction**): from its first
