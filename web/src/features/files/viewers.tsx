@@ -714,13 +714,13 @@ export function PdfView({ path, className }: { path: string; className?: string 
   const info = usePdfInfo(path, paged)
   const actions = (short: boolean) => (
     <>
-      <Button asChild variant="ghost" size="sm" className="h-7 pointer-coarse:h-9">
+      <Button asChild variant="ghost" size="sm" className="h-7 pointer-coarse:h-10">
         <a {...openRawProps(path)} aria-label={t(inIosApp() ? 'files.openRawInApp' : 'files.openRaw')}>
           <ExternalLink />
           <span className={cn(short && 'max-sm:sr-only')}>{t(inIosApp() ? 'files.openRawInApp' : 'files.openRaw')}</span>
         </a>
       </Button>
-      <Button asChild variant="ghost" size="sm" className="h-7 pointer-coarse:h-9">
+      <Button asChild variant="ghost" size="sm" className="h-7 pointer-coarse:h-10">
         <a {...downloadProps(path)} aria-label={t('files.download')}>
           <Download />
           <span className={cn(short && 'max-sm:sr-only')}>{t('files.download')}</span>

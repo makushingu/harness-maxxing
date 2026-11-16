@@ -248,3 +248,23 @@ def test_the_voice_call_status_button_is_big_enough_to_touch():
     src = (WEB / "features" / "voice" / "VoiceCall.tsx").read_text()
     cls = re.search(r'onClick=\{\(\) => voice\.current\?\.interrupt\(\)\}\s*className="([^"]*)"', src)
     assert cls and "pointer-coarse:h-10" in cls[1].split()
+
+
+def test_the_linked_resources_of_an_infra_detail_are_big_enough_to_tap():
+    src = (WEB / "features" / "infra" / "InfraPage.tsx").read_text()
+    cls = re.search(r'onClick=\{\(\) => onOpen\(l\.id\)\} className="([^"]*)"', src)
+    assert cls and "pointer-coarse:min-h-10" in cls[1].split()
+
+
+def test_the_controls_of_the_pdf_and_html_viewers_are_big_enough_to_tap():
+    for name in ("viewers.tsx", "rich.tsx"):
+        src = (WEB / "features" / "files" / name).read_text()
+        assert "h-7" in src and "pointer-coarse:h-9" not in src
+        assert "pointer-coarse:h-10" in src
+
+
+def test_the_role_protection_line_and_new_group_link_of_an_agent_are_big_enough_to_tap():
+    src = (WEB / "features" / "agents" / "AgentPage.tsx").read_text()
+    for testid in ("agent-sandbox-line", "agent-new-group", "agent-role"):
+        cls = re.search(r"className=(?:\{cn\()?['\"]([^'\"]*)['\"][^\n]*\n(?:[^\n]*\n)?\s*data-testid=\"" + testid + '"', src)
+        assert cls and "pointer-coarse:min-h-10" in cls[1].split(), testid

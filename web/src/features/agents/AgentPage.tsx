@@ -1330,7 +1330,7 @@ function Profile({ agent: a }: { agent: AgentDetail }) {
           <button
             type="button"
             onClick={() => setAdvanced('protection')}
-            className={cn('-mx-1 mt-1 flex items-center gap-1.5 rounded-md px-1 py-0.5 text-left hover:bg-accent', !a.sandbox && readsOutside(a) ? 'text-warning' : 'text-muted-foreground')}
+            className={cn('-mx-1 mt-1 flex items-center gap-1.5 rounded-md px-1 py-0.5 text-left hover:bg-accent pointer-coarse:min-h-10', !a.sandbox && readsOutside(a) ? 'text-warning' : 'text-muted-foreground')}
             data-testid="agent-sandbox-line"
           >
             {a.sandbox ? <ShieldCheck className="size-3.5 shrink-0" /> : <Lock className="size-3.5 shrink-0 opacity-60" />}
@@ -1382,7 +1382,7 @@ function Profile({ agent: a }: { agent: AgentDetail }) {
         </button>
         <Link
           to={`/agents/groups/new?project=${encodeURIComponent(a.project)}&with=${encodeURIComponent(a.path)}`}
-          className="flex items-center gap-1.5 justify-self-start px-1 text-xs text-muted-foreground hover:text-foreground"
+          className="flex items-center gap-1.5 justify-self-start px-1 text-xs text-muted-foreground hover:text-foreground pointer-coarse:min-h-10"
           data-testid="agent-new-group"
         >
           <UsersRound className="size-3.5 shrink-0" /> {t('groups.withAgent')}
@@ -1463,7 +1463,7 @@ function RoleEditor({ agent: a }: { agent: AgentDetail }) {
         <button
           type="button"
           onClick={() => setV(a.description)}
-          className="group min-w-0 rounded-lg bg-muted px-3 py-2 text-left text-sm break-words whitespace-pre-line hover:bg-muted"
+          className="group min-w-0 rounded-lg bg-muted px-3 py-2 text-left text-sm break-words whitespace-pre-line hover:bg-muted pointer-coarse:min-h-10"
           data-testid="agent-role"
         >
           {a.description ? <Sensitive block>{a.description}</Sensitive> : <span className="text-muted-foreground italic">{t('agents.noRole')}</span>}
