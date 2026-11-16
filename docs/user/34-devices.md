@@ -37,13 +37,17 @@ terminal window that started it, and **Claude can use the computer only while th
 what happens, line by line:
 
 ```
-14:02:11  Connected to https://ui.example.com as "MacBook".
-14:02:14  Claude is using this computer.
-14:02:15  Screenshot
-14:02:18  Click at 812,440
-14:02:19  Type "dog"
-14:02:19  Press "cmd+l"
+  14:02:11  ● Connected to ui.example.com as MacBook
+  14:02:14  ♦ Claude is using this computer
+  14:02:15  › Screenshot  ×3
+  14:02:18  › Click at 812,440
+  14:02:19  › Type "dog"
+  14:02:19  › Press "cmd+l"
 ```
+
+- In a terminal the log is in colour: green when connected, yellow when something is missing (a permission, the
+  connection), red when an action is refused or Harness Link stops. The same action repeated is folded into one line
+  with a counter. Set `NO_COLOR=1` for plain text.
 
 - Typed text is shown cut to 80 characters; on a Mac, what Claude types in a password field is hidden.
 - **Ctrl+C** (or closing the window) stops it: the device shows as offline and Claude cannot use it.

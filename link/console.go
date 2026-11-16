@@ -124,10 +124,11 @@ func (c *console) line(ts string, k lineKind, msg string, n int) string {
 	var b strings.Builder
 	for i, l := range strings.Split(msg, "\n") {
 		if i > 0 {
-			b.WriteString("\n           ")
+			b.WriteString("\n             ")
 			b.WriteString(c.paint(textColor(k, col), l))
 			continue
 		}
+		b.WriteString("  ")
 		b.WriteString(c.paint(cDim, ts))
 		b.WriteString("  ")
 		b.WriteString(c.paint(col, sym))
@@ -163,7 +164,7 @@ func (c *console) header() {
 		if pad < 1 {
 			pad = 1
 		}
-		return c.paint(cAccent, "│") + "  " + left + strings.Repeat(" ", pad) + right + c.paint(cAccent, "│")
+		return "  " + c.paint(cAccent, "│") + "  " + left + strings.Repeat(" ", pad) + right + c.paint(cAccent, "│")
 	}
 	plain := func(s string, color string) string {
 		return row(c.paint(color, s), "", utf8.RuneCountInString(s), 0)
@@ -171,13 +172,13 @@ func (c *console) header() {
 	ver := "v" + version
 	title := c.paint(cAccent, "♦") + " " + c.paint(cBold, "Harness Link")
 	fmt.Fprintln(c.out)
-	fmt.Fprintln(c.out, c.paint(cAccent, "┌"+strings.Repeat("─", w)+"┐"))
+	fmt.Fprintln(c.out, "  "+c.paint(cAccent, "┌"+strings.Repeat("─", w)+"┐"))
 	fmt.Fprintln(c.out, row(title, c.paint(cDim, ver)+" ", 14, len(ver)+1))
 	fmt.Fprintln(c.out, plain("", ""))
 	fmt.Fprintln(c.out, plain("Claude can use this computer while this", ""))
 	fmt.Fprintln(c.out, plain("window stays open.", ""))
 	fmt.Fprintln(c.out, plain("Press Ctrl+C to stop.", cDim))
-	fmt.Fprintln(c.out, c.paint(cAccent, "└"+strings.Repeat("─", w)+"┘"))
+	fmt.Fprintln(c.out, "  "+c.paint(cAccent, "└"+strings.Repeat("─", w)+"┘"))
 	fmt.Fprintln(c.out)
 }
 

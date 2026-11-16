@@ -215,7 +215,7 @@ def install_script(kind: str, code: str, server_url: str) -> str:
             'mb=$(awk "BEGIN { printf \\"%.1f\\", $(wc -c < "$f") / 1048576 }")\n'
             'step "Downloaded ($mb MB)"\n'
             'step "Installed in $f"\n'
-            'new=\n'
+            'where="a terminal"\n'
             'case ":$PATH:" in *":$dir:"*) ;; *)\n'
             '  case "${SHELL##*/}" in zsh) rc="$HOME/.zshrc" ;; '
             'bash) if [ "$os" = darwin ]; then rc="$HOME/.bash_profile"; else rc="$HOME/.bashrc"; fi ;; '
@@ -224,10 +224,10 @@ def install_script(kind: str, code: str, server_url: str) -> str:
             '    printf \'\\n# Harness Link\\nexport PATH="$HOME/.local/bin:$PATH"\\n\' >> "$rc"\n'
             '  fi\n'
             '  step "Added to the PATH (${rc#"$HOME"/})"\n'
-            '  new=" (in a new terminal window)" ;;\n'
+            '  where="a new terminal window" ;;\n'
             'esac\n'
-            'printf \'\\n  %sDone.%s From now on, type %sharness-link%s in a terminal%s whenever you want Claude to '
-            'use this computer.\\n\' "$G" "$R" "$A" "$R" "$new"\n'
+            'printf \'\\n  %sDone.%s From now on, type %sharness-link%s in %s whenever you want Claude to '
+            'use this computer.\\n\' "$G" "$R" "$A" "$R" "$where"\n'
             'if (exec </dev/tty) 2>/dev/null; then exec "$f" </dev/tty; else exec "$f"; fi\n')
 
 
