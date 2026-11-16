@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import shutil
+import time
 import zipfile
 from pathlib import Path
 
@@ -262,6 +263,19 @@ def test_pdf_pages(client, tree, mx):  # noqa: F811
     (tree / "broken.pdf").write_bytes(b"%PDF-1.4 nothing")
     assert client.get("/api/files/pdf", params={"path": str(tree / "broken.pdf")}).status_code == 415
     assert client.get("/api/files/pdf", params={"path": str(tree / "none.pdf")}).status_code == 404
+
+
+@pytest.mark.skipif(not all(shutil.which(x) for x in ("pdfinfo", "pdftoppm", "ffmpeg")), reason="poppler-utils or ffmpeg not installed")
+def test_a_very_tall_pdf_page_is_cut_instead_of_filling_tmp(client, tree, monkeypatch):  # noqa: F811
+    from maxxing.api import files
+    f = pdf(tree / "tall.pdf", 1, box="0 0 10 5000")
+    sizes = []
+    real = files._ffmpeg_thumb
+    monkeypatch.setattr(files, "_ffmpeg_thumb", lambda src, *a: sizes.append(src.stat().st_size) or real(src, *a))
+    t0 = time.monotonic()
+    r = client.get("/api/files/pdf/page", params={"path": str(f), "w": 2048})
+    assert r.status_code == 200 and r.content[8:12] == b"WEBP" and time.monotonic() - t0 < 20
+    assert sizes and sizes[0] <= 2048 * files.PDF_PAGE_MAX_H * 3 + 65536     # not 2048 x 1 024 000 px
 
 
 def pdf_with_text(path: Path, words: str) -> Path:
