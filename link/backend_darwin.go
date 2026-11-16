@@ -58,6 +58,7 @@ var (
 	tisCopyCurrentASCIILayout     func() uintptr
 	tisGetInputSourceProperty     func(src, key uintptr) uintptr
 	lmGetKbdType                  func() uint8
+	isSecureEventInputEnabled     func() uint8
 	ucKeyTranslate                func(layout uintptr, code, action uint16, mods, kbdType, opts uint32, dead *uint32, max uintptr, n *uintptr, out *uint16) int32
 	tisUnicodeLayoutKey           uintptr
 
@@ -114,6 +115,7 @@ func loadCG() error {
 			optional(tis, &tisCopyCurrentASCIILayout, "TISCopyCurrentASCIICapableKeyboardLayoutInputSource")
 			optional(tis, &tisGetInputSourceProperty, "TISGetInputSourceProperty")
 			optional(tis, &lmGetKbdType, "LMGetKbdType")
+			optional(tis, &isSecureEventInputEnabled, "IsSecureEventInputEnabled")
 			optional(tis, &ucKeyTranslate, "UCKeyTranslate")
 			if p, err := purego.Dlsym(tis, "kTISPropertyUnicodeKeyLayoutData"); err == nil {
 				tisUnicodeLayoutKey = deref(p)
@@ -603,4 +605,13 @@ func (b *macBackend) Launch(a app) error {
 		return &opError{"failed", "cannot open " + a.Name + ": " + strings.TrimSpace(string(out))}
 	}
 	return nil
+}
+
+// secureInput tells whether macOS secure keyboard entry is on (a password field has the focus): the live log
+// then hides what Claude types.
+func secureInput() bool {
+	if loadCG() != nil || isSecureEventInputEnabled == nil {
+		return false
+	}
+	return isSecureEventInputEnabled() != 0
 }

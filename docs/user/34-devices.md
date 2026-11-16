@@ -45,6 +45,7 @@ what happens, line by line:
 14:02:19  Press "cmd+l"
 ```
 
+- Typed text is shown cut to 80 characters; on a Mac, what Claude types in a password field is hidden.
 - **Ctrl+C** (or closing the window) stops it: the device shows as offline and Claude cannot use it.
 - **Next time**, open a terminal and type `harness-link`. No new code is needed: the device stays paired until you
   remove it. (After the first install, open a new terminal window for the command to be found.)

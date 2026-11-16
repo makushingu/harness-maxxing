@@ -86,6 +86,9 @@ func (a *agent) serve(r request) map[string]any {
 		return m
 	}
 	if d := describe(r); d != "" {
+		if r.T == "input" && r.A == "type" && secureInput() {
+			d = fmt.Sprintf("Type %d characters in a password field (hidden)", utf8.RuneCountInString(r.Text))
+		}
 		a.say("%s", d)
 	}
 	var err error

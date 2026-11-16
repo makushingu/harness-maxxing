@@ -9,7 +9,7 @@ Android app).
 The server appends a pairing trailer to the generic binary, so the downloaded copy pairs by itself on first run. It
 runs **in the foreground of the terminal that started it** and nowhere else: nothing starts at login, nothing stays
 in the background. While it runs it prints a live log (connection, who has the device, one line per action: screenshot,
-click x,y, typed text cut to 80 characters, keys, opened app, refusals with their cause) and reconnects
+click x,y, typed text cut to 80 characters (hidden on macOS while a password field has the focus: secure keyboard entry), keys, opened app, refusals with their cause) and reconnects
 (backoff 1 s to 60 s); Ctrl+C or closing the window stops it. Older versions registered a login entry: every start
 removes it. Removing the device in Harness (401/403 or `unpair`) deletes the pairing and stops the app.
 

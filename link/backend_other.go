@@ -21,3 +21,6 @@ func (noBackend) Text(string) error              { return &opError{"unsupported"
 func (noBackend) Apps() ([]app, error)           { return nil, nil }
 func (noBackend) Launch(app) error               { return &opError{"unsupported", "no apps"} }
 func (noBackend) Close()                         {}
+
+// secureInput: no system-wide "password field focused" signal here; the live log shows typed text (cut).
+func secureInput() bool { return false }

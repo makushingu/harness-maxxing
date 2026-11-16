@@ -559,3 +559,6 @@ func (b *x11Backend) Launch(a app) error {
 	go cmd.Wait() // reap it; it is not ours to stop
 	return nil
 }
+
+// secureInput: no system-wide "password field focused" signal here; the live log shows typed text (cut).
+func secureInput() bool { return false }

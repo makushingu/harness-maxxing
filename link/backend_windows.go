@@ -423,3 +423,6 @@ var (
 	_ [unsafe.Sizeof(mouseInput{}) - 32]byte
 	_ [unsafe.Sizeof(keybdInput{}) - 32]byte
 )
+
+// secureInput: no system-wide "password field focused" signal here; the live log shows typed text (cut).
+func secureInput() bool { return false }
