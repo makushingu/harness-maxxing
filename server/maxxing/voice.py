@@ -218,6 +218,9 @@ def status() -> dict:
 
 
 # ---- audio normalisation --------------------------------------------------------------------
+_convert_slots = threading.BoundedSemaphore(2)       # ffmpeg conversions at once (a burst of voice notes)
+
+
 def normalise(src: Path, dest: Path, max_seconds: int = MAX_SECONDS) -> float:
     """Any audio/video file -> 16 kHz mono 16-bit WAV at `dest`. Returns the duration in seconds.
     Raises VoiceError(422 bad_audio | 413 too_long | 503 no_ffmpeg)."""
@@ -227,7 +230,8 @@ def normalise(src: Path, dest: Path, max_seconds: int = MAX_SECONDS) -> float:
     cmd = [ff, "-nostdin", "-hide_banner", "-loglevel", "error", "-y", "-protocol_whitelist", "file",   # no URLs
            "-i", str(src), "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", "-t", str(max_seconds + 1), str(dest)]
     try:
-        p = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+        with _convert_slots:
+            p = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
     except subprocess.TimeoutExpired:
         raise VoiceError(422, "bad_audio", "audio conversion timed out") from None
     if p.returncode != 0 or not dest.is_file():
