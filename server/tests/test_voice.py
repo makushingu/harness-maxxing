@@ -372,3 +372,13 @@ def test_the_model_download_uses_the_pinned_revision(mx, monkeypatch):
     voice._download_subprocess("tiny")
     pinned = deps.get("whisper")["revisions"]["tiny"]
     assert seen[0][-1] == pinned and "revision=sys.argv[3]" in seen[0][2]
+
+
+def test_a_slash_path_never_keeps_the_audio_at_the_workspace_root(client, mx, tmp_path, fake_engine):
+    client.put("/api/voice/settings", json={"engine": "local", "model": "base"})
+    audio = make_audio(tmp_path / "rec.webm", 1.0, ["-c:a", "libopus"])
+    r = client.post("/api/voice/transcribe", data={"path": "/"},
+                    files={"audio": ("rec.webm", audio.read_bytes(), "audio/webm")})
+    assert r.status_code == 400 and r.json()["error"] == "bad_path"
+    from maxxing import workspace
+    assert not (workspace.root() / "attachments").exists()

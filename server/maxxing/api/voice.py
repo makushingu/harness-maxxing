@@ -111,6 +111,8 @@ def _save(up: UploadFile, dest: Path) -> int:
 def _keep(tmp: Path, topic: str, ext: str) -> str:
     """Copy the original audio to <topic>/attachments/voice/YYYY-MM/voice-YYYYMMDD-HHMMSS<ext>."""
     from .. import workspace
+    if not topic:                                      # "/" would be the workspace root, not a topic
+        raise VoiceError(400, "bad_path", "path must be a topic")
     try:
         folder = workspace.topic_dir(topic) / "attachments" / "voice" / time.strftime("%Y-%m")
     except ValueError as e:
