@@ -376,8 +376,8 @@ VoiceStatus = {settings:{engine:"off"|"local"|"groq"|"openai", model:"tiny"|"bas
 | GET | `/api/voice` | – | `VoiceStatus` (the UI polls it every second while `install.state = running`) |
 | PUT | `/api/voice/settings` | partial settings | `{ok, settings}` · `400 invalid_language` · `422` bad enum. Default model when never chosen: `small` (`base` with < 4 GB RAM) |
 | POST | `/api/voice/install` | `{model?}` | starts the background job: `uv sync --extra voice` when faster-whisper is missing, then the model download → `install` object · `409 busy` |
-| DELETE | `/api/voice/models/{model}` | – | `{ok}` (deletes a downloaded local model) |
-| POST | `/api/voice/transcribe` | multipart `audio` (+ form `path`? topic path, `language`?) | `{text, language, duration_s, engine, model, ms, audio_path}` — `path` keeps the original file in `<topic>/attachments/voice/YYYY-MM/` (`audio_path`, else null). Any format ffmpeg reads (webm/opus, ogg/opus, m4a, mp3, wav, mp4), ≤ 100 MB, ≤ 15 min · `409 voice_off` · `503 not_installed\|no_key\|no_ffmpeg` · `413 too_long\|too_large` · `422 bad_audio\|empty_audio` · `502 engine_error\|bad_key\|download_failed` |
+| DELETE | `/api/voice/models/{model}` | – | `{ok}` (deletes a downloaded local model) · `409 busy` while that model is being installed |
+| POST | `/api/voice/transcribe` | multipart `audio` (+ form `path`? topic path, `language`?) | `{text, language, duration_s, engine, model, ms, audio_path}` — `path` keeps the original file in `<topic>/attachments/voice/YYYY-MM/` (`audio_path`, else null). Any format ffmpeg reads (webm/opus, ogg/opus, m4a, mp3, wav, mp4), ≤ 100 MB, ≤ 15 min · `400 bad_path` (`path` not a topic, `/` included) · `409 voice_off` · `503 not_installed\|no_key\|no_ffmpeg` · `413 too_long\|too_large` · `422 bad_audio\|empty_audio` · `502 engine_error\|bad_key\|download_failed` |
 
 Telegram: voice notes and video notes in a session thread (not audio files: attachments) are downloaded, transcribed, echoed as
 `🎤 <transcript>` and sent to the session as the user message (attachment = the audio file). Engine off → a hint.
