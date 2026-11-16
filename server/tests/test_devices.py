@@ -340,7 +340,7 @@ def test_phone_tree_elements_and_errors(dv):
         wait_for(lambda: not dv.get("/api/devices").json()["devices"][0]["paused"], 5)
         assert not _call(dv, "sess02", "screenshot", {"device": did}, tok).get("isError")
     r = _call(dv, "sess02", "screenshot", {"device": did}, tok)
-    assert r["isError"] and "offline" in _text(r)
+    assert r["isError"] and "offline" in _text(r) and "open the Harness Link app" in _text(r)
 
 
 def test_view_only_device(dv):

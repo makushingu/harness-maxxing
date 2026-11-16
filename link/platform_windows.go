@@ -25,9 +25,6 @@ func lockInstance(path string) (func(), error) {
 
 func cliOutput(s string) { os.Stdout.WriteString(s) }
 
-// notify tells the user something in the console.
-func notify(s string) { os.Stdout.WriteString("Harness Link: " + s + "\r\n") }
-
 // fatal reports the reason the app stops.
 func fatal(s string) { os.Stderr.WriteString("Harness Link: " + s + "\r\n") }
 

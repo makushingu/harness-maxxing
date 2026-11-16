@@ -169,7 +169,7 @@ func runAgent(ctx context.Context, o runOpts) int {
 	a.say = say
 	if fresh {
 		a.onFirst = func() {
-			notify("Accept this computer in Harness Maxxing (Settings > Devices) so Claude can use it.")
+			say("Accept this computer in Harness Maxxing (Settings > Devices) so Claude can use it.")
 		}
 	}
 	err = a.run(ctx)

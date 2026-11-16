@@ -113,6 +113,9 @@ def _handler(a) -> int:
             if not dist.available():
                 print("Note: Harness Link is not available for download on this server yet.", file=sys.stderr)
             print("Then accept the device: maxxing devices confirm <id> (or Settings -> Devices).")
+            if a.os != "android":
+                print("On a computer, Harness Link runs only in that terminal window; later, type harness-link in a "
+                      "terminal whenever Claude may use it.")
             return 0
         dev = store.resolve(a.id)
         if dev is None:
