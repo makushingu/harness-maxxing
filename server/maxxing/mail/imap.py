@@ -102,6 +102,8 @@ def _q(name: str) -> str:
     """A folder name as an IMAP quoted string (modified UTF-7)."""
     if any(ord(c) < 0x20 or ord(c) == 0x7F for c in name):       # NUL, CR/LF...: no folder has them
         raise MailError("bad_folder", "invalid folder name")
+    if any(0xD800 <= ord(c) <= 0xDFFF for c in name):            # a lone surrogate cannot be encoded
+        raise MailError("bad_folder", "invalid folder name")
     return '"' + mutf7_encode(name).replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 

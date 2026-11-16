@@ -411,3 +411,9 @@ def test_a_badly_typed_forward_or_address_list_is_a_clear_refusal(client, acc, s
 def test_a_folder_name_with_a_control_character_is_a_400(client, acc):
     r = client.get(f"/api/mail/{acc['id']}/messages", params={"folder": "\x00"})
     assert r.status_code == 400 and r.json()["error"] == "bad_folder"
+
+
+@pytest.mark.parametrize("argv", [["list", "--folder", "a\udc80"], ["mkdir", "a\udc80"]])
+def test_a_folder_name_with_a_lone_surrogate_is_a_clean_cli_error(client, acc, monkeypatch, capsys, argv):
+    code, _out, err = _cli(capsys, *argv, stdin="", monkeypatch=monkeypatch)
+    assert code != 0 and "invalid folder name" in err
