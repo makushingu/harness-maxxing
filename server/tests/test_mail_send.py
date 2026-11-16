@@ -385,3 +385,12 @@ def test_a_message_longer_than_the_page_is_never_sent_from_the_outbox(acc, smtp,
         outbox.approve(q["id"], "web")
     assert e.value.code == "too_long" and not smtp.messages
     assert [p for p in outbox.pending() if p["id"] == q["id"]][0]["text_cut"]   # still waiting
+
+
+@pytest.mark.parametrize("extra", [{"reply": "x"}, {"reply": {"uid": "abc"}}, {"draft": "x"}, {"draft": {"uid": "abc"}}])
+def test_a_badly_typed_reply_or_draft_is_refused_before_the_message_leaves(client, acc, smtp, extra):
+    import json
+    n0 = len(smtp.messages)
+    r = client.post(f"/api/mail/{acc['id']}/send", data={"data": json.dumps({"to": ["x@example.org"], "text": "hi",
+                                                                             **extra})})
+    assert r.status_code == 400 and len(smtp.messages) == n0 and send.sent_today(acc["id"]) == 0
