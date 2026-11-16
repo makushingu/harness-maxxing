@@ -194,6 +194,7 @@ def _url_masked(url: str, mask: str = MASK) -> str:
 SECRET_NAME_RE = re.compile(r"key|token|secret|pass|auth|cred|cookie|session|bearer|signature|private", re.I)
 # the scheme starts a word and is short: on a long run of letters with no "://" each try stops quickly (linear)
 USERINFO_RE = re.compile(r"(?<![A-Za-z0-9+.-])[A-Za-z][A-Za-z0-9+.-]{0,31}://([^/\s@]+)@")
+ENV_ARG_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")     # NAME of a NAME=value argument (docker -e, env)
 SECRET_FLAG_RE = re.compile(r"(?:key|token|secret|pass|password|auth|credentials?|cookie|bearer)\Z", re.I)
 HEADER_ARG_RE = re.compile(r"\A\s*([A-Za-z0-9-]+)\s*:(.*)\Z", re.S)
 
@@ -204,8 +205,8 @@ def _has_userinfo(v: str) -> bool:
 
 
 def _secret_args(args: Any) -> list[bool]:
-    """Which command-line arguments carry a literal secret: a token, a login in an address, `--api-key=value`
-    or `Authorization: value` with a secret-looking name, the value after `--token` / `--api-key`, or a non-plain
+    """Which command-line arguments carry a literal secret: a token, a login in an address, `--api-key=value`,
+    `NAME=value` / `-e NAME=value` (docker, env) or `Authorization: value` with a secret-looking name, the value after `--token` / `--api-key`, or a non-plain
     header after `-H` / `--header`."""
     out, after = [], ""
     for a in map(str, _list(args)):
@@ -217,6 +218,11 @@ def _secret_args(args: Any) -> list[bool]:
             secret = not (header and header.group(1).lower() in PLAIN_HEADERS) and not _only_refs(a)
         elif after == "value":
             secret = not _only_refs(a)
+        elif after == "env" or (eq and ENV_ARG_RE.match(name)):     # docker -e NAME=value, env NAME=value
+            secret = bool(SECRET_NAME_RE.search(name)) and not _only_refs(value)
+        elif name in ("-e", "--env") and eq:                          # --env=NAME=value
+            inner, _, value = value.partition("=")
+            secret = bool(SECRET_NAME_RE.search(inner)) and not _only_refs(value)
         elif a.startswith("-") and eq:
             secret = bool(SECRET_NAME_RE.search(name)) and not _only_refs(value)
         elif header and not a.startswith("-"):
@@ -226,7 +232,8 @@ def _secret_args(args: Any) -> list[bool]:
         out.append(secret)
         flag = a.startswith("-") and not eq
         value_flag = flag and not a.lower().startswith("--no-") and SECRET_FLAG_RE.search(a)
-        after = "header" if a in ("-H", "--header") else "value" if value_flag else ""
+        after = ("header" if a in ("-H", "--header") else "env" if a in ("-e", "--env")
+                 else "value" if value_flag else "")
     return out
 
 
