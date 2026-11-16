@@ -187,7 +187,7 @@ function Row({ d, st, onWatch }: { d: Device; st: DevicesStatus; onWatch: () => 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <>
-      <dt className="text-[12px] text-muted-foreground sm:pt-1.5">{label}</dt>
+      <dt className="text-[12px] text-muted-foreground sm:pt-2">{label}</dt>
       <dd className="-mt-2 grid min-w-0 justify-items-start gap-1.5 sm:mt-0">
         {children}
         {hint && <p className="text-[12px] text-muted-foreground">{hint}</p>}
