@@ -55,3 +55,15 @@ func enableANSI(f *os.File) bool {
 	}
 	return windows.SetConsoleMode(h, mode|windows.ENABLE_VIRTUAL_TERMINAL_PROCESSING) == nil
 }
+
+// termWidth is the width of the console window, 80 when unknown.
+func termWidth() int {
+	var info windows.ConsoleScreenBufferInfo
+	if windows.GetConsoleScreenBufferInfo(windows.Handle(os.Stdout.Fd()), &info) != nil {
+		return 80
+	}
+	if w := int(info.Window.Right-info.Window.Left) + 1; w > 0 {
+		return w
+	}
+	return 80
+}

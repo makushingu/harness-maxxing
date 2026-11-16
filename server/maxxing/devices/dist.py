@@ -107,6 +107,36 @@ def personalised(target: str, code: str, server_url: str) -> tuple[str, Path, by
     return SAVE_AS[os_name], f, (b"" if target == "android" else trailer(server_url, code))
 
 
+# "LINK" in big letters, as the Harness Maxxing installer writes "MAXXING" (same blues, top to bottom); the app
+# prints it too when it starts (link/console.go), except right after the install (HARNESS_LINK_NO_LOGO).
+LOGO = ('██╗     ██╗███╗   ██╗██╗  ██╗',
+        '██║     ██║████╗  ██║██║ ██╔╝',
+        '██║     ██║██╔██╗ ██║█████╔╝ ',
+        '██║     ██║██║╚██╗██║██╔═██╗ ',
+        '███████╗██║██║ ╚████║██║  ██╗',
+        '╚══════╝╚═╝╚═╝  ╚═══╝╚═╝  ╚═╝')
+_BLUES = (27, 33, 39, 45, 51, 87)
+_PS_BLUES = ("Blue", "Blue", "Cyan", "Cyan", "Cyan", "Cyan")
+
+
+def _sh_logo() -> str:
+    lines = "".join(f"  printf '  \\033[38;5;{c}m%s%s\\n' '{l}' \"$R\"\n" for c, l in zip(_BLUES, LOGO))
+    return ("if [ -n \"$R\" ] && [ \"$(tput cols 2>/dev/null || echo 80)\" -ge 34 ]; then\n"
+            "  printf '\\n  %s\\033[38;5;75mH A R N E S S%s\\n' \"$B\" \"$R\"\n" + lines +
+            "else printf '\\n  %sHARNESS LINK%s\\n' \"$B\" \"$R\"; fi\n"
+            "printf '  %sInstall on this computer%s\\n\\n' \"$D\" \"$R\"\n")
+
+
+def _ps_logo() -> str:
+    lines = "".join(f"  Write-Host '  {l}' -ForegroundColor {c}\n" for c, l in zip(_PS_BLUES, LOGO))
+    return ("Write-Host ''\n"
+            "if ($Host.UI.RawUI.WindowSize.Width -ge 34) {\n"
+            "  Write-Host '  H A R N E S S' -ForegroundColor Cyan\n" + lines +
+            "} else { Write-Host '  HARNESS LINK' }\n"
+            "Write-Host '  Install on this computer' -ForegroundColor DarkGray\n"
+            "Write-Host ''\n")
+
+
 _SH_STYLE = (
     "if [ -t 1 ] && [ -z \"${NO_COLOR:-}\" ] && [ \"${TERM:-}\" != dumb ]; then\n"
     "  A=$(printf '\\033[38;5;141m'); G=$(printf '\\033[38;5;114m'); Y=$(printf '\\033[38;5;221m')\n"
@@ -141,10 +171,7 @@ def install_script(kind: str, code: str, server_url: str) -> str:
                 "function Step($t) { Write-Host '  ● ' -ForegroundColor Green -NoNewline; Write-Host $t }\n"
                 "function Fail($t) { Write-Host ''; Write-Host ('  ■ ' + $t) -ForegroundColor Red; Write-Host ''; "
                 "return }\n"
-                "Write-Host ''\n"
-                "Write-Host '  ♦ ' -ForegroundColor Magenta -NoNewline; Write-Host 'Harness Link' -NoNewline; "
-                "Write-Host '  install' -ForegroundColor DarkGray\n"
-                "Write-Host ''\n"
+                + _ps_logo() +
                 "$arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'amd64' }\n"
                 "Step (\"Windows · $arch\")\n"
                 "$dir = Join-Path $env:LOCALAPPDATA 'HarnessLink'\n"
@@ -189,9 +216,10 @@ def install_script(kind: str, code: str, server_url: str) -> str:
                 "Cmd 'harness-link uninstall' 'remove Harness Link from this computer'\n"
                 "Write-Host ''\n"
                 "Write-Host '  Starting Harness Link...' -ForegroundColor DarkGray\n"
-                "& $exe\n")
+                "$env:HARNESS_LINK_NO_LOGO = '1'\n"
+                "try { & $exe } finally { Remove-Item Env:HARNESS_LINK_NO_LOGO -ErrorAction SilentlyContinue }\n")
     return ("#!/bin/sh\nset -e\n" + _SH_STYLE +
-            'printf \'\\n  %s♦%s %sHarness Link%s  %sinstall%s\\n\\n\' "$A" "$R" "$B" "$R" "$D" "$R"\n'
+            _sh_logo() +
             'case "$(uname -s)" in Linux) os=linux; osn=Linux ;; Darwin) os=darwin; osn=macOS ;; '
             '*) fail "This system is not supported: $(uname -s)" ;; esac\n'
             'case "$(uname -m)" in x86_64|amd64) arch=amd64 ;; arm64|aarch64) arch=arm64 ;; '
@@ -247,6 +275,7 @@ def install_script(kind: str, code: str, server_url: str) -> str:
             'and Accessibility: allow both, quit the terminal (cmd+Q), open it again and type harness-link.%s\\n\' '
             '"$D" "$R"; fi\n'
             'printf \'\\n  %sStarting Harness Link...%s\\n\' "$D" "$R"\n'
+            'export HARNESS_LINK_NO_LOGO=1\n'
             'if (exec </dev/tty) 2>/dev/null; then exec "$f" </dev/tty; else exec "$f"; fi\n')
 
 

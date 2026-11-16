@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"syscall"
+
+	"golang.org/x/sys/unix"
 )
 
 // lockInstance takes an exclusive, non-blocking lock (released by the OS if the process dies).
@@ -30,3 +32,12 @@ func exitPause() {}
 
 // enableANSI reports whether the terminal understands colours and cursor moves (always, on Unix).
 func enableANSI(*os.File) bool { return true }
+
+// termWidth is the width of the terminal on stdout, 80 when unknown.
+func termWidth() int {
+	ws, err := unix.IoctlGetWinsize(int(os.Stdout.Fd()), unix.TIOCGWINSZ)
+	if err != nil || ws.Col == 0 {
+		return 80
+	}
+	return int(ws.Col)
+}

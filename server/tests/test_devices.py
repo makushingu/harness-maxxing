@@ -178,7 +178,8 @@ def test_invite_install_download_pair_and_confirm(dv):
     ps = dv.get(f"/api/devices/install/{code.lower()}.ps1").text
     assert "LOCALAPPDATA" in ps and "harness-link.exe" in ps and f"windows-${{arch}}?code={code}" in ps
     assert "HarnessPC" in ps and "Invoke-WebRequest" in ps
-    assert "Start-Process" not in ps and ps.rstrip().endswith("& $exe") and "'Path', 'User'" in ps
+    assert "Start-Process" not in ps and "try { & $exe }" in ps.splitlines()[-1] and "H A R N E S S" in ps and "'Path', 'User'" in ps
+    assert "H A R N E S S" in sh.text and "HARNESS_LINK_NO_LOGO=1" in sh.text
     # the desktop app carries its pairing trailer
     d = dv.get(f"/api/devices/download/linux-amd64?code={code}")
     assert d.status_code == 200 and 'filename="harness-link"' in d.headers["content-disposition"]

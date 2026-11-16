@@ -151,34 +151,36 @@ func textColor(k lineKind, col string) string {
 	return col
 }
 
-// header is the box printed when Harness Link starts (only in a terminal).
+// logo is "LINK" in big letters, as the Harness Maxxing installer writes "MAXXING" (same blues, top to bottom).
+var logo = [...]string{
+	"██╗     ██╗███╗   ██╗██╗  ██╗",
+	"██║     ██║████╗  ██║██║ ██╔╝",
+	"██║     ██║██╔██╗ ██║█████╔╝ ",
+	"██║     ██║██║╚██╗██║██╔═██╗ ",
+	"███████╗██║██║ ╚████║██║  ██╗",
+	"╚══════╝╚═╝╚═╝  ╚═══╝╚═╝  ╚═╝",
+}
+
+var logoBlues = [...]int{27, 33, 39, 45, 51, 87}
+
+// header is what Harness Link prints when it starts (only in a terminal): the logo, then how it works.
 func (c *console) header() {
 	if c.out == nil || (!c.tty && !c.color) {
 		return
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	const w = 52 // inner width
-	row := func(left, right string, lw, rw int) string {
-		pad := w - 2 - lw - rw
-		if pad < 1 {
-			pad = 1
-		}
-		return "  " + c.paint(cAccent, "│") + "  " + left + strings.Repeat(" ", pad) + right + c.paint(cAccent, "│")
-	}
-	plain := func(s string, color string) string {
-		return row(c.paint(color, s), "", utf8.RuneCountInString(s), 0)
-	}
-	ver := "v" + version
-	title := c.paint(cAccent, "♦") + " " + c.paint(cBold, "Harness Link")
 	fmt.Fprintln(c.out)
-	fmt.Fprintln(c.out, "  "+c.paint(cAccent, "┌"+strings.Repeat("─", w)+"┐"))
-	fmt.Fprintln(c.out, row(title, c.paint(cDim, ver)+" ", 14, len(ver)+1))
-	fmt.Fprintln(c.out, plain("", ""))
-	fmt.Fprintln(c.out, plain("Claude can use this computer while this", ""))
-	fmt.Fprintln(c.out, plain("window stays open.", ""))
-	fmt.Fprintln(c.out, plain("Press Ctrl+C to stop.", cDim))
-	fmt.Fprintln(c.out, "  "+c.paint(cAccent, "└"+strings.Repeat("─", w)+"┘"))
+	if c.color && termWidth() >= 34 && os.Getenv("HARNESS_LINK_NO_LOGO") == "" { // the install script just showed it
+		fmt.Fprintln(c.out, "  "+c.paint(cBold+"\x1b[38;5;75m", "H A R N E S S"))
+		for i, l := range logo {
+			fmt.Fprintln(c.out, "  "+c.paint(fmt.Sprintf("\x1b[38;5;%dm", logoBlues[i]), l))
+		}
+	} else {
+		fmt.Fprintln(c.out, "  "+c.paint(cBold, "HARNESS LINK"))
+	}
+	fmt.Fprintln(c.out, "  "+c.paint(cDim, "v"+version+" · Claude can use this computer while this window stays open"))
+	fmt.Fprintln(c.out, "  "+c.paint(cDim, "Ctrl+C stops it"))
 	fmt.Fprintln(c.out)
 }
 
