@@ -8,8 +8,8 @@
  *   other static files      stale-while-revalidate (icons, fonts, manifest, favicon)
  *   /api/*, /ext/*, non-GET, cross-origin   never touched (straight to the network)
  */
-const VERSION = "0d8d6d2ad806"
-const PRECACHE = ["/assets/index-eNBKCOKb.js","/assets/rolldown-runtime-hePW80VL.js","/assets/vendor-react-CATZNyVw.js","/assets/react-DGdUkIGQ.js","/assets/middleware-ZXcm-2wU.js","/assets/i18n-DrWFoQXj.js","/assets/vendor-router-DxJHOyP5.js","/assets/media-BNctMFM3.js","/assets/pwa-CG09SY0R.js","/assets/vendor-query-CthOliPc.js","/assets/queries-BY921Mmv.js","/assets/api-CAkmgipw.js","/assets/vendor-ui-frGWvPt-.js","/assets/upload-BLNvPg8u.js","/assets/createLucideIcon-BWohsRmo.js","/assets/bot-BwRRiF4v.js","/assets/check-Ce_XXrw7.js","/assets/folder-open-D5GQqdU9.js","/assets/git-branch-C7GPyGy4.js","/assets/x-BpV09p2K.js","/assets/utils-DuHn04kK.js","/assets/spinner-CgwG32yl.js","/assets/sheet-drag-By4aOfcL.js","/assets/index-Bfvaiqzz.css","/assets/inter-latin-wght-normal-Dx4kXJAl.woff2"]
+const VERSION = "bb38566c42e7"
+const PRECACHE = ["/assets/index-CI1q_ddB.js","/assets/rolldown-runtime-hePW80VL.js","/assets/vendor-react-CATZNyVw.js","/assets/react-DGdUkIGQ.js","/assets/middleware-ZXcm-2wU.js","/assets/i18n-D0a3zSMJ.js","/assets/vendor-router-DxJHOyP5.js","/assets/media-qVSU0gBA.js","/assets/pwa-CG09SY0R.js","/assets/vendor-query-CthOliPc.js","/assets/queries-BgpQxhLc.js","/assets/api-DTc44dBD.js","/assets/vendor-ui-frGWvPt-.js","/assets/upload-C60b9atS.js","/assets/createLucideIcon-BWohsRmo.js","/assets/bot-BwRRiF4v.js","/assets/check-Ce_XXrw7.js","/assets/folder-open-D5GQqdU9.js","/assets/git-branch-C7GPyGy4.js","/assets/x-BpV09p2K.js","/assets/utils-DuHn04kK.js","/assets/spinner-CgwG32yl.js","/assets/sheet-drag-Du6rwwbv.js","/assets/index-Bfvaiqzz.css","/assets/inter-latin-wght-normal-Dx4kXJAl.woff2"]
 const SHELL = `mx-shell-${VERSION}`
 const ASSETS = `mx-assets-${VERSION}`
 const OFFLINE = '/offline.html'
