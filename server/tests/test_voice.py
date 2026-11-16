@@ -368,7 +368,109 @@ def test_the_model_download_uses_the_pinned_revision(mx, monkeypatch):
         return subprocess.CompletedProcess(argv, 0, "", "")
 
     monkeypatch.setattr(voice.subprocess, "run", run)
-    monkeypatch.setattr(voice, "model_present", lambda name: True)
+    monkeypatch.setattr(voice, "model_present", lambda name: bool(seen))      # there once downloaded
     voice._download_subprocess("tiny")
     pinned = deps.get("whisper")["revisions"]["tiny"]
     assert seen[0][-1] == pinned and "revision=sys.argv[3]" in seen[0][2]
+
+
+def test_a_slash_path_never_keeps_the_audio_at_the_workspace_root(client, mx, tmp_path, fake_engine):
+    client.put("/api/voice/settings", json={"engine": "local", "model": "base"})
+    audio = make_audio(tmp_path / "rec.webm", 1.0, ["-c:a", "libopus"])
+    r = client.post("/api/voice/transcribe", data={"path": "/"},
+                    files={"audio": ("rec.webm", audio.read_bytes(), "audio/webm")})
+    assert r.status_code == 400 and r.json()["error"] == "bad_path"
+    from maxxing import workspace
+    assert not (workspace.root() / "attachments").exists()
+
+
+def test_two_recordings_kept_in_the_same_second_get_two_files(topic, mx, tmp_path, monkeypatch):
+    import threading
+    from maxxing.api import voice as api_voice
+    barrier, real_exists = threading.Barrier(2, timeout=1), Path.exists
+
+    def exists(self, *a, **k):                         # both requests check the name before either writes
+        if self.name.startswith("voice-"):
+            try:
+                barrier.wait()
+            except threading.BrokenBarrierError:
+                pass
+        return real_exists(self, *a, **k)
+
+    monkeypatch.setattr(Path, "exists", exists)
+    srcs = []
+    for body in (b"AAAA", b"BBBB"):
+        srcs.append(tmp_path / f"in-{body.decode()}.webm")
+        srcs[-1].write_bytes(body)
+    out: list[str] = []
+    ts = [threading.Thread(target=lambda s=s: out.append(api_voice._keep(s, topic, ".webm"))) for s in srcs]
+    for t in ts:
+        t.start()
+    for t in ts:
+        t.join()
+    assert len(set(out)) == 2 and sorted(Path(p).read_bytes() for p in out) == [b"AAAA", b"BBBB"]
+
+
+def test_deleting_a_model_being_installed_is_refused(client, mx, monkeypatch):
+    import threading
+    monkeypatch.setattr(voice, "local_installed", lambda: True)
+    go = threading.Event()
+
+    def model(name):
+        go.wait(5)
+        d = voice.model_path(name)
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "config.json").write_text("{}")
+        (d / "model.bin").write_bytes(b"x")
+
+    monkeypatch.setitem(voice.install_steps, "model", model)
+    assert client.post("/api/voice/install", json={"model": "tiny"}).json()["state"] == "running"
+    r = client.delete("/api/voice/models/tiny")
+    go.set()
+    assert r.status_code == 409 and r.json()["error"] == "busy"
+    deadline = time.time() + 5
+    while voice.install_state()["state"] == "running" and time.time() < deadline:
+        time.sleep(0.05)
+    assert voice.install_state()["state"] == "done" and voice.model_present("tiny")
+
+
+def _fake_downloader(monkeypatch, download):
+    import types
+    monkeypatch.setattr(voice, "local_installed", lambda: True)
+    monkeypatch.setitem(sys.modules, "faster_whisper.utils", types.SimpleNamespace(download_model=download))
+
+
+def test_a_half_downloaded_model_is_not_seen_as_installed(mx, monkeypatch):
+    def download(name, output_dir, revision=None):
+        Path(output_dir).mkdir(parents=True, exist_ok=True)
+        (Path(output_dir) / "config.json").write_text("{}")
+        (Path(output_dir) / "model.bin").write_bytes(b"half")
+        raise OSError("connection reset")
+
+    _fake_downloader(monkeypatch, download)
+    with pytest.raises(OSError):
+        voice.download_model("tiny")
+    assert not voice.model_present("tiny")
+
+
+def test_a_model_is_downloaded_once_when_two_ask_for_it(mx, monkeypatch):
+    import threading
+    calls, live, peak = [], [0], [0]
+
+    def download(name, output_dir, revision=None):
+        calls.append(output_dir)
+        live[0] += 1
+        peak[0] = max(peak[0], live[0])
+        time.sleep(0.3)
+        Path(output_dir).mkdir(parents=True, exist_ok=True)
+        (Path(output_dir) / "config.json").write_text("{}")
+        (Path(output_dir) / "model.bin").write_bytes(b"full")
+        live[0] -= 1
+
+    _fake_downloader(monkeypatch, download)
+    ts = [threading.Thread(target=voice.download_model, args=("tiny",)) for _ in range(2)]
+    for t in ts:
+        t.start()
+    for t in ts:
+        t.join()
+    assert len(calls) == 1 and peak[0] == 1 and voice.model_present("tiny")

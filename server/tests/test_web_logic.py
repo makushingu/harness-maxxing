@@ -151,3 +151,12 @@ const last = sets[sets.length - 1]
 const out = { last, revoked: revoked.includes(last) }
 """)
     assert out == {"last": None, "revoked": False}
+
+
+def test_a_long_code_block_is_shown_without_colours_and_markdown_sooner(tmp_path):
+    out = _run_ts(tmp_path, WEB / "components" / "ui" / "highlightLimit.ts", """return [
+        m.canHighlight('markdown', 20000), m.canHighlight('MD', 3001), m.canHighlight('md', 3000),
+        m.canHighlight('java', 20001), m.canHighlight('java', 20000), m.canHighlight('python', 500)]""")
+    assert out == [False, False, True, False, True, True]
+    src = (WEB / "components" / "ui" / "markdown.tsx").read_text(encoding="utf-8")
+    assert re.search(r"if \(!canHighlight\(lang, text\.length\)\) continue\s+code\.children = ll\.highlight\(lang, text\)", src)

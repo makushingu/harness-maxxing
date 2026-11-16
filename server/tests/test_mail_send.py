@@ -385,3 +385,63 @@ def test_a_message_longer_than_the_page_is_never_sent_from_the_outbox(acc, smtp,
         outbox.approve(q["id"], "web")
     assert e.value.code == "too_long" and not smtp.messages
     assert [p for p in outbox.pending() if p["id"] == q["id"]][0]["text_cut"]   # still waiting
+
+
+@pytest.mark.parametrize("extra", [{"reply": "x"}, {"reply": {"uid": "abc"}}, {"draft": "x"}, {"draft": {"uid": "abc"}}])
+def test_a_badly_typed_reply_or_draft_is_refused_before_the_message_leaves(client, acc, smtp, extra):
+    import json
+    n0 = len(smtp.messages)
+    r = client.post(f"/api/mail/{acc['id']}/send", data={"data": json.dumps({"to": ["x@example.org"], "text": "hi",
+                                                                             **extra})})
+    assert r.status_code == 400 and len(smtp.messages) == n0 and send.sent_today(acc["id"]) == 0
+
+
+@pytest.mark.parametrize("path,extra", [("send", {"forward": "x"}), ("send", {"forward": {"uid": 1, "indexes": ["a"]}}),
+                                        ("send", {"forward": {"indexes": [1]}}), ("send", {"to": 5}),
+                                        ("draft", {"draft": "x"}), ("draft", {"forward": "x"})])
+def test_a_badly_typed_forward_or_address_list_is_a_clear_refusal(client, acc, srv, smtp, path, extra):
+    import json
+    n0 = len(smtp.messages)
+    r = client.post(f"/api/mail/{acc['id']}/{path}", data={"data": json.dumps({"to": ["x@example.org"], "text": "hi",
+                                                                               **extra})})
+    assert r.status_code == 400 and len(smtp.messages) == n0
+    assert not srv.folders["Drafts"].messages
+
+
+def test_a_folder_name_with_a_control_character_is_a_400(client, acc):
+    r = client.get(f"/api/mail/{acc['id']}/messages", params={"folder": "\x00"})
+    assert r.status_code == 400 and r.json()["error"] == "bad_folder"
+
+
+@pytest.mark.parametrize("argv", [["list", "--folder", "a\udc80"], ["mkdir", "a\udc80"]])
+def test_a_folder_name_with_a_lone_surrogate_is_a_clean_cli_error(client, acc, monkeypatch, capsys, argv):
+    code, _out, err = _cli(capsys, *argv, stdin="", monkeypatch=monkeypatch)
+    assert code != 0 and "invalid folder name" in err
+
+
+def test_an_account_name_with_a_lone_surrogate_is_refused_when_saved():
+    with pytest.raises(MailError):
+        mail._clean({"address": "me@example.com", "name": "Me \ud800", "imap_host": "imap.example.com",
+                     "imap_port": 993, "imap_tls": "ssl", "smtp_host": "smtp.example.com",
+                     "smtp_port": 465, "smtp_tls": "ssl"})
+
+
+def test_an_account_name_saved_with_a_lone_surrogate_is_a_mail_error_when_sending():
+    with pytest.raises(MailError):
+        send.build({"address": "me@example.com", "name": "Me \ud800"}, {"to": "bob@example.com", "text": "x"})
+
+
+def test_an_agent_mail_queued_keeps_a_decision_made_while_its_notification_was_posted(acc, smtp, monkeypatch):
+    from maxxing import feed
+    monkeypatch.setattr(outbox, "_agent_name", lambda path: "Writer")
+    real = feed.post
+
+    def post(*a, **k):
+        r = store.outbox_list("waiting")[0]                # on the E-mail page since the first write
+        assert store.outbox_claim(r["id"], "sending")      # the owner clicked Send meanwhile
+        return real(*a, **k)
+
+    monkeypatch.setattr(feed, "post", post)
+    q = outbox.queue(acc, "acme/blog/writer", {"to": ["a@x.org"], "subject": "H", "text": "t"}, [], "new")
+    row = store.outbox_get(q["id"])
+    assert row["status"] == "sending" and row["event_id"]

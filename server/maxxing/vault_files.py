@@ -92,9 +92,13 @@ def _stage(name: str, data: bytes) -> Path:
     return Path(tmp)
 
 
-def _sweep(files: dict) -> None:
+def _sweep(files: dict, s: dict) -> None:
     """Under config._lock: remove what a crash left in the folder - temp files older than STALE_TMP_S and files with
-    no metadata entry. A file that has an entry is never touched; folders are left alone. Never raises."""
+    no metadata entry. A file that has an entry is never touched; folders are left alone. Never raises.
+    Nothing when the entries could not be read (secrets.json damaged, vault_files not an object): every file would
+    look orphaned."""
+    if not isinstance(s.get("vault_files"), dict):
+        return
     try:
         entries = list(files_dir().iterdir())
     except OSError:
@@ -139,7 +143,7 @@ def put(name: str, data: bytes | None = None, filename: str | None = None, note:
         cur.setdefault("note", "")
         cur.setdefault("expose", False)
         cur["updated"] = time.time()
-        _sweep(files)
+        _sweep(files, s)
         tmp = None
         if data is not None:
             cur["size"] = len(data)
@@ -170,7 +174,7 @@ def delete(name: str) -> bool:
     with config._lock:
         s = config.load_secrets()
         files = s.get("vault_files") if isinstance(s.get("vault_files"), dict) else {}
-        _sweep(files)
+        _sweep(files, s)
         if name not in files:
             return False
         files.pop(name)

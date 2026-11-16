@@ -48,7 +48,7 @@ def _path(rel: str) -> Path:
 def _read(rel: str) -> dict | None:
     try:
         d = json.loads(_path(rel).read_text())
-    except (OSError, ValueError):
+    except (OSError, ValueError, RecursionError):      # damaged file (deeply nested JSON too): ignored
         return None
     return d if isinstance(d, dict) else None
 

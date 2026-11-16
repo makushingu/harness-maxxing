@@ -142,6 +142,23 @@ def model_present(name: str) -> bool:
     return (p / "model.bin").is_file() and (p / "config.json").is_file()
 
 
+# A model downloads into <name>.part and moves to <name> once complete: a half download is never seen as installed.
+# One download at a time (install job, transcription, `maxxing update`): two never write the same folder.
+_download_lock = threading.Lock()
+
+
+def _part_path(name: str) -> Path:
+    return models_dir() / f"{name}.part"
+
+
+def _finish_download(name: str) -> None:
+    part, dest = _part_path(name), model_path(name)
+    if not ((part / "model.bin").is_file() and (part / "config.json").is_file()):
+        return
+    shutil.rmtree(dest, ignore_errors=True)
+    os.replace(part, dest)
+
+
 def _dir_bytes(p: Path) -> int:
     total = 0
     for root, _dirs, files in os.walk(p):
@@ -281,14 +298,17 @@ def download_model(name: str) -> Path:
         return model_path(name)
     if not local_installed():
         raise VoiceError(503, "not_installed", "local transcription is not installed (Settings → Voice → Install)")
-    fw_utils = importlib.import_module("faster_whisper.utils")
-    dest = model_path(name)
-    from . import deps                                 # the revision pinned in deps.toml, not whatever is newest
-    revision = (deps.get("whisper").get("revisions") or {}).get(name)
-    fw_utils.download_model(name, output_dir=str(dest), revision=revision)
+    with _download_lock:
+        if model_present(name):                        # downloaded by the install job meanwhile
+            return model_path(name)
+        fw_utils = importlib.import_module("faster_whisper.utils")
+        from . import deps                             # the revision pinned in deps.toml, not whatever is newest
+        revision = (deps.get("whisper").get("revisions") or {}).get(name)
+        fw_utils.download_model(name, output_dir=str(_part_path(name)), revision=revision)
+        _finish_download(name)
     if not model_present(name):
         raise VoiceError(502, "download_failed", f"model {name} could not be downloaded")
-    return dest
+    return model_path(name)
 
 
 def _load(name: str) -> Any:
@@ -457,7 +477,7 @@ def install_state() -> dict:
     j = dict(_job)
     if j["state"] == "running" and j["step"] == "model" and j["model"]:
         expected = MODEL_SIZE_MB.get(j["model"], 1) * 1024 * 1024
-        j["progress"] = round(min(0.99, _dir_bytes(model_path(j["model"])) / expected), 3)
+        j["progress"] = round(min(0.99, _dir_bytes(_part_path(j["model"])) / expected), 3)
     return j
 
 
@@ -504,8 +524,13 @@ def _download_subprocess(name: str) -> None:
     revision = (deps.get("whisper").get("revisions") or {}).get(name) or ""
     code = ("import sys; from faster_whisper.utils import download_model as d; "
             "d(sys.argv[1], output_dir=sys.argv[2], revision=sys.argv[3] or None)")
-    p = subprocess.run([sys.executable, "-c", code, name, str(model_path(name)), revision], capture_output=True,
-                       text=True, timeout=3600)
+    with _download_lock:
+        if model_present(name):
+            return
+        p = subprocess.run([sys.executable, "-c", code, name, str(_part_path(name)), revision],
+                           capture_output=True, text=True, timeout=3600)
+        if p.returncode == 0:
+            _finish_download(name)
     if p.returncode != 0 or not model_present(name):
         err = (p.stderr or "").strip().splitlines()
         raise VoiceError(502, "download_failed", (err[-1] if err else "download failed")[:300])
@@ -558,9 +583,13 @@ def start_install(model: str | None = None) -> dict:
 def delete_model(name: str) -> None:
     if name not in MODELS:
         raise VoiceError(400, "invalid_model", f"unknown model {name!r}")
+    with _job_lock:
+        if _job["state"] == "running" and _job["model"] == name:
+            raise VoiceError(409, "busy", f"the {name} model is being installed")
     if _model_name == name:
         _unload()
     shutil.rmtree(model_path(name), ignore_errors=True)
+    shutil.rmtree(_part_path(name), ignore_errors=True)
 
 
 # ---- doctor ----------------------------------------------------------------------------------
