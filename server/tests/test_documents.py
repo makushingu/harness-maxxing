@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from maxxing import documents
+from maxxing.api import files as files_api
 
 from test_files import tree  # noqa: F401  (fixture)
 
@@ -261,6 +262,41 @@ def test_pdf_pages(client, tree, mx):  # noqa: F811
     (tree / "broken.pdf").write_bytes(b"%PDF-1.4 nothing")
     assert client.get("/api/files/pdf", params={"path": str(tree / "broken.pdf")}).status_code == 415
     assert client.get("/api/files/pdf", params={"path": str(tree / "none.pdf")}).status_code == 404
+
+
+def pdf_with_text(path: Path, words: str) -> Path:
+    """A one-page PDF that says `words`."""
+    stream = f"BT /F1 12 Tf 20 100 Td ({words}) Tj ET".encode()
+    objs = [b"<< /Type /Catalog /Pages 2 0 R >>", b"<< /Type /Pages /Count 1 /Kids [3 0 R] >>",
+            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 200] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
+            b"<< /Length %d >>\nstream\n" % len(stream) + stream + b"\nendstream",
+            b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"]
+    out, at = b"%PDF-1.4\n", []
+    for i, o in enumerate(objs, 1):
+        at.append(len(out))
+        out += f"{i} 0 obj\n".encode() + o + b"\nendobj\n"
+    xref = len(out)
+    out += f"xref\n0 {len(objs) + 1}\n0000000000 65535 f \n".encode() + b"".join(f"{a:010d} 00000 n \n".encode() for a in at)
+    out += f"trailer\n<< /Size {len(objs) + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n".encode()
+    path.write_bytes(out)
+    return path
+
+
+@pytest.mark.skipif(not shutil.which("pdftotext"), reason="poppler-utils not installed")
+def test_pdf_text(client, tree, monkeypatch):  # noqa: F811
+    """The viewer's copy button on a PDF: its words, nothing for pages without any, the start only of a very long one."""
+    f = pdf_with_text(tree / "words.pdf", "Hello from a PDF")
+    assert client.get("/api/files/pdf/text", params={"path": str(f)}).json() == {"text": "Hello from a PDF", "truncated": False}
+    assert client.get("/api/files/pdf/text", params={"path": str(pdf(tree / "empty.pdf", 2))}).json() == {"text": "", "truncated": False}
+    monkeypatch.setattr(files_api, "PDF_TEXT_MAX", 5)
+    assert client.get("/api/files/pdf/text", params={"path": str(f)}).json() == {"text": "Hello", "truncated": True}
+    (tree / "broken.pdf").write_bytes(b"%PDF-1.4 nothing")
+    assert client.get("/api/files/pdf/text", params={"path": str(tree / "broken.pdf")}).status_code == 415
+    assert client.get("/api/files/pdf/text", params={"path": str(tree / "b.txt")}).status_code == 404
+    assert client.get("/api/files/pdf/text", params={"path": str(tree / "none.pdf")}).status_code == 404
+    assert client.get("/api/files/pdf/text", params={"path": "/etc/passwd"}).status_code == 403
+    monkeypatch.setattr(shutil, "which", lambda name, *a, **k: None)
+    assert client.get("/api/files/pdf/text", params={"path": str(f)}).status_code == 415
 
 
 def test_pdf_pages_without_the_tools(client, tree, monkeypatch):  # noqa: F811

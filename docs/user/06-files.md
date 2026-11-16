@@ -118,6 +118,10 @@ phone).
   tab on a computer, in place on a phone.
 - **Open in Files** opens the file in the Files page - a new tab on a computer (the viewer stays open), in place
   on a phone.
+- **Copy the text** copies what the file says: a text, code or CSV file as it is, a PDF as the text read in its
+  pages (a scan has none), a workbook as cells that paste into a spreadsheet. A Markdown or HTML file and a Word
+  document give two choices: the **source** (Markdown for a document) or **plain text**, the words as you read them
+  without the marks. On a phone it is in the **⋯** menu; in the Files page, in the menu of the file.
 - **Download** (also on a phone; a picture on screen is saved at once, without downloading it again); on a folder,
   **Download as zip**. **Esc** to close.
 

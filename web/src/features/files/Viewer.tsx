@@ -28,6 +28,7 @@ import { CodeBlock, CopyButton } from '@/components/ui/code-block'
 import { DIAGRAM_PREFIX, diagramCode } from '@/components/ui/diagram'
 import { useFileViewer } from './viewerStore'
 import { downloadProps, useDownloadZip } from './download'
+import { CopyTextButton, CopyTextItems } from './copyText'
 import { ChangesPane } from '@/features/code/ChangesPane'
 import { isChangesPath } from '@/features/code/api'
 import { PrPane } from '@/features/code/PrPane'
@@ -162,6 +163,7 @@ function ViewerPane({ path, index, count, fullscreen, canFull, onFull }: { path:
             ]}
           />
         )}
+        {isFile && <CopyTextButton path={path} kind={kind} text={content.data?.content} className="max-sm:hidden" />}
         {editable && (
           <Tooltip content={canFull ? t('viewer.editNewTab') : null}>
             <Button asChild variant="secondary" size="sm" className="mx-1 h-8" data-testid="viewer-edit">
@@ -236,14 +238,15 @@ function ViewerPane({ path, index, count, fullscreen, canFull, onFull }: { path:
             </a>
           </Button>
         </Tooltip>
-        {/* Phone: the header has no room for every button; download, Files and the parent folder go in a menu. */}
+        {/* Phone: the header has no room for every button; copy, download, Files and the parent folder go in a menu. */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon-sm" aria-label={t('common.more')} className="sm:hidden" data-testid="viewer-more">
               <MoreVertical />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-52">
+          <DropdownMenuContent align="end" className="w-56">
+            {isFile && <CopyTextItems path={path} kind={kind} text={content.data?.content} />}
             {isDir ? (
               <DropdownMenuItem onSelect={() => downloadZip(path)}>
                 <FolderDown />
