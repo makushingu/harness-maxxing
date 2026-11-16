@@ -217,3 +217,25 @@ def test_a_lone_surrogate_emoji_is_refused(client, mx):
     r = client.patch("/api/workspace/projects/shop", content=b'{"emoji": "\\ud800"}',
                      headers={"content-type": "application/json"})
     assert r.status_code == 400 and r.json()["error"] == "bad_emoji", r.text
+
+
+def test_concurrent_writes_to_a_topics_settings_keep_every_change(client, monkeypatch):
+    import threading
+    import time
+    client.post("/api/workspace/projects", json={"name": "acme"})
+    client.post("/api/workspace/projects/acme/topics", json={"name": "blog"})
+    path = "projects/acme/topics/blog"
+    write = config.write_json
+    monkeypatch.setattr(config, "write_json", lambda *a, **k: (time.sleep(0.002), write(*a, **k))[1])
+    rules = [f"Bash(tool{i}:*)" for i in range(15)]
+    jobs = [lambda r=r: workspace.add_topic_allowed_tool(path, r) for r in rules]
+    jobs += [lambda i=i: workspace.set_folder_browser(path, {"enabled": True, "profile": f"p{i}"}) for i in range(15)]
+    jobs += [lambda: workspace.update_topic("acme", "blog", permission_mode="ask") for _ in range(5)]
+    threads = [threading.Thread(target=j) for j in jobs]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert sorted(workspace.topic_allowed_tools(path)) == sorted(rules)
+    assert workspace.folder_browser(path)["enabled"] is True
+    assert workspace.topic_permission_mode(path) == "ask"
