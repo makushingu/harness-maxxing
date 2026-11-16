@@ -967,3 +967,17 @@ def test_hand_edited_extension_lists_of_the_wrong_type_fall_back_to_empty(client
         assert client.get("/api/dashboard").status_code == 200
     config.save_config({**config.load_config(), "extensions": 5})
     assert extensions.disabled_ids() == set()
+
+
+def test_a_status_the_server_cannot_send_is_a_clean_500(client, org):
+    api = '''
+def handle(ctx, method, path, query, body):
+    return {"1000": 1000, "99": 99, "-1": -1, "true": True, "204": 204, "201": 201}[path], {"ok": True}
+'''
+    _ext(org, "codes", {"type": "page"}, api, "export function mount(el){}")
+    for bad in ("1000", "99", "-1", "true"):              # uvicorn would drop the connection instead
+        r = client.get(f"/api/ext/codes/{bad}")
+        assert r.status_code == 500 and r.json()["error"] == "extension_error", bad
+    r = client.get("/api/ext/codes/204")
+    assert r.status_code == 204 and r.content == b""
+    assert client.get("/api/ext/codes/201").json() == {"ok": True}
