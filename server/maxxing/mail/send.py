@@ -295,6 +295,8 @@ def build(acc: dict, draft: dict, files: list[tuple[str, str, bytes]] | None = N
     # a non-ASCII address (before the @): headers in UTF-8 (RFC 6532), the only valid form; the default policy would
     # RFC 2047-encode the address itself, which no server reads. Sending it needs SMTPUTF8 (`send`)
     msg = EmailMessage(policy=email.policy.SMTPUTF8) if not all(a.isascii() for a in to + cc + bcc) else EmailMessage()
+    if acc.get("name") and _bad_header(str(acc["name"])):   # saved before names were checked
+        raise MailError("invalid", "invalid account name (Settings of the mailbox)")
     msg["From"] = email.utils.formataddr((acc.get("name") or "", acc["address"])) if acc.get("name") else acc["address"]
     if to:
         msg["To"] = ", ".join(to)

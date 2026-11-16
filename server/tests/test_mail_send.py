@@ -417,3 +417,15 @@ def test_a_folder_name_with_a_control_character_is_a_400(client, acc):
 def test_a_folder_name_with_a_lone_surrogate_is_a_clean_cli_error(client, acc, monkeypatch, capsys, argv):
     code, _out, err = _cli(capsys, *argv, stdin="", monkeypatch=monkeypatch)
     assert code != 0 and "invalid folder name" in err
+
+
+def test_an_account_name_with_a_lone_surrogate_is_refused_when_saved():
+    with pytest.raises(MailError):
+        mail._clean({"address": "me@example.com", "name": "Me \ud800", "imap_host": "imap.example.com",
+                     "imap_port": 993, "imap_tls": "ssl", "smtp_host": "smtp.example.com",
+                     "smtp_port": 465, "smtp_tls": "ssl"})
+
+
+def test_an_account_name_saved_with_a_lone_surrogate_is_a_mail_error_when_sending():
+    with pytest.raises(MailError):
+        send.build({"address": "me@example.com", "name": "Me \ud800"}, {"to": "bob@example.com", "text": "x"})
