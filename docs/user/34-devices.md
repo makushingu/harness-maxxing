@@ -49,8 +49,10 @@ what happens, line by line:
 
 - The live view (Watch, in Settings -> Devices) does not fill the window: it shows one line when it opens and one
   when it closes. Its pictures are not saved anywhere.
-- **Several screens**: Watch shows a **Screen** menu when the computer has more than one. The screen you pick is the
-  one Claude sees and uses, and the one the view shows.
+- **Several screens**: Claude sees one screen at a time. Pick it in the device's row in Settings -> Devices (**Screen**,
+  shown when the computer has more than one), in Watch, or with `maxxing devices screen ID N`: it is the one Claude
+  sees and uses, and the one Watch shows. Claude can also switch screens by itself when what it looks for is on
+  another one; the menu then follows.
 - In a terminal the log is in colour: green when connected, yellow when something is missing (a permission, the
   connection), red when an action is refused or Harness Link stops. The same action repeated is folded into one line
   with a counter. Set `NO_COLOR=1` for plain text.
@@ -109,7 +111,7 @@ Devices. The text Claude typed is not stored there, only its length.
 ## From the terminal
 
 `maxxing devices list | add [--os windows|darwin|linux|android] | confirm ID [--refuse] | remove ID | rename ID NAME |
-mode ID view|control | access ID --all|--project NAME|--agent PATH | enable | disable`. See the
+mode ID view|control | screen ID N|main | access ID --all|--project NAME|--agent PATH | enable | disable`. See the
 [CLI reference](cli-reference).
 
 ## Limits

@@ -254,7 +254,7 @@ def resolve(ref: str) -> dict | None:
 
 def public(dev: dict) -> dict:
     out = {k: dev.get(k) for k in ("id", "name", "os", "kind", "arch", "version", "created", "last_seen", "confirmed",
-                                   "mode", "scope", "caps", "screen", "note", "ip", "display")}
+                                   "mode", "scope", "caps", "screen", "note", "ip", "display", "screens")}
     out["os_name"] = OS_NAMES.get(str(dev.get("os")), str(dev.get("os") or ""))
     return out
 

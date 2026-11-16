@@ -4659,7 +4659,7 @@ export const en = {
   'devices.add.readyPhone': "Accepted. Claude can use this phone while Harness Link is on. Choose View only or Control in its row.",
   'devices.add.done': "Done",
   'devices.live.screen': "Screen",
-  'devices.live.screenHelp': "The screen Claude sees and uses on this computer (and that this view shows)",
+  'devices.live.screenHelp': "The screen Claude sees and uses on this computer, also shown by Watch. Claude can switch it itself when it needs another one.",
   'devices.live.main': "main",
   'devices.add.notAvailable': "Harness Link is not available for download on this server yet.",
   'devices.new.title': "New device: {name} ({os})",

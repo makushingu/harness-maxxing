@@ -41,8 +41,9 @@ def dv(client, mx, monkeypatch, tmp_path):
 class FakeDevice:
     """Harness Link on the other end of WS /api/devices/ws (protocol v2), in a thread."""
 
-    def __init__(self, ws, os_name="android", caps=None, screen=(1080, 2400)) -> None:
+    def __init__(self, ws, os_name="android", caps=None, screen=(1080, 2400), screens=None) -> None:
         self.ws, self.os, self.caps, self.screen = ws, os_name, caps or CAPS_PHONE, screen
+        self.screens, self.display = screens or [], 0          # several screens: [(w, h)], the first is the main one
         self.got: list[dict] = []
         self.errors: dict[str, tuple[str, str]] = {}
         self.unpaired = False
@@ -58,9 +59,7 @@ class FakeDevice:
 
     def run(self) -> None:
         ws = self.ws
-        w, h = self.screen
-        ws.send_json({"t": "hello", "v": "0.1.0", "os": self.os, "arch": "arm64", "name": "fake", "caps": self.caps,
-                      "screen": {"w": w, "h": h, "scale": 1}, "note": ""})
+        self.hello()
         while True:
             try:
                 m = ws.receive_json()
@@ -72,8 +71,15 @@ class FakeDevice:
             if t == "unpair":
                 self.unpaired = True
                 continue
+            if t == "display" and self.screens:              # as Harness Link: switch, then hello again
+                i = m.get("i")
+                self.display = i if isinstance(i, int) and 0 <= i < len(self.screens) else 0
+                self.screen = self.screens[self.display]
+                self.hello()
+                continue
             if t in ("state", "access", "display", "watch"):
                 continue
+            w, h = self.screen
             if t in self.errors:
                 code, msg = self.errors[t]
                 ws.send_json({"t": "err", "id": rid, "code": code, "message": msg})
@@ -94,6 +100,18 @@ class FakeDevice:
                                                              {"id": "com.whatsapp", "name": "WhatsApp"}]})
             else:
                 ws.send_json({"t": "ok", "id": rid})
+
+
+    def hello(self) -> None:
+        w, h = self.screens[self.display] if self.screens else self.screen
+        self.screen = (w, h)
+        m = {"t": "hello", "v": "0.1.0", "os": self.os, "arch": "arm64", "name": "fake", "caps": self.caps,
+             "screen": {"w": w, "h": h, "scale": 1}, "note": ""}
+        if self.screens:
+            m["screens"] = [{"i": i, "name": f"Display {i + 1}", "w": a, "h": b, "main": i == 0}
+                            for i, (a, b) in enumerate(self.screens)]
+            m["display"] = self.display
+        self.ws.send_json(m)
 
 
 def _pair(c, os_name="android", name="Pixel 7", caps=None, confirm=True) -> dict:
@@ -304,6 +322,37 @@ def test_removed_from_the_cli_the_app_is_told_too(dv):
         _online(dv, p["device_id"])
         assert cli.main(["devices", "remove", "Pixel 7"]) == 0
         wait_for(lambda: dev.unpaired, 8)
+
+
+def test_claude_switches_the_screen_itself(dv, capsys):
+    from maxxing import cli
+    p = _pair(dv, "darwin", "mac", CAPS_PC)
+    did = p["device_id"]
+    with _ws(dv, p["token"]) as ws:
+        dev = FakeDevice(ws, "darwin", CAPS_PC, screens=[(1512, 982), (2560, 1440)]).start()
+        _online(dv, did)
+        tok = turns.write_turn("sess0s", T)
+        listed = _text(_call(dv, "sess0s", "devices", token=tok))
+        assert "0 Display 1 1512x982 main" in listed and "1 Display 2 2560x1440" in listed and "you see 0" in listed
+        _call(dv, "sess0s", "screenshot", {"device": did}, tok)
+        assert "outside" in _text(_call(dv, "sess0s", "click", {"device": did, "x": 1300, "y": 10}, tok))
+        r = _call(dv, "sess0s", "screen", {"device": did, "screen": 1}, tok)
+        assert not r.get("isError"), r
+        assert dev.display == 1 and "Now on screen 1 (Display 2)" in _text(r) and "1280x720 picture" in _text(r)
+        assert dv.get("/api/devices").json()["devices"][0]["display"] == 1          # the menus follow
+        assert not _call(dv, "sess0s", "click", {"device": did, "x": 1270, "y": 10}, tok).get("isError")
+        assert "no screen 5" in _text(_call(dv, "sess0s", "screen", {"device": did, "screen": 5}, tok))
+        store.update(did, mode="view")                                              # looking: allowed in view only
+        assert not _call(dv, "sess0s", "screen", {"device": did, "screen": -1}, tok).get("isError")
+        assert dev.display == 0
+        capsys.readouterr()
+        assert cli.main(["devices", "list"]) == 0
+        out = capsys.readouterr().out
+        assert "* screen 0  Display 1  1512x982  main" in out and "  screen 1  Display 2" in out
+        assert cli.main(["devices", "screen", "mac", "1"]) == 0 and "screen 1" in capsys.readouterr().out
+        wait_for(lambda: dev.display == 1, 6)                                       # told by the ticker
+        assert cli.main(["devices", "screen", "mac", "main"]) == 0 and store.get(did)["display"] == -1
+        assert cli.main(["devices", "screen", "mac", "x"]) == 1
 
 
 # ---- tools -------------------------------------------------------------------------------------------------------------

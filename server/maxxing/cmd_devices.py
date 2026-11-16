@@ -9,6 +9,8 @@ Claude uses them with its tools (mcp__harness-devices__*), never with this comma
     maxxing devices remove ID                   remove it: its app forgets this server and stops
     maxxing devices rename ID NAME
     maxxing devices mode ID view|control        view: Claude looks and guides; control: it clicks and types
+    maxxing devices screen ID N|main            a computer with several screens: the one Claude sees and uses (and
+                                                the live view shows); `list` shows their numbers
     maxxing devices access ID --all | [--project NAME ...] [--agent PATH ...]
                                                 who may use it: every project and agent, or the ones named (an agent
                                                 also needs it in its agent.json `devices`, unless it is free and named
@@ -42,6 +44,9 @@ def _configure(p) -> None:
     s = sub.add_parser("mode", help="view (Claude looks) or control (Claude acts)")
     s.add_argument("id")
     s.add_argument("mode", choices=["view", "control"])
+    s = sub.add_parser("screen", help="several screens: the one Claude sees and uses")
+    s.add_argument("id")
+    s.add_argument("screen", help="the screen number (maxxing devices list) or main")
     s = sub.add_parser("access", help="which projects and agents may use it")
     s.add_argument("id")
     s.add_argument("--all", action="store_true", help="every project and agent")
@@ -91,6 +96,13 @@ def _handler(a) -> int:
                 print(f"{d['id']}  {d['name']}  ({devices.OS_NAMES.get(d['os'], d['os'])}"
                       f"{', ' + d['version'] if d.get('version') else ''})  {d['mode']}  "
                       f"access: {', '.join(d.get('scope') or []) or 'nobody'}  {state}")
+                screens = d.get("screens") or []             # as the app last described them
+                if len(screens) > 1:
+                    cur = d.get("display") if isinstance(d.get("display"), int) and d["display"] >= 0 else \
+                        next((x["i"] for x in screens if x.get("main")), 0)
+                    for x in screens:
+                        mark = "*" if x["i"] == cur else " "
+                        print(f"    {mark} screen {x['i']}  {x['name']}  {x['w']}x{x['h']}{'  main' if x.get('main') else ''}")
             n = len(store.invites_public())
             if n:
                 print(f"{n} code(s) waiting to be used")
@@ -137,6 +149,16 @@ def _handler(a) -> int:
         if cmd == "mode":
             store.update(dev["id"], mode=a.mode)
             print(f"{dev['name']}: {'view only' if a.mode == 'view' else 'control'}")
+            return 0
+        if cmd == "screen":
+            want = a.screen.strip().lower()
+            if want != "main" and not want.lstrip("-").isdigit():
+                print("screen: a number (maxxing devices list) or main", file=sys.stderr)
+                return 1
+            n = -1 if want == "main" else int(want)
+            out = store.update(dev["id"], display=n)
+            print(f"{dev['name']}: " + ("the main screen" if out.get("display", -1) < 0 else f"screen {out['display']}") +
+                  " (Harness Link switches within a few seconds)")
             return 0
         if cmd == "access":
             scope = ["*"] if a.all else [f"project:{p}" for p in a.project] + [f"agent:{p.strip('/')}" for p in a.agent]

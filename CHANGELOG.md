@@ -12,7 +12,8 @@ New:
   you) or **Control**, and which projects and agents may use it. Watch it live, take over at any time and hand it
   back with a word; Claude asks you for passwords, codes and captchas. On a computer, Harness Link runs only while
   you let it: type `harness-link` in a terminal, it shows there what Claude does, and Ctrl+C stops it. Off by
-  default: Settings -> Features -> Devices. [Show me](#show:devices)
+  default: Settings -> Features -> Devices. A computer with several screens: pick the one Claude uses in the device's
+  row, and Claude switches screens by itself when it needs another one. [Show me](#show:devices)
 
 Changed:
 - **The HUD is gone.** The floating bar that showed one session over your other apps and shared your screen is

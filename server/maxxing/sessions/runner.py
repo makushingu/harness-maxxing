@@ -1341,7 +1341,9 @@ DEVICES_NOTE = ("The person's own devices are available (mcp__harness-devices__*
                 "any time. Ask before you send a message, post, pay, delete or change an account in their name. When "
                 "a password, a code (SMS, e-mail) or a captcha is needed, call ask_human: never guess or ask for a "
                 "password in the chat. A device in \"view only\" lets you look and guide, not act. Call the device "
-                "tools one at a time, never in parallel: each action answers with the new screen, look at it first.")
+                "tools one at a time, never in parallel: each action answers with the new screen, look at it first. "
+                "A computer with several screens shows you one: `devices` lists them, the screen tool switches. "
+                "More in the skill maxxing-devices.")
 
 
 def devices_args(sid: str, path: str, agent: dict, others: list[str] | None = None) -> list[str]:

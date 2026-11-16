@@ -354,7 +354,8 @@ target = linux-amd64|linux-arm64|darwin-amd64|darwin-arm64|windows-amd64|windows
 ```
 Who sees a device: its `scope` (a session of project `acme`: `*` or `project:acme`), and an agent turn only the ids of
 its agent.json `devices` (a free agent also the devices whose scope names it: `agent:<path>`). `mode: view`: Claude
-gets `devices`, `screenshot`, `zoom`, `ui_tree`, `ask_human`, `wait` only. Downloads: `MAXXING_LINK_BIN_DIR` (a local
+gets `devices`, `screenshot`, `zoom`, `ui_tree`, `ask_human`, `wait`, `screen` only (`screen {device, screen: n|-1}`
+sets the device's `display` like `PUT`, waits up to 3 s for the app's new hello, answers with a shot). Downloads: `MAXXING_LINK_BIN_DIR` (a local
 build), else the release of `maxxing/link.json` (`{version, url, files:{<name>: sha256}}`, cached in
 `<state>/devices/bin/`, checked). A desktop binary is sent with the trailer `<json {server, code}><uint32 BE
 len>HMLINK01`; the APK as it is. The public code routes count wrong codes per client: 20 in 10 min -> `429 throttled`.
@@ -365,7 +366,7 @@ They answer `404 off` while the feature is off.
 | GET | `/api/devices` | – | `DevicesStatus` |
 | POST | `/api/devices/invites` | `{os?}` | `DeviceInvite` · `409 off` (feature off), `429 too_many` (10 codes waiting) |
 | POST | `/api/devices/{id}/confirm` | `{ok}` | `{ok}` - yes: the device may be used; no: it is dropped and its app gets `unpair` · `ok:false` when it does not wait |
-| PUT | `/api/devices/{id}` | `{name?, mode?: view\|control, scope?, display?: -1..15 (screen used, -1 = main)}` | `Device` · `400 bad_scope`, `404`, `422` |
+| PUT | `/api/devices/{id}` | `{name?, mode?: view\|control, scope?, display?: -1..15 (screen used, -1 = main)}` | `Device` (+ `screens`: the last `hello.screens`, kept offline) · `400 bad_scope`, `404`, `422` |
 | DELETE | `/api/devices/{id}` | – | `{ok}` - its token is revoked at once, its app gets `unpair` (forgets this server, stops), its requests are skipped |
 | GET | `/api/devices/session/{sid}` | – | `{using:[{id,name,os,online,human,at}], asks:[DeviceAsk]}` - the session's line ("Claude is using …") |
 | GET | `/api/devices/asks?session=` | – | `{asks:[DeviceAsk]}` (pending) |

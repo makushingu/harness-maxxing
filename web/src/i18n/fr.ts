@@ -4641,7 +4641,7 @@ export const fr: Record<keyof typeof en, string> = {
   'devices.add.readyPhone': "Accepté. Claude peut utiliser ce téléphone tant que Harness Link est actif. Choisissez Voir seulement ou Piloter sur sa ligne.",
   'devices.add.done': "Terminé",
   'devices.live.screen': "Écran",
-  'devices.live.screenHelp': "L’écran que Claude voit et utilise sur cet ordinateur (et que cette vue montre)",
+  'devices.live.screenHelp': "L’écran que Claude voit et utilise sur cet ordinateur, et que montre Regarder. Claude peut aussi en changer lui-même s’il lui en faut un autre.",
   'devices.live.main': "principal",
   'devices.add.notAvailable': "Harness Link n’est pas encore disponible au téléchargement sur ce serveur.",
   'devices.new.title': "Nouvel appareil : {name} ({os})",

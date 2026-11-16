@@ -140,7 +140,7 @@ class Hub:
                        "caps": caps, "screen": screen, "note": store._text(msg.get("note"), 1000),
                        "screens": screens, "display": msg.get("display") if isinstance(msg.get("display"), int) else None}
             await asyncio.to_thread(store.touch, c.id, version=c.hello["v"], arch=c.hello["arch"], caps=caps,
-                                    screen=screen, note=c.hello["note"])
+                                    screen=screen, note=c.hello["note"], screens=screens)
             _invalidate()
         elif t == "paused":
             c.paused = bool(msg.get("on"))

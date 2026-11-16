@@ -253,13 +253,14 @@ export function DeviceLive({ id, onClose, className }: { id: string; onClose?: (
   )
 }
 
-/** Several screens: which one Claude sees and uses (and this view shows). */
-function ScreenPick({ d }: { d: Device }) {
+/** Several screens: which one Claude sees and uses (and the live view shows); Claude may switch it too. */
+export function ScreenPick({ d }: { d: Device }) {
   const t = useT()
   const save = useSaveDevice()
-  const screens = d.hello?.screens ?? []
+  const screens = d.hello?.screens ?? d.screens ?? []
   if (screens.length < 2) return null
-  const cur = String(d.hello?.display ?? screens.find((x) => x.main)?.i ?? 0)
+  const chosen = d.display != null && d.display >= 0 ? d.display : undefined
+  const cur = String(d.hello?.display ?? chosen ?? screens.find((x) => x.main)?.i ?? 0)
   return (
     <span title={t('devices.live.screenHelp')} data-testid="device-screen">
       <Select

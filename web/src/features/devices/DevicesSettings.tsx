@@ -16,6 +16,7 @@ import { Callout } from '@/features/common'
 import { SectionStack, SettingsCard } from '@/pages/settings/sections/ui'
 import { DevicesFeature } from './DevicesFeature'
 import { DeviceWindow } from './DeviceWindow'
+import { ScreenPick } from './DeviceLive'
 
 type Tab = 'windows' | 'darwin' | 'linux' | 'android'
 
@@ -151,6 +152,12 @@ function Row({ d, st, onWatch }: { d: Device; st: DevicesStatus; onWatch: () => 
             ]}
           />
         </label>
+        {(d.hello?.screens ?? d.screens ?? []).length > 1 && (
+          <label className="flex items-center gap-2 text-[12px] text-muted-foreground">
+            {t('devices.live.screen')}
+            <ScreenPick d={d} />
+          </label>
+        )}
         <Access d={d} />
       </div>
       {d.mode === 'view' && <p className="pl-6 text-[12px] text-muted-foreground">{t('devices.mode.viewDesc')}</p>}

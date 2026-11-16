@@ -20,7 +20,8 @@ SHOT_QUALITY = 70
 SETTLE_S = 0.4
 MAX_TEXT = 4000
 MAX_TREE_NODES = 300
-VIEW_TOOLS = frozenset({"devices", "screenshot", "zoom", "ui_tree", "ask_human", "wait"})
+VIEW_TOOLS = frozenset({"devices", "screenshot", "zoom", "ui_tree", "ask_human", "wait", "screen"})
+SWITCH_WAIT_S = 3.0
 
 _D = {"device": {"type": "string", "description": "The device id (or its name) from `devices`."}}
 _XY = {"x": {"type": "number"}, "y": {"type": "number"}}
@@ -60,6 +61,11 @@ TOOLS = [
     _spec("tap_element", "Tap an element of ui_tree by its id.", {"element": {"type": "string"}}, ["element"]),
     _spec("set_text", "Put text into an editable element of ui_tree (replaces its content).",
           {"element": {"type": "string"}, "text": {"type": "string"}}, ["element", "text"]),
+    _spec("screen", "A computer with several screens: switch to another one (`devices` lists them with their number). "
+                    "You then see and act on that screen only (it is also the one the person's live view shows); "
+                    "answers with a screenshot of it. Use it when what you look for is not on the screen you see.",
+          {"screen": {"type": "integer", "description": "The screen number from `devices`; -1 = the main screen."}},
+          ["screen"]),
     _spec("apps", "The apps that can be opened on the device."),
     _spec("open_app", "Open an app by its name or id (see apps).", {"name": {"type": "string"}}, ["name"]),
     _spec("wait", "Wait a few seconds (a page loading, an animation), then look again with screenshot.",
@@ -136,9 +142,11 @@ def _describe(dev: dict) -> str:
         bits.append(f"screen {scr.get('w')}x{scr.get('h')}")
     screens = (h.get("hello") or {}).get("screens") or []
     if len(screens) > 1:
-        cur = next((x for x in screens if x.get("i") == (h.get("hello") or {}).get("display")), None)
-        bits.append(f"{len(screens)} screens, you see " + (cur or {}).get("name", "the main one") +
-                    " (the person picks it in Settings -> Devices -> Watch)")
+        shown = (h.get("hello") or {}).get("display")
+        cur = next((x for x in screens if x.get("i") == shown), None) or next((x for x in screens if x.get("main")), {})
+        bits.append(f"{len(screens)} screens (" + "; ".join(
+            f"{x['i']} {x['name']} {x['w']}x{x['h']}" + (" main" if x.get("main") else "") for x in screens) +
+            f"), you see {cur.get('i', 0)} {cur.get('name', '')}: switch with the screen tool")
     if h["paused"]:
         bits.append("paused by the person")
     if h["human"]:
@@ -294,6 +302,8 @@ async def _run(did: str, dev: dict, name: str, args: dict) -> dict:
         nodes = r.get("nodes") if isinstance(r.get("nodes"), list) else []
         return {"content": [_text(f"{len(nodes)} elements of {dev['name']} (frames x,y,w,h in pixels of the latest "
                                   f"screenshot, {sw}x{sh}):\n" + _tree_text(nodes))]}
+    if name == "screen":
+        return await _switch(did, dev, int(_num(args, "screen")))
     if name == "apps":
         r = await h.request(did, {"t": "apps"})
         apps = [a for a in r.get("apps") or [] if isinstance(a, dict)][:400]
@@ -360,6 +370,27 @@ async def _run(did: str, dev: dict, name: str, args: dict) -> dict:
         inp.update(a="key", keys=keys)
     await h.request(did, inp)
     return await _after(did, dev, "Done. ")
+
+
+async def _switch(did: str, dev: dict, n: int) -> dict:
+    """Show another screen of the device (the choice of Settings -> Devices too), then a picture of it."""
+    h = hub()
+    hello = h.conn(did).hello if h.conn(did) else {}
+    screens = hello.get("screens") or []
+    if len(screens) < 2:
+        raise Refused(f"{dev['name']} has a single screen.")
+    nums = [x["i"] for x in screens]
+    if n != -1 and n not in nums:
+        raise Refused(f"{dev['name']} has no screen {n}: " + ", ".join(f"{x['i']} {x['name']}" for x in screens) + ".")
+    want = n if n >= 0 else next((x["i"] for x in screens if x.get("main")), nums[0])
+    await asyncio.to_thread(store.update, did, display=n)
+    await h.access_changed(did)
+    end = time.monotonic() + SWITCH_WAIT_S                # the app says hello again on the new screen
+    while time.monotonic() < end and (h.conn(did).hello if h.conn(did) else {}).get("display") != want:
+        await asyncio.sleep(0.05)
+    h.shots.pop(did, None)                                # the old picture's pixels are no longer coordinates
+    name = next(x["name"] for x in screens if x["i"] == want)
+    return {"content": await _picture(did, dev, f"Now on screen {want} ({name}). ")}
 
 
 async def _after(did: str, dev: dict, said: str) -> dict:

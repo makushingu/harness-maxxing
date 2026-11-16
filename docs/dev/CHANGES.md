@@ -23,7 +23,11 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   Several screens: `hello.screens` / `hello.display`, device field `display` (`PUT /api/devices/{id} {display}`,
   -1..15) sent as `{"t":"display","i"}`; backends: macOS `CGGetActiveDisplayList` + `screencapture -D`, X11 RandR 1.5
   monitors, Windows `EnumDisplayMonitors` + `MOUSEEVENTF_VIRTUALDESK`. Live-view shots carry `live: true` and the app
-  gets `{"t":"watch","on"}` (one line in its terminal instead of one per picture).
+  gets `{"t":"watch","on"}` (one line in its terminal instead of one per picture). Claude switches screens itself
+  with the MCP tool `screen` (view mode too; refused while the person has the device; clears the coordinate space);
+  `devices` lists `i name WxH main`. `store.touch` keeps the last `screens` on the device (field in `Device`), so
+  `maxxing devices list` shows them; `maxxing devices screen ID N|main` (the 3 s ticker tells the app).
+  Product skill `maxxing-devices` (tools, refusals, CLI); `runner.DEVICES_NOTE` points to it.
 - Harness Link desktop runs only in the foreground of a terminal (no login entry; older ones removed at start and by
   the install script, which now `exec`s the app on `/dev/tty` and adds `~/.local/bin` / the user `Path`), with a live
   log (`link/console.go`). Windows binaries are console apps named `harness-link-windows-<arch>.exe`, installed as
@@ -34,7 +38,7 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   its `agent.json` `devices` list; a free agent also sees `agent:<its path>`). It relays to the loopback-only
   `POST /api/devices/mcp/<sid>` with a per-turn token (`<state>/devices/turns/`, cleared at startup). One
   `--allowedTools` per turn: merged into the browser's. View mode exposes only `devices`, `screenshot`, `zoom`,
-  `ui_tree`, `ask_human`, `wait`. Coordinates = pixels of the last `shot` of that device.
+  `ui_tree`, `ask_human`, `wait`, `screen`. Coordinates = pixels of the last `shot` of that device.
 - `ask_human` waits in memory (asyncio future, 10 min, turn liveness checked every 2 s), feed ref `devask:<id>`
   (`feed.HANDLERS`), `Session.device_asks`, agent waiting count. Human input over `WS /api/devices/<id>/live`
   (one-time `POST /live-token`; JPEG frames ~3 fps only while watched, JSON `state`) takes the device; Claude's
