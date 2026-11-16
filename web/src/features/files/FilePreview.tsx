@@ -21,6 +21,7 @@ import { FileSkeleton } from './skeletons'
 import { MarkdownReader, TextZoomControl, ZoomBox, zoomsText } from './textZoom'
 import { useTextZoom } from './readPos'
 import { downloadProps } from './download'
+import { CopyTextButton } from './copyText'
 
 export type FilePreviewProps = {
   /** Absolute path of the file (inside files_root). */
@@ -63,6 +64,7 @@ export function FilePreview({ path, className, header = true, openInFiles = true
               ]}
             />
           )}
+          <CopyTextButton path={path} kind={kind} text={content.data?.content} />
           <Tooltip content={t('files.download')}>
             <Button asChild variant="ghost" size="icon-sm">
               <a {...downloadProps(path, { size: content.data?.size })} aria-label={t('files.download')}>

@@ -64,6 +64,25 @@ export async function copyText(text: string): Promise<boolean> {
   }
 }
 
+/** Copy a text that is still being fetched or converted. Safari only writes to the clipboard during the click
+ *  itself: it is handed the promise (ClipboardItem); elsewhere the text is written once it is there. */
+export async function copyTextLater(text: Promise<string>): Promise<boolean> {
+  const w = focusedWindow() as Window & typeof globalThis
+  try {
+    if (w.ClipboardItem && w.navigator.clipboard?.write) {
+      await w.navigator.clipboard.write([new w.ClipboardItem({ 'text/plain': text.then((s) => new Blob([s], { type: 'text/plain' })) })])
+      return true
+    }
+  } catch {
+    // a browser that takes no promise there, or a refused write: the plain way below
+  }
+  try {
+    return await copyText(await text)
+  } catch {
+    return false
+  }
+}
+
 export const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
 
 /** Merge refs (callback or object) into one callback ref (memoize it: a new ref re-attaches on every render). */

@@ -41,6 +41,7 @@ import { FileInfoCard, ImageView, LazyCodeEditor, MediaView, PdfView } from '@/f
 import { FileSkeleton } from '@/features/files/skeletons'
 import { DocView } from '@/features/files/docs'
 import { ReadError } from '@/features/files/FilePreview'
+import { CopyTextItems } from '@/features/files/copyText'
 import { MarkdownReader, TextZoomControl, ZoomBox, zoomsText } from '@/features/files/textZoom'
 import { useTextZoom } from '@/features/files/readPos'
 import { ConflictDialog, type ConflictChoice } from './dialogs'
@@ -373,7 +374,7 @@ export function FileView({ path, siblings, folder, actions, entry }: { path: str
               <MoreHorizontal />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-52">
+          <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuItem asChild>
               <a {...downloadProps(path, { version: entry?.mtime, size: entry?.size })}>
                 <Download />
@@ -390,6 +391,8 @@ export function FileView({ path, siblings, folder, actions, entry }: { path: str
               <Copy />
               {t('files.copyPath')}
             </DropdownMenuItem>
+            {/* the text as it is in the editor, unsaved changes included */}
+            <CopyTextItems path={path} kind={kind} text={base ? doc : undefined} />
             <DropdownMenuItem onSelect={() => actions.ask(path)}>
               <Sparkles />
               {t('files.askClaude')}

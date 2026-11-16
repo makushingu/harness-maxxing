@@ -5,6 +5,20 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## Unreleased
+
+- "Copy the text" (`web/src/features/files/copyText.tsx`: `useCopyChoices`, `CopyTextButton` for a title bar,
+  `CopyTextItems` for a menu; used by `Viewer.tsx`, `FilePreview.tsx`, `pages/files/FileView.tsx`, where the text is
+  the editor's, unsaved changes included). Plain text is made in the browser by `features/files/plainText.ts`
+  (lazy chunk: `markdownToText` walks the mdast of `unified` + `remark-parse` + `remark-gfm`, `htmlToText` walks a
+  `DOMParser` document - nothing of the page runs or loads -, `sheetsToText` gives TSV). `unified` and `remark-parse`
+  were already installed through react-markdown; they are now declared in `web/package.json`. New route
+  `GET /api/files/pdf/text` (`pdftotext`, at most `PDF_TEXT_MAX` 2 MB then `truncated`; a scan gives an empty text).
+  `lib/utils.ts` `copyTextLater(promise)`: a text fetched or converted after the click is handed to the clipboard as
+  a `ClipboardItem` promise (Safari only writes during the click), with `copyText` as the fallback. Its strings are
+  their own dictionary group (`ctext`): the `files` group is part of the first load of a session, whose budget
+  (20,000 bytes, `test_web_first_load`) was full.
+
 ## 2.0.0-alpha.156 - 2026-11-15
 
 - Voice mode hardening (Radar check): `tts.synth` waits at most `SYNTH_TIMEOUT_S` (30 s, `select`) for the Piper

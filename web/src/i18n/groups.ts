@@ -44,6 +44,8 @@ export const GROUPS = {
   code: ['code', 'copy', 'pr'],
   // the terminal drawer and its setting (features/terminal)
   term: ['term'],
+  // "Copy the text" of a file (features/files/copyText.tsx): with the Files page, else on the first file shown in the viewer
+  ctext: ['ctext'],
   // Office documents and the page-by-page PDF reader (features/files/docs.tsx, pdfPages.tsx): on the first one opened
   docs: ['doc'],
   // the sentences of the status line (components/shell/mood.ts): fetched once the shell shows, not before it
