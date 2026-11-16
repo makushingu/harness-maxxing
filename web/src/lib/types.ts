@@ -919,7 +919,13 @@ export type VersionInfo = {
   /** Last update seen by the restarted server; notes_session = the Harness session applying its upgrade notes. */
   after?: { to: string; at: number; notes_session?: string | null; notes_path?: string | null; done?: boolean } | null
   /** Automatic update while nobody is on the interface (`auto_update`, default off). */
-  auto_update?: { enabled: boolean; tried?: { target: string; version?: string; at: number } | null; last_check?: { at: number; verdict: string } | null }
+  auto_update?: {
+    enabled: boolean
+    tried?: { target: string; version?: string; at: number } | null
+    last_check?: { at: number; verdict: string } | null
+    /** What its last pass decided (`result`: started, busy, up_to_date, needs_review...; `why`: what a busy server waits for). */
+    last?: { at: number; result: string; why?: string } | null
+  }
 }
 export type PreflightCustom = {
   id: string

@@ -7,6 +7,16 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Automatic update (`maxxing.auto_update`): an upgrade note no longer makes the preflight "needs a person"
+  (`_simple`): since the notes exist about one version out of two has one, so the first of them stopped the
+  automatic update for good (every later target crosses the same note). The update now runs as `maxxing update
+  --auto` (new flag, kept as `auto` in `update/after.json`); `smartupdate.after_update()` announces the notes to
+  apply in the feed (`auto-update-notes:<version>`), no session is opened. `tick()` keeps every pass in
+  `auto-update.json` `last` `{at, result, why?}` (GET /api/system/version `auto_update.last`, line under the switch,
+  strings `system.autoLast` / `autoRes.*` / `autoWhy.*`, group `settings`), logs a change of result, looks again
+  after `BUSY_POLL_S` (5 min) when the server was busy, posts "Harness is updating" only after the unit started
+  (new result `failed`), and dedupes "needs you" per version instead of per commit (one per push on beta).
+
 - "Copy the text" (`web/src/features/files/copyText.tsx`: `useCopyChoices`, `CopyTextButton` for a title bar,
   `CopyTextItems` for a menu; used by `Viewer.tsx`, `FilePreview.tsx`, `pages/files/FileView.tsx`, where the text is
   the editor's, unsaved changes included). Plain text is made in the browser by `features/files/plainText.ts`

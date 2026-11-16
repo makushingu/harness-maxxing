@@ -107,9 +107,11 @@ keeps the version to roll back to and the upgrade notes of the release.
 
 Off by default. Settings -> Updates -> **Update by itself when nobody is here**: when a new version is out, nobody
 is on the interface and nothing runs (no turn, no queued message, no scheduled job, nothing for 10 minutes), and
-the update is "simple" (no customization to adapt, no unsaved change, no upgrade note asking for something),
-Harness runs `maxxing update` by itself and restarts for a few seconds. Otherwise it waits and tells you in the
-notifications. It never touches a server whose code is on a branch under test (detached HEAD) or an update that
+the update is "simple" (no customization to adapt, no unsaved change), Harness runs `maxxing update` by itself
+and restarts for a few seconds. Otherwise it waits and tells you in the notifications. When the new version comes
+with upgrade notes (changes to make in your workspace), it updates all the same, then a notification tells you to
+open the update topic and say "update". A tab of the interface left open, even in the background, counts as
+someone being there. Under the switch, a line says when Harness last looked and what it found. It never touches a server whose code is on a branch under test (detached HEAD) or an update that
 already waits for you (conflict, rolled-back version), and tries a given version at most once a day.
 
 ## New server

@@ -2389,7 +2389,8 @@ def _mark_updated(new_version: str, a) -> None:
     upgrade-notes session) - see smartupdate.after_update."""
     from . import smartupdate
     try:
-        smartupdate.mark_updated(_from_version(), new_version, smart=bool(getattr(a, "smart", False)))
+        smartupdate.mark_updated(_from_version(), new_version, smart=bool(getattr(a, "smart", False)),
+                                 auto=bool(getattr(a, "auto", False)))
     except Exception:  # noqa: BLE001 - never fail an update for this
         pass
 
@@ -2531,6 +2532,9 @@ def _cfg_update(p: argparse.ArgumentParser) -> None:
                    help="check that every extension loads and every customization check passes")
     p.add_argument("--smart", action="store_true",
                    help="update started from the UI: afterwards the server applies the upgrade notes in a session")
+    p.add_argument("--auto", action="store_true",
+                   help="update started by the server itself (Settings -> Updates, automatic update): afterwards "
+                        "the upgrade notes left to apply are announced in the notifications")
 
 
 # ---- status --------------------------------------------------------------------------------
