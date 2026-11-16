@@ -409,3 +409,26 @@ def test_two_recordings_kept_in_the_same_second_get_two_files(topic, mx, tmp_pat
     for t in ts:
         t.join()
     assert len(set(out)) == 2 and sorted(Path(p).read_bytes() for p in out) == [b"AAAA", b"BBBB"]
+
+
+def test_deleting_a_model_being_installed_is_refused(client, mx, monkeypatch):
+    import threading
+    monkeypatch.setattr(voice, "local_installed", lambda: True)
+    go = threading.Event()
+
+    def model(name):
+        go.wait(5)
+        d = voice.model_path(name)
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "config.json").write_text("{}")
+        (d / "model.bin").write_bytes(b"x")
+
+    monkeypatch.setitem(voice.install_steps, "model", model)
+    assert client.post("/api/voice/install", json={"model": "tiny"}).json()["state"] == "running"
+    r = client.delete("/api/voice/models/tiny")
+    go.set()
+    assert r.status_code == 409 and r.json()["error"] == "busy"
+    deadline = time.time() + 5
+    while voice.install_state()["state"] == "running" and time.time() < deadline:
+        time.sleep(0.05)
+    assert voice.install_state()["state"] == "done" and voice.model_present("tiny")

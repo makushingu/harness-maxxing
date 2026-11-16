@@ -558,6 +558,9 @@ def start_install(model: str | None = None) -> dict:
 def delete_model(name: str) -> None:
     if name not in MODELS:
         raise VoiceError(400, "invalid_model", f"unknown model {name!r}")
+    with _job_lock:
+        if _job["state"] == "running" and _job["model"] == name:
+            raise VoiceError(409, "busy", f"the {name} model is being installed")
     if _model_name == name:
         _unload()
     shutil.rmtree(model_path(name), ignore_errors=True)
