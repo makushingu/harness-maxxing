@@ -3,6 +3,15 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## Unreleased
+
+New:
+- **Copy the text of a file.** The file viewer has a **Copy the text** button (in its "more" menu on a phone), and
+  the Files page the same lines in the menu of a file. A Markdown or HTML file gives two choices: **Copy the
+  source**, or **Copy as plain text** (the words as you read them, without the marks). A Word document copies as
+  Markdown or as plain text, a workbook as cells that paste into a spreadsheet, a PDF as the text read in its pages,
+  code, text and CSV files as they are.
+
 ## 2.0.0-alpha.156 - 2026-11-15
 
 New:
