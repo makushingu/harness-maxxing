@@ -20,7 +20,16 @@ NAME_RE = re.compile(r"^[A-Z][A-Z0-9_]{1,63}\Z")
 RESERVED = {"PATH", "HOME", "USER", "LOGNAME", "SHELL", "PWD", "TERM", "LANG", "LC_ALL", "TZ",
             "HOSTNAME", "TMPDIR", "PYTHONPATH", "LD_PRELOAD", "LD_LIBRARY_PATH",
             "LD_AUDIT", "BASH_ENV", "ENV", "PROMPT_COMMAND", "NODE_OPTIONS", "NODE_PATH",
-            "PYTHONSTARTUP", "PYTHONHOME", "GIT_SSH_COMMAND", "GIT_EXEC_PATH", "ANTHROPIC_BASE_URL"}
+            "PYTHONSTARTUP", "PYTHONHOME", "GIT_SSH_COMMAND", "GIT_EXEC_PATH", "ANTHROPIC_BASE_URL",
+            "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CONFIG_DIR", "SHELLOPTS", "PS4", "SSH_AUTH_SOCK",
+            "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE"}
+# Whole families: git config/dirs/askpass, loader and interpreter hooks, TLS trust stores, config dirs.
+RESERVED_PREFIXES = ("MAXXING_", "GIT_", "LD_", "DYLD_", "PYTHON", "NODE_", "BASH_", "XDG_", "SSL_")
+
+
+def is_reserved(name: str) -> bool:
+    """True for a name an exposed secret must never set (RESERVED, its prefixes, the *_PROXY variables)."""
+    return name in RESERVED or name.startswith(RESERVED_PREFIXES) or name.endswith("_PROXY")
 
 
 class VaultError(ValueError):
@@ -39,7 +48,7 @@ def _vault() -> dict[str, dict]:
 def check_name(name: str) -> None:
     if not NAME_RE.match(name or ""):
         raise VaultError("names use A-Z, 0-9 and _, start with a letter (2-64 characters)", "invalid_name")
-    if name in RESERVED or name.startswith("MAXXING_"):
+    if is_reserved(name):
         raise VaultError(f"{name} is a reserved environment variable", "reserved_name")
 
 
@@ -117,6 +126,6 @@ def exposed_env() -> dict[str, str]:
     """{NAME: value} of the secrets flagged `expose` (never raises)."""
     try:
         return {k: e["value"] for k, e in _vault().items()
-                if e.get("expose") and NAME_RE.match(k) and k not in RESERVED and "\0" not in e["value"]}
+                if e.get("expose") and NAME_RE.match(k) and not is_reserved(k) and "\0" not in e["value"]}
     except Exception:
         return {}
