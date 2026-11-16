@@ -187,3 +187,17 @@ def test_each_way_of_adding_outside_text_turns_the_sandbox_on(client, topic, mx,
     assert cli.main(["agents", "create", "acme/blog/helper2", "--template", "support"]) == 0
     assert agents.load("projects/acme/topics/blog/agents/helper2")["sandbox"] is True
     assert agents.load("projects/acme/topics/blog/agents/helper2")["triggers"]
+
+
+def test_a_request_that_cannot_be_written_says_what_was_applied_and_what_was_not(client, topic, mx, monkeypatch):
+    from maxxing import approval_mcp
+    _on(client); _create(client)
+
+    def full(*a, **k):
+        raise OSError(28, "No space left on device")
+    monkeypatch.setattr(approval_mcp, "write_atomic", full)
+    r = agents.request_change(A, {"name": "Renamed", "domains": ["evil.example.com"]}, session="s1")
+    assert r["applied"] == ["name"] and r["asked"] == [] and r["request"] == "" and r["not_asked"] == ["domains"]
+    assert "No space left" in r["error"] and "domains" in r["error"]
+    a = agents.load(A)
+    assert a["name"] == "Renamed" and "evil.example.com" not in a["domains"]
