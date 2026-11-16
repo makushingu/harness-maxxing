@@ -149,7 +149,7 @@ func TestX11Binary(t *testing.T) {
 		t.Fatalf("stamp: %v %s", err, out)
 	}
 	cmd := exec.Command(bin)
-	cmd.Env = append(os.Environ(), "HARNESS_LINK_CONFIG_DIR="+filepath.Join(tmp, "cfg"), "HARNESS_LINK_NO_AUTOSTART=1")
+	cmd.Env = append(os.Environ(), "HARNESS_LINK_CONFIG_DIR="+filepath.Join(tmp, "cfg"), "HARNESS_LINK_NO_INSTALL=1")
 	if testing.Verbose() {
 		cmd.Stderr = os.Stderr
 	}

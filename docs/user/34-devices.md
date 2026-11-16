@@ -19,13 +19,38 @@ It is off until you turn it on: **Settings -> Features -> Devices** (or **Settin
 
 **Settings -> Devices -> Add a device**, then pick the system:
 
-- **Windows**: open PowerShell and paste the command shown. It downloads Harness Link for this server and starts it.
-- **Mac**: open Terminal and paste the command. The first time, macOS asks for **Accessibility** and **Screen
-  Recording** for Harness Link: allow both in System Settings -> Privacy & Security.
+- **Windows**: open PowerShell and paste the command shown. It installs Harness Link for this server and starts it in
+  that window.
+- **Mac**: open Terminal and paste the command. macOS gives **Screen Recording** and **Accessibility** to the terminal
+  app, not to Harness Link: in System Settings -> Privacy & Security, turn on **Terminal** (or iTerm, Warp...) under
+  both, quit it (cmd+Q), open it again and type `harness-link`. Harness Link says it, and opens the right page, while
+  a permission is missing.
 - **Linux**: paste the command in a terminal. On an X11 desktop Claude can do everything; on Wayland it can only look.
 - **Android**: scan the QR code with the phone's camera, download and install the app from the page, then tap
   **Open in Harness Link**. You can also type the server and the code in the app yourself. The app then asks you to
   turn on its accessibility service: that is how it sees the screen and taps for Claude.
+
+## Harness Link runs only while you let it (computers)
+
+On a computer, Harness Link does nothing in the background and does not start with the computer. It runs in the
+terminal window that started it, and **Claude can use the computer only while that window is open**. The window shows
+what happens, line by line:
+
+```
+14:02:11  Connected to https://ui.example.com as "MacBook".
+14:02:14  Claude is using this computer.
+14:02:15  Screenshot
+14:02:18  Click at 812,440
+14:02:19  Type "dog"
+14:02:19  Press "cmd+l"
+```
+
+- **Ctrl+C** (or closing the window) stops it: the device shows as offline and Claude cannot use it.
+- **Next time**, open a terminal and type `harness-link`. No new code is needed: the device stays paired until you
+  remove it. (After the first install, open a new terminal window for the command to be found.)
+- `harness-link status` shows the pairing and what this computer allows; `harness-link uninstall` removes it all.
+
+The phone app works the same way with its notification: **Pause** there stops Claude until you resume.
 
 The command and the QR code contain a **code** that works once, for 15 minutes. Do not share it. A new code is one
 click away.
@@ -50,8 +75,8 @@ Sessions of an allowed project see the device. An **agent** also needs the devic
 page -> **Devices**). Off is the default, and turning a device on for an agent waits for your OK, like the agent's
 other rights. Turning one off applies at once.
 
-On the device itself, Harness Link can **pause** at any time: Claude cannot see or touch the device until you resume.
-Removing a device (**Remove**) disconnects it, and Harness Link there forgets your server and stops.
+On the device itself you can stop Claude at any time: Ctrl+C in the Harness Link window of a computer, **Pause** on a
+phone. Removing a device (**Remove**) disconnects it, and Harness Link there forgets your server and stops.
 
 ## Watching and taking over
 
@@ -78,7 +103,8 @@ mode ID view|control | access ID --all|--project NAME|--agent PATH | enable | di
 
 ## Limits
 
-- The device must be on, awake and running Harness Link. A computer that sleeps or a phone that locks is offline.
+- The device must be on, awake and running Harness Link (on a computer: a terminal window with `harness-link`). A
+  computer that sleeps or a phone that locks is offline.
 - On a Linux Wayland desktop Claude can only look.
 - Claude sees what is on the screen: it cannot read a window hidden behind another one.
 - One person at a time: while you have the device, Claude waits, and the other way round.

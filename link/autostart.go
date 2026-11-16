@@ -10,7 +10,7 @@ import (
 )
 
 // installPath is where the app lives once installed (where the install script puts it too):
-// Windows %LOCALAPPDATA%\HarnessLink\HarnessLink.exe, macOS / Linux ~/.local/bin/harness-link.
+// Windows %LOCALAPPDATA%\HarnessLink\harness-link.exe, macOS / Linux ~/.local/bin/harness-link.
 // HARNESS_LINK_INSTALL_PATH overrides it (tests).
 func installPath() (string, error) {
 	if p := os.Getenv("HARNESS_LINK_INSTALL_PATH"); p != "" {
@@ -21,7 +21,7 @@ func installPath() (string, error) {
 		if base == "" {
 			return "", errors.New("LOCALAPPDATA is not set")
 		}
-		return filepath.Join(base, "HarnessLink", "HarnessLink.exe"), nil
+		return filepath.Join(base, "HarnessLink", "harness-link.exe"), nil
 	}
 	h, err := os.UserHomeDir()
 	if err != nil {
@@ -49,9 +49,9 @@ func samePath(a, b string) bool {
 	return a == b
 }
 
-// ensureAutostart copies the running binary to installPath (unless it is that copy)
-// and registers the copy to start at login.
-func ensureAutostart() error {
+// ensureInstalled copies the running binary to installPath unless it is that copy, so `harness-link` works
+// from a terminal next time. Nothing starts at login: Harness Link runs only while a terminal runs it.
+func ensureInstalled() error {
 	self, err := selfPath()
 	if err != nil {
 		return err
@@ -60,15 +60,13 @@ func ensureAutostart() error {
 	if err != nil {
 		return err
 	}
-	if !samePath(self, target) {
-		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-			return err
-		}
-		if err := copyExe(self, target); err != nil {
-			return err
-		}
+	if samePath(self, target) {
+		return nil
 	}
-	return registerAutostart(target)
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		return err
+	}
+	return copyExe(self, target)
 }
 
 func copyExe(src, dst string) error {
@@ -99,9 +97,20 @@ func copyExe(src, dst string) error {
 	return nil
 }
 
-// removeAutostart unregisters the login entry and deletes the installed copy (Windows: not while it runs).
-func removeAutostart() error {
+// removeLegacyAutostart deletes the login entry older versions registered (LaunchAgent, HKCU Run,
+// ~/.config/autostart) and, on Windows, the old HarnessLink.exe copy.
+func removeLegacyAutostart() error {
 	err := unregisterAutostart()
+	if e := removeLegacyCopy(); e != nil && err == nil {
+		err = e
+	}
+	return err
+}
+
+// removeInstalled removes the login entry of older versions and deletes the installed copy
+// (Windows: not while it runs).
+func removeInstalled() error {
+	err := removeLegacyAutostart()
 	target, e := installPath()
 	if e != nil {
 		return err
@@ -113,28 +122,4 @@ func removeAutostart() error {
 		err = e
 	}
 	return err
-}
-
-// desktopEntry is the Linux ~/.config/autostart file.
-func desktopEntry(exe string) string {
-	r := strings.NewReplacer(`\`, `\\\\`, `"`, `\\"`, "`", "\\\\`", "$", `\\$`)
-	return "[Desktop Entry]\nType=Application\nName=Harness Link\nComment=Lets Harness Maxxing see and use this computer\n" +
-		"Exec=\"" + r.Replace(exe) + "\"\nTerminal=false\nNoDisplay=true\nX-GNOME-Autostart-enabled=true\n"
-}
-
-// launchAgentPlist is the macOS ~/Library/LaunchAgents file.
-func launchAgentPlist(exe string) string {
-	r := strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", `"`, "&quot;", "'", "&apos;")
-	return `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key><string>com.harnessmaxxing.link</string>
-  <key>ProgramArguments</key><array><string>` + r.Replace(exe) + `</string></array>
-  <key>RunAtLoad</key><true/>
-  <key>KeepAlive</key><false/>
-  <key>ProcessType</key><string>Interactive</string>
-</dict>
-</plist>
-`
 }

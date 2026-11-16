@@ -10,8 +10,9 @@ New:
   Linux computer (one command to paste) or an Android phone (a QR code), accept it, and Claude can look at its
   screen, click, type and open apps, for what only exists there. Per device: **View only** (Claude looks and guides
   you) or **Control**, and which projects and agents may use it. Watch it live, take over at any time and hand it
-  back with a word; Claude asks you for passwords, codes and captchas. Off by default: Settings -> Features ->
-  Devices. [Show me](#show:devices)
+  back with a word; Claude asks you for passwords, codes and captchas. On a computer, Harness Link runs only while
+  you let it: type `harness-link` in a terminal, it shows there what Claude does, and Ctrl+C stops it. Off by
+  default: Settings -> Features -> Devices. [Show me](#show:devices)
 
 Changed:
 - **The HUD is gone.** The floating bar that showed one session over your other apps and shared your screen is

@@ -26,7 +26,7 @@ dir) and never uses the code again. A trailer with another code or server than t
 
 ## Channel
 `GET {server}/api/devices/ws` upgraded to a websocket, header `Authorization: Bearer <token>`.
-401/403 -> token revoked: delete the config, remove autostart, stop (desktop exit code 3, with a message).
+401/403 -> token revoked: delete the config, stop (desktop exit code 3, with a message).
 Any other failure -> reconnect with backoff 1 s, 2 s, 4 s ... 60 s (+ up to 20 % jitter), forever (reset after
 30 s connected). Websocket ping every 30 s. Frames are JSON text, at most 16 MB each way.
 `id` (any JSON value) is chosen by the server and echoed in the reply.
@@ -84,7 +84,7 @@ Requests are run one at a time, in order (input never interleaves). At most 16 m
   "edit","focus"}],"sw","sh"}`; `{"t":"tap_node","id","node"}`, `{"t":"set_text","id","node","text"}`.
   Desktop: `unsupported` in this version.
 - `{"t":"state","busy":bool,"by":"claude"|"human"}` (no reply): Android shows it; desktop only logs it.
-- `{"t":"unpair"}` (no reply): delete the config and the autostart entry, stop (exit code 0).
+- `{"t":"unpair"}` (no reply): delete the config, stop (exit code 0).
 - Any other `t` with an `id` -> `unsupported`; without an `id` -> ignored.
 
 ### Error codes
@@ -106,11 +106,12 @@ Requests are run one at a time, in order (input never interleaves). At most 16 m
 | What | Windows | macOS | Linux |
 |---|---|---|---|
 | config dir | `%APPDATA%\HarnessLink` | `~/Library/Application Support/HarnessLink` | `$XDG_CONFIG_HOME/harness-link` |
-| installed copy | `%LOCALAPPDATA%\HarnessLink\HarnessLink.exe` | `~/.local/bin/harness-link` | `~/.local/bin/harness-link` |
-| autostart | HKCU `...\CurrentVersion\Run` value `HarnessLink` | `~/Library/LaunchAgents/com.harnessmaxxing.link.plist` | `~/.config/autostart/harness-link.desktop` |
+| installed copy (on the user PATH) | `%LOCALAPPDATA%\HarnessLink\harness-link.exe` | `~/.local/bin/harness-link` | `~/.local/bin/harness-link` |
+| login entry of older versions (removed at start) | HKCU `...\CurrentVersion\Run` value `HarnessLink` | `~/Library/LaunchAgents/com.harnessmaxxing.link.plist` | `~/.config/autostart/harness-link.desktop` |
 
 Config dir: `config.json` (0600), `harness-link.log` (1 MB, one rotation), `harness-link.lock` (single instance),
-macOS `asked-screen` / `asked-accessibility` (System Settings opened once). On each start the app copies itself to
-the installed-copy path (unless it runs from there) and registers that copy to start at login.
-`harness-link uninstall` removes the autostart entry, the config dir and the installed copy.
-Environment for tests: `HARNESS_LINK_CONFIG_DIR`, `HARNESS_LINK_INSTALL_PATH`, `HARNESS_LINK_NO_AUTOSTART=1`.
+On each start the app copies itself to the installed-copy path (unless it runs from there) and removes the login entry
+of older versions; it runs only in the foreground of its terminal. The install script puts the installed copy on the
+PATH (`~/.zshrc` / `~/.bashrc` / `~/.bash_profile` / `~/.profile` line, user `Path` on Windows).
+`harness-link uninstall` removes the config dir and the installed copy.
+Environment for tests: `HARNESS_LINK_CONFIG_DIR`, `HARNESS_LINK_INSTALL_PATH`, `HARNESS_LINK_NO_INSTALL=1`.

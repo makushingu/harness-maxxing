@@ -175,24 +175,51 @@ func inputAllowed() bool {
 	return ok
 }
 
-// askOnce opens the System Settings pane of a missing permission, once per installation (marker file in
-// the config dir), after registering the app in that list when macOS allows it.
+// askOnce opens the System Settings pane of a missing permission once per run (each time Harness Link is
+// started while it is missing), after asking macOS to add the terminal app to that list.
 func (b *macBackend) askOnce(what, pane string, request func() bool) {
-	if b.asked[what] {
+	if b.asked[what] || b.dir == "" {
 		return
 	}
 	b.asked[what] = true
-	marker := filepath.Join(b.dir, "asked-"+what)
-	if _, err := os.Stat(marker); err == nil || b.dir == "" {
-		return
-	}
-	_ = os.WriteFile(marker, []byte(time.Now().UTC().Format(time.RFC3339)+"\n"), 0o600)
 	if request != nil {
 		runOnMain(func() { request() })
 	}
 	if err := exec.Command("/usr/bin/open", pane).Run(); err != nil {
 		b.logf("cannot open System Settings: %v", err)
 	}
+}
+
+// terminalApp is the app macOS gives the permissions to: the terminal Harness Link was started from.
+func terminalApp() string {
+	switch os.Getenv("TERM_PROGRAM") {
+	case "Apple_Terminal":
+		return "Terminal"
+	case "iTerm.app":
+		return "iTerm"
+	case "WarpTerminal":
+		return "Warp"
+	case "vscode":
+		return "Visual Studio Code"
+	case "ghostty":
+		return "Ghostty"
+	case "WezTerm":
+		return "WezTerm"
+	case "Hyper":
+		return "Hyper"
+	case "Tabby":
+		return "Tabby"
+	}
+	if os.Getenv("__CFBundleIdentifier") == "com.apple.Terminal" {
+		return "Terminal"
+	}
+	return "your terminal app"
+}
+
+func screenOffText() string {
+	t := terminalApp()
+	return "Screen Recording is off for " + t + ": Claude cannot see the screen. In System Settings > Privacy & " +
+		"Security > Screen Recording, turn on " + t + ", quit " + t + " (cmd+Q), open it again and type harness-link."
 }
 
 func (b *macBackend) Info() backendInfo {
@@ -211,17 +238,26 @@ func (b *macBackend) Info() backendInfo {
 	var notes []string
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if !screenAllowed() {
-		notes = append(notes, "Screen Recording is off for Harness Link: screenshots only show the desktop background. "+
-			"Turn it on in System Settings > Privacy & Security > Screen Recording, then restart Harness Link "+
-			"(log out and back in).")
-		b.askOnce("screen", paneScr, cgRequestScreenCaptureAcc)
+	scr := screenAllowed()
+	t := terminalApp()
+	switch {
+	case !scr && !inf.Input:
+		notes = append(notes, "Screen Recording and Accessibility are off for "+t+": Claude cannot see the screen "+
+			"nor use the mouse or keyboard. In System Settings > Privacy & Security, turn on "+t+" under Screen "+
+			"Recording and under Accessibility, quit "+t+" (cmd+Q), open it again and type harness-link.")
+	case !scr:
+		notes = append(notes, screenOffText())
+	case !inf.Input:
+		notes = append(notes, "Accessibility is off for "+t+": Claude cannot use the mouse or keyboard. In System "+
+			"Settings > Privacy & Security > Accessibility, turn on "+t+", quit "+t+" (cmd+Q), open it again and "+
+			"type harness-link.")
 	}
 	if !inf.Input {
-		notes = append(notes, "Accessibility is off for Harness Link: Claude cannot use the mouse or keyboard. "+
-			"Turn it on in System Settings > Privacy & Security > Accessibility.")
 		inf.Code = "permission"
 		b.askOnce("accessibility", paneAX, cgRequestPostEventAccess)
+	}
+	if !scr {
+		b.askOnce("screen", paneScr, cgRequestScreenCaptureAcc)
 	}
 	inf.Note = strings.Join(notes, " ")
 	return inf
@@ -239,6 +275,14 @@ func (b *macBackend) Capture() (image.Image, error) {
 	if out, err := exec.Command(shotTool, "-x", "-m", "-t", "jpg", name).CombinedOutput(); err != nil {
 		return nil, &opError{"failed", "screencapture: " + strings.TrimSpace(string(out)+" "+err.Error())}
 	}
+	// Without Screen Recording, screencapture can exit 0 and write nothing.
+	if st, err := os.Stat(name); err != nil || st.Size() == 0 {
+		if !screenAllowed() {
+			return nil, &opError{"permission", screenOffText()}
+		}
+		return nil, &opError{"failed", "macOS gave no screenshot (screen locked, or Screen Recording off for " +
+			terminalApp() + ")"}
+	}
 	r, err := os.Open(name)
 	if err != nil {
 		return nil, &opError{"failed", err.Error()}
@@ -246,7 +290,7 @@ func (b *macBackend) Capture() (image.Image, error) {
 	defer r.Close()
 	img, err := jpeg.Decode(r)
 	if err != nil {
-		return nil, &opError{"protected", "no screenshot (screen locked or Screen Recording off?)"}
+		return nil, &opError{"failed", "no screenshot (screen locked or Screen Recording off for " + terminalApp() + "?)"}
 	}
 	return img, nil
 }

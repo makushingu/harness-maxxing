@@ -125,7 +125,7 @@ class Hub:
             caps = [str(x)[:16] for x in (msg.get("caps") or [])[:10] if isinstance(x, str)]
             c.hello = {"v": store._text(msg.get("v"), 32), "os": store._text(msg.get("os"), 16),
                        "arch": store._text(msg.get("arch"), 16), "name": store._text(msg.get("name"), 64),
-                       "caps": caps, "screen": screen, "note": store._text(msg.get("note"), 300)}
+                       "caps": caps, "screen": screen, "note": store._text(msg.get("note"), 1000)}
             await asyncio.to_thread(store.touch, c.id, version=c.hello["v"], arch=c.hello["arch"], caps=caps,
                                     screen=screen, note=c.hello["note"])
             _invalidate()
@@ -189,7 +189,7 @@ class Hub:
         finally:
             c.wait.pop(rid, None)
         if r.get("t") == "err":
-            raise DeviceError(str(r.get("code") or "error")[:40], store._text(r.get("message"), 300))
+            raise DeviceError(str(r.get("code") or "error")[:40], store._text(r.get("message"), 1000))
         return r
 
     # ---- who has it ----

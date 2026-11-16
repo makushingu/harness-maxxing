@@ -16,18 +16,6 @@ func plistPath() (string, error) {
 	return filepath.Join(h, "Library", "LaunchAgents", "com.harnessmaxxing.link.plist"), nil
 }
 
-// registerAutostart writes the LaunchAgent; launchd loads it at the next login (nothing is executed now).
-func registerAutostart(exe string) error {
-	p, err := plistPath()
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
-		return err
-	}
-	return writeFileAtomic(p, []byte(launchAgentPlist(exe)), 0o644)
-}
-
 func unregisterAutostart() error {
 	p, err := plistPath()
 	if err != nil {
@@ -38,3 +26,5 @@ func unregisterAutostart() error {
 	}
 	return nil
 }
+
+func removeLegacyCopy() error { return nil }

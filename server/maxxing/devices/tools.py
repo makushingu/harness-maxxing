@@ -217,8 +217,9 @@ async def call(turn: dict, sid: str, name: str, args: dict, alive: Alive | None 
             ok = True
             return {"content": [_text(f"Waited {s:g} s.")]}
         if not hub().online(did):
-            raise Refused(f"{dev['name']} is offline: Harness Link is not running there or the device is asleep. "
-                          "Tell the person.")
+            how = ("open the Harness Link app on it" if dev.get("os") == "android" else
+                   "open a terminal on it and type harness-link (Harness Link only runs while that window is open)")
+            raise Refused(f"{dev['name']} is offline. Ask the person to {how}, then try again.")
         if hub().paused(did):
             raise DeviceError("paused")
         acts = name not in ("screenshot", "zoom", "ui_tree", "apps")

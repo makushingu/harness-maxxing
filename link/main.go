@@ -20,14 +20,19 @@ import (
 var version = "dev" // set with -ldflags "-X main.version=..."
 
 const usage = `Usage: harness-link [command]
-  (no command)          pair with the server written into this download, or run with the saved pairing
+  (no command)          let Claude use this computer while this terminal window is open (Ctrl+C stops),
+                        printing what it does; pairs first with the server written into this download
   pair SERVER CODE      pair with SERVER (https://...) using a one-time CODE from Harness, then run
   status                print the saved pairing (without the token) and what this computer allows
-  uninstall             remove the pairing, the autostart entry and the installed copy
+  uninstall             remove the pairing, the configuration and the installed copy
   version               print the version
 `
 
-func main() { os.Exit(runMain(func() int { return realMain(os.Args[1:]) })) }
+func main() {
+	code := runMain(func() int { return realMain(os.Args[1:]) })
+	exitPause()
+	os.Exit(code)
+}
 
 func realMain(args []string) int {
 	cmd := ""
@@ -78,7 +83,7 @@ func realMain(args []string) int {
 	}
 	unlock, err := lockInstance(filepath.Join(dir, lockName))
 	if err != nil {
-		fatal("Harness Link is already running on this computer.")
+		fatal("Harness Link is already running in another window on this computer (or an older version started at login: quit it, or log out and back in).")
 		return 1
 	}
 	defer unlock()
@@ -98,20 +103,30 @@ func realMain(args []string) int {
 	defer stop()
 	be := newBackend(dir, logf)
 	defer be.Close()
-	return runAgent(ctx, runOpts{dir: dir, trailer: tr, logf: logf, be: be,
-		autostart: os.Getenv("HARNESS_LINK_NO_AUTOSTART") != "1"})
+	con := stdoutConsole(logf)
+	code := runAgent(ctx, runOpts{dir: dir, trailer: tr, logf: logf, say: con.say, be: be,
+		install: os.Getenv("HARNESS_LINK_NO_INSTALL") != "1" && os.Getenv("HARNESS_LINK_NO_AUTOSTART") != "1"})
+	if ctx.Err() != nil {
+		con.say("Stopped: Claude can no longer use this computer. Type harness-link to start again.")
+	}
+	return code
 }
 
 type runOpts struct {
-	dir       string
-	trailer   *Trailer
-	logf      func(string, ...any)
-	be        backend
-	autostart bool // install / remove autostart entries (off in tests)
+	dir     string
+	trailer *Trailer
+	logf    func(string, ...any)
+	say     func(string, ...any) // live log (defaults to logf)
+	be      backend
+	install bool // copy the app to its install path, remove the login entry of older versions (off in tests)
 }
 
 func runAgent(ctx context.Context, o runOpts) int {
 	logf := o.logf
+	say := o.say
+	if say == nil {
+		say = logf
+	}
 	logf("Harness Link %s starting (%s/%s)", version, runtime.GOOS, runtime.GOARCH)
 	cfg, err := loadConfig(o.dir)
 	if err != nil {
@@ -140,20 +155,21 @@ func runAgent(ctx context.Context, o runOpts) int {
 		fatal("Harness Link is not paired. In Harness Maxxing, open Settings > Devices > Add a device and run the command shown there.")
 		return 2
 	}
-	if o.autostart {
-		if err := ensureAutostart(); err != nil {
-			logf("autostart: %v", err)
+	if o.install {
+		if err := removeLegacyAutostart(); err != nil {
+			logf("old login entry: %v", err)
+		}
+		if err := ensureInstalled(); err != nil {
+			logf("install: %v", err)
 		}
 	}
 
+	say("Harness Link %s. Claude can use this computer while this window is open; press Ctrl+C to stop.", version)
 	a := newAgent(cfg, o.be, logf)
+	a.say = say
 	if fresh {
 		a.onFirst = func() {
-			msg := "Harness Link is connected. Accept this computer in Harness Maxxing (Settings > Devices) so Claude can use it."
-			if n := o.be.Info().Note; n != "" {
-				msg += "\n\n" + n
-			}
-			notify(msg)
+			notify("Accept this computer in Harness Maxxing (Settings > Devices) so Claude can use it.")
 		}
 	}
 	err = a.run(ctx)
@@ -161,13 +177,11 @@ func runAgent(ctx context.Context, o runOpts) int {
 	case errors.Is(err, errRevoked), errors.Is(err, errUnpaired):
 		logf("%v: removing the pairing", err)
 		_ = deleteConfig(o.dir)
-		if o.autostart {
-			_ = removeAutostart()
-		}
 		if errors.Is(err, errRevoked) {
 			fatal("Disconnected from Harness Maxxing: this computer was removed. Add it again from Settings > Devices to reconnect it.")
 			return 3
 		}
+		say("Disconnected: this computer was removed from Harness Maxxing.")
 		return 0
 	default:
 		logf("stopped: %v", err)
@@ -217,8 +231,8 @@ func statusText(dir string) string {
 
 func doUninstall(dir string) int {
 	var problems []string
-	if err := removeAutostart(); err != nil {
-		problems = append(problems, "autostart: "+err.Error())
+	if err := removeInstalled(); err != nil {
+		problems = append(problems, "app: "+err.Error())
 	}
 	if err := deleteConfig(dir); err != nil {
 		problems = append(problems, "config: "+err.Error())
@@ -227,11 +241,11 @@ func doUninstall(dir string) int {
 		problems = append(problems, "files: "+err.Error())
 	}
 	if len(problems) > 0 {
-		cliOutput("Harness Link: pairing and autostart removed; some files are still in use (quit Harness Link, then retry):\n" +
+		cliOutput("Harness Link: pairing removed; some files are still in use (quit Harness Link, then retry):\n" +
 			strings.Join(problems, "\n") + "\n")
 		return 1
 	}
-	cliOutput("Harness Link removed (pairing, autostart, configuration and installed copy).\n")
+	cliOutput("Harness Link removed (pairing, configuration and installed copy).\n")
 	return 0
 }
 
@@ -292,9 +306,6 @@ func openLog(dir string) (func(string, ...any), func()) {
 	var out io.Writer = w
 	if err := w.open(); err != nil {
 		out = io.Discard
-	}
-	if runtime.GOOS != "windows" {
-		out = io.MultiWriter(out, os.Stderr)
 	}
 	l := log.New(out, "", log.LstdFlags)
 	return func(f string, a ...any) { l.Printf(f, a...) }, func() { w.Close() }

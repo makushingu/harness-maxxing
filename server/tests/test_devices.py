@@ -151,9 +151,13 @@ def test_invite_install_download_pair_and_confirm(dv):
     sh = dv.get(f"/api/devices/install/{code}.sh")
     assert sh.status_code == 200 and "~/.local/bin" not in sh.text and '$HOME/.local/bin' in sh.text
     assert f"/api/devices/download/$os-$arch?code={code}" in sh.text and "com.apple.quarantine" in sh.text
-    assert "nohup" in sh.text
+    # runs in the foreground of the terminal (live log), nothing started in the background or at login
+    assert "nohup" not in sh.text and 'exec "$f" </dev/tty' in sh.text
+    assert "LaunchAgents/com.harnessmaxxing.link.plist" in sh.text and "autostart/harness-link.desktop" in sh.text
+    assert subprocess.run(["sh", "-n"], input=sh.text, text=True).returncode == 0
     ps = dv.get(f"/api/devices/install/{code.lower()}.ps1").text
-    assert "LOCALAPPDATA" in ps and "HarnessLink.exe" in ps and f"windows-$arch?code={code}" in ps
+    assert "LOCALAPPDATA" in ps and "harness-link.exe" in ps and f"windows-$arch?code={code}" in ps
+    assert "Start-Process" not in ps and ps.rstrip().endswith("& $exe") and "'Path', 'User'" in ps
     # the desktop app carries its pairing trailer
     d = dv.get(f"/api/devices/download/linux-amd64?code={code}")
     assert d.status_code == 200 and 'filename="harness-link"' in d.headers["content-disposition"]

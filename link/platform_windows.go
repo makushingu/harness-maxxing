@@ -4,16 +4,9 @@ package main
 
 import (
 	"os"
-	"sync"
+	"unsafe"
 
 	"golang.org/x/sys/windows"
-)
-
-const (
-	mbIconError       = 0x10
-	mbIconInformation = 0x40
-	mbSetForeground   = 0x10000
-	mbTopmost         = 0x40000
 )
 
 func lockInstance(path string) (func(), error) {
@@ -30,45 +23,24 @@ func lockInstance(path string) (func(), error) {
 	return func() { f.Close() }, nil
 }
 
-func messageBox(text string, flags uint32) {
-	t, _ := windows.UTF16PtrFromString(text)
-	c, _ := windows.UTF16PtrFromString("Harness Link")
-	windows.MessageBox(0, t, c, flags|mbSetForeground|mbTopmost)
-}
+func cliOutput(s string) { os.Stdout.WriteString(s) }
 
-var (
-	consoleOnce sync.Once
-	consoleOK   bool
-)
+// notify tells the user something in the console.
+func notify(s string) { os.Stdout.WriteString("Harness Link: " + s + "\r\n") }
 
-// attachConsole reuses the console of the parent (cmd.exe / PowerShell) for CLI flags:
-// the binary is built as a GUI app, so it has no console of its own.
-func attachConsole() bool {
-	consoleOnce.Do(func() {
-		proc := windows.NewLazySystemDLL("kernel32.dll").NewProc("AttachConsole")
-		const attachParent = ^uintptr(0) // ATTACH_PARENT_PROCESS
-		if r, _, _ := proc.Call(attachParent); r == 0 {
-			return
-		}
-		f, err := os.OpenFile("CONOUT$", os.O_WRONLY, 0)
-		if err != nil {
-			return
-		}
-		os.Stdout, os.Stderr, consoleOK = f, f, true
-	})
-	return consoleOK
-}
+// fatal reports the reason the app stops.
+func fatal(s string) { os.Stderr.WriteString("Harness Link: " + s + "\r\n") }
 
-func cliOutput(s string) {
-	if attachConsole() {
-		os.Stdout.WriteString("\r\n" + s)
+// exitPause keeps a console window the app opened itself (double-click in Explorer) until Enter is pressed,
+// so its last lines can be read. In PowerShell or cmd the console belongs to the shell: nothing to wait for.
+func exitPause() {
+	proc := windows.NewLazySystemDLL("kernel32.dll").NewProc("GetConsoleProcessList")
+	var ids [4]uint32
+	n, _, _ := proc.Call(uintptr(unsafe.Pointer(&ids[0])), uintptr(len(ids)))
+	if n != 1 {
 		return
 	}
-	messageBox(s, mbIconInformation)
+	os.Stdout.WriteString("\r\nPress Enter to close this window.")
+	var b [1]byte
+	_, _ = os.Stdin.Read(b[:])
 }
-
-// notify shows an information box without blocking the agent.
-func notify(s string) { go messageBox(s, mbIconInformation) }
-
-// fatal shows the reason the agent stops (blocks until closed).
-func fatal(s string) { messageBox(s, mbIconError) }

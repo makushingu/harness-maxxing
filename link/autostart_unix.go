@@ -20,17 +20,6 @@ func desktopPath() (string, error) {
 	return filepath.Join(base, "autostart", "harness-link.desktop"), nil
 }
 
-func registerAutostart(exe string) error {
-	p, err := desktopPath()
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
-		return err
-	}
-	return writeFileAtomic(p, []byte(desktopEntry(exe)), 0o644)
-}
-
 func unregisterAutostart() error {
 	p, err := desktopPath()
 	if err != nil {
@@ -41,3 +30,5 @@ func unregisterAutostart() error {
 	}
 	return nil
 }
+
+func removeLegacyCopy() error { return nil }

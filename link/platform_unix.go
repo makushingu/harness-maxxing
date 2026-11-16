@@ -28,3 +28,5 @@ func notify(s string) { fmt.Fprintln(os.Stdout, "Harness Link: "+s) }
 
 // fatal reports the reason the agent stops.
 func fatal(s string) { fmt.Fprintln(os.Stderr, "Harness Link: "+s) }
+
+func exitPause() {}

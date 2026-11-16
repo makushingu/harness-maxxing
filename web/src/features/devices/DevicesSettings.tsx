@@ -154,6 +154,7 @@ function Row({ d, st, onWatch }: { d: Device; st: DevicesStatus; onWatch: () => 
         <Access d={d} />
       </div>
       {d.mode === 'view' && <p className="pl-6 text-[12px] text-muted-foreground">{t('devices.mode.viewDesc')}</p>}
+      {!d.online && <p className="pl-6 text-[12px] text-muted-foreground">{t(d.os === 'android' ? 'devices.offlineHelp.android' : 'devices.offlineHelp')}</p>}
       {note && <p className="pl-6 text-[12px] text-warning">{t('devices.note', { note })}</p>}
       {outdated && <p className="pl-6 text-[12px] text-muted-foreground">{t('devices.outdated', { version: st.latest })}</p>}
       <Rename d={d} open={renaming} onOpenChange={setRenaming} />
@@ -318,6 +319,7 @@ function AddDevice({ open, onOpenChange, st }: { open: boolean; onOpenChange: (v
               <code className="min-w-0 flex-1 break-all">{tab === 'windows' ? inv.commands.ps1 : inv.commands.sh}</code>
               <CopyButton text={tab === 'windows' ? inv.commands.ps1 : inv.commands.sh} />
             </div>
+            <p className="text-muted-foreground">{t('devices.add.after')}</p>
             {tab === 'darwin' && <p className="text-muted-foreground">{t('devices.add.macHelp')}</p>}
           </div>
         )}

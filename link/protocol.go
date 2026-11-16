@@ -85,6 +85,9 @@ func (a *agent) serve(r request) map[string]any {
 		}
 		return m
 	}
+	if d := describe(r); d != "" {
+		a.say("%s", d)
+	}
 	var err error
 	switch r.T {
 	case "shot":
@@ -108,7 +111,6 @@ func (a *agent) serve(r request) map[string]any {
 		}
 	case "open":
 		if err = openApp(a.be, r.App); err == nil {
-			a.logf("opened app %q", r.App)
 			return ok()
 		}
 	case "tree", "tap_node", "set_text":
@@ -118,6 +120,12 @@ func (a *agent) serve(r request) map[string]any {
 	}
 	if err != nil {
 		a.logf("%s %s failed: %v", r.T, r.A, err)
+		msg := err.Error()
+		var oe *opError
+		if errors.As(err, &oe) {
+			msg = oe.Message
+		}
+		a.say("  refused: %s", shortErr(errors.New(msg)))
 	}
 	return errReply(r.ID, err)
 }

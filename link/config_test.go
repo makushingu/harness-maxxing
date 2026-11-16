@@ -135,13 +135,26 @@ func TestLogRotation(t *testing.T) {
 	}
 }
 
-func TestAutostartFiles(t *testing.T) {
-	d := desktopEntry(`/home/a b/"x"$y/harness-link`)
-	if !strings.Contains(d, `Exec="/home/a b/\\"x\\"\\$y/harness-link"`) {
-		t.Fatalf("desktop entry: %s", d)
+func TestLegacyAutostartRemoved(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("linux layout")
 	}
-	p := launchAgentPlist(`/Users/a&b/.local/bin/harness-link`)
-	if !strings.Contains(p, "<string>/Users/a&amp;b/.local/bin/harness-link</string>") || !strings.Contains(p, "com.harnessmaxxing.link") {
-		t.Fatalf("plist: %s", p)
+	cfg := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", cfg)
+	p := filepath.Join(cfg, "autostart", "harness-link.desktop")
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte("[Desktop Entry]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := removeLegacyAutostart(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(p); !os.IsNotExist(err) {
+		t.Fatalf("login entry still there: %v", err)
+	}
+	if err := removeLegacyAutostart(); err != nil { // nothing to remove: no error
+		t.Fatal(err)
 	}
 }

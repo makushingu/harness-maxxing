@@ -143,7 +143,11 @@ type agent struct {
 	cfg     *Config
 	be      backend
 	logf    func(string, ...any)
-	onFirst func() // called once after the first successful connection
+	say     func(string, ...any) // live log in the terminal (defaults to logf)
+	onFirst func()               // called once after the first successful connection
+
+	online bool   // the live log tells only the changes of the connection
+	busyBy string // who has the device, from the last "state" frame
 
 	connMu    sync.Mutex
 	conn      *websocket.Conn
@@ -154,7 +158,7 @@ type agent struct {
 }
 
 func newAgent(cfg *Config, be backend, logf func(string, ...any)) *agent {
-	return &agent{cfg: cfg, be: be, logf: logf, reqs: make(chan request, maxQueue)}
+	return &agent{cfg: cfg, be: be, logf: logf, say: logf, reqs: make(chan request, maxQueue)}
 }
 
 // deviceName is the name shown in Harness (the host name).
@@ -185,6 +189,10 @@ func (a *agent) run(ctx context.Context) error {
 		d := backoff(n)
 		n++
 		a.logf("control link down (%v); retry in %s", err, d.Round(100*time.Millisecond))
+		if a.online || n == 1 {
+			a.say("Cannot reach Harness Maxxing (%s); retrying...", shortErr(err))
+		}
+		a.online = false
 		t := time.NewTimer(d)
 		select {
 		case <-ctx.Done():
@@ -221,7 +229,7 @@ func (a *agent) sendHello(conn *websocket.Conn, force bool) error {
 		return nil
 	}
 	if note, _ := h["note"].(string); note != "" {
-		a.logf("note: %s", note)
+		a.say("%s", note)
 	}
 	return a.write(conn, h)
 }
@@ -258,6 +266,10 @@ func (a *agent) session(ctx context.Context) (err error) {
 		return err
 	}
 	a.logf("connected to %s", a.cfg.Server)
+	if !a.online {
+		a.say("Connected to %s as %q.", a.cfg.Server, deviceName())
+	}
+	a.online = true
 	a.firstOnce.Do(func() {
 		if a.onFirst != nil {
 			go safely(a.logf, "first-connect", a.onFirst)
@@ -353,6 +365,21 @@ func (a *agent) handle(r request) bool {
 		return true
 	case "state":
 		a.logf("state: busy=%v by=%s", r.Busy != nil && *r.Busy, r.By)
+		by := r.By
+		if r.Busy == nil || !*r.Busy {
+			by = ""
+		}
+		if by != a.busyBy {
+			switch by {
+			case "claude":
+				a.say("Claude is using this computer.")
+			case "human":
+				a.say("Someone took over from Harness Maxxing: Claude waits.")
+			default:
+				a.say("Claude is not using this computer right now.")
+			}
+			a.busyBy = by
+		}
 	case "shot", "input", "apps", "open", "tree", "tap_node", "set_text":
 		if len(r.ID) == 0 {
 			a.logf("%s without id ignored", r.T)

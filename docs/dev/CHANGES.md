@@ -18,6 +18,11 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   from `server/maxxing/link.json` (GitHub release `link-v<version>`, sha256 checked, cached) or
   `MAXXING_LINK_BIN_DIR`. State `<state>/devices/devices.json` (sha256 of tokens), `actions.jsonl` (typed text kept
   as its length only).
+- Harness Link desktop runs only in the foreground of a terminal (no login entry; older ones removed at start and by
+  the install script, which now `exec`s the app on `/dev/tty` and adds `~/.local/bin` / the user `Path`), with a live
+  log (`link/console.go`). Windows binaries are console apps named `harness-link-windows-<arch>.exe`, installed as
+  `harness-link.exe`. macOS permissions are named after the terminal app (`TERM_PROGRAM`); an empty `screencapture`
+  output is a `permission` error. Hello `note` and device error messages kept up to 1000 characters.
 - Turns: `runner.devices_args()` adds the stdio MCP `harness-devices` (`maxxing/devices_mcp.py`, stdlib) only when the
   turn sees a device (`devices.visible()`: device `scope` `["*"]` / `project:<p>` / `agent:<path>`, and for an agent
   its `agent.json` `devices` list; a free agent also sees `agent:<its path>`). It relays to the loopback-only

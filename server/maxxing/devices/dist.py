@@ -23,10 +23,10 @@ TRAILER_MAGIC = b"HMLINK01"
 TARGETS = {                                           # download target -> file name in the release
     "linux-amd64": "harness-link-linux-amd64", "linux-arm64": "harness-link-linux-arm64",
     "darwin-amd64": "harness-link-darwin-amd64", "darwin-arm64": "harness-link-darwin-arm64",
-    "windows-amd64": "HarnessLink-windows-amd64.exe", "windows-arm64": "HarnessLink-windows-arm64.exe",
+    "windows-amd64": "harness-link-windows-amd64.exe", "windows-arm64": "harness-link-windows-arm64.exe",
     "android": "harness-link.apk",
 }
-SAVE_AS = {"linux": "harness-link", "darwin": "harness-link", "windows": "HarnessLink.exe", "android": "harness-link.apk"}
+SAVE_AS = {"linux": "harness-link", "darwin": "harness-link", "windows": "harness-link.exe", "android": "harness-link.apk"}
 _download_lock = threading.Lock()
 
 
@@ -108,32 +108,59 @@ def personalised(target: str, code: str, server_url: str) -> tuple[str, Path, by
 
 
 def install_script(kind: str, code: str, server_url: str) -> str:
-    """The script the pasted command (`commands()`) runs: download the app (with its pairing trailer), start it."""
+    """The script the pasted command (`commands()`) runs: stop and unregister an older copy, download the app (with
+    its pairing trailer), put it on the PATH, then run it in the foreground of the same terminal (live log; it
+    stops with the window). Nothing starts at login."""
     store.invite(code)
     c = store.normalize_code(code)
     base = f"{server_url}/api/devices/download"
     if kind == "ps1":
         return ("$ErrorActionPreference = 'Stop'\n"
+                "$ProgressPreference = 'SilentlyContinue'\n"
                 "$arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'amd64' }\n"
                 "$dir = Join-Path $env:LOCALAPPDATA 'HarnessLink'\n"
                 "New-Item -ItemType Directory -Force -Path $dir | Out-Null\n"
-                "$exe = Join-Path $dir 'HarnessLink.exe'\n"
-                "Get-Process -Name HarnessLink -ErrorAction SilentlyContinue | Stop-Process -Force\n"
+                "$exe = Join-Path $dir 'harness-link.exe'\n"
+                "Get-Process -Name harness-link, HarnessLink -ErrorAction SilentlyContinue | Stop-Process -Force\n"
+                "Remove-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run' "
+                "-Name HarnessLink -ErrorAction SilentlyContinue\n"
                 "Start-Sleep -Milliseconds 500\n"
                 f"Invoke-WebRequest -UseBasicParsing -Uri \"{base}/windows-$arch?code={c}\" -OutFile $exe\n"
-                "Start-Process -FilePath $exe\n"
-                "Write-Host 'Harness Link started. Accept this computer in Harness Maxxing (Settings -> Devices).'\n")
+                "$p = [Environment]::GetEnvironmentVariable('Path', 'User'); if (-not $p) { $p = '' }\n"
+                "if (-not (($p -split ';') -contains $dir)) {\n"
+                "  [Environment]::SetEnvironmentVariable('Path', ($p.TrimEnd(';') + ';' + $dir).TrimStart(';'), 'User')\n"
+                "  $env:Path = $env:Path.TrimEnd(';') + ';' + $dir\n"
+                "}\n"
+                "Write-Host 'Harness Link is installed. From now on, type harness-link in PowerShell whenever you want "
+                "Claude to use this computer.'\n"
+                "& $exe\n")
     return ("#!/bin/sh\nset -e\n"
             'case "$(uname -s)" in Linux) os=linux ;; Darwin) os=darwin ;; '
             '*) echo "Harness Link: this system is not supported" >&2; exit 1 ;; esac\n'
             'case "$(uname -m)" in x86_64|amd64) arch=amd64 ;; arm64|aarch64) arch=arm64 ;; '
             '*) echo "Harness Link: this processor is not supported" >&2; exit 1 ;; esac\n'
             'dir="$HOME/.local/bin"; mkdir -p "$dir"; f="$dir/harness-link"\n'
+            '# older versions started at login: stop them and remove their login entry\n'
+            'pkill -x harness-link 2>/dev/null || true\n'
+            '[ "$os" = darwin ] && launchctl remove com.harnessmaxxing.link 2>/dev/null || true\n'
+            'rm -f "$HOME/Library/LaunchAgents/com.harnessmaxxing.link.plist" '
+            '"${XDG_CONFIG_HOME:-$HOME/.config}/autostart/harness-link.desktop"\n'
             f'curl -fsSL "{base}/$os-$arch?code={c}" -o "$f.tmp"\n'
             'chmod 755 "$f.tmp" && mv -f "$f.tmp" "$f"\n'
             '[ "$os" = darwin ] && xattr -d com.apple.quarantine "$f" 2>/dev/null || true\n'
-            'nohup "$f" >/dev/null 2>&1 &\n'
-            "echo 'Harness Link started. Accept this computer in Harness Maxxing (Settings -> Devices).'\n")
+            'new=\n'
+            'case ":$PATH:" in *":$dir:"*) ;; *)\n'
+            '  case "${SHELL##*/}" in zsh) rc="$HOME/.zshrc" ;; '
+            'bash) if [ "$os" = darwin ]; then rc="$HOME/.bash_profile"; else rc="$HOME/.bashrc"; fi ;; '
+            '*) rc="$HOME/.profile" ;; esac\n'
+            '  if ! grep -qs "Harness Link" "$rc"; then\n'
+            '    printf \'\\n# Harness Link\\nexport PATH="$HOME/.local/bin:$PATH"\\n\' >> "$rc"\n'
+            '  fi\n'
+            '  new=" (in a new terminal window)" ;;\n'
+            'esac\n'
+            'echo "Harness Link is installed. From now on, type harness-link in a terminal$new whenever you want '
+            'Claude to use this computer."\n'
+            'if (exec </dev/tty) 2>/dev/null; then exec "$f" </dev/tty; else exec "$f"; fi\n')
 
 
 def commands(server_url: str, code: str) -> dict:
