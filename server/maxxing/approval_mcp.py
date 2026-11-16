@@ -67,8 +67,14 @@ def read(f: Path) -> dict | None:
     return d if isinstance(d, dict) else None
 
 
+def _shown(s: str) -> str:
+    """A lone surrogate (from an escaped \\ud800 in the JSON) cannot be served by the API: shown as U+FFFD."""
+    return s if s.isascii() else "".join("\ufffd" if "\ud800" <= c <= "\udfff" else c for c in s)
+
+
 def clip(v: Any, budget: list[int] | None = None, depth: int = 0) -> Any:
-    """The tool input for display: long strings cut, deep or huge structures summarised."""
+    """The tool input for display: long strings cut, deep or huge structures summarised, lone surrogates replaced
+    (then the request differs from the input: it can only be denied)."""
     budget = budget if budget is not None else [INPUT_MAX]
     if budget[0] <= 0:
         return "..."
@@ -76,17 +82,17 @@ def clip(v: Any, budget: list[int] | None = None, depth: int = 0) -> Any:
         s = v if len(v) <= STR_MAX else v[:STR_MAX] + f"... [{len(v) - STR_MAX} more characters]"
         s = s[:max(budget[0], 3)]
         budget[0] -= len(s)
-        return s
+        return _shown(s)
     if isinstance(v, (int, float, bool)) or v is None:
         budget[0] -= 8
         return v
     if depth >= 6:
         return "..."
     if isinstance(v, dict):
-        return {str(k)[:200]: clip(x, budget, depth + 1) for k, x in list(v.items())[:100]}
+        return {_shown(str(k)[:200]): clip(x, budget, depth + 1) for k, x in list(v.items())[:100]}
     if isinstance(v, (list, tuple)):
         return [clip(x, budget, depth + 1) for x in list(v)[:100]]
-    return str(v)[:200]
+    return _shown(str(v)[:200])
 
 
 def expire(folder: Path, session: str | None = None, ids: set[str] | None = None, reason: str = "expired") -> int:
@@ -157,7 +163,8 @@ def ask(args: dict, poll_s: float = POLL_S, ctx: dict | None = None) -> dict:
     """One permission prompt: write the request, wait for the answer, return Claude Code's expected object.
     ctx: {folder, session, agent_path, timeout} when the caller is not this MCP server (the runner answering Claude
     Code's own `can_use_tool` requests), else the environment."""
-    tool = str(args.get("tool_name") or "")[:200] or "?"
+    raw_tool = str(args.get("tool_name") or "")[:200] or "?"
+    tool = _shown(raw_tool)
     tool_input = args.get("input") if isinstance(args.get("input"), dict) else {}
     if ctx:
         folder, timeout = Path(ctx["folder"]), float(ctx["timeout"])
@@ -169,9 +176,9 @@ def ask(args: dict, poll_s: float = POLL_S, ctx: dict | None = None) -> dict:
     req = {"id": rid, "session": (ctx or {}).get("session") or os.environ.get("MAXXING_SESSION") or "",
            "agent_path": (ctx or {}).get("agent_path") if ctx else os.environ.get("MAXXING_AGENT_PATH") or "",
            "tool": tool, "input": clip(tool_input),
-           "tool_use_id": str(args.get("tool_use_id") or "")[:200], "at": now, "expires": now + timeout,
+           "tool_use_id": _shown(str(args.get("tool_use_id") or "")[:200]), "at": now, "expires": now + timeout,
            "status": "pending"}
-    if req["input"] != tool_input:          # what Allow would run is not all shown: it can only be denied
+    if req["input"] != tool_input or tool != raw_tool:   # what Allow would run is not all shown: it can only be denied
         req["clipped"] = True
     f = folder / f"{rid}.json"
     with _mine_lock:
