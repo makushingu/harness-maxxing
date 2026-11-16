@@ -691,6 +691,24 @@ def test_files_nested_too_deep_read_as_damaged_not_a_crash(org):
     assert e.value.code == "damaged_jobs"
 
 
+def test_a_schedule_that_is_not_text_blocks_nothing(org, capsys):
+    """"schedule": 5 or ["x"] written by hand: that job is skipped, the others are still created, synced, listed."""
+    from maxxing import cmd_cron
+    a = crons.create_job({"name": "A", "schedule": "0 5 * * *", "command": "echo a"})
+    b = crons.create_job({"name": "B", "schedule": "0 6 * * *", "command": "echo b"})
+    d = json.loads(crons.jobs_path().read_text())
+    for j in d["jobs"]:
+        j["schedule"] = 5 if j["id"] == a["id"] else ["x"] if j["id"] == b["id"] else j["schedule"]
+    crons.jobs_path().write_text(json.dumps(d))
+    c = crons.create_job({"name": "C", "schedule": "0 7 * * *", "command": "echo c"})
+    crons.delete_job(c["id"])
+    crons.sync_crontab()
+    with pytest.raises(crons.CronError):
+        crons.job_is_due(crons.get_job(a["id"]))
+    assert cmd_cron._handler(types.SimpleNamespace(cron_cmd="list", json=False)) == 0
+    assert a["id"] in capsys.readouterr().out
+
+
 def test_deleted_lists_even_with_a_bad_date(org, capsys):
     """deleted.jsonl is only a file: a date that is not a number (or out of range) does not break the list."""
     from maxxing import cmd_cron

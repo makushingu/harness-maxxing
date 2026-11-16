@@ -128,7 +128,7 @@ def _handler(a) -> int:
             ("ok" if last["ok"] else f"failed ({last['code']})") + " "
             + _stamp(last["at"], zone))
         state = "on " if j["enabled"] else "off"
-        when = j["schedule"]
+        when = str(j["schedule"])
         if crons.is_once(j):
             state = "done" if j.get("done_at") else state
             when = "once"
