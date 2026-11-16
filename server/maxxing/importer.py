@@ -185,11 +185,17 @@ def _entries(zf: zipfile.ZipFile) -> tuple[list[tuple[zipfile.ZipInfo, PurePosix
         ok.append((i, p))
     # the export folder at the top ("harness-maxxing-export/...") is stripped, and the folders above it when
     # the zip was made from higher up ("out/harness-maxxing-export/...")
+    # (how many in one pass, then each path cut once: a zip nested 1000 deep cost files x depth^2 before)
+    k = 0
     while ok:
-        tops = {p.parts[0] for _, p in ok if len(p.parts) > 1} | {"" for _, p in ok if len(p.parts) == 1}
-        if len(tops) != 1 or "" in tops or next(iter(tops)) in ("projects", "skills"):
+        first = ok[0][1].parts
+        if len(first) <= k + 1 or first[k] in ("projects", "skills"):
             break
-        ok = [(i, PurePosixPath(*p.parts[1:])) for i, p in ok]
+        if any(len(p.parts) <= k + 1 or p.parts[k] != first[k] for _, p in ok):
+            break
+        k += 1
+    if k:
+        ok = [(i, PurePosixPath(*p.parts[k:])) for i, p in ok]
     return ok, skipped
 
 

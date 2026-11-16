@@ -87,13 +87,17 @@ PROBE_OUT_MAX = 8 * 1024 * 1024
 _PROBE_LISTS = ("sites", "databases", "buckets", "containers", "listeners")
 
 
+def _no_constant(name: str) -> object:
+    raise ValueError(f"{name} is not JSON")
+
+
 def _probe_json(out: str, bad: str) -> dict:
     """A probe's answer as build() reads it: an object whose lists hold objects, else an error for that server only
     (a remote server prints what it likes: `[1]` once stopped the refresh of every server)."""
     if len(out) > PROBE_OUT_MAX:
         return {"error": "the probe answer is too large"}
     try:
-        p = json.loads(out)
+        p = json.loads(out, parse_constant=_no_constant)   # NaN / Infinity: GET /api/infra could not answer (500)
     except (ValueError, RecursionError):
         return {"error": bad}
     if not isinstance(p, dict):

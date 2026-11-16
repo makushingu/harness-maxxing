@@ -174,6 +174,8 @@ def _parse_field(text: str, lo: int, hi: int, names: list[str] | None, what: str
 
 def parse(expr: str) -> CronExpr:
     """Parse a cron expression; raises CronError with a readable message."""
+    if expr is not None and not isinstance(expr, str):     # a jobs.json edited by hand: "schedule": 5
+        raise CronError("the schedule must be text")
     src = " ".join((expr or "").split())
     if not src:
         raise CronError("empty schedule")
@@ -431,7 +433,7 @@ def _read_raw() -> list[dict] | None:
             data = json.load(f)
     except FileNotFoundError:
         return []
-    except (OSError, ValueError):
+    except (OSError, ValueError, RecursionError):        # RecursionError: nested too deep (damaged as well)
         return None
     jobs = data.get("jobs", []) if isinstance(data, dict) else None
     if not isinstance(jobs, list):
@@ -779,7 +781,7 @@ def _all_runs() -> list[dict]:
     for line in lines:
         try:
             r = json.loads(line)
-        except ValueError:
+        except (ValueError, RecursionError):
             continue
         if isinstance(r, dict):
             runs.append(r)

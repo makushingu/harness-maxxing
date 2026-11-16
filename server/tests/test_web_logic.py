@@ -47,6 +47,15 @@ def test_the_default_one_time_date_is_a_whole_hour_in_the_configured_zone(tmp_pa
                    ["2026-11-14T12:00", "2026-11-14T12:00"]]
 
 
+def test_a_zone_the_browser_refuses_falls_back_instead_of_throwing(tmp_path):
+    t = 1794816000                                         # 2026-11-16T08:00:00Z
+    out = _run_ts(tmp_path, SCHEDULE, f"return [m.inputInZone({t}, 'Factory'), m.defaultOnceAt('Factory', {t})]")
+    assert out == ["2026-11-16T08:00", "2026-11-16T09:00"]
+    out = _run_ts(tmp_path, WEB / "lib" / "format.ts", f"return [m.fmtDate({t}, 'en', 'Factory', {{timeZone: 'Factory'}}) !== '',"
+                  f" m.fmtDate({t}, 'en', 'UTC', {{dateStyle: 'short', timeStyle: 'short'}})]")
+    assert out == [True, "11/16/26, 8:00 AM"]
+
+
 def test_a_task_whose_project_is_gone_is_listed_where_it_is_counted(tmp_path):
     out = _run_ts(tmp_path, WEB / "features" / "tasks" / "model.ts", """
         const task = (id, project_id) => ({ id, title: id, notes: '', status: 'todo', priority: 0, project_id, labels: [], due: null })
@@ -160,3 +169,59 @@ def test_a_long_code_block_is_shown_without_colours_and_markdown_sooner(tmp_path
     assert out == [False, False, True, False, True, True]
     src = (WEB / "components" / "ui" / "markdown.tsx").read_text(encoding="utf-8")
     assert re.search(r"if \(!canHighlight\(lang, text\.length\)\) continue\s+code\.children = ll\.highlight\(lang, text\)", src)
+
+
+def _html_to_text(tmp_path: Path, tree: str, body: str):
+    """Run htmlToText (plainText.ts imports remark: only its HTML part is taken) on a small fake DOM built by `tree`
+    (node has no DOMParser), then `body` (`run()` gives the text)."""
+    src = (WEB / "features" / "files" / "plainText.ts").read_text(encoding="utf-8")
+    part = src[src.index("const HTML_SKIP"):src.index("/** Cells separated by tabs")]
+    dom = """
+class T { constructor(v) { this.nodeType = 3; this.nodeValue = v; this.childNodes = [] } }
+class E {
+  constructor(tag, attrs, kids) {
+    this.nodeType = 1; this.tagName = tag.toUpperCase(); this.attrs = attrs; this.childNodes = []; this.parentElement = null
+    for (const k of kids) this.add(typeof k === 'string' ? new T(k) : k)
+  }
+  add(k) { if (k.nodeType === 1) { k.parentElement = this; k.previousElementSibling = this.last ?? null; this.last = k } this.childNodes.push(k) }
+  getAttribute(a) { return this.attrs[a] ?? null }
+  closest(sel) { for (let e = this; e; e = e.parentElement) if (e.tagName === sel.toUpperCase()) return e; return null }
+}
+const h = (tag, attrs, ...kids) => new E(tag, attrs, kids)
+let BODY
+globalThis.DOMParser = class { parseFromString() { return { body: BODY } } }
+const edges = (s: string) => s.replace(/^\\n+|\\s+$/g, '')
+"""
+    (tmp_path / "main.ts").write_text(dom + part + f"\nBODY = (() => {{ {tree} }})()\nconst run = () => htmlToText('')\n"
+                                      f"console.log(JSON.stringify((() => {{ {body} }})()))\n", encoding="utf-8")
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node not installed")
+    r = subprocess.run([node, "--experimental-strip-types", "--no-warnings", "main.ts"], cwd=tmp_path,
+                       capture_output=True, text=True, timeout=120)
+    if r.returncode and ("strip-types" in r.stderr or "Unknown file extension" in r.stderr):
+        pytest.skip("this node cannot strip types")
+    assert r.returncode == 0, r.stderr
+    return json.loads(r.stdout)
+
+
+def test_html_to_text_keeps_its_layout(tmp_path):
+    tree = """return h('body', {}, h('h1', {}, 'Title '), h('p', {}, 'one  ', h('b', {}, 'two'), h('br', {}), 'three'),
+      h('ul', {}, h('li', {}, 'a'), h('li', {}, 'b', h('ol', { start: '3' }, h('li', {}, 'x'), h('li', {}, 'y')))),
+      h('table', {}, h('tr', {}, h('td', {}, 'c1'), h('td', {}, 'c2')), h('tr', {}, h('td', {}, 'd1'), h('td', {}, 'd2'))),
+      h('pre', {}, '  code\\n  more'), h('div', {}, h('img', { alt: 'pic' }), ' end'))"""
+    assert _html_to_text(tmp_path, tree, "return run()") == (
+        "Title\n\none two\nthree\n\n- a\n- b\n  3. x\n  4. y\n\nc1\tc2\nd1\td2\n\n  code\n  more\n\npic end")
+
+
+def test_html_to_text_of_a_long_page_takes_linear_time(tmp_path):
+    """40 000 paragraphs (870 KB of HTML), 40 000 list items, a table of 40 000 cells: each took 10 to 90 s before
+    (regexes and replaces over the whole text at each block, list numbers counted from the first item each time)."""
+    tree = """const ps = []; for (let i = 0; i < 40000; i++) ps.push(h('p', {}, `paragraph ${i}`))
+      const lis = []; for (let i = 0; i < 40000; i++) lis.push(h('li', {}, `item ${i}`))
+      const trs = []; for (let i = 0; i < 4000; i++) { const tds = []; for (let j = 0; j < 10; j++) tds.push(h('td', {}, `v${i}-${j}`)); trs.push(h('tr', {}, ...tds)) }
+      return h('body', {}, ...ps, h('ol', {}, ...lis), h('table', {}, ...trs))"""
+    out = _html_to_text(tmp_path, tree, """const t0 = performance.now(); const s = run()
+      return [Math.round(performance.now() - t0), s.split('\\n').length, s.endsWith('v3999-8\\tv3999-9'), s.includes('\\n40000. item 39999\\n')]""")
+    assert out[1:] == [40000 * 2 + 1 + 40000 + 1 + 4000 - 1, True, True]
+    assert out[0] < 10_000, out

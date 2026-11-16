@@ -349,3 +349,26 @@ def test_status_names_the_port_when_the_address_is_on_no_interface(mx, monkeypat
     assert run_cli("proxy", "status") == 0
     out = capsys.readouterr().out
     assert ":8790)" in out and "{addr" not in out
+
+
+def test_status_is_not_fooled_by_another_program_on_the_port(mx, monkeypatch, capsys):
+    other = socket.socket()
+    other.bind(("127.0.0.1", 0))
+    other.listen()
+    host, port = other.getsockname()
+    try:
+        monkeypatch.setattr(proxylisten, "configured", lambda cfg: (host, port))
+        monkeypatch.setattr(proxylisten, "ufw_missing", lambda h, p: False)
+        proxylisten.note_opened(host, port, error="[Errno 98] Address already in use")
+        assert proxylisten.listening(host, port) is False
+        assert run_cli("proxy", "status") == 0
+        assert "NOT opened by the server at its start: [Errno 98] Address already in use" in capsys.readouterr().out
+        assert run_cli("proxy", "status", "--json") == 0
+        info = json.loads(capsys.readouterr().out)
+        assert info["listening"] is False and "Address already in use" in info["error"]
+        proxylisten.note_opened(host, port)                           # opened at the next start
+        assert proxylisten.listening(host, port) is True
+        proxylisten.note_opened(host, port + 1, error="x")            # a record for another address says nothing here
+        assert proxylisten.listening(host, port) is True
+    finally:
+        other.close()

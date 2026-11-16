@@ -99,14 +99,27 @@ const HTML_LINE = new Set([
 /** The text of an HTML page or fragment, read without running or loading anything of it. */
 export function htmlToText(html: string): string {
   const doc = new DOMParser().parseFromString(html, 'text/html')
+  // the text so far = done.join('') + out: the tests and trims below only ever read `out`, a short end that starts
+  // with a word or a new line (a regex or a replace over the whole text at each block was quadratic: 87 s for 870 KB)
+  const done: string[] = []
   let out = ''
+  const empty = () => !out && !done.length
+  const settle = () => {
+    if (out.length < 2048) return
+    let c = out.length - 512
+    while (c > 0 && /\s/.test(out[c]) && out[c - 1] !== '\n') c-- // cut before a word or just after a line break
+    if (c <= 0) return
+    done.push(out.slice(0, c))
+    out = out.slice(c)
+  }
   /** At least `n` line breaks at the end (none before the first word, none between a list mark and its text). */
   const brk = (n: number, closing = false) => {
     if (!closing && /(^|\n) *(- |\d+\. )$/.test(out)) return
     out = out.replace(/[ \t]+$/, '')
     const have = /\n*$/.exec(out)![0].length
-    if (out && have < n) out += '\n'.repeat(n - have)
+    if (!empty() && have < n) out += '\n'.repeat(n - have)
   }
+  const items = new Map<Element, number>() // a list -> its items so far (counting the earlier ones each time: n²)
   const walk = (node: Node, pre: boolean) => {
     for (const c of Array.from(node.childNodes)) {
       if (c.nodeType === 3) {
@@ -114,8 +127,9 @@ export function htmlToText(html: string): string {
         if (pre) out += s
         else {
           const t = s.replace(/\s+/g, ' ')
-          out += !out || /\s$/.test(out) ? t.replace(/^ /, '') : t
+          out += empty() || /\s$/.test(out) ? t.replace(/^ /, '') : t
         }
+        settle()
         continue
       }
       if (c.nodeType !== 1) continue
@@ -128,6 +142,7 @@ export function htmlToText(html: string): string {
       }
       if (tag === 'IMG') {
         out += el.getAttribute('alt') ?? ''
+        settle()
         continue
       }
       // a list inside an item starts on the next line, not after an empty one
@@ -137,8 +152,8 @@ export function htmlToText(html: string): string {
         const list = el.parentElement
         for (let up = list?.closest('li'); up; up = up.parentElement?.closest('li')) out += '  ' // a list inside an item
         if (list?.tagName === 'OL') {
-          let i = Number(list.getAttribute('start')) || 1
-          for (let p = el.previousElementSibling; p; p = p.previousElementSibling) if (p.tagName === 'LI') i++
+          const i = (items.get(list) ?? (Number(list.getAttribute('start')) || 1) - 1) + 1
+          items.set(list, i)
           out += `${i}. `
         } else out += '- '
       } else if ((tag === 'TD' || tag === 'TH') && el.previousElementSibling) out = out.replace(/ +$/, '') + '\t'
@@ -147,7 +162,8 @@ export function htmlToText(html: string): string {
     }
   }
   walk(doc.body, false)
-  return edges(out)
+  done.push(out)
+  return edges(done.join(''))
 }
 
 /** Cells separated by tabs, one row a line; several sheets: each under its name. */

@@ -403,3 +403,16 @@ def test_dmarc_parents_stop_at_the_registrable_domain_and_spf_reads_stop_at_the_
     asked.clear()
     mailinfo.dns_facts("ex.com")
     assert "a.net" not in asked and "b.net" not in asked
+
+
+def test_an_include_read_only_in_part_deep_down_is_counted_in_full_higher_up(monkeypatch):
+    """x4 is first reached at the bottom of x1 -> x2 -> x3 -> x4 (its include not followed): its count there is not
+    the one reused when the top record includes it too - the total no longer depends on the order of the includes."""
+    recs = {"x1": "v=spf1 include:x2", "x2": "v=spf1 include:x3", "x3": "v=spf1 include:x4",
+            "x4": "v=spf1 include:t -all", "t": "v=spf1 a a a a a a a a -all"}
+    monkeypatch.setattr(mailinfo, "_txt", lambda c, n: [recs[n]] if n in recs else [])
+
+    def lookups(top: str) -> int:
+        return mailinfo._spf_count(None, top, {"budget": 10, "seen": {}}, ("d",))[0]
+    assert lookups("v=spf1 include:x4 -all") == 10
+    assert lookups("v=spf1 include:x1 include:x4 -all") == lookups("v=spf1 include:x4 include:x1 -all") == 23

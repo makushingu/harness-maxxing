@@ -259,3 +259,21 @@ def test_cli_json_errors_stay_json(mx, tmp_path, capsys):
     assert cli.main(["import", str(bad), "--json"]) == 1
     r = json.loads(capsys.readouterr().out)
     assert r["error"] == "bad_zip" and r["message"]
+
+
+def test_the_folders_at_the_top_are_stripped_in_one_pass(monkeypatch):
+    """Every file under a/a/a/... (300 levels): each path is cut once, not once per level (files x depth^2)."""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        for n in range(40):
+            zf.writestr("a/" * 300 + f"out/harness-maxxing-export/projects/p{n}/CLAUDE.md", "x")
+    made = [0]
+    real = importer.PurePosixPath
+
+    def counted(*a):
+        made[0] += 1
+        return real(*a)
+    monkeypatch.setattr(importer, "PurePosixPath", counted)
+    ok, _ = importer._entries(zipfile.ZipFile(buf))
+    assert sorted(str(p) for _, p in ok)[:2] == ["projects/p0/CLAUDE.md", "projects/p1/CLAUDE.md"]
+    assert made[0] <= 2 * 40                                          # was 40 x 302

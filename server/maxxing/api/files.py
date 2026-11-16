@@ -480,6 +480,9 @@ def _ffmpeg_thumb(src: Path, dest: Path, w: int, video: bool) -> bool | None:
         tmp.unlink(missing_ok=True)
 
 
+PDF_PAGE_MAX_H = 8192                              # px: the height of a rendered page, beyond it the page is cut
+
+
 def _pdf_thumb(src: Path, dest: Path, w: int, page: int = 1, wide: bool = False) -> bool | None:
     """A page of a PDF (the first: its thumbnail) -> WebP (pdftoppm renders it, ffmpeg encodes it); False/None as
     _ffmpeg_thumb. `w` bounds its longer side, or its width with `wide` (a page to read)."""
@@ -489,7 +492,9 @@ def _pdf_thumb(src: Path, dest: Path, w: int, page: int = 1, wide: bool = False)
     with tempfile.TemporaryDirectory(prefix="mx-pdf-") as tmp:
         out = Path(tmp) / "page"
         try:
-            scale = ["-scale-to-x", str(w), "-scale-to-y", "-1"] if wide else ["-scale-to", str(w)]
+            # a page to read is cut at PDF_PAGE_MAX_H px: a 10 x 5000 pt page made a TIFF of 600 MB in /tmp (memory)
+            scale = (["-scale-to-x", str(w), "-scale-to-y", "-1", "-H", str(PDF_PAGE_MAX_H)] if wide
+                     else ["-scale-to", str(w)])
             # an uncompressed TIFF: written at once, when the PNG of a page costs 0.3 s of compression for nothing
             r = subprocess.run([*_nice(), pdftoppm, "-f", str(page), "-l", str(page), "-singlefile", "-tiff", *scale,
                                 str(src), str(out)], capture_output=True, timeout=THUMB_TIMEOUT_S)

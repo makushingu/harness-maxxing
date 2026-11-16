@@ -882,7 +882,8 @@ def _safer_limit(c: float, n: float, k: str) -> bool:
 def request_change(path: str, fields: dict, session: str = "") -> dict:
     """The manager's `maxxing agents set`: everything but the safety settings is applied now, and a safety change
     that only makes it safer (_safer); the others wait for the owner's OK (an approval request of kind agent_change: Allow / Deny in the chat, the feed and Telegram; applied by
-    change_decided). -> {applied: [names], asked: [names], request: id}."""
+    change_decided). -> {applied: [names], asked: [names], request: id}; + {not_asked, error} when the request could
+    not be written (what was applied stays applied)."""
     if not exists(path):
         raise AgentError(404, "not_found", f"Agent {path!r} not found")
     f = {k: v for k, v in (fields or {}).items() if k != "description"}
@@ -932,10 +933,15 @@ def request_change(path: str, fields: dict, session: str = "") -> dict:
     req = {"id": rid, "kind": "agent_change", "session": session, "agent_path": path, "tool": CHANGE_TOOL,
            "input": {"description": text}, "change": delta, "at": now, "expires": now + CHANGE_TTL_S,
            "status": "pending"}
-    approvals.folder().mkdir(parents=True, exist_ok=True, mode=0o700)
-    approval_mcp.write_atomic(approvals.folder() / f"{rid}.json", req)
-    approvals._invalidate()
     asked = sorted([k for k in delta if k != "limits"] + [f"limits.{k}" for k in delta.get("limits") or {}])
+    try:
+        approvals.folder().mkdir(parents=True, exist_ok=True, mode=0o700)
+        approval_mcp.write_atomic(approvals.folder() / f"{rid}.json", req)
+    except OSError as e:                                # disk full...: say what was applied and what was not asked
+        return {"applied": applied, "asked": [], "request": "", "not_asked": asked,
+                "error": f"The owner's OK could not be asked ({e.strerror or e}): not changed: {', '.join(asked)}",
+                **({"sandbox_auto": True} if boxed else {})}
+    approvals._invalidate()
     return {"applied": applied, "asked": asked, "request": rid, **({"sandbox_auto": True} if boxed else {})}
 
 
