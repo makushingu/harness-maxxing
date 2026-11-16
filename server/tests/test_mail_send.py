@@ -429,3 +429,19 @@ def test_an_account_name_with_a_lone_surrogate_is_refused_when_saved():
 def test_an_account_name_saved_with_a_lone_surrogate_is_a_mail_error_when_sending():
     with pytest.raises(MailError):
         send.build({"address": "me@example.com", "name": "Me \ud800"}, {"to": "bob@example.com", "text": "x"})
+
+
+def test_an_agent_mail_queued_keeps_a_decision_made_while_its_notification_was_posted(acc, smtp, monkeypatch):
+    from maxxing import feed
+    monkeypatch.setattr(outbox, "_agent_name", lambda path: "Writer")
+    real = feed.post
+
+    def post(*a, **k):
+        r = store.outbox_list("waiting")[0]                # on the E-mail page since the first write
+        assert store.outbox_claim(r["id"], "sending")      # the owner clicked Send meanwhile
+        return real(*a, **k)
+
+    monkeypatch.setattr(feed, "post", post)
+    q = outbox.queue(acc, "acme/blog/writer", {"to": ["a@x.org"], "subject": "H", "text": "t"}, [], "new")
+    row = store.outbox_get(q["id"])
+    assert row["status"] == "sending" and row["event_id"]
