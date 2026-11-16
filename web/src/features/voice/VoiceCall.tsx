@@ -269,7 +269,7 @@ export function VoiceCall({ sid, callKey, stream, running, queueCount, onSend, o
         <button
           type="button"
           onClick={() => voice.current?.interrupt()}
-          className="flex h-6 min-w-0 items-center gap-1.5 rounded-full px-1.5 text-[12px] font-medium text-primary"
+          className="flex h-6 min-w-0 items-center gap-1.5 rounded-full px-1.5 text-[12px] font-medium text-primary pointer-coarse:h-10"
           aria-label={phase === 'speaking' ? t('vmode.tapSkip') : label}
         >
           <AudioLines className={cn('size-3.5 shrink-0', (phase === 'speaking' || phase === 'thinking' || phase === 'connecting' || running) && 'animate-pulse')} />
