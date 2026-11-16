@@ -104,10 +104,11 @@ func realMain(args []string) int {
 	be := newBackend(dir, logf)
 	defer be.Close()
 	con := stdoutConsole(logf)
-	code := runAgent(ctx, runOpts{dir: dir, trailer: tr, logf: logf, say: con.say, be: be,
+	con.header()
+	code := runAgent(ctx, runOpts{dir: dir, trailer: tr, logf: logf, say: con.emit, be: be,
 		install: os.Getenv("HARNESS_LINK_NO_INSTALL") != "1" && os.Getenv("HARNESS_LINK_NO_AUTOSTART") != "1"})
 	if ctx.Err() != nil {
-		con.say("Stopped: Claude can no longer use this computer. Type harness-link to start again.")
+		con.emit(lErr, "Stopped: Claude can no longer use this computer. Type harness-link to start again.")
 	}
 	return code
 }
@@ -116,7 +117,7 @@ type runOpts struct {
 	dir     string
 	trailer *Trailer
 	logf    func(string, ...any)
-	say     func(string, ...any) // live log (defaults to logf)
+	say     func(lineKind, string) // live log (defaults to logf)
 	be      backend
 	install bool // copy the app to its install path, remove the login entry of older versions (off in tests)
 }
@@ -125,7 +126,7 @@ func runAgent(ctx context.Context, o runOpts) int {
 	logf := o.logf
 	say := o.say
 	if say == nil {
-		say = logf
+		say = logSay(logf)
 	}
 	logf("Harness Link %s starting (%s/%s)", version, runtime.GOOS, runtime.GOARCH)
 	cfg, err := loadConfig(o.dir)
@@ -164,12 +165,12 @@ func runAgent(ctx context.Context, o runOpts) int {
 		}
 	}
 
-	say("Harness Link %s. Claude can use this computer while this window is open; press Ctrl+C to stop.", version)
+	logf("live log started")
 	a := newAgent(cfg, o.be, logf)
 	a.say = say
 	if fresh {
 		a.onFirst = func() {
-			say("Accept this computer in Harness Maxxing (Settings > Devices) so Claude can use it.")
+			say(lWarn, "Accept this computer in Harness Maxxing (Settings > Devices) so Claude can use it")
 		}
 	}
 	err = a.run(ctx)
@@ -181,7 +182,7 @@ func runAgent(ctx context.Context, o runOpts) int {
 			fatal("Disconnected from Harness Maxxing: this computer was removed. Add it again from Settings > Devices to reconnect it.")
 			return 3
 		}
-		say("Disconnected: this computer was removed from Harness Maxxing.")
+		say(lErr, "Disconnected: this computer was removed from Harness Maxxing")
 		return 0
 	default:
 		logf("stopped: %v", err)

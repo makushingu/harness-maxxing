@@ -41,3 +41,17 @@ func exitPause() {
 	var b [1]byte
 	_, _ = os.Stdin.Read(b[:])
 }
+
+// enableANSI turns on the virtual terminal mode of the console (Windows 10 and later), which draws colours and
+// moves the cursor; false on an older console, where the live log stays plain text.
+func enableANSI(f *os.File) bool {
+	h := windows.Handle(f.Fd())
+	var mode uint32
+	if err := windows.GetConsoleMode(h, &mode); err != nil {
+		return false
+	}
+	if mode&windows.ENABLE_VIRTUAL_TERMINAL_PROCESSING != 0 {
+		return true
+	}
+	return windows.SetConsoleMode(h, mode|windows.ENABLE_VIRTUAL_TERMINAL_PROCESSING) == nil
+}

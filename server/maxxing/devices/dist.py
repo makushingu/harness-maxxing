@@ -107,47 +107,114 @@ def personalised(target: str, code: str, server_url: str) -> tuple[str, Path, by
     return SAVE_AS[os_name], f, (b"" if target == "android" else trailer(server_url, code))
 
 
+_SH_STYLE = (
+    "if [ -t 1 ] && [ -z \"${NO_COLOR:-}\" ] && [ \"${TERM:-}\" != dumb ]; then\n"
+    "  A=$(printf '\\033[38;5;141m'); G=$(printf '\\033[38;5;114m'); Y=$(printf '\\033[38;5;221m')\n"
+    "  E=$(printf '\\033[38;5;203m'); D=$(printf '\\033[2m'); B=$(printf '\\033[1m'); R=$(printf '\\033[0m')\n"
+    "else A= G= Y= E= D= B= R=; fi\n"
+    "step() { printf '  %s●%s %s\\n' \"$G\" \"$R\" \"$1\"; }\n"
+    "fail() { printf '\\n  %s■ %s%s\\n\\n' \"$E\" \"$1\" \"$R\" >&2; exit 1; }\n"
+)
+
+
+def install_error_script(kind: str, code: str) -> str:
+    """What the pasted command runs when its code cannot be used (expired, already used, unknown): the reason in
+    plain words instead of a bare HTTP error."""
+    msg = ("This command expired or was already used" if code == "expired" else "This command is not valid") + \
+        ". Add the computer again in Harness Maxxing (Settings > Devices)."
+    if kind == "ps1":
+        return f"Write-Host ''; Write-Host '  ■ {msg}' -ForegroundColor Red; Write-Host ''\n"
+    return "#!/bin/sh\n" + _SH_STYLE + f"fail '{msg}'\n"
+
+
 def install_script(kind: str, code: str, server_url: str) -> str:
-    """The script the pasted command (`commands()`) runs: stop and unregister an older copy, download the app (with
-    its pairing trailer), put it on the PATH, then run it in the foreground of the same terminal (live log; it
-    stops with the window). Nothing starts at login."""
+    """The script the pasted command (`commands()`) runs: stop and unregister an older copy (Harness Link started at
+    login, or the first "Harness PC"), download the app (with its pairing trailer), put it on the PATH, then run it
+    in the foreground of the same terminal (live log; it stops with the window). Nothing starts at login. Each step
+    is printed as one styled line."""
     store.invite(code)
     c = store.normalize_code(code)
     base = f"{server_url}/api/devices/download"
     if kind == "ps1":
         return ("$ErrorActionPreference = 'Stop'\n"
                 "$ProgressPreference = 'SilentlyContinue'\n"
+                "function Step($t) { Write-Host '  ● ' -ForegroundColor Green -NoNewline; Write-Host $t }\n"
+                "function Fail($t) { Write-Host ''; Write-Host ('  ■ ' + $t) -ForegroundColor Red; Write-Host ''; "
+                "return }\n"
+                "Write-Host ''\n"
+                "Write-Host '  ♦ ' -ForegroundColor Magenta -NoNewline; Write-Host 'Harness Link' -NoNewline; "
+                "Write-Host '  install' -ForegroundColor DarkGray\n"
+                "Write-Host ''\n"
                 "$arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'amd64' }\n"
+                "Step (\"Windows · $arch\")\n"
                 "$dir = Join-Path $env:LOCALAPPDATA 'HarnessLink'\n"
                 "New-Item -ItemType Directory -Force -Path $dir | Out-Null\n"
                 "$exe = Join-Path $dir 'harness-link.exe'\n"
-                "Get-Process -Name harness-link, HarnessLink -ErrorAction SilentlyContinue | Stop-Process -Force\n"
-                "Remove-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run' "
-                "-Name HarnessLink -ErrorAction SilentlyContinue\n"
-                "Start-Sleep -Milliseconds 500\n"
-                f"Invoke-WebRequest -UseBasicParsing -Uri \"{base}/windows-$arch?code={c}\" -OutFile $exe\n"
+                "# older versions started at login (Harness Link, then the first Harness PC): stop them, remove the "
+                "entry\n"
+                "$old = Get-Process -Name harness-link, HarnessLink, HarnessPC -ErrorAction SilentlyContinue\n"
+                "if ($old) { $old | Stop-Process -Force; Start-Sleep -Milliseconds 500; Step 'Older version stopped' }\n"
+                "foreach ($n in 'HarnessLink', 'HarnessPC') { Remove-ItemProperty -Path "
+                "'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run' -Name $n -ErrorAction SilentlyContinue }\n"
+                "try {\n"
+                f"  Invoke-WebRequest -UseBasicParsing -Uri \"{base}/windows-$arch?code={c}\" -OutFile \"$exe.tmp\"\n"
+                "  Move-Item -Force \"$exe.tmp\" $exe\n"
+                "} catch {\n"
+                "  Remove-Item -Force \"$exe.tmp\" -ErrorAction SilentlyContinue\n"
+                "  $s = $_.Exception.Response.StatusCode.value__\n"
+                "  if ($s -eq 410 -or $s -eq 400) { Fail 'This command expired or was already used. Add the computer "
+                "again in Harness Maxxing (Settings > Devices).'; return }\n"
+                "  if (Get-Process -Name harness-link -ErrorAction SilentlyContinue) { Fail 'Harness Link is running "
+                "in another window: close it, then paste the command again.'; return }\n"
+                "  Fail ('Download failed: ' + $_.Exception.Message); return\n"
+                "}\n"
+                "$mb = '{0:N1} MB' -f ((Get-Item $exe).Length / 1MB)\n"
+                "Step \"Downloaded ($mb)\"\n"
+                "Step \"Installed in $exe\"\n"
                 "$p = [Environment]::GetEnvironmentVariable('Path', 'User'); if (-not $p) { $p = '' }\n"
                 "if (-not (($p -split ';') -contains $dir)) {\n"
                 "  [Environment]::SetEnvironmentVariable('Path', ($p.TrimEnd(';') + ';' + $dir).TrimStart(';'), 'User')\n"
                 "  $env:Path = $env:Path.TrimEnd(';') + ';' + $dir\n"
+                "  Step 'Added to the PATH'\n"
                 "}\n"
-                "Write-Host 'Harness Link is installed. From now on, type harness-link in PowerShell whenever you want "
-                "Claude to use this computer.'\n"
+                "Write-Host ''\n"
+                "Write-Host '  Done. ' -ForegroundColor Green -NoNewline; Write-Host 'From now on, type ' -NoNewline; "
+                "Write-Host 'harness-link' -ForegroundColor Magenta -NoNewline; "
+                "Write-Host ' in PowerShell whenever you want Claude to use this computer.'\n"
                 "& $exe\n")
-    return ("#!/bin/sh\nset -e\n"
-            'case "$(uname -s)" in Linux) os=linux ;; Darwin) os=darwin ;; '
-            '*) echo "Harness Link: this system is not supported" >&2; exit 1 ;; esac\n'
+    return ("#!/bin/sh\nset -e\n" + _SH_STYLE +
+            'printf \'\\n  %s♦%s %sHarness Link%s  %sinstall%s\\n\\n\' "$A" "$R" "$B" "$R" "$D" "$R"\n'
+            'case "$(uname -s)" in Linux) os=linux; osn=Linux ;; Darwin) os=darwin; osn=macOS ;; '
+            '*) fail "This system is not supported: $(uname -s)" ;; esac\n'
             'case "$(uname -m)" in x86_64|amd64) arch=amd64 ;; arm64|aarch64) arch=arm64 ;; '
-            '*) echo "Harness Link: this processor is not supported" >&2; exit 1 ;; esac\n'
+            '*) fail "This processor is not supported: $(uname -m)" ;; esac\n'
+            'if [ "$os" = darwin ]; then [ "$arch" = arm64 ] && cpu="Apple silicon" || cpu=Intel; '
+            'else cpu=$(uname -m); fi\n'
+            'step "$osn · $cpu"\n'
             'dir="$HOME/.local/bin"; mkdir -p "$dir"; f="$dir/harness-link"\n'
-            '# older versions started at login: stop them and remove their login entry\n'
-            'pkill -x harness-link 2>/dev/null || true\n'
-            '[ "$os" = darwin ] && launchctl remove com.harnessmaxxing.link 2>/dev/null || true\n'
+            '# older versions started at login (Harness Link, then the first "Harness PC"): stop them, remove the entry\n'
+            'old=; pkill -x harness-link 2>/dev/null && old=1; pkill -x harness-pc 2>/dev/null && old=1\n'
+            '[ -n "$old" ] && { sleep 0.5; step "Older version stopped"; }\n'
+            'if [ "$os" = darwin ]; then\n'
+            '  launchctl remove com.harnessmaxxing.link 2>/dev/null || true\n'
+            '  launchctl remove com.harnessmaxxing.pc 2>/dev/null || true\n'
+            'fi\n'
             'rm -f "$HOME/Library/LaunchAgents/com.harnessmaxxing.link.plist" '
-            '"${XDG_CONFIG_HOME:-$HOME/.config}/autostart/harness-link.desktop"\n'
-            f'curl -fsSL "{base}/$os-$arch?code={c}" -o "$f.tmp"\n'
+            '"$HOME/Library/LaunchAgents/com.harnessmaxxing.pc.plist" '
+            '"${XDG_CONFIG_HOME:-$HOME/.config}/autostart/harness-link.desktop" '
+            '"${XDG_CONFIG_HOME:-$HOME/.config}/autostart/harness-pc.desktop"\n'
+            f'st=$(curl -sSL -w "%{{http_code}}" "{base}/$os-$arch?code={c}" -o "$f.tmp") || '
+            'fail "Cannot reach Harness Maxxing: check the connection and paste the command again."\n'
+            'if [ "$st" != 200 ]; then rm -f "$f.tmp"\n'
+            '  case "$st" in 400|410) fail "This command expired or was already used. Add the computer again in '
+            'Harness Maxxing (Settings > Devices)." ;; esac\n'
+            '  fail "Download failed (HTTP $st)."\n'
+            'fi\n'
             'chmod 755 "$f.tmp" && mv -f "$f.tmp" "$f"\n'
             '[ "$os" = darwin ] && xattr -d com.apple.quarantine "$f" 2>/dev/null || true\n'
+            'mb=$(awk "BEGIN { printf \\"%.1f\\", $(wc -c < "$f") / 1048576 }")\n'
+            'step "Downloaded ($mb MB)"\n'
+            'step "Installed in $f"\n'
             'new=\n'
             'case ":$PATH:" in *":$dir:"*) ;; *)\n'
             '  case "${SHELL##*/}" in zsh) rc="$HOME/.zshrc" ;; '
@@ -156,10 +223,11 @@ def install_script(kind: str, code: str, server_url: str) -> str:
             '  if ! grep -qs "Harness Link" "$rc"; then\n'
             '    printf \'\\n# Harness Link\\nexport PATH="$HOME/.local/bin:$PATH"\\n\' >> "$rc"\n'
             '  fi\n'
+            '  step "Added to the PATH (${rc#"$HOME"/})"\n'
             '  new=" (in a new terminal window)" ;;\n'
             'esac\n'
-            'echo "Harness Link is installed. From now on, type harness-link in a terminal$new whenever you want '
-            'Claude to use this computer."\n'
+            'printf \'\\n  %sDone.%s From now on, type %sharness-link%s in a terminal%s whenever you want Claude to '
+            'use this computer.\\n\' "$G" "$R" "$A" "$R" "$new"\n'
             'if (exec </dev/tty) 2>/dev/null; then exec "$f" </dev/tty; else exec "$f"; fi\n')
 
 

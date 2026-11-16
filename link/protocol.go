@@ -78,18 +78,22 @@ const (
 
 // serve answers one request (run by the worker, one at a time).
 func (a *agent) serve(r request) map[string]any {
-	ok := func(kv ...any) map[string]any {
+	done := func(kv ...any) map[string]any {
 		m := map[string]any{"t": "ok", "id": r.ID}
 		for i := 0; i+1 < len(kv); i += 2 {
 			m[kv[i].(string)] = kv[i+1]
 		}
 		return m
 	}
-	if d := describe(r); d != "" {
-		if r.T == "input" && r.A == "type" && secureInput() {
-			d = fmt.Sprintf("Type %d characters in a password field (hidden)", utf8.RuneCountInString(r.Text))
+	d := describe(r)
+	if d != "" && r.T == "input" && r.A == "type" && secureInput() {
+		d = fmt.Sprintf("Type %d characters in a password field (hidden)", utf8.RuneCountInString(r.Text))
+	}
+	ok := func(kv ...any) map[string]any {
+		if d != "" {
+			a.say(lAction, d)
 		}
-		a.say("%s", d)
+		return done(kv...)
 	}
 	var err error
 	switch r.T {
@@ -128,7 +132,10 @@ func (a *agent) serve(r request) map[string]any {
 		if errors.As(err, &oe) {
 			msg = oe.Message
 		}
-		a.say("  refused: %s", shortErr(errors.New(msg)))
+		if d == "" {
+			d = r.T
+		}
+		a.say(lActionFail, d+": "+shortErr(errors.New(msg)))
 	}
 	return errReply(r.ID, err)
 }

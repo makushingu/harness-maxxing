@@ -226,7 +226,14 @@ async def install(name: str, request: Request):
     if kind not in ("sh", "ps1") or not code:
         raise HTTPException(404, detail={"error": "not_found", "message": "<code>.sh or <code>.ps1"})
     _gate(request)
-    text = await _code_ok(request, dist.install_script, kind, code, _server_url(request))
+    try:
+        text = await asyncio.to_thread(dist.install_script, kind, code, _server_url(request))
+    except devices.DevicesError as e:
+        if e.code not in ("bad_code", "expired"):
+            raise _err(e) from None
+        _failed(request)
+        # a shell runs this: the reason in plain words (curl -f would only print an HTTP error)
+        text = dist.install_error_script(kind, e.code)
     return PlainTextResponse(text, headers={"Cache-Control": "no-store"})
 
 

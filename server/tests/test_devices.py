@@ -155,8 +155,11 @@ def test_invite_install_download_pair_and_confirm(dv):
     assert "nohup" not in sh.text and 'exec "$f" </dev/tty' in sh.text
     assert "LaunchAgents/com.harnessmaxxing.link.plist" in sh.text and "autostart/harness-link.desktop" in sh.text
     assert subprocess.run(["sh", "-n"], input=sh.text, text=True).returncode == 0
+    # the first "Harness PC" is stopped and unregistered too
+    assert "pkill -x harness-pc" in sh.text and "LaunchAgents/com.harnessmaxxing.pc.plist" in sh.text
     ps = dv.get(f"/api/devices/install/{code.lower()}.ps1").text
     assert "LOCALAPPDATA" in ps and "harness-link.exe" in ps and f"windows-$arch?code={code}" in ps
+    assert "HarnessPC" in ps and "Invoke-WebRequest" in ps
     assert "Start-Process" not in ps and ps.rstrip().endswith("& $exe") and "'Path', 'User'" in ps
     # the desktop app carries its pairing trailer
     d = dv.get(f"/api/devices/download/linux-amd64?code={code}")
@@ -182,6 +185,12 @@ def test_invite_install_download_pair_and_confirm(dv):
     from maxxing import devices
     assert devices.visible(T) == []                                  # waits for the user's yes
     assert dv.post("/api/devices/pair", json={"code": code, "os": "linux"}).status_code == 410   # one use
+    # pasting the install command again: the reason in plain words, and the shell stops
+    again = dv.get(f"/api/devices/install/{code}.sh")
+    assert again.status_code == 200 and "already used" in again.text
+    run = subprocess.run(["sh"], input=again.text, text=True, capture_output=True)
+    assert run.returncode == 1 and "Add the computer again" in run.stderr
+    assert "already used" in dv.get(f"/api/devices/install/{code}.ps1").text
     assert dv.post(f"/api/devices/{dev['id']}/confirm", json={"ok": True}).json()["ok"]
     assert [d["id"] for d in devices.visible(T)] == [dev["id"]]
     assert not dv.post(f"/api/devices/{dev['id']}/confirm", json={"ok": True}).json()["ok"]   # nothing waits

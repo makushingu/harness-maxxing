@@ -143,7 +143,7 @@ type agent struct {
 	cfg     *Config
 	be      backend
 	logf    func(string, ...any)
-	say     func(string, ...any) // live log in the terminal (defaults to logf)
+	say     func(lineKind, string) // live log in the terminal (defaults to logf)
 	onFirst func()               // called once after the first successful connection
 
 	online bool   // the live log tells only the changes of the connection
@@ -158,7 +158,7 @@ type agent struct {
 }
 
 func newAgent(cfg *Config, be backend, logf func(string, ...any)) *agent {
-	return &agent{cfg: cfg, be: be, logf: logf, say: logf, reqs: make(chan request, maxQueue)}
+	return &agent{cfg: cfg, be: be, logf: logf, say: logSay(logf), reqs: make(chan request, maxQueue)}
 }
 
 // deviceName is the name shown in Harness (the host name).
@@ -190,7 +190,7 @@ func (a *agent) run(ctx context.Context) error {
 		n++
 		a.logf("control link down (%v); retry in %s", err, d.Round(100*time.Millisecond))
 		if a.online || n == 1 {
-			a.say("Cannot reach Harness Maxxing (%s); retrying...", shortErr(err))
+			a.say(lWarn, "Cannot reach Harness Maxxing ("+shortErr(err)+"), retrying...")
 		}
 		a.online = false
 		t := time.NewTimer(d)
@@ -229,7 +229,7 @@ func (a *agent) sendHello(conn *websocket.Conn, force bool) error {
 		return nil
 	}
 	if note, _ := h["note"].(string); note != "" {
-		a.say("%s", note)
+		a.say(lWarn, note)
 	}
 	return a.write(conn, h)
 }
@@ -267,7 +267,7 @@ func (a *agent) session(ctx context.Context) (err error) {
 	}
 	a.logf("connected to %s", a.cfg.Server)
 	if !a.online {
-		a.say("Connected to %s as %q.", a.cfg.Server, deviceName())
+		a.say(lOK, fmt.Sprintf("Connected to %s as %s", hostOf(a.cfg.Server), deviceName()))
 	}
 	a.online = true
 	a.firstOnce.Do(func() {
@@ -372,11 +372,11 @@ func (a *agent) handle(r request) bool {
 		if by != a.busyBy {
 			switch by {
 			case "claude":
-				a.say("Claude is using this computer.")
+				a.say(lClaude, "Claude is using this computer")
 			case "human":
-				a.say("Someone took over from Harness Maxxing: Claude waits.")
+				a.say(lWarn, "Someone took over in Harness Maxxing: Claude waits")
 			default:
-				a.say("Claude is not using this computer right now.")
+				a.say(lInfo, "Claude is not using this computer right now")
 			}
 			a.busyBy = by
 		}

@@ -27,3 +27,6 @@ func cliOutput(s string) { fmt.Fprint(os.Stdout, s) }
 func fatal(s string) { fmt.Fprintln(os.Stderr, "Harness Link: "+s) }
 
 func exitPause() {}
+
+// enableANSI reports whether the terminal understands colours and cursor moves (always, on Unix).
+func enableANSI(*os.File) bool { return true }
