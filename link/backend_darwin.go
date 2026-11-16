@@ -266,16 +266,21 @@ func (b *macBackend) Info() backendInfo {
 }
 
 func (b *macBackend) Capture() (image.Image, error) {
-	f, err := os.CreateTemp(b.dir, ".shot-*.jpg")
+	// screencapture is given a path that does not exist yet, in a private folder of its own: it can silently
+	// write nothing over a file created beforehand (an empty temp file) or a hidden name.
+	tmp, err := os.MkdirTemp("", "harness-link-shot-")
 	if err != nil {
 		return nil, &opError{"failed", err.Error()}
 	}
-	name := f.Name()
-	f.Close()
-	defer os.Remove(name)
+	defer os.RemoveAll(tmp)
+	name := filepath.Join(tmp, "screen.jpg")
 	// -x no sound, -m main display, -t jpg
-	if out, err := exec.Command(shotTool, "-x", "-m", "-t", "jpg", name).CombinedOutput(); err != nil {
+	out, err := exec.Command(shotTool, "-x", "-m", "-t", "jpg", name).CombinedOutput()
+	if err != nil {
 		return nil, &opError{"failed", "screencapture: " + strings.TrimSpace(string(out)+" "+err.Error())}
+	}
+	if msg := strings.TrimSpace(string(out)); msg != "" {
+		b.logf("screencapture: %s", msg)
 	}
 	// Without Screen Recording, screencapture can exit 0 and write nothing.
 	if st, err := os.Stat(name); err != nil || st.Size() == 0 {
