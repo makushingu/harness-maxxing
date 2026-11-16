@@ -52,6 +52,7 @@ OPENAI_API = "https://api.openai.com/v1"
 GEMINI_API = "https://generativelanguage.googleapis.com/v1beta"
 MAX_CALLS = 3
 IDLE_S = 600                 # a local call without any turn for this long is hung up
+REAP_EVERY_S = 60            # how often idle calls are looked for while one is open (a closed tab never ends it)
 MAX_AUDIO_BYTES = 20 * 1024 * 1024
 
 # Tests: httpx transport for the providers (httpx.MockTransport).
@@ -612,6 +613,7 @@ class LocalCall:
 
 _calls: dict[str, LocalCall] = {}
 _calls_lock = threading.Lock()
+_reaper: threading.Timer | None = None
 
 
 def _reap() -> None:
@@ -621,6 +623,25 @@ def _reap() -> None:
             if not c.alive() or now - c.used > IDLE_S:
                 _calls.pop(cid, None)
                 threading.Thread(target=c.close, daemon=True).start()
+
+
+def _arm_reaper() -> None:
+    """While a local call is open, hang up the idle ones every REAP_EVERY_S (not only when another call starts)."""
+    global _reaper
+    with _calls_lock:
+        if _reaper is not None or not _calls:
+            return
+        _reaper = threading.Timer(REAP_EVERY_S, _reap_tick)
+        _reaper.daemon = True
+        _reaper.start()
+
+
+def _reap_tick() -> None:
+    global _reaper
+    with _calls_lock:
+        _reaper = None
+    _reap()
+    _arm_reaper()
 
 
 def start_local(sid: str, ui_language: str | None = None) -> dict:
@@ -643,6 +664,7 @@ def start_local(sid: str, ui_language: str | None = None) -> dict:
         call = LocalCall(sid, s["talker_model"], None if s["local_voice"] == "auto" else s["local_voice"],
                          s["local_speed"], ui_language)
         _calls[call.id] = call
+    _arm_reaper()
     threading.Thread(target=_warm_up, args=(call,), daemon=True, name="voicecall-warmup").start()
     return {"mode": "local", "call": call.id, "language": call.language,
             "silence_ms": s["silence_ms"]}

@@ -1,4 +1,5 @@
 import json
+import time
 
 import httpx
 import pytest
@@ -308,3 +309,13 @@ def test_the_voice_never_repeats_the_users_words(call):
     call.replies = ["@ask\nOui vas-y.\nJe mets l'alerte en place."]
     out = _turn(call, text="Oui vas-y.")
     assert [x["say"] for x in out if "say" in x] == ["Je mets l'alerte en place."]
+
+
+def test_an_idle_call_is_hung_up_without_another_call_starting(call, monkeypatch):
+    monkeypatch.setattr(voicecall, "REAP_EVERY_S", 0.05)
+    call.used = time.time() - voicecall.IDLE_S - 1               # a tab closed without /end
+    voicecall._arm_reaper()
+    deadline = time.time() + 5
+    while call.id in voicecall._calls and time.time() < deadline:
+        time.sleep(0.02)
+    assert call.id not in voicecall._calls
