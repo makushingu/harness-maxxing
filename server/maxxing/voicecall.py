@@ -279,11 +279,15 @@ def _http():
 def _api_error(provider: str, r) -> VoiceError:
     try:
         body = r.json()
-        msg = (body.get("error") or {}).get("message") if isinstance(body.get("error"), dict) else body.get("error")
-    except ValueError:
-        msg = r.text[:300]
+    except (ValueError, RecursionError):
+        body = None
+    if isinstance(body, dict):                # a proxy or a gateway may answer a list, a string or HTML
+        err = body.get("error")
+        msg = err.get("message") if isinstance(err, dict) else err
+    else:
+        msg = r.text
     code = "bad_key" if r.status_code in (401, 403) else "provider_error"
-    return VoiceError(502, code, f"{provider}: {msg or r.status_code}")
+    return VoiceError(502, code, f"{provider}: {str(msg)[:300] if msg else r.status_code}")
 
 
 def _openai_token(s: dict, key: str) -> dict:
