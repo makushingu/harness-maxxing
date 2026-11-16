@@ -13,6 +13,7 @@
                                              or removes (--remove) one of its schedules
   maxxing agents webhook <agent> [--kind …]  add a webhook (a feed hook + a feed trigger on it); prints its URL
   maxxing agents watch <agent> --source …    add a feed trigger on existing events (a source, levels, words)
+  maxxing agents after <agent> <other>       start <agent> on the result of each automatic run of <other>
   maxxing agents export <agent> [-o FILE]    the agent as a Claude Code agent file (.claude/agents/<name>.md)
   maxxing agents import FILE --topic <p>/<t> create an agent from a Claude Code agent file
   maxxing agents sandbox-setup               install what the sandbox needs (root): bubblewrap, socat, AppArmor
@@ -156,6 +157,14 @@ def _configure(p) -> None:
     s.add_argument("--match", default="", help="only events containing these words")
     s.add_argument("--prompt", default="", help="what to do with the events")
     s.add_argument("--json", action="store_true")
+    s = sub.add_parser("after", help="start an agent on the result of each automatic run of another agent")
+    s.add_argument("agent", help="the agent that starts")
+    s.add_argument("other", help="the agent whose runs start it (path, p/t/a or a unique name)")
+    s.add_argument("--on", dest="chain_on", choices=("ok", "error", "any"), default="ok",
+                   help="which runs: ok (default), error (failed ones), any")
+    s.add_argument("--match", default="", help="only results containing these words")
+    s.add_argument("--prompt", default="", help="what to do with the result (default: per the role)")
+    s.add_argument("--json", action="store_true")
 
 
 def resolve(ref: str) -> str:
@@ -231,10 +240,11 @@ def _list(a) -> int:
     for x in rows:
         crons = len(agents.cron_jobs(x["path"]))
         feeds = sum(1 for t in x["triggers"] if t["kind"] == "feed")
+        after = sum(1 for t in x["triggers"] if t["kind"] == "agent")
         budget = x["limits"]["usd_per_day"]
         cost = f"${x['cost_today']:.2f}" + (f"/{budget:g}" if budget else "")
         print(f"{'on ' if x['enabled'] else 'off'}  {x['path']}  {x['display_name']}  "
-              f"cron:{crons} feed:{feeds}{' telegram' if x['telegram'] else ''}  today {cost}")
+              f"cron:{crons} feed:{feeds}{f' after:{after}' if after else ''}{' telegram' if x['telegram'] else ''}  today {cost}")
     return 0
 
 
@@ -700,6 +710,17 @@ def _handler(a) -> int:
                   else f"{path} now watches the feed source {a.source.strip()}")
             if boxed and not a.json:
                 print(agents.SANDBOX_AUTO_NOTE)
+            return 0
+        if a.agents_cmd == "after":
+            try:
+                other = resolve(a.other)
+            except ValueError as e:
+                print(str(e), file=sys.stderr)
+                return 2
+            agents.add_trigger(path, {"kind": "agent", "agent": other, "on": a.chain_on, "match": a.match,
+                                      "prompt": a.prompt})
+            print(json.dumps({"agent": path, "after": other}) if a.json
+                  else f"{path} now starts after each automatic run of {other} ({a.chain_on})")
             return 0
     except agents.AgentError as e:
         print(e.message, file=sys.stderr)

@@ -302,6 +302,7 @@ export function triggerLabel(t: TFn, m: Pick<AgentMessage, 'trigger' | 'source'>
   if (tr === 'telegram' || m.source === 'telegram') return t('agents.from.telegram')
   if (tr.startsWith('agent:')) return t('agents.from.agent', { name: tr.slice(6).split('/').pop() || '' })
   if (tr.startsWith('feed:')) return m.source ? t('agents.from.feedNamed', { source: m.source }) : t('agents.from.feed')
+  if (tr.startsWith('after:')) return t('agents.from.after', { name: (m.source || '').replace(/^agent /, '') })
   return m.source || tr || t('agents.from.manual')
 }
 
@@ -309,7 +310,7 @@ export function triggerLabel(t: TFn, m: Pick<AgentMessage, 'trigger' | 'source'>
 function triggerIcon(m: Pick<AgentMessage, 'trigger' | 'source'>) {
   const tr = m.trigger || ''
   if (tr.startsWith('cron:')) return Clock
-  if (tr.startsWith('agent:')) return Bot
+  if (tr.startsWith('agent:') || tr.startsWith('after:')) return Bot
   if (tr === 'telegram') return Send
   if (/mail/i.test(m.source || '')) return Mail
   if (tr.startsWith('feed:')) return Zap

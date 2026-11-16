@@ -7,6 +7,19 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- **"After another agent" triggers** (`agents.py` "agent" triggers, contract in `docs/dev/API.md` `Trigger`):
+  `{kind: "agent", agent: <path>, on: ok|error|any, match, prompt}` in agent.json (`TRIGGER_KINDS`, `_clean_chain`;
+  `clean(..., own=path)` refuses itself; `_new_chain_sources_exist` checks only sources added, so a deleted source
+  keeps the trigger inert instead of blocking later saves). `on_turn_end` calls `chain_after(path, text, ok, depth)`
+  for every run that is neither the owner's conversation (`mine`) nor a group turn nor a Harness turn; matches go
+  into the debouncer with `fire_as="after:<tid>"` (kept in `_feed.json`), `depth + 1` (MAX_DEPTH stops loops) and
+  the result framed as outside text (`MAXXING_AGENT_OUTSIDE`). The debouncer now has its own lock (`_mu`):
+  `on_turn_end` and the agents loop add / pop from two threads. `remap` rewrites the triggers pointing at a moved
+  agent (`_remap_chains`). `trigger_stats` counts the runs an "agent" trigger started; `/test` fires it on the source's
+  last result. CLI `maxxing agents after <agent> <other> [--on] [--match] [--prompt]` (owner / manager only, like
+  `watch`). Web: `AgentTriggers.tsx` row + `ChainTriggerDialog`, `triggerLabel` "after:". Tests:
+  `tests/test_agent_chain.py`.
+
 - **Devices** (`maxxing/devices/`, contract in `docs/dev/API.md` "Devices", `INTERNALS.md` "maxxing.devices"): the
   person's computers and phones run Harness Link (`link/` Go, `android/`), connect out to `WS /api/devices/ws`
   (Bearer device token, protocol v2: `hello`/`paused`/`ok`/`err` up; `shot`, `input`, `tree`, `tap_node`,

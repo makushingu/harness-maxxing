@@ -231,6 +231,7 @@ OAuth sign-ins (state "To connect") are done in Settings -> MCP -> **Connect**. 
 | `maxxing agents cron AGENT --schedule CRON [--prompt T] [--name N] [--json]` | add a schedule (a Claude job in the agent folder) |
 | `maxxing agents webhook AGENT [--kind generic\|stripe\|shopify\|github] [--prompt T] [--levels L] [--match W] [--json]` | add a webhook and print its URL |
 | `maxxing agents watch AGENT --source S [--levels L] [--match W] [--prompt T] [--json]` | start it on new feed events of a source |
+| `maxxing agents after AGENT OTHER [--on ok\|error\|any] [--match W] [--prompt T] [--json]` | start AGENT on the result of each automatic run of OTHER |
 | `maxxing agents export AGENT [-o FILE]` | the agent as a Claude Code agent file (`.claude/agents/<name>.md`) |
 | `maxxing agents import FILE --topic P/T [--name N]` | create an agent from a Claude Code agent file |
 | `maxxing agents sandbox-setup` | install what the agents' sandbox needs (root): `bubblewrap`, `socat`, the AppArmor profile |

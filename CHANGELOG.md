@@ -20,6 +20,12 @@ New:
   Markdown or as plain text, a workbook as cells that paste into a spreadsheet, a PDF as the text read in its pages,
   code, text and CSV files as they are.
 
+- **Chain your agents.** An agent can now start by itself after another one: in its **When it works**, add **After
+  another agent…**, pick the agent and which of its runs count (those that succeed, those that fail, or all), and,
+  if you want, words its result must contain. Each automatic run of the first agent then hands its result to the
+  next one: a researcher on a schedule, a writer after it, an editor after the writer. **Try with its last result**
+  checks it at once. From a terminal: `maxxing agents after editor writer`.
+
 Changed:
 - **The HUD is gone.** The floating bar that showed one session over your other apps and shared your screen is
   replaced by Devices: add your computer in **View only** and Claude sees your screen and guides you, without ever

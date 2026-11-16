@@ -54,9 +54,11 @@ class Limits(BaseModel):
 
 class Trigger(BaseModel):
     id: Optional[str] = None
-    kind: Literal["feed"] = "feed"
+    kind: Literal["feed", "agent"] = "feed"
     enabled: Optional[bool] = None
-    source: Optional[str] = None
+    source: Optional[str] = None                # feed: the feed source
+    agent: Optional[str] = None                 # agent: the path of the agent whose runs start this one
+    on: Optional[Literal["ok", "error", "any"]] = None   # agent: which ends of its runs
     levels: Optional[list[str]] = None
     match: Optional[str] = None
     prompt: Optional[str] = None

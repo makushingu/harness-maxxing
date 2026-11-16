@@ -726,9 +726,9 @@ def sandboxed_session(sid8: str) -> str | None:
 
 
 # changing an agent (any agent) is the owner's: refused in every agent turn, sandboxed or not
-AGENT_OWNER_ONLY = {"create", "cron", "webhook", "watch", "on", "off", "silent", "loud", "set", "import", "sandbox-setup", "group"}
+AGENT_OWNER_ONLY = {"create", "cron", "webhook", "watch", "after", "on", "off", "silent", "loud", "set", "import", "sandbox-setup", "group"}
 # ...but the owner's conversation with an agent (its manager) runs these on that agent itself
-AGENT_MANAGER = {"cron", "webhook", "watch", "on", "off", "silent", "loud", "set", "show", "run"}
+AGENT_MANAGER = {"cron", "webhook", "watch", "after", "on", "off", "silent", "loud", "set", "show", "run"}
 
 
 # ...and so is what starts something with the owner's rights outside the agent's guards (a session of any topic,

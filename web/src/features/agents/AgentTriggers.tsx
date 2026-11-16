@@ -4,15 +4,15 @@
 // thread.
 import * as React from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { ChevronRight, Clock, Mail, MoreHorizontal, Pencil, Play, Plus, Rss, Send, Trash2, Webhook } from 'lucide-react'
+import { Bot, ChevronRight, Clock, Mail, MoreHorizontal, Pencil, Play, Plus, Rss, Send, Trash2, Webhook } from 'lucide-react'
 import { useLang, useT } from '@/i18n'
-import { agentKeys, useMailAccounts, useSettings, useAddAgentCron, useAddAgentWebhook, useDeleteCron, usePatchAgent, usePatchCron, useRunCron, useTestAgentTrigger } from '@/lib/queries'
-import type { AgentDetail, AgentTrigger, AgentTriggerInput, AgentWebhookKind, AgentWebhookResult, Cron } from '@/lib/types'
+import { agentKeys, useAgents, useMailAccounts, useSettings, useAddAgentCron, useAddAgentWebhook, useDeleteCron, usePatchAgent, usePatchCron, useRunCron, useTestAgentTrigger } from '@/lib/queries'
+import type { AgentChainOn, AgentDetail, AgentTrigger, AgentTriggerInput, AgentWebhookKind, AgentWebhookResult, Cron } from '@/lib/types'
 import { fmtRelative } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import {
   Button, confirm, CopyButton, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DropdownMenu, DropdownMenuContent,
-  DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, FormField, Input, Sensitive, Switch, Textarea, toast,
+  DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, FormField, Input, Select, Sensitive, Switch, Textarea, toast,
   useContextMenu,
   WithContextMenu,
 } from '@/components/ui'
@@ -36,19 +36,25 @@ export function AgentTriggers({ agent: a, onMailSettings }: { agent: AgentDetail
   const [cronSeed, setCronSeed] = React.useState<EditorSeed | null>(null)
   const [addCron, setAddCron] = React.useState(false)
   const [feedEdit, setFeedEdit] = React.useState<AgentTriggerInput | null>(null)
+  const [chainEdit, setChainEdit] = React.useState<AgentTriggerInput | null>(null)
+  const { data: allAgents } = useAgents()
+  const agentName = (path?: string) => allAgents?.agents.find((x) => x.path === path)?.display_name || path?.split('/').pop() || ''
   const [hook, setHook] = React.useState(false)
   const qc = useQueryClient()
   const refresh = () => qc.invalidateQueries({ queryKey: agentKeys.all })
 
   const boxedNote = useSandboxAutoNote()
   const saveTriggers = (list: AgentTriggerInput[], onSuccess?: () => void) =>
-    patch.mutate({ path: a.path, triggers: list.map(({ ...x }) => ({ ...x, kind: 'feed' as const })) }, {
+    patch.mutate({ path: a.path, triggers: list.map(({ ...x }) => ({ ...x, kind: x.kind || 'feed' })) }, {
       onSuccess: (r) => {
         boxedNote(r)
         onSuccess?.()
       },
     })
-  const toInput = (x: AgentTrigger): AgentTriggerInput => ({ id: x.id, enabled: x.enabled, source: x.source, levels: x.levels, match: x.match, prompt: x.prompt, hook_id: x.hook_id })
+  const toInput = (x: AgentTrigger): AgentTriggerInput =>
+    x.kind === 'agent'
+      ? { id: x.id, kind: 'agent', enabled: x.enabled, agent: x.agent, on: x.on, match: x.match, prompt: x.prompt }
+      : { id: x.id, kind: 'feed', enabled: x.enabled, source: x.source, levels: x.levels, match: x.match, prompt: x.prompt, hook_id: x.hook_id }
   const hooks = new Map((a.webhooks || []).map((h) => [h.id, h]))
 
   return (
@@ -61,7 +67,7 @@ export function AgentTriggers({ agent: a, onMailSettings }: { agent: AgentDetail
         const st = a.trigger_stats?.[x.id]
         const triggerItems = (
           <>
-            <DropdownMenuItem onSelect={() => setFeedEdit(toInput(x))}>
+            <DropdownMenuItem onSelect={() => (x.kind === 'agent' ? setChainEdit(toInput(x)) : setFeedEdit(toInput(x)))}>
               <Pencil /> {t('common.edit')}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
@@ -80,10 +86,12 @@ export function AgentTriggers({ agent: a, onMailSettings }: { agent: AgentDetail
           <WithContextMenu key={x.id} items={triggerItems}>
             <div className="grid grid-cols-[minmax(0,1fr)] gap-2 rounded-xl border bg-card px-3 py-2.5" data-testid="agent-trigger">
               <div className="flex items-center gap-2">
-                {x.hook_id ? <Webhook className="size-4 shrink-0 text-primary" /> : <Rss className="size-4 shrink-0 text-primary" />}
+                {x.kind === 'agent' ? <Bot className="size-4 shrink-0 text-primary" /> : x.hook_id ? <Webhook className="size-4 shrink-0 text-primary" /> : <Rss className="size-4 shrink-0 text-primary" />}
                 <span className="min-w-0 flex-1 text-sm">
                   <Sensitive length={10}>
-                    {x.hook_id
+                    {x.kind === 'agent'
+                      ? t(`agents.when.after.${x.on || 'ok'}` as 'agents.when.after.ok', { name: agentName(x.agent) }) + (x.match ? ` · ${t('agents.trigger.matchShort', { match: x.match })}` : '')
+                      : x.hook_id
                       ? !h || h.kind === 'generic'
                         ? t('agents.when.webhookAny')
                         : t('agents.when.webhook', { service: t(`agents.hook.${h.kind}` as 'agents.hook.generic') })
@@ -121,9 +129,13 @@ export function AgentTriggers({ agent: a, onMailSettings }: { agent: AgentDetail
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
                 <span className={cn('size-1.5 rounded-full', st?.events ? 'bg-success' : 'bg-muted-foreground/40')} aria-hidden />
                 <span className="min-w-0 flex-1">
-                  {st?.events && st.last_event_at
-                    ? t('agents.when.received', { count: st.events, when: agoText(st.last_event_at, lang, t) })
-                    : t('agents.when.noneReceived')}
+                  {x.kind === 'agent' && allAgents && !allAgents.agents.some((y) => y.path === x.agent) ? (
+                    <span className="text-warning">{t('agents.when.afterGone')}</span>
+                  ) : st?.events && st.last_event_at ? (
+                    t(x.kind === 'agent' ? 'agents.when.afterStarted' : 'agents.when.received', { count: st.events, when: agoText(st.last_event_at, lang, t) })
+                  ) : (
+                    t(x.kind === 'agent' ? 'agents.when.afterNone' : 'agents.when.noneReceived')
+                  )}
                 </span>
                 <Button
                   variant="link"
@@ -134,7 +146,7 @@ export function AgentTriggers({ agent: a, onMailSettings }: { agent: AgentDetail
                   onClick={() => test.mutate({ path: a.path, tid: x.id }, { onSuccess: () => toast.success(t('agents.when.testSent')) })}
                   data-testid="agent-trigger-test"
                 >
-                  {t('agents.when.test')}
+                  {t(x.kind === 'agent' ? 'agents.when.afterTest' : 'agents.when.test')}
                 </Button>
               </div>
               {h?.kind === 'generic' && (
@@ -195,6 +207,9 @@ export function AgentTriggers({ agent: a, onMailSettings }: { agent: AgentDetail
           <DropdownMenuItem onSelect={() => setFeedEdit({ enabled: true, source: '', levels: [], match: '', prompt: '' })} data-testid="agent-add-feed">
             <Rss /> {t('agents.when.addFeed')}
           </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setChainEdit({ kind: 'agent', enabled: true, agent: '', on: 'ok', match: '', prompt: '' })} data-testid="agent-add-after">
+            <Bot /> {t('agents.when.addAfter')}
+          </DropdownMenuItem>
           {!a.telegram && (
             <DropdownMenuItem onSelect={() => patch.mutate({ path: a.path, telegram: true })} data-testid="agent-telegram-switch">
               <Send /> {t('agents.when.addTelegram')}
@@ -217,6 +232,16 @@ export function AgentTriggers({ agent: a, onMailSettings }: { agent: AgentDetail
         onSave={(v) => {
           const list = v.id ? a.triggers.map((y) => (y.id === v.id ? v : toInput(y))) : [...a.triggers.map(toInput), v]
           saveTriggers(list, () => setFeedEdit(null))
+        }}
+      />
+      <ChainTriggerDialog
+        value={chainEdit}
+        self={a.path}
+        onClose={() => setChainEdit(null)}
+        pending={patch.isPending}
+        onSave={(v) => {
+          const list = v.id ? a.triggers.map((y) => (y.id === v.id ? v : toInput(y))) : [...a.triggers.map(toInput), v]
+          saveTriggers(list, () => setChainEdit(null))
         }}
       />
       <WebhookDialog open={hook} onOpenChange={setHook} agent={a} />
@@ -348,6 +373,55 @@ function FeedTriggerDialog({ value, onClose, onSave, pending }: { value: AgentTr
             {t('common.cancel')}
           </Button>
           <Button loading={pending} onClick={() => onSave(v)} data-testid="agent-feed-save">
+            {t('common.save')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+/** "After another agent": its automatic runs that end (well, badly, either), with words of its result, start this one. */
+function ChainTriggerDialog({ value, self, onClose, onSave, pending }: { value: AgentTriggerInput | null; self: string; onClose: () => void; onSave: (v: AgentTriggerInput) => void; pending: boolean }) {
+  const t = useT()
+  const { data } = useAgents(!!value)
+  const [v, setV] = React.useState<AgentTriggerInput>({})
+  React.useEffect(() => {
+    if (value) setV(value)
+  }, [value])
+  const others = (data?.agents || []).filter((x) => x.path !== self)
+  const opts = others.map((x) => ({ value: x.path, label: `${x.display_name} · ${x.path.split('/')[3]}` }))
+  if (v.agent && !others.some((x) => x.path === v.agent)) opts.push({ value: v.agent, label: v.agent.split('/').pop() || v.agent })
+  return (
+    <Dialog open={!!value} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{value?.id ? t('agents.trigger.editAfter') : t('agents.trigger.addAfter')}</DialogTitle>
+          <DialogDescription>{t('agents.trigger.afterDesc')}</DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-3">
+          <FormField label={t('agents.trigger.afterAgent')}>
+            {opts.length ? (
+              <Select value={v.agent || ''} onValueChange={(x) => setV({ ...v, agent: x })} options={opts} placeholder={t('agents.trigger.afterPick')} />
+            ) : (
+              <p className="text-sm text-muted-foreground">{t('agents.trigger.afterNoOther')}</p>
+            )}
+          </FormField>
+          <FormField label={t('agents.trigger.afterOn')}>
+            <Select value={v.on || 'ok'} onValueChange={(x) => setV({ ...v, on: x as AgentChainOn })} options={(['ok', 'error', 'any'] as const).map((k) => ({ value: k, label: t(`agents.trigger.afterOn.${k}` as 'agents.trigger.afterOn.ok') }))} />
+          </FormField>
+          <FormField label={t('agents.trigger.match')} hint={t('agents.trigger.afterMatchHint')}>
+            <Input value={v.match || ''} onChange={(e) => setV({ ...v, match: e.target.value })} placeholder={t('agents.trigger.matchPlaceholder')} />
+          </FormField>
+          <FormField label={t('agents.trigger.prompt')} hint={t('agents.trigger.afterPromptHint')}>
+            <Textarea minRows={2} maxRows={8} value={v.prompt || ''} onChange={(e) => setV({ ...v, prompt: e.target.value })} placeholder={t('agents.trigger.promptPlaceholder')} />
+          </FormField>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>
+            {t('common.cancel')}
+          </Button>
+          <Button loading={pending} disabled={!v.agent} onClick={() => onSave(v)} data-testid="agent-after-save">
             {t('common.save')}
           </Button>
         </DialogFooter>

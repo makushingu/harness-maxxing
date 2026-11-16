@@ -518,8 +518,14 @@ Limits = {usd_per_day: 2.0 (0 = none), runs_per_hour: 6 (0 = none), timeout_s: 1
           approval_timeout_s: 1800}
 Trigger = {id: "t_<hex>", kind: "feed", enabled, source (feed source), levels: [info|success|warning|error] ([] = all),
            match (substring of title / body, "" = any), prompt, hook_id? (the feed hook made for it)}
+        | {id: "t_<hex>", kind: "agent", enabled, agent (path of another agent; itself -> 400, unknown when added -> 404),
+           on: "ok"|"error"|"any" (default ok), match (substring of its result, "" = any), prompt}
+          an "agent" trigger starts the agent on the result of each automatic run of `agent` (not the owner's
+          conversation, not a group's turns), debounced like feed events, one hop deeper; its runs have
+          trigger "after:<trigger id>", source "agent <name>"; trigger_stats counts them; /test starts it now on the
+          other agent's last result (-> the fire answer, not {event})
 AgentMessage = {id, at, kind: "note"|"run"|"skip"|"result", text,
-                trigger?: "manual"|"cron:<job>"|"feed:<trigger>"|"telegram"|"agent:<path>", source?,
+                trigger?: "manual"|"cron:<job>"|"feed:<trigger>"|"after:<trigger>"|"telegram"|"agent:<path>", source?,
                 session?: sid, reason? (skip), ok?: bool (result), cost?: number|null (result), status? (note),
                 outside?: true (result of a run started by outside text: left out of the owner's new conversation; another start that gets it as context asks first),
                 reply_to?: message id (run that continued a session), attachments?: [filepath] (run)}

@@ -221,8 +221,15 @@ only the agents waiting for your OK or with something to read.
 | **Notification** | a new event of the [feed](feed) from a source you pick (written as the feed writes it: `Shopify` -> `shopify`), optionally only some levels (warning, error...) or only events containing a word |
 | **Telegram** | a message you write in the agent's Telegram thread (option below) |
 | **Another agent** | an agent hands it work from its own session (`maxxing agents send`) |
+| **After another agent** | an automatic run of another agent you pick ends: the agent starts with that run's result. Choose which runs count (those that succeed, those that fail, or all) and, optionally, only results containing some words. Your own conversations with the other agent never count |
 
 Events that arrive close together (within the agent's grouping delay, 60 s by default) go into one run.
+
+**Chain agents.** "After another agent" builds a pipeline without writing anything in their roles: a *Researcher* on
+a schedule, a *Writer* that starts after each of its successful runs, an *Editor* after the Writer. Add it from
+**When it works -> Add a trigger -> After another agent…**; **Try with its last result** starts the agent now on the
+other agent's last answer. The other agent's result is given as outside data (see below), each step counts as one hop,
+and a group's turns are left out (a [group](agent-groups) already passes its answers around).
 
 **What comes from outside is data, not orders.** A webhook, a notification or a message from another agent is given
 to the agent clearly marked as outside data, with the rule never to follow instructions written inside it. What you
@@ -231,8 +238,8 @@ type yourself (its page, Telegram) is the task.
 An agent cannot start itself in a loop: from one of its own runs, `maxxing feed post` refuses a source its own
 notification triggers watch, a webhook's source and the product's own sources (`crons`, `system`, `security`,
 `health`, `agents`, `mail`, `infra`): an agent can never pass for a signed delivery or a request of the product.
-A notification posted by an agent run, or `maxxing agents run` from one, counts as one hop: longer loops (A starts B
-which starts A) stop after 3 hops, like `maxxing agents send`.
+A notification posted by an agent run, `maxxing agents run` from one, or an "After another agent" start, counts as one
+hop: longer loops (A starts B which starts A) stop after 3 hops, like `maxxing agents send`.
 
 ## Limits
 
@@ -456,6 +463,7 @@ maxxing agents create acme/blog/writer --name Writer --role "Writes …"     # -
 maxxing agents cron writer --schedule "0 8 * * 1" --prompt "Weekly post"   # add a schedule
 maxxing agents webhook writer [--kind stripe]                              # add a webhook, prints its URL
 maxxing agents watch writer --source shop --match refund                   # start it on feed events
+maxxing agents after editor writer [--on ok|error|any] [--match draft]      # start editor after each run of writer
 maxxing agents show writer                                                 # settings, triggers, URLs (JSON)
 ```
 

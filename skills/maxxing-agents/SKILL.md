@@ -65,6 +65,7 @@ maxxing agents create acme/game/game-dev --name "Game Dev" --role-file /tmp/role
 maxxing agents cron    game-dev --schedule "0 8 * * 1" --prompt "Weekly digest of the new feedback."
 maxxing agents webhook game-dev [--kind generic|stripe|shopify|github] [--prompt …]   # prints its URL
 maxxing agents watch   game-dev --source shop --levels warning,error --match refund     # existing feed events
+maxxing agents after   game-dev researcher [--on ok|error|any] [--match …]             # after each run of another agent
 maxxing agents show    game-dev                                                         # check it
 ```
 Once created, give the user the link to talk to it: `[Talk to <name>](/agents/<project>/<topic>/<agent>)` (its
@@ -139,6 +140,7 @@ field), or add a trigger with the commands above.
 | Feed event | a `feed` trigger: new events of `source` (optionally only `levels`, only those containing `match`) |
 | Telegram | `telegram: true`: the agent gets its own thread; its results are posted there and a message there starts it |
 | Another agent | `maxxing agents send <agent> "<text>"` from a turn (below) |
+| After another agent | an `agent` trigger (`maxxing agents after <agent> <other>`, agent page -> When it works): each automatic run of `<other>` that ends (`--on ok` default, `error`, `any`; optional `--match` words of its result) starts the agent with that result as outside data, one hop deeper. The owner's conversation and group turns never chain. Prefer it to a `send` written in a role when the hand-off is always the same |
 
 Events closer than `debounce_s` go into one turn. An agent that posts to the feed (`maxxing feed post`) must use
 another `source` than the ones its own feed triggers watch: from its own turn, `maxxing feed post` refuses such a
