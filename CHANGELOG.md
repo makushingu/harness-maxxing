@@ -34,6 +34,11 @@ Fixed:
   update topic and say "update"). Under the switch, Settings -> Updates now says when it last looked and what it
   found ("waiting, someone is on the interface", "a session is working", "up to date"...), and a busy server is
   looked at again after 5 minutes instead of 30.
+- **Two dependencies with a known vulnerability are updated.** The OpenTelemetry API used by the server
+  (GHSA-mf5v-w3w3-f6cg) and Soup Sieve in the web scraping tools (GHSA-mmhr-3c5m-f64f); both could be slowed down by
+  crafted input. Scrapling stays on the same version; its browsers are updated by themselves after the update.
+- **The weekly "Check dependencies for vulnerabilities" job no longer shows "Failed" when it finds something.** The
+  finding is in the notifications; "Failed" now only means the check itself could not run.
 
 ## 2.0.0-alpha.156 - 2026-11-15
 

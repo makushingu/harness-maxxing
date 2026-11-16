@@ -75,6 +75,16 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   their own dictionary group (`ctext`): the `files` group is part of the first load of a session, whose budget
   (20,000 bytes, `test_web_first_load`) was full.
 
+- **Dependencies** (issue #104): `server/uv.lock` opentelemetry-api 1.45.1 -> 1.45.2 (GHSA-mf5v-w3w3-f6cg).
+  `templates/scrapling/requirements.txt` re-resolved from `scrapling[fetchers,rag]==0.4.15` + `soupsieve>=4.0.0`
+  (soupsieve 3.0.3 -> 4.1.1, GHSA-mmhr-3c5m-f64f; also playwright 1.64.0 -> 1.65.2, patchright 1.64.1 -> 1.64.4,
+  curl-cffi 0.17.0, new frostwork): the lock hash changes, so `deps update` builds a new venv and the `chromium`
+  component installs the new revisions. Scrapling 0.5 is not taken: it drops `DynamicFetcher` and renames
+  `extract stealthy-fetch` to `extract fetch` (skill `web-scraping`, users' scripts). `scripts/bump-pins.sh`
+  keeps it below `SCRAPLING_BELOW` (0.5) and adds the `SCRAPLING_EXTRA` floors to the compile input.
+- `maxxing deps check --notify` exits 0 when it found something (the feed reports it): the default job `deps-check`
+  ran it and its runs read "Failed (code 1)". Without `--notify` the exit code is unchanged (1 = vulnerable).
+
 ## 2.0.0-alpha.156 - 2026-11-15
 
 - Voice mode hardening (Radar check): `tts.synth` waits at most `SYNTH_TIMEOUT_S` (30 s, `select`) for the Piper

@@ -145,7 +145,7 @@ Remotion, the Whisper models, Garage). As root.
 | `maxxing deps update [NAME...] [--notify]` | install the pinned versions next to the old ones, switch once they work (every `maxxing update` does it) |
 | `maxxing deps remove NAME [--force]` | delete what the manifest lists for it (`--force` for uv, Python, Claude Code) |
 | `maxxing deps clean [--dry-run] [--caches]` | old versions, unused browsers, leftovers, oversized logs (weekly job); `--caches` also empties root's uv / npm / pip / npx caches, shared with the other tools of the server |
-| `maxxing deps check [--notify] [--json]` | known vulnerabilities (osv.dev) in the lockfiles and components (weekly job, notification) |
+| `maxxing deps check [--notify] [--json]` | known vulnerabilities (osv.dev) in the lockfiles and components (weekly job, notification); exit code 1 when something is vulnerable, 0 with `--notify` (the notification reports it) |
 
 ## maxxing uninstall
 

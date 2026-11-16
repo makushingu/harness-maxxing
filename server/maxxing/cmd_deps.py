@@ -119,6 +119,7 @@ def cmd_deps(a) -> int:
                 print(f"  ! {v['where']}: {v['name']} {v['version']} ({', '.join(x for x in v['ids'] if x)})")
         if a.notify:
             deps.notify_vulnerable(r)
+            return 0                    # reported in the feed: the weekly job's run is not a failure
         return 1 if r["vulnerable"] else 0
     return 2
 

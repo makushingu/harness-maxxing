@@ -556,6 +556,15 @@ def test_check_json_stays_json_when_osv_is_unreachable(mx, monkeypatch, capsys):
     assert r["checked"] == 0 and r["vulnerable"] == [] and "no route" in r["skipped"]
 
 
+def test_check_exit_code_vulnerable_vs_notified(mx, monkeypatch, capsys):
+    found = {"checked": 4, "vulnerable": [{"where": "pip", "name": "x", "version": "1", "ids": ["GHSA-x"]}]}
+    monkeypatch.setattr(deps, "check", lambda timeout=30: found)
+    sent = []
+    monkeypatch.setattr(deps, "notify_vulnerable", lambda r: sent.append(r) or True)
+    assert cli.main(["deps", "check"]) == 1 and not sent                  # scripts: 1 = something vulnerable
+    assert cli.main(["deps", "check", "--notify"]) == 0 and sent == [found]   # weekly job: reported, not "failed"
+
+
 # kept here: test_videos.py and test_voice.py are skipped as a whole without ffmpeg, this test needs none
 def test_pdf_into_an_uncreatable_folder_raises_system_exit(st, monkeypatch, tmp_path):
     from maxxing import cmd_video
