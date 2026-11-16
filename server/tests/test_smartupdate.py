@@ -174,3 +174,11 @@ def test_after_update_verifies_and_opens_the_notes_session(code, monkeypatch):
     smartupdate.mark_updated("1.0.0", "1.1.0", smart=True)
     smartupdate.after_update()
     assert len(made) == 1
+
+
+def test_a_deeply_nested_update_file_is_ignored():
+    for rel in (smartupdate.REPORT, smartupdate.AFTER):
+        p = config.STATE / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text("[" * 200000)
+    assert smartupdate.last_report() is None and smartupdate.after_info() is None
