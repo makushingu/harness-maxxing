@@ -40,7 +40,8 @@ def _handler(a) -> int:
     cfg = config.load_config()
     addr = proxylisten.configured(cfg)
     info = {"address": f"{addr[0]}:{addr[1]}" if addr else "", "listening": bool(addr) and proxylisten.listening(*addr),
-            "ufw_blocks": bool(addr) and proxylisten.ufw_missing(*addr)}
+            "ufw_blocks": bool(addr) and proxylisten.ufw_missing(*addr),
+            "error": proxylisten.open_error(*addr) if addr else ""}
     if a.json:
         print(json.dumps(info))
     elif not addr:
@@ -48,6 +49,10 @@ def _handler(a) -> int:
     else:
         if info["listening"]:
             print(f"{info['address']}: listening")
+        elif info["error"]:
+            print(f"{info['address']}: NOT opened by the server at its start: {info['error']} (another program holds"
+                  f" the port? free it or choose another one: maxxing proxy on <address>:<port>; then"
+                  f" systemctl restart claude-maxxing)")
         elif not proxylisten.address_present(addr[0]):
             print(f"{info['address']}: no interface of this server has {addr[0]} (is Docker running? its bridge address:"
                   f" ip -4 addr show docker0; then maxxing proxy on <that address>:{addr[1]})")

@@ -32,6 +32,7 @@ def cmd_serve(a) -> int:
     extra = proxylisten.configured(cfg)
     if extra and extra[1] == port:
         print(f"proxy address {extra[0]}:{extra[1]} not opened: same port as the server", flush=True)
+        proxylisten.note_opened(*extra, error="same port as the server")
     if not extra or extra[1] == port:
         uvicorn.run(create_app(), **opts)
         return 0
@@ -40,8 +41,10 @@ def cmd_serve(a) -> int:
     sockets = [uc.bind_socket()]
     try:
         sockets.append(proxylisten.open_socket(*extra))
+        proxylisten.note_opened(*extra)
     except OSError as e:
         print(f"proxy address {extra[0]}:{extra[1]} not opened: {e}", flush=True)
+        proxylisten.note_opened(*extra, error=str(e) or type(e).__name__)
     server = uvicorn.Server(uc)
     server.run(sockets=sockets)
     return 0 if server.started else 3                # as uvicorn.run: a failed startup is not a clean exit

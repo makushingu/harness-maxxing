@@ -338,7 +338,30 @@ def address_present(host: str) -> bool:
     return True
 
 
+OPENED_FILE = "proxy_listen.json"   # state: what the server did with the proxy address at its start
+
+
+def note_opened(host: str, port: int, error: str = "") -> None:
+    """Called by `maxxing serve`: whether it opened the proxy address (another program on the port: not)."""
+    try:
+        config.write_json(config.STATE / OPENED_FILE, {"address": f"{host}:{port}", "error": error[:300]})
+    except OSError:
+        pass
+
+
+def open_error(host: str, port: int) -> str:
+    """Why the server could not open this address at its last start ("" = opened, or not known)."""
+    d = config.read_json(config.STATE / OPENED_FILE, {})
+    if not isinstance(d, dict) or d.get("address") != f"{host}:{port}":
+        return ""
+    return str(d.get("error") or "")
+
+
 def listening(host: str, port: int) -> bool:
+    """The server holds the address: something answers there, and it is not another program that took the port
+    before the server could open it."""
+    if open_error(host, port):
+        return False
     try:
         with socket.create_connection((host, port), timeout=2):
             return True
