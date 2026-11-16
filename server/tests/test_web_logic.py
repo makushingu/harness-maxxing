@@ -47,6 +47,15 @@ def test_the_default_one_time_date_is_a_whole_hour_in_the_configured_zone(tmp_pa
                    ["2026-11-14T12:00", "2026-11-14T12:00"]]
 
 
+def test_a_zone_the_browser_refuses_falls_back_instead_of_throwing(tmp_path):
+    t = 1794816000                                         # 2026-11-16T08:00:00Z
+    out = _run_ts(tmp_path, SCHEDULE, f"return [m.inputInZone({t}, 'Factory'), m.defaultOnceAt('Factory', {t})]")
+    assert out == ["2026-11-16T08:00", "2026-11-16T09:00"]
+    out = _run_ts(tmp_path, WEB / "lib" / "format.ts", f"return [m.fmtDate({t}, 'en', 'Factory', {{timeZone: 'Factory'}}) !== '',"
+                  f" m.fmtDate({t}, 'en', 'UTC', {{dateStyle: 'short', timeStyle: 'short'}})]")
+    assert out == [True, "11/16/26, 8:00 AM"]
+
+
 def test_a_task_whose_project_is_gone_is_listed_where_it_is_counted(tmp_path):
     out = _run_ts(tmp_path, WEB / "features" / "tasks" / "model.ts", """
         const task = (id, project_id) => ({ id, title: id, notes: '', status: 'todo', priority: 0, project_id, labels: [], due: null })
