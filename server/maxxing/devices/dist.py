@@ -157,7 +157,7 @@ def install_script(kind: str, code: str, server_url: str) -> str:
                 "foreach ($n in 'HarnessLink', 'HarnessPC') { Remove-ItemProperty -Path "
                 "'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run' -Name $n -ErrorAction SilentlyContinue }\n"
                 "try {\n"
-                f"  Invoke-WebRequest -UseBasicParsing -Uri \"{base}/windows-$arch?code={c}\" -OutFile \"$exe.tmp\"\n"
+                f"  Invoke-WebRequest -UseBasicParsing -Uri \"{base}/windows-${{arch}}?code={c}\" -OutFile \"$exe.tmp\"\n"
                 "  Move-Item -Force \"$exe.tmp\" $exe\n"
                 "} catch {\n"
                 "  Remove-Item -Force \"$exe.tmp\" -ErrorAction SilentlyContinue\n"

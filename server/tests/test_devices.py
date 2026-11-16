@@ -176,7 +176,7 @@ def test_invite_install_download_pair_and_confirm(dv):
     # the first "Harness PC" is stopped and unregistered too
     assert "pkill -x harness-pc" in sh.text and "LaunchAgents/com.harnessmaxxing.pc.plist" in sh.text
     ps = dv.get(f"/api/devices/install/{code.lower()}.ps1").text
-    assert "LOCALAPPDATA" in ps and "harness-link.exe" in ps and f"windows-$arch?code={code}" in ps
+    assert "LOCALAPPDATA" in ps and "harness-link.exe" in ps and f"windows-${{arch}}?code={code}" in ps
     assert "HarnessPC" in ps and "Invoke-WebRequest" in ps
     assert "Start-Process" not in ps and ps.rstrip().endswith("& $exe") and "'Path', 'User'" in ps
     # the desktop app carries its pairing trailer
