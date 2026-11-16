@@ -136,7 +136,8 @@ Before building something, check whether Harness Maxxing already does it: a to-d
 role or a bot -> an agent (skill `maxxing-agents`); something at set times -> a cron; "tell me when…" ->
 the Notifications feed (`maxxing-feed`); e-mail -> the E-mail page (`maxxing-mail`); sites, databases,
 servers -> Infra (`maxxing-infra`); a site with no API, a sign-in or a form to fill in -> the Harness Browser
-(`maxxing-browser`); an app on the user's own computer or phone -> Devices (`maxxing-devices`); repositories -> Git; a chat with other people -> Team; a card on the
+(`maxxing-browser`); an app on the user's own computer or phone -> Devices (`maxxing-devices`); repositories -> Git; a chat with other people -> Team; talking out loud
+with a session or an agent -> the voice mode (sound-waves button; Settings -> Voice -> Voice mode); a card on the
 dashboard or a page of its own -> an extension. Some pages are optional: `maxxing status` (line `Pages`)
 says which are on. When the right one is off, say it exists and that Settings -> Features turns it on in
 one click, then use it, rather than building a substitute.

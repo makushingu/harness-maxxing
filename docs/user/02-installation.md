@@ -164,7 +164,7 @@ That second address refuses every request that does not carry the secret header 
 cannot reach the UI directly nor pass for another visitor. With an active ufw, `maxxing proxy on` lets the private
 networks (where containers live) reach that port only; other machines of a private network can then reach it too, and
 get the same refusal without the secret. A connection there must send its request within 10 s, and at most 512 are
-open at once. If the block leaks, `maxxing proxy on --new-secret` makes it worthless (copy the new one). `maxxing proxy status` says when ufw blocks it. Updates never touch Traefik: its configuration is yours. Docker's published ports
+open at once. If the block leaks, `maxxing proxy on --new-secret` makes it worthless (copy the new one). `maxxing proxy status` says when ufw blocks it, and when another program already held the port when the service started (the address is then not opened). Updates never touch Traefik: its configuration is yours. Docker's published ports
 bypass ufw (true of every Docker server). `maxxing proxy off` closes the address.
 
 ## Unattended install

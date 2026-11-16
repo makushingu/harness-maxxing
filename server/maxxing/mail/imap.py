@@ -100,6 +100,10 @@ def mutf7_encode(s: str) -> str:
 
 def _q(name: str) -> str:
     """A folder name as an IMAP quoted string (modified UTF-7)."""
+    if any(ord(c) < 0x20 or ord(c) == 0x7F for c in name):       # NUL, CR/LF...: no folder has them
+        raise MailError("bad_folder", "invalid folder name")
+    if any(0xD800 <= ord(c) <= 0xDFFF for c in name):            # a lone surrogate cannot be encoded
+        raise MailError("bad_folder", "invalid folder name")
     return '"' + mutf7_encode(name).replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
@@ -482,6 +486,8 @@ def _line(s: Any) -> str:
 HDR_CAP = 16 * 1024          # characters of one header field parsed (the stdlib parser is quadratic: a 1 MB Subject took 11 s)
 ADDR_CAP = 4 * 1024          # an address list (about a hundred recipients) is cut at the last comma under this: the
                              # address parser is quadratic (64 KB of commas took 18 s, on every list of the folder)
+ADDR_MORE = 200              # addresses kept in all from a list past ADDR_CAP (the rest is scanned without the parser)
+_ADDR_SPEC = re.compile(r"[^\s<>,;:\"()\[\]@]{1,64}@[A-Za-z0-9.-]{1,253}")
 # whitespace between two encoded-words is not part of the text (RFC 2047 6.2): "=?utf-8?b?..Dupo?= =?utf-8?b?bnQ=?="
 # is "Dupont"; the stdlib joins them with a space in display names (Subject is right)
 _EW = r"=\?[^?\s]+\?[bBqQ]\?[^?\s]*\?="
@@ -501,13 +507,8 @@ def _raw(msg: Any, name: str) -> str | None:
     return None
 
 
-def _cut(raw: str, cap: int, sep: str = "") -> str:
-    if len(raw) <= cap:
-        return raw
-    raw = raw[:cap]
-    if sep and sep in raw:
-        raw = raw.rsplit(sep, 1)[0]              # no half address
-    return raw
+def _cut(raw: str, cap: int) -> str:
+    return raw if len(raw) <= cap else raw[:cap]
 
 
 def _decoded(raw: str) -> str:
@@ -546,13 +547,25 @@ def _addrs(msg: Any, name: str) -> list[dict]:
     raw = _raw(msg, name)
     if raw is None or not raw.strip():
         return []
-    raw = _cut(raw, ADDR_CAP, ",")
+    rest = ""
+    if len(raw) > ADDR_CAP:
+        head = raw[:ADDR_CAP]
+        if "," not in head:                     # one address longer than the cap: its text, never a half address
+            return [{"name": _line(" ".join(_decoded(head).split())), "email": ""}]
+        raw, rest = head.rsplit(",", 1)[0], raw[len(head.rsplit(",", 1)[0]):]
     try:
         v = _parsed(msg, name, _EW_GAP.sub(r"\1", raw))
-        return [{"name": _line(a.display_name or ""), "email": _line(a.addr_spec or "")} for a in v.addresses]
+        out = [{"name": _line(a.display_name or ""), "email": _line(a.addr_spec or "")} for a in v.addresses]
     except Exception:  # noqa: BLE001 - malformed header
         s = " ".join(_decoded(raw).split())
-        return [{"name": "", "email": _line(s)}] if s else []
+        out = [{"name": "", "email": _line(s)}] if s else []
+    # past the cap: the addresses of the rest found without the parser (linear), so none is hidden (a Reply-To)
+    seen = {a["email"].lower() for a in out}
+    for e in _ADDR_SPEC.findall(rest[:HDR_CAP]):
+        if e.lower() not in seen and len(out) < ADDR_MORE:
+            seen.add(e.lower())
+            out.append({"name": "", "email": _line(e)})
+    return out
 
 
 def _idate(internal: bytes | None) -> float | None:

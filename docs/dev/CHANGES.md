@@ -51,6 +51,105 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   `local_host()` and `security.loopback()` moved out of it. The HUD: `MessageIn.hud`, `runner.HUD_PREFACE`, inline
   screen captures (`stdin_payload`, `inline_image`), web `Hud.tsx`, route `/hud`, `ui.hud`; Caddy route `hud` -> `link`.
   The `display-capture=()` Permissions-Policy stays.
+- Automatic update (`maxxing.auto_update`): an upgrade note no longer makes the preflight "needs a person"
+  (`_simple`): since the notes exist about one version out of two has one, so the first of them stopped the
+  automatic update for good (every later target crosses the same note). The update now runs as `maxxing update
+  --auto` (new flag, kept as `auto` in `update/after.json`); `smartupdate.after_update()` announces the notes to
+  apply in the feed (`auto-update-notes:<version>`), no session is opened. `tick()` keeps every pass in
+  `auto-update.json` `last` `{at, result, why?}` (GET /api/system/version `auto_update.last`, line under the switch,
+  strings `system.autoLast` / `autoRes.*` / `autoWhy.*`, group `settings`), logs a change of result, looks again
+  after `BUSY_POLL_S` (5 min) when the server was busy, posts "Harness is updating" only after the unit started
+  (new result `failed`), and dedupes "needs you" per version instead of per commit (one per push on beta).
+
+- "Copy the text" (`web/src/features/files/copyText.tsx`: `useCopyChoices`, `CopyTextButton` for a title bar,
+  `CopyTextItems` for a menu; used by `Viewer.tsx`, `FilePreview.tsx`, `pages/files/FileView.tsx`, where the text is
+  the editor's, unsaved changes included). Plain text is made in the browser by `features/files/plainText.ts`
+  (lazy chunk: `markdownToText` walks the mdast of `unified` + `remark-parse` + `remark-gfm`, `htmlToText` walks a
+  `DOMParser` document - nothing of the page runs or loads -, `sheetsToText` gives TSV). `unified` and `remark-parse`
+  were already installed through react-markdown; they are now declared in `web/package.json`. New route
+  `GET /api/files/pdf/text` (`pdftotext`, at most `PDF_TEXT_MAX` 2 MB then `truncated`; a scan gives an empty text).
+  `lib/utils.ts` `copyTextLater(promise)`: a text fetched or converted after the click is handed to the clipboard as
+  a `ClipboardItem` promise (Safari only writes during the click), with `copyText` as the fallback. Its strings are
+  their own dictionary group (`ctext`): the `files` group is part of the first load of a session, whose budget
+  (20,000 bytes, `test_web_first_load`) was full.
+
+## 2.0.0-alpha.156 - 2026-11-15
+
+- Voice mode hardening (Radar check): `tts.synth` waits at most `SYNTH_TIMEOUT_S` (30 s, `select`) for the Piper
+  worker, then stops it (`504 tts_timeout`) instead of holding `tts._lock` and the call; `voicecall.settings()`
+  resets a non-string value of a hand-edited `voice_call`. Browser: a hang up while a call starts closes what it
+  opened (mic, peer connection; `VoiceCall` `attempt` counter, `closed` checks after each await); OpenAI's open
+  waits at most 15 s and fails on ICE failure (no reconnection stuck), its level meter's AudioContext is closed;
+  Gemini's setup waits at most 15 s, a reconnection resets `muted` / captions, the mic buffer is capped while
+  disconnected; a call whose connection cannot be renewed is hung up (`VoiceEvents.ended`).
+- Voice mode on an agent's page: `VoiceCall` gets `callKey` (`agent:<path>`, the call's own key for `/call/start`;
+  `sid` = `chat_session`, '' before the first message, followed when a new conversation starts) and `stream` (the
+  call follows that session's log). `RunIn.call` -> `agents.fire(call=)` -> `send_message` / `create_session(call=)`
+  (and kept by `owner_wait`).
+- Wording only: `sessions.queue.inject` "Add to task", `sessions.msg.injected` "added to the running task" +
+  `sessions.msg.injectedTip` (Items.tsx tooltip); no API change.
+- Voice mode (`voicecall.py`, `tts.py`, `tts_worker.py`, `api/voice.py` `/call*` `/tts*` `/said`, web
+  `features/voice/{VoiceCall,VoiceCallSettings}.tsx` + `features/voice/call/*`, i18n group `vmode`). Config key
+  `voice_call` (see API.md#voice-mode). Design after two tries: (1) a small model that answered and rewrote requests
+  (`@ask: <request>`) answered from its own knowledge, rephrased in English and switched language; (2) every
+  sentence sent to the session with canned acknowledgements was slow and robotic ("I'm taking it into account" on
+  each fragment, sentences cut after 0.9 s of silence). Now: the voice converses (`talker_model`, default sonnet;
+  `claude -p --input-format stream-json --include-partial-messages --tools ""` per call, cwd `<state>/claude-titles`)
+  and decides with a bare `@ask` / `@stop` line (`reply_parts`: an "@" line is never said, an echo of the bracketed
+  lines is dropped); `@ask` hands over `_handover(c)` = the user's own sentences since the last hand-over (earlier
+  ones only when they answered a question of the voice, small talk left out, `MAX_PENDING` 4). Each message to the
+  voice: `[Work: <state line>]` + `[Language: xx]` + the sentence, or `[Work finished|failed|in progress]`.
+  Without a model: `classify` (Whisper hallucinations, noise, stop words after "non / ok / attends", language
+  requests = a speak verb right before the language name), `is_echo` (60 % of the words of the sentence the voice was
+  saying), `sort` (one language per call; the first sentence is transcribed in "auto" and sets it, `settled`). If the
+  voice fails, a sentence is handed over anyway with a phrase of `PHRASES`. Messages carry `call: <lang>`
+  (`MessageIn.call`, queue item `call`, kept by `_merged`, `runner.CALL_PREFACE`); said while the session works ->
+  `/inject`. Browser (`call/local.ts`), one barge-in behaviour (no `turn_mode`): a sound over the voice ducks it
+  (`DUCK_VOLUME` 0.3), 0.8 s of speech well over the echo (`CONFIRM_MS`, `CONFIRM_FRAMES`; `DUCK_MAX_MS` 3 s) pauses
+  it, quiet again within `DUCK_QUIET_MS` = it was noise; `empty` (noise, `is_echo`, `_BACKCHANNEL` words said over
+  the voice: "ouais", "hm", "ok"...) says the cut sentence again from its start; tap = `interrupt()`. End of a
+  sentence after `silence_ms` (default 1800). Nothing new is played while the user speaks or while their transcript
+  is pending (`hearing`); a reply not started yet is aborted when the user goes on (the server keeps what was not
+  handed over, and a cut reply makes the next message start with "[They went on before your reply ended…]"); ends of turns wait for the voice to be
+  free, the end of a stopped turn is not told (`muteNext`). Progress (`VoiceCall.tsx`): every 3 s, when the session
+  works, the call did nothing for 15 s (then 25 s) and the log moved: `/turn` `outcome=progress` (`note` = last
+  assistant text, `tool`). Cloud (`call/cloud.ts` `Relay`): the provider's transcription is kept (pending) and sorted
+  by `/call/sort` (stop, noise); `ask_session()` (no argument) sends the pending words.
+  Reconnection: `/call/start` `resume` = a new token for the same call; Gemini's setup has `sessionResumption` (the
+  browser keeps the last `sessionResumptionUpdate.newHandle` and reconnects on `goAway` or a close, with the handle,
+  without it after a refusal, then with `Relay.recap()` = the last 16 lines); OpenAI reconnects on a failed peer
+  connection (or 4 s disconnected) or a closed data channel and is given the recap. A tap on a Gemini call mutes the
+  reply under way to its `turnComplete` (Live has no cancel); OpenAI: `response.cancel` + `output_audio_buffer.clear`. Piper (piper-tts, GPL) lives
+  in its own venv under `<state>/voice/tts`, run apart; `tts_worker.py` is executed by that venv's Python (`-I`),
+  never imported. Cloud tokens only (OpenAI client_secrets, Gemini auth_tokens with the full
+  `bidiGenerateContentSetup`, so a client cannot change the instructions or tools); the browser talks to the provider
+  directly (WebRTC / WebSocket). Mic capture by ScriptProcessor (an AudioWorklet from a Blob is refused by the app's
+  script-src). Not done: approvals by voice, Telegram.
+- Voice mode, local: `tts.VOICES` = id -> {model, path, speaker?, lang, name} (several voices in one Piper model,
+  e.g. upmc Pierre/Jessica; worker request gains `speaker`; old id `fr_FR-upmc-medium` aliased); `pick_voice` only
+  uses the chosen voice for its language. `voice_call.local_speed` (0.8-1.5, default 1.15). The first sentence
+  of a call is transcribed in any language and sets the call's language (forced into a wrong one, Whisper
+  translates: the interface language is only a guess); then transcribed in the call's language; when the mean `avg_logprob` is below `voice.WRONG_LANGUAGE_LOGPROB` (-0.4; right language about
+  -0.2, wrong -0.45 to -0.85 with `small`; `voice.text_language` corrects a French run that copied English), the
+  other `call_languages()` (voice setting, browser language sent to `/call/start`, server language, en) are tried and
+  the best kept (`transcribe_file(among=...)`; `detect_language` cost +1.3 s on every sentence). Barge-in ("call"
+  mode): while speaking, the threshold follows the echo heard by the mic (`max(0.07, floor*2.5, echo*1.6)`, 4 frames)
+  instead of a fixed 0.32.
+- Web: `features/composer/MessageBox.tsx` = the shared shell of every message box (`MessageBox`: slots `above`, `menu`,
+  `top`, `backdrop`, `toolbar`, `actions`, `voice`, `send`, `reason`, `closed`, `boxProps`, `compact`,
+  `widthClassName`; `TuckedCard` / `TuckedHead` = the cards tucked under the top of the box, rise and sink, last
+  content kept 220 ms; `CloseButton`, `StopButton`). `AttachmentChip` + `Att` moved to `features/composer/AttachmentChip.tsx`
+  (re-exported by `pages/sessions/Composer`; `progress < 0` = no progress known, "…"), `insertAtCaret` to
+  `features/composer/text.ts` (re-exported by `features/agents/attach`). Users: `pages/sessions/Composer` (no visible
+  change), the agent box (`AgentPage` `Composer`: toolbar `ModelPicker` + `CompactGauge`, actions New conversation +
+  Stop of the chat session via `useStopSession`, reply = `TuckedCard`; the separate `agent-chat-bar` is gone), the group
+  box (`GroupPage`: recipients in `top`, the `@` list in `menu`), the Team box (`team/Chat` `Composer`: poll in
+  `toolbar`, reply / edit = `TuckedCard`, `VoiceButton` dictation, Enter = newline on `pointer: coarse` like the other
+  boxes). `attach.tsx`: `AttachList` / `AttachButton` removed (the shell draws them).
+- Web: `CompactGauge` (`pages/sessions/Widgets.tsx`, replaces `ContextGauge`) in the toolbar of the session and agent
+  boxes, removed from the session header. Threshold `compactAt(auto_compact_tokens, window)` mirrors
+  `runner._auto_compact` (setting raised to 100k, `resume.fit`: min(limit, max(window - 70k, window / 2))); off = the
+  model's window. Wide / narrow from the toolbar's `@container` (`@md`). Tooltip texts `cgauge.*` in the `composer` i18n group.
 
 ## 2.0.0-alpha.155 - 2026-11-15
 

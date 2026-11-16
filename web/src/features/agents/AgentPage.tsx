@@ -30,7 +30,7 @@ import { useCompact, useMediaQuery } from '@/stores/media'
 import {
   Badge, Button, EmptyState, Sensitive, Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle, Skeleton, StatusDot, Switch, Textarea, Tooltip, toast,
 } from '@/components/ui'
-import { ModelPicker } from '@/pages/sessions/Widgets'
+import { CompactGauge, ModelPicker } from '@/pages/sessions/Widgets'
 import { Page, PageHeader } from '@/components/shell/Page'
 import { absTopicDir, filesUrl, fmtCost, modelLabel, relPaths, toolIcon, type PathBases } from '@/pages/sessions/util'
 import { AgentMenuButton } from './AgentMenu'
@@ -42,9 +42,11 @@ import { AgentsOff, ContinueButton, costLine, reasonText, useAgentsOn } from './
 import { CutNote, WaitingNote } from './CutNote'
 import { ApprovalLine, ThreadApprovalBody, useAgentBrowserAsks, useThreadApprovals } from './approvals'
 import { BrowserWindow } from '@/features/browser/BrowserWindow'
-import { AttachButton, AttachList, bringBackDraft, insertAtCaret, useAttachments, useDraftText, withQuote } from './attach'
+import { bringBackDraft, insertAtCaret, useAttachments, useDraftText, withQuote } from './attach'
 import { agentDraftKey } from '@/lib/drafts'
 import { VoiceButton } from '@/features/voice/VoiceButton'
+import { VoiceCall } from '@/features/voice/VoiceCall'
+import { MessageBox, StopButton, TuckedCard, TuckedHead } from '@/features/composer/MessageBox'
 import { AttachmentStrip, MessageMedia, useMessageMenu, VoiceNote } from '@/pages/sessions/Items'
 import { useSlashCommands } from '@/pages/sessions/slashCommands'
 import { useSlashMenu } from '@/pages/sessions/useSlashMenu'
@@ -1177,71 +1179,89 @@ function Composer({ agent: a, replyTo, onCancelReply, onSend, ref }: { agent: Ag
       )
       .finally(() => alive.current && setVoiceUp(false))
   }
+  const stopChat = useStopSession()
+  const showModel = a.enabled && !replyTo
   return (
-    <div className="shrink-0 border-t bg-background px-3 py-3 md:px-8">
-      <div className="relative mx-auto flex max-w-3xl flex-col rounded-xl border bg-card p-1.5 focus-within:border-primary/50" {...(a.enabled ? files.dropProps : {})}>
-        {slash.node}
-        {replyTo && (
-          <div className="mb-1 flex items-center gap-2 rounded-lg bg-muted py-1 pr-1 pl-2 text-[12px]" data-testid="agent-replying">
-            <Reply className="size-3.5 shrink-0 text-primary" />
-            <span className="min-w-0 flex-1 truncate">
-              <span className="font-medium">{t('agents.conv.replyingTo')}</span>
-              <span className="text-muted-foreground"> · {firstLine(replyTo.text)}</span>
-            </span>
-            <button type="button" onClick={onCancelReply} className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground pointer-coarse:grid pointer-coarse:size-10 pointer-coarse:place-items-center" aria-label={t('common.cancel')}>
-              <X className="size-3.5" />
-            </button>
-          </div>
-        )}
-        {!a.enabled ? (
-          <p className="px-2 py-1.5 text-sm text-muted-foreground">{t('agents.conv.paused')}</p>
-        ) : (
+    <MessageBox
+      widthClassName="max-w-3xl md:px-5"
+      above={
+        <TuckedCard open={!!replyTo} data-testid={replyTo ? 'agent-replying' : undefined}>
+          {replyTo && (
+            <TuckedHead icon={<Reply />} onClose={onCancelReply} closeLabel={t('common.cancel')} className="pb-4.5">
+              <span className="font-medium text-foreground">{t('agents.conv.replyingTo')}</span> · {firstLine(replyTo.text)}
+            </TuckedHead>
+          )}
+        </TuckedCard>
+      }
+      menu={slash.node}
+      closed={!a.enabled ? t('agents.conv.paused') : null}
+      atts={files.atts}
+      onRemoveAtt={files.remove}
+      attsTestId="agent-attachments"
+      backdrop={<ChipBackdrop text={text} spans={commandSpan(text, a.enabled ? commands : undefined)} target={inputEl} />}
+      textareaRef={setInput}
+      textarea={{
+        value: text,
+        onPaste: files.onPaste,
+        onChange: (e) => setText(e.target.value),
+        onKeyDown: (e) => {
+          if (slash.onKeyDown(e)) return
+          const k = files.keyAction(e)
+          if (k === 'send') submit()
+          else if (k === 'escape') {
+            if (replyTo) onCancelReply()
+            else e.currentTarget.blur()
+          }
+        },
+        maxRows: 8,
+        placeholder: replyTo ? t('agents.conv.replyPlaceholder', { name: a.display_name }) : t('agents.conv.placeholder', { name: a.display_name }),
+        'data-testid': 'agent-run-text',
+      }}
+      onFiles={files.add}
+      attachTestId="agent-attach"
+      toolbar={
+        showModel ? (
           <>
-          <AttachList atts={files.atts} onRemove={files.remove} />
-          <div className="flex items-end gap-1">
-            <AttachButton onFiles={files.add} />
-            <ChipBackdrop text={text} spans={commandSpan(text, a.enabled ? commands : undefined)} target={inputEl} />
-            <Textarea
-              ref={setInput}
-              value={text}
-              onPaste={files.onPaste}
-              onChange={(e) => setText(e.target.value)}
-              onKeyDown={(e) => {
-                if (slash.onKeyDown(e)) return
-                const k = files.keyAction(e)
-                if (k === 'send') submit()
-                else if (k === 'escape') {
-                  if (replyTo) onCancelReply()
-                  else e.currentTarget.blur()
-                }
-              }}
-              minRows={1}
-              maxRows={8}
-              placeholder={replyTo ? t('agents.conv.replyPlaceholder', { name: a.display_name }) : t('agents.conv.placeholder', { name: a.display_name })}
-              className="relative min-h-8 flex-1 resize-none border-0 bg-transparent px-1.5 py-1.5 text-[14px] shadow-none focus-visible:ring-0 dark:bg-transparent"
-              data-testid="agent-run-text"
-            />
-            <VoiceButton onTranscript={onTranscript} onVoiceMessage={onVoiceMessage} />
-            <Button size="icon-sm" onClick={() => submit()} disabled={!canSend} loading={run.isPending || voiceUp} aria-label={t('agents.run.now')} data-testid="agent-run">
-              <Send />
-            </Button>
-          </div>
+            <ModelPicker chosen={model} defaultModel={setting || undefined} real={chat?.real_model} contextTokens={chat?.context_tokens} onChange={onModel} effort={effort} onEffort={onEffort} />
+            <CompactGauge tokens={chat?.context_tokens} window={chat?.context_window} model={model || chat?.model} realModel={chat?.real_model} />
           </>
-        )}
-      </div>
-      {a.enabled && !replyTo && (
-        <div className="mx-auto mt-1 flex max-w-3xl items-center gap-2 px-1" data-testid="agent-chat-bar">
-          <ModelPicker chosen={model} defaultModel={setting || undefined} real={chat?.real_model} contextTokens={chat?.context_tokens} onChange={onModel} effort={effort} onEffort={onEffort} />
-          {a.chat_session && (
+        ) : null
+      }
+      actions={
+        <>
+          {showModel && a.chat_session && (
             <Tooltip content={t('agents.chat.newHint')}>
-              <Button variant="ghost" size="sm" className="ml-auto h-7 text-xs text-muted-foreground" onClick={() => fresh.mutate({ path: a.path })} loading={fresh.isPending} data-testid="agent-new-chat">
-                <MessageSquarePlus /> {t('agents.chat.new')}
+              <Button variant="ghost" size="icon-sm" aria-label={t('agents.chat.new')} onClick={() => fresh.mutate({ path: a.path })} loading={fresh.isPending} className="text-muted-foreground" data-testid="agent-new-chat">
+                <MessageSquarePlus />
               </Button>
             </Tooltip>
           )}
-        </div>
-      )}
-    </div>
+          {a.enabled && (
+            // A voice call with the agent: what is said goes to its conversation (as typed here), its answers are
+            // read out. The call follows the conversation when a new one starts.
+            <VoiceCall
+              sid={a.chat_session || ''}
+              callKey={`agent:${a.path}`}
+              stream
+              running={chat?.state === 'running'}
+              queueCount={chat?.queue || 0}
+              onSend={(said, _atts, call) =>
+                run.mutateAsync({ path: a.path, text: said, call, ...nextPick() }).then(
+                  (r) => !!r.started,
+                  () => false,
+                )
+              }
+              onStop={chat ? () => stopChat.mutate(chat.id) : undefined}
+            />
+          )}
+          {chat && chat.state === 'running' && <StopButton onClick={() => stopChat.mutate(chat.id)} busy={stopChat.isPending} label={t('sessions.stop')} />}
+        </>
+      }
+      voice={<VoiceButton onTranscript={onTranscript} onVoiceMessage={onVoiceMessage} />}
+      send={{ onClick: () => submit(), disabled: !canSend, busy: run.isPending || voiceUp, label: t('agents.run.now'), testId: 'agent-run' }}
+      reason={files.uploading ? t('sessions.composer.uploading') : null}
+      boxProps={{ ...(a.enabled ? files.dropProps : {}), 'data-testid': 'agent-box' }}
+    />
   )
 }
 
@@ -1312,7 +1332,7 @@ function Profile({ agent: a }: { agent: AgentDetail }) {
           <button
             type="button"
             onClick={() => setAdvanced('protection')}
-            className={cn('-mx-1 mt-1 flex items-center gap-1.5 rounded-md px-1 py-0.5 text-left hover:bg-accent', !a.sandbox && readsOutside(a) ? 'text-warning' : 'text-muted-foreground')}
+            className={cn('-mx-1 mt-1 flex items-center gap-1.5 rounded-md px-1 py-0.5 text-left hover:bg-accent pointer-coarse:min-h-10', !a.sandbox && readsOutside(a) ? 'text-warning' : 'text-muted-foreground')}
             data-testid="agent-sandbox-line"
           >
             {a.sandbox ? <ShieldCheck className="size-3.5 shrink-0" /> : <Lock className="size-3.5 shrink-0 opacity-60" />}
@@ -1364,7 +1384,7 @@ function Profile({ agent: a }: { agent: AgentDetail }) {
         </button>
         <Link
           to={`/agents/groups/new?project=${encodeURIComponent(a.project)}&with=${encodeURIComponent(a.path)}`}
-          className="flex items-center gap-1.5 justify-self-start px-1 text-xs text-muted-foreground hover:text-foreground"
+          className="flex items-center gap-1.5 justify-self-start px-1 text-xs text-muted-foreground hover:text-foreground pointer-coarse:min-h-10"
           data-testid="agent-new-group"
         >
           <UsersRound className="size-3.5 shrink-0" /> {t('groups.withAgent')}
@@ -1445,7 +1465,7 @@ function RoleEditor({ agent: a }: { agent: AgentDetail }) {
         <button
           type="button"
           onClick={() => setV(a.description)}
-          className="group min-w-0 rounded-lg bg-muted px-3 py-2 text-left text-sm break-words whitespace-pre-line hover:bg-muted"
+          className="group min-w-0 rounded-lg bg-muted px-3 py-2 text-left text-sm break-words whitespace-pre-line hover:bg-muted pointer-coarse:min-h-10"
           data-testid="agent-role"
         >
           {a.description ? <Sensitive block>{a.description}</Sensitive> : <span className="text-muted-foreground italic">{t('agents.noRole')}</span>}

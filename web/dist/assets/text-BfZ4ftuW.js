@@ -1,0 +1,1 @@
+function e(e,t,n){let r=e?e.selectionStart:t.length,i=e?e.selectionEnd:t.length,a=t.slice(0,r),o=t.slice(i),s=(a&&!/\s$/.test(a)?` `:``)+n+(o&&!/^\s/.test(o)?` `:``);return{text:a+s+o,caret:a.length+s.length}}export{e as t};

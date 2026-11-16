@@ -106,11 +106,13 @@ def test_scanner_ignores_names():
     for ok in ("password: in the vault (Settings -> Keys)", "mot de passe : `<PASSWORD>`", "passwd = changeme",
                "password: see accounts", "| mdp: 1Password |", "password=$DB_PASS_2024",
                "- Password: https://vault.bitwarden.com/#/vault?itemId=4f2a", "sk_live_ keys start like this", "the eyJ prefix of a JWT",
-               "(mdp : SHOP2_CF_PASSWORD)", "password: SMTP_PASS_2024, rotated", 'password: "SHOP_DB_PASS2"', "mdp: S3_SECRET_KEY"):
+               "(mdp : SHOP2_CF_PASSWORD)", "password: SMTP_PASS_2024, rotated", 'password: "SHOP_DB_PASS2"', "mdp: S3_SECRET_KEY",
+               "mdp: SHOP_DB_PASS2."):
         assert backup.scan_bytes(ok.encode()) == [], ok
     # a key name only when it is the whole value: a password that starts like one, or mixed case, is still caught
     for bad in ("mdp : SHOP2_CF_Xk81mQ", "password: Shop_Db_2024x", "password: ABC_DEF12gh", "password: S3CR3T_P4SS_9X",
-                "mdp: P4SSW0RD_2024", 'password: "AB12CD_9X"'):
+                "mdp: P4SSW0RD_2024", 'password: "AB12CD_9X"', "password: ADMIN_PASS1:xK9fQ2mZtail",
+                "mdp: ROOT_X1.s3cr3tTail99", "password: DB_PASS2,Zq81kLmw", "mot de passe : SHOP_KEY;9fQ2mZxx"):
         assert backup.scan_bytes(bad.encode()) == ["password"], bad
 
 

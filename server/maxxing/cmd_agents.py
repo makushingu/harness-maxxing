@@ -546,6 +546,9 @@ def _set(path: str, a) -> int:
         print("ignored (unknown field or wrong type): " + ", ".join(r["ignored"]), file=sys.stderr)
     if r.get("sandbox_auto"):
         print(agents.SANDBOX_AUTO_NOTE)
+    if r.get("error"):
+        print(r["error"], file=sys.stderr)
+        return 1
     return 0 if r["applied"] or r["asked"] else 2
 
 

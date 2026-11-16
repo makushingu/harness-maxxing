@@ -421,7 +421,7 @@ export const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const
 export type Effort = (typeof EFFORTS)[number]
 export type CreateSessionBody = { path: string; message?: string; title?: string; model?: string; effort?: Effort | ''; attachments?: string[]; plan_mode?: boolean; /** Absolute path of a voice message sent directly. */ voice?: string; /** This page's id for the first message (see SendMessageBody). */ client_id?: string; /** Work on a separate copy (Code mode). */ worktree?: { repo: string; base?: string; prepare?: string; copy_env?: boolean; remember?: boolean } }
 export type PatchSessionBody = { title?: string; model?: string; effort?: Effort | ''; archived?: boolean; notify?: boolean; plan_mode?: boolean; favorite?: boolean; /** Move to another topic (idle sessions only). */ path?: string }
-export type SendMessageBody = { text: string; attachments?: string[]; /** Absolute path of a voice message sent directly: the server transcribes it, then sends it. */ voice?: string; /** This page's id for the message, found again in `client_ids` of its queue item and its log event (a reload mid-send checks it). */ client_id?: string; /** The @ of the composer: the server tells Claude how to write to each. */ mentions?: Mention[] }
+export type SendMessageBody = { text: string; attachments?: string[]; /** Sent during a voice call, in that language: Claude answers short and easy to say. */ call?: string; /** Absolute path of a voice message sent directly: the server transcribes it, then sends it. */ voice?: string; /** This page's id for the message, found again in `client_ids` of its queue item and its log event (a reload mid-send checks it). */ client_id?: string; /** The @ of the composer: the server tells Claude how to write to each. */ mentions?: Mention[] }
 export type SendMessageResult = { queued: boolean; session: Session }
 /** Who the composer's @ can name (GET /api/sessions/{id}/mentions). */
 export type MentionKind = 'session' | 'agent' | 'team'
@@ -439,7 +439,7 @@ export type UploadResult = { files: Upload[] }
 
 export type Usage = { input: number; output: number; cache_read: number; cache_write: number }
 export type SessionEvent =
-  | { type: 'user'; text: string; attachments: string[]; at: number; source: SessionSource; /** Audio of a voice message sent directly. */ voice?: string[]; /** The web pages' ids of the message(s) it carries (SendMessageBody.client_id). */ client_ids?: string[]; /** Added to a running turn (Add to plan): read at Claude's next step. */ injected?: boolean; /** Sent by another session's turn (`maxxing sessions send`). */ from?: { session: string; title: string }; /** The @ it names (composer menu): drawn as chips. */ mentions?: SentMention[] }
+  | { type: 'user'; text: string; attachments: string[]; at: number; source: SessionSource; /** Audio of a voice message sent directly. */ voice?: string[]; /** The web pages' ids of the message(s) it carries (SendMessageBody.client_id). */ client_ids?: string[]; /** Added to a running turn (Add to task): read at Claude's next step. */ injected?: boolean; /** Sent by another session's turn (`maxxing sessions send`). */ from?: { session: string; title: string }; /** The @ it names (composer menu): drawn as chips. */ mentions?: SentMention[] }
   /** Transcript of the voice message just above (or why it failed). */
   | { type: 'voice_text'; text: string; error: string | null; stopped?: boolean; at: number }
   | { type: 'assistant'; text: string; at: number; /** Written by Claude Code in place of an answer, the API refused the call: why (rate_limit, server_error…). */ error?: string }
@@ -968,7 +968,13 @@ export type VersionInfo = {
   /** Last update seen by the restarted server; notes_session = the Harness session applying its upgrade notes. */
   after?: { to: string; at: number; notes_session?: string | null; notes_path?: string | null; done?: boolean } | null
   /** Automatic update while nobody is on the interface (`auto_update`, default off). */
-  auto_update?: { enabled: boolean; tried?: { target: string; version?: string; at: number } | null; last_check?: { at: number; verdict: string } | null }
+  auto_update?: {
+    enabled: boolean
+    tried?: { target: string; version?: string; at: number } | null
+    last_check?: { at: number; verdict: string } | null
+    /** What its last pass decided (`result`: started, busy, up_to_date, needs_review...; `why`: what a busy server waits for). */
+    last?: { at: number; result: string; why?: string } | null
+  }
 }
 export type PreflightCustom = {
   id: string

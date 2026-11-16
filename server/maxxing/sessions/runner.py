@@ -1179,6 +1179,8 @@ def build_prompt(item: dict) -> str:
     files = [str(p) for p in item.get("attachments") or [] if p]
     if files:
         text = (text + "\n\n" if text else "") + "Attached files:\n" + "\n".join(f"- {p}" for p in files)
+    if item.get("call"):
+        text = CALL_PREFACE.format(lang=item["call"]) + text
     if item.get("plan_approved"):
         text = PLAN_APPROVED_PREFACE + text
     if item.get("steer"):
@@ -1416,6 +1418,13 @@ PLAN_PREFACE = ("[Plan mode is on: you must not create, edit or delete files nor
 PLAN_APPROVED_PREFACE = ("[The user validated your plan: plan mode is off, you can now edit files and run "
                          "commands. Implement the latest version of the plan you proposed, then report what you "
                          "did.]\n\n")
+
+
+CALL_PREFACE = ("[Said by the user on a voice call (speech-to-text, language: {lang}): your answer is read out to "
+                "them. Do the work as usual, then answer in that language, short and easy to say: the result first, "
+                "plain sentences, no tables, no code, no lists, no paths or URLs unless asked, one question at a "
+                "time. The transcript may have small errors: read it for its meaning. To change the call itself (voice, speed, "
+                "on this server or cloud, the pause before it answers): Settings -> Voice -> Voice mode.]\n\n")
 
 
 def _idle_compact(m: dict, item: dict, cfg: dict, now: float, window: object = None) -> tuple[str, int] | None:

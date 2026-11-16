@@ -1,4 +1,4 @@
-// Small column widgets: model picker (shows the model that ACTUALLY answered), context gauge, state badge.
+// Small column widgets: model picker (shows the model that ACTUALLY answered), compaction gauge, state badge.
 import { Check, ChevronDown, Cpu } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
@@ -149,40 +149,54 @@ export function ModelPicker({
   )
 }
 
-export function ContextGauge({ tokens, window: reported, model, realModel, ring }: { tokens: number | null; window?: number | null; model?: string | null; realModel?: string | null; ring?: boolean }) {
+/** The context left before the next compaction, next to the model picker of a composer. The threshold is the
+ *  server's (runner._auto_compact): `auto_compact_tokens` raised to 100k, capped by the model's window
+ *  (resume.fit: window - 70k, never under half of it). Automatic compaction off: the model's window.
+ *  Two looks from the toolbar's width (`@container` of the composer bar): a bar + "75 % · 188k / 250k" with room,
+ *  a ring + "75 %" without. */
+export function CompactGauge({ tokens, window: reported, model, realModel }: { tokens: number | null | undefined; window?: number | null; model?: string | null; realModel?: string | null }) {
   const t = useT()
   const { data: claude } = useClaudeStatus()
   if (!tokens) return null
   const windows = Object.fromEntries((claude?.models || []).map((m) => [m.id, m.context_window]))
-  const max = contextWindow(tokens, reported, { chosen: model || claude?.default_model || null, real: realModel, windows })
-  const pct = Math.min(1, tokens / max)
-  const tone = pct > 0.85 ? 'bg-destructive' : pct > 0.6 ? 'bg-warning' : 'bg-primary'
-  const label = t('sessions.context', { used: fmtTokens(tokens), max: fmtTokens(max), pct: Math.round(pct * 100) })
-  if (ring) {
-    // phone header: a ring that fills with the context used (r = 6.5 -> circumference 40.84)
-    const stroke = pct > 0.85 ? 'stroke-destructive' : pct > 0.6 ? 'stroke-warning' : 'stroke-primary'
-    return (
-      <Tooltip content={label}>
-        <span tabIndex={0} className="inline-flex items-center gap-1 rounded outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={label}>
-          <svg viewBox="0 0 16 16" className="size-4 -rotate-90" aria-hidden>
-            <circle cx="8" cy="8" r="6.5" fill="none" strokeWidth="2.5" className="stroke-muted" />
-            <circle cx="8" cy="8" r="6.5" fill="none" strokeWidth="2.5" strokeLinecap="round" className={cn(stroke, 'transition-[stroke-dasharray] duration-500 ease-out')} strokeDasharray={`${Math.max(1.5, pct * 40.84)} 40.84`} />
-          </svg>
-          <span className="tabular-nums">{fmtTokens(tokens)}</span>
-        </span>
-      </Tooltip>
-    )
-  }
+  const win = contextWindow(tokens, reported, { chosen: model || claude?.default_model || null, real: realModel, windows })
+  const at = compactAt(claude?.auto_compact_tokens, win)
+  const max = at ?? win
+  const pct = Math.round(Math.min(1, tokens / max) * 100)
+  const tip = at
+    ? t('cgauge.tip', { at: fmtTokens(at), left: fmtTokens(Math.max(0, at - tokens)), used: fmtTokens(tokens), window: fmtTokens(win) })
+    : t('cgauge.off', { used: fmtTokens(tokens), window: fmtTokens(win), pct })
   return (
-    <Tooltip content={t('sessions.context', { used: fmtTokens(tokens), max: fmtTokens(max), pct: Math.round(pct * 100) })}>
-      <span tabIndex={0} className="inline-flex items-center gap-1.5 rounded outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={t('sessions.context', { used: fmtTokens(tokens), max: fmtTokens(max), pct: Math.round(pct * 100) })}>
-        <span className="relative h-1.5 w-10 overflow-hidden rounded-full bg-muted">
-          <span className={cn('absolute inset-y-0 left-0 rounded-full', tone)} style={{ width: `${Math.max(4, pct * 100)}%` }} />
+    <Tooltip content={<span className="block max-w-72 whitespace-normal">{tip}</span>}>
+      <span
+        tabIndex={0}
+        className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded px-1 text-[11px] text-muted-foreground tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        aria-label={t('sessions.context', { used: fmtTokens(tokens), max: fmtTokens(max), pct })}
+        data-testid="compact-gauge"
+      >
+        {/* narrow: a ring that fills up (r = 6 -> circumference 37.7) */}
+        <svg viewBox="0 0 16 16" className="size-3.5 -rotate-90 @md:hidden" aria-hidden>
+          <circle cx="8" cy="8" r="6" fill="none" strokeWidth="2.5" className="stroke-muted" />
+          <circle cx="8" cy="8" r="6" fill="none" strokeWidth="2.5" strokeLinecap="round" className="stroke-primary transition-[stroke-dasharray] duration-500 ease-out" strokeDasharray={`${Math.max(1.5, (pct / 100) * 37.7)} 37.7`} />
+        </svg>
+        {/* wide: a bar */}
+        <span className="relative hidden h-1.5 w-12 overflow-hidden rounded-full bg-muted @md:block" aria-hidden>
+          <span className="absolute inset-y-0 left-0 rounded-full bg-primary transition-[width] duration-500 ease-out" style={{ width: `${Math.max(4, pct)}%` }} />
         </span>
-        <span className="tabular-nums">{fmtTokens(tokens)}</span>
+        <span>
+          {pct} %<span className="hidden @md:inline"> · {fmtTokens(tokens)} / {fmtTokens(max)}</span>
+        </span>
       </span>
     </Tooltip>
   )
+}
+
+/** Tokens at which the server compacts a session (null: automatic compaction off). Mirrors runner._auto_compact. */
+export function compactAt(setting: number | null | undefined, window: number | null | undefined): number | null {
+  if (!setting || setting <= 0) return null
+  const limit = Math.max(setting, 100_000)
+  if (!window || window <= 0) return limit
+  return Math.min(limit, Math.max(window - 70_000, Math.floor(window / 2)))
 }
 
 export function StateBadge({ session }: { session: Pick<Session, 'state' | 'queue' | 'error'> }) {

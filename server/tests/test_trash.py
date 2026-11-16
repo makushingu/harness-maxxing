@@ -410,3 +410,24 @@ def test_trash_item_id_longer_than_a_file_name_is_a_400(client, mx):
     long_id = "a" * 300
     for r in (client.post(f"/api/trash/{long_id}/restore"), client.delete(f"/api/trash/{long_id}")):
         assert r.status_code == 400 and r.json()["error"] == "bad_id", r.text
+
+
+def test_deleting_files_of_the_same_name_at_once_keeps_each_one_in_the_trash(mx, tmp_path):
+    import threading
+    from maxxing import config, workspace
+    srcs = []
+    for i in range(4):
+        (tmp_path / f"d{i}").mkdir()
+        f = tmp_path / f"d{i}" / "notes.md"
+        f.write_text(f"note {i}")
+        srcs.append(f)
+    go = threading.Barrier(4)
+    threads = [threading.Thread(target=lambda f=f: (go.wait(), workspace.move_to_trash(f))) for f in srcs]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    trash_dir = config.state_dir("trash")
+    kept = sorted(p.read_text() for p in trash_dir.iterdir() if not p.name.endswith(".json"))
+    assert kept == [f"note {i}" for i in range(4)]
+    assert all(json.loads(p.read_text())["kind"] == "file" for p in trash_dir.glob("*.json"))

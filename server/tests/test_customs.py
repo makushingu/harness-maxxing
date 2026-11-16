@@ -202,6 +202,15 @@ def test_check_set_by_a_sha_prefix_is_kept_under_the_customization_id(code):
     assert customs.check_overrides() == {}
 
 
+def test_deeply_nested_checks_or_pending_files_read_as_absent(code):
+    customs._checks_path().parent.mkdir(parents=True, exist_ok=True)
+    customs._checks_path().write_text("[" * 200_000)
+    customs.pending_path().parent.mkdir(parents=True, exist_ok=True)
+    customs.pending_path().write_text("[" * 200_000)
+    assert customs.check_overrides() == {} and customs.pending() is None
+    assert customs.list_customs() == []
+
+
 def test_restore_on_a_fresh_install(code, tmp_path, monkeypatch, capsys):
     clone, ws = code["clone"], code["ws"]
     (clone / "server" / "maxxing" / "rules.py").write_text("LIMIT = 50\nNAME = 'product'\n")

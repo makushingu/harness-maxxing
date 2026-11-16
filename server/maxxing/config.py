@@ -36,7 +36,8 @@ TEMPLATES_DIR = CODE / "templates"
 
 # Names tzdata ships that are not zones: `localtime` is a link to /etc/localtime, so `timedatectl set-timezone
 # localtime` makes /etc/localtime point at itself (the server falls back to UTC, cron fires an hour or more off).
-PSEUDO_ZONES = ("localtime", "posixrules")
+# `Factory` is a placeholder zone that browsers refuse (Intl.DateTimeFormat throws: the Crons page broke).
+PSEUDO_ZONES = ("localtime", "posixrules", "Factory")
 PUBLIC_URL_RE = re.compile(r"^https?://[A-Za-z0-9.\-]+(:\d{1,5})?(/[^\s]*)?$")   # shared by PUT /api/settings and init
 
 DEFAULT_CONFIG: dict[str, Any] = {
@@ -276,7 +277,7 @@ def read_json(path: Path, default: Any = None) -> Any:
     try:
         with open(path, encoding="utf-8") as f:
             return json.load(f)
-    except (OSError, ValueError):
+    except (OSError, ValueError, RecursionError):        # RecursionError: nested too deep
         return copy.deepcopy(default)
 
 

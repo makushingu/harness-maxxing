@@ -304,6 +304,12 @@ def outbox_data(oid: str, data: dict) -> bool:
         return c.execute("UPDATE outbox SET data=? WHERE id=? AND status='waiting'", (json.dumps(data), oid)).rowcount > 0
 
 
+def outbox_event(oid: str, event_id: int) -> None:
+    """The feed event of a request, alone: never undoes a send, refusal or edit made since the row was written."""
+    with conn() as c:
+        c.execute("UPDATE outbox SET event_id=? WHERE id=?", (event_id, oid))
+
+
 def outbox_set(oid: str, status: str, note: str = "") -> None:
     with conn() as c:
         c.execute("UPDATE outbox SET status=?, done_at=?, note=? WHERE id=?", (status, time.time(), note[:500], oid))

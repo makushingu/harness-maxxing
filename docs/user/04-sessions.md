@@ -176,10 +176,11 @@ others stay in the composer. The **×** of the card empties the queue at once to
 refuses). **Stop** still cancels the turn
 and the queue (background work included).
 
-**Add to the plan, without interrupting.** **Add to plan** (in the same card) hands the waiting messages to the
+**Add to the task, without interrupting.** **Add to task** (in the same card) hands the waiting messages to the
 task that runs, without stopping anything: Claude reads them at its next step, between two actions, and goes on
 with them in mind ("only the intro for now", "also update the README"). In the conversation the message is marked
-*added to the plan*. Where **Steer** cuts the current step short to make Claude read you now, **Add to plan** lets
+*added to the running task* (hover it for what it means). Where **Steer** cuts the current step short to make
+Claude read you now, **Add to task** lets
 it finish what it is doing. A voice message or a plan approval cannot be added this way: it goes at the end of the
 task (or use **Steer**).
 
@@ -245,9 +246,11 @@ into another app, the content arrives as plain text (a file as its path).
   (**app · 3 files · +12 −4**); click it to review the diff, undo a file, commit, push or open a pull request. Right
   click one of your messages for **Revert to before this message**. See [Code in a session](35-code.md).
 - File paths are clickable and open the **file viewer**: ← / → go through every file of the conversation (see [Files](06-files.md#the-file-viewer)).
-- The header shows the **model that actually answered**, the **cost** and a **context gauge**
-  (how full Claude's context window is, measured against the real window of the model in use - it
-  follows when you switch model).
+- The header shows the **model that actually answered** and the **cost**. Next to the model, in the message box, the
+  **compaction gauge** shows how close the conversation is to its next automatic compaction (the threshold of
+  Settings -> Claude, capped by the window of the model in use): a bar with "63 % · 188k / 300k" when there is room,
+  a ring with "63 %" on a phone or in a narrow column. Hover it for the tokens left. With automatic compaction off,
+  it measures the model's whole window.
 - A line under each answer shows the model, the time it took, its **cost**, the tokens (input → output) and the
   share of input served from cache. Hover (or tap) any of them to see what it means: the token count splits
   uncached input, cache reads, cache writes and output.

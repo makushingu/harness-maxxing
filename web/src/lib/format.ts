@@ -45,7 +45,12 @@ export function fmtDate(at: number, lang: string, tz?: string, opts?: Intl.DateT
   const o: Intl.DateTimeFormatOptions = { dateStyle: 'medium', timeStyle: 'short', timeZone: tz || undefined, ...opts }
   const d = new Date(at * 1000)
   if (Number.isNaN(d.getTime())) return ''          // out of the Date range: format() would throw
-  return cached('d', lang, o, () => new Intl.DateTimeFormat(lang, o)).format(d)
+  try {
+    return cached('d', lang, o, () => new Intl.DateTimeFormat(lang, o)).format(d)
+  } catch {                                         // a zone this browser does not know (e.g. Factory): its own zone
+    const b = { ...o, timeZone: undefined }
+    return cached('d', lang, b, () => new Intl.DateTimeFormat(lang, b)).format(d)
+  }
 }
 
 /** "3 min ago" / "in 2 h" — `at` in Unix seconds. */

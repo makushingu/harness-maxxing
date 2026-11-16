@@ -71,6 +71,36 @@ Send a **voice note** or a **round video note** in a session thread (an audio fi
 
 If voice messages are off, the bot replies with a short hint instead.
 
+## Voice mode (talk with Harness)
+The **voice mode** button (sound waves, in the bar of a session, or next to *Send* on an agent's page) starts a call. A voice answers you at once and
+talks with you; anything real (look something up, check, change, create...) it hands to the session - the same
+Claude, with its files and tools - **in your own words**, and tells you the outcome when the session is done.
+Everything handed over appears in the session as your messages, so nothing happens out of sight.
+
+- **While it works**, keep talking: ask where it is at, or add something ("also check the blog"): what you add
+  joins the work in progress. Now and then the voice tells you what it is doing. Say **"stop"** to stop the work.
+- **One language per call**: the one of your first sentence. It changes when you ask ("speak English") or when you
+  clearly speak another language.
+- **Cut the voice by speaking**: as soon as you speak it lowers its volume; once it is sure it is you (under a
+  second of real speech) it stops and listens to the end. If it was only noise, its own echo or a mere "yeah", it
+  says its sentence again. While you speak it says nothing new: what you add joins what you said before and gets one
+  answer. **Tapping the call** cuts it too.
+- **Pause before your sentence ends** (Settings -> Voice -> Voice mode): how long a silence lasts before the voice
+  answers (1.8 s by default; raise it if you get cut while thinking).
+- A short rising tone tells you the call is connected, a falling one that it ended.
+- **Hang up** with the red button.
+- **Settings -> Voice -> Voice mode** also chooses the voice:
+  - **On this server** (default): free and private. It hears you with the engine above, talks with a Claude model
+    (Sonnet by default: better decisions; Haiku answers faster) and speaks with Piper (install it from the card:
+    about 150 MB). Choose its **voice** (several French and English voices, each downloaded when chosen) and its
+    **speed**.
+  - **Cloud (realtime)**: OpenAI Realtime or Gemini Live, under a second, very natural, about 1 to 5 cents a minute
+    on your own key, with the same rules. Harness finds the keys in the Keys vault (`OPENAI_API_KEY`,
+    `GEMINI_API_KEY`, or any key whose name contains OPENAI / GEMINI) and asks which one to use when there are
+    several. Your key never leaves the server: each call gets a short-lived token. The audio goes to that provider.
+    A long call goes on by itself when the provider renews its connection (Gemini every 10 minutes or so), and
+    tapping the call cuts the voice for good.
+
 ## From the terminal
 ```
 maxxing voice status                 # engine, model, readiness

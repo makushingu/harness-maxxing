@@ -349,12 +349,12 @@ def create_session(path: str, message: str | None = None, title: str | None = No
                    env: dict | None = None, timeout_s: int | None = None, plan_mode: bool = False,
                    permission_mode: str = "", auto_title: bool = False, voice_path: str | None = None,
                    client_id: str | None = None, silent_ok: bool = False, ref: str | None = None,
-                   effort: str | None = None, worktree: dict | None = None) -> dict:
+                   effort: str | None = None, worktree: dict | None = None, call: str | None = None) -> dict:
     """`worktree` = {repo, base?, prepare?, copy_env?, pr?}: the session works on a separate copy (worktrees.py),
     made before its first turn.
     `auto_title`: `title` was made from the first message by the caller (Telegram) - still worth a short title.
     `silent_ok`: a scheduled job that reports every run - its turn may answer [SILENT] (runner, spawn.CRON_SILENT).
-    `ref`: as send_message's, for the first message."""
+    `ref`, `call`: as send_message's, for the first message."""
     try:
         p = workspace.normalize_path(path)
         workspace.topic_dir(p)
@@ -392,7 +392,8 @@ def create_session(path: str, message: str | None = None, title: str | None = No
             worktrees.undo(meta["id"], meta["worktree"])
         raise
     first = _item((message or "").strip(), files, source, **_client_ids(client_id),
-                  **({"silent_ok": True} if silent_ok else {}), **({"refs": [str(ref)]} if ref else {}))
+                  **({"silent_ok": True} if silent_ok else {}), **({"refs": [str(ref)]} if ref else {}),
+                  **({"call": call} if call else {}))
     if audio:
         _enqueue_voice(meta["id"], first, audio)
     elif (message or "").strip() or files:
@@ -453,18 +454,20 @@ def _enqueue_voice(sid: str, item: dict, audio: str, *, reset_cron: bool = False
 def send_message(sid: str, text: str, attachments: list[str] | None = None, source: str = "web",
                  voice_path: str | None = None, ref: str | None = None,
                  client_id: str | None = None, silent_ok: bool = False, mentions: list[dict] | None = None,
-                 relay: dict | None = None) -> dict:
+                 relay: dict | None = None, call: str | None = None) -> dict:
     """`ref`: an id the caller (Telegram) finds again in the meta of the turn that ran this message
     (`turn_refs` while it runs, `last_turn.refs` once it ended; see live_refs). `client_id`: the web page's own id
     for it, kept in its queue item and its log line (`client_ids`). `mentions`: the @ of the composer ({kind, ref},
     see mentions.resolve): Claude reads with the message how to write to each. `relay`: sent by another session's
-    turn (relay_message)."""
+    turn (relay_message). `call`: sent during a voice call, in that language (runner.CALL_PREFACE)."""
     _require(sid)
     files = _check_attachments(attachments)
     audio = _check_voice(voice_path)
     if not (text or "").strip() and not files and not audio:
         raise SessionError(400, "empty", "Empty message")
     extra: dict[str, Any] = {}
+    if call:
+        extra["call"] = call
     if ref:
         extra["refs"] = [str(ref)]
     extra.update(_client_ids(client_id))
@@ -682,6 +685,7 @@ def _merged(mine: list[dict], **extra: Any) -> dict:
                  mine[-1].get("source") or "web", **extra,
                  **({"voice": [v for x in mine for v in x.get("voice") or []]}
                     if any(x.get("voice") for x in mine) else {}),
+                 **({"call": calls[-1]} if (calls := [x["call"] for x in mine if x.get("call")]) else {}),
                  **({"client_ids": ids} if (ids := [c for x in mine for c in x.get("client_ids") or []]) else {}),
                  **({"plan_approved": True} if any(x.get("plan_approved") for x in mine) else {}),
                  **({"mentions": ms} if (ms := [mm for x in mine for mm in x.get("mentions") or []]) else {}),

@@ -3,7 +3,7 @@ import * as React from 'react'
 import { Link } from 'react-router'
 import {
   ArrowLeft, BarChart3, Bell, BellOff, Check, CheckCheck, Clock, Copy, FileText, Loader2, LogOut, MessageCircleMore, MessageSquareShare, MoreHorizontal, Paperclip, Pencil, RefreshCw, Reply, Search,
-  Send, Settings2, Smile, Sparkles, SquarePen, Trash2, UserPlus, Users, X,
+   Settings2, Smile, Sparkles, SquarePen, Trash2, UserPlus, Users, X,
 } from 'lucide-react'
 import {
   fileRawUrl, useTeamChat, useTeamConnections, useTeamDelete, useTeamEdit, useTeamLeave, useTeamMute, useTeamRead, useTeamReact, useTeamSend, useTeamSummarize,
@@ -15,9 +15,13 @@ import { fmtDate } from '@/lib/format'
 import { useLang, useT } from '@/i18n'
 import {
   Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, EmptyState, Input, Popover, PopoverContent, PopoverTrigger, Skeleton, Spinner,
-  Textarea, Tooltip, toast, useContextMenu, WithContextMenu,
+  Tooltip, toast, useContextMenu, WithContextMenu,
 } from '@/components/ui'
 import { openFileViewer } from '@/features/files/viewerStore'
+import { MessageBox, TuckedCard, TuckedHead } from '@/features/composer/MessageBox'
+import type { Att } from '@/features/composer/AttachmentChip'
+import { VoiceButton } from '@/features/voice/VoiceButton'
+import { insertAtCaret } from '@/features/composer/text'
 import { fmtBytes } from '@/lib/format'
 import { Markdown } from '@/components/ui/markdown'
 import { confirm } from '@/components/ui/alert-dialog'
@@ -1110,7 +1114,6 @@ function Composer({
   const [text, setText] = React.useState('')
   const [pending, setPending] = React.useState<Pending[]>([])
   const input = React.useRef<HTMLTextAreaElement>(null)
-  const picker = React.useRef<HTMLInputElement>(null)
   React.useEffect(() => {
     setText('')
     setPending([])
@@ -1143,8 +1146,9 @@ function Composer({
   React.useImperativeHandle(ref, () => ({ add }), [add])
   const uploading = pending.some((p) => !p.file && !p.failed)
   const ready = pending.filter((p) => p.file)
-  const submit = () => {
-    const v = text.trim()
+  const submit = (heard?: string) => {
+    const typed = text.trim()
+    const v = heard ? [typed, heard].filter(Boolean).join('\n\n') : typed
     if (editing) {
       if (!v && !editing.files?.length) return
       edit.mutate({ cid: chatId, mid: editing.id, text: v })
@@ -1160,97 +1164,100 @@ function Composer({
     send.mutate({ cid: chatId, text: v, files, reply_to: replyTo?.id }, { onError: () => setText(v) })
     onCancelReply()
   }
+  // The files of the message, drawn as in every other box (Team uploads give no progress: "…" until done).
+  const atts: Att[] = pending.map((p) => ({
+    lid: p.key,
+    name: p.file?.name || p.name,
+    size: p.file?.size || 0,
+    path: p.file?.path || null,
+    progress: p.file ? 1 : -1,
+    error: p.failed ? t('common.failed') : null,
+    preview: p.file?.mime.startsWith('image/') ? fileRawUrl(p.file.path) : null,
+  }))
+  // Dictation: put at the caret for review, or sent at once (voice setting "send automatically") when it can be.
+  const onTranscript = (heard: string, autoSend: boolean) => {
+    if (autoSend && !editing && !uploading) return submit(heard)
+    const next = insertAtCaret(input.current, text, heard)
+    setText(next.text)
+    requestAnimationFrame(() => {
+      input.current?.focus({ preventScroll: true })
+      input.current?.setSelectionRange(next.caret, next.caret)
+    })
+  }
+  const voice = React.useRef(onTranscript)
+  voice.current = onTranscript
+  const onVoice = React.useCallback((heard: string, autoSend: boolean) => voice.current(heard, autoSend), [])
+  const banner = editing || replyTo
   return (
-    <div className={cn('shrink-0 border-t bg-background', compact ? 'p-2' : 'px-4 py-3 md:px-8')}>
-      <div className={cn('mx-auto flex flex-col rounded-xl border bg-card p-1.5 focus-within:border-primary/50', !compact && 'max-w-3xl')}>
-        {(editing || replyTo) && (
-          <div className="mb-1 flex items-center gap-2 rounded-lg bg-muted py-1 pr-1 pl-2 text-[12px]">
-            {editing ? <Pencil className="size-3.5 shrink-0 text-primary" /> : <Reply className="size-3.5 shrink-0 text-primary" />}
-            <span className="min-w-0 flex-1 truncate">
-              <span className="font-medium">{editing ? t('team.msg.editing') : t('team.msg.replyingTo', { name: replyName })}</span>
-              {!editing && replyTo && <span className="text-muted-foreground"> · {replyTo.text || replyTo.poll?.question || replyTo.files?.map((f) => f.name).join(', ')}</span>}
-            </span>
-            <button type="button" onClick={editing ? stopEditing : onCancelReply} className="rounded p-1 pointer-coarse:grid pointer-coarse:size-10 pointer-coarse:place-items-center text-muted-foreground hover:bg-accent hover:text-foreground" aria-label={t('common.cancel')}>
-              <X className="size-3.5" />
-            </button>
-          </div>
-        )}
-        {!!pending.length && (
-          <div className="flex flex-wrap gap-1.5 px-1 pt-0.5 pb-1.5">
-            {pending.map((p) => (
-              <span key={p.key} className={cn('inline-flex max-w-[220px] items-center gap-1.5 rounded-lg border bg-background py-1 pr-1 pl-2 text-[12px]', p.failed && 'border-destructive/50 text-destructive')}>
-                {!p.file && !p.failed ? <Loader2 className="size-3.5 animate-spin" /> : p.file?.mime.startsWith('image/') ? <img src={fileRawUrl(p.file.path)} alt="" className="size-5 rounded object-cover" /> : <FileText className="size-3.5" />}
-                <span className="truncate">{p.name}</span>
-                <button type="button" onClick={() => setPending((x) => x.filter((y) => y.key !== p.key))} className="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground" aria-label={t('common.delete')}>
-                  <X className="size-3" />
-                </button>
-              </span>
-            ))}
-          </div>
-        )}
-        <div className="flex items-end gap-1">
-          <Tooltip content={t('team.attach')}>
-            <Button size="icon-sm" variant="ghost" onClick={() => picker.current?.click()} aria-label={t('team.attach')} className="text-muted-foreground">
-              <Paperclip />
-            </Button>
-          </Tooltip>
-          <Tooltip content={t('team.poll.new')}>
-            <Button size="icon-sm" variant="ghost" onClick={onPoll} aria-label={t('team.poll.new')} className="text-muted-foreground">
-              <BarChart3 />
-            </Button>
-          </Tooltip>
-          <input
-            ref={picker}
-            type="file"
-            multiple
-            hidden
-            onChange={(e) => {
-              const files = [...(e.target.files || [])]
-              e.target.value = ''
-              if (files.length) add(files)
-            }}
-          />
-          <Textarea
-            ref={input}
-            value={text}
-            onChange={(e) => {
-              setText(e.target.value)
-              const now = Date.now()
-              if (!editing && e.target.value.trim() && now - lastTyping.current > 2500) {
-                lastTyping.current = now
-                typing.mutate(chatId)
-              }
-            }}
-            onPaste={(e) => {
-              const files = [...e.clipboardData.files]
-              if (files.length) {
-                e.preventDefault()
-                add(files)
-              }
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-                e.preventDefault()
-                submit()
-              } else if (e.key === 'Escape' && (editing || replyTo)) {
-                e.preventDefault()
-                if (editing) stopEditing()
-                else onCancelReply()
-              } else if (e.key === 'ArrowUp' && !text && !editing && !pending.length) {
-                e.preventDefault()
-                onEditLast()
-              }
-            }}
-            minRows={1}
-            maxRows={8}
-            placeholder={t('team.placeholder', { chat: title })}
-            className="min-h-8 flex-1 resize-none border-0 bg-transparent px-1.5 py-1.5 text-[14px] shadow-none focus-visible:ring-0 dark:bg-transparent"
-          />
-          <Button size="icon-sm" onClick={submit} disabled={editing ? !text.trim() && !editing.files?.length : (!text.trim() && !ready.length) || uploading} aria-label={editing ? t('team.msg.save') : t('team.send')}>
-            {editing ? <Check /> : <Send />}
+    <MessageBox
+      compact={compact}
+      widthClassName="max-w-3xl md:px-5"
+      above={
+        <TuckedCard open={!!banner}>
+          {banner && (
+            <TuckedHead icon={editing ? <Pencil /> : <Reply />} onClose={editing ? stopEditing : onCancelReply} closeLabel={t('common.cancel')} className="pb-4.5">
+              <span className="font-medium text-foreground">{editing ? t('team.msg.editing') : t('team.msg.replyingTo', { name: replyName })}</span>
+              {!editing && replyTo && <> · {replyTo.text || replyTo.poll?.question || replyTo.files?.map((f) => f.name).join(', ')}</>}
+            </TuckedHead>
+          )}
+        </TuckedCard>
+      }
+      atts={atts}
+      onRemoveAtt={(lid) => setPending((x) => x.filter((y) => y.key !== lid))}
+      textareaRef={input}
+      textarea={{
+        value: text,
+        onChange: (e) => {
+          setText(e.target.value)
+          const now = Date.now()
+          if (!editing && e.target.value.trim() && now - lastTyping.current > 2500) {
+            lastTyping.current = now
+            typing.mutate(chatId)
+          }
+        },
+        onPaste: (e) => {
+          const files = [...e.clipboardData.files]
+          if (files.length) {
+            e.preventDefault()
+            add(files)
+          }
+        },
+        onKeyDown: (e) => {
+          if (e.nativeEvent.isComposing) return
+          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey || !e.shiftKey)) {
+            // as in every box: on a touch keyboard Enter is a new line, the button sends
+            if (!e.metaKey && !e.ctrlKey && window.matchMedia('(pointer: coarse)').matches) return
+            e.preventDefault()
+            submit()
+          } else if (e.key === 'Escape' && (editing || replyTo)) {
+            e.preventDefault()
+            if (editing) stopEditing()
+            else onCancelReply()
+          } else if (e.key === 'ArrowUp' && !text && !editing && !pending.length) {
+            e.preventDefault()
+            onEditLast()
+          }
+        },
+        maxRows: 8,
+        placeholder: t('team.placeholder', { chat: title }),
+      }}
+      onFiles={add}
+      attachLabel={t('team.attach')}
+      toolbar={
+        <Tooltip content={t('team.poll.new')}>
+          <Button size="icon-sm" variant="ghost" onClick={onPoll} aria-label={t('team.poll.new')}>
+            <BarChart3 />
           </Button>
-        </div>
-      </div>
-    </div>
+        </Tooltip>
+      }
+      voice={editing ? null : <VoiceButton onTranscript={onVoice} />}
+      send={{
+        onClick: () => submit(),
+        disabled: editing ? !text.trim() && !editing.files?.length : (!text.trim() && !ready.length) || uploading,
+        label: editing ? t('team.msg.save') : t('team.send'),
+        icon: editing ? <Check /> : undefined,
+      }}
+      reason={uploading ? t('sessions.composer.uploading') : null}
+    />
   )
 }

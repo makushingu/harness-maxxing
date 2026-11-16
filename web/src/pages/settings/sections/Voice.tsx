@@ -3,6 +3,7 @@ import { Skeleton } from '@/components/ui'
 import { Callout } from '@/features/common'
 import { useVoice } from '@/features/voice/api'
 import { ApiEngine, EngineChoice, LocalEngine, RecordTest, VoiceOptions } from '@/features/voice/VoiceSetup'
+import { VoiceCallSettings } from '@/features/voice/VoiceCallSettings'
 import { SettingsCard, SectionStack } from './ui'
 
 export function VoiceSection() {
@@ -30,6 +31,9 @@ export function VoiceSection() {
           <ApiEngine status={s} engine={engine} />
         </SettingsCard>
       )}
+      <SettingsCard title={t('vmode.card')} description={t('vmode.cardDesc')}>
+        <VoiceCallSettings />
+      </SettingsCard>
       {engine !== 'off' && (
         <>
           <SettingsCard title={t('voice.options')}>

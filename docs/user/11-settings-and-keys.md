@@ -220,8 +220,10 @@ Store API keys and tokens your projects need (for example `OPENAI_API_KEY`, `SHO
 - **Expose** makes the secret available as an **environment variable** to every Claude session and
   every shell cron job – handy for scripts, and Claude never needs to see the value in a chat;
 - some names are reserved (system variables, variables that make shells, Node, Python or git load
-  code - `NODE_OPTIONS`, `BASH_ENV`, `GIT_SSH_COMMAND`... -, `ANTHROPIC_BASE_URL`, anything starting with
-  `MAXXING_`); an existing key with such a name is kept but no longer exposed.
+  code or send credentials elsewhere - `NODE_OPTIONS`, `BASH_ENV`, `SHELLOPTS`, `CLAUDE_CONFIG_DIR`,
+  `ANTHROPIC_BASE_URL`, `SSH_AUTH_SOCK`... -, anything starting with `MAXXING_`, `GIT_`, `LD_`, `DYLD_`,
+  `PYTHON`, `NODE_`, `BASH_`, `XDG_` or `SSL_`, anything ending in `_PROXY`); an existing key with such a
+  name is kept but no longer exposed.
 
 From scripts and sessions: `maxxing keys list|get|set|delete` (the value of `set` is read from stdin) -
 a script that renews a token writes the new value back this way. Scripts read keys from the

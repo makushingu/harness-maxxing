@@ -570,3 +570,26 @@ def test_a_huge_sandbox_goes_in_a_file(mx):
     assert spawn.settings_args({}, extra) == args                   # the same settings: the same file
     small = spawn.settings_args({}, {"sandbox": {"enabled": True}})
     assert json.loads(small[1])["sandbox"] == {"enabled": True}      # small ones stay inline
+
+
+def test_a_link_to_the_topic_s_own_files_never_makes_them_writable(client, topic, mx):
+    """`notes -> memory.md` (or a folder link to .claude) passes the name filter of writable ".": its target is
+    still one of the topic's own files, read by every session of the owner there."""
+    from maxxing import agent_guard, agents
+    _on(client)
+    _create(client, writable=["."])
+    root = Path(client.get("/api/workspace/tree").json()["root"])
+    t = root / "projects/acme/topics/blog"
+    (t / "memory.md").write_text("m")
+    (t / "notes").symlink_to(t / "memory.md")
+    (t / "role").symlink_to(t / "CLAUDE.md")
+    (t / ".claude").mkdir(exist_ok=True)
+    (t / "cc").symlink_to(t / ".claude")
+    (t / "site").mkdir()
+    a = {**agents.load(A), "sandbox": True}
+    w = agent_guard.writable_dirs(A, a)
+    assert f"{t}/site" in w                                       # negative case: an ordinary folder stays
+    assert not [x for x in w if x in (f"{t}/memory.md", f"{t}/CLAUDE.md", f"{t}/.claude")], w
+    allow = agent_guard.settings(A, a)["sandbox"]["filesystem"]["allowWrite"]
+    assert str(t / "memory.md") not in allow and str(t / "CLAUDE.md") not in allow
+    assert agent_guard.writable_dirs(A, {**a, "writable": ["notes", "role"]}) == []

@@ -10,7 +10,7 @@ import { useCheckVersion, useUpdate, useAutoUpdate, useVersion } from '@/lib/que
 import { fmtRelative } from '@/lib/format'
 import { api } from '@/lib/api'
 import type { AuthState, VersionInfo } from '@/lib/types'
-import { useLang, useT } from '@/i18n'
+import { tDyn, useLang, useT } from '@/i18n'
 import { Badge, Button, ProgressBar, Skeleton, Spinner, Switch, confirm, toast } from '@/components/ui'
 import { Callout, SettingRow } from '@/features/common'
 import { SettingsCard } from './ui'
@@ -28,6 +28,13 @@ export function VersionCard() {
   // the topic that handles updates: system/harness (system/update on workspaces installed before 2.0.0a33)
   const updateTopic = useHarnessTopic()
   const [phase, setPhase] = React.useState<'idle' | 'running' | 'restarting' | 'done' | 'blocked'>('idle')
+  const autoLast = v?.auto_update?.last
+  const autoTried = v?.auto_update?.tried
+  const autoWhat = !autoLast
+    ? ''
+    : autoLast.result === 'busy'
+      ? tDyn(t, `system.autoWhy.${autoLast.why || 'work'}`, t('system.autoWhy.work'))
+      : tDyn(t, `system.autoRes.${autoLast.result}`, autoLast.result)
   const start = React.useRef(0)
   const [elapsed, setElapsed] = React.useState(0)
 
@@ -174,6 +181,13 @@ export function VersionCard() {
         <SettingRow label={t('system.autoUpdate')} description={t('system.autoUpdateHint')} htmlFor="mx-auto-update" className="py-4 first:pt-4 last:pb-4">
           <Switch id="mx-auto-update" checked={v.auto_update?.enabled ?? false} onCheckedChange={(on) => autoUpdate.mutate(on)} />
         </SettingRow>
+        {/* why nothing happened: what the last pass of the automatic update decided */}
+        {v.auto_update?.enabled && (autoLast || autoTried) && (
+          <p className="pb-4 text-xs text-muted-foreground" data-testid="auto-update-last">
+            {autoLast && t('system.autoLast', { when: fmtRelative(autoLast.at, lang), what: autoWhat })}
+            {autoTried?.version && autoLast?.result !== 'started' && <> {t('system.autoTried', { version: autoTried.version, when: fmtRelative(autoTried.at, lang) })}</>}
+          </p>
+        )}
       </div>
     </SettingsCard>
   )

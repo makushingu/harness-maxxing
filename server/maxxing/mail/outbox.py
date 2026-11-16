@@ -80,8 +80,7 @@ def queue(acc: dict, agent: str, draft: dict, files: list[tuple[str, str, bytes]
                    + [{"id": "deny", "label": "Refuse", "style": "danger"},
                       {"id": "open", "label": "Open", "style": "link"}])
     if ev:
-        row["event_id"] = ev["id"]
-        store.outbox_put(row)
+        store.outbox_event(oid, ev["id"])
     return {"id": oid, "waiting": True, **saved}
 
 

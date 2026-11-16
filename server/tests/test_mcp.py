@@ -295,6 +295,21 @@ def test_literal_secrets_stay_out_of_the_cli_arguments(env, monkeypatch):
                                                        "env": {"PW": "hunter2"}}
 
 
+def test_docker_env_secrets_stay_out_of_the_cli_the_overview_and_the_export(env, monkeypatch):
+    from maxxing import mcp
+    seen, cli = [], mcp._cli
+    monkeypatch.setattr(mcp, "_cli", lambda args, folder, **kw: (seen.append(args), cli(args, folder, **kw))[1])
+    mcp.add("gh", {"type": "stdio", "command": "docker",
+                   "args": ["run", "-i", "--rm", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN=hunter2pw", "--env",
+                            "DB_PASSWORD=s3cretpw", "--env=API_KEY=k3yvalue", "-e", "LOG_LEVEL=debug",
+                            "ghcr.io/github/github-mcp-server"]}, None)
+    shown = json.dumps([seen, mcp.export(), mcp.overview()])
+    for secret in ("hunter2pw", "s3cretpw", "k3yvalue"):
+        assert secret not in shown
+    assert "LOG_LEVEL=debug" in json.dumps(mcp.export())
+    assert _cfg(env)["mcpServers"]["gh"]["args"][4] == "GITHUB_PERSONAL_ACCESS_TOKEN=hunter2pw"
+
+
 def test_add_with_secrets_is_undone_when_the_config_cannot_be_completed(env, monkeypatch):
     from maxxing import mcp
     monkeypatch.setattr(mcp, "_write_cfg", lambda fn: None)    # the entry is not found where the CLI put it

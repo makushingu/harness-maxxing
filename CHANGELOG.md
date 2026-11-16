@@ -14,11 +14,51 @@ New:
   you let it: type `harness-link` in a terminal, it shows there what Claude does, and Ctrl+C stops it. Off by
   default: Settings -> Features -> Devices. A computer with several screens: pick the one Claude uses in the device's
   row, and Claude switches screens by itself when it needs another one. [Show me](#show:devices)
+- **Copy the text of a file.** The file viewer has a **Copy the text** button (in its "more" menu on a phone), and
+  the Files page the same lines in the menu of a file. A Markdown or HTML file gives two choices: **Copy the
+  source**, or **Copy as plain text** (the words as you read them, without the marks). A Word document copies as
+  Markdown or as plain text, a workbook as cells that paste into a spreadsheet, a PDF as the text read in its pages,
+  code, text and CSV files as they are.
 
 Changed:
 - **The HUD is gone.** The floating bar that showed one session over your other apps and shared your screen is
   replaced by Devices: add your computer in **View only** and Claude sees your screen and guides you, without ever
   clicking.
+- **"Browser of my PC" is gone.** It was prepared but never downloadable; Devices does it and more (Claude uses
+  the whole computer, not only a browser).
+
+Fixed:
+- **The automatic update really updates.** "Update by itself when nobody is here" stopped for good at the first
+  version that came with an upgrade note (about one version out of two), without saying why. A note no longer holds
+  the update back: Harness updates, then tells you in the notifications that there are notes to apply (open the
+  update topic and say "update"). Under the switch, Settings -> Updates now says when it last looked and what it
+  found ("waiting, someone is on the interface", "a session is working", "up to date"...), and a busy server is
+  looked at again after 5 minutes instead of 30.
+
+## 2.0.0-alpha.156 - 2026-11-15
+
+New:
+- **Voice mode: talk with Harness out loud.** The new button in the bar of a session (or in the box of an agent) starts a call: a voice
+  answers you at once, hands real work to the session in your own words (the same Claude, files and tools), tells
+  you now and then what it is doing and reads the outcome out when it is done; what you add while it works joins
+  the work in progress, and "stop" stops it. Speak to cut the voice: it lowers its volume at once, stops when it is
+  sure it is you, and says its sentence again if it was only noise or a "yeah"; what you add right after your
+  sentence gets one answer for the whole. The pause before your sentence ends is yours to set; a short tone tells
+  you when a call connects and when it ends. One language per call, yours.
+  By default the voice runs on your server (free, private, several French and English voices and their speed); in
+  Settings -> Voice you can switch to a realtime voice from OpenAI or Gemini on your own key, which Harness finds in
+  the Keys vault; a long cloud call goes on by itself when the provider renews its connection.
+
+Improved:
+- **One message box everywhere.** Sessions, agents, agent groups and Team chats now share the same box: the same
+  look, the same keys, the same file chips, Send in the same place. Each keeps its own tools: the model in a session or
+  with an agent, the recipients in a group, polls in Team. With an agent, **Stop** and **New conversation** sit next to
+  Send; replying to a run or to a Team message shows as a card on top of the box; Team gets dictation.
+- **Compaction gauge.** Next to the model, in the message box of a session or an agent: how close the conversation is
+  to its next automatic compaction (a bar with the tokens when there is room, a ring with the percentage on a phone
+  or in a narrow column). It replaces the context gauge of the session header.
+- **Clearer words for a message added to a running task**: the button is now **Add to task** and the message is
+  marked *added to the running task*, with a tip saying what it means (it was "added to the plan").
 
 ## 2.0.0-alpha.155 - 2026-11-15
 

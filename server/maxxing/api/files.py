@@ -480,6 +480,9 @@ def _ffmpeg_thumb(src: Path, dest: Path, w: int, video: bool) -> bool | None:
         tmp.unlink(missing_ok=True)
 
 
+PDF_PAGE_MAX_H = 8192                              # px: the height of a rendered page, beyond it the page is cut
+
+
 def _pdf_thumb(src: Path, dest: Path, w: int, page: int = 1, wide: bool = False) -> bool | None:
     """A page of a PDF (the first: its thumbnail) -> WebP (pdftoppm renders it, ffmpeg encodes it); False/None as
     _ffmpeg_thumb. `w` bounds its longer side, or its width with `wide` (a page to read)."""
@@ -489,7 +492,9 @@ def _pdf_thumb(src: Path, dest: Path, w: int, page: int = 1, wide: bool = False)
     with tempfile.TemporaryDirectory(prefix="mx-pdf-") as tmp:
         out = Path(tmp) / "page"
         try:
-            scale = ["-scale-to-x", str(w), "-scale-to-y", "-1"] if wide else ["-scale-to", str(w)]
+            # a page to read is cut at PDF_PAGE_MAX_H px: a 10 x 5000 pt page made a TIFF of 600 MB in /tmp (memory)
+            scale = (["-scale-to-x", str(w), "-scale-to-y", "-1", "-H", str(PDF_PAGE_MAX_H)] if wide
+                     else ["-scale-to", str(w)])
             # an uncompressed TIFF: written at once, when the PNG of a page costs 0.3 s of compression for nothing
             r = subprocess.run([*_nice(), pdftoppm, "-f", str(page), "-l", str(page), "-singlefile", "-tiff", *scale,
                                 str(src), str(out)], capture_output=True, timeout=THUMB_TIMEOUT_S)
@@ -835,6 +840,38 @@ async def pdf_page(path: str, n: int = Query(1, ge=1, le=100_000), w: int = Quer
         mtime = 0
     f = await _pooled((str(p), mtime, w, n), _pdf_page, p, n, w)
     return FileResponse(f, media_type="image/webp", headers=_file_headers("image/webp", _cache(v)))
+
+
+PDF_TEXT_MAX = 2_000_000                           # bytes of text sent for "Copy the text": then `truncated`
+
+
+def _pdf_text(p: Path) -> dict:
+    """The words of a PDF in reading order (pdftotext), for the viewer's "Copy the text". A scan has none."""
+    if not p.is_file() or p.suffix.lower() not in PDF_EXT:
+        raise _err(404, "not_found", "File not found")
+    pdftotext = shutil.which("pdftotext")
+    if not pdftotext:
+        raise _err(415, "unsupported", "PDF text unavailable (poppler-utils missing)")
+    with tempfile.TemporaryDirectory(prefix="mx-pdf-") as tmp:
+        out = Path(tmp) / "text.txt"
+        try:
+            r = subprocess.run([*_nice(), pdftotext, "-enc", "UTF-8", str(p), str(out)], capture_output=True, timeout=THUMB_TIMEOUT_S)
+        except (subprocess.TimeoutExpired, OSError):
+            raise _err(415, "unsupported", "This PDF could not be read") from None
+        if r.returncode != 0 or not out.is_file():
+            raise _err(415, "unsupported", "This PDF could not be read")
+        with out.open("rb") as f:
+            raw = f.read(PDF_TEXT_MAX + 1)
+    # pdftotext ends every page with a form feed
+    text = raw[:PDF_TEXT_MAX].decode("utf-8", "ignore").replace("\f", "\n").strip()
+    return {"text": text, "truncated": len(raw) > PDF_TEXT_MAX}
+
+
+@router.get("/pdf/text")
+async def pdf_text(path: str):
+    """The text of a PDF (the page-by-page reader shows pictures: nothing to select there)."""
+    p = await _t(resolve, path)
+    return await _pooled((str(p), "pdf-text"), _pdf_text, p)
 
 
 def _doc(p: Path) -> dict:

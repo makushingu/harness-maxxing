@@ -110,17 +110,27 @@ Python modules call each other only through these functions. Keep signatures sta
 - Harness updates itself while nobody uses it. Off by default (config `auto_update`, Settings -> System -> Updates,
   `PUT /api/system/auto-update`, `auto_update` in GET /api/system/version). Loop started by `api/system.py`
   `startup()` (only the installed server: `claude_update.runs_here()`; first pass `MAXXING_AUTO_UPDATE_DELAY` s,
-  default 900; one `tick(spawn)` every 30 min).
-- `tick() -> off|not_on_branch|pending|busy|unavailable|up_to_date|needs_review|tried_recently|started`. Never on
+  default 900; one `tick(spawn)` every `POLL_S` 30 min, `BUSY_POLL_S` 5 min after a pass that found the server
+  busy: a short quiet moment between two jobs is not missed).
+- `tick() -> off|not_on_branch|pending|busy|unavailable|up_to_date|needs_review|tried_recently|failed|started`. Never on
   a detached HEAD (`on_branch()`: a branch under test, put there on purpose) nor while `customs.pending()` (a
   conflict or a rolled-back version waits for a person: not retried every day). Waits while `busy_reason()`: a
   browser holds `/api/stream` (`bus.browser_count()`, signed-in streams only), or `claude_update.busy_reason`
   (turn, queue, cron job, side question, last turn < 10 min ago), or the `maxxing-update` unit runs. Then
-  `smartupdate.preflight()` (fetches): only the verdict "simple" with no upgrade note, no unsaved change and every
-  customization "ok"/"included" goes on; anything else posts one notification per target (`needs_review`). One try per
-  target per 24 h (`<state>/auto-update.json` `tried`); busy is checked again after the preflight. The update is
-  `api/system._spawn_update(smart=False)`: the usual `maxxing update` (rolls itself back when the new version does not
-  start) without the Harness session of the Update button.
+  `smartupdate.preflight()` (fetches): only the verdict "simple" with no unsaved change and every customization
+  "ok"/"included" goes on; anything else posts one notification per version (`needs_review`). An upgrade note does
+  NOT hold the update back (it did until a156: every version with a note stopped the automatic update for good,
+  about one version out of two): a note changes the workspace, not the code. One try per target per 24 h
+  (`<state>/auto-update.json` `tried`); busy is checked again after the preflight. The update is
+  `api/system._spawn_update(smart=False)`: `maxxing update --auto` (rolls itself back when the new version does not
+  start) without the Harness session of the Update button; `--auto` is kept in `update/after.json`, and
+  `smartupdate.after_update()` then posts "Harness updated itself to X: upgrade notes to apply" (link to the update
+  topic) when the versions crossed have notes that ask something. "Harness is updating" is posted only once the
+  unit is started; a start that fails is `failed` (logged).
+- Every pass is kept in `auto-update.json` `last` `{at, result, why?}` (`why` for busy: browser, turn, queue, aside,
+  cron, recent, update, work - `WHY`), given by GET /api/system/version (`auto_update.last`) and shown under the
+  switch ("Last look 5 min ago: waiting, someone is on the interface"); a change of result is logged
+  (`automatic update: busy (browser)`).
 
 ## maxxing.claude_models
 

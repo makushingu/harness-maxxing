@@ -43,7 +43,7 @@ export const routes: RouteObject[] = [
           { index: true, lazy: page(() => import('./pages/dashboard')) },
           // Feature pages — implemented in src/pages/<name>/index.tsx
           { path: 'sessions/*', lazy: page(() => import('./pages/sessions'), ['files']) },
-          { path: 'files/*', lazy: page(() => import('./pages/files'), ['files', 'media']) },
+          { path: 'files/*', lazy: page(() => import('./pages/files'), ['files', 'media', 'ctext']) },
           { path: 'tasks/*', lazy: page(() => import('./pages/tasks'), ['tasks']) },
           // Crons moved into Settings (links in old notifications, Telegram reports and bookmarks keep working)
           { path: 'crons/*', Component: CronsMoved },
@@ -58,7 +58,7 @@ export const routes: RouteObject[] = [
           { path: 'browser', element: <BrowserMoved /> },
           // Settings & docs
           { path: 'settings', element: <Navigate to="/settings/general" replace /> },
-          { path: 'settings/:section', lazy: page(() => import('./pages/settings'), ['settings', 'auth', 'show', 'tasks', 'team']) },
+          { path: 'settings/:section', lazy: page(() => import('./pages/settings'), ['settings', 'auth', 'show', 'tasks', 'team', 'vmode']) },
           { path: 'docs', lazy: page(() => import('./pages/docs')) },
           { path: 'docs/:slug', lazy: page(() => import('./pages/docs')) },
           // Extension pages: /x/<id> loads /ext/<id>/page.js

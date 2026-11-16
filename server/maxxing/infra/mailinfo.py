@@ -266,12 +266,18 @@ def _spf_walk(c: httpx.Client, record: str, st: dict, path: tuple[str, ...], dep
         if target in st["seen"]:            # read once, but receivers count it on every pass (RFC 7208 4.6.4)
             return st["seen"][target]
         if depth >= 4 or st["budget"] <= 0 or time.time() > st.get("until", float("inf")):
+            st["cut"] = st.get("cut", 0) + 1
             return 0, None
         st["seen"][target] = (0, None)      # while it is being read
         st["budget"] -= 1
+        cut = st.get("cut", 0)
         sub = next((x for x in _txt(c, target) if x.lower().startswith("v=spf1")), None)
-        st["seen"][target] = _spf_walk(c, sub, st, path + (target,), depth + 1) if sub else (0, None)
-        return st["seen"][target]
+        got = _spf_walk(c, sub, st, path + (target,), depth + 1) if sub else (0, None)
+        if st.get("cut", 0) == cut:
+            st["seen"][target] = got
+        else:                               # read only in part (too deep there): reached higher up, it is read again
+            del st["seen"][target]
+        return got
 
     for term in terms:
         t = term.lower()
@@ -294,6 +300,17 @@ def _spf_walk(c: httpx.Client, record: str, st: dict, path: tuple[str, ...], dep
     return n, qual
 
 
+def _spf_count(c: httpx.Client, record: str, st: dict, path: tuple[str, ...]) -> tuple[int, str | None]:
+    """_spf_walk, once more when a target was read only in part (too deep where it was met first): the second pass
+    finds it complete in st["seen"] if it was read higher up, so the count does not depend on the order of the
+    include: terms."""
+    got = _spf_walk(c, record, st, path)
+    if st.get("cut"):
+        st["cut"] = 0
+        got = _spf_walk(c, record, st, path)
+    return got
+
+
 def dns_facts(domain: str) -> dict:
     """{mx: [{prio, host}], spf: [records], spf_lookups, spf_loop, spf_redirect, spf_redirect_all, dmarc: [records],
     dmarc_parent, dkim: [selectors found], checked} or {error, checked}."""
@@ -312,7 +329,7 @@ def dns_facts(domain: str) -> dict:
             out["spf_lookups"] = None
             if len(out["spf"]) == 1:
                 st: dict[str, Any] = {"budget": SPF_MAX_QUERIES, "seen": {}, "until": until}
-                out["spf_lookups"], qual = _spf_walk(c, out["spf"][0], st, (domain,))
+                out["spf_lookups"], qual = _spf_count(c, out["spf"][0], st, (domain,))
                 out["spf_loop"] = st.get("loop")                # include:/redirect= target already on the chain
                 if st.get("redirect"):          # the `all` that applies comes from the redirect= target
                     out["spf_redirect"], out["spf_redirect_all"] = st["redirect"], qual

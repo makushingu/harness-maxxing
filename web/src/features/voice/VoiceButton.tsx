@@ -17,7 +17,7 @@ const HOLD_MS = 350 // a press longer than this is push-to-talk
 const CANCEL_SLIDE_PX = 80 // slide left while holding = cancel
 
 /** The recording as a file named like a voice note (voice-YYYYMMDD-HHMMSS.webm), in the topic's attachments. */
-function voiceFile(blob: Blob): File {
+export function voiceFile(blob: Blob): File {
   const type = blob.type || 'audio/webm'
   const ext = type.includes('mp4') || type.includes('aac') ? 'm4a' : type.includes('ogg') ? 'ogg' : type.includes('wav') ? 'wav' : 'webm'
   const d = new Date()

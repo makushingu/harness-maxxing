@@ -59,6 +59,8 @@ def _addr_list(values: Any) -> list[str]:
         return []
     if isinstance(values, str):
         values = [values]
+    if not isinstance(values, (list, tuple)):
+        raise MailError("invalid", "invalid address list")
     pairs = []
     for v in values:
         v = str(v).strip(" \t\r\n,")
@@ -256,9 +258,30 @@ def _give_back(acc_id: str, n: int) -> None:
 
 # ---------------------------------------------------------------- building and sending
 
+def _uint(v: Any) -> bool:
+    return (isinstance(v, int) and not isinstance(v, bool) and v >= 0) or \
+        (isinstance(v, str) and re.fullmatch(r"[0-9]{1,20}", v) is not None)
+
+
+def _check_refs(draft: dict) -> None:
+    """reply / draft / forward: {folder, uid, indexes}. Another shape is refused before anything is sent or written:
+    a 500 once the SMTP server has the message would make the page send it again."""
+    for key in ("reply", "draft", "forward"):
+        v = draft.get(key)
+        if not v:
+            continue
+        idx = v.get("indexes") if isinstance(v, dict) else None
+        if not isinstance(v, dict) or not isinstance(v.get("folder") or "", str) \
+                or (v.get("uid") not in (None, "") and not _uint(v.get("uid"))) \
+                or (idx is not None and not (isinstance(idx, list) and all(_uint(i) for i in idx))) \
+                or (key == "forward" and idx and not _uint(v.get("uid"))):
+            raise MailError("invalid", f"invalid {key}")
+
+
 def build(acc: dict, draft: dict, files: list[tuple[str, str, bytes]] | None = None) -> tuple[EmailMessage, list[str]]:
     """The message of a draft {to, cc, bcc, subject, text, in_reply_to, references, forward: {folder, uid,
     indexes}} + uploaded files [(name, type, bytes)]. Returns (message, every recipient address)."""
+    _check_refs(draft)
     to, cc, bcc = (_addr_list(draft.get(k)) for k in ("to", "cc", "bcc"))
     subject = str(draft.get("subject") or "").strip()[:500]
     if _bad_header(subject):
@@ -272,6 +295,8 @@ def build(acc: dict, draft: dict, files: list[tuple[str, str, bytes]] | None = N
     # a non-ASCII address (before the @): headers in UTF-8 (RFC 6532), the only valid form; the default policy would
     # RFC 2047-encode the address itself, which no server reads. Sending it needs SMTPUTF8 (`send`)
     msg = EmailMessage(policy=email.policy.SMTPUTF8) if not all(a.isascii() for a in to + cc + bcc) else EmailMessage()
+    if acc.get("name") and _bad_header(str(acc["name"])):   # saved before names were checked
+        raise MailError("invalid", "invalid account name (Settings of the mailbox)")
     msg["From"] = email.utils.formataddr((acc.get("name") or "", acc["address"])) if acc.get("name") else acc["address"]
     if to:
         msg["To"] = ", ".join(to)
@@ -471,10 +496,10 @@ def send(acc: dict, draft: dict, files: list[tuple[str, str, bytes]] | None = No
         with contextlib.suppress(Exception):           # imaplib.IMAP4.error too: the message is gone
             out["sent_folder"] = imap.append(acc, "sent", msg.as_bytes(), "(\\Seen)")
     rep = draft.get("reply") or None
-    target = (orig["folder"], orig["uid"]) if orig else (str(rep.get("folder") or "INBOX"), int(rep["uid"])) \
-        if rep and rep.get("uid") else None
-    if target:
-        with contextlib.suppress(Exception):
+    with contextlib.suppress(Exception):
+        target = (orig["folder"], orig["uid"]) if orig else (str(rep.get("folder") or "INBOX"), int(rep["uid"])) \
+            if rep and rep.get("uid") else None
+        if target:
             imap.act(acc, target[0], [target[1]], "answered")
     _drop_draft(acc, draft)
     return out

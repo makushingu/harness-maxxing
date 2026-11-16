@@ -103,3 +103,14 @@ def test_onboarding(client, monkeypatch, tmp_path):
     assert all(steps.values())
     assert client.post("/api/onboarding/complete").json() == {"ok": True, "jobs_enabled": []}
     assert client.get("/api/onboarding").json()["completed"] is True
+
+
+def test_a_token_that_fails_its_test_keeps_the_one_stored_before(client, mx, monkeypatch, tmp_path):
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    import maxxing.api.claude as cl
+    assert client.post("/api/claude/auth", json={"kind": "oauth_token", "value": "sk-ant-oat-GOODGOODGOOD"}).json()["ok"]
+    monkeypatch.setattr(cl, "TEST_PROMPT", "FAIL now")
+    r = client.post("/api/claude/auth", json={"kind": "api_key", "value": "sk-ant-api-WRONGWRONG"}).json()
+    assert r["ok"] is False and r["error"]
+    assert config.get_secret("claude_oauth_token") == "sk-ant-oat-GOODGOODGOOD"
+    assert config.get_secret("anthropic_api_key") in (None, "")

@@ -131,6 +131,7 @@ class RunIn(BaseModel):
     model: Optional[str] = Field(default=None, max_length=80)     # a new conversation's model (the owner's pick)
     effort: Optional[str] = Field(default=None, max_length=20)    # a new conversation's effort (the owner's pick)
     voice: Optional[str] = None          # a voice message sent directly (under <agent>/attachments/): transcribed after
+    call: Optional[str] = Field(default=None, pattern=r"^[a-z]{2,3}$")  # said on a voice call, in that language
 
 
 class WebhookIn(BaseModel):
@@ -318,7 +319,7 @@ def run_agent(project: str, topic: str, name: str, body: RunIn):
     try:                       # typed by the user: an instruction, not outside data (no markers)
         return agents.fire(path, trigger="manual", prompt=text, source="manual", reply_to=body.reply_to or None,
                            attachments=files or None, model=(body.model or "").strip() or None,
-                           effort=(body.effort or "").strip() or None, voice=voice)
+                           effort=(body.effort or "").strip() or None, voice=voice, call=body.call or None)
     except Exception as e:     # SessionError (bad model...)
         raise HTTPException(getattr(e, "status", 500),
                             detail={"error": getattr(e, "code", "run_failed"), "message": str(e)}) from None

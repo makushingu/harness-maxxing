@@ -103,6 +103,9 @@ class MentionIn(BaseModel):
 class MessageIn(_Text):
     text: str = ""
     attachments: list[str] = Field(default_factory=list)
+    # sent during a voice call (the language of the call): Claude is told it is on the phone, answers short and
+    # easy to say, in that language
+    call: str | None = Field(None, pattern=r"^[a-z]{2,3}$")
     voice: str | None = None  # absolute path of a voice message sent directly: transcribed on the server, then sent
     # The sender's own id for this message, found again in its queue item and its log line (`client_ids`): a page
     # reloaded mid-send tells whether the server got it.
@@ -222,7 +225,7 @@ async def delete_session(sid: str):
 @router.post("/sessions/{sid}/messages")
 async def send_message(sid: str, body: MessageIn):
     return await _call(service.send_message, sid, body.text, body.attachments, "web",
-                       voice_path=body.voice, client_id=body.client_id,
+                       call=body.call, voice_path=body.voice, client_id=body.client_id,
                        mentions=[m.model_dump() for m in body.mentions])
 
 

@@ -112,6 +112,7 @@ function FolderList({ acc, folders, loading, error, current, onPick, newName, se
                     className={cn(
                       'flex h-8 w-full items-center gap-2 rounded-md pr-2 text-left text-[13px] transition-colors pointer-coarse:h-10',
                       active ? 'bg-accent font-medium text-accent-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                      !f.role && 'pointer-coarse:pr-11',
                     )}
                     style={{ paddingLeft: 8 + depth(f) * 12 }}
                     title={f.role ? f.name : mask(f.name)}
@@ -125,7 +126,7 @@ function FolderList({ acc, folders, loading, error, current, onPick, newName, se
                       <DropdownMenuTrigger asChild>
                         <button
                           type="button"
-                          className="absolute top-1 right-1 hidden size-6 items-center justify-center rounded text-muted-foreground group-hover:flex hover:bg-background data-[state=open]:flex"
+                          className="absolute top-1 right-1 hidden size-6 items-center justify-center rounded text-muted-foreground group-hover:flex hover:bg-background data-[state=open]:flex pointer-coarse:top-0 pointer-coarse:right-0 pointer-coarse:flex pointer-coarse:size-10"
                           aria-label={t('mail.folder.menu')}
                         >
                           <MoreHorizontal className="size-3.5" />
@@ -204,7 +205,7 @@ function MailboxNav({ acc, all, accounts, folders, loading, error, current, onPi
             <div key={a.id} className="mt-0.5">
               <WithContextMenu items={accItems}>
                 <div className="group relative">
-                  <button type="button" className={cn(row(open), 'pr-9')} onClick={() => onAccount(a.id)} aria-current={open || undefined} title={mask(a.address, 8)} data-testid="mail-box">
+                  <button type="button" className={cn(row(open), 'pr-9 pointer-coarse:pr-11')} onClick={() => onAccount(a.id)} aria-current={open || undefined} title={mask(a.address, 8)} data-testid="mail-box">
                     <Mail className="size-4 shrink-0" />
                     <span className="min-w-0 flex-1 truncate">
                       <Sensitive length={8}>{a.label || a.address}</Sensitive>
@@ -215,7 +216,7 @@ function MailboxNav({ acc, all, accounts, folders, loading, error, current, onPi
                       <DropdownMenuTrigger asChild>
                         <button
                           type="button"
-                          className="absolute top-1.5 right-1.5 flex size-6 items-center justify-center rounded text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-background focus-visible:opacity-100 data-[state=open]:opacity-100 pointer-coarse:opacity-100"
+                          className="absolute top-1.5 right-1.5 flex size-6 items-center justify-center rounded text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-background focus-visible:opacity-100 data-[state=open]:opacity-100 pointer-coarse:opacity-100 pointer-coarse:top-0 pointer-coarse:right-0 pointer-coarse:size-10"
                           aria-label={t('mail.accountMenu')}
                         >
                           <MoreHorizontal className="size-3.5" />

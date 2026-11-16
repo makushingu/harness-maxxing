@@ -30,7 +30,7 @@ export function ClaudeStatusCard({ onReplace }: { onReplace?: () => void }) {
       </Callout>
     )
   return (
-    <div className="grid grid-cols-1 gap-3">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-3">
       <Callout
         tone={s.auth.ok ? 'success' : 'warning'}
         title={s.auth.ok ? t('claude.connected') : s.auth.method ? t('claude.signInExpired') : t('claude.notConnected')}
@@ -58,7 +58,7 @@ export function ClaudeStatusCard({ onReplace }: { onReplace?: () => void }) {
           {s.auth.method && <Badge variant="outline">{t(METHOD[s.auth.method])}</Badge>}
           {s.version && <span>Claude Code {s.version}</span>}
           {s.auth.detail && (
-            <span>
+            <span className="min-w-0 [overflow-wrap:anywhere]">
               · <Sensitive>{s.auth.detail}</Sensitive>
             </span>
           )}

@@ -28,6 +28,9 @@ MAX_SENDERS = 50
 ACC_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,40}$")          # = mail.ID_RE
 SENDER_RE = re.compile(r"^[a-z0-9*?._%+'-]*@[a-z0-9*?.-]+$")
 DEFAULT_RIGHTS = ["read", "draft"]
+# The sender list of a grant whose hand-written senders are all invalid: matches no real (verified) mail. An empty
+# list means "any sender", so dropping every invalid entry would open the mailbox instead of closing it.
+NO_SENDER = "nobody@invalid.invalid"
 
 
 class AccessError(ValueError):
@@ -35,8 +38,12 @@ class AccessError(ValueError):
 
 
 def _clean_senders(v: Any, strict: bool) -> list[str]:
+    if v not in (None, "") and not isinstance(v, list):
+        if strict:
+            raise AccessError("senders: a list of addresses or domains")
+        return [NO_SENDER]                                # a list written wrong by hand restricts, never opens
     out: list[str] = []
-    for s in v if isinstance(v, list) else []:
+    for s in v or []:
         s = str(s).strip().lower()
         if s and "@" not in s:
             s = "*@" + s                                  # "stripe.com": the whole domain
@@ -48,6 +55,8 @@ def _clean_senders(v: Any, strict: bool) -> list[str]:
             continue
         if s not in out:
             out.append(s)
+    if not out and any(str(s).strip() for s in v or []):
+        return [NO_SENDER]                                # every entry invalid: no sender at all, not "anyone"
     return out[:MAX_SENDERS]
 
 

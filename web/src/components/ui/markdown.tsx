@@ -6,6 +6,7 @@ import type { createLowlight } from 'lowlight'
 import { cn } from '@/lib/utils'
 import { CodeBlock } from './code-block'
 import { Diagram } from './diagram'
+import { canHighlight } from './highlightLimit'
 import { useT, withGroups } from '@/i18n'
 import { FILE_HREF, fileHrefPath } from '@/features/files/viewerStore'
 
@@ -53,7 +54,9 @@ function rehypeHighlightLite() {
         const ll = lowlight
         if (code && lang && !ll) loadLowlight()
         else if (code && lang && ll?.registered(lang)) {
-          code.children = ll.highlight(lang, hText(code)).children as unknown as HNode[]
+          const text = hText(code)
+          if (!canHighlight(lang, text.length)) continue
+          code.children = ll.highlight(lang, text).children as unknown as HNode[]
           code.properties = { ...code.properties, className: [...(cls as string[]), 'hljs'] }
         }
       } else walk(child)

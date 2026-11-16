@@ -91,7 +91,15 @@ def _exposed_vault(secrets: dict) -> dict[str, str]:
     v = secrets.get("vault") if isinstance(secrets.get("vault"), dict) else {}
     return {k: str(e.get("value") or "") for k, e in v.items()
             if isinstance(e, dict) and e.get("expose") and ENV_NAME_RE.match(k)
-            and k not in _RESERVED and not k.startswith("MAXXING_")}
+            and not _reserved(k)}
+
+
+def _reserved(name: str) -> bool:
+    try:
+        from .. import vault
+        return vault.is_reserved(name)
+    except ImportError:
+        return name in _RESERVED or name.startswith("MAXXING_")
 
 
 def _named_vault(names: list[str]) -> dict[str, str]:
@@ -102,7 +110,7 @@ def _named_vault(names: list[str]) -> dict[str, str]:
         return {}
     out = {}
     for n in names:
-        v = vault.get(n) if ENV_NAME_RE.match(n) and n not in _RESERVED and not n.startswith("MAXXING_") else None
+        v = vault.get(n) if ENV_NAME_RE.match(n) and not _reserved(n) else None
         if v is not None and "\0" not in v:
             out[n] = v
     return out

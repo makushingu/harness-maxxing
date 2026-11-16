@@ -439,7 +439,7 @@ function Detail({ r, v, byId, onOpen, projects }: { r: InfraResource; v: InfraVi
                 const LIcon = KIND_ICON[l.kind]
                 return (
                   <li key={l.id}>
-                    <button type="button" onClick={() => onOpen(l.id)} className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-[13px] hover:bg-muted">
+                    <button type="button" onClick={() => onOpen(l.id)} className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-[13px] hover:bg-muted pointer-coarse:min-h-10">
                       <StatusDot tone={STATUS_TONE[l.status]} />
                       <LIcon className="size-3.5 text-muted-foreground" />
                       <span className="truncate">

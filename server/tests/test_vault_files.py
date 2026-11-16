@@ -499,3 +499,19 @@ def test_a_broken_pipe_of_the_command_itself_is_still_an_error(mx, monkeypatch):
         monkeypatch.undo()
         fake.close()
         os.close(r)
+
+
+def test_a_damaged_secrets_json_never_makes_a_put_or_delete_erase_the_other_files(mx):
+    d = mx["state"] / "secret-files"
+    vault_files.put("KEYSTORE_A", b"precious-bytes", filename="a.p12")
+    sp = config.secrets_path()
+    sp.write_text(sp.read_text()[:-5])                     # torn or hand-damaged
+    config._forget_secrets()
+    vault_files.put("KEYSTORE_B", b"other")
+    assert (d / "KEYSTORE_A").read_bytes() == b"precious-bytes"
+    s = json.loads(sp.read_text())
+    s["vault_files"] = []                                  # entries of the wrong type
+    sp.write_text(json.dumps(s))
+    config._forget_secrets()
+    vault_files.delete("NOPE")
+    assert (d / "KEYSTORE_A").exists() and (d / "KEYSTORE_B").exists()

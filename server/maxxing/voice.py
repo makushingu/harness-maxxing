@@ -21,6 +21,7 @@ import importlib
 import importlib.util
 import logging
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -141,6 +142,23 @@ def model_present(name: str) -> bool:
     return (p / "model.bin").is_file() and (p / "config.json").is_file()
 
 
+# A model downloads into <name>.part and moves to <name> once complete: a half download is never seen as installed.
+# One download at a time (install job, transcription, `maxxing update`): two never write the same folder.
+_download_lock = threading.Lock()
+
+
+def _part_path(name: str) -> Path:
+    return models_dir() / f"{name}.part"
+
+
+def _finish_download(name: str) -> None:
+    part, dest = _part_path(name), model_path(name)
+    if not ((part / "model.bin").is_file() and (part / "config.json").is_file()):
+        return
+    shutil.rmtree(dest, ignore_errors=True)
+    os.replace(part, dest)
+
+
 def _dir_bytes(p: Path) -> int:
     total = 0
     for root, _dirs, files in os.walk(p):
@@ -200,6 +218,9 @@ def status() -> dict:
 
 
 # ---- audio normalisation --------------------------------------------------------------------
+_convert_slots = threading.BoundedSemaphore(2)       # ffmpeg conversions at once (a burst of voice notes)
+
+
 def normalise(src: Path, dest: Path, max_seconds: int = MAX_SECONDS) -> float:
     """Any audio/video file -> 16 kHz mono 16-bit WAV at `dest`. Returns the duration in seconds.
     Raises VoiceError(422 bad_audio | 413 too_long | 503 no_ffmpeg)."""
@@ -209,7 +230,8 @@ def normalise(src: Path, dest: Path, max_seconds: int = MAX_SECONDS) -> float:
     cmd = [ff, "-nostdin", "-hide_banner", "-loglevel", "error", "-y", "-protocol_whitelist", "file",   # no URLs
            "-i", str(src), "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", "-t", str(max_seconds + 1), str(dest)]
     try:
-        p = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+        with _convert_slots:
+            p = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
     except subprocess.TimeoutExpired:
         raise VoiceError(422, "bad_audio", "audio conversion timed out") from None
     if p.returncode != 0 or not dest.is_file():
@@ -280,14 +302,17 @@ def download_model(name: str) -> Path:
         return model_path(name)
     if not local_installed():
         raise VoiceError(503, "not_installed", "local transcription is not installed (Settings → Voice → Install)")
-    fw_utils = importlib.import_module("faster_whisper.utils")
-    dest = model_path(name)
-    from . import deps                                 # the revision pinned in deps.toml, not whatever is newest
-    revision = (deps.get("whisper").get("revisions") or {}).get(name)
-    fw_utils.download_model(name, output_dir=str(dest), revision=revision)
+    with _download_lock:
+        if model_present(name):                        # downloaded by the install job meanwhile
+            return model_path(name)
+        fw_utils = importlib.import_module("faster_whisper.utils")
+        from . import deps                             # the revision pinned in deps.toml, not whatever is newest
+        revision = (deps.get("whisper").get("revisions") or {}).get(name)
+        fw_utils.download_model(name, output_dir=str(_part_path(name)), revision=revision)
+        _finish_download(name)
     if not model_present(name):
         raise VoiceError(502, "download_failed", f"model {name} could not be downloaded")
-    return dest
+    return model_path(name)
 
 
 def _load(name: str) -> Any:
@@ -305,15 +330,57 @@ def _load(name: str) -> Any:
         return _model
 
 
+_FR_WORDS = re.compile(r"\b(?:le|la|les|des|est|une|pour|que|qui|pas|tu|je|et|du|sur|avec|ce|ça|mon|ma|on)\b")
+_EN_WORDS = re.compile(r"\b(?:the|is|are|and|you|to|of|with|for|not|it|this|can|what|my|we|do|i)\b")
+
+
+def text_language(text: str) -> str | None:
+    """French or English from common words, None when it cannot tell (short, other language)."""
+    low = text.lower()
+    fr, en = len(_FR_WORDS.findall(low)), len(_EN_WORDS.findall(low))
+    if fr + en < 2 or fr == en:
+        return None
+    return "fr" if fr > en else "en"
+
+
+# Mean log-probability of a transcript below which the language is doubted (right language about -0.2 to -0.4,
+# wrong one -0.45 to -0.85 with the small model).
+WRONG_LANGUAGE_LOGPROB = -0.4
+
+
 def _engine_local(wav: Path, language: str, s: dict) -> dict:
     global _last_used
     model = _load(s["model"])
-    segments, info = model.transcribe(str(wav), language=None if language == "auto" else language,
-                                      beam_size=1, vad_filter=True, condition_on_previous_text=False)
-    text = " ".join(seg.text.strip() for seg in segments).strip()
+    among = [lang for lang in (s.get("among") or ()) if lang != language]
+
+    def run(lang: str) -> tuple[str, float, Any]:
+        segments, info = model.transcribe(str(wav), language=None if lang == "auto" else lang,
+                                          beam_size=1, vad_filter=True, condition_on_previous_text=False)
+        segs = list(segments)
+        n = sum(len(seg.text) for seg in segs) or 1
+        score = sum(seg.avg_logprob * len(seg.text) for seg in segs) / n if segs else 0.0
+        return " ".join(seg.text.strip() for seg in segs).strip(), score, info
+
+    text, score, info = run(language)
+    if among and language != "auto" and text and score < WRONG_LANGUAGE_LOGPROB:
+        # Heard in the expected language with a poor confidence: the user may have switched. The other likely
+        # languages are tried and the most confident transcript is kept (costs time only on such sentences).
+        for other in among:
+            t2, s2, i2 = run(other)
+            if t2 and s2 > score:
+                text, score, info, language = t2, s2, i2, other
+        if score < WRONG_LANGUAGE_LOGPROB:                 # none of them: whatever language Whisper hears
+            t2, s2, i2 = run("auto")
+            if t2 and s2 > score:
+                text, score, info, language = t2, s2, i2, "auto"
+    lang_out = getattr(info, "language", None) or (None if language == "auto" else language)
+    # Forced into French, Whisper may copy an English sentence as it is (good score): the text tells.
+    if among and lang_out in ("fr", "en") and text_language(text) not in (None, lang_out) \
+            and text_language(text) in (*among, language):
+        lang_out = text_language(text)
     _last_used = time.time()
     _arm_unload()
-    return {"text": text, "language": getattr(info, "language", None) or (None if language == "auto" else language),
+    return {"text": text, "language": lang_out,
             "model": s["model"]}
 
 
@@ -377,11 +444,14 @@ _ENGINES: dict[str, Callable[[Path, str, dict], dict]] = {
 
 
 # ---- public entry point ---------------------------------------------------------------------
-def transcribe_file(src: Path, language: str | None = None, engine: str | None = None) -> dict:
-    """Blocking. -> {text, language, duration_s, engine, model, ms}. Raises VoiceError."""
+def transcribe_file(src: Path, language: str | None = None, engine: str | None = None,
+                    among: tuple[str, ...] = ()) -> dict:
+    """Blocking. -> {text, language, duration_s, engine, model, ms}. Raises VoiceError.
+    `among`: other likely languages; the local engine tries them when the transcript in `language` is doubtful."""
     s = settings()
     if engine:
         s["engine"] = engine
+    s["among"] = tuple(among)
     ready, reason = readiness(s)
     if not ready:
         msgs = {"off": "voice messages are off (Settings → Voice)",
@@ -411,7 +481,7 @@ def install_state() -> dict:
     j = dict(_job)
     if j["state"] == "running" and j["step"] == "model" and j["model"]:
         expected = MODEL_SIZE_MB.get(j["model"], 1) * 1024 * 1024
-        j["progress"] = round(min(0.99, _dir_bytes(model_path(j["model"])) / expected), 3)
+        j["progress"] = round(min(0.99, _dir_bytes(_part_path(j["model"])) / expected), 3)
     return j
 
 
@@ -458,8 +528,13 @@ def _download_subprocess(name: str) -> None:
     revision = (deps.get("whisper").get("revisions") or {}).get(name) or ""
     code = ("import sys; from faster_whisper.utils import download_model as d; "
             "d(sys.argv[1], output_dir=sys.argv[2], revision=sys.argv[3] or None)")
-    p = subprocess.run([sys.executable, "-c", code, name, str(model_path(name)), revision], capture_output=True,
-                       text=True, timeout=3600)
+    with _download_lock:
+        if model_present(name):
+            return
+        p = subprocess.run([sys.executable, "-c", code, name, str(_part_path(name)), revision],
+                           capture_output=True, text=True, timeout=3600)
+        if p.returncode == 0:
+            _finish_download(name)
     if p.returncode != 0 or not model_present(name):
         err = (p.stderr or "").strip().splitlines()
         raise VoiceError(502, "download_failed", (err[-1] if err else "download failed")[:300])
@@ -512,9 +587,13 @@ def start_install(model: str | None = None) -> dict:
 def delete_model(name: str) -> None:
     if name not in MODELS:
         raise VoiceError(400, "invalid_model", f"unknown model {name!r}")
+    with _job_lock:
+        if _job["state"] == "running" and _job["model"] == name:
+            raise VoiceError(409, "busy", f"the {name} model is being installed")
     if _model_name == name:
         _unload()
     shutil.rmtree(model_path(name), ignore_errors=True)
+    shutil.rmtree(_part_path(name), ignore_errors=True)
 
 
 # ---- doctor ----------------------------------------------------------------------------------

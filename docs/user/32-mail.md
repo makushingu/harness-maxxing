@@ -90,6 +90,8 @@ An agent (Settings -> Features -> Agents) sees **no mailbox** until you give it 
 - **Only mail from** (optional): `client@example.com`, `*@stripe.com`. The agent then only sees mail from these
   senders, and only when your mail provider checked the sender (DKIM, SPF or DMARC passed): a forged sender stays
   invisible to it. It also only writes to these addresses. See [Who checks the senders](#who-checks-the-senders).
+  A list edited by hand in `agent.json` where no entry is a valid address or domain (accents, a typo, a plain text
+  instead of a list) closes the mailbox (shown as `nobody@invalid.invalid`) rather than opening it to everyone.
 - **Sending** (with the Send right): **every message waits for my OK** (default), **only someone I never wrote to waits
   for my OK**, or **sends alone**. "Someone I wrote to" = an address you sent to from Harness, or a message of an agent
   you allowed: writing to you first never makes anyone known, and what an agent sends alone does not count. The

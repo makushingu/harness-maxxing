@@ -147,9 +147,11 @@ def _clean(data: dict, partial: bool = False) -> dict:
                 raise MailError("invalid", f"{k}: one of {', '.join(TLS)}")
         else:
             v = str(v).strip()
+            if any(0xD800 <= ord(c) <= 0xDFFF for c in v):          # a lone surrogate: every send would fail
+                raise MailError("invalid", f"{k}: invalid characters")
             if k == "signature":
                 v = v[:2000]
-            elif any(c in v for c in "\r\n\0"):
+            elif any(c in v for c in "\r\n\0\x85\u2028\u2029"):
                 raise MailError("invalid", f"{k}: invalid characters")
             else:
                 v = v[:200]

@@ -39,19 +39,23 @@ export const GROUPS = {
   skw: ['skw'],
   // the guided tour: loaded with its chunk (tour/Tour.tsx); its entry points (menu, palette) use help.*
   tour: ['tour'],
-  // the composer's / and @ menus, the intelligence (effort) level and the rows of the session shortcuts window
-  // (pages/sessions/index.tsx): loaded on their first text asked
-  composer: ['slash', 'mention', 'effort', 'kbd'],
+  // the composer's / and @ menus, the intelligence (effort) level, the compaction gauge's tooltip and the rows of the
+  // session shortcuts window (pages/sessions/index.tsx): loaded on their first text asked
+  composer: ['slash', 'mention', 'effort', 'kbd', 'cgauge'],
   // the Changes view of a session (features/code): loaded when it opens
   code: ['code', 'copy', 'pr'],
   // the terminal drawer and its setting (features/terminal)
   term: ['term'],
+  // "Copy the text" of a file (features/files/copyText.tsx): with the Files page, else on the first file shown in the viewer
+  ctext: ['ctext'],
   // Office documents and the page-by-page PDF reader (features/files/docs.tsx, pdfPages.tsx): on the first one opened
   docs: ['doc'],
   // the sentences of the status line (components/shell/mood.ts): fetched once the shell shows, not before it
   mood: ['mood'],
   // who takes the processor (the CPU meter's window, components/shell/HealthIndicator.tsx): loaded when it opens
   cpuwho: ['cpuwho'],
+  // the hands-free voice mode of a session (features/voice/VoiceCall.tsx, its card in Settings -> Voice): on its first text asked
+  vmode: ['vmode'],
 } as const satisfies Record<string, readonly string[]>
 
 export type Group = keyof typeof GROUPS

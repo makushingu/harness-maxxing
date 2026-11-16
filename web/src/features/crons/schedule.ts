@@ -101,15 +101,23 @@ export const UNIT_S: Record<TimeoutUnit, number> = { s: 1, min: 60, h: 3600 }
 /** "YYYY-MM-DDTHH:MM" of a Unix time in the zone `tz` (the server's zone, not the browser's): the value of a
  *  datetime-local field for a one-time job, read by the server in that zone. */
 export function inputInZone(ts: number, tz?: string): string {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: tz || 'UTC',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-  }).formatToParts(new Date(ts * 1000))
+  const fmt = (timeZone: string) =>
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    })
+  let f: Intl.DateTimeFormat
+  try {
+    f = fmt(tz || 'UTC')
+  } catch {                                         // a zone this browser does not know (e.g. Factory)
+    f = fmt('UTC')
+  }
+  const parts = f.formatToParts(new Date(ts * 1000))
   const v = (type: string) => parts.find((p) => p.type === type)?.value || '00'
   return `${v('year')}-${v('month')}-${v('day')}T${v('hour')}:${v('minute')}`
 }

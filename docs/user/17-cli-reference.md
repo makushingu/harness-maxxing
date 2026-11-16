@@ -63,6 +63,7 @@ Restart the service after changing the port, bind address or public URL:
 | `--preflight` | simulate the update on a throw-away copy: per customization *carries over* / *on code that changed* / *now included* / *conflicts*, plus unsaved edits, web UI edits, extensions the new version does not support, upgrade notes to apply, and a verdict (`simple` or `adapt`). Changes nothing; `--json` for machine-readable |
 | `--verify` | check that every extension loads and every widget answers, and run each customization's check. Exit `0` everything works, `1` something to fix |
 | `--smart` | used by the Update button: after the restart the server opens a `system/harness` session that applies the upgrade notes |
+| `--auto` | used by the automatic update (Settings -> Updates): after the restart, a notification says which upgrade notes are left to apply |
 
 Every install fetches the new version from its git remote (a private fork or mirror: with the read token stored as
 `github_update_token`). A server installed with a key before 2.0.0a87 first moves to the public git repository by
