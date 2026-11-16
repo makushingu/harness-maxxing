@@ -48,3 +48,45 @@ def test_a_hanging_voice_worker_fails_the_sentence_instead_of_blocking(tmp_path,
     assert tts._lock.acquire(timeout=1)
     tts._lock.release()
     assert tts._worker is None or tts._worker.poll() is not None
+
+
+def test_an_install_that_fails_at_once_is_never_left_running(mx, monkeypatch):
+    import threading
+    monkeypatch.setattr(tts, "_install", {"state": "idle"})
+
+    def fail(voices=None):
+        tts._install.update(state="failed", error="no uv")
+
+    monkeypatch.setattr(tts, "install", fail)
+    for _ in range(50):
+        tts.start_install()
+        for t in threading.enumerate():
+            if t.name == "tts-install":
+                t.join()
+        assert tts._install["state"] == "failed"
+
+
+def test_two_installs_at_once_start_one_thread(mx, monkeypatch):
+    import threading
+    import time
+    monkeypatch.setattr(tts, "_install", {"state": "idle"})
+    started, release = [], threading.Event()
+
+    def slow(voices=None):
+        started.append(1)
+        release.wait(5)
+        tts._install.update(state="done")
+
+    monkeypatch.setattr(tts, "install", slow)
+    go = threading.Barrier(16)
+    threads = [threading.Thread(target=lambda: (go.wait(), tts.start_install())) for _ in range(16)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    time.sleep(0.1)
+    release.set()
+    for t in threading.enumerate():
+        if t.name == "tts-install":
+            t.join()
+    assert len(started) == 1
