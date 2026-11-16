@@ -55,6 +55,19 @@ def test_grants_are_cleaned_and_strict_refuses_bad_values():
     assert agents.clean({})["mail"] == []                      # nothing by default
 
 
+def test_hand_written_senders_that_are_all_invalid_do_not_open_the_mailbox():
+    for senders in (["jürgen@müller.de"], ["not an address", "x@*"], "client@example.com"):
+        g = access.clean_grants([{"account": "a", "rights": ["read", "send"], "senders": senders,
+                                  "trigger": {"senders": senders}}])[0]
+        assert not access.sender_ok(g, "evil@attacker.com", True), senders
+        assert access.recipients_ok(g, ["evil@attacker.com"]) == ["evil@attacker.com"], senders
+        assert g["trigger"]["senders"] == g["senders"] == [access.NO_SENDER]
+    g = access.clean_grants([{"account": "a", "senders": ["", "  "]}])[0]
+    assert g["senders"] == [] and access.sender_ok(g, "anyone@example.com", False)
+    with pytest.raises(access.AccessError):
+        access.clean_grants([{"account": "a", "senders": "client@example.com"}], strict=True)
+
+
 def test_only_the_providers_top_header_proves_the_sender():
     trusted = access.trusted_servers({"imap_host": "imap.example.net", "smtp_host": "smtp.example.net"})
     ok = _msg("billing@stripe.com", ar=[AR_OK])
