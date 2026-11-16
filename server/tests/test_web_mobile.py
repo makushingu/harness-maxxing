@@ -234,3 +234,11 @@ def test_a_long_claude_sign_in_error_stays_inside_the_card():
     assert root and "grid-cols-[minmax(0,1fr)]" in root[1].split()
     detail = re.search(r'\{s\.auth\.detail && \(\s*<span className="([^"]*)">', src)
     assert detail and "[overflow-wrap:anywhere]" in detail[1].split()
+
+
+def test_the_mail_folder_and_mailbox_menus_are_visible_and_big_enough_to_tap():
+    src = (WEB / "features" / "mail" / "MailPage.tsx").read_text()
+    for label in ("mail.folder.menu", "mail.accountMenu"):
+        cls = re.search(r'className="([^"]*)"\s*aria-label=\{t\(\'' + re.escape(label) + r"'\)\}", src)
+        assert cls and "pointer-coarse:size-10" in cls[1].split(), label
+        assert "hidden" not in cls[1].split() or "pointer-coarse:flex" in cls[1].split(), label
