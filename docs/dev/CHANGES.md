@@ -82,6 +82,9 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   revision 1248. Scrapling 0.5 is not taken: it drops `DynamicFetcher` and renames `extract stealthy-fetch` to
   `extract fetch` (skill `web-scraping`, users' scripts). `scripts/bump-pins.sh` keeps it below `SCRAPLING_BELOW`
   (0.5), adds the `SCRAPLING_EXTRA` floors to the compile input, and holds playwright on patchright's minor.
+- `deps.toml` uv 0.13.1 -> 0.13.8 (GHSA-hq85-5cpj-mr62, sha256 checked against the release's `sha256.sum`);
+  `templates/remotion/package-lock.json` fast-uri 3.1.8 -> 3.1.9 (`npm update fast-uri --package-lock-only`;
+  GHSA-333x-w4r6-6crp, -w74x-v6f9-j3xg, -wjr9-j795-jxcr, -xhq7-xmqj-769h). Caddy comes from apt: not pinned here.
 - **Chromium for two drivers**: `playwright install` deletes every revision no Playwright install links to,
   Patchright's included, so a lock where they need different revisions (playwright 1.65 / patchright 1.64) left
   `StealthyFetcher` without its browser while `deps update chromium` said "installed". `bump-pins.sh` now

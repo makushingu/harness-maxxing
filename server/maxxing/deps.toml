@@ -29,10 +29,10 @@ schema = 1
 [uv]
 title = "uv (Python toolchain)"
 kind = "archive"
-version = "0.13.1"
+version = "0.13.8"
 url = "https://github.com/astral-sh/uv/releases/download/{version}/uv-{arch}-unknown-linux-gnu.tar.gz"
 arch = { x86_64 = "x86_64", aarch64 = "aarch64" }
-sha256 = { x86_64 = "eadd9d27c134ab5ac1ffd4473b97a741407f3ea238288f03121fc4deddf90220", aarch64 = "9041c73c99fdc5892cf128140beb354eca9231d502068cc36e6cb53a8e59ad14" }
+sha256 = { x86_64 = "5acfd9177cfecf0bf87578f059728215ccc884388988f55f7a65041b57387d91", aarch64 = "74f2f5c6024d397481db228db8fc25eed420db192243f88438c118e7e013e585" }
 path = "/usr/local/bin/uv"
 files = ["uv", "uvx"]
 remove = ["/usr/local/bin/uv", "/usr/local/bin/uvx"]

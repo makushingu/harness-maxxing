@@ -34,9 +34,11 @@ Fixed:
   update topic and say "update"). Under the switch, Settings -> Updates now says when it last looked and what it
   found ("waiting, someone is on the interface", "a session is working", "up to date"...), and a busy server is
   looked at again after 5 minutes instead of 30.
-- **Two dependencies with a known vulnerability are updated.** The OpenTelemetry API used by the server
-  (GHSA-mf5v-w3w3-f6cg) and Soup Sieve in the web scraping tools (GHSA-mmhr-3c5m-f64f); both could be slowed down by
-  crafted input. Scrapling and its browser stay on the same versions.
+- **Dependencies with a known vulnerability are updated.** The OpenTelemetry API used by the server
+  (GHSA-mf5v-w3w3-f6cg) and Soup Sieve in the web scraping tools (GHSA-mmhr-3c5m-f64f), both could be slowed down by
+  crafted input; uv 0.13.8 (it trusted a certificate authority that was revoked, GHSA-hq85-5cpj-mr62); fast-uri in the
+  video tools (GHSA-333x-w4r6-6crp and three others). Scrapling and its browser stay on the same versions. Caddy is
+  updated by the system (`apt upgrade caddy`, 2.11.5 or later fixes GHSA-8qx7-j2v2-x6q5).
 - **The weekly "Check dependencies for vulnerabilities" job no longer shows "Failed" when it finds something.** The
   finding is in the notifications; "Failed" now only means the check itself could not run.
 
