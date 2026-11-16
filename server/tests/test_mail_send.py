@@ -406,3 +406,8 @@ def test_a_badly_typed_forward_or_address_list_is_a_clear_refusal(client, acc, s
                                                                                **extra})})
     assert r.status_code == 400 and len(smtp.messages) == n0
     assert not srv.folders["Drafts"].messages
+
+
+def test_a_folder_name_with_a_control_character_is_a_400(client, acc):
+    r = client.get(f"/api/mail/{acc['id']}/messages", params={"folder": "\x00"})
+    assert r.status_code == 400 and r.json()["error"] == "bad_folder"
