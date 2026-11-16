@@ -120,9 +120,14 @@ def _keep(tmp: Path, topic: str, ext: str) -> str:
     folder.mkdir(parents=True, exist_ok=True)
     base = f"voice-{time.strftime('%Y%m%d-%H%M%S')}"
     dest, n = folder / f"{base}{ext}", 1
-    while dest.exists():
-        dest, n = folder / f"{base}-{n}{ext}", n + 1
-    shutil.copyfile(tmp, dest)
+    while True:                                        # exclusive create: two recordings in the same second never share a file
+        try:
+            out = open(dest, "xb")
+            break
+        except FileExistsError:
+            dest, n = folder / f"{base}-{n}{ext}", n + 1
+    with out, open(tmp, "rb") as src:
+        shutil.copyfileobj(src, out)
     return str(dest)
 
 

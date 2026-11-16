@@ -382,3 +382,30 @@ def test_a_slash_path_never_keeps_the_audio_at_the_workspace_root(client, mx, tm
     assert r.status_code == 400 and r.json()["error"] == "bad_path"
     from maxxing import workspace
     assert not (workspace.root() / "attachments").exists()
+
+
+def test_two_recordings_kept_in_the_same_second_get_two_files(topic, mx, tmp_path, monkeypatch):
+    import threading
+    from maxxing.api import voice as api_voice
+    barrier, real_exists = threading.Barrier(2, timeout=1), Path.exists
+
+    def exists(self, *a, **k):                         # both requests check the name before either writes
+        if self.name.startswith("voice-"):
+            try:
+                barrier.wait()
+            except threading.BrokenBarrierError:
+                pass
+        return real_exists(self, *a, **k)
+
+    monkeypatch.setattr(Path, "exists", exists)
+    srcs = []
+    for body in (b"AAAA", b"BBBB"):
+        srcs.append(tmp_path / f"in-{body.decode()}.webm")
+        srcs[-1].write_bytes(body)
+    out: list[str] = []
+    ts = [threading.Thread(target=lambda s=s: out.append(api_voice._keep(s, topic, ".webm"))) for s in srcs]
+    for t in ts:
+        t.start()
+    for t in ts:
+        t.join()
+    assert len(set(out)) == 2 and sorted(Path(p).read_bytes() for p in out) == [b"AAAA", b"BBBB"]
