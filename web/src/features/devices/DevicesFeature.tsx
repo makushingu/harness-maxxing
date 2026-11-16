@@ -8,7 +8,7 @@ import { Button, Switch } from '@/components/ui'
 import { SettingRow } from '@/features/common'
 import { SettingsCard } from '@/pages/settings/sections/ui'
 
-export const DEVICES_SETTINGS = '/settings/devices'
+const DEVICES_SETTINGS = '/settings/devices'
 
 export function DevicesFeature({ link }: { link?: boolean }) {
   const t = useT()

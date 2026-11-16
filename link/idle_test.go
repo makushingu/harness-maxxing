@@ -27,7 +27,7 @@ func TestIdleCost(t *testing.T) {
 	dir := t.TempDir()
 	saveConfig(dir, &Config{Server: fs.URL, DeviceID: "dev1", Token: "tok1"})
 	cmd := exec.Command(bin)
-	cmd.Env = append(os.Environ(), "HARNESS_LINK_CONFIG_DIR="+dir, "HARNESS_LINK_NO_AUTOSTART=1")
+	cmd.Env = append(os.Environ(), "HARNESS_LINK_CONFIG_DIR="+dir, "HARNESS_LINK_NO_INSTALL=1")
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}

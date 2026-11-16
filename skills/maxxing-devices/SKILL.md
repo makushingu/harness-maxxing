@@ -45,8 +45,8 @@ Refusals and what to do:
 - **paused** on the device, **locked**, **protected screen**: say so, or `ask_human`.
 - Mac, black pictures or clicks ignored: the terminal app (Terminal, iTerm, Warp) needs **Screen Recording** and
   **Accessibility** in System Settings -> Privacy & Security, then quit it (cmd+Q) and type `harness-link` again.
-- Linux on Wayland: look only. No tools at all: the feature is off, no device is allowed for this project, or the
-  agent does not have the device in its settings (its page -> Devices).
+- Linux on Wayland: no screen yet (the device says so; an X11 session is needed).
+- No tools at all: the feature is off, no device is allowed for this project, or the agent does not have the device in its settings (its page -> Devices).
 
 ## Setting up (the `maxxing devices` command)
 

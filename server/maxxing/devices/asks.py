@@ -114,12 +114,6 @@ def decide_device(device_id: str, action: str, note: str = "") -> int:
     return n
 
 
-def expire_session(sid: str) -> None:
-    for d in list(_asks.values()):
-        if d["session"] == sid and d["status"] == "pending":
-            _finish(d, "expired")
-
-
 def _prune() -> None:
     now = time.time()
     for rid, d in list(_asks.items()):

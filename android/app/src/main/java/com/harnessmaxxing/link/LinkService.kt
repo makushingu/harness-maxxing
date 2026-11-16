@@ -256,7 +256,6 @@ class LinkService : Service() {
                 loop.post { config.forget(); shutdown("revoked") }
                 return null
             }
-            "ping" -> return if (f.id != null) Protocol.ok(f.id) else null
         }
         if (f.t !in COMMANDS) {
             return if (f.id != null) Protocol.err(f.id, Protocol.Err.UNSUPPORTED, "Unknown command: ${f.t}") else null

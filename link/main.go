@@ -106,7 +106,7 @@ func realMain(args []string) int {
 	con := stdoutConsole(logf)
 	con.header()
 	code := runAgent(ctx, runOpts{dir: dir, trailer: tr, logf: logf, say: con.emit, be: be,
-		install: os.Getenv("HARNESS_LINK_NO_INSTALL") != "1" && os.Getenv("HARNESS_LINK_NO_AUTOSTART") != "1"})
+		install: os.Getenv("HARNESS_LINK_NO_INSTALL") != "1"})
 	if ctx.Err() != nil {
 		con.emit(lErr, "Stopped: Claude can no longer use this computer. Type harness-link to start again.")
 	}

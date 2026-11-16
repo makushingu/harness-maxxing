@@ -51,6 +51,8 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   `local_host()` and `security.loopback()` moved out of it. The HUD: `MessageIn.hud`, `runner.HUD_PREFACE`, inline
   screen captures (`stdin_payload`, `inline_image`), web `Hud.tsx`, route `/hud`, `ui.hud`; Caddy route `hud` -> `link`.
   The `display-capture=()` Permissions-Policy stays.
+- `THIRD_PARTY_NOTICES.md` has an Android section (`scripts/third_party_notices.py` `android_packages()`: the
+  `implementation(...)` lines of `android/app/build.gradle.kts`, licenses in `ANDROID_KNOWN`).
 - Automatic update (`maxxing.auto_update`): an upgrade note no longer makes the preflight "needs a person"
   (`_simple`): since the notes exist about one version out of two has one, so the first of them stopped the
   automatic update for good (every later target crosses the same note). The update now runs as `maxxing update

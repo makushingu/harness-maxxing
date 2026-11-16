@@ -22,7 +22,7 @@ import (
 )
 
 // Linux: X11 only in this version, pure Go (xgb): capture with GetImage on the root window, input with XTEST.
-// The app runs inside the graphical session (autostart .desktop file), so DISPLAY / XAUTHORITY come from it.
+// The app runs from a terminal of the graphical session, so DISPLAY / XAUTHORITY come from it.
 
 const waylandNote = "This computer uses a Wayland session: screenshots and mouse / keyboard control are not " +
 	"supported yet. Choose an X11 session at login (for example \"Ubuntu on Xorg\") to let Claude see and use it."

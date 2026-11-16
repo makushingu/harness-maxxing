@@ -265,6 +265,23 @@ def go_packages() -> list[dict]:
     return out
 
 
+# ---- Android ------------------------------------------------------------------------------------------------------
+# The direct dependencies of the Harness Link Android app; what they pull in (AndroidX, Kotlin, Okio) is Apache-2.0 too.
+ANDROID_KNOWN = {"androidx.appcompat:appcompat": "Apache-2.0", "com.google.android.material:material": "Apache-2.0",
+                 "com.squareup.okhttp3:okhttp": "Apache-2.0"}
+
+
+def android_packages() -> list[dict]:
+    gradle = read_text(ROOT / "android" / "app" / "build.gradle.kts")
+    out = []
+    for g, a, v in sorted(set(re.findall(r'^\s*implementation\("([\w.\-]+):([\w.\-]+):([\w.\-]+)"\)', gradle, re.M))):
+        name = f"{g}:{a}"
+        out.append({"eco": "Android", "name": name, "version": v, "group": "compiled into Harness Link (Android)",
+                    "license": ANDROID_KNOWN.get(name, ""), "texts": [],
+                    "url": f"https://mvnrepository.com/artifact/{g}/{a}/{v}"})
+    return out
+
+
 # ---- output ------------------------------------------------------------------------------------------------------
 COPYLEFT = re.compile(r"\b(A?GPL|LGPL)", re.I)
 
@@ -282,6 +299,8 @@ def render(items: list[dict]) -> str:
         "- **JavaScript**: bundled into the web interface (`web/dist`), fonts included (SIL Open Font License 1.1).",
         "- **Python**: installed from PyPI into the server's virtual environment by the installer and `maxxing update`.",
         "- **Go**: compiled into the optional Harness Link desktop app (`link/`).",
+        "- **Android**: compiled into the optional Harness Link Android app (`android/`), with the AndroidX, Kotlin and",
+        "  Okio libraries they pull in (Apache-2.0).",
         "",
         "Tools the installer downloads from their publishers (Claude Code, uv, Python, Node.js, Caddy, Chromium, ...)",
         "are not part of this list: they come with their own licenses.",
@@ -295,7 +314,7 @@ def render(items: list[dict]) -> str:
     ]
     lines += [f"| {k} | {v} |" for k, v in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))]
     texts: dict[str, list[str]] = {}
-    for eco in ("JavaScript", "Python", "Go"):
+    for eco in ("JavaScript", "Python", "Go", "Android"):
         group = [it for it in items if it["eco"] == eco]
         lines += ["", f"## {eco} ({len(group)})", "", "| Package | Version | License | Use |", "|---|---|---|---|"]
         for it in group:
@@ -322,7 +341,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--check", action="store_true", help="exit 1 when THIRD_PARTY_NOTICES.md is not up to date")
     a = ap.parse_args()
-    items = js_packages() + python_packages() + go_packages()
+    items = js_packages() + python_packages() + go_packages() + android_packages()
     text = render(items)
     flagged = sorted(f"{it['eco']} {it['name']} {it['version']}: {it['license'] or 'UNKNOWN'}" for it in items
                      if not it["license"] or COPYLEFT.search(it["license"]))

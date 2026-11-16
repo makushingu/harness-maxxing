@@ -1,5 +1,13 @@
 {
-  "version": "",
+  "version": "0.1.0",
   "url": "https://github.com/makushingu/harness-maxxing/releases/download/link-v{version}/{name}",
-  "files": {}
+  "files": {
+    "harness-link-darwin-amd64": "4f8c918afddbe4c43d774640bcf3ed3c9e3ff61405b0434c560b7067bb4cc296",
+    "harness-link-darwin-arm64": "b85202209b3c125cf49afbc16626ca0d4b3ccd0747ad5593c2d67e4543e068f0",
+    "harness-link-linux-amd64": "a562a33c59c67bce7ffa15dabc85e3501369d2451135a0d4781217a9da793971",
+    "harness-link-linux-arm64": "069c3703b92118b472cea94258971fdb39b6b2c0e02965d6586ad5d9cd0671bc",
+    "harness-link-windows-amd64.exe": "e6d93e77f1f5c90a12040f6d158f54beec3438e72e5e6ad9903c03e1398c4d76",
+    "harness-link-windows-arm64.exe": "93d8fe40be3f121b0ae2dc5c93374a568538535dbe02bcc99fc6ae977a95aa00",
+    "harness-link.apk": "3e9f6197aa142b70b356e783960db1d3056dd9029010d74013bd581a6783b72e"
+  }
 }

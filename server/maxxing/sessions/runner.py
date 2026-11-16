@@ -520,10 +520,9 @@ class Runner:
             if wt.get("port"):
                 env["MAXXING_PORT"] = str(wt["port"])
         text = (PLAN_PREFACE if plan else "") + build_prompt(item)
-        prompt, json_in = text, False
+        prompt = text
         if STREAM_INPUT:                                # always a user message: stdin stays open (steer)
-            prompt, json_in = user_message(text), True
-        if json_in:
+            prompt = user_message(text)
             base += ["--input-format", "stream-json"]
         timeout_s = meta.get("timeout_s")
 

@@ -21,7 +21,7 @@ import (
 	"github.com/ebitengine/purego"
 )
 
-// macOS: screenshots with /usr/sbin/screencapture (main display), input with CoreGraphics events posted to the
+// macOS: screenshots with /usr/sbin/screencapture (the chosen display, -D n), input with CoreGraphics events posted to the
 // HID event tap (needs the Accessibility permission), keyboard layout read with UCKeyTranslate. No cgo: purego.
 
 const (

@@ -25,7 +25,7 @@ It is off until you turn it on: **Settings -> Features -> Devices** (or **Settin
   app, not to Harness Link: in System Settings -> Privacy & Security, turn on **Terminal** (or iTerm, Warp...) under
   both, quit it (cmd+Q), open it again and type `harness-link`. Harness Link says it, and opens the right page, while
   a permission is missing.
-- **Linux**: paste the command in a terminal. On an X11 desktop Claude can do everything; on Wayland it can only look.
+- **Linux**: paste the command in a terminal. On an X11 desktop Claude can do everything; a Wayland desktop is not supported yet (choose an X11 session at login, for example "Ubuntu on Xorg").
 - **Android**: scan the QR code with the phone's camera, download and install the app from the page, then tap
   **Open in Harness Link**. You can also type the server and the code in the app yourself. The app then asks you to
   turn on its accessibility service: that is how it sees the screen and taps for Claude.
@@ -118,6 +118,6 @@ mode ID view|control | screen ID N|main | access ID --all|--project NAME|--agent
 
 - The device must be on, awake and running Harness Link (on a computer: a terminal window with `harness-link`). A
   computer that sleeps or a phone that locks is offline.
-- On a Linux Wayland desktop Claude can only look.
+- On a Linux Wayland desktop Claude cannot see the screen yet: choose an X11 session at login.
 - Claude sees what is on the screen: it cannot read a window hidden behind another one.
 - One person at a time: while you have the device, Claude waits, and the other way round.

@@ -24,8 +24,8 @@ harness-link status | uninstall | version
 |---|---|---|---|
 | Linux X11 | X11 `GetImage` (pure Go, `jezek/xgb`) | XTEST; characters missing from the layout are typed through a spare keycode | `.desktop` files |
 | Linux Wayland | not yet (hello `note`) | not yet | `.desktop` files |
-| Windows 10/11 | GDI `BitBlt`, primary monitor, per-monitor DPI aware | `SendInput` (Unicode text) | Start Menu shortcuts |
-| macOS 10.15+ | `screencapture -x -m` | CoreGraphics events (`purego`, no cgo), shortcuts follow the keyboard layout | `.app` bundles, `open -a` |
+| Windows 10/11 | GDI `BitBlt`, the chosen monitor (`display`), per-monitor DPI aware | `SendInput` (Unicode text) | Start Menu shortcuts |
+| macOS 10.15+ | `screencapture -x` (`-D n` for the chosen screen) | CoreGraphics events (`purego`, no cgo), shortcuts follow the keyboard layout | `.app` bundles, `open -a` |
 
 macOS gives its two permissions to the *responsible* process, which is the terminal app (Terminal, iTerm, Warp...,
 named from `TERM_PROGRAM`): **Accessibility** (input) and **Screen Recording** (without it `screencapture` writes
@@ -66,3 +66,12 @@ HARNESS_LINK_CONFIG_DIR=/tmp/hl HARNESS_LINK_NO_INSTALL=1 dist/harness-link-linu
 
 The code comes from Settings -> Devices -> Add a device. On Linux, run it inside the graphical session
 (`DISPLAY` set), or against a virtual one: `Xvfb :77 -screen 0 1280x800x24 & DISPLAY=:77 ...`.
+
+## Publish a version (maintainers)
+
+Servers download the apps from a GitHub release `link-v<version>` of this repository, as listed in
+`server/maxxing/link.json` (`{version, url, files: {name: sha256}}`; a file is used only when its sha256 matches).
+
+1. `VERSION=<version> ./build.sh` here, and `android/build.sh` with the release signing key in the environment.
+2. Create the release `link-v<version>` with the 6 files of `dist/`, `harness-link.apk` and `SHA256SUMS`.
+3. Put the version and the sha256 of each file in `server/maxxing/link.json`, then release Harness Maxxing as usual.
