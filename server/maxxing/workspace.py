@@ -693,16 +693,24 @@ def move_to_trash(src: Path, label: str | None = None, kind: str | None = None) 
         label = raw.decode("utf-8", "replace")
     base = f"{stamp}-{label}"
     dest, n = trash / base, 1
-    while dest.exists() or dest.with_name(dest.name + ".json").exists():
+    # The name is reserved by creating its sidecar exclusively: two deletes of the same name in the same second
+    # picked the same name and the second one replaced the first file in the trash (lost for good).
+    while True:
+        sidecar = dest.with_name(dest.name + ".json")
+        if not os.path.lexists(dest):
+            try:
+                os.close(os.open(sidecar, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600))
+                break
+            except FileExistsError:
+                pass
         n += 1
         dest = trash / f"{base}-{n}"
     # The sidecar first (a file never sits in the trash without it), its path in UTF-8: one that is not comes back
     # under a readable name.
     side: dict = {"original": os.fsencode(str(src)).decode("utf-8", "replace"), "at": time.time()}
     side["kind"] = kind or ("folder" if src.is_dir() else "file")
-    sidecar = dest.with_name(dest.name + ".json")
-    config.write_json(sidecar, side)
     try:
+        config.write_json(sidecar, side)
         shutil.move(str(src), str(dest))
     except BaseException:
         sidecar.unlink(missing_ok=True)
