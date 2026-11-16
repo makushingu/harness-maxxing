@@ -938,6 +938,11 @@ def _up_chromium(c: dict, explicit: bool = False) -> tuple[str, str]:
         if code != 0 or not chromium_bin(rev):
             raise DepError(f"{mod} could not download Chromium {rev}: {out.strip()[-300:]}")
         done.append(rev)
+    # `playwright install` deletes the revisions no Playwright install links to (Patchright's among them)
+    lost = sorted(r for r in set(revs.values()) if not chromium_bin(r))
+    if lost:
+        raise DepError(f"Chromium {', '.join(lost)} was removed by another driver's install: "
+                       "Playwright and Patchright need the same revision (Scrapling lock)")
     b = chromium_bin(max(revs.values()))
     if b and missing_libs(b):
         code, out = _run([str(py), "-m", "playwright", "install-deps", "chromium"], timeout=1800, env=env)

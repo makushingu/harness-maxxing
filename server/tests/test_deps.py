@@ -315,6 +315,27 @@ def test_one_chromium_for_pdfs_and_remotion(st, monkeypatch):
     assert "setBrowserExecutable" in cfg and "chrome-for-testing" in cfg
 
 
+def test_chromium_update_fails_when_one_install_removed_the_other(st, monkeypatch, tmp_path):
+    # playwright's install garbage-collects the revision patchright needs when they differ
+    base = st / "tools/browsers"
+    monkeypatch.setattr(deps, "scrapling_python", lambda: tmp_path / "python")
+    monkeypatch.setattr(deps, "playwright_revisions", lambda py=None: {"patchright": "1248", "playwright": "1255"})
+
+    def install(cmd, timeout=600, env=None, cwd=None):
+        rev = "1248" if cmd[2] == "patchright" else "1255"
+        for d in base.glob("chromium-*"):
+            shutil.rmtree(d)
+        exe = base / f"chromium-{rev}/chrome-linux64/chrome"
+        exe.parent.mkdir(parents=True)
+        exe.write_text("")
+        (base / f"chromium-{rev}/INSTALLATION_COMPLETE").write_text("")
+        return 0, ""
+    monkeypatch.setattr(deps, "_run", install)
+    monkeypatch.setattr(deps, "missing_libs", lambda b: [])
+    with pytest.raises(deps.DepError, match="1248 was removed"):
+        deps._up_chromium({})
+
+
 def test_video_new_on_a_file_says_so(st, tmp_path):
     from maxxing import cmd_video
     (cmd_video.tools_dir() / "node_modules").mkdir(parents=True)
