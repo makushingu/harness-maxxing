@@ -675,6 +675,22 @@ def test_an_unreadable_jobs_json_is_never_saved_over(org):
     assert crons.read_crontab() == tab
 
 
+def test_files_nested_too_deep_read_as_damaged_not_a_crash(org):
+    """jobs.json, retries.json or a line of runs.jsonl of 100 000 brackets: the damaged path, not a RecursionError."""
+    a = crons.create_job({"name": "A", "schedule": "0 5 * * *", "command": "echo a"})
+    deep = "[" * 100_000
+    crons.runs_path().write_text(deep + "\n" + json.dumps({"cron_id": a["id"], "status": "ok", "started": 1.0}) + "\n")
+    assert [r["cron_id"] for r in crons.read_runs(a["id"])] == [a["id"]]     # the good line is kept
+    (crons.jobs_path().parent / "retries.json").write_text(deep)
+    assert config.read_json(crons.jobs_path().parent / "retries.json", {}) == {}
+    crons.tick()
+    crons.jobs_path().write_text(deep)
+    assert crons.list_jobs() == []
+    with pytest.raises(crons.CronError) as e:
+        crons.create_job({"name": "C", "schedule": "0 7 * * *", "command": "echo c"})
+    assert e.value.code == "damaged_jobs"
+
+
 def test_deleted_lists_even_with_a_bad_date(org, capsys):
     """deleted.jsonl is only a file: a date that is not a number (or out of range) does not break the list."""
     from maxxing import cmd_cron

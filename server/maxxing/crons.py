@@ -431,7 +431,7 @@ def _read_raw() -> list[dict] | None:
             data = json.load(f)
     except FileNotFoundError:
         return []
-    except (OSError, ValueError):
+    except (OSError, ValueError, RecursionError):        # RecursionError: nested too deep (damaged as well)
         return None
     jobs = data.get("jobs", []) if isinstance(data, dict) else None
     if not isinstance(jobs, list):
@@ -779,7 +779,7 @@ def _all_runs() -> list[dict]:
     for line in lines:
         try:
             r = json.loads(line)
-        except ValueError:
+        except (ValueError, RecursionError):
             continue
         if isinstance(r, dict):
             runs.append(r)
