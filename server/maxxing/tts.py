@@ -49,6 +49,7 @@ KEEP_S = 600                # generated audio files are deleted after this
 
 _lock = threading.Lock()
 _install: dict = {"state": "idle"}
+_install_lock = threading.Lock()
 
 
 class TTSError(voice.VoiceError):
@@ -124,9 +125,14 @@ def install(voices: list[str] | None = None) -> dict:
 
 
 def start_install(voices: list[str] | None = None) -> dict:
-    if _install.get("state") != "running":
+    # "running" is set under the lock BEFORE the thread starts: set after, it hid an install that failed at once
+    # (stuck "running" until a restart), and two clicks at once started two installs on the same files.
+    with _install_lock:
+        start = _install.get("state") != "running"
+        if start:
+            _install.update(state="running", started=time.time(), error=None)
+    if start:
         threading.Thread(target=install, args=(voices,), daemon=True, name="tts-install").start()
-        _install["state"] = "running"
     return status()
 
 

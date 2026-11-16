@@ -8,7 +8,7 @@ from pathlib import Path, PurePosixPath
 import pytest
 from fastapi.testclient import TestClient
 
-from maxxing import feedhooks, importer, security, vault
+from maxxing import config, feedhooks, importer, security, vault
 from maxxing.api import files, filesite, hooks
 
 from test_files import tree  # noqa: F401  (fixture)
@@ -342,6 +342,24 @@ def test_vault_reserved_names(mx):
     for name in ("NODE_OPTIONS", "BASH_ENV", "GIT_SSH_COMMAND", "ANTHROPIC_BASE_URL", "LD_AUDIT"):
         with pytest.raises(vault.VaultError):
             vault.put(name, "x")
+
+
+DANGEROUS_NAMES = ("GIT_CONFIG_GLOBAL", "GIT_CONFIG_COUNT", "GIT_DIR", "GIT_ASKPASS", "SHELLOPTS", "PS4",
+                   "PYTHONBREAKPOINT", "PYTHONUSERBASE", "CLAUDE_CONFIG_DIR", "ANTHROPIC_AUTH_TOKEN",
+                   "HTTPS_PROXY", "ALL_PROXY", "SSL_CERT_FILE", "NODE_EXTRA_CA_CERTS", "LD_DEBUG",
+                   "DYLD_INSERT_LIBRARIES", "XDG_CONFIG_HOME", "SSH_AUTH_SOCK", "BASH_FUNC_X")
+
+
+def test_names_that_redirect_git_python_node_or_tls_are_never_exported(mx):
+    from maxxing.sessions import spawn
+    for name in DANGEROUS_NAMES:
+        with pytest.raises(vault.VaultError):
+            vault.put(name, "x")
+    vault.put("GITHUB_TOKEN", "x", expose=True)
+    v = config.load_secrets()["vault"]
+    config.set_secret("vault", {**v, **{n: {"value": "/x", "expose": True} for n in DANGEROUS_NAMES}})
+    assert vault.exposed_env() == {"GITHUB_TOKEN": "x"}
+    assert spawn.auth_env(keys=["GITHUB_TOKEN", *DANGEROUS_NAMES]) == {"GITHUB_TOKEN": "x"}
 
 
 def test_import_skips_claude_settings():

@@ -290,10 +290,11 @@ def set_topic_order(project: str, names: list[str]) -> list[str]:
     if not project_dir(check_slug(project)).is_dir():
         raise WorkspaceError(404, "not_found", f"Project {project!r} not found")
     known = set(_dirs(project_dir(project) / "topics"))
-    meta = _meta(project)
-    meta["topics"] = [n for n in dict.fromkeys(names) if isinstance(n, str) and n in known]
-    _forget(project_dir(project) / META_FILE)
-    config.write_json(project_dir(project) / META_FILE, meta)
+    with _meta_lock:
+        meta = _meta(project)
+        meta["topics"] = [n for n in dict.fromkeys(names) if isinstance(n, str) and n in known]
+        _forget(project_dir(project) / META_FILE)
+        config.write_json(project_dir(project) / META_FILE, meta)
     bus.invalidate("workspace")
     return topic_names(project)
 
@@ -320,17 +321,23 @@ def _folder_meta(folder: Path) -> dict:
     return copy.deepcopy(_cached(folder / META_FILE, _parse_meta))
 
 
-def _set_folder_meta(folder: Path, key: str, value: str | list) -> None:
-    meta = _folder_meta(folder)
-    if value:
-        meta[key] = value
-    else:
-        meta.pop(key, None)
-    _forget(folder / META_FILE)
-    if meta:
-        config.write_json(folder / META_FILE, meta)
-    else:
-        (folder / META_FILE).unlink(missing_ok=True)
+# Every read-modify-write of a .maxxing.json (two writers at once - an "Always allow" and the browser setting of the
+# same topic - kept only the last one's change).
+_meta_lock = config.ProcessLock("folder-meta")
+
+
+def _set_folder_meta(folder: Path, key: str, value: str | list | dict) -> None:
+    with _meta_lock:
+        meta = _folder_meta(folder)
+        if value:
+            meta[key] = value
+        else:
+            meta.pop(key, None)
+        _forget(folder / META_FILE)
+        if meta:
+            config.write_json(folder / META_FILE, meta)
+        else:
+            (folder / META_FILE).unlink(missing_ok=True)
 
 
 def _meta(project: str) -> dict:
@@ -395,15 +402,12 @@ def add_topic_allowed_tool(path: str, rule: str) -> list[str]:
     d = topic_dir(path)
     if not d.is_dir():
         raise WorkspaceError(404, "not_found", f"Topic {path} not found")
-    with _allowed_lock:
+    with _meta_lock:
         rules = topic_allowed_tools(path)
         rules = check_allowed_tools(rules + [rule])
         _set_folder_meta(d, "allowed_tools", rules)
     _changed("updated", "topic", path)
     return rules
-
-
-_allowed_lock = config.ProcessLock("topic-allowed-tools")
 
 
 def folder_browser(path: str) -> dict:
@@ -417,17 +421,7 @@ def folder_browser(path: str) -> dict:
 
 def set_folder_browser(path: str, block: dict | None) -> None:
     """Write (or remove, with an empty block) the `browser` block of a project's or a topic's .maxxing.json."""
-    folder = topic_dir(path)
-    meta = _folder_meta(folder)
-    if block:
-        meta["browser"] = block
-    else:
-        meta.pop("browser", None)
-    _forget(folder / META_FILE)
-    if meta:
-        config.write_json(folder / META_FILE, meta)
-    else:
-        (folder / META_FILE).unlink(missing_ok=True)
+    _set_folder_meta(topic_dir(path), "browser", block or "")
 
 
 def check_permission_mode(value: str) -> str:
@@ -584,15 +578,15 @@ def update_topic(project: str, topic: str, name: str | None = None, description:
     if mode is not None:
         _set_folder_meta(d, "permission_mode", mode)
     if tools is not None:
-        with _allowed_lock:
-            _set_folder_meta(d, "allowed_tools", tools)
+        _set_folder_meta(d, "allowed_tools", tools)
     if new != topic:
         _rename(topic_path(project, topic), topic_path(project, new))
-        meta = _meta(project)
-        if isinstance(meta.get("topics"), list):
-            meta["topics"] = _rename_in_order(meta["topics"], topic, new)
-            _forget(project_dir(project) / META_FILE)
-            config.write_json(project_dir(project) / META_FILE, meta)
+        with _meta_lock:
+            meta = _meta(project)
+            if isinstance(meta.get("topics"), list):
+                meta["topics"] = _rename_in_order(meta["topics"], topic, new)
+                _forget(project_dir(project) / META_FILE)
+                config.write_json(project_dir(project) / META_FILE, meta)
     _write_claude_md(project_dir(project) / "topics" / new, "topic", new, description)
     if new != topic:
         _changed("renamed", "topic", topic_path(project, new), topic_path(project, topic))
@@ -699,16 +693,24 @@ def move_to_trash(src: Path, label: str | None = None, kind: str | None = None) 
         label = raw.decode("utf-8", "replace")
     base = f"{stamp}-{label}"
     dest, n = trash / base, 1
-    while dest.exists() or dest.with_name(dest.name + ".json").exists():
+    # The name is reserved by creating its sidecar exclusively: two deletes of the same name in the same second
+    # picked the same name and the second one replaced the first file in the trash (lost for good).
+    while True:
+        sidecar = dest.with_name(dest.name + ".json")
+        if not os.path.lexists(dest):
+            try:
+                os.close(os.open(sidecar, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600))
+                break
+            except FileExistsError:
+                pass
         n += 1
         dest = trash / f"{base}-{n}"
     # The sidecar first (a file never sits in the trash without it), its path in UTF-8: one that is not comes back
     # under a readable name.
     side: dict = {"original": os.fsencode(str(src)).decode("utf-8", "replace"), "at": time.time()}
     side["kind"] = kind or ("folder" if src.is_dir() else "file")
-    sidecar = dest.with_name(dest.name + ".json")
-    config.write_json(sidecar, side)
     try:
+        config.write_json(sidecar, side)
         shutil.move(str(src), str(dest))
     except BaseException:
         sidecar.unlink(missing_ok=True)

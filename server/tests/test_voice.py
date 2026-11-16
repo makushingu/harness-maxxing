@@ -64,6 +64,37 @@ def test_normalise_errors(mx, tmp_path):
     assert e.value.code == "too_long" and e.value.status == 413
 
 
+def test_a_burst_of_voice_notes_runs_at_most_two_conversions_at_once(mx, tmp_path, monkeypatch):
+    import threading
+    running, peak, lock = [0], [0], threading.Lock()
+
+    def run(cmd, **kw):
+        with lock:
+            running[0] += 1
+            peak[0] = max(peak[0], running[0])
+        time.sleep(0.05)
+        with lock:
+            running[0] -= 1
+        return subprocess.CompletedProcess(cmd, 1, "", "boom")
+
+    monkeypatch.setattr(voice, "ffmpeg_bin", lambda: "/usr/bin/ffmpeg")
+    monkeypatch.setattr(voice.subprocess, "run", run)
+    errors = []
+
+    def one(i):
+        try:
+            voice.normalise(tmp_path / f"{i}.webm", tmp_path / f"{i}.wav")
+        except voice.VoiceError as e:
+            errors.append(e.code)
+
+    threads = [threading.Thread(target=one, args=(i,)) for i in range(20)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert errors == ["bad_audio"] * 20 and peak[0] <= 2
+
+
 # ---- settings & status ----------------------------------------------------------------------
 def test_status_defaults_and_settings(client, monkeypatch):
     monkeypatch.setattr(voice, "ram_gb", lambda: 2.0)

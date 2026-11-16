@@ -1,4 +1,5 @@
 import json
+import time
 
 import httpx
 import pytest
@@ -308,3 +309,21 @@ def test_the_voice_never_repeats_the_users_words(call):
     call.replies = ["@ask\nOui vas-y.\nJe mets l'alerte en place."]
     out = _turn(call, text="Oui vas-y.")
     assert [x["say"] for x in out if "say" in x] == ["Je mets l'alerte en place."]
+
+
+def test_an_idle_call_is_hung_up_without_another_call_starting(call, monkeypatch):
+    monkeypatch.setattr(voicecall, "REAP_EVERY_S", 0.05)
+    call.used = time.time() - voicecall.IDLE_S - 1               # a tab closed without /end
+    voicecall._arm_reaper()
+    deadline = time.time() + 5
+    while call.id in voicecall._calls and time.time() < deadline:
+        time.sleep(0.02)
+    assert call.id not in voicecall._calls
+
+
+def test_a_provider_error_that_is_not_a_json_object_is_a_502():
+    for body in (["boom"], "boom", {"error": {"code": 5}}, {"error": ["x"] * 500}):
+        r = httpx.Response(503, json=body)
+        e = voicecall._api_error("openai", r)
+        assert e.status == 502 and e.code == "provider_error" and len(e.message) < 320, body
+    assert voicecall._api_error("gemini", httpx.Response(401, text="<html>no</html>")).code == "bad_key"

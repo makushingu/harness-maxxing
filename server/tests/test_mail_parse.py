@@ -207,9 +207,20 @@ def test_a_huge_address_header_is_cut_before_the_parser(monkeypatch, value):
     monkeypatch.setattr(imap, "_parsed", lambda msg, name, raw: seen.append(len(raw)) or parsed(msg, name, raw))
     msg = imap._parse(f"From: a@x.fr\r\nTo: {value}\r\nSubject: s\r\n\r\nx\r\n".encode())
     got = imap._addrs(msg, "to")
-    assert seen and max(seen) <= 4 * 1024                   # the parser is quadratic: never fed more than this
+    assert max(seen, default=0) <= 4 * 1024                 # the parser is quadratic: never fed more than this
     if "@" in value:
         assert 100 <= len(got) <= 600 and got[0]["email"] == "a@x.fr"
+
+
+def test_a_from_header_past_the_cap_never_shows_a_different_domain():
+    msg = imap._parse(("From: <" + "a" * 4083 + "@trusted.com.evil.org>\r\nSubject: s\r\n\r\nx\r\n").encode())
+    got = imap._addrs(msg, "from")
+    assert got[0]["email"] == "" and not got[0]["name"].endswith("@trusted.com>")
+
+
+def test_a_reply_to_past_the_cap_keeps_every_address():
+    msg = imap._parse(('Reply-To: ok@ok.com, "' + "p" * 4100 + '" <evil@evil.org>\r\nSubject: s\r\n\r\nx\r\n').encode())
+    assert [a["email"] for a in imap._addrs(msg, "reply-to")] == ["ok@ok.com", "evil@evil.org"]
 
 
 def test_size_of_quoted_printable_part_counts_soft_break_as_zero():

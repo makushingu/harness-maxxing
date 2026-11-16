@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from . import config
-from .vault import NAME_RE, RESERVED, VaultError, _is_text, check_name
+from .vault import NAME_RE, VaultError, _is_text, check_name, is_reserved
 
 DIRNAME = "secret-files"
 MAX_SIZE = 1024 * 1024
@@ -189,7 +189,7 @@ def exposed_files_env() -> dict[str, str]:
     """{NAME: absolute path} of the files flagged `expose` that exist (never raises). The path, never the content."""
     try:
         return {k: str(files_dir() / k) for k, e in _meta().items()
-                if e.get("expose") and NAME_RE.match(k) and k not in RESERVED and not k.startswith("MAXXING_")
+                if e.get("expose") and NAME_RE.match(k) and not is_reserved(k)
                 and path_of(k)}
     except Exception:
         return {}

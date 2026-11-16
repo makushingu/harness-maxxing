@@ -186,7 +186,7 @@ def check_overrides() -> dict[str, str]:
     commit's Check trailer."""
     try:
         d = json.loads(_checks_path().read_text())
-    except (OSError, ValueError, KeyError):
+    except (OSError, ValueError, KeyError, RecursionError):          # RecursionError: deeply nested JSON
         return {}
     return {str(k): str(v) for k, v in d.items()} if isinstance(d, dict) else {}
 
@@ -390,7 +390,7 @@ def pending_path() -> Path:
 def pending() -> dict[str, Any] | None:
     try:
         d = json.loads(pending_path().read_text())
-    except (OSError, ValueError):
+    except (OSError, ValueError, RecursionError):
         return None
     return d if isinstance(d, dict) else None
 
