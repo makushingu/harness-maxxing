@@ -357,9 +357,11 @@ def last_report() -> dict | None:
 
 
 # ---- after an update (run by the restarted server) -----------------------------------------------
-def mark_updated(old_version: str, new_version: str, smart: bool) -> None:
-    """Written by `maxxing update` once the new version answers."""
-    _write(AFTER, {"at": time.time(), "from": old_version, "to": new_version, "smart": smart, "done": False})
+def mark_updated(old_version: str, new_version: str, smart: bool, auto: bool = False) -> None:
+    """Written by `maxxing update` once the new version answers (`smart`: the Update button, `auto`: the automatic
+    update)."""
+    _write(AFTER, {"at": time.time(), "from": old_version, "to": new_version, "smart": smart, "auto": auto,
+                   "done": False})
 
 
 def after_info() -> dict | None:
@@ -374,7 +376,8 @@ def update_topic_path() -> str:
 
 
 def after_update() -> dict | None:
-    """Once per update: verify, tell the user, open the notes session for a button update."""
+    """Once per update: verify, tell the user, open the notes session for a button update; after an automatic
+    update (nobody was there, no session is opened) the notes left to apply are announced instead."""
     m = _read(AFTER)
     if not m or m.get("done"):
         return None
@@ -389,8 +392,14 @@ def after_update() -> dict | None:
         feed.system(title, body, "warning", "system", "/settings/updates")
         from .telegram import gateway
         gateway.system_alert(f"{title}\n{body}")
-    notes = upgrade_notes_to_apply(m.get("from") or "", m.get("to") or "") if m.get("smart") else []
-    if notes and config.load_config().get("update_auto_notes", True):
+    notes = upgrade_notes_to_apply(m.get("from") or "", m.get("to") or "") if m.get("smart") or m.get("auto") else []
+    if notes and m.get("auto") and not m.get("smart"):
+        from .cmd_core import update_topic
+        feed.system(f"Harness updated itself to {m['to']}: upgrade notes to apply",
+                    f"This version comes with changes to make in your workspace "
+                    f"({', '.join(n['version'] for n in notes[:8])}). Open the topic {update_topic()} and say: update",
+                    "info", "system", f"/sessions?path={update_topic_path()}", dedupe=f"auto-update-notes:{m['to']}")
+    elif notes and config.load_config().get("update_auto_notes", True):
         try:
             from .sessions import service
             s = service.create_session(update_topic_path(), message=notes_prompt(m["from"], m["to"], notes),

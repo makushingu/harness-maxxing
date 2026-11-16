@@ -174,3 +174,27 @@ def test_after_update_verifies_and_opens_the_notes_session(code, monkeypatch):
     smartupdate.mark_updated("1.0.0", "1.1.0", smart=True)
     smartupdate.after_update()
     assert len(made) == 1
+
+
+def test_after_an_automatic_update_the_notes_are_announced(code, monkeypatch):
+    """Nobody was there: no session is opened, the notes left to apply are in the notifications, once."""
+    from maxxing import feed
+    from maxxing.sessions import service
+    clone = code["clone"]
+    (clone / "docs/upgrade").mkdir(parents=True)
+    (clone / "docs/upgrade/1.1.0.md").write_text("# Upgrade notes - 1.1.0\n\nRename the topic x.\n")
+    (clone / "docs/upgrade/1.0.5.md").write_text("# Upgrade notes - 1.0.5\n\nNothing to do: UI only.\n")
+    made = []
+    monkeypatch.setattr(service, "create_session", lambda *a, **kw: made.append(a) or {"id": "s1"})
+    smartupdate.mark_updated("1.0.0", "1.1.0", smart=False, auto=True)
+    assert smartupdate.after_update()["done"] and made == []
+    ev = feed.list_events()["events"]
+    assert [e["title"] for e in ev] == ["Harness updated itself to 1.1.0: upgrade notes to apply"]
+    assert "(1.1.0)" in ev[0]["body"] and "system/harness" in ev[0]["body"]
+    assert ev[0]["url"] == "/sessions?path=projects/system/topics/harness"
+    smartupdate.mark_updated("1.0.5", "1.1.0", smart=False, auto=True)      # the same version again: said once
+    smartupdate.after_update()
+    assert len(feed.list_events()["events"]) == 1
+    smartupdate.mark_updated("1.0.0", "1.0.5", smart=False, auto=True)      # a note with nothing to do: silence
+    smartupdate.after_update()
+    assert len(feed.list_events()["events"]) == 1 and made == []
