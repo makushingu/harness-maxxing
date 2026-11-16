@@ -96,7 +96,7 @@ export function CsvView({ content, name, className }: { content: string; name: s
         {q && view.length !== rows.length && <span className="tabular-nums">· {t('viewer.csvMatches', { count: fmtNumber(view.length, lang) })}</span>}
         <div className="relative ml-auto w-48 max-sm:w-36">
           <Search className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2" />
-          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('viewer.filter')} className="h-7 pl-7 text-xs pointer-coarse:h-9" aria-label={t('viewer.filter')} />
+          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('viewer.filter')} className="h-7 pl-7 text-xs pointer-coarse:h-10" aria-label={t('viewer.filter')} />
         </div>
       </div>
       <div className="min-h-0 flex-1 overflow-auto overscroll-contain">
@@ -175,12 +175,12 @@ export function HtmlView({ path, version, className }: { path: string; version?:
           <ShieldCheck className="size-3.5 shrink-0" />
           <span className="truncate">{t('viewer.htmlSandbox')}</span>
         </span>
-        <Button variant="ghost" size="sm" className="h-7 pointer-coarse:h-9" onClick={() => setReload((n) => n + 1)}>
+        <Button variant="ghost" size="sm" className="h-7 pointer-coarse:h-10" onClick={() => setReload((n) => n + 1)}>
           <RefreshCw />
           {t('viewer.reload')}
         </Button>
         {q.data && (
-          <Button asChild variant="ghost" size="sm" className="h-7 pointer-coarse:h-9">
+          <Button asChild variant="ghost" size="sm" className="h-7 pointer-coarse:h-10">
             <a href={q.data.url} target="_blank" rel="noopener noreferrer">
               <ExternalLink />
               {t('viewer.newTab')}
@@ -221,7 +221,7 @@ export function ArchiveView({ path, className }: { path: string; className?: str
         </span>
         <div className="relative ml-auto w-48 shrink-0 max-sm:w-32">
           <Search className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2" />
-          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('viewer.filter')} className="h-7 pl-7 text-xs pointer-coarse:h-9" aria-label={t('viewer.filter')} />
+          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('viewer.filter')} className="h-7 pl-7 text-xs pointer-coarse:h-10" aria-label={t('viewer.filter')} />
         </div>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-1">
