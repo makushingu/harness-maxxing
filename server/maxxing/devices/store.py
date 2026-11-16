@@ -267,7 +267,7 @@ def invites_public() -> list[dict]:
 
 # ---- actions log ---------------------------------------------------------------------------------------------------
 _alock = threading.Lock()
-SAFE_ARGS = ("x", "y", "x2", "y2", "w", "h", "dx", "dy", "button", "double", "keys", "app", "element", "ms", "s")
+SAFE_ARGS = ("x", "y", "x2", "y2", "w", "h", "dx", "dy", "button", "double", "keys", "app", "name", "screen", "element", "ms", "s")
 
 
 def log_action(device: str, tool: str, args: dict, ok: bool, ms: int, session: str = "", owner: str = "",

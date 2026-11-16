@@ -4,13 +4,13 @@
 // of a request's notification); ?add=1 opens "Add a device".
 import * as React from 'react'
 import { useSearchParams } from 'react-router'
-import { Eye, Laptop, MonitorSmartphone, Pencil, Plus, Smartphone, Trash2 } from 'lucide-react'
-import { useLang, useT } from '@/i18n'
+import { EllipsisVertical, Eye, Laptop, MonitorSmartphone, Pencil, Plus, Smartphone, Trash2 } from 'lucide-react'
+import { useLang, useT, type TFn, type TKey } from '@/i18n'
 import { useConfirmDevice, useDevices, useNewInvite, useRemoveDevice, useSaveDevice, useSettings, useWorkspace } from '@/lib/queries'
-import type { Device, DeviceInvite, DeviceOs, DevicesStatus } from '@/lib/types'
+import type { Device, DeviceAction, DeviceInvite, DeviceOs, DevicesStatus } from '@/lib/types'
 import { fmtRelative } from '@/lib/format'
 import { cn } from '@/lib/utils'
-import { Badge, Button, Checkbox, CopyButton, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, Input, Segmented, Select, Skeleton, StatusDot, confirm } from '@/components/ui'
+import { Badge, Button, Checkbox, CopyButton, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, Input, Segmented, Select, Skeleton, StatusDot, confirm } from '@/components/ui'
 import { QRCode } from '@/components/ui/qr-code'
 import { Callout } from '@/features/common'
 import { SectionStack, SettingsCard } from '@/pages/settings/sections/ui'
@@ -46,8 +46,7 @@ export function DevicesSettingsSection() {
       <DevicesFeature />
       {waiting.map((d) => <Waiting key={d.id} d={d} />)}
       <SettingsCard
-        title={t('devices.feature.title')}
-        description={t('devices.settingsDesc')}
+        title={devices.length ? t('devices.list.count', { count: devices.length }) : t('devices.list.title')}
         actions={
           <Button size="sm" onClick={() => setAdding(true)} data-testid="devices-add">
             <Plus /> {t('devices.add')}
@@ -55,9 +54,12 @@ export function DevicesSettingsSection() {
         }
       >
         {devices.length ? (
-          <div className="divide-y" data-testid="devices-list">
-            {devices.map((d) => <Row key={d.id} d={d} st={st} onWatch={() => setWatch(d.id)} />)}
-          </div>
+          <>
+            <div className="divide-y" data-testid="devices-list">
+              {devices.map((d) => <Row key={d.id} d={d} st={st} onWatch={() => setWatch(d.id)} />)}
+            </div>
+            <p className="mt-4 border-t pt-3 text-[12px] text-muted-foreground">{t('devices.access.agentsNote')}</p>
+          </>
         ) : (
           <p className="py-2 text-[13px] text-muted-foreground">{t('devices.empty')}</p>
         )}
@@ -107,40 +109,53 @@ function Row({ d, st, onWatch }: { d: Device; st: DevicesStatus; onWatch: () => 
   const [renaming, setRenaming] = React.useState(false)
   const note = d.hello?.note || d.note
   const outdated = !!st.latest && !!d.version && cmpVersion(d.version, st.latest) < 0
+  const several = (d.hello?.screens ?? d.screens ?? []).length > 1
   const state = d.paused ? t('devices.paused') : d.human ? t('devices.human') : d.claude ? t('devices.claude') : d.online ? t('devices.online') : t('devices.offline', { ago: fmtRelative(d.last_seen, lang) })
   return (
-    <div className="grid gap-2 py-3" data-testid="device-row">
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <DeviceIcon os={d.os} className="text-muted-foreground" />
-        <span className="truncate text-sm font-medium">{d.name}</span>
-        <span className="text-[12px] text-muted-foreground">{d.os_name}{d.version ? ` · ${d.version}` : ''}</span>
-        <span className="inline-flex items-center gap-1.5 text-[12px] text-muted-foreground">
-          <StatusDot tone={d.online ? (d.claude ? 'running' : 'ok') : 'idle'} pulse={d.claude} /> {state}
+    <div className="grid gap-3 py-4 first:pt-0 last:pb-0" data-testid="device-row">
+      <div className="flex min-w-0 items-center gap-3">
+        <span className="grid size-9 shrink-0 place-items-center rounded-md bg-muted">
+          <DeviceIcon os={d.os} className="text-muted-foreground" />
         </span>
-        <span className="flex-1" />
-        <Button size="sm" variant="outline" className="h-7" disabled={!d.online} onClick={onWatch} data-testid="device-watch">
-          <Eye /> {t('devices.watch')}
+        <div className="grid min-w-0 flex-1 gap-0.5">
+          <span className="truncate text-sm font-medium">{d.name}</span>
+          <span className="flex min-w-0 flex-wrap items-center gap-x-1.5 text-[12px] text-muted-foreground">
+            <span>{d.os_name}{d.version ? ` · ${d.version}` : ''}</span>
+            <span aria-hidden>·</span>
+            <span className="inline-flex items-center gap-1.5">
+              <StatusDot tone={d.online ? (d.claude ? 'running' : 'ok') : 'idle'} pulse={d.claude} /> {state}
+            </span>
+          </span>
+        </div>
+        <Button size="sm" variant="outline" className="shrink-0" disabled={!d.online} onClick={onWatch} data-testid="device-watch">
+          <Eye /> <span className="max-sm:sr-only">{t('devices.watch')}</span>
         </Button>
-        <Button size="icon-sm" variant="ghost" onClick={() => setRenaming(true)} title={t('devices.rename')} aria-label={t('devices.rename')}>
-          <Pencil />
-        </Button>
-        <Button
-          size="icon-sm"
-          variant="ghost"
-          title={t('devices.remove')}
-          aria-label={t('devices.remove')}
-          onClick={async () => {
-            if (await confirm({ title: t('devices.remove.title', { name: d.name }), description: t('devices.remove.desc'), destructive: true, confirmText: t('devices.remove') }))
-              remove.mutate(d.id)
-          }}
-          data-testid="device-remove"
-        >
-          <Trash2 />
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button size="icon-sm" variant="ghost" className="shrink-0" aria-label={t('devices.more')} title={t('devices.more')} data-testid="device-menu">
+              <EllipsisVertical />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={() => setRenaming(true)}>
+              <Pencil /> {t('devices.rename')}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              destructive
+              data-testid="device-remove"
+              onSelect={async () => {
+                if (await confirm({ title: t('devices.remove.title', { name: d.name }), description: t('devices.remove.desc'), destructive: true, confirmText: t('devices.remove') }))
+                  remove.mutate(d.id)
+              }}
+            >
+              <Trash2 /> {t('devices.remove')}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
-      <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 pl-6">
-        <label className="flex items-center gap-2 text-[12px] text-muted-foreground">
-          {t('devices.mode.label')}
+      {!d.online && <p className="text-[12px] text-muted-foreground sm:pl-12">{t(d.os === 'android' ? 'devices.offlineHelp.android' : 'devices.offlineHelp')}</p>}
+      <dl className="grid gap-x-4 gap-y-3 sm:grid-cols-[10rem_minmax(0,1fr)] sm:items-start sm:pl-12">
+        <Field label={t('devices.mode.label')} hint={d.mode === 'view' ? t('devices.mode.viewDesc') : undefined}>
           <Segmented
             size="sm"
             value={d.mode}
@@ -151,21 +166,33 @@ function Row({ d, st, onWatch }: { d: Device; st: DevicesStatus; onWatch: () => 
               { value: 'control', label: t('devices.mode.control') },
             ]}
           />
-        </label>
-        {(d.hello?.screens ?? d.screens ?? []).length > 1 && (
-          <label className="flex items-center gap-2 text-[12px] text-muted-foreground">
-            {t('devices.live.screen')}
+        </Field>
+        {several && (
+          <Field label={t('devices.live.screen')} hint={t('devices.live.screenHelp')}>
             <ScreenPick d={d} />
-          </label>
+          </Field>
         )}
-        <Access d={d} />
-      </div>
-      {d.mode === 'view' && <p className="pl-6 text-[12px] text-muted-foreground">{t('devices.mode.viewDesc')}</p>}
-      {!d.online && <p className="pl-6 text-[12px] text-muted-foreground">{t(d.os === 'android' ? 'devices.offlineHelp.android' : 'devices.offlineHelp')}</p>}
-      {note && <p className="pl-6 text-[12px] text-warning">{t('devices.note', { note })}</p>}
-      {outdated && <p className="pl-6 text-[12px] text-muted-foreground">{t('devices.outdated', { version: st.latest })}</p>}
+        <Field label={t('devices.access.label')}>
+          <Access d={d} />
+        </Field>
+      </dl>
+      {note && <p className="text-[12px] text-warning sm:pl-12">{t('devices.note', { note })}</p>}
+      {outdated && <p className="text-[12px] text-muted-foreground sm:pl-12">{t('devices.outdated', { version: st.latest })}</p>}
       <Rename d={d} open={renaming} onOpenChange={setRenaming} />
     </div>
+  )
+}
+
+/** One setting of a device: its label on the left (above on a phone), the control and a hint on the right. */
+function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <>
+      <dt className="text-[12px] text-muted-foreground sm:pt-1.5">{label}</dt>
+      <dd className="-mt-2 grid min-w-0 justify-items-start gap-1.5 sm:mt-0">
+        {children}
+        {hint && <p className="text-[12px] text-muted-foreground">{hint}</p>}
+      </dd>
+    </>
   )
 }
 
@@ -186,22 +213,19 @@ function Access({ d }: { d: Device }) {
   const agents = d.scope.filter((x) => x.startsWith('agent:'))
   const set = (scope: string[]) => save.mutate({ id: d.id, scope })
   return (
-    <div className="grid min-w-0 gap-1.5">
-      <label className="flex items-center gap-2 text-[12px] text-muted-foreground">
-        {t('devices.access.label')}
-        <Select
-          className="h-7 w-52 text-[12px]"
-          value={all ? 'all' : 'some'}
-          onValueChange={(v) => set(v === 'all' ? ['*'] : [...agents])}
-          aria-label={t('devices.access.label')}
-          options={[
-            { value: 'all', label: t('devices.access.all') },
-            { value: 'some', label: projects.length ? t('devices.access.count', { count: projects.length }) : t('devices.access.some') },
-          ]}
-        />
-      </label>
+    <>
+      <Select
+        className="h-8 w-60 text-[13px] max-sm:w-full"
+        value={all ? 'all' : 'some'}
+        onValueChange={(v) => set(v === 'all' ? ['*'] : [...agents])}
+        aria-label={t('devices.access.label')}
+        options={[
+          { value: 'all', label: t('devices.access.all') },
+          { value: 'some', label: projects.length ? t('devices.access.count', { count: projects.length }) : t('devices.access.some') },
+        ]}
+      />
       {!all && (
-        <div className="flex flex-wrap gap-x-4 gap-y-1.5" data-testid="device-projects">
+        <div className="flex flex-wrap gap-x-4 gap-y-1.5 pt-0.5" data-testid="device-projects">
           {(ws?.projects || []).map((p) => (
             <label key={p.name} className="flex cursor-pointer items-center gap-1.5 text-[12px] pointer-coarse:min-h-10">
               <Checkbox
@@ -214,8 +238,7 @@ function Access({ d }: { d: Device }) {
           {!projects.length && !agents.length && <span className="text-[12px] text-muted-foreground">{t('devices.access.none')}</span>}
         </div>
       )}
-      <p className="text-[11px] text-muted-foreground">{t('devices.access.agentsNote')}</p>
-    </div>
+    </>
   )
 }
 
@@ -361,22 +384,60 @@ function AddDevice({ open, onOpenChange, st }: { open: boolean; onOpenChange: (v
 function Actions({ st }: { st: DevicesStatus }) {
   const t = useT()
   const lang = useLang()
-  const names = Object.fromEntries(st.devices.map((d) => [d.id, d.name]))
+  const [all, setAll] = React.useState(false)
+  const devs = Object.fromEntries(st.devices.map((d) => [d.id, d]))
   if (!st.actions.length) return null
+  const shown = st.actions.slice(0, all ? 50 : 8)
   return (
-    <SettingsCard title={t('devices.actions.title')}>
-      <ul className="grid gap-1 font-mono text-[11px]" data-testid="devices-actions">
-        {st.actions.slice(0, 15).map((a, i) => (
-          <li key={i} className={cn('flex min-w-0 gap-2', !a.ok && 'text-destructive')}>
-            <span className="shrink-0 text-muted-foreground">{fmtRelative(a.at, lang)}</span>
-            <span className="shrink-0">{names[a.device] || a.device}</span>
-            <span className="truncate">
-              {a.tool} {Object.entries(a.args || {}).map(([k, v]) => `${k}=${v}`).join(' ')}
-              {a.error ? ` · ${a.error}` : ''}
-            </span>
-          </li>
-        ))}
+    <SettingsCard title={t('devices.actions.title')} description={t('devices.actions.desc')}>
+      <ul className="grid divide-y" data-testid="devices-actions">
+        {shown.map((a, i) => {
+          const d = devs[a.device]
+          return (
+            <li key={i} className="flex min-w-0 items-center gap-3 py-2 text-[13px] first:pt-0 last:pb-0">
+              <StatusDot tone={a.ok ? 'ok' : 'error'} />
+              <span className="min-w-0 flex-1">
+                <span className={cn(!a.ok && 'text-destructive')}>{actionText(t, a)}</span>
+                {a.error && <span className="block truncate text-[12px] text-muted-foreground">{a.error}</span>}
+              </span>
+              <span className="hidden max-w-40 shrink-0 truncate text-[12px] text-muted-foreground sm:block">
+                {d ? d.name : t('devices.actions.removed')}
+              </span>
+              <span className="w-20 shrink-0 text-right text-[12px] text-muted-foreground tabular-nums">{fmtRelative(a.at, lang)}</span>
+            </li>
+          )
+        })}
       </ul>
+      {st.actions.length > 8 && (
+        <Button size="sm" variant="ghost" className="mt-2 -ml-2" onClick={() => setAll(!all)}>
+          {all ? t('devices.actions.less') : t('devices.actions.more')}
+        </Button>
+      )}
     </SettingsCard>
   )
+}
+
+/** One of Claude's actions in plain words ("Clicked at 490, 226", "Typed 5 characters"). */
+function actionText(t: TFn, a: DeviceAction): string {
+  const g = a.args || {}
+  const chars = /<(\d+) chars>/.exec(g.text || '')?.[1]
+  switch (a.tool) {
+    case 'click':
+      return t(g.double === 'True' ? 'devices.act.double' : 'devices.act.click', { x: g.x, y: g.y })
+    case 'type':
+      return t('devices.act.type', { count: Number(chars || 0) })
+    case 'key':
+      return t('devices.act.key', { keys: g.keys || '' })
+    case 'open_app':
+      return g.name || g.app ? t('devices.act.openNamed', { name: g.name || g.app }) : t('devices.act.open')
+    case 'wait':
+      return t('devices.act.wait', { s: g.s || '' })
+    case 'screen':
+      return t('devices.act.screen', { n: g.screen === '-1' ? t('devices.live.main') : g.screen })
+    case 'screenshot': case 'zoom': case 'scroll': case 'drag': case 'move': case 'long_press': case 'ui_tree':
+    case 'tap_element': case 'set_text': case 'apps': case 'ask_human': case 'devices':
+      return t(`devices.act.${a.tool}` as TKey)
+    default:
+      return a.tool
+  }
 }
