@@ -38,6 +38,8 @@ what happens, line by line:
 
 ```
   14:02:11  ● Connected to ui.example.com as MacBook
+  14:02:11  ▲ Waiting for your OK: accept this computer in Harness Maxxing (Settings > Devices)
+  14:02:13  ● Accepted (Control): Claude can look, click, type and open apps
   14:02:14  ♦ Claude is using this computer
   14:02:15  › Screenshot  ×3
   14:02:18  › Click at 812,440

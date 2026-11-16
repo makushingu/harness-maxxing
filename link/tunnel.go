@@ -140,21 +140,20 @@ func pairWithRetry(ctx context.Context, tr *Trailer, caps []string, logf func(st
 // ---- control channel ----
 
 type agent struct {
-	cfg     *Config
-	be      backend
-	logf    func(string, ...any)
-	say     func(lineKind, string) // live log in the terminal (defaults to logf)
-	onFirst func()               // called once after the first successful connection
+	cfg  *Config
+	be   backend
+	logf func(string, ...any)
+	say  func(lineKind, string) // live log in the terminal (defaults to logf)
 
 	online bool   // the live log tells only the changes of the connection
 	busyBy string // who has the device, from the last "state" frame
+	access string // "" (not told yet), "wait", "view" or "control", from the last "access" frame
 
 	connMu    sync.Mutex
 	conn      *websocket.Conn
 	lastHello string
 
-	reqs      chan request
-	firstOnce sync.Once
+	reqs chan request
 }
 
 func newAgent(cfg *Config, be backend, logf func(string, ...any)) *agent {
@@ -270,11 +269,6 @@ func (a *agent) session(ctx context.Context) (err error) {
 		a.say(lOK, fmt.Sprintf("Connected to %s as %s", hostOf(a.cfg.Server), deviceName()))
 	}
 	a.online = true
-	a.firstOnce.Do(func() {
-		if a.onFirst != nil {
-			go safely(a.logf, "first-connect", a.onFirst)
-		}
-	})
 
 	go safely(a.logf, "ping", func() {
 		t := time.NewTicker(pingEvery)
@@ -363,6 +357,19 @@ func (a *agent) handle(r request) bool {
 	switch r.T {
 	case "unpair":
 		return true
+	case "access":
+		now := "wait"
+		if r.OK != nil && *r.OK {
+			now = "view"
+			if r.Mode == "control" {
+				now = "control"
+			}
+		}
+		a.logf("access: %s", now)
+		if now != a.access {
+			a.say(accessLine(a.access, now))
+			a.access = now
+		}
 	case "state":
 		a.logf("state: busy=%v by=%s", r.Busy != nil && *r.Busy, r.By)
 		by := r.By
@@ -416,4 +423,27 @@ func (a *agent) worker(ctx context.Context) {
 			}
 		}
 	}
+}
+
+// accessLine is what the live log says when the access of this computer changes.
+func accessLine(before, now string) (lineKind, string) {
+	switch now {
+	case "wait":
+		return lWarn, "Waiting for your OK: accept this computer in Harness Maxxing (Settings > Devices)"
+	case "view":
+		if before == "control" {
+			return lInfo, "Now View only: Claude looks at the screen but does not click or type"
+		}
+		if before == "wait" {
+			return lOK, "Accepted (View only): Claude can look at the screen, not click or type"
+		}
+		return lOK, "Ready (View only): Claude can look at the screen, not click or type"
+	}
+	if before == "view" {
+		return lInfo, "Now Control: Claude can click, type and open apps"
+	}
+	if before == "wait" {
+		return lOK, "Accepted (Control): Claude can look, click, type and open apps"
+	}
+	return lOK, "Ready (Control): Claude can look, click, type and open apps"
 }

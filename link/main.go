@@ -134,7 +134,6 @@ func runAgent(ctx context.Context, o runOpts) int {
 		logf("saved config ignored: %v", err)
 		cfg = nil
 	}
-	fresh := false
 	if tr := o.trailer; tr != nil && (cfg == nil || cfg.PairedCode != tr.Code || cfg.Server != tr.Server) {
 		nc, err := pairWithRetry(ctx, tr, o.be.Info().capsList(), logf)
 		switch {
@@ -143,7 +142,7 @@ func runAgent(ctx context.Context, o runOpts) int {
 				fatal("Cannot save the configuration: " + err.Error())
 				return 1
 			}
-			cfg, fresh = nc, true
+			cfg = nc
 			logf("paired with %s (device %s)", nc.Server, nc.DeviceID)
 		case cfg != nil:
 			logf("new pairing failed (%v); keeping the saved pairing", err)
@@ -168,11 +167,6 @@ func runAgent(ctx context.Context, o runOpts) int {
 	logf("live log started")
 	a := newAgent(cfg, o.be, logf)
 	a.say = say
-	if fresh {
-		a.onFirst = func() {
-			say(lWarn, "Accept this computer in Harness Maxxing (Settings > Devices) so Claude can use it")
-		}
-	}
 	err = a.run(ctx)
 	switch {
 	case errors.Is(err, errRevoked), errors.Is(err, errUnpaired):

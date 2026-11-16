@@ -72,7 +72,7 @@ class FakeDevice:
             if t == "unpair":
                 self.unpaired = True
                 continue
-            if t == "state":
+            if t in ("state", "access"):
                 continue
             if t in self.errors:
                 code, msg = self.errors[t]
@@ -196,6 +196,23 @@ def test_invite_install_download_pair_and_confirm(dv):
     assert not dv.post(f"/api/devices/{dev['id']}/confirm", json={"ok": True}).json()["ok"]   # nothing waits
 
 
+def test_the_app_is_told_when_it_is_accepted_and_its_mode(dv):
+    p = _pair(dv, os_name="darwin", name="mac", caps=CAPS_PC, confirm=False)
+    with _ws(dv, p["token"]) as ws:
+        fd = FakeDevice(ws, os_name="darwin", caps=CAPS_PC).start()
+        wait_for(lambda: fd.of("access"), 5)
+        assert fd.of("access")[0] == {"t": "access", "ok": False, "mode": "control"}   # waits for the user's OK
+        assert dv.post(f"/api/devices/{p['device_id']}/confirm", json={"ok": True}).json()["ok"]
+        wait_for(lambda: len(fd.of("access")) == 2, 5)
+        assert fd.of("access")[1] == {"t": "access", "ok": True, "mode": "control"}
+        assert dv.put(f"/api/devices/{p['device_id']}", json={"mode": "view"}).status_code == 200
+        wait_for(lambda: len(fd.of("access")) == 3, 5)
+        assert fd.of("access")[2]["mode"] == "view"
+        dv.put(f"/api/devices/{p['device_id']}", json={"name": "mac 2"})              # nothing new to tell
+        time.sleep(0.3)
+        assert len(fd.of("access")) == 3
+
+
 def test_codes_expire_and_wrong_codes_are_throttled(dv, monkeypatch):
     inv = dv.post("/api/devices/invites", json={}).json()
     real = time.time
@@ -222,6 +239,7 @@ def test_phone_link_page(dv):
 def test_refused_device_is_told_to_forget_the_server(dv):
     p = _pair(dv, confirm=False)
     with _ws(dv, p["token"]) as ws:
+        assert ws.receive_json() == {"t": "access", "ok": False, "mode": "control"}      # waits for the OK
         assert dv.post(f"/api/devices/{p['device_id']}/confirm", json={"ok": False}).json()["ok"]
         assert ws.receive_json() == {"t": "unpair"}
     assert dv.get("/api/devices").json()["devices"] == []

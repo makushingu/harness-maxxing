@@ -51,6 +51,7 @@ class Conn:
         self.wait: dict[int, asyncio.Future] = {}
         self.lock = asyncio.Lock()
         self.busy: tuple[bool, str] = (False, "")
+        self.access: tuple[bool, str] | None = None   # (accepted, mode) last told to the app
 
 
 class Hub:
@@ -97,6 +98,7 @@ class Hub:
         _invalidate()
         try:
             await self._state(c)
+            await self._access(c, dev)
             while True:
                 try:
                     raw = await ws.receive_text()
@@ -205,6 +207,22 @@ class Hub:
             with contextlib.suppress(Exception):
                 await self.send(c, {"t": "state", "busy": want[0], "by": want[1] or None})
 
+    async def _access(self, c: Conn, dev: dict | None) -> None:
+        """Tell the app whether it is accepted and its mode, when that changed (its terminal says it)."""
+        if dev is None:
+            return
+        want = (bool(dev.get("confirmed")), "control" if dev.get("mode") == "control" else "view")
+        if want != c.access:
+            c.access = want
+            with contextlib.suppress(Exception):
+                await self.send(c, {"t": "access", "ok": want[0], "mode": want[1]})
+
+    async def access_changed(self, device_id: str) -> None:
+        """Accepted, or its mode changed: told to the app now (the ticker would within 3 s)."""
+        c = self.conns.get(device_id)
+        if c is not None:
+            await self._access(c, await asyncio.to_thread(store.get, device_id))
+
     async def claude_acted(self, device_id: str, session: str = "", owner: str = "") -> None:
         now = time.time()
         fresh = now - self.claude_at.get(device_id, 0) >= CLAUDE_BUSY_S or \
@@ -247,13 +265,15 @@ class Hub:
         while True:
             await asyncio.sleep(3)
             try:
-                known = {d["id"] for d in await asyncio.to_thread(store.devices)} if self.conns else set()
+                known = {d["id"]: d for d in await asyncio.to_thread(store.devices)} if self.conns else {}
             except Exception:  # noqa: BLE001 - an unreadable file: check again next time
-                known = set(self.conns)
+                known = {i: None for i in self.conns}
             for c in list(self.conns.values()):
                 if c.id not in known:
                     await self.unpair(c.id)
-                elif c.busy == (True, "claude"):
+                    continue
+                await self._access(c, known[c.id])    # accepted / mode changed from the CLI
+                if c.busy == (True, "claude"):
                     await self._state(c)
                     if not c.busy[0]:
                         _invalidate()

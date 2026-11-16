@@ -140,6 +140,8 @@ async def confirm(device_id: str, body: ConfirmIn) -> dict:
     ok = await asyncio.to_thread(store.confirm, device_id, body.ok)
     if ok and not body.ok:
         await hub().unpair(device_id)
+    elif ok:
+        await hub().access_changed(device_id)
     return {"ok": ok}
 
 
@@ -155,6 +157,7 @@ async def put_device(device_id: str, body: DeviceIn) -> dict:
         dev = await asyncio.to_thread(store.update, device_id, body.name, body.mode, body.scope)
     except devices.DevicesError as e:
         raise _err(e) from None
+    await hub().access_changed(device_id)
     return _view(dev)
 
 
@@ -315,7 +318,10 @@ async def device_ws(ws: WebSocket):
 
 async def _wait_confirmation(ws: WebSocket, device_id: str) -> dict | None:
     """Hold a device not accepted yet (nothing is asked of it): it goes on once the user says yes; on no, or after
-    15 min, it is told to forget this server."""
+    15 min, it is told to forget this server. Its terminal says it waits for the user's OK."""
+    dev = await asyncio.to_thread(store.get, device_id)
+    mode = "control" if (dev or {}).get("mode") == "control" else "view"
+    await ws.send_text(json.dumps({"t": "access", "ok": False, "mode": mode}))
     while True:
         dev = await asyncio.to_thread(store.get, device_id)
         if dev is not None and dev.get("confirmed"):

@@ -178,9 +178,17 @@ def install_script(kind: str, code: str, server_url: str) -> str:
                 "  Step 'Added to the PATH'\n"
                 "}\n"
                 "Write-Host ''\n"
-                "Write-Host '  Done. ' -ForegroundColor Green -NoNewline; Write-Host 'From now on, type ' -NoNewline; "
-                "Write-Host 'harness-link' -ForegroundColor Magenta -NoNewline; "
-                "Write-Host ' in PowerShell whenever you want Claude to use this computer.'\n"
+                "Write-Host '  Done. ' -ForegroundColor Green -NoNewline; Write-Host 'Harness Link is installed.'\n"
+                "Write-Host ''\n"
+                "Write-Host '  How to use it'\n"
+                "function Cmd($c, $d) { Write-Host ('    ' + $c.PadRight(24)) -ForegroundColor Magenta -NoNewline; "
+                "Write-Host (' ' + $d) }\n"
+                "Cmd 'harness-link' 'start it: Claude can use this computer while the window stays open'\n"
+                "Cmd 'Ctrl+C' 'stop it (closing the window does the same)'\n"
+                "Cmd 'harness-link status' 'what is paired and what this computer allows'\n"
+                "Cmd 'harness-link uninstall' 'remove Harness Link from this computer'\n"
+                "Write-Host ''\n"
+                "Write-Host '  Starting Harness Link...' -ForegroundColor DarkGray\n"
                 "& $exe\n")
     return ("#!/bin/sh\nset -e\n" + _SH_STYLE +
             'printf \'\\n  %s♦%s %sHarness Link%s  %sinstall%s\\n\\n\' "$A" "$R" "$B" "$R" "$D" "$R"\n'
@@ -226,8 +234,19 @@ def install_script(kind: str, code: str, server_url: str) -> str:
             '  step "Added to the PATH (${rc#"$HOME"/})"\n'
             '  where="a new terminal window" ;;\n'
             'esac\n'
-            'printf \'\\n  %sDone.%s From now on, type %sharness-link%s in %s whenever you want Claude to '
-            'use this computer.\\n\' "$G" "$R" "$A" "$R" "$where"\n'
+            'printf \'\\n  %sDone.%s Harness Link is installed.\\n\\n\' "$G" "$R"\n'
+            'printf \'  %sHow to use it%s\\n\' "$B" "$R"\n'
+            'cmd() { printf \'    %s%-24s%s %s\\n\' "$A" "$1" "$R" "$2"; }\n'
+            'cmd "harness-link" "start it: Claude can use this computer while the window stays open"\n'
+            'cmd "Ctrl+C" "stop it (closing the window does the same)"\n'
+            'cmd "harness-link status" "what is paired and what this computer allows"\n'
+            'cmd "harness-link uninstall" "remove Harness Link from this computer"\n'
+            'if [ "$where" != "a terminal" ]; then printf \'\\n  %sThis time it starts by itself; next time, type harness-link in a new '
+            'terminal window.%s\\n\' "$D" "$R"; fi\n'
+            'if [ "$os" = darwin ]; then printf \'  %sThe first time, macOS asks to allow your terminal app in Screen Recording '
+            'and Accessibility: allow both, quit the terminal (cmd+Q), open it again and type harness-link.%s\\n\' '
+            '"$D" "$R"; fi\n'
+            'printf \'\\n  %sStarting Harness Link...%s\\n\' "$D" "$R"\n'
             'if (exec </dev/tty) 2>/dev/null; then exec "$f" </dev/tty; else exec "$f"; fi\n')
 
 

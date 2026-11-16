@@ -84,6 +84,9 @@ Requests are run one at a time, in order (input never interleaves). At most 16 m
   "edit","focus"}],"sw","sh"}`; `{"t":"tap_node","id","node"}`, `{"t":"set_text","id","node","text"}`.
   Desktop: `unsupported` in this version.
 - `{"t":"state","busy":bool,"by":"claude"|"human"}` (no reply): Android shows it; desktop only logs it.
+- `{"t":"access","ok":bool,"mode":"view"|"control"}` (no reply): sent on connect and whenever it changes. `ok:false`:
+  waiting for the person's OK in Harness Maxxing; then `ok:true` once accepted, and again when the mode changes.
+  The desktop live log says it ("Waiting for your OK", "Accepted (Control)", "Now View only").
 - `{"t":"unpair"}` (no reply): delete the config, stop (exit code 0).
 - Any other `t` with an `id` -> `unsupported`; without an `id` -> ignored.
 

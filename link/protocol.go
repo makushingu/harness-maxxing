@@ -21,6 +21,10 @@ type request struct {
 	T  string          `json:"t"`
 	ID json.RawMessage `json:"id,omitempty"`
 
+	// access: accepted in Harness Maxxing, and what Claude may do
+	OK   *bool  `json:"ok"`
+	Mode string `json:"mode"`
+
 	// shot
 	MaxW    int       `json:"max_w"`
 	Quality int       `json:"quality"`

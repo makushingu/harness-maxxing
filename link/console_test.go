@@ -48,3 +48,18 @@ func TestConsoleSay(t *testing.T) {
 		t.Fatalf("shortErr: %q", s)
 	}
 }
+
+func TestAccessLine(t *testing.T) {
+	cases := []struct{ before, now, want string }{
+		{"", "wait", "Waiting for your OK"},
+		{"wait", "control", "Accepted (Control)"},
+		{"", "view", "Ready (View only)"},
+		{"view", "control", "Now Control"},
+		{"control", "view", "Now View only"},
+	}
+	for _, c := range cases {
+		if _, got := accessLine(c.before, c.now); !strings.HasPrefix(got, c.want) {
+			t.Errorf("accessLine(%q, %q) = %q", c.before, c.now, got)
+		}
+	}
+}

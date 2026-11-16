@@ -14,11 +14,12 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   Pairing: `POST /api/devices/invites` -> 8-char code (15 min, single use, hashed) -> `POST /api/devices/pair`
   (public, 20 wrong codes / 10 min per client then 429) -> candidate until `POST /{id}/confirm` (dropped after
   15 min). Desktop downloads carry a trailer `<json {server, code}><u32 BE len>HMLINK01`; `GET /install/<code>.sh|.ps1`,
-  `GET /download/<target>?code=` (an install command whose code expired or was used answers 200 with a script that
+  `GET /download/<target>?code=` (it prints each step and a short "How to use it" with the commands; an install command whose code expired or was used answers 200 with a script that
   prints the reason and exits 1: `curl -f` would only print the HTTP status), `GET /link/<code>` (phone page, route added to Caddy's UI routes). Binaries come
   from `server/maxxing/link.json` (GitHub release `link-v<version>`, sha256 checked, cached) or
   `MAXXING_LINK_BIN_DIR`. State `<state>/devices/devices.json` (sha256 of tokens), `actions.jsonl` (typed text kept
-  as its length only).
+  as its length only). The app gets `{"t":"access", ok, mode}` on connect, once accepted and when its mode changes
+  (`hub._access`, also from the 3 s ticker for CLI changes): its terminal says "Waiting for your OK" / "Accepted".
 - Harness Link desktop runs only in the foreground of a terminal (no login entry; older ones removed at start and by
   the install script, which now `exec`s the app on `/dev/tty` and adds `~/.local/bin` / the user `Path`), with a live
   log (`link/console.go`). Windows binaries are console apps named `harness-link-windows-<arch>.exe`, installed as

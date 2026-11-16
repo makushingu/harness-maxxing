@@ -269,7 +269,11 @@ function AddDevice({ open, onOpenChange, st }: { open: boolean; onOpenChange: (v
     fresh()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
-  const arrived = open ? st.devices.filter((d) => !d.confirmed && !known.current.has(d.id)) : []
+  // the device paired from this dialog: waiting for the OK, then accepted (the dialog says so instead of waiting again)
+  const arrived = open ? st.devices.filter((d) => !known.current.has(d.id)) : []
+  const pending = arrived.filter((d) => !d.confirmed)
+  const ready = arrived.filter((d) => d.confirmed)
+  const done = ready.length > 0 && pending.length === 0
   const available = TARGET_OF[tab].some((x) => st.available.includes(x))
   const mmss = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`
   return (
@@ -290,8 +294,16 @@ function AddDevice({ open, onOpenChange, st }: { open: boolean; onOpenChange: (v
             { value: 'android', label: t('devices.add.android') },
           ]}
         />
-        {!available && <Callout tone="info">{t('devices.add.notAvailable')}</Callout>}
-        {!inv ? (
+        {!available && !done && <Callout tone="info">{t('devices.add.notAvailable')}</Callout>}
+        {done ? (
+          <div className="grid gap-2" data-testid="devices-add-ready">
+            {ready.map((d) => (
+              <Callout key={d.id} tone="success" icon={d.kind === 'android' ? Smartphone : Laptop} title={t('devices.add.ready', { name: d.name })}>
+                {t(d.kind === 'android' ? 'devices.add.readyPhone' : 'devices.add.readyDesc')}
+              </Callout>
+            ))}
+          </div>
+        ) : !inv ? (
           <Skeleton className="h-28" />
         ) : left <= 0 ? (
           <Callout tone="warning" action={<Button size="sm" variant="outline" onClick={fresh}>{t('devices.add.again')}</Button>}>
@@ -323,12 +335,17 @@ function AddDevice({ open, onOpenChange, st }: { open: boolean; onOpenChange: (v
             {tab === 'darwin' && <p className="text-muted-foreground">{t('devices.add.macHelp')}</p>}
           </div>
         )}
-        {inv && left > 0 && (
+        {inv && left > 0 && !done && (
           <p className="flex flex-wrap items-center gap-2 text-[12px] text-muted-foreground">
             <Badge variant="muted">{t('devices.add.expires', { time: mmss })}</Badge> {t('devices.add.secret')}
           </p>
         )}
-        {arrived.length ? arrived.map((d) => <Waiting key={d.id} d={d} />) : inv && left > 0 && <p className="text-[12px] text-muted-foreground">{t('devices.add.waiting')}</p>}
+        {pending.length ? pending.map((d) => <Waiting key={d.id} d={d} />) : !done && inv && left > 0 && <p className="text-[12px] text-muted-foreground">{t('devices.add.waiting')}</p>}
+        {done && (
+          <DialogFooter>
+            <Button onClick={() => onOpenChange(false)} data-testid="devices-add-done">{t('devices.add.done')}</Button>
+          </DialogFooter>
+        )}
       </DialogContent>
     </Dialog>
   )
