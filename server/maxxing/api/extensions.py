@@ -126,6 +126,10 @@ async def forward(eid: str, path: str, request: Request):
     status = 200
     if isinstance(result, tuple) and len(result) == 2 and isinstance(result[0], int):
         status, result = result
+        if type(status) is not int or not 200 <= status < 600:   # the real server drops the connection on these
+            raise _err(500, "extension_error", f"handle() returned an invalid status ({status!r})")
+        if status in (204, 304):                                 # no body allowed with these
+            return Response(status_code=status)
     if result is None:
         result = {"ok": True}
     try:
