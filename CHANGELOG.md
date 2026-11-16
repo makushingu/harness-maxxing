@@ -12,6 +12,14 @@ New:
   Markdown or as plain text, a workbook as cells that paste into a spreadsheet, a PDF as the text read in its pages,
   code, text and CSV files as they are.
 
+Fixed:
+- **The automatic update really updates.** "Update by itself when nobody is here" stopped for good at the first
+  version that came with an upgrade note (about one version out of two), without saying why. A note no longer holds
+  the update back: Harness updates, then tells you in the notifications that there are notes to apply (open the
+  update topic and say "update"). Under the switch, Settings -> Updates now says when it last looked and what it
+  found ("waiting, someone is on the interface", "a session is working", "up to date"...), and a busy server is
+  looked at again after 5 minutes instead of 30.
+
 ## 2.0.0-alpha.156 - 2026-11-15
 
 New:

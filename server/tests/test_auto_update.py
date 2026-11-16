@@ -56,14 +56,73 @@ def test_branch_and_pending_read_the_real_state(mx, monkeypatch):
 
 def test_waits_for_the_browsers_and_for_the_work(fake):
     fake["browsers"] = 1
-    assert au.tick(fake["spawn"]) == "busy"
+    assert au.tick(fake["spawn"], now=50.0) == "busy"
+    assert au.public()["last"] == {"at": 50.0, "result": "busy", "why": "browser"}     # said under the switch
     fake["browsers"], fake["busy"] = 0, "a turn is running"
     assert au.tick(fake["spawn"]) == "busy" and fake["spawned"] == 0
+    assert au.public()["last"]["why"] == "turn"
+    fake["busy"] = "something new"
+    assert au.tick(fake["spawn"]) == "busy" and au.public()["last"]["why"] == "work"
+    for why in ("a message is waiting", "a side question is running", "a cron job is running",
+                "a turn ended less than 10 min ago"):                # every reason claude_update gives has its word
+        assert why in au.WHY
+
+
+def test_every_reason_of_the_idle_check_has_a_word():
+    import inspect
+    import re
+    given = set(re.findall(r'return "([^"]+)"', inspect.getsource(au.claude_update.busy_reason)))
+    given |= set(re.findall(r'return "([^"]+)"', inspect.getsource(au.busy_reason)))
+    assert given and given <= set(au.WHY)
+
+
+def test_an_upgrade_note_does_not_hold_the_update_back(fake, mx):
+    """Half the versions come with a note for the workspace: the update goes on, the note is announced after it."""
+    from maxxing import feed
+    fake["rep"] = {**fake["rep"], "notes": [{"version": "2.0.0a98"}, {"version": "2.0.0a99"}]}
+    assert au.tick(fake["spawn"], now=1000.0) == "started" and fake["spawned"] == 1
+    assert au.public()["last"] == {"at": 1000.0, "result": "started"}
+    assert au.public()["tried"] == {"target": "abc123", "version": "2.0.0a99", "at": 1000.0}
+    assert [e["title"] for e in feed.list_events()["events"]] == ["Harness is updating to 2.0.0a99"]
+
+
+def test_an_update_that_cannot_start_is_said_and_not_announced(fake, mx):
+    from maxxing import feed
+
+    def broken():
+        raise RuntimeError("systemd-run: not found")
+    assert au.tick(broken, now=1000.0) == "failed"
+    assert au.public()["last"]["result"] == "failed" and feed.list_events()["events"] == []
+    assert au.tick(fake["spawn"], now=1000.0 + 600) == "tried_recently" and fake["spawned"] == 0   # never a loop
+    assert au.tick(fake["spawn"], now=1000.0 + 25 * 3600) == "started"
+
+
+def test_one_notification_per_version_when_a_person_is_needed(fake, mx):
+    from maxxing import feed
+    fake["rep"] = {**fake["rep"], "customs": [{"id": "c1", "status": "conflict"}]}
+    assert au.tick(fake["spawn"]) == "needs_review"
+    fake["rep"] = {**fake["rep"], "target": "def456"}               # a new commit of the same version
+    assert au.tick(fake["spawn"]) == "needs_review"
+    assert [e["title"] for e in feed.list_events()["events"]] == ["Harness 2.0.0a99 is available but needs you"]
+
+
+def test_a_busy_server_is_looked_at_again_sooner(fake, monkeypatch):
+    slept, results = [], iter(["busy", "up_to_date"])
+
+    async def sleep(s):
+        slept.append(s)
+        if len(slept) == 3:
+            raise asyncio.CancelledError
+    monkeypatch.setattr(au.asyncio, "sleep", sleep)
+    monkeypatch.setattr(au, "tick", lambda spawn: next(results))
+    monkeypatch.setenv("MAXXING_AUTO_UPDATE_DELAY", "7")
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(au._loop(fake["spawn"]))
+    assert slept == [7.0, au.BUSY_POLL_S, au.POLL_S]
 
 
 @pytest.mark.parametrize("change", [
     {"verdict": "adapt"},
-    {"notes": [{"version": "2.0.0a99"}]},
     {"unsaved": ["server/maxxing/app.py"]},
     {"customs": [{"id": "c1", "status": "conflict"}]},
     {"customs": [{"id": "c1", "status": "review"}]},

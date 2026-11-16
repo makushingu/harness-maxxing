@@ -242,6 +242,8 @@ def test_update_spawn(client, monkeypatch):
     monkeypatch.setattr(system_api.subprocess, "Popen", lambda cmd, **kw: spawned.append(cmd))
     assert client.post("/api/system/update").json() == {"ok": True}
     assert spawned[0][-2:] == ["update", "--smart"]                 # the Update button: smart update
+    system_api._spawn_update(smart=False)
+    assert spawned[1][-2:] == ["update", "--auto"]                  # the automatic update: notes announced after it
 
 
 def test_update_spawn_is_refused_while_an_update_holds_the_lock(client, monkeypatch):
