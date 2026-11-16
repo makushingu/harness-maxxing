@@ -394,3 +394,15 @@ def test_a_badly_typed_reply_or_draft_is_refused_before_the_message_leaves(clien
     r = client.post(f"/api/mail/{acc['id']}/send", data={"data": json.dumps({"to": ["x@example.org"], "text": "hi",
                                                                              **extra})})
     assert r.status_code == 400 and len(smtp.messages) == n0 and send.sent_today(acc["id"]) == 0
+
+
+@pytest.mark.parametrize("path,extra", [("send", {"forward": "x"}), ("send", {"forward": {"uid": 1, "indexes": ["a"]}}),
+                                        ("send", {"forward": {"indexes": [1]}}), ("send", {"to": 5}),
+                                        ("draft", {"draft": "x"}), ("draft", {"forward": "x"})])
+def test_a_badly_typed_forward_or_address_list_is_a_clear_refusal(client, acc, srv, smtp, path, extra):
+    import json
+    n0 = len(smtp.messages)
+    r = client.post(f"/api/mail/{acc['id']}/{path}", data={"data": json.dumps({"to": ["x@example.org"], "text": "hi",
+                                                                               **extra})})
+    assert r.status_code == 400 and len(smtp.messages) == n0
+    assert not srv.folders["Drafts"].messages

@@ -59,6 +59,8 @@ def _addr_list(values: Any) -> list[str]:
         return []
     if isinstance(values, str):
         values = [values]
+    if not isinstance(values, (list, tuple)):
+        raise MailError("invalid", "invalid address list")
     pairs = []
     for v in values:
         v = str(v).strip(" \t\r\n,")
