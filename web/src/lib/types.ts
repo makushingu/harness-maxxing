@@ -743,8 +743,11 @@ export type Device = {
   claude: boolean
   used_by: { session: string; owner: string; at: number } | null
   watched: boolean
-  hello: { v: string; os: string; arch: string; caps: string[]; screen: { w: number; h: number; scale?: number } | null; note: string } | null
+  hello: { v: string; os: string; arch: string; caps: string[]; screen: { w: number; h: number; scale?: number } | null; note: string; screens?: DeviceScreen[]; display?: number | null } | null
+  /** the screen chosen (index in hello.screens), -1 / absent = the main one */
+  display?: number
 }
+export type DeviceScreen = { i: number; name: string; w: number; h: number; main: boolean }
 export type DeviceAsk = { id: string; session: string; owner: string; device: string; device_name: string; message: string; at: number; expires: number; status: string; note?: string }
 export type DeviceAction = { at: number; device: string; tool: string; args: Record<string, string>; ok: boolean; ms: number; session: string; owner: string; error?: string }
 export type DevicesStatus = {

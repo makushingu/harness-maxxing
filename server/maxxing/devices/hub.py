@@ -52,6 +52,8 @@ class Conn:
         self.lock = asyncio.Lock()
         self.busy: tuple[bool, str] = (False, "")
         self.access: tuple[bool, str] | None = None   # (accepted, mode) last told to the app
+        self.display: int | None = None               # the screen last asked of the app
+        self.watched = False                          # the app was told someone watches the live view
 
 
 class Hub:
@@ -85,7 +87,8 @@ class Hub:
         claude = time.time() - self.claude_at.get(device_id, 0) < CLAUDE_BUSY_S
         return {"online": c is not None, "paused": bool(c and c.paused), "human": device_id in self.human,
                 "claude": claude, "used_by": u if u and claude else None, "watched": bool(self.viewers.get(device_id)),
-                "hello": ({k: c.hello.get(k) for k in ("v", "os", "arch", "caps", "screen", "note")} if c else None)}
+                "hello": ({k: c.hello.get(k) for k in ("v", "os", "arch", "caps", "screen", "note", "screens", "display")}
+                          if c else None)}
 
     # ---- the app's connection ----
     async def serve(self, ws: Any, dev: dict) -> None:
@@ -99,6 +102,7 @@ class Hub:
         try:
             await self._state(c)
             await self._access(c, dev)
+            await self._watch(c)
             while True:
                 try:
                     raw = await ws.receive_text()
@@ -125,9 +129,16 @@ class Hub:
             scr = msg.get("screen") if isinstance(msg.get("screen"), dict) else {}
             screen = {k: scr.get(k) for k in ("w", "h", "scale") if isinstance(scr.get(k), (int, float))} or None
             caps = [str(x)[:16] for x in (msg.get("caps") or [])[:10] if isinstance(x, str)]
+            screens = []
+            for x in (msg.get("screens") or [])[:16] if isinstance(msg.get("screens"), list) else []:
+                if isinstance(x, dict) and isinstance(x.get("i"), int):
+                    screens.append({"i": x["i"], "name": store._text(x.get("name"), 64),
+                                    "w": x.get("w") if isinstance(x.get("w"), int) else 0,
+                                    "h": x.get("h") if isinstance(x.get("h"), int) else 0, "main": bool(x.get("main"))})
             c.hello = {"v": store._text(msg.get("v"), 32), "os": store._text(msg.get("os"), 16),
                        "arch": store._text(msg.get("arch"), 16), "name": store._text(msg.get("name"), 64),
-                       "caps": caps, "screen": screen, "note": store._text(msg.get("note"), 1000)}
+                       "caps": caps, "screen": screen, "note": store._text(msg.get("note"), 1000),
+                       "screens": screens, "display": msg.get("display") if isinstance(msg.get("display"), int) else None}
             await asyncio.to_thread(store.touch, c.id, version=c.hello["v"], arch=c.hello["arch"], caps=caps,
                                     screen=screen, note=c.hello["note"])
             _invalidate()
@@ -216,6 +227,19 @@ class Hub:
             c.access = want
             with contextlib.suppress(Exception):
                 await self.send(c, {"t": "access", "ok": want[0], "mode": want[1]})
+        disp = dev.get("display") if isinstance(dev.get("display"), int) else -1
+        if disp != (c.display if c.display is not None else -1) or (c.display is None and disp >= 0):
+            c.display = disp
+            with contextlib.suppress(Exception):
+                await self.send(c, {"t": "display", "i": disp})
+
+    async def _watch(self, c: Conn) -> None:
+        """Tell the app when the live view opens and closes (its terminal says so instead of listing pictures)."""
+        on = bool(self.viewers.get(c.id))
+        if on != c.watched:
+            c.watched = on
+            with contextlib.suppress(Exception):
+                await self.send(c, {"t": "watch", "on": on})
 
     async def access_changed(self, device_id: str) -> None:
         """Accepted, or its mode changed: told to the app now (the ticker would within 3 s)."""
@@ -285,6 +309,7 @@ class Hub:
         t = self._frames.get(device_id)
         if t is None or t.done():
             self._frames[device_id] = asyncio.get_running_loop().create_task(self._pictures(device_id))
+        self._tell_watch(device_id)
         _invalidate()
 
     def unwatch(self, device_id: str, vid: int) -> None:
@@ -295,7 +320,13 @@ class Hub:
             t = self._frames.pop(device_id, None)
             if t is not None:
                 t.cancel()
+        self._tell_watch(device_id)
         _invalidate()
+
+    def _tell_watch(self, device_id: str) -> None:
+        c = self.conns.get(device_id)
+        if c is not None and c.watched != bool(self.viewers.get(device_id)):
+            asyncio.get_running_loop().create_task(self._watch(c))
 
     async def _pictures(self, device_id: str) -> None:
         """~3 pictures a second while someone watches; nothing asked of the device otherwise."""
@@ -303,7 +334,8 @@ class Hub:
         while self.viewers.get(device_id):
             t0 = time.monotonic()
             try:
-                r = await self.request(device_id, {"t": "shot", "max_w": LIVE_MAX_W, "quality": LIVE_QUALITY})
+                r = await self.request(device_id, {"t": "shot", "max_w": LIVE_MAX_W, "quality": LIVE_QUALITY,
+                                                   "live": True})
                 data = base64.b64decode(str(r.get("jpeg") or ""), validate=False)
                 if data:
                     for push in list((self.viewers.get(device_id) or {}).values()):

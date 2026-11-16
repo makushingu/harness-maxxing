@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/jezek/xgb"
+	"github.com/jezek/xgb/randr"
 	"github.com/jezek/xgb/xproto"
 	"github.com/jezek/xgb/xtest"
 )
@@ -38,6 +39,9 @@ type x11Backend struct {
 	visual  *xproto.VisualInfo
 	depth   byte
 	xtestOK bool
+	randrOK bool
+	want    int     // the screen chosen in Harness (-1: the primary one)
+	cur     display // the screen used, in root-window pixels
 	connErr string
 	info    backendInfo
 	infoAt  time.Time
@@ -46,7 +50,7 @@ type x11Backend struct {
 }
 
 func newBackend(dir string, logf func(string, ...any)) backend {
-	return &x11Backend{logf: logf, scratch: map[xproto.Keycode]xproto.Keysym{}}
+	return &x11Backend{logf: logf, scratch: map[xproto.Keycode]xproto.Keysym{}, want: -1}
 }
 
 func isWayland() bool {
@@ -77,6 +81,7 @@ func (b *x11Backend) connect() error {
 		}
 	}
 	b.xtestOK = xtest.Init(c) == nil
+	b.randrOK = randr.Init(c) == nil
 	if !b.xtestOK {
 		b.logf("X server without the XTEST extension: no input")
 	}
@@ -115,7 +120,10 @@ func (b *x11Backend) Info() backendInfo {
 		b.drop()
 		inf.Note, inf.Code = "Lost the connection to the screen.", "no_display"
 	} else {
-		inf.Screen = &screenInfo{W: int(g.Width), H: int(g.Height), Scale: 1}
+		inf.Displays = b.monitors(int(g.Width), int(g.Height))
+		inf.Display = pickDisplay(inf.Displays, b.want)
+		b.cur = inf.Displays[inf.Display]
+		inf.Screen = &screenInfo{W: b.cur.W, H: b.cur.H, Scale: 1}
 		inf.Input = b.xtestOK
 		if !b.xtestOK {
 			inf.Note, inf.Code = "The X server has no XTEST extension: Claude can see the screen but not use the mouse or keyboard.", "unsupported"
@@ -123,6 +131,41 @@ func (b *x11Backend) Info() backendInfo {
 	}
 	b.info, b.infoAt = inf, time.Now()
 	return inf
+}
+
+// monitors lists the screens with RandR 1.5 (one per monitor); without it, the whole root window is one screen.
+func (b *x11Backend) monitors(rw, rh int) []display {
+	whole := []display{{Name: "Screen", W: rw, H: rh, Main: true}}
+	if !b.randrOK {
+		return whole
+	}
+	rep, err := randr.GetMonitors(b.conn, b.root, true).Reply()
+	if err != nil || rep == nil || len(rep.Monitors) == 0 {
+		return whole
+	}
+	l := make([]display, 0, len(rep.Monitors))
+	for i, m := range rep.Monitors {
+		name := fmt.Sprintf("Screen %d", i+1)
+		if a, err := xproto.GetAtomName(b.conn, m.Name).Reply(); err == nil && a.Name != "" {
+			name = a.Name
+		}
+		x, y := max(0, int(m.X)), max(0, int(m.Y))
+		w, h := min(int(m.Width), rw-x), min(int(m.Height), rh-y)
+		if w <= 0 || h <= 0 {
+			continue
+		}
+		l = append(l, display{Name: name, X: x, Y: y, W: w, H: h, Main: m.Primary})
+	}
+	if len(l) == 0 {
+		return whole
+	}
+	return l
+}
+
+func (b *x11Backend) SetDisplay(i int) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.want, b.infoAt = i, time.Time{}
 }
 
 func (b *x11Backend) Capture() (image.Image, error) {
@@ -162,7 +205,7 @@ func (b *x11Backend) Capture() (image.Image, error) {
 	for y0 := 0; y0 < h; y0 += band {
 		bh := min(band, h-y0)
 		rep, err := xproto.GetImage(b.conn, xproto.ImageFormatZPixmap, xproto.Drawable(b.root),
-			0, int16(y0), uint16(w), uint16(bh), 0xffffffff).Reply()
+			int16(b.cur.X), int16(b.cur.Y+y0), uint16(w), uint16(bh), 0xffffffff).Reply()
 		if err != nil {
 			b.drop()
 			return nil, &opError{"failed", "screen capture failed: " + err.Error()}
@@ -236,7 +279,7 @@ func (b *x11Backend) fake(typ, detail byte, x, y int16) error {
 func (b *x11Backend) Move(x, y int) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	return b.fake(xproto.MotionNotify, 0, int16(x), int16(y))
+	return b.fake(xproto.MotionNotify, 0, int16(x+b.cur.X), int16(y+b.cur.Y))
 }
 
 func (b *x11Backend) Button(button string, down bool, _ int) error {

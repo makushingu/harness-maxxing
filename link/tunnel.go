@@ -145,9 +145,10 @@ type agent struct {
 	logf func(string, ...any)
 	say  func(lineKind, string) // live log in the terminal (defaults to logf)
 
-	online bool   // the live log tells only the changes of the connection
-	busyBy string // who has the device, from the last "state" frame
-	access string // "" (not told yet), "wait", "view" or "control", from the last "access" frame
+	online  bool   // the live log tells only the changes of the connection
+	busyBy  string // who has the device, from the last "state" frame
+	access  string // "" (not told yet), "wait", "view" or "control", from the last "access" frame
+	watched bool   // someone watches the live view, from the last "watch" frame
 
 	connMu    sync.Mutex
 	conn      *websocket.Conn
@@ -210,6 +211,13 @@ func (a *agent) hello() map[string]any {
 		"name": deviceName(), "kind": "desktop", "caps": inf.capsList()}
 	if inf.Screen != nil {
 		h["screen"] = map[string]any{"w": inf.Screen.W, "h": inf.Screen.H, "scale": inf.Screen.Scale}
+	}
+	if len(inf.Displays) > 0 {
+		l := make([]map[string]any, 0, len(inf.Displays))
+		for i, d := range inf.Displays {
+			l = append(l, map[string]any{"i": i, "name": d.Name, "w": d.W, "h": d.H, "main": d.Main})
+		}
+		h["screens"], h["display"] = l, inf.Display
 	}
 	if inf.Note != "" {
 		h["note"] = inf.Note
@@ -357,6 +365,28 @@ func (a *agent) handle(r request) bool {
 	switch r.T {
 	case "unpair":
 		return true
+	case "display":
+		i := -1
+		if r.I != nil {
+			i = *r.I
+		}
+		a.be.SetDisplay(i)
+		inf := a.be.Info()
+		a.logf("display: %d -> %d", i, inf.Display)
+		if len(inf.Displays) > 1 && inf.Display < len(inf.Displays) {
+			d := inf.Displays[inf.Display]
+			a.say(lInfo, fmt.Sprintf("Screen: %s (%dx%d)", d.Name, d.W, d.H))
+		}
+		a.helloAgain()
+	case "watch":
+		if r.On != a.watched {
+			a.watched = r.On
+			if r.On {
+				a.say(lClaude, "Live view: your screen is shown in Harness Maxxing")
+			} else {
+				a.say(lInfo, "Live view closed")
+			}
+		}
 	case "access":
 		now := "wait"
 		if r.OK != nil && *r.OK {
@@ -446,4 +476,14 @@ func accessLine(before, now string) (lineKind, string) {
 		return lOK, "Accepted (Control): Claude can look, click, type and open apps"
 	}
 	return lOK, "Ready (Control): Claude can look, click, type and open apps"
+}
+
+// helloAgain sends the hello frame now if it changed (the screen in use changed).
+func (a *agent) helloAgain() {
+	a.connMu.Lock()
+	c := a.conn
+	a.connMu.Unlock()
+	if c != nil {
+		_ = a.sendHello(c, false)
+	}
 }

@@ -35,6 +35,8 @@ Any other failure -> reconnect with backoff 1 s, 2 s, 4 s ... 60 s (+ up to 20 %
 - Right after connecting:
   `{"t":"hello","v":"0.1.0","os":"linux","arch":"amd64","name":"studio","kind":"desktop",
     "caps":["screen","input","apps"],"screen":{"w":2560,"h":1440,"scale":1},"note":"..."}`
+  - desktop, optional: `"screens":[{"i":0,"name":"Display 1","w":1920,"h":1080,"main":true},...]` and
+    `"display":0` (the one `screen` describes and requests use).
   - `caps`: subset of `screen`, `input`, `apps`, `tree` (Android only). Missing = requests of that kind fail.
   - `screen`: full size of a capture in **pixels** and the system scale (pixels per point: 2 on Retina,
     1.5 at 150 %). Absent when there is no usable screen.
@@ -84,6 +86,10 @@ Requests are run one at a time, in order (input never interleaves). At most 16 m
   "edit","focus"}],"sw","sh"}`; `{"t":"tap_node","id","node"}`, `{"t":"set_text","id","node","text"}`.
   Desktop: `unsupported` in this version.
 - `{"t":"state","busy":bool,"by":"claude"|"human"}` (no reply): Android shows it; desktop only logs it.
+- `{"t":"display","i":n}` (no reply): use screen `n` of `hello.screens` (`-1`: the main one) for pictures and input;
+  the app sends its hello again. Sent on connect when a screen was chosen, and when it changes.
+- `{"t":"watch","on":bool}` (no reply): the live view opened / closed in Harness Maxxing. Its pictures are `shot`
+  requests with `"live":true`: the desktop live log shows "Live view" once instead of one line per picture.
 - `{"t":"access","ok":bool,"mode":"view"|"control"}` (no reply): sent on connect and whenever it changes. `ok:false`:
   waiting for the person's OK in Harness Maxxing; then `ok:true` once accepted, and again when the mode changes.
   The desktop live log says it ("Waiting for your OK", "Accepted (Control)", "Now View only").

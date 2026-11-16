@@ -6,15 +6,17 @@ import (
 	"image"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"unicode/utf16"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
 )
 
-// Windows: GDI capture of the primary monitor (BitBlt + GetDIBits) and SendInput, through lazy DLLs (no cgo).
+// Windows: GDI capture of one monitor (BitBlt + GetDIBits; the primary one unless another is chosen) and SendInput, through lazy DLLs (no cgo).
 // The process is per-monitor DPI aware, so sizes and coordinates are physical pixels.
 
 var (
@@ -27,6 +29,8 @@ var (
 	pSetProcessDpiAwareness        = shcore.NewProc("SetProcessDpiAwareness")
 	pGetDpiForSystem               = user32.NewProc("GetDpiForSystem")
 	pGetSystemMetrics              = user32.NewProc("GetSystemMetrics")
+	pEnumDisplayMonitors           = user32.NewProc("EnumDisplayMonitors")
+	pGetMonitorInfoW               = user32.NewProc("GetMonitorInfoW")
 	pGetDC                         = user32.NewProc("GetDC")
 	pReleaseDC                     = user32.NewProc("ReleaseDC")
 	pSendInput                     = user32.NewProc("SendInput")
@@ -66,28 +70,94 @@ func setDPIAware() {
 type winBackend struct {
 	logf func(string, ...any)
 	mu   sync.Mutex
+	want atomic.Int32 // the screen chosen in Harness (-1: the primary one)
 }
 
 func newBackend(dir string, logf func(string, ...any)) backend {
 	setDPIAware()
-	return &winBackend{logf: logf}
+	b := &winBackend{logf: logf}
+	b.want.Store(-1)
+	return b
 }
 
 func (b *winBackend) Close() {}
 
-func screenSize() (int, int) {
-	w, _, _ := pGetSystemMetrics.Call(0) // SM_CXSCREEN: primary monitor
-	h, _, _ := pGetSystemMetrics.Call(1) // SM_CYSCREEN
-	return int(int32(w)), int(int32(h))
+func (b *winBackend) SetDisplay(i int) { b.want.Store(int32(i)) }
+
+type winRect struct{ Left, Top, Right, Bottom int32 }
+
+type monitorInfoEx struct {
+	Size    uint32
+	Monitor winRect
+	Work    winRect
+	Flags   uint32
+	Device  [32]uint16
+}
+
+var (
+	monMu   sync.Mutex
+	monList []display
+	monCB   = windows.NewCallback(func(h, _ uintptr, _ uintptr, _ uintptr) uintptr {
+		mi := monitorInfoEx{}
+		mi.Size = uint32(unsafe.Sizeof(mi))
+		if r, _, _ := pGetMonitorInfoW.Call(h, uintptr(unsafe.Pointer(&mi))); r != 0 {
+			name := windows.UTF16ToString(mi.Device[:])
+			if i := strings.LastIndex(name, "DISPLAY"); i >= 0 {
+				name = "Display " + name[i+len("DISPLAY"):]
+			}
+			monList = append(monList, display{Name: name, X: int(mi.Monitor.Left), Y: int(mi.Monitor.Top),
+				W: int(mi.Monitor.Right - mi.Monitor.Left), H: int(mi.Monitor.Bottom - mi.Monitor.Top),
+				Main: mi.Flags&1 != 0})
+		}
+		return 1
+	})
+)
+
+// monitors lists the screens, the primary one first then from left to right, in virtual-desktop pixels.
+func monitors() []display {
+	monMu.Lock()
+	defer monMu.Unlock()
+	monList = nil
+	pEnumDisplayMonitors.Call(0, 0, monCB, 0)
+	l := slices.Clone(monList)
+	slices.SortStableFunc(l, func(a, b display) int {
+		if a.Main != b.Main {
+			if a.Main {
+				return -1
+			}
+			return 1
+		}
+		return a.X - b.X
+	})
+	if len(l) == 0 {
+		w, _, _ := pGetSystemMetrics.Call(0) // SM_CXSCREEN: primary monitor
+		h, _, _ := pGetSystemMetrics.Call(1) // SM_CYSCREEN
+		if int32(w) > 0 && int32(h) > 0 {
+			l = []display{{Name: "Display 1", W: int(int32(w)), H: int(int32(h)), Main: true}}
+		}
+	}
+	return l
+}
+
+// screen is the monitor in use (ok false: none).
+func (b *winBackend) screen() (l []display, i int, ok bool) {
+	l = monitors()
+	if len(l) == 0 {
+		return nil, 0, false
+	}
+	i = pickDisplay(l, int(b.want.Load()))
+	return l, i, l[i].W > 0 && l[i].H > 0
 }
 
 func (b *winBackend) Info() backendInfo {
 	inf := backendInfo{Apps: true}
-	w, h := screenSize()
-	if w <= 0 || h <= 0 {
+	l, i, ok := b.screen()
+	if !ok {
 		inf.Note, inf.Code = "No screen found (is a user signed in?).", "no_display"
 		return inf
 	}
+	inf.Displays, inf.Display = l, i
+	w, h := l[i].W, l[i].H
 	scale := 1.0
 	if pGetDpiForSystem.Find() == nil {
 		if d, _, _ := pGetDpiForSystem.Call(); d > 0 {
@@ -120,10 +190,11 @@ type bitmapInfo struct {
 func (b *winBackend) Capture() (image.Image, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	w, h := screenSize()
-	if w <= 0 || h <= 0 {
+	l, i, ok := b.screen()
+	if !ok {
 		return nil, &opError{"no_display", "no screen"}
 	}
+	w, h, sx, sy := l[i].W, l[i].H, l[i].X, l[i].Y
 	src, _, _ := pGetDC.Call(0)
 	if src == 0 {
 		return nil, &opError{"failed", "GetDC failed"}
@@ -141,9 +212,9 @@ func (b *winBackend) Capture() (image.Image, error) {
 	defer pDeleteObject.Call(bmp)
 	old, _, _ := pSelectObject.Call(mem, bmp)
 	const srcCopy, captureBlt = 0x00CC0020, 0x40000000
-	ok, _, _ := pBitBlt.Call(mem, 0, 0, uintptr(w), uintptr(h), src, 0, 0, srcCopy|captureBlt)
+	r, _, _ := pBitBlt.Call(mem, 0, 0, uintptr(w), uintptr(h), src, uintptr(sx), uintptr(sy), srcCopy|captureBlt)
 	pSelectObject.Call(mem, old) // GetDIBits wants the bitmap out of any DC
-	if ok == 0 {
+	if r == 0 {
 		return nil, &opError{"protected", "the screen cannot be captured now (locked or secure desktop?)"}
 	}
 	bi := bitmapInfo{Header: bitmapInfoHeader{Width: int32(w), Height: -int32(h), Planes: 1, BitCount: 32}}
@@ -166,16 +237,17 @@ const (
 	inputMouse    = 0
 	inputKeyboard = 1
 
-	mouseMove       = 0x0001
-	mouseLeftDown   = 0x0002
-	mouseLeftUp     = 0x0004
-	mouseRightDown  = 0x0008
-	mouseRightUp    = 0x0010
-	mouseMiddleDown = 0x0020
-	mouseMiddleUp   = 0x0040
-	mouseWheel      = 0x0800
-	mouseHWheel     = 0x1000
-	mouseAbsolute   = 0x8000
+	mouseMove        = 0x0001
+	mouseLeftDown    = 0x0002
+	mouseLeftUp      = 0x0004
+	mouseRightDown   = 0x0008
+	mouseRightUp     = 0x0010
+	mouseMiddleDown  = 0x0020
+	mouseMiddleUp    = 0x0040
+	mouseWheel       = 0x0800
+	mouseHWheel      = 0x1000
+	mouseAbsolute    = 0x8000
+	mouseVirtualDesk = 0x4000
 
 	keyExtended = 0x0001
 	keyUp       = 0x0002
@@ -230,13 +302,24 @@ func sendInputs(l []winInput) error {
 }
 
 func (b *winBackend) Move(x, y int) error {
-	w, h := screenSize()
+	l, i, ok := b.screen()
+	if !ok {
+		return &opError{"no_display", "no screen"}
+	}
+	// absolute coordinates over the whole virtual desktop (every monitor), 0..65535
+	vx, _, _ := pGetSystemMetrics.Call(76) // SM_XVIRTUALSCREEN
+	vy, _, _ := pGetSystemMetrics.Call(77) // SM_YVIRTUALSCREEN
+	vw, _, _ := pGetSystemMetrics.Call(78) // SM_CXVIRTUALSCREEN
+	vh, _, _ := pGetSystemMetrics.Call(79) // SM_CYVIRTUALSCREEN
+	w, h := int64(int32(vw)), int64(int32(vh))
 	if w <= 1 || h <= 1 {
 		return &opError{"no_display", "no screen"}
 	}
-	nx := int32((int64(x)*65535 + int64(w-1)/2) / int64(w-1))
-	ny := int32((int64(y)*65535 + int64(h-1)/2) / int64(h-1))
-	return sendInputs([]winInput{mouseIn(mouseInput{DX: nx, DY: ny, Flags: mouseMove | mouseAbsolute})})
+	gx := int64(l[i].X+x) - int64(int32(vx))
+	gy := int64(l[i].Y+y) - int64(int32(vy))
+	nx := int32((gx*65535 + (w-1)/2) / (w - 1))
+	ny := int32((gy*65535 + (h-1)/2) / (h - 1))
+	return sendInputs([]winInput{mouseIn(mouseInput{DX: nx, DY: ny, Flags: mouseMove | mouseAbsolute | mouseVirtualDesk})})
 }
 
 func (b *winBackend) Button(button string, down bool, _ int) error {

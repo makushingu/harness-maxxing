@@ -20,6 +20,10 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   `MAXXING_LINK_BIN_DIR`. State `<state>/devices/devices.json` (sha256 of tokens), `actions.jsonl` (typed text kept
   as its length only). The app gets `{"t":"access", ok, mode}` on connect, once accepted and when its mode changes
   (`hub._access`, also from the 3 s ticker for CLI changes): its terminal says "Waiting for your OK" / "Accepted".
+  Several screens: `hello.screens` / `hello.display`, device field `display` (`PUT /api/devices/{id} {display}`,
+  -1..15) sent as `{"t":"display","i"}`; backends: macOS `CGGetActiveDisplayList` + `screencapture -D`, X11 RandR 1.5
+  monitors, Windows `EnumDisplayMonitors` + `MOUSEEVENTF_VIRTUALDESK`. Live-view shots carry `live: true` and the app
+  gets `{"t":"watch","on"}` (one line in its terminal instead of one per picture).
 - Harness Link desktop runs only in the foreground of a terminal (no login entry; older ones removed at start and by
   the install script, which now `exec`s the app on `/dev/tty` and adds `~/.local/bin` / the user `Path`), with a live
   log (`link/console.go`). Windows binaries are console apps named `harness-link-windows-<arch>.exe`, installed as

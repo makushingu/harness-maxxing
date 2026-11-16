@@ -365,7 +365,7 @@ They answer `404 off` while the feature is off.
 | GET | `/api/devices` | – | `DevicesStatus` |
 | POST | `/api/devices/invites` | `{os?}` | `DeviceInvite` · `409 off` (feature off), `429 too_many` (10 codes waiting) |
 | POST | `/api/devices/{id}/confirm` | `{ok}` | `{ok}` - yes: the device may be used; no: it is dropped and its app gets `unpair` · `ok:false` when it does not wait |
-| PUT | `/api/devices/{id}` | `{name?, mode?: view\|control, scope?}` | `Device` · `400 bad_scope`, `404`, `422` |
+| PUT | `/api/devices/{id}` | `{name?, mode?: view\|control, scope?, display?: -1..15 (screen used, -1 = main)}` | `Device` · `400 bad_scope`, `404`, `422` |
 | DELETE | `/api/devices/{id}` | – | `{ok}` - its token is revoked at once, its app gets `unpair` (forgets this server, stops), its requests are skipped |
 | GET | `/api/devices/session/{sid}` | – | `{using:[{id,name,os,online,human,at}], asks:[DeviceAsk]}` - the session's line ("Claude is using …") |
 | GET | `/api/devices/asks?session=` | – | `{asks:[DeviceAsk]}` (pending) |
@@ -375,7 +375,7 @@ They answer `404 off` while the feature is off.
 | GET | `/api/devices/install/<code>.sh\|ps1` | – | install script: stops an older copy and removes its login entry, downloads the app with its trailer, puts it on the PATH, then runs it in the foreground of that terminal (sh: `~/.local/bin/harness-link`, quarantine removed on macOS, `exec … </dev/tty`; ps1: `%LOCALAPPDATA%\HarnessLink\harness-link.exe`, user `Path`) · public, `400 bad_code`, `410 expired`, `429` |
 | GET | `/api/devices/download/{target}?code=` | – | the app (desktop: + pairing trailer; `Content-Length` set; android: the APK) · public, `400`, `404 not_available`, `410`, `429` |
 | POST | `/api/devices/pair` | `{code, name, os, arch, version, caps}` | `{device_id, token}` - the code is used up, the device waits for `/confirm` · public, `400 bad_code`, `410 expired`, `409 too_many`, `422`, `429` |
-| WS | `/api/devices/ws` | `Authorization: Bearer <device token>` | Harness Link protocol v2 (PROTOCOL.md); a device not accepted yet is held (it gets `{"t":"access","ok":false}`), then `access` `ok:true` once accepted or `unpair` if refused or after 15 min; `access` again when its mode changes · unknown / revoked token: refused before the handshake (HTTP 403) |
+| WS | `/api/devices/ws` | `Authorization: Bearer <device token>` | Harness Link protocol v2 (PROTOCOL.md); a device not accepted yet is held (it gets `{"t":"access","ok":false}`), then `access` `ok:true` once accepted or `unpair` if refused or after 15 min; `access` again when its mode changes; `display` (the screen chosen, `PUT {display}`), `watch` (live view open) · unknown / revoked token: refused before the handshake (HTTP 403) |
 | POST | `/api/devices/mcp/{sid}` | JSON-RPC, `Authorization: Bearer <the turn's token>` | loopback only: `tools/list`, `tools/call` of the turn (`<state>/devices/turns/<sid>.json`) · `403` |
 
 `GET /link/<code>` (public, not under /api): the phone's pairing page - Download the app (APK), Open in Harness Link

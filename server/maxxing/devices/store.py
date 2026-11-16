@@ -203,8 +203,10 @@ def remove(device_id: str) -> bool:
     return True
 
 
-def update(device_id: str, name: str | None = None, mode: str | None = None, scope: list | None = None) -> dict:
-    """Rename it, change its rights (view / control) or who may use it."""
+def update(device_id: str, name: str | None = None, mode: str | None = None, scope: list | None = None,
+           display: int | None = None) -> dict:
+    """Rename it, change its rights (view / control), who may use it, or the screen used (index in the app's
+    `screens`, -1 = its main screen)."""
     with _lock:
         d = load()
         dev = next((x for x in d["devices"] if x["id"] == device_id), None)
@@ -221,6 +223,10 @@ def update(device_id: str, name: str | None = None, mode: str | None = None, sco
             dev["mode"] = mode
         if scope is not None:
             dev["scope"] = clean_scope(scope, strict=True)
+        if display is not None:
+            if not -1 <= int(display) < 16:
+                raise DevicesError(422, "invalid", "display: -1 (the main screen) or a screen number")
+            dev["display"] = int(display)
         save(d)
     from .. import bus
     bus.invalidate("devices")
@@ -248,7 +254,7 @@ def resolve(ref: str) -> dict | None:
 
 def public(dev: dict) -> dict:
     out = {k: dev.get(k) for k in ("id", "name", "os", "kind", "arch", "version", "created", "last_seen", "confirmed",
-                                   "mode", "scope", "caps", "screen", "note", "ip")}
+                                   "mode", "scope", "caps", "screen", "note", "ip", "display")}
     out["os_name"] = OS_NAMES.get(str(dev.get("os")), str(dev.get("os") or ""))
     return out
 

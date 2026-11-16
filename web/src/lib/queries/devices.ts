@@ -29,7 +29,7 @@ export function useConfirmDevice() {
 
 /** Rename, change its rights or who may use it. */
 export function useSaveDevice() {
-  return useMut(({ id, ...v }: { id: string; name?: string; mode?: 'view' | 'control'; scope?: string[] }) => api.put<Device>(`/api/devices/${seg(id)}`, v), {
+  return useMut(({ id, ...v }: { id: string; name?: string; mode?: 'view' | 'control'; scope?: string[]; display?: number }) => api.put<Device>(`/api/devices/${seg(id)}`, v), {
     invalidate: [deviceKeys.all, ['agents', 'one']],
     optimistic: ({ id, ...v }) => [{ key: deviceKeys.status, update: (s?: DevicesStatus) => s && { ...s, devices: s.devices.map((d) => (d.id === id ? { ...d, ...v } : d)) } }],
   })

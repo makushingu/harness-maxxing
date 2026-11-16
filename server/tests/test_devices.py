@@ -72,7 +72,7 @@ class FakeDevice:
             if t == "unpair":
                 self.unpaired = True
                 continue
-            if t in ("state", "access"):
+            if t in ("state", "access", "display", "watch"):
                 continue
             if t in self.errors:
                 code, msg = self.errors[t]
@@ -211,6 +211,28 @@ def test_the_app_is_told_when_it_is_accepted_and_its_mode(dv):
         dv.put(f"/api/devices/{p['device_id']}", json={"name": "mac 2"})              # nothing new to tell
         time.sleep(0.3)
         assert len(fd.of("access")) == 3
+
+
+def test_several_screens_the_one_used_is_chosen(dv):
+    p = _pair(dv, os_name="windows", name="pc", caps=CAPS_PC)
+    did = p["device_id"]
+    with _ws(dv, p["token"]) as ws:
+        ws.send_json({"t": "hello", "v": "0.1.0", "os": "windows", "arch": "amd64", "name": "pc", "caps": CAPS_PC,
+                      "screen": {"w": 1920, "h": 1080, "scale": 1}, "display": 0,
+                      "screens": [{"i": 0, "name": "Display 1", "w": 1920, "h": 1080, "main": True},
+                                  {"i": 1, "name": "Display 2", "w": 2560, "h": 1440, "main": False}, "junk"]})
+        wait_for(lambda: (next(iter(dv.get("/api/devices").json()["devices"]), {}).get("hello") or {}).get("screens"), 5)
+        h = dv.get("/api/devices").json()["devices"][0]["hello"]
+        assert [x["name"] for x in h["screens"]] == ["Display 1", "Display 2"] and h["display"] == 0
+        assert ws.receive_json()["t"] == "access"
+        r = dv.put(f"/api/devices/{did}", json={"display": 1})
+        assert r.status_code == 200 and r.json()["display"] == 1
+        assert ws.receive_json() == {"t": "display", "i": 1}
+        assert dv.put(f"/api/devices/{did}", json={"display": 99}).status_code == 422
+    with _ws(dv, p["token"]) as ws:                      # on the next connection the choice is sent again
+        ws.send_json({"t": "hello", "v": "0.1.0", "os": "windows", "arch": "amd64", "name": "pc", "caps": CAPS_PC})
+        got = [ws.receive_json(), ws.receive_json()]
+        assert {"t": "display", "i": 1} in got
 
 
 def test_codes_expire_and_wrong_codes_are_throttled(dv, monkeypatch):
@@ -456,6 +478,9 @@ def test_the_person_takes_over_and_hands_back(dv):
             wait_for(lambda: not dv.get("/api/devices").json()["devices"][0]["human"], 5)
             assert not _call(dv, "sess05", "click", {"device": did, "x": 10, "y": 10}, tok).get("isError")
         wait_for(lambda: not dv.get("/api/devices").json()["devices"][0]["watched"], 5)
+        # the app is told the live view opened and closed; its pictures are marked live (not in its terminal log)
+        wait_for(lambda: dev.of("watch") == [{"t": "watch", "on": True}, {"t": "watch", "on": False}], 5)
+        assert any(m.get("live") for m in dev.of("shot")) and not all(m.get("live") for m in dev.of("shot"))
 
 
 def _ask_in_thread(dv, sid, did, tok, out):

@@ -180,3 +180,61 @@ func TestX11Binary(t *testing.T) {
 		t.Fatalf("apps %v", m)
 	}
 }
+
+// Two monitors side by side (RandR 1.5 monitors on one 2560x800 root): the second one is captured and the
+// pointer lands on it.
+func TestX11TwoScreens(t *testing.T) {
+	const display = ":78"
+	xvfb := exec.Command("Xvfb", display, "-screen", "0", "2560x800x24", "-nolisten", "tcp")
+	if err := xvfb.Start(); err != nil {
+		t.Skipf("Xvfb: %v", err)
+	}
+	t.Cleanup(func() { xvfb.Process.Kill(); xvfb.Wait() })
+	t.Setenv("DISPLAY", display)
+	t.Setenv("WAYLAND_DISPLAY", "")
+	t.Setenv("XDG_SESSION_TYPE", "x11")
+	time.Sleep(time.Second)
+	for _, args := range [][]string{
+		{"--setmonitor", "LEFT", "1280/340x800/210+0+0", "none"},
+		{"--setmonitor", "RIGHT", "1280/340x800/210+1280+0", "none"},
+		{"--output", "screen", "--primary"},
+	} {
+		if out, err := exec.Command("xrandr", args...).CombinedOutput(); err != nil {
+			t.Logf("xrandr %v: %v %s", args, err, out)
+		}
+	}
+	be := newBackend(t.TempDir(), testLog)
+	defer be.Close()
+	inf := be.Info()
+	if len(inf.Displays) < 2 {
+		t.Skipf("RandR monitors not available here: %+v", inf.Displays)
+	}
+	t.Logf("screens: %+v (using %d)", inf.Displays, inf.Display)
+	right := -1
+	for i, d := range inf.Displays {
+		if d.X == 1280 {
+			right = i
+		}
+	}
+	if right < 0 {
+		t.Fatalf("no screen at x=1280: %+v", inf.Displays)
+	}
+	be.SetDisplay(right)
+	inf = be.Info()
+	if inf.Display != right || inf.Screen.W != 1280 || inf.Screen.H != 800 {
+		t.Fatalf("after SetDisplay: %+v", inf)
+	}
+	img, err := be.Capture()
+	if err != nil || img.Bounds().Dx() != 1280 {
+		t.Fatalf("capture: %v %v", err, img)
+	}
+	if err := be.Move(100, 50); err != nil {
+		t.Fatal(err)
+	}
+	c, _ := xgb.NewConn()
+	defer c.Close()
+	p, err := xproto.QueryPointer(c, xproto.Setup(c).DefaultScreen(c).Root).Reply()
+	if err != nil || p.RootX != 1380 || p.RootY != 50 {
+		t.Fatalf("pointer at %d,%d (want 1380,50): %v", p.RootX, p.RootY, err)
+	}
+}

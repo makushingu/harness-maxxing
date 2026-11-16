@@ -5,7 +5,7 @@ Signed in:
                                            codes waiting, requests (ask_human) waiting, the last actions
   POST   /api/devices/invites              {os?} a one-time code (15 min) -> commands, phone link, QR target
   POST   /api/devices/{id}/confirm         {ok} accept / refuse a device that paired
-  PUT    /api/devices/{id}                 {name?, mode?: view|control, scope?: ["*"] | ["project:<name>", "agent:<path>"]}
+  PUT    /api/devices/{id}                 {name?, mode?: view|control, scope?: ["*"] | ["project:<name>", "agent:<path>"], display?: -1..15}
   DELETE /api/devices/{id}                 remove it: its token is revoked, its app forgets this server and stops
   GET    /api/devices/session/{sid}        the devices this session's Claude is using now + its requests waiting
   GET    /api/devices/asks?session=        requests waiting       POST /api/devices/asks/{rid}  {action: done|skip, note?}
@@ -149,12 +149,13 @@ class DeviceIn(BaseModel):
     name: Optional[str] = Field(default=None, max_length=200)
     mode: Optional[Literal["view", "control"]] = None
     scope: Optional[list[str]] = None
+    display: Optional[int] = Field(default=None, ge=-1, le=15)
 
 
 @router.put(P + "/{device_id}", dependencies=AUTH)
 async def put_device(device_id: str, body: DeviceIn) -> dict:
     try:
-        dev = await asyncio.to_thread(store.update, device_id, body.name, body.mode, body.scope)
+        dev = await asyncio.to_thread(store.update, device_id, body.name, body.mode, body.scope, body.display)
     except devices.DevicesError as e:
         raise _err(e) from None
     await hub().access_changed(device_id)

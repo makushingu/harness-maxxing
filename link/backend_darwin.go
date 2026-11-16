@@ -4,13 +4,16 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"image"
 	"image/jpeg"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode/utf16"
 	"unsafe"
@@ -33,8 +36,13 @@ const (
 
 type cgPoint struct{ X, Y float64 }
 
+type cgRect struct{ X, Y, W, H float64 } // CGRect: origin then size, in global points
+
 var (
 	cgMainDisplayID               func() uint32
+	cgGetActiveDisplayList        func(max uint32, ids *uint32, n *uint32) int32
+	cgDisplayBounds               func(uint32) cgRect
+	cgDisplayIsBuiltin            func(uint32) uint32
 	cgDisplayPixelsWide           func(uint32) uintptr
 	cgDisplayPixelsHigh           func(uint32) uintptr
 	cgDisplayCopyDisplayMode      func(uint32) uintptr
@@ -89,6 +97,9 @@ func loadCG() error {
 			return
 		}
 		purego.RegisterLibFunc(&cgMainDisplayID, cg, "CGMainDisplayID")
+		optional(cg, &cgGetActiveDisplayList, "CGGetActiveDisplayList")
+		optional(cg, &cgDisplayBounds, "CGDisplayBounds")
+		optional(cg, &cgDisplayIsBuiltin, "CGDisplayIsBuiltin")
 		purego.RegisterLibFunc(&cgDisplayPixelsWide, cg, "CGDisplayPixelsWide")
 		purego.RegisterLibFunc(&cgDisplayPixelsHigh, cg, "CGDisplayPixelsHigh")
 		purego.RegisterLibFunc(&cgDisplayCopyDisplayMode, cg, "CGDisplayCopyDisplayMode")
@@ -134,20 +145,60 @@ type macBackend struct {
 	pressed string  // button held down (drag events)
 	mods    uint64  // modifier flags held by Key
 	asked   map[string]bool
+	want    atomic.Int32 // the screen chosen in Harness (-1: the main one)
 }
 
 func newBackend(dir string, logf func(string, ...any)) backend {
 	if err := loadCG(); err != nil {
 		logf("CoreGraphics: %v", err)
 	}
-	return &macBackend{dir: dir, logf: logf, asked: map[string]bool{}}
+	b := &macBackend{dir: dir, logf: logf, asked: map[string]bool{}}
+	b.want.Store(-1)
+	return b
 }
 
 func (b *macBackend) Close() {}
 
-// geometry returns the main display in pixels and in points.
-func geometry() (pw, ph int, ptw, pth float64) {
-	id := cgMainDisplayID()
+// macScreen is one active display: its id, its place in global points and its size in pixels.
+type macScreen struct {
+	id     uint32
+	bounds cgRect
+	pw, ph int
+}
+
+// screens lists the active displays, the main one first (the order screencapture -D numbers them in), and the
+// index of the one to use.
+func (b *macBackend) screens() ([]macScreen, []display, int) {
+	var buf [16]uint32
+	var n uint32
+	if cgGetActiveDisplayList == nil || cgGetActiveDisplayList(uint32(len(buf)), &buf[0], &n) != 0 || n == 0 {
+		buf[0], n = cgMainDisplayID(), 1
+	}
+	main := cgMainDisplayID()
+	var ms []macScreen
+	var ds []display
+	ext := 0
+	for _, id := range buf[:n] {
+		pw, ph, ptw, pth := geometry(id)
+		r := cgRect{W: ptw, H: pth}
+		if cgDisplayBounds != nil {
+			r = cgDisplayBounds(id)
+		}
+		name := "Built-in display"
+		if cgDisplayIsBuiltin == nil || cgDisplayIsBuiltin(id) == 0 {
+			ext++
+			name = fmt.Sprintf("Display %d", ext)
+		}
+		ms = append(ms, macScreen{id: id, bounds: r, pw: pw, ph: ph})
+		ds = append(ds, display{Name: name, X: int(r.X), Y: int(r.Y), W: pw, H: ph, Main: id == main})
+	}
+	return ms, ds, pickDisplay(ds, int(b.want.Load()))
+}
+
+func (b *macBackend) SetDisplay(i int) { b.want.Store(int32(i)) }
+
+// geometry returns a display in pixels and in points.
+func geometry(id uint32) (pw, ph int, ptw, pth float64) {
 	ptw, pth = float64(cgDisplayPixelsWide(id)), float64(cgDisplayPixelsHigh(id))
 	pw, ph = int(ptw), int(pth)
 	if m := cgDisplayCopyDisplayMode(id); m != 0 {
@@ -230,12 +281,14 @@ func (b *macBackend) Info() backendInfo {
 		inf.Note, inf.Code = "CoreGraphics is not available: "+cgLoadErr.Error(), "unsupported"
 		return inf
 	}
-	pw, ph, ptw, _ := geometry()
-	if pw <= 0 || ph <= 0 {
+	ms, ds, i := b.screens()
+	cur := ms[i]
+	if cur.pw <= 0 || cur.ph <= 0 || cur.bounds.W <= 0 {
 		inf.Note, inf.Code = "No display found.", "no_display"
 		return inf
 	}
-	inf.Screen = &screenInfo{W: pw, H: ph, Scale: float64(pw) / ptw}
+	inf.Displays, inf.Display = ds, i
+	inf.Screen = &screenInfo{W: cur.pw, H: cur.ph, Scale: float64(cur.pw) / cur.bounds.W}
 	inf.Input = inputAllowed()
 	var notes []string
 	b.mu.Lock()
@@ -274,8 +327,12 @@ func (b *macBackend) Capture() (image.Image, error) {
 	}
 	defer os.RemoveAll(tmp)
 	name := filepath.Join(tmp, "screen.jpg")
-	// -x no sound, -m main display, -t jpg
-	out, err := exec.Command(shotTool, "-x", "-m", "-t", "jpg", name).CombinedOutput()
+	// -x no sound, -m main display (-D n: display n, 1 = main), -t jpg
+	args := []string{"-x", "-m", "-t", "jpg", name}
+	if ms, _, i := b.screens(); len(ms) > 1 {
+		args = []string{"-x", "-D", strconv.Itoa(i + 1), "-t", "jpg", name}
+	}
+	out, err := exec.Command(shotTool, args...).CombinedOutput()
 	if err != nil {
 		return nil, &opError{"failed", "screencapture: " + strings.TrimSpace(string(out)+" "+err.Error())}
 	}
@@ -323,13 +380,15 @@ func post(ev uintptr) error {
 }
 
 // toPoints converts screen pixels (capture space) to the points CoreGraphics expects.
-func toPoints(x, y int) cgPoint {
-	pw, ph, ptw, pth := geometry()
-	return cgPoint{X: float64(x) * ptw / float64(max(pw, 1)), Y: float64(y) * pth / float64(max(ph, 1))}
+func (b *macBackend) toPoints(x, y int) cgPoint {
+	ms, _, i := b.screens()
+	s := ms[i]
+	return cgPoint{X: s.bounds.X + float64(x)*s.bounds.W/float64(max(s.pw, 1)),
+		Y: s.bounds.Y + float64(y)*s.bounds.H/float64(max(s.ph, 1))}
 }
 
 func (b *macBackend) Move(x, y int) error {
-	p := toPoints(x, y)
+	p := b.toPoints(x, y)
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.pos = p

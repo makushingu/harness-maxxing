@@ -24,6 +24,11 @@ type request struct {
 	// access: accepted in Harness Maxxing, and what Claude may do
 	OK   *bool  `json:"ok"`
 	Mode string `json:"mode"`
+	// display: the screen to use (index in hello.screens); watch: someone watches the live view
+	I  *int `json:"i"`
+	On bool `json:"on"`
+	// shot: a picture of the live view (not one of Claude's), not shown in the live log
+	Live bool `json:"live"`
 
 	// shot
 	MaxW    int       `json:"max_w"`
@@ -89,7 +94,10 @@ func (a *agent) serve(r request) map[string]any {
 		}
 		return m
 	}
-	d := describe(r)
+	d := ""
+	if !r.Live {
+		d = describe(r)
+	}
 	if d != "" && r.T == "input" && r.A == "type" && secureInput() {
 		d = fmt.Sprintf("Type %d characters in a password field (hidden)", utf8.RuneCountInString(r.Text))
 	}

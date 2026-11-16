@@ -85,6 +85,13 @@ func (f *fakeBackend) Launch(a app) error {
 }
 func (f *fakeBackend) Close() {}
 
+func (f *fakeBackend) SetDisplay(i int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.ops = append(f.ops, fmt.Sprintf("display %d", i))
+	f.info.Display = pickDisplay(f.info.Displays, i)
+}
+
 // ---- fake server ----
 
 type sconn struct {

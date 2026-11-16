@@ -134,6 +134,11 @@ def _describe(dev: dict) -> str:
             "view only" if dev.get("mode") == "view" else "control"]
     if scr.get("w"):
         bits.append(f"screen {scr.get('w')}x{scr.get('h')}")
+    screens = (h.get("hello") or {}).get("screens") or []
+    if len(screens) > 1:
+        cur = next((x for x in screens if x.get("i") == (h.get("hello") or {}).get("display")), None)
+        bits.append(f"{len(screens)} screens, you see " + (cur or {}).get("name", "the main one") +
+                    " (the person picks it in Settings -> Devices -> Watch)")
     if h["paused"]:
         bits.append("paused by the person")
     if h["human"]:

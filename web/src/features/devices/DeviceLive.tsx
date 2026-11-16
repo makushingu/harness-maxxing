@@ -5,10 +5,10 @@
 import * as React from 'react'
 import { ChevronLeft, Circle, Hand, LayoutGrid, Minimize2, SkipForward, Undo2 } from 'lucide-react'
 import { useT } from '@/i18n'
-import { deviceLiveToken } from '@/lib/queries'
+import { deviceLiveToken, useSaveDevice } from '@/lib/queries'
 import type { Device, DeviceAsk } from '@/lib/types'
 import { cn } from '@/lib/utils'
-import { Button, Input, Spinner } from '@/components/ui'
+import { Button, Input, Select, Spinner } from '@/components/ui'
 
 type State = { device: Device; me: boolean; asks: DeviceAsk[] }
 type Input_ = { a: string; x?: number; y?: number; x2?: number; y2?: number; sw?: number; sh?: number; button?: string; double?: boolean; dx?: number; dy?: number; text?: string; keys?: string; ms?: number }
@@ -165,6 +165,7 @@ export function DeviceLive({ id, onClose, className }: { id: string; onClose?: (
         <Circle className={cn('size-2.5 shrink-0 fill-current', online ? 'text-success' : 'text-muted-foreground')} />
         <span className="truncate text-sm font-medium">{d?.name || '…'}</span>
         <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">{status}</span>
+        {d && <ScreenPick d={d} />}
         {online && !me && (
           <Button size="sm" variant="outline" className="h-7" onClick={() => send({ t: 'take' })} data-testid="device-take">
             <Hand /> {t('devices.live.take')}
@@ -249,5 +250,25 @@ export function DeviceLive({ id, onClose, className }: { id: string; onClose?: (
         )}
       </div>
     </div>
+  )
+}
+
+/** Several screens: which one Claude sees and uses (and this view shows). */
+function ScreenPick({ d }: { d: Device }) {
+  const t = useT()
+  const save = useSaveDevice()
+  const screens = d.hello?.screens ?? []
+  if (screens.length < 2) return null
+  const cur = String(d.hello?.display ?? screens.find((x) => x.main)?.i ?? 0)
+  return (
+    <span title={t('devices.live.screenHelp')} data-testid="device-screen">
+      <Select
+        className="h-7 w-48 text-[12px]"
+        value={cur}
+        onValueChange={(v) => save.mutate({ id: d.id, display: Number(v) })}
+        aria-label={t('devices.live.screen')}
+        options={screens.map((x) => ({ value: String(x.i), label: `${x.name} · ${x.w}×${x.h}${x.main ? ` (${t('devices.live.main')})` : ''}` }))}
+      />
+    </span>
   )
 }

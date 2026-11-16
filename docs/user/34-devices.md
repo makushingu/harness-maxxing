@@ -47,6 +47,10 @@ what happens, line by line:
   14:02:19  › Press "cmd+l"
 ```
 
+- The live view (Watch, in Settings -> Devices) does not fill the window: it shows one line when it opens and one
+  when it closes. Its pictures are not saved anywhere.
+- **Several screens**: Watch shows a **Screen** menu when the computer has more than one. The screen you pick is the
+  one Claude sees and uses, and the one the view shows.
 - In a terminal the log is in colour: green when connected, yellow when something is missing (a permission, the
   connection), red when an action is refused or Harness Link stops. The same action repeated is folded into one line
   with a counter. Set `NO_COLOR=1` for plain text.
