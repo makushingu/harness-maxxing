@@ -1302,13 +1302,15 @@ def test_a_note_made_during_a_refresh_stays(org, monkeypatch):
 
 
 def test_a_malformed_probe_answer_costs_only_its_server(monkeypatch):
-    """A remote server answers `[1]`, an object with odd lists, deep JSON: that server is down, the build goes on."""
+    """A remote server answers `[1]`, an object with odd lists, deep JSON, NaN (GET /api/infra could not send it):
+    that server is down, the build goes on."""
     answers = {"a": "[1]", "b": json.dumps({"sites": 5, "databases": [1, {"engine": "sqlite", "path": "/srv/a.db"}], "server": "x"}),
-               "c": "[" * 5000, "d": json.dumps({"error": 7})}
+               "c": "[" * 5000, "d": json.dumps({"error": 7}),
+               "e": '{"server": {"load": NaN}, "sites": [{"host": "a.example", "size": Infinity}]}'}
     monkeypatch.setattr(infra.subprocess, "run",
                         lambda cmd, **k: subprocess.CompletedProcess(cmd, 0, answers[cmd[-4].split("@")[0]], ""))
     probes = {n: infra.probe_remote({"name": n, "host": "h.example.com", "user": n}, {}) for n in answers}
-    assert probes["a"]["error"] and probes["c"]["error"] and probes["d"]["error"] == "7"
+    assert probes["a"]["error"] and probes["c"]["error"] and probes["d"]["error"] == "7" and probes["e"]["error"]
     assert probes["b"]["sites"] == [] and probes["b"]["databases"] == [{"engine": "sqlite", "path": "/srv/a.db"}] and "server" not in probes["b"]
     servers = [{"name": n, "host": "h.example.com", "user": n} for n in answers]
     res = {r["id"]: r for r in build.build({build.LOCAL: {}, **probes}, servers, {}, {}, {}, {}, "/w", None)}
