@@ -226,3 +226,11 @@ def test_the_profile_settings_link_of_the_browser_panel_is_big_enough_to_touch()
     src = (WEB / "features" / "browser" / "BrowserPanel.tsx").read_text()
     link = re.search(r'<Link to=\{`/settings/browser\?[^`]*`\} className="([^"]*)">', src)
     assert link and {"pointer-coarse:inline-flex", "pointer-coarse:min-h-10"} <= set(link[1].split())
+
+
+def test_a_long_claude_sign_in_error_stays_inside_the_card():
+    src = (WEB / "features" / "claude" / "ClaudeConnect.tsx").read_text()
+    root = re.search(r'<div className="([^"]*)">\s*<Callout\s+tone=\{s\.auth\.ok', src)
+    assert root and "grid-cols-[minmax(0,1fr)]" in root[1].split()
+    detail = re.search(r'\{s\.auth\.detail && \(\s*<span className="([^"]*)">', src)
+    assert detail and "[overflow-wrap:anywhere]" in detail[1].split()
