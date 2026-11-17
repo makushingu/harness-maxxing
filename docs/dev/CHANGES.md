@@ -14,7 +14,7 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   fixed +120 s), None past `CATCH_UP_WINDOW_S` or when config `limit_retry` (default true) is false - then a limit
   failure is final. Both keys in `/api/settings` (`400 invalid_limit_retry_delay`), card in Settings -> Usage.
   Agents: `on_turn_end` -> `_plan_limit_retry` stores `<state>/agents/<key>.json` `limit_retry` {at, session,
-  attempt, trigger, depth} (one per agent, the latest wins; not for group turns, not when the session env has
+  attempt} (one per agent, the latest wins; not for group turns, not when the session env has
   `MAXXING_CRON_ID`: the cron's `retry_plan` owns it; at most `crons.MAX_RETRIES` for the same session) and posts a
   `note` (`status: limit_retry`). `agents.retry_limits()` (agents loop, every `FEED_POLL_S`) sends `LIMIT_RETRY_TEXT`
   into the same session once due, through `gate()`: `busy` waits, other reasons drop it with a `skip`; the run
