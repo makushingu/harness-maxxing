@@ -5,7 +5,7 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
-## Unreleased
+## 2.0.0-alpha.157 - 2026-11-18
 
 - Global daily budget (`server/maxxing/budget.py`): config `daily_budget_usd` (0 = none, settings route, restorable
   from a backup). `spent_today()` sums `days[today].cost` of the session metas touched in the last 25 h (same basis

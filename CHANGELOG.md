@@ -3,7 +3,7 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
-## Unreleased
+## 2.0.0-alpha.157 - 2026-11-18
 
 New:
 - **A daily budget for the whole server.** Settings -> Usage has a **Daily budget** in dollars (0 = none, as
