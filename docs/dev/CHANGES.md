@@ -7,6 +7,14 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Global daily budget (`server/maxxing/budget.py`): config `daily_budget_usd` (0 = none, settings route, restorable
+  from a backup). `spent_today()` sums `days[today].cost` of the session metas touched in the last 25 h (same basis
+  as an agent's `day_cost`; a deleted session takes its cost away). `reached()` gates only automatic work:
+  `crons._claude_turn(auto=True)` returns a `skipped` run, `agents.gate()` returns `limit` for a non-owner trigger
+  (`SKIP_TEXT`, Telegram `AGENT_REASONS`, web `agents.reason.limit`). The user's turns, the owner's messages to an
+  agent or a group (`agent_rooms._start` asks `gate(owner=True)`), "Run now" and shell jobs are never held. `check()` runs after every turn (`service.on_turn_end`, in a
+  thread) and after a settings save: feed source `system`, info at 80 % (`dedupe budget:<day>:<usd>:80`), alert at
+  100 % (ref `budget:reached`, resolved when work runs again). `GET /api/stats/budget`; mock route added.
 - **"After another agent" triggers** (`agents.py` "agent" triggers, contract in `docs/dev/API.md` `Trigger`):
   `{kind: "agent", agent: <path>, on: ok|error|any, match, prompt}` in agent.json (`TRIGGER_KINDS`, `_clean_chain`;
   `clean(..., own=path)` refuses itself; `_new_chain_sources_exist` checks only sources added, so a deleted source

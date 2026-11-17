@@ -2000,14 +2000,19 @@ def test_trigger(path: str, tid: str) -> dict:
 
 
 def gate(path: str, owner: bool = False) -> str | None:
-    """Why a trigger may not start a turn now (None = it may): disabled, budget, busy (the rest of the budget is held
-    by runs in progress), rate. fire() asks it again under _lock, with the start of the run. owner: the owner's own
-    message (agent page, Telegram): runs_per_hour guards against triggers in a loop, never against the owner."""
+    """Why a trigger may not start a turn now (None = it may): disabled, limit (the server's daily budget,
+    budget.py), budget, busy (the rest of the budget is held by runs in progress), rate. fire() asks it again
+    under _lock, with the start of the run. owner: the owner's own message (agent page, Telegram): runs_per_hour
+    and the server's budget guard against triggers, never against the owner."""
     if not exists(path):
         return "missing"
     a = load(path)
     if not a["enabled"]:
         return "disabled"
+    if not owner:
+        from . import budget
+        if budget.reached():                            # the server's daily budget: triggers wait for tomorrow
+            return "limit"
     lim = a["limits"]
     if lim["usd_per_day"]:
         spent = day_cost(path)
@@ -2068,6 +2073,7 @@ def hand_over(path: str, sid: str) -> None:
 
 
 SKIP_TEXT = {"disabled": "The agent is switched off", "budget": "Daily budget reached",
+             "limit": "Daily budget of the server reached (Settings -> Usage)",
              "busy": "The rest of today's budget is held by the run in progress",
              "rate": "Too many runs in the last hour", "missing": "The agent no longer exists",
              "depth": "Too many hops between agents",

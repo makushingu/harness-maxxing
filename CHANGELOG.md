@@ -6,6 +6,10 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 ## Unreleased
 
 New:
+- **A daily budget for the whole server.** Settings -> Usage has a **Daily budget** in dollars (0 = none, as
+  before). You get a notification at 80 % and an alert when it is reached; from then on the scheduled jobs and the
+  agents wait for the next day, while your own messages and **Run now** still run. The card shows what today cost
+  so far (at the price Claude Code reports; on a subscription, what the same turns would cost with an API key).
 - **Devices: Claude uses your own computers and phones.** Install the small Harness Link app on a Windows, Mac or
   Linux computer (one command to paste) or an Android phone (a QR code), accept it, and Claude can look at its
   screen, click, type and open apps, for what only exists there. Per device: **View only** (Claude looks and guides

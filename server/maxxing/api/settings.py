@@ -11,13 +11,14 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from .. import bus, config, memory, profile_photo
+from .. import budget, bus, config, memory, profile_photo
 from ..security import require_auth
 
 router = APIRouter(prefix="/api/settings", tags=["settings"], dependencies=[Depends(require_auth)])
 
 KEYS = ("timezone", "language", "public_url", "files_root", "presentation_default", "usage_widget", "tasks_page", "git_page", "infra_page", "team_page", "agents_page", "mail_page", "browser_feature", "devices_feature",
-        "maxxing_mode", "memory_max_lines", "cpu_priorities", "result_line_hidden", "donation_hidden", "sidebar_order")
+        "maxxing_mode", "memory_max_lines", "cpu_priorities", "result_line_hidden", "donation_hidden", "sidebar_order",
+        "daily_budget_usd")
 RESULT_FIELDS = ("model", "duration", "cost", "tokens", "cache")   # parts of the line under each answer
 _ROUTE = re.compile(r"^/(x/[a-z0-9][a-z0-9-]{0,47}|[a-z0-9-]{0,40})\Z")   # a page (/sessions) or a pinned extension page (/x/<id>)
 _URL = config.PUBLIC_URL_RE
@@ -44,6 +45,7 @@ class SettingsIn(BaseModel):
     donation_hidden: Optional[bool] = None
     cpu_priorities: Optional[bool] = None         # Settings -> System: the UI first when the processor is full
     sidebar_order: Optional[list[str]] = None     # routes of the sidebar pages, in the order the user dragged them
+    daily_budget_usd: Optional[float] = None      # Settings -> Usage: dollars a day for the whole server, 0 = none
 
 
 def _err(code: str, msg: str) -> HTTPException:
@@ -58,6 +60,7 @@ def current() -> dict:
             "public_url": cfg.get("public_url") or "", "files_root": cfg.get("files_root") or "/root",
             "presentation_default": bool(cfg.get("presentation_default", False)),
             "usage_widget": bool(cfg.get("usage_widget", False)),
+            "daily_budget_usd": budget.limit(),
             "tasks_page": bool(cfg.get("tasks_page", False)),
             "git_page": bool(cfg.get("git_page", False)),
             "code_mode": bool(cfg.get("code_mode", False)),   # read-only here: /api/term/enable|disable
@@ -358,6 +361,11 @@ def put_settings(body: SettingsIn):
         n = changes["memory_max_lines"]
         if n != 0 and not 50 <= n <= 5000:
             raise _err("invalid_memory_max_lines", "memory_max_lines is 0 (no limit) or between 50 and 5000")
+    if "daily_budget_usd" in changes:
+        usd = changes["daily_budget_usd"]
+        if not 0 <= usd <= budget.MAX_USD:             # NaN and infinity fail both comparisons
+            raise _err("invalid_daily_budget", f"daily_budget_usd is 0 (no budget) or at most {budget.MAX_USD:.0f}")
+        changes["daily_budget_usd"] = round(usd, 2)
     if "result_line_hidden" in changes:
         changes["result_line_hidden"] = [f for f in RESULT_FIELDS if f in changes["result_line_hidden"]]
     if "sidebar_order" in changes:
@@ -390,6 +398,8 @@ def put_settings(body: SettingsIn):
             topics += ["crons", "tasks"]
         if "usage_widget" in changes:
             topics.append("extensions")
+        if "daily_budget_usd" in changes:             # its alert opens or closes now, not at the next turn end
+            budget.check_quietly()
         if "cpu_priorities" in changes:               # the slices' weights now (the server runs as root)
             from .. import cmd_core
             cmd_core.ensure_cpu_slices()

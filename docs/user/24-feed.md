@@ -47,7 +47,7 @@ page (and the *to handle* count of the dashboard panel) shows only the alerts st
 | Source | Events |
 |---|---|
 | **Cron jobs** | every run: failures one by one (with the error), successes folded into one row |
-| **Harness Maxxing** | an update is available, an update needs attention (customizations, roll-back) |
+| **Harness Maxxing** | an update is available, an update needs attention (customizations, roll-back), 80 % of the server's daily budget is used, the daily budget is reached (Settings -> Usage) |
 | **Sign-ins** | sign-ins (folded), several wrong passwords |
 | **Agents** | an agent waits for your OK (Allow / Deny), a run failed (repeats folded), its daily budget or its runs per hour are reached, its sandbox cannot run, a trigger lost its webhook (Agents page on only) |
 | **Server health** | each new problem of the health card (disk, services, Claude sign-in, backup, failed sign-ins), with *Seen*; ends as *Fixed*. On for new installs; turn it on in Settings -> Notifications -> **Server problems in the notifications** |

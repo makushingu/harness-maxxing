@@ -150,7 +150,7 @@ server is back (if you are typing, as soon as you leave the field). Otherwise re
 app's HTML is never cached, a reload is enough.
 
 **An agent did not run.** Its page (Activity) and the [notifications](feed) say why: switched off, daily budget
-or runs per hour reached, sandbox not available on the server, a trigger without its webhook. From a terminal:
+or runs per hour reached, the server's daily budget reached (Settings -> Usage), sandbox not available on the server, a trigger without its webhook. From a terminal:
 `maxxing agents show <agent>`. See [Agents](agents#limits).
 
 **A member of an agent group did not answer.** The group says why in a small line (switched off, daily budget, the

@@ -766,9 +766,9 @@ def _start(path: str, me: str, item: dict, st: dict, g: dict) -> str | None:
     """Start the member's turn -> its session id (None: it could not speak, a note says why)."""
     from .sessions import service
     with agents._lock:
-        reason = agents.gate(me)
-        if reason == "rate":                             # a group's turns are bounded by the group's limits
-            reason = None
+        # only the owner writes to a group: its turns are bounded by the group's limits, never held by the member's
+        # runs per hour or the server's daily budget
+        reason = agents.gate(me, owner=True)
         if reason:
             post(path, "skip", f"@{handles(g).get(me, slug(me))}: {SKIP_GROUP.get(reason, reason)}", author=me, reason=reason)
             if reason in ("budget",):

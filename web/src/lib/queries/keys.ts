@@ -59,7 +59,7 @@ export const qk = {
     preflight: ['system', 'preflight'] as const,
   },
   memory: ['memory'] as const,
-  stats: { tokens: ['stats', 'tokens'] as const },
+  stats: { tokens: ['stats', 'tokens'] as const, budget: ['stats', 'budget'] as const },
   docs: {
     list: ['docs', 'list'] as const,
     full: ['docs', 'full'] as const,

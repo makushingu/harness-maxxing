@@ -136,7 +136,7 @@ function buildState(scenario) {
     loginFails: [], // timestamps
     lockUntil: 0,
     onboarding_completed: ready,
-    settings: { timezone: 'Europe/Paris', language: 'en', public_url: 'https://ui.example.com', files_root: ROOT, presentation_default: false, usage_widget: false, maxxing_mode: false, memory_max_lines: 200, donation_hidden: false,
+    settings: { timezone: 'Europe/Paris', language: 'en', public_url: 'https://ui.example.com', files_root: ROOT, presentation_default: false, daily_budget_usd: 0, usage_widget: false, maxxing_mode: false, memory_max_lines: 200, donation_hidden: false,
       ...Object.fromEntries(PAGE_FLAGS.map((k) => [k, MOCK_ALL])), sidebar_order: [] },
     claude: {
       installed: true, version: '2.4.1',
@@ -1850,7 +1850,7 @@ R('GET', '/api/settings', () => S.settings)
 R('PUT', '/api/settings', ({ body }) => {
   if (body.language !== undefined && !['en', 'fr'].includes(body.language)) fail(422, 'invalid', 'language must be en or fr')
   if (body.public_url !== undefined && body.public_url && !/^https?:\/\//.test(body.public_url)) fail(422, 'invalid', 'public_url must start with http(s)://')
-  for (const k of ['timezone', 'language', 'public_url', 'files_root', 'presentation_default', 'usage_widget', 'memory_max_lines', 'donation_hidden', ...PAGE_FLAGS, 'sidebar_order']) if (body[k] !== undefined) S.settings[k] = body[k]
+  for (const k of ['timezone', 'language', 'public_url', 'files_root', 'presentation_default', 'daily_budget_usd', 'usage_widget', 'memory_max_lines', 'donation_hidden', ...PAGE_FLAGS, 'sidebar_order']) if (body[k] !== undefined) S.settings[k] = body[k]
   return S.settings
 })
 /* ---- feedback: checked first (a word decides here: "bug" or "idea" is sent, "model" or "API" is for this
@@ -1961,6 +1961,8 @@ R('GET', '/api/memory', () => ({ max_lines: S.settings.memory_max_lines ?? 200, 
   { path: 'projects/acme/topics/blog/memory.md', level: 'topic', lines: 80, bytes: 4100, over: false },
 ] }))
 R('POST', '/api/memory/compact', () => ({ session: S.sessions[0] || null }))
+// the day's spend of the mock is fixed: $8.40
+R('GET', '/api/stats/budget', () => ({ usd_per_day: S.settings.daily_budget_usd || 0, spent_today: 8.4, reached: !!S.settings.daily_budget_usd && S.settings.daily_budget_usd <= 8.4 }))
 R('GET', '/api/stats/tokens', () => {
   const row = (total) => ({ input: Math.round(total * 0.05), output: Math.round(total * 0.05), cache_read: Math.round(total * 0.85), cache_write: Math.round(total * 0.05), total, cost_usd: total / 400000, turns: Math.round(total / 50000), sessions: 3 })
   const days = Array.from({ length: 30 }, (_, i) => ({ date: new Date(Date.now() - (29 - i) * 864e5).toISOString().slice(0, 10), tokens: 200000 + ((i * 7919) % 9) * 90000, cost_usd: 1.2 }))
