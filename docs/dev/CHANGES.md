@@ -7,6 +7,9 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Tabs bar: `useTabIndicator` (`tabMotion.ts`) now places an oval (the chip's width, height and offset) behind the
+  chips (`z-0`, chips `relative z-10`, transparent): it glides to the tab picked; the underline is gone. `TabsBar`
+  `edge` (phone header): the tablist runs edge to edge with its own `px-3`, the scroll-into-view keeps that padding.
 - Session multi-selection (`web/src/pages/sessions/selection.ts`, zustand, not persisted): a plain click on a tree
   row sets the anchor, Ctrl/Cmd/Shift + click picks the rows between, in DOM order of `[data-session-row]` under the
   same `[role=tree]` (the anchor copy nearest to the target when it shows twice: Favorites); Ctrl + click on a

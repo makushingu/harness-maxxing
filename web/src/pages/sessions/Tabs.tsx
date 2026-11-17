@@ -82,7 +82,7 @@ export function stepCol(dir: -1 | 1): Col | null {
 let barScroll = 0
 
 /** Chips of the open sessions. `onPick` shows a col (desktop: focus; phone: its URL). */
-export function TabsBar({ sessions, onPick, className, compact }: { sessions: Session[] | undefined; onPick: (c: Col) => void; className?: string; /** "Waiting": its number only. */ compact?: boolean }) {
+export function TabsBar({ sessions, onPick, className, compact, edge }: { sessions: Session[] | undefined; onPick: (c: Col) => void; className?: string; /** "Waiting": its number only. */ compact?: boolean; /** Phone: the chips scroll from one edge of the screen to the other (the bar brings its own margin). */ edge?: boolean }) {
   const t = useT()
   const cols = useSessionsUI((s) => s.cols)
   const focused = useSessionsUI((s) => s.focused)
@@ -102,7 +102,9 @@ export function TabsBar({ sessions, onPick, className, compact }: { sessions: Se
     if (first) el.scrollLeft = barScroll
     const chip = el.querySelector<HTMLElement>('[aria-selected="true"]')
     if (!chip) return
-    const a = el.getBoundingClientRect()
+    const pad = parseFloat(getComputedStyle(el).paddingLeft) || 0
+    const b = el.getBoundingClientRect()
+    const a = { left: b.left + pad, right: b.right - pad }
     const c = chip.getBoundingClientRect()
     const left = c.left < a.left ? el.scrollLeft + c.left - a.left : c.right > a.right ? el.scrollLeft + c.right - a.right : null
     if (left !== null) el.scrollTo({ left, behavior: first ? 'instant' : 'smooth' })
@@ -121,11 +123,11 @@ export function TabsBar({ sessions, onPick, className, compact }: { sessions: Se
   if (!cols.length) return null
   return (
     <div className={cn('flex min-w-0 shrink-0 items-center gap-1 border-b bg-sidebar/40 px-2 py-1.5', className)} data-testid="tabs-bar">
-      <div ref={bar} role="tablist" onScroll={(e) => (barScroll = e.currentTarget.scrollLeft)} className="relative flex min-w-0 flex-1 items-center gap-1 overflow-x-auto overscroll-x-contain [scrollbar-width:none]">
+      <div ref={bar} role="tablist" onScroll={(e) => (barScroll = e.currentTarget.scrollLeft)} className={cn('relative flex min-w-0 flex-1 items-center gap-1 overflow-x-auto overscroll-x-contain [scrollbar-width:none]', edge && 'px-3')}>
         <span
           ref={line}
           aria-hidden
-          className="pointer-events-none absolute bottom-0 left-0 h-0.5 w-[100px] origin-left bg-primary opacity-0 transition-[transform,opacity] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]"
+          className="pointer-events-none absolute top-1/2 left-0 z-0 -translate-y-1/2 rounded-full border border-primary/40 bg-primary/15 opacity-0 shadow-[0_0_12px] shadow-primary/20 transition-[transform,width,opacity] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]"
         />
         {cols.map((c) => {
           const s = c.kind === 'session' ? byId.get(c.id) : undefined
@@ -139,7 +141,8 @@ export function TabsBar({ sessions, onPick, className, compact }: { sessions: Se
               className={cn(
                 // computer: the chips share the bar with the page's actions - they narrow (down to 7rem) before the bar scrolls
                 'group flex h-8 max-w-56 max-md:max-w-44 max-md:shrink-0 md:min-w-28 items-center gap-1.5 rounded-full border pr-1 pl-2.5 pointer-coarse:h-10 pointer-coarse:pr-0 text-[13px] transition-colors',
-                on ? 'border-primary/50 bg-primary/10 text-foreground' : 'border-transparent bg-muted text-muted-foreground hover:bg-muted hover:text-foreground',
+                'relative z-10 border-transparent',
+                on ? 'text-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
               )}
               data-tab={c.key}
             >

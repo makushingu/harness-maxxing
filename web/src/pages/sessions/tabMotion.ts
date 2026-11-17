@@ -43,8 +43,10 @@ export function useTabIndicator(bar: React.RefObject<HTMLElement | null>, mark: 
       const first = !placed.current || reducedMotion()
       line.style.transition = first ? 'none' : ''
       line.style.opacity = '1'
-      // 100 px wide at scale 1: scaleX gives the chip's width without a layout per frame
-      line.style.transform = `translateX(${chip.offsetLeft + 10}px) scaleX(${Math.max(0, chip.offsetWidth - 20) / 100})`
+      // The oval of the shown tab sits behind the chips and glides to the tab picked (its size follows the chip's)
+      line.style.width = `${chip.offsetWidth}px`
+      line.style.height = `${chip.offsetHeight}px`
+      line.style.transform = `translateX(${chip.offsetLeft}px)`
       placed.current = true
     }
     place()
