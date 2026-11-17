@@ -239,3 +239,15 @@ def test_concurrent_writes_to_a_topics_settings_keep_every_change(client, monkey
     assert sorted(workspace.topic_allowed_tools(path)) == sorted(rules)
     assert workspace.folder_browser(path)["enabled"] is True
     assert workspace.topic_permission_mode(path) == "ask"
+
+
+def test_an_unread_session_that_failed_is_counted_as_an_error(monkeypatch):
+    """The tree's counter turns red: `errors` = the unread sessions whose last turn failed (not archived)."""
+    from maxxing.sessions import service
+    p = "projects/acme/topics/blog"
+    rows = [{"path": p, "archived": False, "state": "error", "unread": True},
+            {"path": p, "archived": False, "state": "idle", "unread": True},
+            {"path": p, "archived": False, "state": "error", "unread": False},
+            {"path": p, "archived": True, "state": "error", "unread": True}]
+    monkeypatch.setattr(service, "list_sessions", lambda archived=None: rows)
+    assert workspace._session_stats()[p] == {"sessions": 3, "archived": 1, "running": 0, "unread": 2, "errors": 1}

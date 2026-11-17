@@ -82,6 +82,8 @@ export type Topic = {
   archived_count?: number
   running: number
   unread: number
+  /** Unread sessions whose last turn failed (among `unread`): the counter turns red. */
+  errors?: number
   telegram_thread: number | null
   /** The topic's "Always allow" rules (Claude Code rules added from an approval card). */
   allowed_tools?: string[]

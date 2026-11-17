@@ -31,7 +31,7 @@ def test_network_error_is_translated():
 
 # groups loaded by their own trigger (a paste, a drag, a hover...), not with a page; browser: off by default, its
 # texts outside its page (a topic's menu, an agent's settings, a session's line) load on their first key
-ON_DEMAND = {"paste", "drag", "where", "media", "skw", "tour", "maxxing", "feedback", "composer", "cut", "browser"}
+ON_DEMAND = {"paste", "drag", "where", "media", "skw", "tour", "maxxing", "feedback", "composer", "cut", "browser", "sel"}
 
 # (route, group) pairs knowingly left undeclared, with the reason
 KNOWN = {

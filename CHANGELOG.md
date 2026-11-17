@@ -14,12 +14,16 @@ New:
   you let it: type `harness-link` in a terminal, it shows there what Claude does, and Ctrl+C stops it. Off by
   default: Settings -> Features -> Devices. A computer with several screens: pick the one Claude uses in the device's
   row, and Claude switches screens by itself when it needs another one. [Show me](#show:devices)
+- **Several sessions at once.** In the session list, click a session then Ctrl+click (Cmd on a Mac, or Shift) another:
+  all the sessions in between are selected; Ctrl+click on a topic or a project selects all of its sessions. A bar
+  then opens, closes, archives or deletes them in one go (Delete key to delete, Escape to let them go).
+- **Confirm from the keyboard.** In a confirmation window (deleting a session...), Enter confirms at once, Escape
+  cancels, the arrows move between the buttons.
 - **Copy the text of a file.** The file viewer has a **Copy the text** button (in its "more" menu on a phone), and
   the Files page the same lines in the menu of a file. A Markdown or HTML file gives two choices: **Copy the
   source**, or **Copy as plain text** (the words as you read them, without the marks). A Word document copies as
   Markdown or as plain text, a workbook as cells that paste into a spreadsheet, a PDF as the text read in its pages,
   code, text and CSV files as they are.
-
 - **Chain your agents.** An agent can now start by itself after another one: in its **When it works**, add **After
   another agent…**, pick the agent and which of its runs count (those that succeed, those that fail, or all), and,
   if you want, words its result must contain. Each automatic run of the first agent then hands its result to the
@@ -34,6 +38,8 @@ Changed:
   the whole computer, not only a browser).
 
 Fixed:
+- **A session that ended in error turns its counter red** (sidebar, ☰ button, project and topic of the list), instead
+  of the green of a finished one.
 - **The automatic update really updates.** "Update by itself when nobody is here" stopped for good at the first
   version that came with an upgrade note (about one version out of two), without saying why. A note no longer holds
   the update back: Harness updates, then tells you in the notifications that there are notes to apply (open the

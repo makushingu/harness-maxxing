@@ -48,8 +48,16 @@ function useBadgeMotion(count: number) {
 
 /** Round counter (unread answers, running turns). Pulses when Settings -> Notifications -> "Pulsing badge" is on.
  *  Shows "99+" above 99 unless `exact` (lists with room for the real number, e.g. mail folders). */
-export function CountBadge({ count, tone = 'unread', className, title, exact }: { count: number; tone?: 'unread' | 'running'; className?: string; title?: string; exact?: boolean }) {
-  const pulse = useUI((s) => s.badgePulse) && tone === 'unread'
+export type BadgeTone = 'unread' | 'running' | 'error'
+const BADGE: Record<BadgeTone, string> = {
+  unread: 'bg-success/15 text-success ring-1 ring-success/40 ring-inset',
+  running: 'bg-primary/15 text-primary',
+  error: 'bg-destructive/15 text-destructive ring-1 ring-destructive/40 ring-inset',
+}
+const DOT: Record<BadgeTone, string> = { unread: 'bg-success/70 ring-2 ring-success/25', running: 'bg-primary', error: 'bg-destructive ring-2 ring-destructive/25' }
+
+export function CountBadge({ count, tone = 'unread', className, title, exact }: { count: number; tone?: BadgeTone; className?: string; title?: string; exact?: boolean }) {
+  const pulse = useUI((s) => s.badgePulse) && tone !== 'running'
   const { ref, shown, leaving } = useBadgeMotion(count)
   if (shown <= 0) return null
   return (
@@ -59,8 +67,8 @@ export function CountBadge({ count, tone = 'unread', className, title, exact }: 
       aria-hidden={leaving || undefined}
       className={cn(
         'inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full px-1 text-[11px] leading-none font-semibold tabular-nums',
-        // Finished (unread): green, see-through, with a fine ring; running: the theme color, see-through.
-        tone === 'unread' ? 'bg-success/15 text-success ring-1 ring-success/40 ring-inset' : 'bg-primary/15 text-primary',
+        // Finished (unread): green, see-through, with a fine ring; one of them failed: red; running: the theme color.
+        BADGE[tone],
         pulse && !leaving && 'mx-badge-pulse',
         leaving && 'pointer-events-none',
         className,
@@ -72,7 +80,7 @@ export function CountBadge({ count, tone = 'unread', className, title, exact }: 
 }
 
 /** Round dot version (collapsed sidebar, tab bar icons). */
-export function CountDot({ tone = 'unread', className }: { tone?: 'unread' | 'running'; className?: string }) {
-  const pulse = useUI((s) => s.badgePulse) && tone === 'unread'
-  return <span aria-hidden className={cn('size-2 rounded-full', tone === 'unread' ? 'bg-success/70 ring-2 ring-success/25' : 'bg-primary', pulse && 'mx-badge-pulse', className)} />
+export function CountDot({ tone = 'unread', className }: { tone?: BadgeTone; className?: string }) {
+  const pulse = useUI((s) => s.badgePulse) && tone !== 'running'
+  return <span aria-hidden className={cn('size-2 rounded-full', DOT[tone], pulse && 'mx-badge-pulse', className)} />
 }
