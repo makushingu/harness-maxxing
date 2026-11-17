@@ -112,6 +112,7 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   their own dictionary group (`ctext`): the `files` group is part of the first load of a session, whose budget
   (20,000 bytes, `test_web_first_load`) was full.
 
+- **Dependencies**: `web/package-lock.json` Tailwind CSS 4.3.5 (4.3.3 -> 4.3.5); `web/dist` rebuilt, `THIRD_PARTY_NOTICES.md` regenerated.
 - **Dependencies** (issue #104): `server/uv.lock` opentelemetry-api 1.45.1 -> 1.45.2 (GHSA-mf5v-w3w3-f6cg).
   `templates/scrapling/requirements.txt` re-resolved from `scrapling[fetchers,rag]==0.4.15` + `soupsieve>=4.0.0`
   (soupsieve 3.0.3 -> 4.1.1, GHSA-mmhr-3c5m-f64f; also playwright 1.64.0 -> 1.64.1, patchright 1.64.1 -> 1.64.4,
