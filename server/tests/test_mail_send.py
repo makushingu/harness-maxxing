@@ -445,3 +445,9 @@ def test_an_agent_mail_queued_keeps_a_decision_made_while_its_notification_was_p
     q = outbox.queue(acc, "acme/blog/writer", {"to": ["a@x.org"], "subject": "H", "text": "t"}, [], "new")
     row = store.outbox_get(q["id"])
     assert row["status"] == "sending" and row["event_id"]
+
+
+def test_a_deeply_nested_draft_is_a_400_not_a_500(client, acc):
+    deep = "[" * 100000 + "]" * 100000
+    for path in ("send", "draft"):
+        assert client.post(f"/api/mail/{acc['id']}/{path}", data={"data": deep}).status_code == 400

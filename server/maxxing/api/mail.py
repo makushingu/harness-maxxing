@@ -293,7 +293,7 @@ async def _draft_and_files(data: str, files: list[UploadFile]) -> tuple[dict, li
     try:
         draft = json.loads(data)
         assert isinstance(draft, dict)
-    except (ValueError, AssertionError):
+    except (ValueError, AssertionError, RecursionError):
         raise HTTPException(400, detail={"error": "invalid", "message": "data: a JSON object"}) from None
     if len(files) > MAX_FILES:
         raise HTTPException(400, detail={"error": "invalid", "message": f"at most {MAX_FILES} attachments"})

@@ -254,8 +254,9 @@ SHELL_RC = (".bashrc", ".bash_profile", ".bash_login", ".profile", ".bash_aliase
 # a name with one of these anywhere (PGPASSWORD, github_token), or one of SECRET_PARTS as a whole `_` part (NPM_KEY)
 SECRET_WORDS = ("TOKEN", "SECRET", "PASSWORD", "PASSWD", "APIKEY", "CREDENTIAL")
 SECRET_PARTS = {"KEY", "PASS", "PWD", "AUTH", "PAT", "DSN"}
-# `NAME=value` (export, readonly, declare -x...), fish's `set -x NAME value`, a URL with a password (DATABASE_URL)
-SECRET_SET = re.compile(r"^[ \t]*(?:(?:export|readonly|local|declare[ \t]+-\w+|typeset[ \t]+-\w+)[ \t]+)*(\w+)=\S"
+# `NAME=value` anywhere on a line (export, readonly, declare -x..., after `;`, `&&`, `then`, or as a second assignment),
+# fish's `set -x NAME value`, a URL with a password (DATABASE_URL)
+SECRET_SET = re.compile(r"(?:^|[ \t;&|(`{])(?:(?:export|readonly|local|declare[ \t]+-\w+|typeset[ \t]+-\w+)[ \t]+)*(\w+)=\S"
                         r"|^[ \t]*set[ \t]+-\w+[ \t]+(\w+)[ \t]+\S|(://)[^/\s:@]{1,256}:[^@\s/]{1,256}@", re.M)
 
 

@@ -497,6 +497,26 @@ def test_a_topic_in_mode_ask_waits_for_the_user_and_always_allow_adds_a_rule(cli
     assert bad.status_code == 400
 
 
+def test_always_allow_on_a_request_that_times_out_meanwhile_adds_no_rule(client, topic, mx, monkeypatch):
+    from maxxing import approvals, approval_mcp
+    assert client.patch("/api/workspace/projects/acme/topics/blog", json={"permission_mode": "ask"}).status_code == 200
+    sid = client.post("/api/sessions", json={"path": topic, "message": "APPROVE push"}).json()["id"]
+    p = wait_for(lambda: client.get(f"/api/approvals?session={sid}").json()["approvals"], timeout=15)[0]
+    orig = approvals.topic_of_session
+
+    def late(session):                          # the MCP's timeout lands after the first look at the request
+        out = orig(session)
+        f = approvals._file(p["id"])
+        approval_mcp.write_atomic(f, {**approval_mcp.read(f), "status": "timeout"})
+        return out
+    monkeypatch.setattr(approvals, "topic_of_session", late)
+    r = client.post(f"/api/approvals/{p['id']}", json={"decision": "allow", "always": True})
+    assert r.status_code == 409
+    t = client.get("/api/workspace/tree").json()
+    blog = next(x for pr in t["projects"] for x in pr["topics"] if x["path"] == topic)
+    assert blog["allowed_tools"] == [], blog["allowed_tools"]
+
+
 def test_always_allow_is_refused_for_an_agent_and_with_deny(client, topic, mx):
     _agent(client, approvals=True)
     sid = _run("APPROVE push")["session"]["id"]
