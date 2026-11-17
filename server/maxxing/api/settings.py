@@ -11,14 +11,14 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from .. import budget, bus, config, memory, profile_photo
+from .. import budget, bus, config, crons, memory, profile_photo
 from ..security import require_auth
 
 router = APIRouter(prefix="/api/settings", tags=["settings"], dependencies=[Depends(require_auth)])
 
 KEYS = ("timezone", "language", "public_url", "files_root", "presentation_default", "usage_widget", "tasks_page", "git_page", "infra_page", "team_page", "agents_page", "mail_page", "browser_feature", "devices_feature",
         "maxxing_mode", "memory_max_lines", "cpu_priorities", "result_line_hidden", "donation_hidden", "sidebar_order",
-        "daily_budget_usd")
+        "daily_budget_usd", "limit_retry", "limit_retry_delay_s")
 RESULT_FIELDS = ("model", "duration", "cost", "tokens", "cache")   # parts of the line under each answer
 _ROUTE = re.compile(r"^/(x/[a-z0-9][a-z0-9-]{0,47}|[a-z0-9-]{0,40})\Z")   # a page (/sessions) or a pinned extension page (/x/<id>)
 _URL = config.PUBLIC_URL_RE
@@ -46,6 +46,8 @@ class SettingsIn(BaseModel):
     cpu_priorities: Optional[bool] = None         # Settings -> System: the UI first when the processor is full
     sidebar_order: Optional[list[str]] = None     # routes of the sidebar pages, in the order the user dragged them
     daily_budget_usd: Optional[float] = None      # Settings -> Usage: dollars a day for the whole server, 0 = none
+    limit_retry: Optional[bool] = None            # Settings -> Usage: a run stopped by the usage limit starts again
+    limit_retry_delay_s: Optional[int] = None     # ...this many seconds after the reset (0-3600)
 
 
 def _err(code: str, msg: str) -> HTTPException:
@@ -61,6 +63,8 @@ def current() -> dict:
             "presentation_default": bool(cfg.get("presentation_default", False)),
             "usage_widget": bool(cfg.get("usage_widget", False)),
             "daily_budget_usd": budget.limit(),
+            "limit_retry": crons.limit_retry_on(),
+            "limit_retry_delay_s": int(crons.limit_retry_delay()),
             "tasks_page": bool(cfg.get("tasks_page", False)),
             "git_page": bool(cfg.get("git_page", False)),
             "code_mode": bool(cfg.get("code_mode", False)),   # read-only here: /api/term/enable|disable
@@ -361,6 +365,8 @@ def put_settings(body: SettingsIn):
         n = changes["memory_max_lines"]
         if n != 0 and not 50 <= n <= 5000:
             raise _err("invalid_memory_max_lines", "memory_max_lines is 0 (no limit) or between 50 and 5000")
+    if "limit_retry_delay_s" in changes and not 0 <= changes["limit_retry_delay_s"] <= 3600:
+        raise _err("invalid_limit_retry_delay", "limit_retry_delay_s is between 0 and 3600 seconds")
     if "daily_budget_usd" in changes:
         usd = changes["daily_budget_usd"]
         if not 0 <= usd <= budget.MAX_USD:             # NaN and infinity fail both comparisons

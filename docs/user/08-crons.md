@@ -48,8 +48,10 @@ for. Turn **Catch up a missed run** off for a job that must only run at its exac
 more than 24 hours is not run: it shows **Missed**.
 
 **Retries.** A Claude job that fails for a passing reason is tried again by itself:
-- the usage limit of your Claude plan was reached: after the limit resets (the reset time Claude Code reported, else
-  30 minutes later);
+- the usage limit of your Claude plan was reached: one minute after the limit resets (the reset time Claude Code
+  reported, or the one in its message, such as "resets 4pm (UTC)"; else 30 minutes later); not when the reset is more
+  than a day away (a weekly limit: the next scheduled run does it). **Settings -> Usage -> Start again after the usage
+  limit** turns this off or changes the minute;
 - Claude's API was overloaded or unreachable (errors 5xx, 529, 429, network): after 5, then 15, then 30 minutes.
 
 At most 3 retries. A shell job is retried only when you set **Retries after a failure** (`retries`), after any failure,

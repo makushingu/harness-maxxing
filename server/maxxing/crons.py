@@ -72,6 +72,8 @@ RETRY_BACKOFF_S = (300, 900, 1800)       # wait before retry 1, 2, 3 (then the l
 MAX_RETRIES = 3                          # automatic retries of a Claude job after a transient failure
 MAX_SHELL_RETRIES = 5                    # `retries` of a shell job (0 = none, the default)
 LIMIT_RETRY_S = 1800                     # usage limit with no known reset time: try again after this
+LIMIT_RETRY_DELAY_S = 60                 # usage limit: try again this long after the reset (config limit_retry_delay_s)
+LIMIT_RESET_GRACE_S = 900                # "resets 4pm" read at 4:05pm: that reset, not tomorrow's
 TICK_ALIVE_S = 900                       # retries are planned only while the server's tick ran this recently
 RETRY_OVERDUE_S = 3600                   # a retry this late (server down, tick off) is given up: final failure
 ONCE_PAST_S = 60                         # a one-time job may be set at most this long in the past
@@ -1443,8 +1445,9 @@ def _interrupted(cid: str, job: dict, lockf) -> dict | None:
 # =============================================================================================
 # Retries after a transient failure
 # =============================================================================================
-# A Claude job that failed because the plan's usage limit was reached is tried again after the reset time (read
-# from the answer or from the last limits Claude Code reported, else LIMIT_RETRY_S); one that failed on an API or
+# A Claude job that failed because the plan's usage limit was reached is tried again limit_retry_delay_s after the
+# reset time (read from the answer or from the last limits Claude Code reported, else LIMIT_RETRY_S), unless the
+# config's limit_retry is off; one that failed on an API or
 # network error is tried again after RETRY_BACKOFF_S. A shell job is retried only when it has `retries`. A timeout
 # is never retried (the job would most likely time out again). The retry waits in retries.json until the tick
 # starts it: it survives a restart and needs no extra unit.
@@ -1463,6 +1466,8 @@ _ERROR_TRANSIENT_RE = re.compile(
     r"|eai_again|socket hang up|network (?:error|is unreachable)|fetch failed|request timed out"
     r"|temporarily unavailable|spawn failed", re.I)
 _EPOCH_RE = re.compile(r"limit reached\|(\d{10})")
+# "You've hit your session limit · resets 4pm (UTC)", "resets 4:30pm", "resets 4am (Europe/Paris)"
+_RESETS_RE = re.compile(r"\bresets\s+(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*([ap])\.?m\.?(?:\s*\(([^)\s]{1,40})\))?", re.I)
 
 
 def classify_failure(text: str, error: str = "") -> str | None:
@@ -1482,7 +1487,8 @@ def classify_failure(text: str, error: str = "") -> str | None:
 
 def limit_reset(text: str, now: float) -> float | None:
     """When the usage limit that stopped a turn resets: the time in an old-style answer ("…limit reached|<epoch>"),
-    else the reset of a full window among the limits Claude Code last reported. None = unknown."""
+    else the reset of a full window among the limits Claude Code last reported, else the time in the message
+    ("resets 4pm (UTC)", text_reset). None = unknown."""
     m = _EPOCH_RE.search(text or "")
     if m and float(m.group(1)) > now:
         return float(m.group(1))
@@ -1490,11 +1496,60 @@ def limit_reset(text: str, now: float) -> float | None:
         from . import claude_auth
         lim = claude_auth.limits(now) or {}
     except Exception:  # noqa: BLE001
-        return None
+        lim = {}
     full = [w["resets_at"] for w in (lim.get("five_hour"), lim.get("seven_day"))
             if isinstance(w, dict) and isinstance(w.get("resets_at"), (int, float)) and w["resets_at"] > now
             and (w.get("pct") or 0) >= 99.5]
-    return max(full) if full else None
+    return max(full) if full else text_reset(text, now)
+
+
+def text_reset(text: str, now: float) -> float | None:
+    """The reset time said in Claude Code's message ("resets 4pm (UTC)", "resets 4:30pm", "resets 4am"): the next
+    time it is that hour in the zone given (UTC when none or unknown), or one that passed less than
+    LIMIT_RESET_GRACE_S ago (the message was read a moment after the reset). None = no such time."""
+    m = None
+    for m in _RESETS_RE.finditer((text or "")[-2000:]):
+        pass                                           # the last one: the error comes last
+    if m is None:
+        return None
+    hour, minute = int(m.group(1)), int(m.group(2) or 0)
+    if not 1 <= hour <= 12 or minute > 59:
+        return None
+    hour = hour % 12 + (12 if m.group(3).lower() == "p" else 0)
+    try:
+        zone = ZoneInfo(m.group(4)) if m.group(4) else ZoneInfo("UTC")
+    except Exception:  # noqa: BLE001 - "(PST)", a typo: read as UTC
+        zone = ZoneInfo("UTC")
+    local = dt.datetime.fromtimestamp(now - LIMIT_RESET_GRACE_S, zone)
+    at = local.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if at <= local:
+        at = (at.replace(tzinfo=None) + dt.timedelta(days=1)).replace(tzinfo=zone)   # same wall time, next day
+    return at.timestamp()
+
+
+def limit_retry_on() -> bool:
+    """config limit_retry (Settings -> Usage): a run stopped by the usage limit starts again after the reset."""
+    return config.load_config().get("limit_retry", True) is not False
+
+
+def limit_retry_delay() -> float:
+    """Seconds after the reset before the run starts again (config limit_retry_delay_s, 0-3600)."""
+    v = config.load_config().get("limit_retry_delay_s", LIMIT_RETRY_DELAY_S)
+    try:
+        return float(min(max(int(v), 0), 3600))
+    except (TypeError, ValueError, OverflowError):
+        return float(LIMIT_RETRY_DELAY_S)
+
+
+def limit_retry_at(text: str, now: float) -> float | None:
+    """When a run stopped by the usage limit starts again: limit_retry_delay() after the reset (LIMIT_RETRY_S when the
+    reset is unknown, at least 60 s from now). None = not at all: limit_retry is off, or the reset is more than
+    CATCH_UP_WINDOW_S away (a weekly limit: the next scheduled run will do)."""
+    if not limit_retry_on():
+        return None
+    reset = limit_reset(text, now)
+    delay = max(60.0, reset + limit_retry_delay() - now) if reset else LIMIT_RETRY_S
+    return now + delay if delay <= CATCH_UP_WINDOW_S else None
 
 
 def retry_plan(job: dict, *, ok: bool, attempt: int, timed_out: bool, text: str, error: str = "",
@@ -1514,12 +1569,10 @@ def retry_plan(job: dict, *, ok: bool, attempt: int, timed_out: bool, text: str,
             allowed = 0
     if attempt > allowed or reason is None:
         return None
-    delay = RETRY_BACKOFF_S[min(attempt - 1, len(RETRY_BACKOFF_S) - 1)]
     if reason == "limit":
-        reset = limit_reset(text, now)
-        delay = max(60.0, reset + 120 - now) if reset else LIMIT_RETRY_S
-        if delay > CATCH_UP_WINDOW_S:
-            return None                                # a weekly limit: the next scheduled run will do
+        at = limit_retry_at(text, now)
+        return {"at": at, "attempt": attempt + 1, "reason": reason} if at else None
+    delay = RETRY_BACKOFF_S[min(attempt - 1, len(RETRY_BACKOFF_S) - 1)]
     return {"at": now + delay, "attempt": attempt + 1, "reason": reason}
 
 
