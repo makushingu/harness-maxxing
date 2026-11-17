@@ -870,6 +870,14 @@ def waiting_for(sid: str) -> dict | None:
     return next((w for w in _waiters() if w["session"] == sid), None)
 
 
+def waiting_by_session() -> dict[str, dict]:
+    """session id -> its waiting turn, from one read of the file: a session list asks once, not once a session."""
+    out: dict[str, dict] = {}
+    for w in _waiters():
+        out.setdefault(w["session"], w)
+    return out
+
+
 def wait_down(sid: str, owner: str, e: dict, profile: dict) -> None:
     """A turn stopped because its profile's exit is down: remember it (the session shows a card), tell the user once
     per exit going down (Notifications: Retry now / Go on when it is back)."""

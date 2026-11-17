@@ -40,6 +40,8 @@ Changed:
   clicking.
 - **"Browser of my PC" is gone.** It was prepared but never downloadable; Devices does it and more (Claude uses
   the whole computer, not only a browser).
+- **The session list loads about twice as fast on a busy server.** With thousands of sessions (scheduled jobs and
+  agents add many), the list, the sidebar and the dashboard answer in half the time.
 
 Fixed:
 - **Tabs.** The shown tab is now an oval that glides from tab to tab, the other tabs lose their grey background,

@@ -7,6 +7,11 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- `service.list_sessions` reads the turns waiting for a browser exit once per list (`exits.waiting_by_session()`,
+  passed to `public(meta, exits_waiting)`) instead of once per session: each `exits.waiting_for` call built the
+  state path through `config.state_dir()` (a `mkdir`) and stat'ed `waiting.json`. Measured on a copy of a real
+  state with ~2,000 sessions: 139 ms -> 72 ms per list (warm caches); the tree, the dashboard and @-mentions call it.
+  `public(meta)` alone is unchanged. Test: `test_browser.py::test_the_session_list_reads_the_turns_waiting_for_an_exit_once`.
 - Global daily budget (`server/maxxing/budget.py`): config `daily_budget_usd` (0 = none, settings route, restorable
   from a backup). `spent_today()` sums `days[today].cost` of the session metas touched in the last 25 h (same basis
   as an agent's `day_cost`; a deleted session takes its cost away). `reached()` gates only automatic work:
