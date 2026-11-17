@@ -802,7 +802,7 @@ function MobileOverlay({ col, tabs, sessions, onPick }: { col: Col; tabs: boolea
   return (
     <div ref={ref} className="fixed inset-0 z-[45] flex flex-col bg-background pr-[var(--safe-right)] pl-[var(--safe-left)]" data-touch-layer data-testid="touch-session">
       <div ref={body} className="flex min-h-0 flex-1 flex-col">
-        <MobileTabsSlot.Provider value={tabs ? <TabsBar sessions={sessions} onPick={onPick} className="-mx-3 border-b-0 bg-transparent px-3 py-1" /> : null}>
+        <MobileTabsSlot.Provider value={tabs ? <TabsBar sessions={sessions} onPick={onPick} edge className="-mx-3 border-b-0 bg-transparent px-0 py-1 [&>button]:mr-3" /> : null}>
           <ColumnFor col={col} index={0} count={1} variant="mobile" />
         </MobileTabsSlot.Provider>
       </div>

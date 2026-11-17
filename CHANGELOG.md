@@ -18,6 +18,9 @@ New:
   code, text and CSV files as they are.
 
 Fixed:
+- **Tabs.** The shown tab is now an oval that glides from tab to tab, the other tabs lose their grey background,
+  and the line that cut across the shown tab's border is gone. On a phone the tabs scroll from one edge of the screen
+  to the other instead of being cut short of it.
 - **A session that ended in error turns its counter red** (sidebar, ☰ button, project and topic of the list), instead
   of the green of a finished one.
 - **The automatic update really updates.** "Update by itself when nobody is here" stopped for good at the first
