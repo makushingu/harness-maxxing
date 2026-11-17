@@ -233,7 +233,7 @@ const SESSION_SEED = [
     last: 'Clicks +12 % week over week. Two pages lost rankings after the redesign; details in `reports/2026-W40.md`.' },
   { p: 'personal', t: 'notes', title: 'Summarise “Deep Work” highlights', ago: 5 * HOUR, turns: 2, cost: 0.22, model: 'claude-haiku-4-5-20251001', real: 'claude-haiku-4-5-20251001', src: 'telegram', unread: true,
     last: 'Summary saved to `reading/deep-work.md`: 4 rules, 12 highlights, and 3 ideas you could try this week.' },
-  { p: 'personal', t: 'finance', title: 'Categorise September expenses', ago: 28 * HOUR, turns: 2, cost: 0.41, model: '', real: 'claude-opus-5-5', src: 'web', unread: false, state: 'error',
+  { p: 'personal', t: 'finance', title: 'Categorise September expenses', ago: 28 * HOUR, turns: 2, cost: 0.41, model: '', real: 'claude-opus-5-5', src: 'web', unread: true, state: 'error',
     error: 'Claude exited with code 1: API rate limit reached, retry later', last: 'I categorised 112 of 143 transactions so far.' },
   { p: 'ops', t: 'server', title: 'Caddy: add security headers', ago: 30 * MIN, turns: 3, cost: 0.58, model: '', real: 'claude-opus-5-5', src: 'web', unread: false,
     last: 'Added HSTS, `X-Content-Type-Options` and a strict `Referrer-Policy` to the Caddyfile, validated the config and reloaded Caddy.' },
@@ -637,7 +637,7 @@ function topicObj(p, tp) {
   const ss = S.sessions.filter((s) => s.path === pth && !s.archived)
   const th = S.telegram.threads.find((x) => x.path === pth)
   return { name: tp.name, project: p.name, path: pth, description: tp.description || '', session_count: ss.length, archived_count: S.sessions.filter((s) => s.path === pth && s.archived).length,
-    running: ss.filter((s) => s.state === 'running').length, unread: ss.filter((s) => s.unread).length, telegram_thread: th ? th.thread_id : null,
+    running: ss.filter((s) => s.state === 'running').length, unread: ss.filter((s) => s.unread).length, errors: ss.filter((s) => s.unread && s.state === 'error').length, telegram_thread: th ? th.thread_id : null,
     ...(MOCK_ALL ? { agents: mockAgents().filter((a) => a.project === p.name && a.topic === tp.name) } : {}) }
 }
 function projectObj(p) {

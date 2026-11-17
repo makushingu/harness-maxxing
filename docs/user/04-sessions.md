@@ -114,6 +114,12 @@ The top of the list is the same on a computer and on a phone:
 With a mouse, the **+** (new session in this topic) and **…** of a row show when you hover it, in place of its
 counters; on a touch screen **+** stays visible and a long press opens the menu.
 
+**Several sessions at once** (computer): click a session, then Ctrl+click (Cmd+click on a Mac, or Shift+click)
+another one: every session in between is selected, in the same topic, project or across them. Ctrl+click a topic or
+a project selects all its sessions (again to let them go). A bar above the list then **Opens** or **Closes** them
+all, archives or deletes them; the Delete key deletes them, Escape lets them go. In every confirmation window the
+confirm button has the focus: Enter confirms, Escape cancels, the arrows go from one button to the other.
+
 - **Project emoji**: the **…** menu of a project -> *Set an emoji…* (a list of common ones, or type / paste any emoji). It shows before the project in the list and labels, and its Telegram threads (`🛒 acme/blog · Launch plan`). It is saved with the project folder (kept by renames, the trash and the backup).
 - **Favorites**: add a session with its **…** menu (or a right-click) -> **Add to favorites**; same menu to
   remove it. A star marks favorite sessions. Favorites are saved on the server: the same on your computer,
@@ -422,7 +428,7 @@ The **…** of a session (or a right-click on its header, a long press on a phon
   system notification when the tab is in the background (a small banner with **Open** otherwise),
   with an optional chime. A failed turn is notified too; scheduled jobs are not. **Test** checks that
   it works in this browser. Unread answers show a green round counter in the sidebar, on the ☰ button and
-  the tree; it can pulse until you read them (*Pulsing badge*).
+  the tree, red when one of those sessions ended in error; it can pulse until you read them (*Pulsing badge*).
   Click a counter - running or finished, in the sidebar or on a project / topic of the tree -
   and the session tree shows only those sessions, unfolded (the **Running** or **Unread** chip lights up; a click on a
   project or topic still folds it, until the filter changes). **Open all** opens them next to the columns already

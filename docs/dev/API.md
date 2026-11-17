@@ -75,7 +75,7 @@ at startup and at most every 6 h; a background timeout/network error does not ma
 
 ```
 Project = {name, path, description, topics:[Topic], session_count}
-Topic   = {name, project, path, description, permission_mode:""|"bypass"|"acceptEdits"|"default", session_count, archived_count:int, running:int, unread:int, telegram_thread:int|null, agents:[Agent]}
+Topic   = {name, project, path, description, permission_mode:""|"bypass"|"acceptEdits"|"default", session_count, archived_count:int, running:int, unread:int, errors:int (the unread ones whose last turn failed: red counter), telegram_thread:int|null, agents:[Agent]}
 ```
 `Topic.agents` = the agents of the topic (`[]` when none, see [Agents](#agents)); a session `path` may be an agent path
 `projects/<p>/topics/<t>/agents/<a>` (3rd level: same rules as a topic path).

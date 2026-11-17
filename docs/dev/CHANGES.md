@@ -7,6 +7,19 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Session multi-selection (`web/src/pages/sessions/selection.ts`, zustand, not persisted): a plain click on a tree
+  row sets the anchor, Ctrl/Cmd/Shift + click picks the rows between, in DOM order of `[data-session-row]` under the
+  same `[role=tree]` (the anchor copy nearest to the target when it shows twice: Favorites); Ctrl + click on a
+  topic / project row picks its live sessions (`TreeSessions` context = `byPath`). `SelectionBar` (Tree.tsx, computer
+  only): open (at most `SHOW_OPEN_MAX` in columns, `PICK_OPEN_MAX` 20 in tabs), close, archive, delete (one confirm,
+  N `DELETE /api/sessions/{id}` in parallel); Delete key / Escape on the window when no field, dialog or menu has
+  the focus. Strings in their own group `sel`, loaded on the first pick.
+- `ConfirmHost`: the action button gets the focus on open (not with `typeToConfirm`), arrows swap the focus between
+  both buttons, Enter outside a button / field confirms.
+- Workspace topics get `errors` (unread, not archived, `state == "error"`; `workspace._session_stats`); `CountBadge`
+  / `CountDot` get the tone `error` (destructive), used for the unread counter of the sidebar, ☰, tree and phone
+  rows when `errors > 0`; title "Error - " + `sessions.showUnread` (first-load budget). The mock counts it and its failed session is unread.
+
 - Automatic update (`maxxing.auto_update`): an upgrade note no longer makes the preflight "needs a person"
   (`_simple`): since the notes exist about one version out of two has one, so the first of them stopped the
   automatic update for good (every later target crosses the same note). The update now runs as `maxxing update
