@@ -284,6 +284,23 @@ def test_a_link_to_a_file_outside_the_workspace_is_not_indexed(client, mx, tmp_p
     os.symlink(d / "notes.md", d / "inside.md")              # a link inside the workspace is still read
     search.refresh()
     assert sorted(r["title"] for r in _q(client, "zqxsecretvalue123")) == ["inside.md", "notes.md"]
+
+def test_a_topic_folder_linked_outside_the_workspace_is_not_indexed(client, mx, tmp_path):
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "secret.txt").write_text("zqxlinkedsecret456\n")
+    topics = config.workspace() / "projects" / "acme" / "topics"
+    topics.mkdir(parents=True)
+    os.symlink(outside, topics / "linked")
+    inside = topics / "real"
+    inside.mkdir()
+    (inside / "notes.md").write_text("zqxlinkedsecret456 dans une vraie note\n")
+    os.symlink(inside, topics / "alias")                     # a folder link inside the workspace is still read
+    search.refresh()
+    assert sorted(r["title"] for r in _q(client, "zqxlinkedsecret456") if r["title"] != "secret.txt") == ["notes.md", "notes.md"]
+    assert all(r["title"] != "secret.txt" for r in _q(client, "zqxlinkedsecret456"))
+
+
 def test_a_non_utf8_file_name_does_not_stop_the_index(client, mx):
     d = config.workspace() / "projects" / "acme" / "topics" / "blog"
     d.mkdir(parents=True)

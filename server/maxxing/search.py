@@ -379,10 +379,22 @@ def _file_stat(fp: str, base: str) -> os.stat_result | None:
     return st
 
 
-def _subdirs(d: str) -> list[str]:
+def _subdirs(d: str, base: str) -> list[str]:
+    """Sub-folders of `d`; a linked folder only when it points inside the workspace (as _file_stat does for files)."""
     try:
-        return sorted(e.path for e in os.scandir(d) if e.is_dir(follow_symlinks=True)
-                      and e.name not in SKIP_DIRS and not e.name.startswith("."))
+        out, root = [], None
+        for e in os.scandir(d):
+            if not e.is_dir(follow_symlinks=True) or e.name in SKIP_DIRS or e.name.startswith("."):
+                continue
+            if e.is_symlink():
+                root = root or os.path.realpath(base)
+                try:
+                    if os.path.commonpath([os.path.realpath(e.path), root]) != root:
+                        continue
+                except ValueError:
+                    continue
+            out.append(e.path)
+        return sorted(out)
     except OSError:
         return []
 
@@ -396,14 +408,14 @@ def _layout(base: str) -> tuple[list[str], list[tuple[str, set[str]]]]:
     its agents/ folder, every project without its topics/ folder, the root without projects/."""
     mem, buckets = [base], []
     projects = os.path.join(base, "projects")
-    for pdir in _subdirs(projects):
+    for pdir in _subdirs(projects, base):
         mem.append(pdir)
         tdir = os.path.join(pdir, "topics")
-        topics = _subdirs(tdir)
+        topics = _subdirs(tdir, base)
         mem += topics
         for t in topics:
             adir = os.path.join(t, "agents")
-            agents = _subdirs(adir)
+            agents = _subdirs(adir, base)
             mem += agents
             buckets += [(a, set()) for a in agents]
             buckets.append((t, {adir} if agents else set()))
