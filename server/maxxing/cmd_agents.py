@@ -29,6 +29,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+from collections import Counter
 
 from . import cli
 
@@ -237,8 +238,9 @@ def _list(a) -> int:
     if not rows:
         print("No agent yet.")
         return 0
+    per_agent = Counter(j.get("topic_path") for j in agents.cron_jobs())   # one read of the jobs, not one per agent
     for x in rows:
-        crons = len(agents.cron_jobs(x["path"]))
+        crons = per_agent[x["path"]]
         feeds = sum(1 for t in x["triggers"] if t["kind"] == "feed")
         after = sum(1 for t in x["triggers"] if t["kind"] == "agent")
         budget = x["limits"]["usd_per_day"]

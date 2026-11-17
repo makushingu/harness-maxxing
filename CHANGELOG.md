@@ -69,6 +69,8 @@ Fixed:
   updated by the system (`apt upgrade caddy`, 2.11.5 or later fixes GHSA-8qx7-j2v2-x6q5).
 - **The weekly "Check dependencies for vulnerabilities" job no longer shows "Failed" when it finds something.** The
   finding is in the notifications; "Failed" now only means the check itself could not run.
+- **`maxxing agents list` answers several times faster when you have many agents.** It read every scheduled job
+  again for each agent; it reads them once now (with 24 agents: about 290 ms down to 60 ms).
 
 ## 2.0.0-alpha.156 - 2026-11-15
 

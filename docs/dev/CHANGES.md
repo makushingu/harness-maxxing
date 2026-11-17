@@ -141,6 +141,11 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   missing after the installs.
 - `maxxing deps check --notify` exits 0 when it found something (the feed reports it): the default job `deps-check`
   ran it and its runs read "Failed (code 1)". Without `--notify` the exit code is unchanged (1 = vulnerable).
+- `maxxing agents list` (text output, `cmd_agents._list`) counted each agent's jobs with `agents.cron_jobs(path)`,
+  i.e. one `crons.list_jobs()` per agent (jobs.json, runs.jsonl, retries, `next_run` of every job each time): it now
+  counts them from one `agents.cron_jobs()` call (`path=None` = every job). Measured on a copy of a real state
+  (24 agents, 32 jobs, median of 7, in-process): 286 ms -> 62 ms, same output. Test:
+  `test_agents_cli.py::test_list_reads_the_scheduled_jobs_once`.
 
 ## 2.0.0-alpha.156 - 2026-11-15
 

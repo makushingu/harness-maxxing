@@ -3124,10 +3124,11 @@ def add_cron(path: str, schedule: str = "", prompt: str = "", name: str = "", en
     return job
 
 
-def cron_jobs(path: str) -> list[dict]:
+def cron_jobs(path: str | None = None) -> list[dict]:
+    """The agent's scheduled jobs (path None: every job, for callers that sort them per agent in one read)."""
     try:
         from . import crons
-        return [j for j in crons.list_jobs() if j.get("topic_path") == path]
+        return [j for j in crons.list_jobs() if path is None or j.get("topic_path") == path]
     except Exception:
         return []
 

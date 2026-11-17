@@ -261,3 +261,16 @@ def test_set_says_which_fields_were_ignored(client, topic, capsys):
     assert "changed: enabled" in out.out and "bogus" in out.err and agents.load(A)["enabled"] is False
     assert cli.main(["agents", "set", "writer", "enabled=false"]) == 0      # already so: taken, not ignored
     assert "changed: enabled" in capsys.readouterr().out
+
+
+def test_list_reads_the_scheduled_jobs_once(client, topic, capsys, monkeypatch):
+    _two_agents(client)
+    agents.add_cron(A, "0 9 * * *")
+    agents.add_cron(B, "0 18 * * *")
+    from maxxing import crons
+    calls, real = [], crons.list_jobs
+    monkeypatch.setattr(crons, "list_jobs", lambda: calls.append(1) or real())
+    assert cli.main(["agents", "list"]) == 0
+    out = capsys.readouterr().out
+    assert f"{A}  Writer  cron:1" in out and f"{B}  Editor  cron:1" in out
+    assert len(calls) == 1                                   # one read of the jobs for every agent, not one per agent
