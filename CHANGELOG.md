@@ -40,6 +40,8 @@ Changed:
   clicking.
 - **"Browser of my PC" is gone.** It was prepared but never downloadable; Devices does it and more (Claude uses
   the whole computer, not only a browser).
+- **The web interface is built with zustand 5.1.0.** A routine update of a dependency; nothing changes in how
+  the interface looks or works.
 
 Fixed:
 - **Tabs.** The shown tab is now an oval that glides from tab to tab, the other tabs lose their grey background,
