@@ -1304,11 +1304,15 @@ def _run_claude(job: dict) -> tuple[bool, int, str, str | None]:
     return t["ok"], 0 if t["ok"] else 1, t["text"], t["session_id"]
 
 
-def _claude_turn(job: dict) -> dict:
+def _claude_turn(job: dict, auto: bool = False) -> dict:
     """Run the prompt as a Claude session turn -> {ok, text, session_id, error, timed_out}: `error` is the turn's
-    own error (the session's), `text` the whole answer (run_job keeps its start)."""
+    own error (the session's), `text` the whole answer (run_job keeps its start). auto: the run started by itself
+    (schedule, catch-up, retry), not "Run now": skipped once the server's daily budget is reached."""
     from .sessions import service                       # lazy: sessions are owned by core
-    from . import agents
+    from . import agents, budget
+    if auto and budget.reached():
+        return {"ok": True, "text": f"skipped: {budget.SKIP_TEXT}", "session_id": None,
+                "error": "", "timed_out": False, "skipped": True}
     when = dt.datetime.now(tz()).strftime("%Y-%m-%d %H:%M")
     title = f"{job['name']} - {when}"
     timeout = _timeout(job)
@@ -1833,7 +1837,7 @@ def run_job(cid: str, trigger: str = "manual", attempt: int = 1) -> dict | None:
         error, timed_out = "", False
         try:
             if job["kind"] == "claude":
-                turn = _claude_turn(job)
+                turn = _claude_turn(job, auto=trigger != "manual")
                 ok, answer, session_id = turn["ok"], turn["text"], turn["session_id"]
                 code, error, timed_out = 0 if ok else 1, turn["error"], turn["timed_out"]
                 tail = _clip_head(answer, OUTPUT_TAIL)  # an answer starts with its title and summary

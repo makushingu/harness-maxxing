@@ -71,6 +71,10 @@ export const tokenStatsQuery = () => ({ queryKey: qk.stats.tokens, queryFn: () =
 export function useTokenStats(enabled = true) {
   return useQuery({ ...tokenStatsQuery(), enabled })
 }
+/** The server's daily budget and what today cost so far (Settings -> Usage). */
+export function useBudget() {
+  return useQuery({ queryKey: qk.stats.budget, queryFn: () => api.get<{ usd_per_day: number; spent_today: number; reached: boolean }>('/api/stats/budget'), staleTime: 30_000 })
+}
 export function useMemory(enabled = true) {
   return useQuery({ queryKey: qk.memory, queryFn: () => api.get<MemoryInfo>('/api/memory'), enabled })
 }

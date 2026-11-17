@@ -146,6 +146,10 @@ what the server does every 5 minutes), `maxxing cron deleted` (the removed jobs 
 An [agent](agents)'s schedule is a job of this page too: its link opens the agent, and the agent's limits decide
 (switched off, daily budget or runs per hour reached: the run is skipped, with the reason in its history).
 
+**Daily budget of the server.** With a budget in **Settings -> Usage**, a scheduled prompt job that comes due
+once the day's budget is reached is skipped (its history says so) and runs again the next day. **Run now** and
+the command jobs (no Claude) always run.
+
 ### Memory and time limits
 
 A scheduled run starts exactly like **Run now**: in its own systemd unit (`maxxing-cron-<id>`, see

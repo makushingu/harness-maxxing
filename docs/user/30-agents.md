@@ -248,6 +248,10 @@ which starts A) stop after 3 hops, like `maxxing agents send`.
 A run that was refused is never retried: it is written in Activity with its reason. Agents handing work to each other
 stop after 3 hops, so two agents can never ping-pong forever.
 
+Above these, the **daily budget of the server** (Settings -> Usage, none by default) counts every session, job and
+agent together: once it is reached, the triggers of every agent wait for the next day (*the server's daily budget is
+reached* in Activity); your own messages to an agent are still answered.
+
 ## When an agent needs you
 
 What needs you lands in the **Notifications** (dashboard panel, `/feed`, and Telegram by the rules of the source

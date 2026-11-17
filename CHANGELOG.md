@@ -6,6 +6,10 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 ## Unreleased
 
 New:
+- **A daily budget for the whole server.** Settings -> Usage has a **Daily budget** in dollars (0 = none, as
+  before). You get a notification at 80 % and an alert when it is reached; from then on the scheduled jobs and the
+  agents wait for the next day, while your own messages and **Run now** still run. The card shows what today cost
+  so far (at the price Claude Code reports; on a subscription, what the same turns would cost with an API key).
 - **Several sessions at once.** In the session list, click a session then Ctrl+click (Cmd on a Mac, or Shift) another:
   all the sessions in between are selected; Ctrl+click on a topic or a project selects all of its sessions. A bar
   then opens, closes, archives or deletes them in one go (Delete key to delete, Escape to let them go).
