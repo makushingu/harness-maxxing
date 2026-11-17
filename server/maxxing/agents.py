@@ -2805,9 +2805,7 @@ def chain_after(src: str, text: str, ok: bool, depth: int = 0) -> int:
                               fire_as=f"{CHAIN_TRIGGER}{t['id']}")
                 n += 1
     if n:                                               # saved: a restart in the window does not lose them
-        f, st = _read_feed_state()
-        if "last_id" in st:
-            _save_feed_pos(f, int(st.get("last_id") or 0))
+        _save_feed_pending()
     return n
 
 
@@ -2915,8 +2913,22 @@ def _read_feed_state() -> tuple[Path, dict]:
     return f, st
 
 
+_feed_mu = threading.Lock()     # _feed.json: written by the agents loop and by end-of-turn threads (chain_after)
+
+
 def _save_feed_pos(f: Path, last_id: int) -> None:
-    config.write_json(f, {"last_id": last_id, "pending": debouncer.dump()})
+    with _feed_mu:
+        config.write_json(f, {"last_id": last_id, "pending": debouncer.dump()})
+
+
+def _save_feed_pending() -> None:
+    """Save the waiting batches, keeping the position the file holds now: one read before may be stale (scan_feed
+    can save a newer one meanwhile, and writing the old one back would hand the same events out again)."""
+    f, _ = _read_feed_state()
+    with _feed_mu:
+        st = config.read_json(f, {}) or {}
+        if "last_id" in st:
+            config.write_json(f, {**st, "pending": debouncer.dump()})
 
 
 def scan_feed() -> int:

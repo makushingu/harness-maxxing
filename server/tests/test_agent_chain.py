@@ -1,8 +1,10 @@
 """"agent" triggers: an agent starts on the result of another agent's automatic run (agents.chain_after)."""
 from __future__ import annotations
 
+import threading
+
 from conftest import wait_for, wait_idle
-from maxxing import agents
+from maxxing import agents, config, feed
 
 W = "projects/acme/topics/blog/agents/writer"
 R = "projects/acme/topics/blog/agents/reviewer"
@@ -106,6 +108,36 @@ def test_a_waiting_result_survives_a_restart(client, topic, monkeypatch):
     fired = []
     monkeypatch.setattr(agents, "fire", lambda path, **k: fired.append(k) or {"started": True})
     assert agents.flush_due() == 1 and fired[0]["trigger"] == p["fire_as"]
+
+
+def test_a_chained_result_does_not_move_the_feed_position_back(client, topic, monkeypatch):
+    """chain_after (end of a turn, worker thread) and scan_feed (agents loop) both write _feed.json: a position read
+    before scan_feed saved a newer one is never written back (the events would be handed out again)."""
+    _setup(client)
+    monkeypatch.setattr(agents, "fire", lambda path, **k: {"started": True})
+    agents.scan_feed()                                  # first scan: the position starts now
+    for i in range(3):
+        feed.post(f"event {i}", "body", source="custom", notify=False)
+    top = feed.max_id()
+    real, inside, go = agents.debouncer.dump, threading.Event(), threading.Event()
+
+    def slow_dump():                                    # chain_after stops just before it writes
+        if threading.current_thread().name == "chain":
+            inside.set()
+            go.wait(5)
+        return real()
+
+    monkeypatch.setattr(agents.debouncer, "dump", slow_dump)
+    chain = threading.Thread(target=agents.chain_after, args=(W, "the post is out", True), name="chain")
+    chain.start()
+    assert inside.wait(5)
+    scan = threading.Thread(target=agents.scan_feed)    # the agents loop meanwhile saves `top`
+    scan.start()
+    scan.join(0.5)
+    go.set()
+    chain.join(5)
+    scan.join(5)
+    assert config.read_json(agents._feed_state())["last_id"] == top
 
 
 def test_the_trigger_follows_a_topic_rename(client, topic):
