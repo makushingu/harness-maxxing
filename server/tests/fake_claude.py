@@ -8,6 +8,7 @@ Behaviour is driven by the prompt (read from stdin, or a positional argument):
   SLOW          long turn (~30 s) - for stop / queue tests
   AGENTS        two background sub-agents and a background command (task_* lines), FAKE_CLAUDE_AGENTS_S long
   FAIL          prints an error, exits 1 (after init)
+  HITLIMIT      fails like the plan's usage limit: "You've hit your session limit · resets 4pm (UTC)"
   RESUME_FAIL   with --resume: fails like the real CLI when the thread is gone
   PAUSE         short turn (~1.5 s) - for queue tests
   NOTOOL        no tool call
@@ -520,6 +521,11 @@ def turn(o: dict, sid: str, model: str, prompt: str, t0: float) -> int | None:
     if "FAIL" in prompt and "RESUME_FAIL" not in prompt:
         sys.stderr.write("API Error: simulated failure\n")
         emit(result(sid, model, "API Error: simulated failure", ok=False, errors=["simulated failure"], t0=t0))
+        return 1
+    if "HITLIMIT" in prompt:                           # the plan's usage limit: Claude Code's own message
+        text = "You've hit your session limit · resets 4pm (UTC)"
+        emit(msg(sid, model, [{"type": "text", "text": text}]))
+        emit(result(sid, model, text, ok=False, t0=t0))
         return 1
     if "OVERBUDGET" in prompt:                         # `--max-budget-usd` reached: Claude Code stops the turn
         r = result(sid, model, "", ok=False, errors=["Reached maximum budget ($0.01)"], t0=t0)

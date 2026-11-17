@@ -13,6 +13,11 @@ Changed:
 ## 2.0.0-alpha.157 - 2026-11-18
 
 New:
+- **Jobs and agents start again right after the usage limit resets.** When a scheduled job or an agent run (started
+  by hand, by a notification, by another agent or by its schedule) is stopped by the usage limit of your Claude plan,
+  it starts again by itself one minute after the reset time Claude gave ("resets 4pm"), instead of trying every 30
+  minutes. Settings -> Usage -> **Start again after the usage limit** (on by default) turns it off or changes the
+  delay.
 - **A daily budget for the whole server.** Settings -> Usage has a **Daily budget** in dollars (0 = none, as
   before). You get a notification at 80 % and an alert when it is reached; from then on the scheduled jobs and the
   agents wait for the next day, while your own messages and **Run now** still run. The card shows what today cost

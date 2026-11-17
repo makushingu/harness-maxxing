@@ -292,6 +292,7 @@ function EnabledSwitch({ agent: a }: { agent: AgentDetail }) {
 /* ---------------------------------------------------------------- The conversation */
 export function triggerLabel(t: TFn, m: Pick<AgentMessage, 'trigger' | 'source'>, crons: Cron[] = []): string {
   const tr = m.trigger || ''
+  if (tr === 'limit-retry') return t('agents.from.limitRetry')
   if (tr === 'manual' && m.source === 'command line') return t('agents.from.command')
   if (tr === 'manual' && m.source === 'conversation') return t('agents.from.conversation')
   if (tr === 'manual' || m.source === 'manual') return t('agents.from.manual')

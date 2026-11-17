@@ -474,9 +474,10 @@ either a text key or a file, never both (`name_taken`; `vault.put` refuses a nam
   date), and marks a one-time job more than 24 h late as done + `missed`. Both start through `spawn_run` with
   `--trigger catch-up|retry [--attempt N]`; `run_job` checks again under the job flock (`_skip_reason`: the regular
   run, Run now or another start may have overtaken it) and a retry entry is claimed once (`_take_retry`).
-- Retries (`retry_plan`): Claude job + `classify_failure(answer, session error)` = "limit" (retry after
-  `limit_reset`: the epoch of an old-style answer, else the reset of a full window of `claude_auth.limits()`, else
-  30 min; given up past 24 h) or "transient" (overloaded, 5xx, 429, network: 5 / 15 / 30 min); 3 retries at most.
+- Retries (`retry_plan`): Claude job + `classify_failure(answer, session error)` = "limit" (`limit_retry_at`: config
+  `limit_retry_delay_s` (60) after `limit_reset`: the epoch of an old-style answer, else the reset of a full window
+  of `claude_auth.limits()`, else the hour of "resets 4pm (UTC)" (`text_reset`), else 30 min; given up past 24 h or
+  when config `limit_retry` is false; agents' own runs: `agents._plan_limit_retry` / `retry_limits`) or "transient" (overloaded, 5xx, 429, network: 5 / 15 / 30 min); 3 retries at most.
   Shell job: `retries` (0-5) for any failure. Never after a timeout (exit 124 with the timeout marker, a Claude turn
   "Turn stopped (timeout)" or still running, or a run that lasted 98 % of `timeout_s`). The failed Run gets
   `retry_at`; the feed gets a "Cron will retry" warning, Telegram nothing until the final outcome. Switching a job off

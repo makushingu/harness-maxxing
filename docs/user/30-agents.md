@@ -266,6 +266,9 @@ What needs you lands in the **Notifications** (dashboard panel, `/feed`, and Tel
 
 - it waits for your OK: **Allow** / **Deny** right in the notification (see [Approvals](#approvals));
 - a run failed (repeats fold into one notification, *×3*; the next good run ends it, and a failure after that is a new notification);
+  a run stopped by the usage limit of your Claude plan starts again by itself in the same conversation one minute
+  after the limit resets (the thread says when; within the agent's budget; Settings -> Usage -> **Start again after
+  the usage limit**);
 - its daily budget or its runs per hour are reached (its triggers are skipped; raise the limit on its page, or it
   starts again tomorrow / next hour);
 - its sandbox cannot run on the server, or a trigger lost its webhook (it no longer starts the agent; **Add webhook**

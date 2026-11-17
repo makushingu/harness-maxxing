@@ -19,6 +19,18 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   state path through `config.state_dir()` (a `mkdir`) and stat'ed `waiting.json`. Measured on a copy of a real
   state with ~2,000 sessions: 139 ms -> 72 ms per list (warm caches); the tree, the dashboard and @-mentions call it.
   `public(meta)` alone is unchanged. Test: `test_browser.py::test_the_session_list_reads_the_turns_waiting_for_an_exit_once`.
+- Usage-limit retry at the reset time: `crons.text_reset()` reads "resets 4pm (UTC)" / "resets 4:30pm" / "resets
+  4am" (zone in parentheses, else or unknown UTC; next occurrence, or one passed less than `LIMIT_RESET_GRACE_S` =
+  15 min ago) and is the last source of `limit_reset()` (epoch, `claude_auth.limits`, text, then `LIMIT_RETRY_S`).
+  `crons.limit_retry_at()` = reset + config `limit_retry_delay_s` (default 60, 0-3600, at least 60 s from now; was a
+  fixed +120 s), None past `CATCH_UP_WINDOW_S` or when config `limit_retry` (default true) is false - then a limit
+  failure is final. Both keys in `/api/settings` (`400 invalid_limit_retry_delay`), card in Settings -> Usage.
+  Agents: `on_turn_end` -> `_plan_limit_retry` stores `<state>/agents/<key>.json` `limit_retry` {at, session,
+  attempt, trigger, depth} (one per agent, the latest wins; not for group turns, not when the session env has
+  `MAXXING_CRON_ID`: the cron's `retry_plan` owns it; at most `crons.MAX_RETRIES` for the same session) and posts a
+  `note` (`status: limit_retry`). `agents.retry_limits()` (agents loop, every `FEED_POLL_S`) sends `LIMIT_RETRY_TEXT`
+  into the same session once due, through `gate()`: `busy` waits, other reasons drop it with a `skip`; the run
+  message has `trigger: "limit-retry"`. Fake Claude: `HITLIMIT`.
 - Global daily budget (`server/maxxing/budget.py`): config `daily_budget_usd` (0 = none, settings route, restorable
   from a backup). `spent_today()` sums `days[today].cost` of the session metas touched in the last 25 h (same basis
   as an agent's `day_cost`; a deleted session takes its cost away). `reached()` gates only automatic work:
