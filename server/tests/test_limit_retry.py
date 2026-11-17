@@ -94,7 +94,7 @@ def test_agent_run_stopped_by_the_limit_starts_again_in_its_session_after_the_re
     sid = agents.fire(A, trigger="manual", prompt="NOTOOL HITLIMIT", source="command line")["session"]["id"]
     wait_for(lambda: agents._read_state(A).get("limit_retry"))
     e = agents._read_state(A)["limit_retry"]
-    assert e["session"] == sid and e["attempt"] == 1 and e["trigger"] == "manual"
+    assert e["session"] == sid and e["attempt"] == 1 and set(e) == {"at", "session", "attempt"}
     assert e["at"] == crons.text_reset(LIMIT, time.time()) + 60
     note = [m for m in agents.thread(A) if m["kind"] == "note" and m.get("status") == "limit_retry"]
     assert note and note[-1]["session"] == sid
@@ -112,7 +112,7 @@ def test_agent_run_stopped_by_the_limit_starts_again_in_its_session_after_the_re
 
 def test_agent_limit_retry_waits_for_a_held_budget_and_skips_otherwise(client, topic, monkeypatch):
     _agent(client)
-    agents._plan_limit_retry(A, "s_x", False, LIMIT, "", {"MAXXING_AGENT_TRIGGER": "feed:t1"})
+    agents._plan_limit_retry(A, "s_x", False, LIMIT, "", {})
     st = agents._read_state(A)
     st["limit_retry"]["at"] = time.time() - 1
     agents._write_state(A, st)
@@ -143,3 +143,13 @@ def test_agent_limit_retry_is_left_to_the_cron_and_follows_the_setting(client, t
         agents._write_state(A, st)
     agents._plan_limit_retry(A, "s_x", False, LIMIT, "", {})
     assert "limit_retry" not in agents._read_state(A)
+
+
+def test_agent_limit_retry_drops_a_damaged_entry(client, topic):
+    _agent(client)
+    st = agents._read_state(A)
+    st["limit_retry"] = {"at": "soon", "session": "s_x", "attempt": 1}
+    agents._write_state(A, st)
+    agents._limit_waiting.add(A)
+    assert agents.retry_limits() == 0
+    assert "limit_retry" not in agents._read_state(A) and A not in agents._limit_waiting

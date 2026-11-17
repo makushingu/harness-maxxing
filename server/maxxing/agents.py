@@ -2786,9 +2786,7 @@ def _plan_limit_retry(path: str, sid: str, ok: bool, text: str, error: str, env:
                 st.pop("limit_retry", None)
                 _write_state(path, st)
             return
-        st["limit_retry"] = {"at": at, "session": sid, "attempt": attempt,
-                             "trigger": str(env.get("MAXXING_AGENT_TRIGGER") or ""),
-                             "depth": _int(env.get("MAXXING_AGENT_DEPTH"))}
+        st["limit_retry"] = {"at": at, "session": sid, "attempt": attempt}
         _write_state(path, st)
         _limit_waiting.add(path)
     post(path, "note", f"Claude's usage limit stopped this run: it starts again by itself at {_local(at)}.",
@@ -2819,11 +2817,15 @@ def retry_limits(now: float | None = None) -> int:
                 if not isinstance(e, dict) or e.get("fired"):
                     _limit_waiting.discard(path)
                     continue
-                if float(e.get("at") or 0) > now_:
+                try:
+                    at = float(e.get("at") or 0)
+                except (TypeError, ValueError):
+                    at = 0.0                            # a damaged entry: dropped below, not raised on every pass
+                if at > now_:
                     continue
                 sid = str(e.get("session") or "")
                 reason = None
-                if not crons.limit_retry_on() or now_ - float(e.get("at") or 0) > crons.CATCH_UP_WINDOW_S \
+                if not at or not crons.limit_retry_on() or now_ - at > crons.CATCH_UP_WINDOW_S \
                         or not exists(path) or not service.session_exists(sid):
                     reason = "gone"
                 else:
