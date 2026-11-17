@@ -207,7 +207,7 @@ _lock = config.ProcessLock("approvals")     # read-check-write of a request (dec
 
 def decide(rid: str, decision: str, message: str = "", by: str = "web", always: bool = False) -> dict:
     """The user's answer. 409 when the request is no longer waiting (answered, timed out, session stopped).
-    `always` (with allow): the request's rule (always_rule) is added to its topic first, so the next turns of the
+    `always` (with allow): the request's rule (always_rule) is added to its topic once the request is known to wait, so the next turns of the
     topic's sessions run it without asking (the running turn still asks for other calls of it)."""
     if decision not in DECISIONS:
         raise ApprovalError(400, "bad_decision", "decision: allow or deny")
@@ -218,12 +218,6 @@ def decide(rid: str, decision: str, message: str = "", by: str = "web", always: 
         rule, topic = always_rule(d), topic_of_session(str(d.get("session") or ""))
         if not rule or not topic:
             raise ApprovalError(400, "no_rule", "This request cannot be allowed for good: allow it once")
-        if d.get("status") == "pending":
-            from . import workspace
-            try:
-                workspace.add_topic_allowed_tool(topic, rule)
-            except workspace.WorkspaceError as e:
-                raise ApprovalError(e.status, e.code, e.message) from None
     # an agent's settings change that can no longer be applied as its card shows it (agent gone, a value changed
     # since): the Allow is refused with the reason and the request closed (denied, `stale`), nothing applied
     problem = ""
@@ -243,6 +237,12 @@ def decide(rid: str, decision: str, message: str = "", by: str = "web", always: 
             approval_mcp.write_atomic(_file(rid), d)
             _seen[rid] = "deny"
         else:
+            if always:                          # only now that the request still waits: a refused click leaves no rule
+                from . import workspace
+                try:
+                    workspace.add_topic_allowed_tool(topic, rule)
+                except workspace.WorkspaceError as e:
+                    raise ApprovalError(e.status, e.code, e.message) from None
             d.update(status=decision, message=" ".join(str(message or "").split())[:MESSAGE_MAX], decided_at=time.time(),
                      decided_by=by)
             approval_mcp.write_atomic(_file(rid), d)
