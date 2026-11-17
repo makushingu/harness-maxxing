@@ -325,6 +325,24 @@ def test_removed_from_the_cli_the_app_is_told_too(dv):
         wait_for(lambda: dev.unpaired, 8)
 
 
+@pytest.mark.parametrize("name,args", [("zoom", {"x": 10, "y": 10, "w": float("nan"), "h": 50}),
+                                       ("zoom", {"x": 10, "y": 10, "w": 50, "h": float("nan")}),
+                                       ("screen", {"screen": float("inf")})])
+def test_a_number_that_is_not_finite_is_refused(dv, name, args):
+    p = _pair(dv, "linux", "laptop", CAPS_PC)
+    did = p["device_id"]
+    with _ws(dv, p["token"]) as ws:
+        FakeDevice(ws, "linux", CAPS_PC, screens=[(1280, 720), (800, 600)]).start()
+        _online(dv, did)
+        tok = turns.write_turn("sessnf", T)
+        _call(dv, "sessnf", "screenshot", {"device": did}, tok)
+        body = {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": name, "arguments": {"device": did, **args}}}
+        r = dv.post("/api/devices/mcp/sessnf", content=json.dumps(body),        # NaN / Infinity, as Python's json reads them
+                    headers={"Authorization": f"Bearer {tok}", "Content-Type": "application/json"})
+        assert r.status_code == 200, r.text
+        assert r.json()["result"]["isError"] and "must be a number" in _text(r.json()["result"])
+
+
 def test_claude_switches_the_screen_itself(dv, capsys):
     from maxxing import cli
     p = _pair(dv, "darwin", "mac", CAPS_PC)
