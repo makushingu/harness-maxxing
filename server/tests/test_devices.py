@@ -696,6 +696,12 @@ def test_an_agent_turn_cannot_manage_devices(mx, monkeypatch):
     assert agent_guard.check_cli(["devices", "list"]) is None
 
 
+def test_an_agent_turn_cannot_switch_the_screen_of_a_device(mx, monkeypatch):
+    from maxxing import agent_guard                              # the CLI does not check the device's scope: the MCP tool does
+    monkeypatch.setattr(agent_guard, "agent_turn", lambda: {"path": A, "tampered": False})
+    assert "not allowed" in agent_guard.check_cli(["devices", "screen", "dev_12345678", "2"])
+
+
 def test_doctor(dv, monkeypatch):
     from maxxing import cmd_core
     assert cmd_core.check_devices()["level"] == "ok"

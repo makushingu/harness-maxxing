@@ -769,7 +769,7 @@ def in_the_sandbox() -> bool:
 
 
 BROWSER_OWNER_ONLY = {"set", "profile", "forget", "setup", "settings", "enable", "disable"}
-DEVICES_OWNER_ONLY = {"add", "confirm", "remove", "rename", "access", "mode", "enable", "disable"}
+DEVICES_OWNER_ONLY = {"add", "confirm", "remove", "rename", "access", "mode", "screen", "enable", "disable"}
 
 
 def check_cli(argv: list[str]) -> str | None:
