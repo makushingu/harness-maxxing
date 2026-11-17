@@ -217,3 +217,15 @@ def test_a_lone_surrogate_emoji_is_refused(client, mx):
     r = client.patch("/api/workspace/projects/shop", content=b'{"emoji": "\\ud800"}',
                      headers={"content-type": "application/json"})
     assert r.status_code == 400 and r.json()["error"] == "bad_emoji", r.text
+
+
+def test_an_unread_session_that_failed_is_counted_as_an_error(monkeypatch):
+    """The tree's counter turns red: `errors` = the unread sessions whose last turn failed (not archived)."""
+    from maxxing.sessions import service
+    p = "projects/acme/topics/blog"
+    rows = [{"path": p, "archived": False, "state": "error", "unread": True},
+            {"path": p, "archived": False, "state": "idle", "unread": True},
+            {"path": p, "archived": False, "state": "error", "unread": False},
+            {"path": p, "archived": True, "state": "error", "unread": True}]
+    monkeypatch.setattr(service, "list_sessions", lambda archived=None: rows)
+    assert workspace._session_stats()[p] == {"sessions": 3, "archived": 1, "running": 0, "unread": 2, "errors": 1}

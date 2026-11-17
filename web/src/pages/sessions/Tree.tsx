@@ -9,6 +9,8 @@ import { useShallow } from 'zustand/react/shallow'
 import { Link, useNavigate } from 'react-router'
 import {
   Archive,
+  CopyX,
+  PanelsTopLeft,
   ArrowDownAZ,
   Bot,
   CalendarClock,
@@ -102,6 +104,7 @@ import {
 } from '@/components/ui'
 import { SlugPreview } from '@/features/workspace/CreateProjectTopic'
 import { forgetLog } from './log'
+import { clearSelection, pickAll, pickRange, setAnchor, useSessionSelection, withModifier } from './selection'
 
 // the browser settings of a project or a topic (Settings -> Features -> browser on): loaded when its dialog opens
 const BrowserPanel = React.lazy(() => import('@/features/browser/BrowserPanel').then((m) => ({ default: m.BrowserPanel })))
@@ -269,6 +272,8 @@ export function SessionTree({ onOpenSession, onNewSession, activePath, openIds, 
           </Button>
         </div>
       )}
+      {!touch && <SelectionBar sessions={live.data || []} onOpen={onOpenSession} />}
+      <TreeSessions.Provider value={byPath}>
       <TreeIntro.Provider value={intro}>
       <div className="min-h-0 flex-1 overflow-y-auto px-1.5 pb-4" role="tree">
         {ws.isPending || live.isPending ? (
@@ -367,6 +372,7 @@ export function SessionTree({ onOpenSession, onNewSession, activePath, openIds, 
         )}
       </div>
       </TreeIntro.Provider>
+      </TreeSessions.Provider>
       <TreeDialogs state={dialog} onClose={() => setDialog(null)} onTopicCreated={(tp) => onNewSession(tp.path)} />
     </nav>
   )
@@ -640,7 +646,9 @@ function ProjectNode({ project, forceOpen, onDialog, stagger, onMove, children }
   const [menu, setMenu] = React.useState(false)
   const running = project.topics.reduce((n, tp) => n + tp.running, 0)
   const unread = project.topics.reduce((n, tp) => n + tp.unread, 0)
+  const errors = project.topics.reduce((n, tp) => n + (tp.errors || 0), 0)
   const dnd = useReorderRow(DND_PROJECT, project.name, onMove)
+  const bySession = React.useContext(TreeSessions)
   const press = useLongPress(() => setMenu(true))
   return (
     <div role="treeitem" aria-expanded={open} className={cn('mt-1 first:mt-0 max-md:[contain-intrinsic-size:auto_48px] max-md:[content-visibility:auto]', intro && 'mx-rise')} style={{ '--i': stagger } as React.CSSProperties}>
@@ -654,7 +662,7 @@ function ProjectNode({ project, forceOpen, onDialog, stagger, onMove, children }
           setMenu(true)
         }}
       >
-        <button type="button" onClick={() => toggle(id, !open)} className="flex min-w-0 flex-1 items-center gap-1.5 self-stretch rounded-md pl-1.5 text-left text-[13px] font-semibold focus-visible:ring-2 max-md:gap-2 max-md:text-[15px] focus-visible:ring-ring focus-visible:outline-none">
+        <button type="button" onClick={(e) => (withModifier(e) ? void pickAll(project.topics.flatMap((tp) => (bySession.get(tp.path) || []).map((s) => s.id))) : toggle(id, !open))} className="flex min-w-0 flex-1 items-center gap-1.5 self-stretch rounded-md pl-1.5 text-left text-[13px] font-semibold focus-visible:ring-2 max-md:gap-2 max-md:text-[15px] focus-visible:ring-ring focus-visible:outline-none">
           <Chevron open={open} />
           {project.emoji && (
             <span className="shrink-0 text-[14px] leading-none" aria-hidden>
@@ -664,7 +672,7 @@ function ProjectNode({ project, forceOpen, onDialog, stagger, onMove, children }
           <span className="truncate">
             <Sensitive length={8}>{project.name}</Sensitive>
           </span>
-          {!open && <Badges running={running} unread={unread} />}
+          {!open && <Badges running={running} unread={unread} errors={errors} />}
         </button>
         <RowMenu open={menu} onOpenChange={setMenu} label={t('common.more')}>
           <ProjectMenuItems project={project} onDialog={onDialog} />
@@ -685,7 +693,7 @@ function ProjectNode({ project, forceOpen, onDialog, stagger, onMove, children }
 const HOVER_ACTION = 'md:pointer-fine:w-0 md:pointer-fine:overflow-hidden md:pointer-fine:group-hover/row:w-7 md:pointer-fine:group-has-[:focus-visible]/row:w-7 md:pointer-fine:data-[state=open]:w-7'
 const HOVER_HIDE = 'md:pointer-fine:group-hover/row:hidden md:pointer-fine:group-has-[[data-state=open]]/row:hidden'
 
-function Badges({ running, unread, count = 0 }: { running: number; unread: number; /** Sessions in the folded topic, shown when nothing runs nor waits. */ count?: number }) {
+function Badges({ running, unread, errors = 0, count = 0 }: { running: number; unread: number; /** Unread ones that failed: the counter turns red. */ errors?: number; /** Sessions in the folded topic, shown when nothing runs nor waits. */ count?: number }) {
   const t = useT()
   const setShow = useSessionsUI((s) => s.setShow)
   // Inside the row's fold button: a click on a counter filters the tree instead of folding the row.
@@ -704,7 +712,7 @@ function Badges({ running, unread, count = 0 }: { running: number; unread: numbe
         </span>
       )}
       <span onClick={pick('unread')} className="cursor-pointer rounded-full empty:hidden">
-        <CountBadge count={unread} title={t('sessions.showUnread', { count: unread })} />
+        <CountBadge count={unread} tone={errors > 0 ? 'error' : 'unread'} title={(errors > 0 ? `${t('sessions.state.error')} - ` : '') + t('sessions.showUnread', { count: unread })} />
       </span>
     </span>
   )
@@ -860,13 +868,13 @@ function TopicNode({
           setMenu(true)
         }}
       >
-        <button type="button" onClick={() => toggle(id, !open)} className="flex min-w-0 flex-1 items-center gap-1.5 self-stretch rounded-md pl-1 text-left text-[13px] focus-visible:ring-2 max-md:gap-2 max-md:text-[15px] focus-visible:ring-ring focus-visible:outline-none">
+        <button type="button" onClick={(e) => (withModifier(e) ? void pickAll(sessions.map((s) => s.id)) : toggle(id, !open))} className="flex min-w-0 flex-1 items-center gap-1.5 self-stretch rounded-md pl-1 text-left text-[13px] focus-visible:ring-2 max-md:gap-2 max-md:text-[15px] focus-visible:ring-ring focus-visible:outline-none">
           <Chevron open={open} />
           <Hash className="size-3.5 shrink-0 text-muted-foreground" />
           <span className="truncate">
             <Sensitive length={8}>{topic.name}</Sensitive>
           </span>
-          {(!open || topic.running > 0 || topic.unread > 0) && <Badges running={topic.running} unread={topic.unread} count={open ? 0 : topic.session_count} />}
+          {(!open || topic.running > 0 || topic.unread > 0) && <Badges running={topic.running} unread={topic.unread} errors={topic.errors} count={open ? 0 : topic.session_count} />}
         </button>
         <Tooltip content={t('sessions.newIn')}>
           <Button
@@ -914,6 +922,101 @@ function TopicNode({
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+/** The tree's live sessions by topic path: Ctrl + click on a topic or a project picks them all. */
+const TreeSessions = React.createContext<Map<string, Session[]>>(new Map())
+/** Sessions opened at once from the selection: tabs hold many, columns get unreadable past SHOW_OPEN_MAX. */
+const PICK_OPEN_MAX = 20
+
+/** Above the list while sessions are picked (Ctrl / Shift + click): open, close, archive or delete them at once.
+ *  Delete (the key) deletes them, Escape lets them go. */
+function SelectionBar({ sessions, onOpen }: { sessions: Session[]; onOpen: (s: Session) => void }) {
+  const t = useT()
+  const ids = useSessionSelection((x) => x.ids)
+  const closeSession = useSessionsUI((x) => x.closeSession)
+  const tabs = useSessionsUI((x) => x.tabs)
+  const del = useDeleteSession()
+  const patch = usePatchSession()
+  const picked = React.useMemo(() => {
+    const by = new Map(sessions.map((s) => [s.id, s]))
+    return ids.flatMap((id) => by.get(id) ?? [])
+  }, [ids, sessions])
+  const remove = React.useCallback(async () => {
+    if (!picked.length) return
+    const ok = await confirm({ title: t('sel.deleteTitle', { count: picked.length }), description: t(picked.length > 1 ? 'sel.deleteDesc' : 'sessions.delete.desc'), destructive: true, confirmText: t('common.delete') })
+    if (!ok) return
+    clearSelection()
+    const done = await Promise.allSettled(
+      picked.map((s) =>
+        del.mutateAsync(s.id).then(() => {
+          closeSession(s.id)
+          forgetLog(s.id)
+          saveDraft(s.id, '')
+          saveQuotes(s.id, [])
+        }),
+      ),
+    )
+    const n = done.filter((r) => r.status === 'fulfilled').length
+    if (n) toast.success(t('sel.deleted', { count: n }))
+  }, [picked, del, closeSession, t])
+  React.useEffect(() => {
+    if (!ids.length) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || document.querySelector('[role="alertdialog"], [role="dialog"], [role="menu"]')) return
+      const el = document.activeElement as HTMLElement | null
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return
+      if (e.key === 'Escape') clearSelection()
+      else if (e.key === 'Delete') {
+        e.preventDefault()
+        void remove()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [ids.length, remove])
+  if (!picked.length) return null
+  const max = tabs ? PICK_OPEN_MAX : SHOW_OPEN_MAX
+  const btn = 'h-6 gap-1 px-1.5 text-xs'
+  return (
+    <div className="mx-2 mb-1 flex shrink-0 flex-wrap items-center gap-0.5 rounded-md bg-primary/10 py-0.5 pr-0.5 pl-2 text-xs animate-in" role="toolbar" aria-label={t('sel.count', { count: picked.length })} data-testid="session-selection">
+      <span className="mr-auto font-medium tabular-nums" title={t('sel.count', { count: picked.length })}>{picked.length}</span>
+      <Button
+        variant="ghost"
+        size="sm"
+        className={btn}
+        title={picked.length > max ? t('sel.openSome', { count: max }) : undefined}
+        onClick={() => {
+          // Bottom first: the first one picked ends up focused; the columns already open stay.
+          for (const s of picked.slice(0, max).reverse()) onOpen(s)
+        }}
+      >
+        <PanelsTopLeft className="size-3.5" /> {t('sel.open')}
+      </Button>
+      <Button variant="ghost" size="sm" className={btn} onClick={() => picked.forEach((s) => closeSession(s.id))}>
+        <CopyX className="size-3.5" /> {t('sel.close')}
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        className={cn(btn, 'px-1')}
+        title={t('sel.archive')}
+        aria-label={t('sel.archive')}
+        onClick={() => {
+          clearSelection()
+          for (const s of picked) patch.mutate({ id: s.id, archived: true })
+        }}
+      >
+        <Archive className="size-3.5" />
+      </Button>
+      <Button variant="ghost" size="sm" className={cn(btn, 'px-1 text-destructive hover:text-destructive')} title={t('sel.delete')} aria-label={t('sel.delete')} onClick={() => void remove()}>
+        <Trash2 className="size-3.5" />
+      </Button>
+      <Button variant="ghost" size="sm" className={cn(btn, 'px-1')} title={t('sel.clear')} aria-label={t('sel.clear')} onClick={clearSelection}>
+        <X className="size-3.5" />
+      </Button>
     </div>
   )
 }
@@ -1015,10 +1118,11 @@ const SessionRow = React.memo(function SessionRow({
   const drop = useSessionDrop(s.path)
   const press = useLongPress(() => setMenu(true))
   const oneLine = compact && !touchLayout
+  const picked = useSessionSelection((x) => x.ids.includes(s.id))
   return (
     <div
       role="treeitem"
-      aria-selected={focused}
+      aria-selected={focused || picked}
       {...sessionDragProps(s)}
       {...drop.props}
       {...press}
@@ -1027,6 +1131,7 @@ const SessionRow = React.memo(function SessionRow({
         'group/row relative flex items-center rounded-md pr-1 hover:bg-muted max-md:h-14 max-md:select-none max-md:[-webkit-touch-callout:none]',
         compact ? 'h-8' : 'h-9',
         focused && 'bg-accent',
+        picked && 'bg-primary/15 ring-1 ring-primary/40 ring-inset',
         s.unread && 'font-medium',
         drop.over && dropCls,
       )}
@@ -1037,7 +1142,15 @@ const SessionRow = React.memo(function SessionRow({
       }}
     >
       {open && <span aria-hidden className="absolute top-2 bottom-2 left-1 w-0.5 rounded-full bg-primary/70" />}
-      <button type="button" onClick={() => onOpen(s)} {...(!open && warmProps(s.id))} className="flex min-w-0 flex-1 items-center gap-2 self-stretch rounded-md text-left focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none" data-session-row={s.id}>
+      <button
+        type="button"
+        onClick={(e) => {
+          if (withModifier(e) && !touchLayout) return void pickRange(s.id, e.currentTarget)
+          setAnchor(s.id)
+          onOpen(s)
+        }}
+        onMouseDown={(e) => e.shiftKey && e.preventDefault()}
+        {...(!open && warmProps(s.id))} className="flex min-w-0 flex-1 items-center gap-2 self-stretch rounded-md text-left focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none" data-session-row={s.id}>
         <span className="flex size-3.5 shrink-0 items-center justify-center">
           {(s.approvals || 0) + (s.browser_asks || 0) > 0 ? (
             <StatusDot tone="warn" pulse label={t('sessions.waitingYou')} />
@@ -1354,6 +1467,7 @@ function DrillView({
             count={p.topics.length}
             running={p.topics.reduce((n, tp) => n + tp.running, 0)}
             unread={p.topics.reduce((n, tp) => n + tp.unread, 0)}
+            errors={p.topics.reduce((n, tp) => n + (tp.errors || 0), 0)}
             onOpen={() => setDrill({ project: p.name, topic: null })}
             menu={<ProjectMenuItems project={p} onDialog={onDialog} />}
           />
@@ -1382,6 +1496,7 @@ function DrillView({
             count={tp.session_count}
             running={tp.running}
             unread={tp.unread}
+            errors={tp.errors}
             onOpen={() => setDrill({ project: project!.name, topic: tp.path })}
             onNew={() => onNewSession(tp.path)}
             menu={<TopicMenuItems topic={tp} rootDir={rootDirOf(tp.path)} onNewSession={onNewSession} onDialog={onDialog} />}
@@ -1473,6 +1588,7 @@ function DrillRow({
   count,
   running,
   unread,
+  errors,
   onOpen,
   onNew,
   menu,
@@ -1485,6 +1601,7 @@ function DrillRow({
   count: number
   running: number
   unread: number
+  errors?: number
   onOpen: () => void
   onNew?: () => void
   menu: React.ReactNode
@@ -1511,7 +1628,7 @@ function DrillRow({
         <span className="truncate">
           <Sensitive length={8}>{name}</Sensitive>
         </span>
-        {running > 0 || unread > 0 ? <Badges running={running} unread={unread} /> : count > 0 && <span className="ml-auto text-[11px] font-normal text-muted-foreground tabular-nums">{count}</span>}
+        {running > 0 || unread > 0 ? <Badges running={running} unread={unread} errors={errors} /> : count > 0 && <span className="ml-auto text-[11px] font-normal text-muted-foreground tabular-nums">{count}</span>}
         <ChevronRight className={cn('size-3.5 shrink-0 text-muted-foreground', !(running > 0 || unread > 0 || count > 0) && 'ml-auto')} />
       </button>
       {onNew && (

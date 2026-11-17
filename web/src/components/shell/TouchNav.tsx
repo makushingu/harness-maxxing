@@ -47,17 +47,19 @@ function MenuButton({ className }: { className?: string }) {
   const tone = healthTone(h)
   let unread = 0
   let running = 0
+  let errors = 0
   for (const p of data?.projects || [])
     for (const tp of p.topics) {
       unread += tp.unread
       running += tp.running
+      errors += tp.errors || 0
     }
   const alert = pending || tone === 'error' || tone === 'warn'
   return (
     <button type="button" className={cn(topButton, '-ml-1', className)} aria-label={t('shell.openApp')} onClick={openTouchMenu} data-tour="touch-sessions" data-testid="touch-menu-button">
       <Menu />
       {unread > 0 ? (
-        <CountBadge count={unread} className="absolute top-0.5 right-0 ring-2 ring-background" title={t('sessions.showUnread', { count: unread })} />
+        <CountBadge count={unread} tone={errors ? 'error' : 'unread'} className="absolute top-0.5 right-0 ring-2 ring-background" title={(errors ? `${t('sessions.state.error')} - ` : '') + t('sessions.showUnread', { count: unread })} />
       ) : running > 0 ? (
         <CountDot tone="running" className="absolute top-1.5 right-1.5" />
       ) : alert ? (

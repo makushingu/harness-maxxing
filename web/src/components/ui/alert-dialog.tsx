@@ -77,10 +77,31 @@ export function ConfirmHost() {
     useConfirmStore.setState({ pending: null })
   }
   const blocked = !!p?.typeToConfirm && typed !== p.typeToConfirm
+  const action = React.useRef<HTMLButtonElement>(null)
+  const cancel = React.useRef<HTMLButtonElement>(null)
   return (
     <AlertDialog open={open} onOpenChange={(o) => !o && close(false)}>
       {p && (
-        <AlertDialogContent>
+        <AlertDialogContent
+          // Keyboard first: the confirm button has the focus (Enter or Space confirms at once, Escape cancels), the
+          // arrows go from one button to the other; a text to type keeps the focus in its field.
+          onOpenAutoFocus={(e) => {
+            if (p.typeToConfirm) return
+            e.preventDefault()
+            action.current?.focus()
+          }}
+          onKeyDown={(e) => {
+            const on = e.target as HTMLElement
+            if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+              if (on.tagName === 'INPUT') return
+              e.preventDefault()
+              ;(on === action.current ? cancel : action).current?.focus()
+            } else if (e.key === 'Enter' && !e.nativeEvent.isComposing && on.tagName !== 'BUTTON' && on.tagName !== 'INPUT' && !blocked) {
+              e.preventDefault()
+              close(true)
+            }
+          }}
+        >
           <div className="grid gap-2">
             <AlertDialogTitle>{p.title}</AlertDialogTitle>
             {p.description && <AlertDialogDescription asChild={typeof p.description !== 'string'}>{typeof p.description === 'string' ? p.description : <div>{p.description}</div>}</AlertDialogDescription>}
@@ -115,10 +136,11 @@ export function ConfirmHost() {
             </div>
           )}
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-            <AlertDialogCancel className={buttonVariants({ variant: 'outline' })} onClick={() => close(false)}>
+            <AlertDialogCancel ref={cancel} className={buttonVariants({ variant: 'outline' })} onClick={() => close(false)}>
               {p.cancelText || t('common.cancel')}
             </AlertDialogCancel>
             <AlertDialogAction
+              ref={action}
               disabled={blocked}
               className={buttonVariants({ variant: p.destructive ? 'destructive' : 'default' })}
               onClick={(e) => {

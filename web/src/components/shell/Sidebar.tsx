@@ -26,12 +26,14 @@ function useSessionBadge() {
   const { data } = useWorkspace()
   let unread = 0
   let running = 0
+  let errors = 0
   for (const p of data?.projects || [])
     for (const tp of p.topics) {
       unread += tp.unread
       running += tp.running
+      errors += tp.errors || 0
     }
-  return { unread, running }
+  return { unread, running, errors }
 }
 
 /** Team entry: its unread count (a chat goes into a bubble from the Team page: "Open in a bubble"). */
@@ -233,8 +235,8 @@ export const Sidebar = React.memo(function Sidebar({ drawer }: { /** touch layou
               {showBadge &&
                 (collapsed ? (
                   badge.unread ? (
-                    <span data-badge onClick={showSessions('unread')} title={t('sessions.showUnread', { count: badge.unread })} className={cn(FOLDED_DOT, 'cursor-pointer')}>
-                      <CountDot tone="unread" />
+                    <span data-badge onClick={showSessions('unread')} title={(badge.errors ? `${t('sessions.state.error')} - ` : '') + t('sessions.showUnread', { count: badge.unread })} className={cn(FOLDED_DOT, 'cursor-pointer')}>
+                      <CountDot tone={badge.errors ? 'error' : 'unread'} />
                     </span>
                   ) : (
                     <span data-badge onClick={showSessions('running')} title={t('sessions.showRunning', { count: badge.running })} className={cn(FOLDED_DOT, 'cursor-pointer')}>
@@ -247,7 +249,7 @@ export const Sidebar = React.memo(function Sidebar({ drawer }: { /** touch layou
                       <CountBadge count={badge.running} tone="running" title={t('sessions.showRunning', { count: badge.running })} />
                     </span>
                     <span data-badge onClick={showSessions('unread')} className="cursor-pointer rounded-full transition-transform empty:hidden hover:scale-110">
-                      <CountBadge count={badge.unread} title={t('sessions.showUnread', { count: badge.unread })} />
+                      <CountBadge count={badge.unread} tone={badge.errors ? 'error' : 'unread'} title={(badge.errors ? `${t('sessions.state.error')} - ` : '') + t('sessions.showUnread', { count: badge.unread })} />
                     </span>
                   </span>
                 ))}
