@@ -75,7 +75,7 @@ LEAKS: list[tuple[str, re.Pattern[bytes]]] = [(k, re.compile(p.encode())) for k,
     ("Slack token", r"(?<![A-Za-z0-9_])xox[abprs]-[A-Za-z0-9-]{10,}"),
     ("AWS access key", r"(?<![A-Za-z0-9])AKIA[0-9A-Z]{16}(?![A-Za-z0-9])"),
     ("private key", r"-----BEGIN [A-Z ]*PRIVATE KEY(?: BLOCK)?-----"),
-    ("Telegram bot token", r"(?<![A-Za-z0-9_:])\d{8,10}:[A-Za-z0-9_-]{35}(?![A-Za-z0-9_-])"),
+    ("Telegram bot token", r"(?:(?<![A-Za-z0-9_:])|(?<=bot))\d{8,10}:[A-Za-z0-9_-]{35}(?![A-Za-z0-9_-])"),
     ("API key (sk-)", r"(?<![A-Za-z0-9_-])sk-(?!ant-)(?:proj-|svcacct-)?[A-Za-z0-9_-]{32,}"),
     ("Shopify token", r"(?<![A-Za-z0-9_])shp(?:at|ss|ca|pa)_[a-fA-F0-9]{30,}"),
     ("Stripe key", r"(?<![A-Za-z0-9_])(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{20,}"),
@@ -98,7 +98,7 @@ LEAKS: list[tuple[str, re.Pattern[bytes]]] = [(k, re.compile(p.encode())) for k,
     # The lookaheads are bounded: unbounded, a long token such as "password:password:..." rescans the rest of the
     # line at every label and the scan turns quadratic (minutes for a few hundred kB). Quotes around the label and
     # the value are allowed so JSON passwords ("password": "...") are caught too.
-    ("password", r"(?i)(?:password|passwd|mot de passe|mdp)[\"']?[ \t]*[:=][ \t]*[\"']?(?!\$)(?![^\s]{0,256}://)"
+    ("password", r"(?i)(?:(?<![A-Za-z0-9_])(?:password|passwd|pw|pass|mot de passe|mdp|secret|token|api[_-]?key)[\"']?[ \t]*(?:[:=|]|\xef\xbc\x9a)|(?<![A-Za-z0-9_])bearer[ \t]+)[ \t]*[\"']?(?!\$)(?![^\s]{0,256}://)"
                  r"(?!(?:1password|bitwarden|keepass\w*|lastpass|dashlane|protonpass|keychain)\b)"
                  r"(?!(?-i:[A-Z]+[0-9]{0,2}(?:_[A-Z]+[0-9]{0,2})*_(?:[A-Z]+[0-9]{0,2}|[0-9]+))[,.;:)\]|]?(?=[\s`'\"]|$))"
                  r"(?=[^\s`'\"<>()]{0,128}\d)(?=[^\s`'\"<>()]{0,128}[A-Za-z])[^\s`'\"<>()]{8,}"),
