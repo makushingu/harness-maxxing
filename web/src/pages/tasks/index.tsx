@@ -26,6 +26,7 @@ import { TaskCalendar } from '@/features/tasks/Calendar'
 import { weekColumns, weekDropDue } from '@/features/tasks/Week'
 import { FilterChips, FilterMenu, QuickAdd } from '@/features/tasks/Toolbar'
 import { ProjectDot } from '@/features/tasks/parts'
+import { isCompact } from '@/stores/media'
 import {
   EMPTY_FILTERS,
   activeFilterCount,
@@ -47,23 +48,27 @@ import {
 type View = 'board' | 'week' | 'calendar' | 'list'
 type Prefs = { view: View; groupBy: GroupBy; sort: SortKey; showDone: boolean; lanes: boolean; scope: Scope }
 const PREFS_KEY = 'mx-tasks'
-const DEFAULT_PREFS: Prefs = { view: 'board', groupBy: 'due', sort: 'due', showDone: false, lanes: false, scope: 'all' }
+// On a phone the board shows one column at a time: the list is the default there, until a view is picked.
+const defaultView = (): View => (isCompact() ? 'list' : 'board')
+const DEFAULT_PREFS: Omit<Prefs, 'view'> = { groupBy: 'due', sort: 'due', showDone: false, lanes: false, scope: 'all' }
 const VIEWS: View[] = ['board', 'week', 'calendar', 'list']
 
 function usePrefs(): [Prefs, (p: Partial<Prefs>) => void] {
   const [prefs, setPrefs] = React.useState<Prefs>(() => {
     try {
-      const p = { ...DEFAULT_PREFS, ...JSON.parse(localStorage.getItem(PREFS_KEY) || '{}') }
-      return VIEWS.includes(p.view) ? p : { ...p, view: 'board' }
+      const p = { ...DEFAULT_PREFS, view: defaultView(), ...JSON.parse(localStorage.getItem(PREFS_KEY) || '{}') }
+      return VIEWS.includes(p.view) ? p : { ...p, view: defaultView() }
     } catch {
-      return DEFAULT_PREFS
+      return { ...DEFAULT_PREFS, view: defaultView() }
     }
   })
   const update = React.useCallback((p: Partial<Prefs>) => {
     setPrefs((cur) => {
       const next = { ...cur, ...p }
       try {
-        localStorage.setItem(PREFS_KEY, JSON.stringify(next))
+        // the view is saved only once picked: a narrow window that changed a filter keeps the default of its size
+        const saved = JSON.parse(localStorage.getItem(PREFS_KEY) || '{}')
+        localStorage.setItem(PREFS_KEY, JSON.stringify({ ...next, view: p.view ?? saved.view }))
       } catch {
         /* private mode */
       }
