@@ -178,6 +178,7 @@ export const en = {
   'sessions.touch.list': "All sessions",
   'shell.menu': 'Menu',
   'shell.navigation': 'Main navigation',
+  'shell.pages': 'Pages',
   'shell.theme': 'Theme',
   'theme.dark': 'Dark',
   'theme.light': 'Light',

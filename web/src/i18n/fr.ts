@@ -176,6 +176,7 @@ export const fr: Record<keyof typeof en, string> = {
   'sessions.touch.list': "Toutes les sessions",
   'shell.menu': 'Menu',
   'shell.navigation': 'Navigation principale',
+  'shell.pages': 'Pages',
   'shell.theme': 'Thème',
   'theme.dark': 'Sombre',
   'theme.light': 'Clair',

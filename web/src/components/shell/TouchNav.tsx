@@ -6,7 +6,7 @@
 // when it has one, else the menu. The search: the field atop the menu, the magnifier facing a list's title.
 import * as React from 'react'
 import { create } from 'zustand'
-import { useLocation, useNavigationType } from 'react-router'
+import { NavLink, useLocation, useNavigationType } from 'react-router'
 import { Download, Menu } from 'lucide-react'
 import { useHealth, useWorkspace } from '@/lib/queries'
 import { cn } from '@/lib/utils'
@@ -20,6 +20,7 @@ import { ListSlot, pageListId } from './PageList'
 import { healthTone } from './HealthIndicator'
 import { usePendingUpdate } from './UpdateIndicator'
 import { Sidebar } from './Sidebar'
+import { useNavEntries } from './nav'
 
 /** The drawer's level: 'app' the menu, 'list' the page's list, 'sessions' the sessions (Sessions page); null: closed. */
 type Panel = 'sessions' | 'list' | 'app' | null
@@ -178,10 +179,35 @@ export function TouchDrawers() {
               // the page's list comes in here (PageList)
               <ListSlot className="flex min-h-0 flex-1 flex-col" />
             )}
+            <PageStrip onClickCapture={onMenuClick} />
           </div>
         )}
       </DrawerContent>
     </Drawer>
+  )
+}
+
+/** The pages, at the bottom of a list level (in reach of the thumb): another page in one tap from a session or a list,
+ *  without ‹ back to the menu at the top. A tap acts as in the menu (onMenuClick). */
+function PageStrip({ onClickCapture }: { onClickCapture: (e: React.MouseEvent) => void }) {
+  const t = useT()
+  const { pages } = useNavEntries()
+  return (
+    <nav aria-label={t('shell.pages')} data-testid="touch-pages" onClickCapture={onClickCapture} className="flex shrink-0 gap-0.5 overflow-x-auto overscroll-x-contain border-t border-sidebar-border px-1.5 py-1">
+      {pages
+        .filter((p) => p.group === 'main')
+        .map((p) => (
+          <NavLink
+            key={p.to}
+            to={p.to}
+            end={p.end}
+            aria-label={t(p.label)}
+            className={({ isActive }) => cn('flex size-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground outline-none active:bg-accent focus-visible:ring-2 focus-visible:ring-ring', isActive && 'bg-accent text-primary')}
+          >
+            <p.icon className="size-5" strokeWidth={1.7} />
+          </NavLink>
+        ))}
+    </nav>
   )
 }
 
