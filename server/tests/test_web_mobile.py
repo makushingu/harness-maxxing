@@ -330,3 +330,12 @@ def test_the_chips_of_empty_task_projects_are_big_enough_to_tap():
     overview = (WEB / "features" / "tasks" / "Overview.tsx").read_text()
     chip = re.search(r'<button[^>]*onClick=\{\(\) => onPick\(p\.id\)\}[^>]*className="([^"]*)"', overview)
     assert chip and "pointer-coarse:h-10" in chip[1].split()
+
+
+def test_settings_opens_on_the_list_of_its_sections_on_a_phone():
+    routes = (WEB / "routes.tsx").read_text()
+    assert "path: 'settings/:section?'" in routes and "path: 'settings', element: <Navigate" not in routes
+    src = (WEB / "pages" / "settings" / "index.tsx").read_text()
+    assert 'return mobile ? <SettingsList /> : <Navigate to="/settings/general" replace />' in src
+    lst = src[src.index("function SettingsList"):src.index("function SettingsPage")]
+    assert "SETTINGS_GROUPS.map" in lst and "min-h-12" in lst, "every section, grouped, big enough to tap"
