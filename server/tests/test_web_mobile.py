@@ -330,3 +330,12 @@ def test_the_chips_of_empty_task_projects_are_big_enough_to_tap():
     overview = (WEB / "features" / "tasks" / "Overview.tsx").read_text()
     chip = re.search(r'<button[^>]*onClick=\{\(\) => onPick\(p\.id\)\}[^>]*className="([^"]*)"', overview)
     assert chip and "pointer-coarse:h-10" in chip[1].split()
+
+
+def test_the_files_page_opens_its_folder_on_a_phone_when_no_file_is_open():
+    src = (WEB / "pages" / "files" / "index.tsx").read_text()
+    landing = re.search(r"if \(!mobile \|\| landed\.current \|\| !kindQ\.data\) return[\s\S]{0,400}?window\.setTimeout\(\(\) => \{\s+landed\.current = true\s+openPageList\(\)", src)
+    assert landing, "a phone landing on a folder opens the page list once"
+    assert "mobile ? t('files.selectFileDescTouch') : t('files.selectFileDesc')" in src
+    for lang in ("en", "fr"):
+        assert "'files.selectFileDescTouch':" in (WEB / "i18n" / f"{lang}.ts").read_text(), lang
