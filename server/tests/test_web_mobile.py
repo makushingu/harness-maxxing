@@ -330,3 +330,14 @@ def test_the_chips_of_empty_task_projects_are_big_enough_to_tap():
     overview = (WEB / "features" / "tasks" / "Overview.tsx").read_text()
     chip = re.search(r'<button[^>]*onClick=\{\(\) => onPick\(p\.id\)\}[^>]*className="([^"]*)"', overview)
     assert chip and "pointer-coarse:h-10" in chip[1].split()
+
+
+def test_the_touch_drawer_lists_the_pages_at_the_bottom_of_a_list_level():
+    src = (WEB / "components" / "shell" / "TouchNav.tsx").read_text()
+    level = src[src.index('<div key="list"'):src.index("</DrawerContent>")]
+    assert "<PageStrip onClickCapture={onMenuClick} />" in level, "the strip acts as the menu's links"
+    assert level.index("<ListSlot") < level.index("<PageStrip"), "below the list, in reach of the thumb"
+    strip = src[src.index("function PageStrip"):src.index("function useEdgeOpen")]
+    assert "size-11" in strip and "aria-label={t(p.label)}" in strip
+    for lang in ("en", "fr"):
+        assert "'shell.pages':" in (WEB / "i18n" / f"{lang}.ts").read_text(), lang
