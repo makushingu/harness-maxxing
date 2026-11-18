@@ -31,6 +31,9 @@ Fixed:
   you leave the page, lands in the draft of its box. Queued messages taken back ("Edit") while you leave go to the draft.
 - **`maxxing agents list` answers several times faster when you have many agents.** It read every scheduled job
   again for each agent; it reads them once now (with 24 agents: about 290 ms down to 60 ms).
+- **A diff read on a phone keeps its line numbers in sight.** In the Changes view and the pull request view, a
+  long line made the whole diff scroll sideways, and the line numbers, the + / − signs and the `@@` headers went off
+  the screen with it: they stay at the left edge now while the code scrolls.
 
 ## 2.0.0-alpha.157 - 2026-11-18
 

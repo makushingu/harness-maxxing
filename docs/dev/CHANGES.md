@@ -7,6 +7,10 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Web: `DiffRows` gutter (old / new numbers + sign) is `sticky left-0` with an opaque `bg-popover` and the line's tint
+  (`tone()`) inside, so the code passes under it; the hunk head's text is a `sticky left-0 inline-block` span (the
+  `sticky` on the full-width head block never stuck: it is as wide as the `min-w-max` content). Test in
+  `test_web_mobile.py`.
 - Files: `/api/files/thumb` takes `h` (min height, bucketed like `w`, in the cache key; ffmpeg `scale=min(iw,
   min(4096,max(w,h*iw/ih)))`). Chat media (box 4:3, h-28) and the attachment strip ask `h=320`, quoted files and
   composer chips `h=160`; viewer placeholder same URL as the chat (`w=320&h=320`); `media.warm` follows. Before: a
