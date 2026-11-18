@@ -268,3 +268,16 @@ def test_the_role_protection_line_and_new_group_link_of_an_agent_are_big_enough_
     for testid in ("agent-sandbox-line", "agent-new-group", "agent-role"):
         cls = re.search(r"className=(?:\{cn\()?['\"]([^'\"]*)['\"][^\n]*\n(?:[^\n]*\n)?\s*data-testid=\"" + testid + '"', src)
         assert cls and "pointer-coarse:min-h-10" in cls[1].split(), testid
+
+
+def test_a_session_header_on_a_phone_leaves_room_to_read():
+    # phone header: app bar, tabs, title, place row = 171 px; one tab repeated the title, the tabs stayed while typing,
+    # and held sideways (360 px high) only ~90 px were left to read
+    src = (WEB / "pages" / "sessions" / "index.tsx").read_text()
+    assert re.search(r"<MobileTabsSlot\.Provider value=\{tabs && several \? <TabsBar", src)
+    column = (WEB / "pages" / "sessions" / "Column.tsx").read_text()
+    assert re.search(r"function MobileTabs\(\) \{[^}]*<div data-kbd-hide=\"\">\{tabs\}</div>", column)
+    assert re.search(r"const several = useSessionsUI\(\(s\) => s\.cols\.length > 1\)", src)
+    css = (WEB / "styles" / "globals.css").read_text()
+    side = re.search(r"@media \(orientation: landscape\) and \(max-height: 500px\) and \(pointer: coarse\) \{\s*\[data-col\] \[data-kbd-hide\] \{\s*display: none;", css)
+    assert side, "no sideways rule for [data-kbd-hide] in globals.css"
