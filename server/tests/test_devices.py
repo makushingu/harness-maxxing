@@ -728,3 +728,9 @@ def test_security_loopback_helper(mx):
     assert not security.loopback(SimpleNamespace(client=SimpleNamespace(host="127.0.0.1"),
                                                  headers={"x-forwarded-for": "1.2.3.4"}))
     assert not security.loopback(SimpleNamespace(client=SimpleNamespace(host="100.101.102.104"), headers={}))
+
+
+def test_an_action_with_a_line_separator_stays_in_the_log(dv):
+    store.log_action("d1", "type", {"keys": "a b"}, True, 5)
+    store.log_action("d1", "click", {"x": 1}, True, 5)
+    assert [a["tool"] for a in store.actions()] == ["click", "type"]
