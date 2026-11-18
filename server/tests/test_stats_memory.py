@@ -228,3 +228,16 @@ def test_a_huge_integer_in_a_session_meta_does_not_break_the_statistics(client, 
         m["started"] = 10 ** 400
     r = client.get("/api/stats/tokens?force=1")
     assert r.status_code == 200, r.text
+
+
+def test_a_lone_surrogate_in_a_meta_does_not_break_usage(mx):
+    import json
+    import uuid
+    from maxxing import stats
+    from maxxing.sessions import store
+    sid = str(uuid.uuid4())
+    m = {"id": sid, "path": "projects/a/topics/b", "title": "\ud800x", "turns": 1, "days": {"\ud800": {"tokens": 1}},
+         "tokens": {k: 0 for k, _ in store.TOKEN_KEYS}}
+    (store.sessions_dir() / f"{sid}.json").write_text(json.dumps(m))
+    json.dumps(stats.compute(), ensure_ascii=False).encode("utf-8")
+

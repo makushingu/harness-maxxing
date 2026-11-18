@@ -56,6 +56,11 @@ def _float(v) -> float:
     return f if math.isfinite(f) else 0.0
 
 
+def _text(v) -> str:
+    """A string of a meta that JSON can carry: a lone surrogate (hand edit) would break the encoding of the answer."""
+    return v.encode("utf-8", "replace").decode() if isinstance(v, str) else ""
+
+
 def _tokens(sid: str, m: dict) -> dict:
     if isinstance(m.get("tokens"), dict):
         return {k: _int(m["tokens"].get(k)) for k, _ in store.TOKEN_KEYS}
@@ -142,16 +147,17 @@ def compute() -> dict:
                 starts.append(float(pair[0]))
                 if len(pair) > 1 and _finite(pair[1]):
                     firsts.append(float(pair[1]))
-        path = m.get("path") if isinstance(m.get("path"), str) else ""
+        path = _text(m.get("path"))
         _add(totals, tk, cost, turns)
         _add(projects.setdefault(_project_of(path), {"name": _project_of(path)}), tk, cost, turns)
         _add(topics.setdefault(path, {"path": path}), tk, cost, turns)
         for day, d in (m.get("days") if isinstance(m.get("days"), dict) else {}).items():
             if isinstance(d, dict):
+                day = _text(day)
                 cur = days.setdefault(day, {"date": day, "tokens": 0, "cost_usd": 0.0})
                 cur["tokens"] += _int(d.get("tokens"))
                 cur["cost_usd"] = round(cur["cost_usd"] + _float(d.get("cost")), 6)
-        title = m.get("title") if isinstance(m.get("title"), str) else ""
+        title = _text(m.get("title"))
         sessions.append({"id": sid, "title": title or "Untitled", "path": path,
                          "archived": bool(m.get("archived")), "updated": _when(m.get("updated")) or _when(m.get("created")),
                          **tk, "total": sum(tk.values()), "cost_usd": round(cost, 6), "turns": turns})
