@@ -305,7 +305,7 @@ def _put_sessions(folder: Path, old_prefix: str | None = None, new_prefix: str |
         if not isinstance(meta, dict):                 # damaged: its files stay in the folder, never deleted
             damaged = True
             continue
-        path = meta.get("path") or ""
+        path = meta.get("path") if isinstance(meta.get("path"), str) else ""
         if old_prefix is not None and new_prefix is not None and (path == old_prefix or path.startswith(old_prefix + "/")):
             meta["path"] = new_prefix + path[len(old_prefix):]
         meta["state"] = "idle" if meta.get("state") == "running" else meta.get("state", "idle")
