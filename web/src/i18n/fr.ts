@@ -2128,6 +2128,7 @@ export const fr: Record<keyof typeof en, string> = {
   'files.saveFailed': 'Enregistrement impossible',
   'files.selectFile': 'Sélectionnez un fichier',
   'files.selectFileDesc': 'Choisissez un fichier à gauche pour l’afficher ou le modifier, ou déposez des fichiers pour les envoyer.',
+  'files.selectFileDescTouch': 'Ouvrez le dossier pour choisir un fichier à afficher ou modifier.',
   'files.sortAndView': 'Tri et affichage',
   'files.sortBy': 'Trier par',
   'files.sortDate': 'Date de modification',

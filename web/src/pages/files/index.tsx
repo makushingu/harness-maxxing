@@ -69,6 +69,22 @@ export default function FilesPage() {
     [navigate, qc],
   )
 
+  // touch: a page opened on a folder (a link, a reload, a session's path) shows the folder at once, the viewer is empty
+  const landed = React.useRef(false)
+  React.useEffect(() => {
+    if (!mobile || landed.current || !kindQ.data) return
+    if (file) {
+      landed.current = true
+      return
+    }
+    // next tick: the drawer closes itself on the navigation that mounted this page (TouchNav.tsx)
+    const id = window.setTimeout(() => {
+      landed.current = true
+      openPageList()
+    })
+    return () => window.clearTimeout(id)
+  }, [mobile, kindQ.data, file])
+
   const visible = React.useMemo(() => (list ? sortEntries(list.entries, { ...prefs, filter: '' }) : []), [list, prefs])
   const entry = file ? list?.entries.find((e) => e.path === file) : undefined
   const exists = (name: string) => !!list?.entries.some((e) => e.name === name)
@@ -427,7 +443,7 @@ export default function FilesPage() {
                 className="flex-1"
                 icon={MousePointerClick}
                 title={t('files.selectFile')}
-                description={t('files.selectFileDesc')}
+                description={mobile ? t('files.selectFileDescTouch') : t('files.selectFileDesc')}
                 action={
                   <>
                     {mobile && (

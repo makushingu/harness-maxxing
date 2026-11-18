@@ -2146,6 +2146,7 @@ export const en = {
   'files.saveFailed': 'Could not save',
   'files.selectFile': 'Select a file',
   'files.selectFileDesc': 'Pick a file on the left to preview or edit it, or drop files to upload them.',
+  'files.selectFileDescTouch': 'Open the folder to pick a file to preview or edit it.',
   'files.sortAndView': 'Sort and display',
   'files.sortBy': 'Sort by',
   'files.sortDate': 'Date modified',
