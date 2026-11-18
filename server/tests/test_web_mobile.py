@@ -268,3 +268,12 @@ def test_the_role_protection_line_and_new_group_link_of_an_agent_are_big_enough_
     for testid in ("agent-sandbox-line", "agent-new-group", "agent-role"):
         cls = re.search(r"className=(?:\{cn\()?['\"]([^'\"]*)['\"][^\n]*\n(?:[^\n]*\n)?\s*data-testid=\"" + testid + '"', src)
         assert cls and "pointer-coarse:min-h-10" in cls[1].split(), testid
+
+
+def test_a_diff_keeps_its_line_numbers_and_hunk_heads_in_sight_when_scrolled_sideways():
+    # long lines scroll the whole diff sideways (phones): the numbers and + / − went off screen, and the hunk head
+    # too (sticky on a block as wide as the diff never sticks)
+    src = (WEB / "features" / "code" / "DiffRows.tsx").read_text()
+    gutter = re.search(r'className="([^"]*)" data-testid="diff-gutter"', src)
+    assert gutter and {"sticky", "left-0", "bg-popover"} <= set(gutter[1].split())  # opaque: the code passes under it
+    assert re.search(r"<span className=\"sticky left-0 inline-block[^\"]*\">\{r\.text\}</span>", src)
