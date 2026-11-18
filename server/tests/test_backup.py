@@ -246,7 +246,7 @@ def test_secret_blocks_run(gh, ws):
     (ws / "projects/acme/topics/blog/memory.md").write_text("token: sk-ant-api03-" + "Z" * 50 + "\n")
     r = backup.run()
     assert r["ok"] is False and r["code"] == "secret_found"
-    assert r["leaks"] == [{"file": "projects/acme/topics/blog/memory.md", "kinds": ["Anthropic API key"]}]
+    assert r["leaks"] == [{"file": "projects/acme/topics/blog/memory.md", "kinds": ["Anthropic API key", "password"]}]
     assert "Z" * 20 not in r["error"]                                # never echo the value
     assert _commits(bare) == 0
     assert backup.history()[0]["ok"] is False
@@ -678,3 +678,47 @@ async def test_a_lone_surrogate_in_the_backup_include_is_refused(gh, ws):
         r = await c.put("/api/backup/settings", content=b'{"include": ["\\ud800"]}',
                         headers={"content-type": "application/json"})
         assert r.status_code == 400 and r.json()["error"] == "invalid_include", r.text
+
+
+def test_restore_skips_a_name_too_long_for_the_file_system(ws, mx_state):
+    r = backup._apply({"projects/" + "a" * 300 + "/CLAUDE.md": b"x", "memory.md": b"- fact\n"})
+    assert (ws / "memory.md").read_text() == "- fact\n" and r["files"] == 1
+    assert backup._safe_rel("projects/" + "a" * 300 + "/x") is None
+    assert backup._safe_rel("projects/" + "a" * 255 + "/x") is not None
+    long = "projects/" + "a" * 300 + "/CLAUDE.md"
+    assert backup._apply({long: b"x"})["files"] == 0      # also when it gets past _extract
+
+
+def test_two_restores_in_the_same_second_keep_both_copies(ws, mx_state, monkeypatch):
+    monkeypatch.setattr(backup.time, "strftime", lambda *_: "20260101-000000")
+    _in_use()
+    (ws / "memory.md").write_text("v1")
+    t1 = backup._apply({"memory.md": b"v2"})["trash"]
+    t2 = backup._apply({"memory.md": b"v3"})["trash"]
+    assert t1 != t2 and (Path(t1) / "workspace/memory.md").read_text() == "v1"
+    assert (Path(t2) / "workspace/memory.md").read_text() == "v2"
+
+
+@pytest.mark.parametrize("blob", [b'"garbage"', b"[1, 2]", b'{"jobs": "x"}', b'{"jobs": [1]}'])
+def test_restore_never_replaces_the_crons_with_a_malformed_jobs_file(ws, mx_state, blob):
+    crons = pytest.importorskip("maxxing.crons")
+    crons.create_job({"name": "Keep", "schedule": "0 1 * * *", "kind": "shell", "command": "echo hi"})
+    for hold in (False, True):
+        r = backup._apply({f"{backup.META_DIR}/crons/jobs.json": blob}, hold=hold)
+        assert r["crons"] is False
+        assert [j["name"] for j in crons.list_jobs()] == ["Keep"]
+
+
+def test_scanner_sees_a_bot_url_and_other_password_labels():
+    tok = "123456789:AAH" + "a1B2c3D4e5" * 3 + "xy"
+    pw = "Sup3rSecret99"
+    for text in (f"https://api.telegram.org/bot{tok}/getMe", f"| Password | {pw} |", f"pw: {pw}",
+                 f"token: {pw}", f"Authorization: Bearer {pw}", f"password：{pw}"):
+        assert backup.scan_bytes(text.encode()), text
+
+
+
+def test_scan_looks_at_file_names_too():
+    name = "projects/ghp_" + "a1B2c3D4e5" * 3 + "abcdef/notes.md"
+    assert backup.scan({name: b"clean"}) == [{"file": name, "kinds": ["GitHub token"]}]
+    assert backup.scan({"projects/acme/notes.md": b"clean"}) == []

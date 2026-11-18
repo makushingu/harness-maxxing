@@ -398,6 +398,7 @@ async def _loop() -> None:
                 last_scan = now
                 await asyncio.to_thread(agents.scan_feed)
                 await asyncio.to_thread(agents.flush_waiting)
+                await asyncio.to_thread(agents.retry_limits)
             if agents.debouncer.pending:
                 await asyncio.to_thread(agents.flush_due)
         except asyncio.CancelledError:

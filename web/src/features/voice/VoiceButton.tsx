@@ -9,6 +9,7 @@ import { Check, Mic, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useT, type TFn } from '@/i18n'
 import { errorMessage, isApiError } from '@/lib/api'
+import { appendDraft } from '@/lib/drafts'
 import { Button, Spinner, Tooltip, TooltipContent, TooltipRoot, TooltipTrigger, toast } from '@/components/ui'
 import { transcribe, useVoice } from './api'
 import { MicError, fmtClock, micUnavailable, useRecorder } from './recorder'
@@ -39,14 +40,28 @@ export function micErrorText(t: TFn, e: unknown): string {
   return errorMessage(e)
 }
 
+/** A recording whose box went away: transcribed, then added to the box's draft. */
+async function toDraft(blob: Blob, key: string, t: TFn) {
+  if (blob.size < 1200) return
+  try {
+    const text = (await transcribe(blob)).text.trim()
+    if (text) appendDraft(key, text)
+  } catch (e) {
+    toast.error(t('voice.failed'), micErrorText(t, e))
+  }
+}
+
 export function VoiceButton({
   onTranscript,
   onVoiceMessage,
   disabled,
+  draftKey,
 }: {
   onTranscript: (text: string, autoSend: boolean) => void
   onVoiceMessage?: (file: File) => void
   disabled?: boolean
+  /** The draft of the box (`mx-draft:<key>`): a dictation that ends once the box is gone (another page) lands there. */
+  draftKey?: string
 }) {
   const t = useT()
   const navigate = useNavigate()
@@ -57,9 +72,20 @@ export function VoiceButton({
   const abort = React.useRef<AbortController | null>(null)
   const press = React.useRef<{ at: number; x: number; id: number } | null>(null)
   const finishRef = React.useRef<() => void>(() => {})
+  const mounted = React.useRef(true)
+  React.useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+    }
+  }, [])
+  // The box went away (another page) while recording: the recording is transcribed into its draft, not lost.
+  const keepKey = React.useRef(draftKey)
+  keepKey.current = draftKey
   const rec = useRecorder({
     maxSeconds: voice?.max_seconds ?? 900,
     onLimit: () => finishRef.current(),
+    onUnmount: draftKey ? (blob) => void toDraft(blob, keepKey.current!, t) : undefined,
   })
   const active = rec.state !== 'idle' || phase === 'transcribing'
 
@@ -83,6 +109,7 @@ export function VoiceButton({
       const out = await transcribe(blob, { signal: ctrl.signal })
       const text = out.text.trim()
       if (!text) toast.info(t('voice.noSpeech'))
+      else if (!mounted.current && draftKey) appendDraft(draftKey, text) // the box is gone: into its draft
       else onTranscript(text, !!voice?.settings.auto_send)
     } catch (e) {
       if ((e as Error)?.name !== 'AbortError') toast.error(t('voice.failed'), micErrorText(t, e))

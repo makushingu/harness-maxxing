@@ -157,12 +157,6 @@ export function useMentionTargets(sid: string, enabled: boolean) {
 export function useClearQueue() {
   return useMut((id: string) => api.del<Ok>(`/api/sessions/${seg(id)}/queue`), { invalidate: invSessions })
 }
-/** Side question: Claude answers about the session without interrupting it (nothing is saved in the session). */
-export function useAskAside() {
-  return useMut(({ id, question }: { id: string; question: string }) => api.post<{ answer: string; cost_usd: number; duration_ms: number }>(`/api/sessions/${seg(id)}/ask`, { question }), {
-    errorToast: false,
-  })
-}
 /** Edit: takes the queued messages out of the queue (they come back in the composer). */
 export function useTakeQueue() {
   const set = useSetSessionCache()

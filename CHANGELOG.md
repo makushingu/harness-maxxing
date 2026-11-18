@@ -5,10 +5,27 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 
 ## Unreleased
 
+New:
+- **Jobs and agents start again right after the usage limit resets.** When a scheduled job or an agent run (started
+  by hand, by a notification, by another agent or by its schedule) is stopped by the usage limit of your Claude plan,
+  it starts again by itself one minute after the reset time Claude gave ("resets 4pm"), instead of trying every 30
+  minutes. Settings -> Usage -> **Start again after the usage limit** (on by default) turns it off or changes the
+  delay.
+
 Changed:
 - **Dependencies updated** (minor and patch versions only): Vite 8.3.8, React Router 8.5.1, TanStack Query 5.108,
   Zustand 5.1, Tailwind CSS 4.3.5, lucide-react 1.74, CodeMirror, FastAPI 0.163, Starlette 1.10, Pydantic 2.14.3,
   websockets 17.4 and their own dependencies. Thanks to Anthony14FR, who flagged them.
+- **The session list loads about twice as fast on a busy server.** With thousands of sessions (scheduled jobs and
+  agents add many), the list, the sidebar and the dashboard answer in half the time.
+
+Fixed:
+- **Nothing you asked or typed is lost when you open another page.** A side question ("Question" on the waiting
+  messages) and its answer were gone after a visit to Agents or any other page: they stay now, even after a reload.
+  The text being written in a Team chat is kept per chat. A dictation still being transcribed, or a recording when
+  you leave the page, lands in the draft of its box. Queued messages taken back ("Edit") while you leave go to the draft.
+- **`maxxing agents list` answers several times faster when you have many agents.** It read every scheduled job
+  again for each agent; it reads them once now (with 24 agents: about 290 ms down to 60 ms).
 
 ## 2.0.0-alpha.157 - 2026-11-18
 

@@ -2711,6 +2711,11 @@ def on_turn_end(session: dict, result: dict | None) -> None:
             chain_after(path, text, ok, depth=_int(env.get("MAXXING_AGENT_DEPTH")))
         except Exception:  # noqa: BLE001
             log.exception("agent %s: agents after it", path)
+    if not group:
+        try:
+            _plan_limit_retry(path, session["id"], ok, text, str(session.get("error") or ""), env)
+        except Exception:  # noqa: BLE001
+            log.exception("agent %s: usage limit retry", path)
     try:
         _turn_alert(path, session, ok, text)
     except Exception:  # noqa: BLE001 - the feed is a nicety here
@@ -2747,6 +2752,108 @@ def on_turn_end(session: dict, result: dict | None) -> None:
             _drain_owner(path)
     except Exception:  # noqa: BLE001
         log.exception("agent %s: waiting messages", path)
+
+
+# ---- a run stopped by Claude's usage limit starts again after the reset (<state>/agents/<key>.json "limit_retry") --
+# Same plan as a cron job's retry (crons.limit_retry_at: config limit_retry, reset + limit_retry_delay_s, none past a
+# day); a run of the agent's own schedule is left to its cron job (retry_plan), never retried twice. The retry goes on
+# in the same session (its context, its outside mark) with LIMIT_RETRY_TEXT, when the agent's guards let it
+# (retry_limits, server loop): held budget = it waits; switched off, budget, rate = dropped (said in the thread).
+LIMIT_RETRY_TRIGGER = "limit-retry"
+LIMIT_RETRY_TEXT = ("Claude's usage limit stopped your previous turn before it ended. The limit has reset: carry on "
+                    "with the task above where you stopped.")
+_limit_waiting: set[str] = set()   # agents with a planned retry (seeded from their state at the first retry_limits)
+_limit_seeded = False
+
+
+def _plan_limit_retry(path: str, sid: str, ok: bool, text: str, error: str, env: dict) -> None:
+    from . import crons
+    with _lock:
+        st = _read_state(path)
+        prev = st.get("limit_retry") if isinstance(st.get("limit_retry"), dict) else None
+        same = bool(prev and prev.get("session") == sid)
+        why = None if ok else crons.classify_failure(text, error)
+        if why != "limit" or env.get("MAXXING_CRON_ID"):
+            if same and prev.get("fired"):            # the retry ended (done, or failed another way): over
+                st.pop("limit_retry", None)
+                _write_state(path, st)
+            return
+        attempt = int(prev.get("attempt") or 1) + 1 if same and prev.get("fired") else 1
+        now = time.time()
+        at = crons.limit_retry_at(text, now) if attempt <= crons.MAX_RETRIES else None
+        if not at:
+            if prev is not None and (same or prev.get("fired")):
+                st.pop("limit_retry", None)
+                _write_state(path, st)
+            return
+        st["limit_retry"] = {"at": at, "session": sid, "attempt": attempt}
+        _write_state(path, st)
+        _limit_waiting.add(path)
+    post(path, "note", f"Claude's usage limit stopped this run: it starts again by itself at {_local(at)}.",
+         status="limit_retry", session=sid, at_retry=at)
+
+
+def retry_limits(now: float | None = None) -> int:
+    """Server loop: start the runs whose usage limit has reset (see _plan_limit_retry). Returns the runs started."""
+    global _limit_seeded
+    from . import crons
+    from .sessions import service
+    if not _limit_seeded:
+        _limit_seeded = True
+        for f in config.state_dir("agents").glob("*.json"):
+            parts = f.stem.split("__")
+            try:
+                if len(parts) == 3 and "limit_retry" in f.read_text(errors="replace"):
+                    _limit_waiting.add(agent_path(*parts))
+            except Exception:  # noqa: BLE001 - one unreadable state never stops the others
+                log.exception("agent state %s", f.name)
+    n = 0
+    for path in list(_limit_waiting):
+        try:
+            with _lock:
+                now_ = time.time() if now is None else now
+                st = _read_state(path)
+                e = st.get("limit_retry")
+                if not isinstance(e, dict) or e.get("fired"):
+                    _limit_waiting.discard(path)
+                    continue
+                try:
+                    at = float(e.get("at") or 0)
+                except (TypeError, ValueError):
+                    at = 0.0                            # a damaged entry: dropped below, not raised on every pass
+                if at > now_:
+                    continue
+                sid = str(e.get("session") or "")
+                reason = None
+                if not at or not crons.limit_retry_on() or now_ - at > crons.CATCH_UP_WINDOW_S \
+                        or not exists(path) or not service.session_exists(sid):
+                    reason = "gone"
+                else:
+                    reason = gate(path)
+                if reason == "busy":
+                    continue                            # a run holds the budget: tried again at the next pass
+                if reason:
+                    st.pop("limit_retry", None)
+                    _write_state(path, st)
+                    _limit_waiting.discard(path)
+                    if reason not in ("gone", "missing"):
+                        post(path, "skip", SKIP_TEXT.get(reason, reason), trigger=LIMIT_RETRY_TRIGGER,
+                             reason=reason, source="usage limit", session=sid)
+                    continue
+                mid = _secrets.token_hex(6)
+                service.send_message(sid, LIMIT_RETRY_TEXT, source="agent", ref=f"agent-run:{mid}")
+                _hold_left(path, load(path), sid)
+                _snapshot(path, sid)
+                st = _read_state(path)
+                st["limit_retry"] = {**e, "fired": True}
+                _write_state(path, st)
+                _limit_waiting.discard(path)
+                post(path, "run", "Started again after the usage limit.", id=mid, trigger=LIMIT_RETRY_TRIGGER,
+                     source="usage limit", session=sid, attempt=int(e.get("attempt") or 1) + 1)
+                n += 1
+        except Exception:  # noqa: BLE001
+            log.exception("agent %s: usage limit retry", path)
+    return n
 
 
 def _asked_by(path: str, session: dict) -> list[dict]:
@@ -3124,10 +3231,11 @@ def add_cron(path: str, schedule: str = "", prompt: str = "", name: str = "", en
     return job
 
 
-def cron_jobs(path: str) -> list[dict]:
+def cron_jobs(path: str | None = None) -> list[dict]:
+    """The agent's scheduled jobs (path None: every job, for callers that sort them per agent in one read)."""
     try:
         from . import crons
-        return [j for j in crons.list_jobs() if j.get("topic_path") == path]
+        return [j for j in crons.list_jobs() if path is None or j.get("topic_path") == path]
     except Exception:
         return []
 

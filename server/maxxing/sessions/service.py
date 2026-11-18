@@ -151,8 +151,9 @@ def _num(v: object) -> float:
         return 0.0
 
 
-def public(meta: dict) -> dict:
-    """Internal meta -> API.md Session."""
+def public(meta: dict, exits_waiting: dict[str, dict] | None = None) -> dict:
+    """Internal meta -> API.md Session. exits_waiting: browser/exits.waiting_by_session() when the caller turns many
+    metas (one read of the waiting turns for the whole list)."""
     m = _effective(meta)
     finished, seen = _num(m.get("finished_at")), _num(m.get("seen_at"))
     return {"id": m["id"], "title": m.get("title") or "Untitled", "path": m.get("path") or "",
@@ -169,7 +170,8 @@ def public(meta: dict) -> dict:
             "permission_mode": m.get("permission_mode") or "", "approvals": _approvals_waiting(m["id"]),
             "code_repos": [r for r in (m.get("code_repos") or []) if isinstance(r, str)],
             "worktree": _worktree_public(m),
-            "browser_asks": _browser_waiting(m["id"]), "browser_exit": _exit_waiting(m["id"]),
+            "browser_asks": _browser_waiting(m["id"]),
+            "browser_exit": _exit_waiting(m["id"]) if exits_waiting is None else exits_waiting.get(m["id"]),
             "device_asks": _devices_waiting(m["id"])}
 
 
@@ -252,8 +254,10 @@ def _require(sid: str) -> dict:
 
 # ---- queries -------------------------------------------------------------------------------
 def list_sessions(path: str | None = None, archived: bool | None = None) -> list[dict]:
+    from ..browser import exits
     out = []
     ids = store.list_ids()
+    waiting = exits.waiting_by_session()
     store.forget_cached(set(ids))
     for sid in ids:
         m = store.read_cached(sid)
@@ -261,7 +265,7 @@ def list_sessions(path: str | None = None, archived: bool | None = None) -> list
             continue
         if archived is not None and bool(m.get("archived")) != archived:
             continue
-        out.append(public(m))
+        out.append(public(m, waiting))
     return sorted(out, key=lambda s: s.get("updated") or 0, reverse=True)
 
 

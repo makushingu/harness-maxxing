@@ -225,3 +225,12 @@ def test_html_to_text_of_a_long_page_takes_linear_time(tmp_path):
       return [Math.round(performance.now() - t0), s.split('\\n').length, s.endsWith('v3999-8\\tv3999-9'), s.includes('\\n40000. item 39999\\n')]""")
     assert out[1:] == [40000 * 2 + 1 + 40000 + 1 + 4000 - 1, True, True]
     assert out[0] < 10_000, out
+
+
+def test_the_context_window_and_the_draft_attachments_read_stored_data_with_their_types():
+    util = (WEB / "pages" / "sessions" / "util.ts").read_text(encoding="utf-8")
+    body = util[util.index("export function contextWindow"):util.index("export function modelLabel")]
+    assert "Object.hasOwn(windows" in body and not re.search(r"windows\[(chosen|real)\]", body)   # `constructor` is not a window
+    store = (WEB / "pages" / "sessions" / "store.ts").read_text(encoding="utf-8")
+    atts = store[store.index("export function loadAtts"):store.index("export function saveAtts")]
+    assert "typeof a.name === 'string'" in atts and "Number.isFinite(a.size)" in atts

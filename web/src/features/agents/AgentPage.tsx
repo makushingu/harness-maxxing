@@ -292,6 +292,7 @@ function EnabledSwitch({ agent: a }: { agent: AgentDetail }) {
 /* ---------------------------------------------------------------- The conversation */
 export function triggerLabel(t: TFn, m: Pick<AgentMessage, 'trigger' | 'source'>, crons: Cron[] = []): string {
   const tr = m.trigger || ''
+  if (tr === 'limit-retry') return t('agents.from.limitRetry')
   if (tr === 'manual' && m.source === 'command line') return t('agents.from.command')
   if (tr === 'manual' && m.source === 'conversation') return t('agents.from.conversation')
   if (tr === 'manual' || m.source === 'manual') return t('agents.from.manual')
@@ -1258,7 +1259,7 @@ function Composer({ agent: a, replyTo, onCancelReply, onSend, ref }: { agent: Ag
           {chat && chat.state === 'running' && <StopButton onClick={() => stopChat.mutate(chat.id)} busy={stopChat.isPending} label={t('sessions.stop')} />}
         </>
       }
-      voice={<VoiceButton onTranscript={onTranscript} onVoiceMessage={onVoiceMessage} />}
+      voice={<VoiceButton draftKey={key} onTranscript={onTranscript} onVoiceMessage={onVoiceMessage} />}
       send={{ onClick: () => submit(), disabled: !canSend, busy: run.isPending || voiceUp, label: t('agents.run.now'), testId: 'agent-run' }}
       reason={files.uploading ? t('sessions.composer.uploading') : null}
       boxProps={{ ...(a.enabled ? files.dropProps : {}), 'data-testid': 'agent-box' }}

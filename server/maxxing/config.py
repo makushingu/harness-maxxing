@@ -137,6 +137,10 @@ DEFAULT_CONFIG: dict[str, Any] = {
     # true = programs a scheduled job leaves running in the background outlive it (KillMode=process), as before
     # 2.0.0a70; `maxxing init` writes true on installs that existed before (no silent change), new ones end them.
     "cron_keep_background": False,
+    # Settings -> Usage: a cron job or an agent run stopped by Claude's usage limit starts again once, this many
+    # seconds after the reset (crons.limit_retry_at)
+    "limit_retry": True,
+    "limit_retry_delay_s": 60,
 }
 
 FLOCK_WAIT_S = 10.0

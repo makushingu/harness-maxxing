@@ -12,7 +12,7 @@ import { uploadAttachment } from '@/lib/queries'
 import { api, errorMessage, isApiError } from '@/lib/api'
 import { busyEnd, busyStart } from '@/lib/busy'
 import { fromDraftAtt, toDraftAtts, type Att } from '@/pages/sessions/Composer'
-import { loadAtts, loadDraft, saveAtts, saveDraft } from '@/pages/sessions/store'
+import { DRAFT_EVENT, loadAtts, loadDraft, saveAtts, saveDraft } from '@/pages/sessions/store'
 import { pastedFile, pastedName } from '@/pages/sessions/pasteAsFile'
 import { quotesMarkdown } from '@/pages/sessions/util'
 export { insertAtCaret } from '@/features/composer/text'
@@ -122,6 +122,14 @@ export function useDraftText(key: string) {
       document.removeEventListener('visibilitychange', onHidden)
     }
   }, [])
+  // Written from outside the box (a dictation that ended while it was gone): show it.
+  React.useEffect(() => {
+    const onDraft = (e: Event) => {
+      if ((e as CustomEvent<string>).detail === key) setText(loadDraft(key))
+    }
+    window.addEventListener(DRAFT_EVENT, onDraft)
+    return () => window.removeEventListener(DRAFT_EVENT, onDraft)
+  }, [key])
   return { text, setText }
 }
 

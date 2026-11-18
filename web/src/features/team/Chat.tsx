@@ -21,6 +21,7 @@ import { openFileViewer } from '@/features/files/viewerStore'
 import { MessageBox, TuckedCard, TuckedHead } from '@/features/composer/MessageBox'
 import type { Att } from '@/features/composer/AttachmentChip'
 import { VoiceButton } from '@/features/voice/VoiceButton'
+import { DRAFT_EVENT } from '@/lib/drafts'
 import { insertAtCaret } from '@/features/composer/text'
 import { fmtBytes } from '@/lib/format'
 import { Markdown } from '@/components/ui/markdown'
@@ -413,6 +414,7 @@ export function ChatView({ team, chatId, onBack, compact, headerExtra, leading }
         <div className={cn('shrink-0 border-t bg-fill-1 text-center text-[13px] text-muted-foreground', compact ? 'p-3' : 'p-4')}>{t('team.group.leftNotice')}</div>
       ) : (
         <Composer
+          key={chatId}
           ref={composer}
           chatId={chatId}
           title={title}
@@ -1089,6 +1091,25 @@ function PollCard({ team, chat, m }: { team: TeamState | undefined; chat: TeamCh
 /* ------------------------------------------------------------------------------------------------ composer */
 type Pending = { key: string; name: string; file?: TeamFile; failed?: boolean }
 
+/* The text being written in a chat is kept in localStorage (`mx-draft:team:<chat>`, cleared at sign-out with the
+ * session drafts): another page, another chat or a reload unmounts the box, the text is there when it comes back. */
+const teamDraftKey = (chatId: string) => `mx-draft:team:${chatId}`
+function loadTeamDraft(chatId: string): string {
+  try {
+    return localStorage.getItem(teamDraftKey(chatId)) || ''
+  } catch {
+    return ''
+  }
+}
+function saveTeamDraft(chatId: string, text: string) {
+  try {
+    if (text) localStorage.setItem(teamDraftKey(chatId), text)
+    else localStorage.removeItem(teamDraftKey(chatId))
+  } catch {
+    /* quota / private mode */
+  }
+}
+
 function Composer({
   chatId, title, compact, onPoll, replyTo, replyName, onCancelReply, editing, onCancelEdit, onEditLast, ref,
 }: {
@@ -1111,13 +1132,29 @@ function Composer({
   const upload = useTeamUpload()
   const typing = useTeamTyping()
   const lastTyping = React.useRef(0)
-  const [text, setText] = React.useState('')
+  // One box per chat (the parent keys it by chat): the draft of this chat, saved as it is typed - not while a sent
+  // message is being edited (that text is not a draft).
+  const [text, setText] = React.useState(() => loadTeamDraft(chatId))
   const [pending, setPending] = React.useState<Pending[]>([])
   const input = React.useRef<HTMLTextAreaElement>(null)
+  const alive = React.useRef(true)
   React.useEffect(() => {
-    setText('')
-    setPending([])
+    alive.current = true
     input.current?.focus()
+    return () => {
+      alive.current = false
+    }
+  }, [])
+  React.useEffect(() => {
+    if (!editing) saveTeamDraft(chatId, text)
+  }, [chatId, text, editing])
+  // Written from outside the box (a dictation that ended while it was gone): show it.
+  React.useEffect(() => {
+    const onDraft = (e: Event) => {
+      if ((e as CustomEvent<string>).detail === `team:${chatId}`) setText(loadTeamDraft(chatId))
+    }
+    window.addEventListener(DRAFT_EVENT, onDraft)
+    return () => window.removeEventListener(DRAFT_EVENT, onDraft)
   }, [chatId])
   // editing a message: its text in the box (the draft comes back after); replying: the focus
   React.useEffect(() => {
@@ -1161,7 +1198,12 @@ function Composer({
     setText('')
     setPending([])
     lastTyping.current = 0
-    send.mutate({ cid: chatId, text: v, files, reply_to: replyTo?.id }, { onError: () => setText(v) })
+    // A failed send puts its text back, in the box or (the box is gone: another page) in the chat's draft.
+    send.mutateAsync({ cid: chatId, text: v, files, reply_to: replyTo?.id }).catch(() => {
+      const join = (cur: string) => [v, cur].filter(Boolean).join('\n\n')
+      if (alive.current) setText(join)
+      else saveTeamDraft(chatId, join(loadTeamDraft(chatId)))
+    })
     onCancelReply()
   }
   // The files of the message, drawn as in every other box (Team uploads give no progress: "…" until done).
@@ -1250,7 +1292,7 @@ function Composer({
           </Button>
         </Tooltip>
       }
-      voice={editing ? null : <VoiceButton onTranscript={onVoice} />}
+      voice={editing ? null : <VoiceButton draftKey={`team:${chatId}`} onTranscript={onVoice} />}
       send={{
         onClick: () => submit(),
         disabled: editing ? !text.trim() && !editing.files?.length : (!text.trim() && !ready.length) || uploading,

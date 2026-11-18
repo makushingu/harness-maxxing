@@ -197,7 +197,7 @@ def test_retry_plan_backoff_limits_and_never_on_timeout(org, monkeypatch):
     assert crons.retry_plan(claude, ok=True, attempt=1, timed_out=False, text=over, now=now) is None
     assert crons.retry_plan(claude, ok=False, attempt=1, timed_out=False, text="no such file", now=now) is None
     p = crons.retry_plan(claude, ok=False, attempt=1, timed_out=False, text="usage limit reached|1900000900", now=now)
-    assert p["reason"] == "limit" and p["at"] == 1900000900 + 120 and p["attempt"] == 2
+    assert p["reason"] == "limit" and p["at"] == 1900000900 + 60 and p["attempt"] == 2
     monkeypatch.setattr(crons, "limit_reset", lambda text, now: None)
     p = crons.retry_plan(claude, ok=False, attempt=1, timed_out=False, text="You've hit your limit", now=now)
     assert p["at"] - now == crons.LIMIT_RETRY_S

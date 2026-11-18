@@ -1229,15 +1229,17 @@ const SessionRow = React.memo(function SessionRow({
           destructive
           onSelect={async () => {
             if (!(await confirm({ title: t('sessions.delete.title'), description: t('sessions.delete.desc'), destructive: true, confirmText: t('common.delete') }))) return
-            del.mutate(s.id, {
-              onSuccess: () => {
+            // mutateAsync: the row leaves the list once deleted, a per-call onSuccess would be dropped with it
+            del.mutateAsync(s.id).then(
+              () => {
                 closeSession(s.id)
                 forgetLog(s.id)
                 saveDraft(s.id, '')
                 saveQuotes(s.id, [])
                 toast.success(t('sessions.delete.done'))
               },
-            })
+              () => {}, // the mutation's toast says why
+            )
           }}
         >
           <Trash2 /> {t('sessions.menu.delete')}

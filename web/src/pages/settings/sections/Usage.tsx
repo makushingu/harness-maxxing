@@ -131,6 +131,47 @@ function BudgetCard() {
   )
 }
 
+/** A job or an agent run stopped by the plan's usage limit starts again after the reset (config `limit_retry`,
+ *  `limit_retry_delay_s`; server/maxxing/crons.py limit_retry_at). */
+function LimitRetryCard() {
+  const t = useT()
+  const { data: s } = useSettings()
+  const save = useSaveSettings()
+  const saved = s?.limit_retry_delay_s ?? 60
+  const [text, setText] = React.useState<string | null>(null)
+  const commit = () => {
+    const n = text === null || text.trim() === '' ? saved : Number(text)
+    setText(null)
+    if (!Number.isInteger(n) || n < 0 || n > 3600 || n === saved) return
+    save.mutate({ limit_retry_delay_s: n })
+  }
+  const on = s?.limit_retry !== false
+  return (
+    <SettingsCard>
+      <SettingRow label={t('stats.limitRetry')} description={t('stats.limitRetryDesc')} htmlFor="mx-limit-retry">
+        <Switch id="mx-limit-retry" data-testid="limit-retry" checked={on} disabled={!s} onCheckedChange={(v) => save.mutate({ limit_retry: v })} />
+      </SettingRow>
+      {on && (
+        <SettingRow label={t('stats.limitRetryDelay')} description={t('stats.limitRetryDelayDesc')} htmlFor="mx-limit-retry-delay">
+          <Input
+            id="mx-limit-retry-delay"
+            data-testid="limit-retry-delay"
+            inputMode="numeric"
+            className="w-28 text-right tabular-nums"
+            disabled={!s}
+            value={text ?? String(saved)}
+            onChange={(e) => setText(e.target.value)}
+            onBlur={commit}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') e.currentTarget.blur()
+            }}
+          />
+        </SettingRow>
+      )}
+    </SettingsCard>
+  )
+}
+
 function Tile({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <div className="grid gap-0.5 rounded-lg border bg-fill-1 px-3 py-2.5">
@@ -269,6 +310,7 @@ export function UsageSection() {
   return (
     <SectionStack>
       <BudgetCard />
+      <LimitRetryCard />
       <QuotaCard />
       <TokensCard />
     </SectionStack>

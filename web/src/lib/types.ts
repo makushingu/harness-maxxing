@@ -864,6 +864,8 @@ export type Settings = {
   presentation_default?: boolean
   /** Settings -> Usage: $ per day for the whole server (0 = no budget); once reached, scheduled jobs and agents wait for the next day */
   daily_budget_usd?: number
+  limit_retry?: boolean
+  limit_retry_delay_s?: number
   usage_widget: boolean
   /** Settings -> Features: the Tasks page (/tasks), its sidebar entry and dashboard widget (off when new) */
   tasks_page?: boolean

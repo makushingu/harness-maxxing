@@ -282,7 +282,7 @@ def log_action(device: str, tool: str, args: dict, ok: bool, ms: int, session: s
     p = home() / "actions.jsonl"
     try:
         with _alock:
-            lines = p.read_text().splitlines()[-(MAX_ACTIONS - 1):] if p.exists() else []
+            lines = p.read_text().split("\n")[-(MAX_ACTIONS):-1] if p.exists() else []
             fd, tmp = tempfile.mkstemp(prefix=".actions.", dir=p.parent)
             try:
                 with os.fdopen(fd, "w") as f:
@@ -298,12 +298,13 @@ def log_action(device: str, tool: str, args: dict, ok: bool, ms: int, session: s
 def actions(limit: int = 30, device: str | None = None) -> list[dict]:
     out: list[dict] = []
     try:
-        for ln in (home() / "actions.jsonl").read_text().splitlines():
+        # split on "\n" only: str.splitlines() also cuts on U+2028 and friends, which JSON keeps inside a string
+        for ln in (home() / "actions.jsonl").read_text().split("\n"):
             try:
                 a = json.loads(ln)
-            except ValueError:
+            except (ValueError, RecursionError):
                 continue
-            if device is None or a.get("device") == device:
+            if isinstance(a, dict) and (device is None or a.get("device") == device):
                 out.append(a)
     except OSError:
         pass

@@ -505,8 +505,8 @@ export function loadDraft(k: string): string {
     return ''
   }
 }
-/** Fired with the draft key when a draft is written from outside its composer (prefillDraft): a mounted composer reloads it. */
-export const DRAFT_EVENT = 'mx-draft'
+import { DRAFT_EVENT } from '@/lib/drafts'
+export { DRAFT_EVENT }
 const PREFILL = 'mx-prefilled:'
 
 /** Types `prompt` in a composer's draft (links such as the dashboard examples). A draft that is still an untouched
@@ -561,7 +561,12 @@ export type DraftAtt = { path: string; name: string; size: number }
 export function loadAtts(k: string): DraftAtt[] {
   try {
     const v = JSON.parse(localStorage.getItem(`${draftKey(k)}:atts`) || '[]')
-    return Array.isArray(v) ? v.filter((a) => a && typeof a.path === 'string' && a.path) : []
+    // every field gets its type: a `name` that is an object crashed the chip (React refuses it as a child)
+    return Array.isArray(v)
+      ? v
+          .filter((a) => a && typeof a.path === 'string' && a.path)
+          .map((a) => ({ path: a.path as string, name: typeof a.name === 'string' && a.name ? a.name : (a.path as string).split('/').pop()!, size: Number.isFinite(a.size) ? (a.size as number) : 0 }))
+      : []
   } catch {
     return []
   }

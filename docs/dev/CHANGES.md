@@ -7,6 +7,14 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Web: state lost on unmount (another page unmounts the whole page tree, no keep-alive). Side question
+  (`pages/sessions/Aside.tsx`): module zustand store per session, sessionStorage (answered ones only), `api.post`
+  instead of a per-call `mutate` callback; `useAskAside` removed. Team composer keyed by chat, draft in
+  `mx-draft:team:<chat>`, failed send back via `mutateAsync().catch`. `VoiceButton draftKey`: a transcript that
+  arrives after unmount, or a recording cut by unmount (`useRecorder({onUnmount})`), goes to the draft
+  (`lib/drafts.ts appendDraft` + `DRAFT_EVENT`, now also heard by `useDraftText` and Team). Composer "Edit queue":
+  taken messages land in the draft when the box is gone. Tree delete, Stop, plan approve: `mutateAsync` (follow-ups
+  no longer dropped with the component).
 - GitHub: `.github/workflows/cla.yml` removed (the CLA bot failed on every closed pull request: `Branch cla-signatures
   not found`). The CLA stays: the maintainers check the signing comment before merging (CONTRIBUTING.md, CLA.md);
   past signatures stay on the branch `cla-signatures`.
@@ -14,6 +22,28 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   majors left out: mermaid 12, emojibase-data 18). Replaces PRs #107 #110 #112 #116 #117 #118 #126 #128 #130.
   Vite 8.3.8 now warns about `advancedChunks` (deprecated, use `codeSplitting`) and the extensionless import of
   `./src/i18n/groups` in `vite.config.ts` (native config loader): harmless for now.
+- `service.list_sessions` reads the turns waiting for a browser exit once per list (`exits.waiting_by_session()`,
+  passed to `public(meta, exits_waiting)`) instead of once per session: each `exits.waiting_for` call built the
+  state path through `config.state_dir()` (a `mkdir`) and stat'ed `waiting.json`. Measured on a copy of a real
+  state with ~2,000 sessions: 139 ms -> 72 ms per list (warm caches); the tree, the dashboard and @-mentions call it.
+  `public(meta)` alone is unchanged. Test: `test_browser.py::test_the_session_list_reads_the_turns_waiting_for_an_exit_once`.
+- Usage-limit retry at the reset time: `crons.text_reset()` reads "resets 4pm (UTC)" / "resets 4:30pm" / "resets
+  4am" (zone in parentheses, else or unknown UTC; next occurrence, or one passed less than `LIMIT_RESET_GRACE_S` =
+  15 min ago) and is the last source of `limit_reset()` (epoch, `claude_auth.limits`, text, then `LIMIT_RETRY_S`).
+  `crons.limit_retry_at()` = reset + config `limit_retry_delay_s` (default 60, 0-3600, at least 60 s from now; was a
+  fixed +120 s), None past `CATCH_UP_WINDOW_S` or when config `limit_retry` (default true) is false - then a limit
+  failure is final. Both keys in `/api/settings` (`400 invalid_limit_retry_delay`), card in Settings -> Usage.
+  Agents: `on_turn_end` -> `_plan_limit_retry` stores `<state>/agents/<key>.json` `limit_retry` {at, session,
+  attempt} (one per agent, the latest wins; not for group turns, not when the session env has
+  `MAXXING_CRON_ID`: the cron's `retry_plan` owns it; at most `crons.MAX_RETRIES` for the same session) and posts a
+  `note` (`status: limit_retry`). `agents.retry_limits()` (agents loop, every `FEED_POLL_S`) sends `LIMIT_RETRY_TEXT`
+  into the same session once due, through `gate()`: `busy` waits, other reasons drop it with a `skip`; the run
+  message has `trigger: "limit-retry"`. Fake Claude: `HITLIMIT`.
+- `maxxing agents list` (text output, `cmd_agents._list`) counted each agent's jobs with `agents.cron_jobs(path)`,
+  i.e. one `crons.list_jobs()` per agent (jobs.json, runs.jsonl, retries, `next_run` of every job each time): it now
+  counts them from one `agents.cron_jobs()` call (`path=None` = every job). Measured on a copy of a real state
+  (24 agents, 32 jobs, median of 7, in-process): 286 ms -> 62 ms, same output. Test:
+  `test_agents_cli.py::test_list_reads_the_scheduled_jobs_once`.
 
 ## 2.0.0-alpha.157 - 2026-11-18
 
