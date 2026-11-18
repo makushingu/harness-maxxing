@@ -770,6 +770,8 @@ def _safe_rel(name: str) -> str | None:
     p = Path(name)
     if p.is_absolute() or ".." in p.parts or not name or name.startswith("/"):
         return None
+    if any(len(part.encode(errors="replace")) > 255 for part in p.parts):   # no file system takes it (ENAMETOOLONG)
+        return None
     return p.as_posix()
 
 
@@ -831,7 +833,11 @@ def _apply(files: dict[str, bytes], hold: bool | None = None) -> dict:
     root = config.workspace()
     root.mkdir(parents=True, exist_ok=True)
     root = root.resolve()
-    trash = config.STATE / "trash" / f"backup-restore-{time.strftime('%Y%m%d-%H%M%S')}"
+    stamp = f"backup-restore-{time.strftime('%Y%m%d-%H%M%S')}"
+    trash, n = config.STATE / "trash" / stamp, 1
+    while trash.exists():                          # a second restore in the same second keeps the first copy
+        n += 1
+        trash = config.STATE / "trash" / f"{stamp}-{n}"
     restored, unchanged = [], 0
     hooks_held: list[str] = []
     # A new server (no session yet: the installer's restore, a move) gets everything back as it was. A server in use
@@ -882,10 +888,13 @@ def _apply(files: dict[str, bytes], hold: bool | None = None) -> dict:
     outside: list[str] = []
     todo = []
     for rel, data in sorted(files.items()):
-        if rel.startswith(META_DIR + "/") or denied(rel):
+        if rel.startswith(META_DIR + "/") or denied(rel) or _safe_rel(rel) is None:   # None: a name no file system takes
             continue
         dest = (root / rel)
-        if root not in dest.resolve().parents:
+        try:
+            if root not in dest.resolve().parents:
+                continue
+        except (OSError, RuntimeError):            # a name too long, a link loop: skipped like an unsafe path
             continue
         if allowed is not None and not any(r.match(rel) for r in allowed):
             aside = trash / "outside" / rel
@@ -916,10 +925,12 @@ def _apply(files: dict[str, bytes], hold: bool | None = None) -> dict:
     jobs = files.get(f"{META_DIR}/crons/jobs.json")
     if jobs is not None:
         try:
+            doc = json.loads(jobs)
+            if not isinstance(doc, dict) or not isinstance(doc.get("jobs"), list) \
+                    or not all(isinstance(j, dict) for j in doc["jobs"]):
+                raise ValueError("not a jobs file")        # never replaces the crons with something else
             if hold:
                 jobs, held["crons"], held_job_ids = _hold_new_jobs(jobs)
-            else:
-                json.loads(jobs)
             if put(_cron_jobs_file(), jobs, "state/crons/jobs.json"):
                 crons_restored = True
                 crons = _crons()
