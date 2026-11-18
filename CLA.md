@@ -81,7 +81,7 @@ already granted stay in force. If a provision is held unenforceable, the rest of
 ## How to sign
 
 - **Individual**: post on your pull request the comment
-  `I have read the CLA Document and I hereby sign the CLA`. The CLA bot records your GitHub account, the date and
+  `I have read the CLA Document and I hereby sign the CLA`. That comment records your GitHub account, the date and
   the pull request.
 - **Entity**: the person signing on behalf of the entity posts the same comment (exactly, alone) and adds, in another comment or
   the pull request description, the entity's legal name and the GitHub accounts it authorizes to contribute. For a

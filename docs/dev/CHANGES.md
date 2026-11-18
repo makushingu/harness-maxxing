@@ -7,6 +7,9 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- GitHub: `.github/workflows/cla.yml` removed (the CLA bot failed on every closed pull request: `Branch cla-signatures
+  not found`). The CLA stays: the maintainers check the signing comment before merging (CONTRIBUTING.md, CLA.md);
+  past signatures stay on the branch `cla-signatures`.
 - Dependencies: `npm update` in `web/` and `uv lock --upgrade` in `server/` (lockfiles only, ranges unchanged;
   majors left out: mermaid 12, emojibase-data 18). Replaces PRs #107 #110 #112 #116 #117 #118 #126 #128 #130.
   Vite 8.3.8 now warns about `advancedChunks` (deprecated, use `codeSplitting`) and the extensionless import of
