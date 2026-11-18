@@ -561,10 +561,12 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
     }
   }
 
+  // mutateAsync: the follow-up runs even if the column is gone by then (another page)
   const onStop = () =>
-    stop.mutate(sid, {
-      onSuccess: () => usePending.getState().clearQueued(sid),
-    })
+    stop.mutateAsync(sid).then(
+      () => usePending.getState().clearQueued(sid),
+      () => {},
+    )
 
   const tgLinked = !!tg?.configured && !!tg?.chat
   const authReason = claude && !claude.auth.ok ? t(claude.auth.method ? 'sessions.composer.authExpired' : 'sessions.composer.noAuth') : null

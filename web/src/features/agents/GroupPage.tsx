@@ -804,7 +804,7 @@ function Composer({ group: g, ref, first }: { group: AgentGroup; ref?: React.Ref
       }}
       onFiles={files.add}
       attachTestId="agent-attach"
-      voice={<VoiceButton onTranscript={onTranscript} />}
+      voice={<VoiceButton draftKey={key} onTranscript={onTranscript} />}
       send={{ onClick: () => submit(), disabled: !canSend, busy: say.isPending, label: t('groups.send'), testId: 'group-send' }}
       reason={files.uploading ? t('sessions.composer.uploading') : null}
       boxProps={ready ? files.dropProps : undefined}

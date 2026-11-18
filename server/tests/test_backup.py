@@ -246,7 +246,7 @@ def test_secret_blocks_run(gh, ws):
     (ws / "projects/acme/topics/blog/memory.md").write_text("token: sk-ant-api03-" + "Z" * 50 + "\n")
     r = backup.run()
     assert r["ok"] is False and r["code"] == "secret_found"
-    assert r["leaks"] == [{"file": "projects/acme/topics/blog/memory.md", "kinds": ["Anthropic API key"]}]
+    assert r["leaks"] == [{"file": "projects/acme/topics/blog/memory.md", "kinds": ["Anthropic API key", "password"]}]
     assert "Z" * 20 not in r["error"]                                # never echo the value
     assert _commits(bare) == 0
     assert backup.history()[0]["ok"] is False
@@ -707,3 +707,18 @@ def test_restore_never_replaces_the_crons_with_a_malformed_jobs_file(ws, mx_stat
         r = backup._apply({f"{backup.META_DIR}/crons/jobs.json": blob}, hold=hold)
         assert r["crons"] is False
         assert [j["name"] for j in crons.list_jobs()] == ["Keep"]
+
+
+def test_scanner_sees_a_bot_url_and_other_password_labels():
+    tok = "123456789:AAH" + "a1B2c3D4e5" * 3 + "xy"
+    pw = "Sup3rSecret99"
+    for text in (f"https://api.telegram.org/bot{tok}/getMe", f"| Password | {pw} |", f"pw: {pw}",
+                 f"token: {pw}", f"Authorization: Bearer {pw}", f"password：{pw}"):
+        assert backup.scan_bytes(text.encode()), text
+
+
+
+def test_scan_looks_at_file_names_too():
+    name = "projects/ghp_" + "a1B2c3D4e5" * 3 + "abcdef/notes.md"
+    assert backup.scan({name: b"clean"}) == [{"file": name, "kinds": ["GitHub token"]}]
+    assert backup.scan({"projects/acme/notes.md": b"clean"}) == []

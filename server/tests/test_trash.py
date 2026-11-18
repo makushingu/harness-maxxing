@@ -514,3 +514,17 @@ def test_restore_into_a_folder_that_became_a_file_answers_409(client, topic, mx)
     (item,) = _items(client)
     r = client.post(f"/api/trash/{item['id']}/restore")
     assert r.status_code == 409 and len(_items(client)) == 1
+
+
+def test_restore_ignores_a_session_path_that_is_not_text(mx):
+    t = trash.trash_dir()
+    item = t / "20260101-000001-topic-x"
+    item.mkdir()
+    (item / "CLAUDE.md").write_text("x")
+    sess = t / (item.name + ".sessions")
+    sess.mkdir()
+    (sess / "11111111-2222-3333-4444-555555555555.json").write_text(json.dumps({"path": 5, "state": "idle"}))
+    dest = mx["ws"] / "projects" / "p" / "topics" / "x"
+    (t / (item.name + ".json")).write_text(json.dumps({"original": str(dest), "at": 2e9, "kind": "topic"}))
+    r = trash.restore(item.name)
+    assert r["ok"] and dest.is_dir() and r["sessions"] == 1 and not sess.exists()

@@ -505,8 +505,8 @@ export function loadDraft(k: string): string {
     return ''
   }
 }
-/** Fired with the draft key when a draft is written from outside its composer (prefillDraft): a mounted composer reloads it. */
-export const DRAFT_EVENT = 'mx-draft'
+import { DRAFT_EVENT } from '@/lib/drafts'
+export { DRAFT_EVENT }
 const PREFILL = 'mx-prefilled:'
 
 /** Types `prompt` in a composer's draft (links such as the dashboard examples). A draft that is still an untouched

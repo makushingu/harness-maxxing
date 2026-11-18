@@ -7,6 +7,14 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Web: state lost on unmount (another page unmounts the whole page tree, no keep-alive). Side question
+  (`pages/sessions/Aside.tsx`): module zustand store per session, sessionStorage (answered ones only), `api.post`
+  instead of a per-call `mutate` callback; `useAskAside` removed. Team composer keyed by chat, draft in
+  `mx-draft:team:<chat>`, failed send back via `mutateAsync().catch`. `VoiceButton draftKey`: a transcript that
+  arrives after unmount, or a recording cut by unmount (`useRecorder({onUnmount})`), goes to the draft
+  (`lib/drafts.ts appendDraft` + `DRAFT_EVENT`, now also heard by `useDraftText` and Team). Composer "Edit queue":
+  taken messages land in the draft when the box is gone. Tree delete, Stop, plan approve: `mutateAsync` (follow-ups
+  no longer dropped with the component).
 - GitHub: `.github/workflows/cla.yml` removed (the CLA bot failed on every closed pull request: `Branch cla-signatures
   not found`). The CLA stays: the maintainers check the signing comment before merging (CONTRIBUTING.md, CLA.md);
   past signatures stay on the branch `cla-signatures`.
