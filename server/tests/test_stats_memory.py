@@ -241,3 +241,9 @@ def test_a_lone_surrogate_in_a_meta_does_not_break_usage(mx):
     (store.sessions_dir() / f"{sid}.json").write_text(json.dumps(m))
     json.dumps(stats.compute(), ensure_ascii=False).encode("utf-8")
 
+
+
+def test_a_session_id_with_a_trailing_newline_is_not_valid():
+    from maxxing.sessions import store
+    sid = "11111111-2222-3333-4444-555555555555"
+    assert store.is_valid_id(sid) and not store.is_valid_id(sid + "\n")

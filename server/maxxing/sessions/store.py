@@ -30,7 +30,7 @@ from typing import Any, Iterator
 
 from .. import config
 
-ID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+ID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\Z")
 SPAWN_GRACE_S = 30.0          # a runner just spawned may not hold its run lock yet
 
 
