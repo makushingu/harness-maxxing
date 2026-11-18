@@ -448,7 +448,13 @@ export default function TasksPage() {
                 ) : (
                   body()
                 )}
-                {tasks.length > 0 && <p className="pb-14 text-center text-xs text-muted-foreground">{t('tasks.footerHint')}</p>}
+                {tasks.length > 0 && (
+                  <p className="pb-14 text-center text-xs text-muted-foreground">
+                    {/* no Ctrl/⌘ on a touch screen: the round box is the way to select */}
+                    <span className="pointer-coarse:hidden">{t('tasks.footerHint')}</span>
+                    <span className="hidden pointer-coarse:inline">{t('tasks.footerHintTouch')}</span>
+                  </p>
+                )}
               </>
             )
           ) : null}
