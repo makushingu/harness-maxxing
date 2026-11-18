@@ -7,6 +7,11 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Web, phone session header (`variant === 'mobile'`): `MobileOverlay` only fills `MobileTabsSlot` when more than one
+  column is open; `MobileTabs` wraps the bar in `data-kbd-hide` (hidden while the composer has the focus, keyboard
+  up); new `@media (orientation: landscape) and (max-height: 500px) and (pointer: coarse)` rule hides
+  `[data-col] [data-kbd-hide]` (place row + tabs) keyboard down. Measured 360x740: header 171 -> 123 px; 390x844
+  keyboard up: 145 -> 97; 740x360: 171 -> 97 (reading area 87 -> 161). Test in `test_web_mobile.py`.
 - Files: `/api/files/thumb` takes `h` (min height, bucketed like `w`, in the cache key; ffmpeg `scale=min(iw,
   min(4096,max(w,h*iw/ih)))`). Chat media (box 4:3, h-28) and the attachment strip ask `h=320`, quoted files and
   composer chips `h=160`; viewer placeholder same URL as the chat (`w=320&h=320`); `media.warm` follows. Before: a

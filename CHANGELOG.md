@@ -31,6 +31,10 @@ Fixed:
   you leave the page, lands in the draft of its box. Queued messages taken back ("Edit") while you leave go to the draft.
 - **`maxxing agents list` answers several times faster when you have many agents.** It read every scheduled job
   again for each agent; it reads them once now (with 24 agents: about 290 ms down to 60 ms).
+- **More room to read a session on a phone.** With a single session open, the bar of tabs no longer repeats its
+  title under the header (48 px more for the conversation); while you type it steps aside with the topic line; and
+  with the phone held sideways the header keeps only its top bar and the title, which leaves about twice as much of
+  the answer in sight (161 px instead of 87 on a 740x360 screen).
 
 ## 2.0.0-alpha.157 - 2026-11-18
 
