@@ -218,3 +218,13 @@ def test_stats_survive_badly_typed_meta_fields(client, mx):
     d = r.json()
     assert d["totals"]["sessions"] == len(cases) + 1 and d["latency"]["turns"] == 0
     assert all(isinstance(s["title"], str) and isinstance(s["path"], str) for s in d["sessions"])
+
+
+def test_a_huge_integer_in_a_session_meta_does_not_break_the_statistics(client, mx):
+    a = _session("projects/acme/topics/blog", "A")
+    with store.edit(a) as m:
+        m["cost_usd"] = 10 ** 400
+        m["latency"] = [[10 ** 400, 1]]
+        m["started"] = 10 ** 400
+    r = client.get("/api/stats/tokens?force=1")
+    assert r.status_code == 200, r.text
