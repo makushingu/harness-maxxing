@@ -106,6 +106,12 @@ html[data-kbd] [data-col]:has([data-kbd-box]:focus-within) [data-kbd-hide] {
     display: none;
   }
 }
+/* A phone held sideways (about 360 px high): with the header's place row and tabs, ~90 px were left to read. */
+@media (orientation: landscape) and (max-height: 500px) and (pointer: coarse) {
+  [data-col] [data-kbd-hide] {
+    display: none;
+  }
+}
 
 .dark {
   --sf-c: 0.006;
