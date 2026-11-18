@@ -2267,7 +2267,7 @@ def _fire(path: str, *, trigger: str, text: str, prompt: str, source: str, attac
         return {"started": False, "reason": reason}
     if reason == "busy" and not owner and not waited and (trigger in CONVERSATIONAL or trigger.startswith("agent:")):
         r = _owner_wait(path, trigger=trigger, prompt=prompt, source=source, attachments=attachments,
-                        reply_to=reply_to, model=model, text=text, depth=depth)
+                        reply_to=reply_to, model=model, text=text, depth=depth, env=cron_env)
         if r:
             return r
     if reason:
@@ -2360,7 +2360,8 @@ _waiting_seeded = False
 
 def _owner_wait(path: str, *, trigger: str, prompt: str, source: str, attachments: list[str] | None,
                 reply_to: str | None, model: str | None, effort: str | None = None,
-                voice: str | None = None, text: str = "", depth: int = 0, call: str | None = None) -> dict | None:
+                voice: str | None = None, text: str = "", depth: int = 0, call: str | None = None,
+                env: dict | None = None) -> dict | None:
     """Keeps the owner's message until the run in progress ends -> the answer of fire, None = no room (refused).
     text: a run that is not the owner's message (by hand, from another agent) with its outside text and its hops."""
     own = _owner_chat(trigger, source, text)
@@ -2375,7 +2376,8 @@ def _owner_wait(path: str, *, trigger: str, prompt: str, source: str, attachment
     q.append({"id": msg["id"], "trigger": trigger, "source": source, "prompt": prompt,
               "attachments": list(attachments or []), "reply_to": reply_to or "", "model": model or "",
               "effort": effort or "", "voice": voice or "", "at": msg["at"], **({"call": call} if call else {}),
-              **({} if own else {"text": text[:EVENT_MAX + 1], "depth": depth, "auto": True})})
+              **({} if own else {"text": text[:EVENT_MAX + 1], "depth": depth, "auto": True}),
+              **({"env": dict(env)} if env else {})})     # --notify-back: kept for when it starts
     st = _read_state(path)
     st["owner_wait"] = q
     _write_state(path, st)
@@ -2406,7 +2408,8 @@ def _drain_owner(path: str) -> int:
             _fire(path, trigger=str(it.get("trigger") or "manual"), text=str(it.get("text") or ""),
                   prompt=str(it.get("prompt") or ""), source=str(it.get("source") or "manual"),
                   attachments=it.get("attachments") or None, depth=int(it.get("depth") or 0),
-                  cron_env=None, timeout_s=None, reply_to=it.get("reply_to") or None, wait=False,
+                  cron_env=it.get("env") if isinstance(it.get("env"), dict) else None, timeout_s=None,
+                  reply_to=it.get("reply_to") or None, wait=False,
                   model=it.get("model") or None, waited=str(it.get("id") or ""), effort=it.get("effort") or None,
                   voice=it.get("voice") or None, call=it.get("call") or None)
             n += 1

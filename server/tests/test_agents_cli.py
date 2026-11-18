@@ -306,3 +306,22 @@ def test_notify_back_sends_the_result_to_the_asking_session(client, topic, capsy
     assert "MAXXING_AGENT_NOTIFY" not in store.read(r["session"])["env"]
     wait_idle(client, asker["id"])
     assert not any("Result of a run" in c["prompt"] for c in _calls()[n:])
+
+
+def test_notify_back_survives_a_busy_agent(client, topic, capsys, monkeypatch):
+    """Sent while the agent runs: the send waits for its turn and still brings its result back."""
+    _two_agents(client)
+    monkeypatch.setattr(bus, "_loop", None)
+    from maxxing import agent_guard
+    from maxxing.sessions import service, store
+    asker = service.create_session("projects/acme/topics/blog", title="Asker")
+    monkeypatch.setenv("FAKE_CLAUDE_DELAY", "0.3")
+    first = agents.fire(A, trigger="manual", source="command line", prompt="NOTOOL a")
+    assert first["started"]
+    monkeypatch.setattr(agent_guard, "turn_meta", lambda: store.read(asker["id"]))
+    assert cli.main(["agents", "send", "writer", "NOTOOL b", "--notify-back", "--json"]) == 0
+    assert json.loads(capsys.readouterr().out).get("waiting")
+    assert agents._read_state(A)["owner_wait"][0]["env"] == {"MAXXING_AGENT_NOTIFY": asker["id"]}
+    monkeypatch.setenv("FAKE_CLAUDE_DELAY", "0.02")
+    wait_for(lambda: any("Result of a run of the agent Writer" in c["prompt"] for c in _calls()))
+    wait_idle(client, asker["id"])
