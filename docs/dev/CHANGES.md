@@ -11,9 +11,6 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   majors left out: mermaid 12, emojibase-data 18). Replaces PRs #107 #110 #112 #116 #117 #118 #126 #128 #130.
   Vite 8.3.8 now warns about `advancedChunks` (deprecated, use `codeSplitting`) and the extensionless import of
   `./src/i18n/groups` in `vite.config.ts` (native config loader): harmless for now.
-
-## 2.0.0-alpha.157 - 2026-11-18
-
 - `service.list_sessions` reads the turns waiting for a browser exit once per list (`exits.waiting_by_session()`,
   passed to `public(meta, exits_waiting)`) instead of once per session: each `exits.waiting_for` call built the
   state path through `config.state_dir()` (a `mkdir`) and stat'ed `waiting.json`. Measured on a copy of a real
@@ -31,6 +28,14 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   `note` (`status: limit_retry`). `agents.retry_limits()` (agents loop, every `FEED_POLL_S`) sends `LIMIT_RETRY_TEXT`
   into the same session once due, through `gate()`: `busy` waits, other reasons drop it with a `skip`; the run
   message has `trigger: "limit-retry"`. Fake Claude: `HITLIMIT`.
+- `maxxing agents list` (text output, `cmd_agents._list`) counted each agent's jobs with `agents.cron_jobs(path)`,
+  i.e. one `crons.list_jobs()` per agent (jobs.json, runs.jsonl, retries, `next_run` of every job each time): it now
+  counts them from one `agents.cron_jobs()` call (`path=None` = every job). Measured on a copy of a real state
+  (24 agents, 32 jobs, median of 7, in-process): 286 ms -> 62 ms, same output. Test:
+  `test_agents_cli.py::test_list_reads_the_scheduled_jobs_once`.
+
+## 2.0.0-alpha.157 - 2026-11-18
+
 - Global daily budget (`server/maxxing/budget.py`): config `daily_budget_usd` (0 = none, settings route, restorable
   from a backup). `spent_today()` sums `days[today].cost` of the session metas touched in the last 25 h (same basis
   as an agent's `day_cost`; a deleted session takes its cost away). `reached()` gates only automatic work:
@@ -153,11 +158,6 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   missing after the installs.
 - `maxxing deps check --notify` exits 0 when it found something (the feed reports it): the default job `deps-check`
   ran it and its runs read "Failed (code 1)". Without `--notify` the exit code is unchanged (1 = vulnerable).
-- `maxxing agents list` (text output, `cmd_agents._list`) counted each agent's jobs with `agents.cron_jobs(path)`,
-  i.e. one `crons.list_jobs()` per agent (jobs.json, runs.jsonl, retries, `next_run` of every job each time): it now
-  counts them from one `agents.cron_jobs()` call (`path=None` = every job). Measured on a copy of a real state
-  (24 agents, 32 jobs, median of 7, in-process): 286 ms -> 62 ms, same output. Test:
-  `test_agents_cli.py::test_list_reads_the_scheduled_jobs_once`.
 
 ## 2.0.0-alpha.156 - 2026-11-15
 

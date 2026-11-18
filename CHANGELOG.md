@@ -5,19 +5,27 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 
 ## Unreleased
 
-Changed:
-- **Dependencies updated** (minor and patch versions only): Vite 8.3.8, React Router 8.5.1, TanStack Query 5.108,
-  Zustand 5.1, Tailwind CSS 4.3.5, lucide-react 1.74, CodeMirror, FastAPI 0.163, Starlette 1.10, Pydantic 2.14.3,
-  websockets 17.4 and their own dependencies. Thanks to Anthony14FR, who flagged them.
-
-## 2.0.0-alpha.157 - 2026-11-18
-
 New:
 - **Jobs and agents start again right after the usage limit resets.** When a scheduled job or an agent run (started
   by hand, by a notification, by another agent or by its schedule) is stopped by the usage limit of your Claude plan,
   it starts again by itself one minute after the reset time Claude gave ("resets 4pm"), instead of trying every 30
   minutes. Settings -> Usage -> **Start again after the usage limit** (on by default) turns it off or changes the
   delay.
+
+Changed:
+- **Dependencies updated** (minor and patch versions only): Vite 8.3.8, React Router 8.5.1, TanStack Query 5.108,
+  Zustand 5.1, Tailwind CSS 4.3.5, lucide-react 1.74, CodeMirror, FastAPI 0.163, Starlette 1.10, Pydantic 2.14.3,
+  websockets 17.4 and their own dependencies. Thanks to Anthony14FR, who flagged them.
+- **The session list loads about twice as fast on a busy server.** With thousands of sessions (scheduled jobs and
+  agents add many), the list, the sidebar and the dashboard answer in half the time.
+
+Fixed:
+- **`maxxing agents list` answers several times faster when you have many agents.** It read every scheduled job
+  again for each agent; it reads them once now (with 24 agents: about 290 ms down to 60 ms).
+
+## 2.0.0-alpha.157 - 2026-11-18
+
+New:
 - **A daily budget for the whole server.** Settings -> Usage has a **Daily budget** in dollars (0 = none, as
   before). You get a notification at 80 % and an alert when it is reached; from then on the scheduled jobs and the
   agents wait for the next day, while your own messages and **Run now** still run. The card shows what today cost
@@ -52,8 +60,6 @@ Changed:
   clicking.
 - **"Browser of my PC" is gone.** It was prepared but never downloadable; Devices does it and more (Claude uses
   the whole computer, not only a browser).
-- **The session list loads about twice as fast on a busy server.** With thousands of sessions (scheduled jobs and
-  agents add many), the list, the sidebar and the dashboard answer in half the time.
 
 Fixed:
 - **Tabs.** The shown tab is now an oval that glides from tab to tab, the other tabs lose their grey background,
@@ -74,8 +80,6 @@ Fixed:
   updated by the system (`apt upgrade caddy`, 2.11.5 or later fixes GHSA-8qx7-j2v2-x6q5).
 - **The weekly "Check dependencies for vulnerabilities" job no longer shows "Failed" when it finds something.** The
   finding is in the notifications; "Failed" now only means the check itself could not run.
-- **`maxxing agents list` answers several times faster when you have many agents.** It read every scheduled job
-  again for each agent; it reads them once now (with 24 agents: about 290 ms down to 60 ms).
 
 ## 2.0.0-alpha.156 - 2026-11-15
 
