@@ -7,6 +7,9 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Web, touch targets: quote remove (Composer) and task filter chip clear (Toolbar) get a `pointer-coarse:before:`
+  hit area (40 px); browser tab close `pointer-coarse:size-8` (tab height); agents new-group arrow
+  `pointer-coarse:px-3`. Measured at 360 px with touch emulation. Tests in `test_web_mobile.py`.
 - Files: `/api/files/thumb` takes `h` (min height, bucketed like `w`, in the cache key; ffmpeg `scale=min(iw,
   min(4096,max(w,h*iw/ih)))`). Chat media (box 4:3, h-28) and the attachment strip ask `h=320`, quoted files and
   composer chips `h=160`; viewer placeholder same URL as the chat (`w=320&h=320`); `media.warm` follows. Before: a

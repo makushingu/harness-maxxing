@@ -727,7 +727,7 @@ function TabButton({ tab, onShow, onClose }: { tab: BrowserTab; onShow: () => vo
         {tab.asleep ? <Moon className="size-3.5 shrink-0 opacity-70" /> : tab.by.kind !== 'you' ? <span className="size-1.5 shrink-0 rounded-full bg-primary" aria-hidden /> : null}
         <span className="truncate">{label}</span>
       </button>
-      <button type="button" onClick={onClose} className="inline-flex size-5 shrink-0 items-center justify-center rounded opacity-60 hover:bg-muted hover:opacity-100" aria-label={t('browser.closeTab')} data-testid="browser-tab-close">
+      <button type="button" onClick={onClose} className="inline-flex size-5 shrink-0 items-center justify-center rounded opacity-60 hover:bg-muted hover:opacity-100 pointer-coarse:size-8" aria-label={t('browser.closeTab')} data-testid="browser-tab-close">
         <X className="size-3" />
       </button>
     </div>

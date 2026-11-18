@@ -268,3 +268,22 @@ def test_the_role_protection_line_and_new_group_link_of_an_agent_are_big_enough_
     for testid in ("agent-sandbox-line", "agent-new-group", "agent-role"):
         cls = re.search(r"className=(?:\{cn\()?['\"]([^'\"]*)['\"][^\n]*\n(?:[^\n]*\n)?\s*data-testid=\"" + testid + '"', src)
         assert cls and "pointer-coarse:min-h-10" in cls[1].split(), testid
+
+
+def test_the_small_close_buttons_of_a_quote_a_task_filter_and_a_browser_tab_are_big_enough_to_tap():
+    # 20-24 px crosses on a phone: a 40 px tap area on touch screens, the same look elsewhere
+    composer = (WEB / "pages" / "sessions" / "Composer.tsx").read_text()
+    quote = re.search(r'onClick=\{\(\) => removeQuote\(q\)\}[^>]*?className="([^"]*)"', composer, re.S)
+    assert quote and "relative" in quote[1].split() and "pointer-coarse:before:-inset-2" in quote[1].split()
+    toolbar = (WEB / "features" / "tasks" / "Toolbar.tsx").read_text()
+    chip = re.search(r'onClick=\{onClear\} aria-label=\{t\(\'tasks\.removeFilter\'\)\} className="([^"]*)"', toolbar)
+    assert chip and "relative" in chip[1].split() and "pointer-coarse:before:-inset-2.5" in chip[1].split()
+    live = (WEB / "features" / "browser" / "LiveView.tsx").read_text()
+    tab = re.search(r'onClick=\{onClose\} className="([^"]*)"[^>]*data-testid="browser-tab-close"', live)
+    assert tab and "pointer-coarse:size-8" in tab[1].split()           # the whole height of the tab
+
+
+def test_the_new_group_arrow_of_the_agents_page_is_wide_enough_to_tap():
+    src = (WEB / "features" / "agents" / "AgentsPage.tsx").read_text()
+    cls = re.search(r'className="([^"]*)" aria-label=\{t\(\'groups\.new\'\)\} data-testid="group-new"', src)
+    assert cls and "pointer-coarse:px-3" in cls[1].split()            # 29 px wide with px-1.5 on a phone

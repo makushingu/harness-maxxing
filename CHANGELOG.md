@@ -22,6 +22,9 @@ Changed:
   per run to count them; it now reads it once.
 
 Fixed:
+- **Small crosses are easier to tap on a phone.** Removing a quote from the message box, a filter from the tasks,
+  or closing a tab of the browser window took a precise tap on a 20-24 px cross; the arrow next to **New agent**
+  (new group) was 29 px wide. On a touch screen they now answer a finger-sized tap, with the same look.
 - **Sharp image previews in sessions.** A wide picture (a screenshot, a photo in landscape) looked blurry in
   the thumbnails of the thread, of the attachments and of the message box: its thumbnail is now high enough for its
   box.

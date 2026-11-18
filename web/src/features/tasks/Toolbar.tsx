@@ -170,7 +170,7 @@ function FilterChip({ children, onClear }: { children: React.ReactNode; onClear:
   return (
     <span className="inline-flex h-7 items-center gap-1.5 rounded-full border bg-muted pr-1 pl-2.5 text-xs font-medium">
       {children}
-      <button type="button" onClick={onClear} aria-label={t('tasks.removeFilter')} className="flex size-5 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground">
+      <button type="button" onClick={onClear} aria-label={t('tasks.removeFilter')} className="relative flex size-5 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground pointer-coarse:before:absolute pointer-coarse:before:-inset-2.5 pointer-coarse:before:content-['']">
         <X className="size-3" />
       </button>
     </span>

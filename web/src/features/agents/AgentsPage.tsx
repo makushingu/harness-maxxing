@@ -109,7 +109,7 @@ export function NewButtons({ onNew }: { onNew: () => void }) {
       </Button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button size="sm" className="rounded-l-none border-l border-primary-foreground/20 px-1.5" aria-label={t('groups.new')} data-testid="group-new" data-tour="group-new">
+          <Button size="sm" className="rounded-l-none border-l border-primary-foreground/20 px-1.5 pointer-coarse:px-3" aria-label={t('groups.new')} data-testid="group-new" data-tour="group-new">
             <ChevronDown />
           </Button>
         </DropdownMenuTrigger>
