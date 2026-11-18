@@ -43,10 +43,14 @@ def _configure(p) -> None:
     s.add_argument("text", nargs="*", help="its task (optional: else its routine)")
     s.add_argument("--data", action="store_true", help="the text is outside data (an e-mail, a script output), "
                                                        "framed so that Claude never follows instructions in it")
+    s.add_argument("--notify-back", action="store_true", help="from a session's turn: its result comes back to "
+                                                              "that session, as a message typed in it")
     s.add_argument("--json", action="store_true")
     s = sub.add_parser("send", help="hand work to another agent (from inside a turn)")
     s.add_argument("agent")
     s.add_argument("text", nargs="+")
+    s.add_argument("--notify-back", action="store_true", help="its result comes back to the sending session, as a "
+                                                              "message typed in it")
     s.add_argument("--json", action="store_true")
     for name, hlp in (("on", "switch an agent on"), ("off", "switch an agent off"),
                       ("silent", "the agent works without notifying you (no Telegram, alerts read, nothing unread)"),
@@ -730,8 +734,16 @@ def _handler(a) -> int:
     text = " ".join(a.text).strip()
     turn = _turn()
     sender = turn["path"]
+    back: dict = {}
+    if getattr(a, "notify_back", False):            # the result comes back to the session of this turn
+        from . import agent_guard
+        meta = agent_guard.turn_meta() or {}
+        if not meta.get("id"):
+            print("--notify-back works from inside a session's turn only.", file=sys.stderr)
+            return 2
+        back = {"MAXXING_AGENT_NOTIFY": meta["id"]}
     if a.agents_cmd == "run" and not sender:
-        r = agents.fire(path, trigger="manual", source="command line",
+        r = agents.fire(path, trigger="manual", source="command line", cron_env=back or None,
                         **({"text": text} if a.data else {"prompt": text}))
         return _print_fire(path, r, a.json)
     if a.agents_cmd == "run" and sender == path and turn.get("manager"):
@@ -756,7 +768,7 @@ def _handler(a) -> int:
         trigger, source = f"agent:{sender}", f"agent {label}"
     else:
         trigger, source = "agent:session", "session"
-    r = agents.fire(path, trigger=trigger, text=text, source=source, depth=turn["depth"] + 1)
+    r = agents.fire(path, trigger=trigger, text=text, source=source, depth=turn["depth"] + 1, cron_env=back or None)
     return _print_fire(path, r, a.json)
 
 

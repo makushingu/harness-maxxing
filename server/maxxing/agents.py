@@ -2713,6 +2713,12 @@ def on_turn_end(session: dict, result: dict | None) -> None:
             chain_after(path, text, ok, depth=_int(env.get("MAXXING_AGENT_DEPTH")))
         except Exception:  # noqa: BLE001
             log.exception("agent %s: agents after it", path)
+    back = str(env.get("MAXXING_AGENT_NOTIFY") or "")
+    if back and not group and not mine:
+        try:
+            _notify_back(path, back, meta, text, ok, _int(env.get("MAXXING_AGENT_DEPTH")))
+        except Exception:  # noqa: BLE001 - the session that asked may be gone; the result stays in the thread
+            log.exception("agent %s: result back to session %s", path, back)
     if not group:
         try:
             _plan_limit_retry(path, session["id"], ok, text, str(session.get("error") or ""), env)
@@ -2866,6 +2872,14 @@ def _asked_by(path: str, session: dict) -> list[dict]:
     if not ids:
         return []
     return [m for m in thread(path, 500) if m.get("kind") == "run" and m.get("id") in ids]
+
+
+def _notify_back(path: str, to: str, meta: dict, text: str, ok: bool, depth: int) -> None:
+    """`agents send|run --notify-back`: the result of the run goes back to the session that handed the work, as a
+    message typed in it (like `maxxing sessions send` from the run: one hop more, capped by MAX_HOPS)."""
+    from .sessions import service
+    service.relay_message(to, _chain_text(path, text, ok), sender={"id": meta.get("id") or "", "path": path,
+                          "title": meta.get("title") or ""}, hops=depth + 1)
 
 
 # ---- "agent" triggers: an agent starts on the result of another agent's automatic run -------------------
