@@ -9,11 +9,11 @@ import { fileThumbUrl, useFileStamp } from '@/lib/queries/files'
 import { cn } from '@/lib/utils'
 
 /** `within`: a folder the file must really be in (an agent's answer: ItemCtx.scope), else no thumbnail. */
-type Props = { path: string; w: number; anim?: boolean; within?: string | null } & Omit<React.ImgHTMLAttributes<HTMLImageElement>, 'src'>
+type Props = { path: string; w: number; h?: number; anim?: boolean; within?: string | null } & Omit<React.ImgHTMLAttributes<HTMLImageElement>, 'src'>
 
 const RETRY_MS = [1000, 2000, 4000, 8000, 15_000, 30_000, 30_000, 30_000]
 
-export function Thumb({ path, w, anim, within, alt = '', onError, ...img }: Props) {
+export function Thumb({ path, w, h, anim, within, alt = '', onError, ...img }: Props) {
   const { ready, version, recheck } = useFileStamp(path, within)
   const key = `${path}|${version}`
   // failures of this version of the file (a new version starts over)
@@ -32,7 +32,7 @@ export function Thumb({ path, w, anim, within, alt = '', onError, ...img }: Prop
   if (!ready || version === null || waiting || n > RETRY_MS.length) return <span aria-hidden className={cn('inline-block min-w-16 bg-muted', img.className)} />
   return (
     <img
-      src={fileThumbUrl(path, w, version, anim && /\.gif$/i.test(path), n, within)}
+      src={fileThumbUrl(path, w, version, anim && /\.gif$/i.test(path), n, within, h)}
       alt={alt}
       onError={(e) => {
         setFail({ key, n: n + 1, waiting: n < RETRY_MS.length })

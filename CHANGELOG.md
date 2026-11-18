@@ -20,6 +20,9 @@ Changed:
   agents add many), the list, the sidebar and the dashboard answer in half the time.
 
 Fixed:
+- **Sharp image previews in sessions.** A wide picture (a screenshot, a photo in landscape) looked blurry in
+  the thumbnails of the thread, of the attachments and of the message box: its thumbnail is now high enough for its
+  box.
 - **Nothing you asked or typed is lost when you open another page.** A side question ("Question" on the waiting
   messages) and its answer were gone after a visit to Agents or any other page: they stay now, even after a reload.
   The text being written in a Team chat is kept per chat. A dictation still being transcribed, or a recording when

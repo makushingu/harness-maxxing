@@ -78,8 +78,9 @@ export const fileRawUrl = (path: string, download = false, version?: number | nu
 /** A folder as a zip, made while it downloads. `check` = only `{count, size}` or the 413 that the zip would get. */
 export const fileZipUrl = (path: string, check = false) => withQuery('/api/files/zip', { path, check: check ? 1 : undefined })
 /** `anim`: a GIF (up to 8 MB) comes as it is, so it moves (chat); else a still WebP (file grids). */
-export const fileThumbUrl = (path: string, w = 320, version?: number | null, anim = false, attempt = 0, within?: string | null) =>
-  withQuery('/api/files/thumb', { path, w, v: ver(version), anim: anim ? 1 : undefined, try: attempt || undefined, within: within || undefined })
+/** `h`: at least this height too, for a box of fixed height (object-cover): a wide picture is not stretched there. */
+export const fileThumbUrl = (path: string, w = 320, version?: number | null, anim = false, attempt = 0, within?: string | null, h?: number) =>
+  withQuery('/api/files/thumb', { path, w, h: h || undefined, v: ver(version), anim: anim ? 1 : undefined, try: attempt || undefined, within: within || undefined })
 /** Current mtime of the files shown as previews (chat thumbnails, viewer), asked in one batch per tick: it goes in
  *  their URLs, so a file rewritten under the same name shows its new version. Refreshed when a turn writes files
  *  (`refreshFileStamps`), on focus, and by any file mutation (key under `files`). */

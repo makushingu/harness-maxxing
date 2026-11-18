@@ -24,7 +24,7 @@ export function QuotedFile({ path, className, draggable }: { path: string; class
       className={cn('flex max-w-full min-w-0 items-center gap-2 rounded-md text-left outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring', className)}
     >
       <span className="relative flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-muted">
-        {media && !masked ? <Thumb path={path} w={160} loading="lazy" className="size-full object-cover" /> : <Icon className="size-4 text-muted-foreground" />}
+        {media && !masked ? <Thumb path={path} w={160} h={160} loading="lazy" className="size-full object-cover" /> : <Icon className="size-4 text-muted-foreground" />}
         {isVideo(path) && !masked && (
           <span className="absolute inset-0 flex items-center justify-center bg-black/25">
             <Play className="size-3 fill-white text-white" />
