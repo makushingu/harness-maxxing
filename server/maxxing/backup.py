@@ -500,7 +500,7 @@ def scan(files: dict[str, bytes]) -> list[dict]:
     """-> [{file, kinds}] for every file containing a secret-shaped string."""
     hits = []
     for rel, data in sorted(files.items()):
-        kinds = scan_bytes(data)
+        kinds = sorted(set(scan_bytes(data)) | set(scan_bytes(rel.encode("utf-8", "replace"))))   # the path too
         if kinds:
             hits.append({"file": rel, "kinds": kinds})
     return hits

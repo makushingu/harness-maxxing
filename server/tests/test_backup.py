@@ -716,3 +716,9 @@ def test_scanner_sees_a_bot_url_and_other_password_labels():
                  f"token: {pw}", f"Authorization: Bearer {pw}", f"password：{pw}"):
         assert backup.scan_bytes(text.encode()), text
 
+
+
+def test_scan_looks_at_file_names_too():
+    name = "projects/ghp_" + "a1B2c3D4e5" * 3 + "abcdef/notes.md"
+    assert backup.scan({name: b"clean"}) == [{"file": name, "kinds": ["GitHub token"]}]
+    assert backup.scan({"projects/acme/notes.md": b"clean"}) == []
