@@ -274,3 +274,35 @@ def test_list_reads_the_scheduled_jobs_once(client, topic, capsys, monkeypatch):
     out = capsys.readouterr().out
     assert f"{A}  Writer  cron:1" in out and f"{B}  Editor  cron:1" in out
     assert len(calls) == 1                                   # one read of the jobs for every agent, not one per agent
+
+
+def test_notify_back_sends_the_result_to_the_asking_session(client, topic, capsys, monkeypatch):
+    """`agents send|run --notify-back` from a session's turn: the run's result comes back to that session."""
+    _two_agents(client)
+    monkeypatch.setattr(bus, "_loop", None)
+    from maxxing import agent_guard
+    from maxxing.sessions import service, store
+    asker = service.create_session("projects/acme/topics/blog", title="Asker")
+    assert cli.main(["agents", "send", "writer", "NOTOOL hi", "--notify-back"]) == 2     # not from a turn
+    assert "inside a session's turn" in capsys.readouterr().err
+    monkeypatch.setattr(agent_guard, "turn_meta", lambda: store.read(asker["id"]))
+    assert cli.main(["agents", "send", "writer", "NOTOOL write the post", "--notify-back", "--json"]) == 0
+    r = json.loads(capsys.readouterr().out)
+    assert store.read(r["session"])["env"]["MAXXING_AGENT_NOTIFY"] == asker["id"]
+    wait_for(lambda: any("Result of a run of the agent Writer" in c["prompt"] for c in _calls()))
+    wait_idle(client, asker["id"])
+    # `run` from a plain session's turn too (its own branch: a run of the command line)
+    assert cli.main(["agents", "run", "editor", "NOTOOL review it", "--notify-back", "--json"]) == 0
+    r = json.loads(capsys.readouterr().out)
+    assert store.read(r["session"])["env"]["MAXXING_AGENT_NOTIFY"] == asker["id"]
+    wait_for(lambda: any("Result of a run of the agent Editor" in c["prompt"] for c in _calls()))
+    wait_idle(client, asker["id"])
+    # a run without the flag says nothing back
+    n = len(_calls())
+    assert cli.main(["agents", "run", "writer", "NOTOOL again", "--json"]) == 0
+    r = json.loads(capsys.readouterr().out)
+    wait_idle(client, r["session"])
+    wait_for(lambda: len([m for m in agents.thread(A) if m["kind"] == "result"]) >= 2)
+    assert "MAXXING_AGENT_NOTIFY" not in store.read(r["session"])["env"]
+    wait_idle(client, asker["id"])
+    assert not any("Result of a run" in c["prompt"] for c in _calls()[n:])
