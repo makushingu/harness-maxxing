@@ -18,6 +18,8 @@ Changed:
   websockets 17.4 and their own dependencies. Thanks to Anthony14FR, who flagged them.
 - **The session list loads about twice as fast on a busy server.** With thousands of sessions (scheduled jobs and
   agents add many), the list, the sidebar and the dashboard answer in half the time.
+- **The Agents page loads faster when your agents have many runs.** The list of agents read the browser state once
+  per run to count them; it now reads it once.
 
 Fixed:
 - **Sharp image previews in sessions.** A wide picture (a screenshot, a photo in landscape) looked blurry in

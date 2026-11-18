@@ -335,6 +335,21 @@ def test_the_agents_list_reads_the_sessions_once(client, topic, monkeypatch):
     assert [a["name"] for a in agents.list_agents(counts=False)] == ["editor", "writer"] and reads == []
 
 
+def test_the_agents_list_reads_the_turns_waiting_for_an_exit_once(client, topic, monkeypatch):
+    from maxxing.browser import exits
+    from maxxing.sessions import store
+    _on(client)
+    _create(client)
+    metas = [store.create(store.new_meta(A, f"run{i}", source="agent")) for i in range(3)]
+    reads: list = []
+    real = exits._waiters
+    monkeypatch.setattr(exits, "_waiters", lambda: reads.append(1) or real())
+    monkeypatch.setattr(agents, "_by_agent", {})        # no pass kept from before
+    row = next(a for a in agents.list_agents(with_status=True) if a["name"] == "writer")
+    assert len(reads) == 1                               # not once a session
+    assert row["session_count"] + row["archived_count"] == len(metas)
+
+
 def test_budget_day_follows_the_harness_time_zone(client, topic):
     from maxxing.sessions import store
     _on(client)

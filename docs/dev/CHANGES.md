@@ -31,6 +31,11 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   state path through `config.state_dir()` (a `mkdir`) and stat'ed `waiting.json`. Measured on a copy of a real
   state with ~2,000 sessions: 139 ms -> 72 ms per list (warm caches); the tree, the dashboard and @-mentions call it.
   `public(meta)` alone is unchanged. Test: `test_browser.py::test_the_session_list_reads_the_turns_waiting_for_an_exit_once`.
+- `agents._session_stats` (behind `list_agents(with_status=True)`, i.e. `GET /api/agents` and `agents.get`) passes
+  `exits.waiting_by_session()` to `service.public(meta, exits_waiting)` too, read once per list instead of once per
+  agent session (same cost as #119: `config.state_dir()` + stat of `waiting.json` each time). Measured on a copy of a
+  real state (25 agents, 222 agent sessions): 46 ms -> 37 ms per list (warm caches). Test:
+  `test_agents.py::test_the_agents_list_reads_the_turns_waiting_for_an_exit_once`.
 - Usage-limit retry at the reset time: `crons.text_reset()` reads "resets 4pm (UTC)" / "resets 4:30pm" / "resets
   4am" (zone in parentheses, else or unknown UTC; next occurrence, or one passed less than `LIMIT_RESET_GRACE_S` =
   15 min ago) and is the last source of `limit_reset()` (epoch, `claude_auth.limits`, text, then `LIMIT_RETRY_S`).
