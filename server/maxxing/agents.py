@@ -1783,15 +1783,17 @@ def _metas(path: str) -> list[dict]:
 
 def _session_stats(by: dict[str, list[dict]]) -> dict[str, dict[str, int]]:
     """= workspace._session_stats for the agents' paths only (archived sessions only counted)."""
+    from .browser import exits
     from .sessions import service
     stats: dict[str, dict[str, int]] = {}
+    waiting = exits.waiting_by_session() if by else {}   # one read for every session, not one a session
     for path, metas in by.items():
         st = stats[path] = {"sessions": 0, "archived": 0, "running": 0, "unread": 0}
         for m in metas:
             if m.get("archived") and m.get("state") != "running":
                 st["archived"] += 1
                 continue
-            s = service.public(m)
+            s = service.public(m, waiting)
             st["archived" if s["archived"] else "sessions"] += 1
             st["running"] += s["state"] == "running"
             st["unread"] += bool(s["unread"]) and not s["archived"]
