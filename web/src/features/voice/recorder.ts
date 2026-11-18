@@ -44,7 +44,7 @@ function pickMime(): string {
  * `stop()` resolves to the recorded Blob (null if nothing was captured); `cancel()` discards it.
  * Reaching `maxSeconds` calls `onLimit` (the caller usually stops and transcribes).
  */
-export function useRecorder({ maxSeconds = 900, onLimit }: { maxSeconds?: number; onLimit?: () => void } = {}) {
+export function useRecorder({ maxSeconds = 900, onLimit, onUnmount }: { maxSeconds?: number; onLimit?: () => void; onUnmount?: (blob: Blob) => void } = {}) {
   const [state, setState] = React.useState<RecorderState>('idle')
   const [elapsed, setElapsed] = React.useState(0)
   const [level, setLevel] = React.useState(0)
@@ -57,6 +57,8 @@ export function useRecorder({ maxSeconds = 900, onLimit }: { maxSeconds?: number
   const started = React.useRef(0)
   const onLimitRef = React.useRef(onLimit)
   onLimitRef.current = onLimit
+  const onUnmountRef = React.useRef(onUnmount)
+  onUnmountRef.current = onUnmount
   const stopResolve = React.useRef<((b: Blob | null) => void) | null>(null)
   const cancelled = React.useRef(false)
 
@@ -73,11 +75,25 @@ export function useRecorder({ maxSeconds = 900, onLimit }: { maxSeconds?: number
     setState('idle')
   }, [])
 
+  // The box goes away while recording (another page): the recording goes to `onUnmount` when it is given (kept, not
+  // thrown away), else it is dropped.
   React.useEffect(
     () => () => {
+      const r = rec.current
+      const keep = onUnmountRef.current
+      if (keep && r && r.state !== 'inactive') {
+        stopResolve.current = (b) => b && keep(b)
+        try {
+          r.requestData()
+          r.stop()
+        } catch {
+          /* ignore */
+        }
+        return
+      }
       cancelled.current = true
       try {
-        rec.current?.stop()
+        r?.stop()
       } catch {
         /* ignore */
       }

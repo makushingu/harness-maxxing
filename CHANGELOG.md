@@ -20,6 +20,10 @@ Changed:
   agents add many), the list, the sidebar and the dashboard answer in half the time.
 
 Fixed:
+- **Nothing you asked or typed is lost when you open another page.** A side question ("Question" on the waiting
+  messages) and its answer were gone after a visit to Agents or any other page: they stay now, even after a reload.
+  The text being written in a Team chat is kept per chat. A dictation still being transcribed, or a recording when
+  you leave the page, lands in the draft of its box. Queued messages taken back ("Edit") while you leave go to the draft.
 - **`maxxing agents list` answers several times faster when you have many agents.** It read every scheduled job
   again for each agent; it reads them once now (with 24 agents: about 290 ms down to 60 ms).
 

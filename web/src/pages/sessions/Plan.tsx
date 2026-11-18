@@ -18,7 +18,7 @@ export function useApprove(sid: string) {
     const text = t('plan.approvedMessage')
     const { add, remove } = usePending.getState()
     const lid = add(sid, { text, attachments: [], queued: false })
-    approve.mutate({ id: sid, text }, { onError: () => remove(sid, lid) })
+    approve.mutateAsync({ id: sid, text }).catch(() => remove(sid, lid)) // runs even once the column is gone
   }, [sid, t, approve])
   return [run, approve.isPending] as const
 }

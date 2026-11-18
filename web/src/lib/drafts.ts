@@ -55,3 +55,18 @@ export function pruneAgentDrafts(kind: 'agent' | 'group', paths: string[]) {
     /* private mode */
   }
 }
+
+/** Fired with the draft key when a draft is written from outside its composer: a mounted composer reloads it. */
+export const DRAFT_EVENT = 'mx-draft'
+
+/** Adds `text` after the draft of `key` (a dictation that came back once its box was gone: another page) and tells
+ *  a box of that key opened again meanwhile. */
+export function appendDraft(key: string, text: string) {
+  try {
+    const cur = localStorage.getItem(`mx-draft:${key}`) || ''
+    localStorage.setItem(`mx-draft:${key}`, [cur.trimEnd(), text].filter(Boolean).join(cur.trim() ? '\n\n' : ''))
+  } catch {
+    /* quota / private mode */
+  }
+  window.dispatchEvent(new CustomEvent(DRAFT_EVENT, { detail: key }))
+}
