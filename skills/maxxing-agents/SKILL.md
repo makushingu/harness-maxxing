@@ -207,7 +207,8 @@ maxxing agents send acme/blog/editor "Draft ready: projects/acme/topics/blog/dra
 ```
 The sender and the hop count come from `MAXXING_AGENT` and `MAXXING_AGENT_DEPTH` (set in every agent turn);
 after 3 hops the start is refused. An agent cannot send to itself. Send a pointer (a file path, an id) rather
-than a long text.
+than a long text. Add `--notify-back` (also on `agents run`, from any session's turn) when the session needs the
+answer: the run's result comes back to it as a message typed in it, like a sub-agent's.
 
 ## Groups (several agents in one conversation)
 When the user wants several agents to work together and talk to them at once ("a writer, a reviewer and a
@@ -235,7 +236,7 @@ Say what the group does, who is in it, and that it is on the Agents page (top of
 ```bash
 maxxing agents list [--json]                   # path, name, on/off, triggers, cost of the day
 maxxing agents run <agent> [task] [--data]     # start now; --data: the text is outside data (framed)
-maxxing agents send <agent> <text>             # hand work to another agent (framed as data)
+maxxing agents send <agent> <text>             # hand work to another agent (framed as data); --notify-back: result back
 maxxing agents on <agent> | off <agent>
 maxxing agents create <p>/<t>/<a> --role … | --template ID | cron | webhook | watch | show   # see "Create one"
 maxxing agents templates [--lang fr] [--json]  # the ready-made agents

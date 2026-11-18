@@ -7,6 +7,10 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Agents: `agents send|run --notify-back` (from a turn: `agent_guard.turn_meta()`, refused otherwise) puts
+  `MAXXING_AGENT_NOTIFY=<session id>` in the run's env (`fire(cron_env=)`); at the end of a non-owner, non-group turn
+  `agents._notify_back` relays `_chain_text(...)` to that session with `service.relay_message` (hops = depth + 1,
+  MAX_HOPS applies; a missing session is only logged).
 - Files: `/api/files/thumb` takes `h` (min height, bucketed like `w`, in the cache key; ffmpeg `scale=min(iw,
   min(4096,max(w,h*iw/ih)))`). Chat media (box 4:3, h-28) and the attachment strip ask `h=320`, quoted files and
   composer chips `h=160`; viewer placeholder same URL as the chat (`w=320&h=320`); `media.warm` follows. Before: a

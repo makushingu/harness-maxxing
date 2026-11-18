@@ -220,7 +220,7 @@ only the agents waiting for your OK or with something to read.
 | **Webhook** | a service calls its address (Stripe, Shopify, GitHub or any JSON): the agent gets the event. It is a [feed](feed) webhook made for the agent, so the event also shows in your notifications |
 | **Notification** | a new event of the [feed](feed) from a source you pick (written as the feed writes it: `Shopify` -> `shopify`), optionally only some levels (warning, error...) or only events containing a word |
 | **Telegram** | a message you write in the agent's Telegram thread (option below) |
-| **Another agent** | an agent hands it work from its own session (`maxxing agents send`) |
+| **Another agent** | an agent hands it work from its own session (`maxxing agents send`); with `--notify-back` the result comes back to that session |
 | **After another agent** | an automatic run of another agent you pick ends: the agent starts with that run's result. Choose which runs count (those that succeed, those that fail, or all) and, optionally, only results containing some words. Your own conversations with the other agent never count |
 
 Events that arrive close together (within the agent's grouping delay, 60 s by default) go into one run.

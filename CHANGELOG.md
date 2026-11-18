@@ -6,6 +6,9 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 ## Unreleased
 
 New:
+- **An agent's result can come back to the session that asked for it.** `maxxing agents send` and `maxxing agents
+  run` take `--notify-back`: when the run ends, its result is written in the session that handed the work, as a
+  message typed in it, so that session goes on with the answer instead of checking the agent's page.
 - **Jobs and agents start again right after the usage limit resets.** When a scheduled job or an agent run (started
   by hand, by a notification, by another agent or by its schedule) is stopped by the usage limit of your Claude plan,
   it starts again by itself one minute after the reset time Claude gave ("resets 4pm"), instead of trying every 30
