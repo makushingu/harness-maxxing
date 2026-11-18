@@ -13,6 +13,8 @@ New:
   delay.
 
 Changed:
+- **On a phone, the Tasks page opens as a list.** The board shows one column at a time on a small screen; the list
+  shows every task at once. A view you pick is kept, as before.
 - **Dependencies updated** (minor and patch versions only): Vite 8.3.8, React Router 8.5.1, TanStack Query 5.108,
   Zustand 5.1, Tailwind CSS 4.3.5, lucide-react 1.74, CodeMirror, FastAPI 0.163, Starlette 1.10, Pydantic 2.14.3,
   websockets 17.4 and their own dependencies. Thanks to Anthony14FR, who flagged them.

@@ -7,6 +7,8 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Tasks (`pages/tasks/index.tsx`): default view `list` when `isCompact()` (touch layout), `board` otherwise; only
+  when `mx-tasks` has no valid `view` (a picked view is kept). Test in `test_web_mobile.py`.
 - Files: `/api/files/thumb` takes `h` (min height, bucketed like `w`, in the cache key; ffmpeg `scale=min(iw,
   min(4096,max(w,h*iw/ih)))`). Chat media (box 4:3, h-28) and the attachment strip ask `h=320`, quoted files and
   composer chips `h=160`; viewer placeholder same URL as the chat (`w=320&h=320`); `media.warm` follows. Before: a
