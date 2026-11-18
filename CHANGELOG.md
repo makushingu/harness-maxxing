@@ -6,6 +6,9 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 ## Unreleased
 
 New:
+- **Mark every agent as read in one tap.** In the Agents list, on a computer and on a phone, a ✓✓ button beside the
+  state chips marks all the agents and groups with something to read as read, without opening them one by one. It
+  only shows while something is unread.
 - **Jobs and agents start again right after the usage limit resets.** When a scheduled job or an agent run (started
   by hand, by a notification, by another agent or by its schedule) is stopped by the usage limit of your Claude plan,
   it starts again by itself one minute after the reset time Claude gave ("resets 4pm"), instead of trying every 30
