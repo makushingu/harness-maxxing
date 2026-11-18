@@ -267,7 +267,7 @@ def _ordered(names: list[str], order: object) -> list[str]:
 def _parse_order(f: Path) -> object:
     try:
         return json.loads(f.read_text()).get("projects")
-    except (OSError, ValueError, AttributeError):
+    except (OSError, ValueError, AttributeError, RecursionError):
         return None
 
 
@@ -314,7 +314,7 @@ def _parse_meta(f: Path) -> dict:
     try:
         data = json.loads(f.read_text())
         return data if isinstance(data, dict) else {}
-    except (OSError, ValueError):
+    except (OSError, ValueError, RecursionError):      # RecursionError: JSON nested too deep
         return {}
 
 
@@ -554,7 +554,7 @@ def update_project(project: str, name: str | None = None, description: str | Non
             data["projects"] = _rename_in_order(data.get("projects"), project, new)
             _forget(f)
             config.write_json(f, data)
-        except (OSError, ValueError, AttributeError):
+        except (OSError, ValueError, AttributeError, RecursionError):
             pass
     _write_claude_md(project_dir(new), "project", new, description)
     if new != project:

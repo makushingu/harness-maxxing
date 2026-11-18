@@ -35,9 +35,10 @@ export function contextWindow(
   opts: { chosen?: string | null; real?: string | null; windows?: Record<string, number | null | undefined> } = {},
 ): number {
   const { chosen, real, windows = {} } = opts
-  if (chosen && chosen !== real && windows[chosen]) return windows[chosen]!
+  const known = (id: string) => (Object.hasOwn(windows, id) ? windows[id] : undefined)   // not `constructor`, `toString`…
+  if (chosen && chosen !== real && known(chosen)) return known(chosen)!
   if (reported && reported > 0) return reported
-  if (real && windows[real]) return windows[real]!
+  if (real && known(real)) return known(real)!
   return tokens > CONTEXT_MAX ? 1_000_000 : CONTEXT_MAX
 }
 

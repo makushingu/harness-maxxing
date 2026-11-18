@@ -444,3 +444,73 @@ def test_restoring_a_very_long_file_name_already_taken(client, topic, mx):
     assert r.status_code == 200
     out = Path(r.json()["restored_to"])
     assert len(out.name.encode()) <= 255 and out.name.endswith(" (restored).md")
+
+
+def _trash_file(mx, topic, name="a.txt"):
+    from maxxing import workspace
+    (mx["ws"] / topic / name).write_text("a")
+    workspace.move_to_trash(mx["ws"] / topic / name)
+    return next(j for j in trash.trash_dir().glob("*.json") if j.name.endswith(f"-{name}.json"))
+
+
+def test_a_relative_link_whose_target_is_not_there_is_restored_and_deleted(client, topic, mx):
+    from maxxing import workspace
+    d = mx["ws"] / topic
+    (d / "real.txt").write_text("x")
+    os.symlink("real.txt", d / "lnk")
+    workspace.move_to_trash(d / "lnk")
+    (item,) = _items(client)
+    assert client.post(f"/api/trash/{item['id']}/restore").status_code == 200 and os.path.islink(d / "lnk")
+    workspace.move_to_trash(d / "lnk")
+    assert client.delete(f"/api/trash/{_items(client)[0]['id']}").status_code == 200 and _items(client) == []
+
+
+def test_json_nested_too_deep_does_not_break_the_tree_or_the_trash(client, topic, mx):
+    deep = "[" * 100000
+    (mx["ws"] / "projects" / ".order.json").write_text(deep)
+    (mx["ws"] / "projects" / topic.split("/")[1] / ".maxxing.json").write_text(deep)
+    sc = _trash_file(mx, topic)
+    sc.write_text(deep)
+    assert client.get("/api/trash").status_code == 200
+    from maxxing import workspace
+    assert isinstance(workspace.project_names(), list)
+
+
+def test_a_sidecar_with_a_huge_date_or_a_lone_surrogate_still_lists(client, topic, mx):
+    sc = _trash_file(mx, topic)
+    sc.write_text('{"at": 1' + "0" * 400 + ', "title": "x\\ud800", "original": "y\\ud800"}')
+    r = client.get("/api/trash")
+    assert r.status_code == 200 and len(r.json()["items"]) == 1
+    assert trash.purge_old() == 0
+
+
+def test_a_broken_link_without_a_sidecar_does_not_break_the_listing_or_the_purge(client, mx):
+    os.symlink("nowhere", trash.trash_dir() / "20260101-000000-dang")
+    assert client.get("/api/trash").status_code == 200
+    assert trash.purge_old() == 0
+    assert client.delete("/api/trash").status_code == 200 and not any(trash.trash_dir().iterdir())
+
+
+def test_a_damaged_session_file_is_not_deleted_by_the_restore(client, topic, mx):
+    d = trash.trash_dir() / "20260101-000000-session-x"
+    d.mkdir()
+    sid = "01234567-89ab-4def-8123-456789abcdef"
+    (d / f"{sid}.json").write_text("{bad")
+    (d / f"{sid}.log").write_text("log")
+    (trash.trash_dir() / (d.name + ".json")).write_text(json.dumps({"original": sid, "kind": "session", "at": time.time()}))
+    r = client.post(f"/api/trash/{d.name}/restore")
+    assert r.status_code == 409, r.text
+    assert (d / f"{sid}.log").read_text() == "log" and len(_items(client)) == 1
+
+
+def test_restore_into_a_folder_that_became_a_file_answers_409(client, topic, mx):
+    from maxxing import workspace
+    sub = mx["ws"] / topic / "sub"
+    sub.mkdir()
+    (sub / "a.md").write_text("a")
+    workspace.move_to_trash(sub / "a.md")
+    sub.rmdir()
+    sub.write_text("now a file")
+    (item,) = _items(client)
+    r = client.post(f"/api/trash/{item['id']}/restore")
+    assert r.status_code == 409 and len(_items(client)) == 1

@@ -561,7 +561,12 @@ export type DraftAtt = { path: string; name: string; size: number }
 export function loadAtts(k: string): DraftAtt[] {
   try {
     const v = JSON.parse(localStorage.getItem(`${draftKey(k)}:atts`) || '[]')
-    return Array.isArray(v) ? v.filter((a) => a && typeof a.path === 'string' && a.path) : []
+    // every field gets its type: a `name` that is an object crashed the chip (React refuses it as a child)
+    return Array.isArray(v)
+      ? v
+          .filter((a) => a && typeof a.path === 'string' && a.path)
+          .map((a) => ({ path: a.path as string, name: typeof a.name === 'string' && a.name ? a.name : (a.path as string).split('/').pop()!, size: Number.isFinite(a.size) ? (a.size as number) : 0 }))
+      : []
   } catch {
     return []
   }

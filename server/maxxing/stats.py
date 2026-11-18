@@ -51,7 +51,7 @@ def _int(v) -> int:
 def _float(v) -> float:
     try:
         f = float(v or 0)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):      # OverflowError: an integer too big for a float
         return 0.0
     return f if math.isfinite(f) else 0.0
 
@@ -74,7 +74,10 @@ def _tokens(sid: str, m: dict) -> dict:
 
 
 def _finite(v) -> bool:
-    return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+    try:
+        return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+    except OverflowError:                               # an integer too big for a float
+        return False
 
 
 def _when(v):
