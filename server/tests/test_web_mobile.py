@@ -50,6 +50,16 @@ def test_the_tasks_header_leaves_room_for_the_menu_button():
     assert int(back[1]) >= 480
 
 
+def test_the_tasks_open_as_a_list_on_a_phone():
+    # the board shows one column at a time on a phone (84vw): reaching "Done" took sideways swipes; the list shows
+    # every task. Only the default: a view picked by hand is kept (localStorage mx-tasks)
+    tasks = (WEB / "pages" / "tasks" / "index.tsx").read_text()
+    assert re.search(r"defaultView = \(\): View => \(isCompact\(\) \? 'list' : 'board'\)", tasks)
+    assert re.search(r"\{ \.\.\.DEFAULT_PREFS, view: defaultView\(\), \.\.\.JSON\.parse", tasks)
+    assert "view: 'board'" not in tasks
+    assert "view: p.view ?? saved.view" in tasks  # changing a filter does not save the default view of this size
+
+
 def test_show_more_is_big_enough_to_tap():
     # "Show more" in the notifications was a 50x16 px target on a phone: a bigger tap area on touch screens only
     feed = (WEB / "features" / "feed" / "FeedItems.tsx").read_text()
