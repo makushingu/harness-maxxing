@@ -3627,6 +3627,7 @@ export const en = {
   'agents.side.new': 'New agent',
   'agents.side.waiting': 'Waiting for you',
   'agents.side.toRead': 'To read',
+  'agents.side.markAllRead': 'Mark all as read',
   'agents.side.running': 'Running',
   'agents.side.active': 'Active',
   'agents.side.off': 'Off',

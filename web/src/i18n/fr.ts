@@ -3609,6 +3609,7 @@ export const fr: Record<keyof typeof en, string> = {
   'agents.side.new': 'Nouvel agent',
   'agents.side.waiting': 'Vous attendent',
   'agents.side.toRead': 'À lire',
+  'agents.side.markAllRead': 'Tout marquer comme lu',
   'agents.side.running': 'En cours',
   'agents.side.active': 'Actifs',
   'agents.side.off': 'Éteints',
