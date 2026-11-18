@@ -7,6 +7,10 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Files: `/api/files/thumb` takes `h` (min height, bucketed like `w`, in the cache key; ffmpeg `scale=min(iw,
+  min(4096,max(w,h*iw/ih)))`). Chat media (box 4:3, h-28) and the attachment strip ask `h=320`, quoted files and
+  composer chips `h=160`; viewer placeholder same URL as the chat (`w=320&h=320`); `media.warm` follows. Before: a
+  wide picture thumbnailed by width only was stretched in its object-cover box (blurry).
 - Web: state lost on unmount (another page unmounts the whole page tree, no keep-alive). Side question
   (`pages/sessions/Aside.tsx`): module zustand store per session, sessionStorage (answered ones only), `api.post`
   instead of a per-call `mutate` callback; `useAskAside` removed. Team composer keyed by chat, draft in

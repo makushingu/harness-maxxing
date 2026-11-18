@@ -173,7 +173,7 @@ export const isVideo = (p: string) => VID.test(p)
 export const isAudio = (p: string) => AUD.test(p)
 export const baseName = (p: string) => p.replace(/\/+$/, '').split('/').pop() || p
 // Same URL builder as the viewer, so the viewer's instant placeholder is the thumbnail already in the cache.
-export const thumbUrl = (p: string, w = 320) => fileThumbUrl(p, w)
+export const thumbUrl = (p: string, w = 320, h?: number) => fileThumbUrl(p, w, null, false, 0, null, h)
 export const rawUrl = (p: string, download = false) => `/api/files/raw?path=${encodeURIComponent(p)}${download ? '&download=1' : ''}`
 export const filesUrl = (p: string) => `/files?path=${encodeURIComponent(p)}`
 
