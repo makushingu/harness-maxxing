@@ -255,7 +255,9 @@ def _free(dest: Path) -> Path:
     n = 1
     while True:
         tag = " (restored)" if n == 1 else f" (restored {n})"
-        cand = dest.with_name(f"{stem}{tag}{suffix}")
+        room = 255 - len(f"{tag}{suffix}".encode())          # a file name is at most 255 bytes
+        short = stem.encode()[:max(room, 1)].decode(errors="ignore") if len(stem.encode()) > room else stem
+        cand = dest.with_name(f"{short}{tag}{suffix}")
         if not cand.exists():
             return cand
         n += 1

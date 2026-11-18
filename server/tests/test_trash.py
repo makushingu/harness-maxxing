@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import time
+from pathlib import Path
 
 from maxxing import trash
 
@@ -431,3 +432,15 @@ def test_deleting_files_of_the_same_name_at_once_keeps_each_one_in_the_trash(mx,
     kept = sorted(p.read_text() for p in trash_dir.iterdir() if not p.name.endswith(".json"))
     assert kept == [f"note {i}" for i in range(4)]
     assert all(json.loads(p.read_text())["kind"] == "file" for p in trash_dir.glob("*.json"))
+
+
+def test_restoring_a_very_long_file_name_already_taken(client, topic, mx):
+    f = mx["files"] / ("a" * 250 + ".md")
+    f.write_text("v1")
+    assert client.post("/api/files/delete", json={"path": str(f)}).status_code == 200
+    it = _items(client)[0]
+    f.write_text("v2")
+    r = client.post(f"/api/trash/{it['id']}/restore")
+    assert r.status_code == 200
+    out = Path(r.json()["restored_to"])
+    assert len(out.name.encode()) <= 255 and out.name.endswith(" (restored).md")
