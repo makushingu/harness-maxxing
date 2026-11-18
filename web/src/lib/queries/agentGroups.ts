@@ -1,9 +1,10 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, seg } from '../api'
-import type { AgentGroup, AgentGroupInput, AgentGroupMessage, Ok } from '../types'
+import type { AgentGroup, AgentGroupInput, AgentGroupMessage, AgentsPayload, Ok } from '../types'
 import { qk } from './keys'
 import { useMut } from './util'
 import { agentDraftKey, forgetDraft, pruneAgentDrafts } from '../drafts'
+import { agentKeys, agentUrl } from './agents'
 
 // Agent groups (on the Agents page): the owner talks to 2-6 agents of one project, who answer in turn.
 // The bus topic `agent-groups` refreshes the list and the groups, `agent-groups:<path>` one group and its messages.
@@ -122,6 +123,28 @@ export function useGroupSeen() {
       { key: groupKeys.one(path), update: (g: AgentGroup) => ({ ...g, unread: 0 }) },
     ],
   })
+}
+/** "Mark all as read" of the Agents list: every given agent and group is read at once (their badges go to 0 right
+ *  away), one POST /seen each (the same as opening it), then one refresh of both lists. */
+export function useMarkAllSeen() {
+  return useMut(
+    async ({ agents, groups }: { agents: string[]; groups: string[] }) => {
+      const res = await Promise.allSettled([
+        ...agents.map((p) => api.post<Ok>(agentUrl(p, '/seen'), {})),
+        ...groups.map((p) => api.post<Ok>(groupUrl(p, '/seen'), {})),
+      ])
+      const failed = res.find((r): r is PromiseRejectedResult => r.status === 'rejected')
+      if (failed) throw failed.reason
+      return { ok: true }
+    },
+    {
+      invalidate: [agentKeys.list, groupKeys.list],
+      optimistic: ({ agents, groups }) => [
+        { key: agentKeys.list, update: (d: AgentsPayload) => ({ ...d, agents: d.agents.map((a) => (agents.includes(a.path) ? { ...a, thread_unread: 0 } : a)) }) },
+        { key: groupKeys.list, update: (d: AgentGroup[]) => d.map((g) => (groups.includes(g.path) ? { ...g, unread: 0 } : g)) },
+      ],
+    },
+  )
 }
 /** Pause a member in the group (it does not speak until named again) or let it speak again. Instant. */
 export function useGroupPause() {
