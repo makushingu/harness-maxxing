@@ -16,6 +16,8 @@ New:
   only that topic's). It shows only while something is unread. Thanks to Anthony14FR.
 
 Changed:
+- **On a phone, the Files page opens on the folder.** It used to open on an empty viewer saying to pick a file
+  "on the left", with nothing on the left: the folder now opens at once.
 - **Dependencies updated** (minor and patch versions only): Vite 8.3.8, React Router 8.5.1, TanStack Query 5.108,
   Zustand 5.1, Tailwind CSS 4.3.5, lucide-react 1.74, CodeMirror, FastAPI 0.163, Starlette 1.10, Pydantic 2.14.3,
   websockets 17.4 and their own dependencies. Thanks to Anthony14FR, who flagged them.

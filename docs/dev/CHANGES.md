@@ -33,6 +33,10 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   it. Web: `useMarkUnread` (optimistic, shared `readMark` with `useMarkSeen`), item `unread-toggle` in the session
   row menu of `Tree.tsx` (tree and second bar), texts in the on-demand group `rmark`. Dashboard Activity: unread
   items `ok` (green) instead of `warn`, "Unread" stat tone `ok`. Mock: `/seen` honours `{seen:false}`.
+
+
+- Files (`pages/files/index.tsx`): touch layout, landing on a folder (no file in `path`) calls `openPageList()` once
+  per mount; empty viewer text `files.selectFileDescTouch` (en+fr) on a phone. Test in `test_web_mobile.py`.
 - Files: `/api/files/thumb` takes `h` (min height, bucketed like `w`, in the cache key; ffmpeg `scale=min(iw,
   min(4096,max(w,h*iw/ih)))`). Chat media (box 4:3, h-28) and the attachment strip ask `h=320`, quoted files and
   composer chips `h=160`; viewer placeholder same URL as the chat (`w=320&h=320`); `media.warm` follows. Before: a
