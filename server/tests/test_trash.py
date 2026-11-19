@@ -546,3 +546,16 @@ def test_a_loop_of_links_or_a_name_too_long_does_not_break_the_trash(client, mx)
     data["original"] = str(mx["files"] / ("n" * 300))
     side.write_text(json.dumps(data))
     assert client.post(f"/api/trash/{it['id']}/restore").status_code == 409
+
+
+def test_a_session_whose_id_is_in_use_again_is_not_deleted_by_a_restore(client, topic):
+    s = client.post("/api/sessions", json={"path": topic, "message": "zebra NOTOOL"}).json()
+    wait_idle(client, s["id"])
+    from maxxing.sessions import store
+    meta = store.read(s["id"])
+    client.delete(f"/api/sessions/{s['id']}")
+    config.write_json(store.meta_path(s["id"]), meta)       # the same id exists again
+    it = _items(client)[0]
+    r = client.post(f"/api/trash/{it['id']}/restore")
+    assert r.status_code == 409
+    assert [i["id"] for i in _items(client)] == [it["id"]]  # its copy is still in the trash

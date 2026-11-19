@@ -296,7 +296,10 @@ def _put_sessions(folder: Path, old_prefix: str | None = None, new_prefix: str |
     done, damaged = 0, False
     for meta_p in sorted(folder.glob("*.json")):
         sid = meta_p.stem
-        if not store.is_valid_id(sid) or store.meta_path(sid).exists():
+        if not store.is_valid_id(sid):
+            continue
+        if store.meta_path(sid).exists():              # that id is in use again: its copy stays in the folder
+            damaged = True
             continue
         try:
             meta = json.loads(meta_p.read_text())
