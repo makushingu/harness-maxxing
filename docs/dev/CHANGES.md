@@ -7,6 +7,9 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Web: `useMarkSeen` / `useMarkUnread` take the session (`{id, path, state, archived, unread}`) and patch the
+  workspace tree too (topic `unread` / `errors`): the topic, project and sidebar counters follow at once instead of
+  after the bus refetch of `/api/sessions` (~1 MB with 1 000 sessions). Mock bench: 340-400 ms -> 65-125 ms.
 - Sessions: `POST /api/sessions/{id}/seen` takes an optional `{seen}`; `seen:false` sets meta `marked_unread`
   (public `unread` = finished after `seen_at` or `marked_unread`, never while running), `seen:true` / opening clears
   it. Web: `useMarkUnread` (optimistic, shared `readMark` with `useMarkSeen`), item `unread-toggle` in the session

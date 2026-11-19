@@ -2,6 +2,7 @@ import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-quer
 import { api, networkError, seg } from '../api'
 import { forgetDraft } from '../drafts'
 import type {
+  WorkspaceTree,
   CreateSessionBody,
   MentionTarget,
   Ok,
@@ -204,22 +205,41 @@ export function useHandoffSession() {
   const qc = useQueryClient()
   return useMut((id: string) => api.post<Session>(`/api/sessions/${seg(id)}/handoff`), { onSuccess: (s) => placeSession(qc, s), invalidate: inv })
 }
-const readMark = (id: string, unread: boolean) => [
-  { key: qk.sessions.one(id), update: (s: Session) => ({ ...s, unread }) },
-  { key: ['sessions', 'list'], update: (l: Session[]) => l.map((x) => (x.id === id && x.unread !== unread ? { ...x, unread } : x)) },
-]
+type ReadMark = Pick<Session, 'id' | 'path' | 'state' | 'archived' | 'unread'>
+/** The session's dot and its topic's counters (tree, sidebar) change at once, without waiting for the bus. */
+const readMark = (s: ReadMark, unread: boolean) => {
+  const d = s.unread === unread || s.archived ? 0 : unread ? 1 : -1
+  return [
+    { key: qk.sessions.one(s.id), update: (x: Session) => ({ ...x, unread }) },
+    { key: ['sessions', 'list'], update: (l: Session[]) => l.map((x) => (x.id === s.id && x.unread !== unread ? { ...x, unread } : x)) },
+    {
+      key: qk.workspace,
+      update: (w: WorkspaceTree) =>
+        !d
+          ? w
+          : {
+              ...w,
+              projects: w.projects.map((p) =>
+                p.topics.some((t) => t.path === s.path)
+                  ? { ...p, topics: p.topics.map((t) => (t.path === s.path ? { ...t, unread: Math.max(0, t.unread + d), errors: s.state === 'error' ? Math.max(0, (t.errors || 0) + d) : t.errors } : t)) }
+                  : p,
+              ),
+            },
+    },
+  ]
+}
 /** Read at once on screen (the unread mark goes away before the request); the bus then refreshes the tree's counters. */
 export function useMarkSeen() {
-  return useMut((id: string) => api.post<Ok>(`/api/sessions/${seg(id)}/seen`), {
-    optimistic: (id) => readMark(id, false),
+  return useMut((s: ReadMark) => api.post<Ok>(`/api/sessions/${seg(s.id)}/seen`), {
+    optimistic: (s) => readMark(s, false),
     invalidate: inv,
     errorToast: false,
   })
 }
 /** "Mark as read" / "Mark as unread" from a session's menu (unread stays until the session is read again). */
 export function useMarkUnread() {
-  return useMut(({ id, unread }: { id: string; unread: boolean }) => api.post<Ok>(`/api/sessions/${seg(id)}/seen`, { seen: !unread }), {
-    optimistic: ({ id, unread }) => readMark(id, unread),
+  return useMut(({ s, unread }: { s: ReadMark; unread: boolean }) => api.post<Ok>(`/api/sessions/${seg(s.id)}/seen`, { seen: !unread }), {
+    optimistic: ({ s, unread }) => readMark(s, unread),
     invalidate: inv,
   })
 }
