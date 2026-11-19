@@ -510,3 +510,12 @@ def test_a_model_is_downloaded_once_when_two_ask_for_it(mx, monkeypatch):
     for t in ts:
         t.join()
     assert len(calls) == 1 and peak[0] == 1 and voice.model_present("tiny")
+
+
+def test_a_bad_topic_path_is_refused_before_the_transcription(client, mx, tmp_path, fake_engine):
+    client.put("/api/voice/settings", json={"engine": "local", "model": "base"})
+    audio = make_audio(tmp_path / "rec.webm", 1.0, ["-c:a", "libopus"])
+    r = client.post("/api/voice/transcribe", data={"path": "projects/nope/topics/x"},
+                    files={"audio": ("rec.webm", audio.read_bytes(), "audio/webm")})
+    assert r.status_code == 400 and r.json()["error"] == "bad_path"
+    assert fake_engine == []                               # the transcriber (paid in the cloud) was never called
