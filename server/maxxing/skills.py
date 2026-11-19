@@ -75,7 +75,7 @@ def _utf8(p: Path) -> bool:
 def _scan(root: Path, origin: str, skip: set[str] | None = None, **where: str) -> list[dict]:
     try:
         folders = sorted(p for p in root.iterdir() if _utf8(p) and p.is_dir() and (p / "SKILL.md").is_file())
-    except OSError:
+    except (OSError, ValueError):               # ValueError: a NUL in the path
         return []
     out = []
     for p in folders:
@@ -101,7 +101,7 @@ def _server_skills() -> list[dict]:
 def _subfolders(root: Path) -> list[Path]:
     try:
         return sorted(p for p in root.iterdir() if _utf8(p) and p.is_dir() and not p.name.startswith("."))
-    except OSError:
+    except (OSError, ValueError):
         return []
 
 
