@@ -370,3 +370,8 @@ def test_the_inline_page_list_keeps_its_filter_and_tools():
     inline = src[src.index("  if (here) {"):src.index("  if (!slot) return null")]
     assert "<ListHead" in inline and "search={search}" in inline and "{actions}" in inline
 
+
+def test_the_key_checks_of_an_agent_are_big_enough_to_tap():
+    src = (WEB / "features" / "agents" / "parts.tsx").read_text()
+    row = re.search(r'<label key=\{n\} className="([^"]*)"', src)
+    assert row and "pointer-coarse:min-h-10" in row[1].split()
