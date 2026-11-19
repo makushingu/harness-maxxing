@@ -63,3 +63,22 @@ def test_a_long_imported_name_gets_a_valid_free_name(tmp_path):
     p.write_text("x")
     cand = importer._free(p)
     assert cand != p and len(cand.name.encode()) <= 255 and cand.name.endswith(" (imported).md")
+
+
+def test_tidy_keeps_a_session_marked_unread(mx, monkeypatch):
+    from maxxing.sessions import store
+    meta = {"id": "s1", "source": "agent", "finished_at": 10.0, "seen_at": 20.0, "marked_unread": True}
+    monkeypatch.setattr(agents, "_read_state", lambda path: {})
+    monkeypatch.setattr(agents, "_metas", lambda path: [meta])
+    edited = []
+
+    class _Ed:
+        def __init__(self, sid): self.sid = sid
+        def __enter__(self): edited.append(self.sid); return meta
+        def __exit__(self, *a): return False
+
+    monkeypatch.setattr(store, "edit", lambda sid: _Ed(sid))
+    assert agents.tidy("projects/acme/topics/blog/agents/writer") == 0 and not edited
+    meta.pop("marked_unread")
+    assert agents.tidy("projects/acme/topics/blog/agents/writer") == 1 and meta["archived"]
+

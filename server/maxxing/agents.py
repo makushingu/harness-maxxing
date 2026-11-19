@@ -1923,7 +1923,7 @@ def tidy(path: str) -> int:
                 or not m.get("finished_at")):
             continue
         fin = float(m.get("finished_at") or 0)
-        if max(float(m.get("seen_at") or 0), seen) >= fin:
+        if max(float(m.get("seen_at") or 0), seen) >= fin and not m.get("marked_unread"):
             done.append(m["id"])
         elif not m.get("error"):
             unread.append((fin, m["id"]))
