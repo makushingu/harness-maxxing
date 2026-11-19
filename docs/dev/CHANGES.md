@@ -7,6 +7,8 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Web: `Column.tsx` remembers `updated` while the session is shown read, so a "Mark as unread" of the open, focused
+  session (same `updated`) is not undone at once; a new answer (new `updated`) is still marked seen.
 - Web: session list filters (`Tree.tsx` header): `chip-all` = `Layers` icon (label in `title` / `aria-label`),
   `chip-running` / `chip-unread` = count pills in the `CountBadge` colours (filled when active), hidden at 0 unless
   active; the touch layout is a plain flex row (no segmented grid).
