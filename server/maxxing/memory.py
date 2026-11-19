@@ -17,6 +17,9 @@ LINES_PER_KB = 10              # the limit also weighs the file: 200 lines = 20 
 READ_MAX = 8 << 20             # bytes read to count the lines of one file: a bigger one is over any limit anyway
 
 
+_counted: dict[str, tuple[tuple[int, int], int, int]] = {}   # path -> ((mtime_ns, size), lines, bytes)
+
+
 def max_lines() -> int:
     """0 = no limit (the skill then only compacts what is long, redundant or outdated)."""
     v = config.load_config().get("memory_max_lines", DEFAULT_MAX_LINES)
@@ -45,6 +48,8 @@ def files() -> list[dict]:
     for p in sorted((ws / "projects").glob("*/topics/*/agents/*/memory.md")):
         found.append(("agent", p))
     out = []
+    for gone in set(_counted) - {p.relative_to(ws).as_posix() for _, p in found}:
+        _counted.pop(gone, None)
     for level, p in found:
         rel = p.relative_to(ws).as_posix()
         try:
@@ -52,12 +57,18 @@ def files() -> list[dict]:
             st = os.stat(p)
             if not stat.S_ISREG(st.st_mode):          # a FIFO or a link to /dev/zero would never end
                 continue
-            with open(p, "rb") as f:
-                data = f.read(READ_MAX)
+            key = (st.st_mtime_ns, st.st_size)
+            hit = _counted.get(rel)
+            if hit and hit[0] == key:                  # unchanged since the last count: not read again
+                lines, size = hit[1], hit[2]
+            else:
+                with open(p, "rb") as f:
+                    data = f.read(READ_MAX)
+                lines = data.count(b"\n") + (1 if data and not data.endswith(b"\n") else 0)
+                size = max(st.st_size, len(data))
+                _counted[rel] = (key, lines, size)
         except (OSError, UnicodeEncodeError):
             continue
-        lines = data.count(b"\n") + (1 if data and not data.endswith(b"\n") else 0)
-        size = max(st.st_size, len(data))
         heavy = bool(limit) and size > weight
         out.append({"path": rel, "level": level, "lines": lines, "bytes": size,
                     "over": heavy or (bool(limit) and lines > limit), "heavy": heavy})

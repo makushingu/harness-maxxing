@@ -247,3 +247,15 @@ def test_a_session_id_with_a_trailing_newline_is_not_valid():
     from maxxing.sessions import store
     sid = "11111111-2222-3333-4444-555555555555"
     assert store.is_valid_id(sid) and not store.is_valid_id(sid + "\n")
+
+
+def test_an_unchanged_memory_file_is_not_read_again(client, mx, monkeypatch):
+    ws = mx["ws"]
+    (ws / "memory.md").write_text("- x\n" * 5)
+    assert memory.files()[0]["lines"] == 5
+    real, opened = open, []
+    monkeypatch.setattr("builtins.open", lambda f, *a, **k: (opened.append(str(f)), real(f, *a, **k))[1])
+    assert memory.files()[0]["lines"] == 5
+    assert not [f for f in opened if f.endswith("memory.md")]
+    (ws / "memory.md").write_text("- x\n" * 7)
+    assert memory.files()[0]["lines"] == 7
