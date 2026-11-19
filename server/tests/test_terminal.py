@@ -1,4 +1,5 @@
 """Terminals of the web app: off by default, password to turn on, websocket auth, limits, idle close."""
+import os
 import json
 import time
 import types
@@ -163,3 +164,18 @@ def test_a_signal_never_reaches_the_servers_own_process_group(monkeypatch):
     monkeypatch.setattr(terminal.os, "getpgid", lambda pid: 777)
     terminal._signal(t, _signal.SIGHUP)
     assert sent[-1] == ("killpg", 777, _signal.SIGHUP)
+
+
+def test_nothing_is_written_to_an_ended_terminal_whose_descriptor_was_reused(tmp_path):
+    r, w = os.pipe()
+    os.close(r)
+    t = terminal.Term(id="t1", cwd=str(tmp_path), pid=0, fd=-1, started=time.time(), title="x", exit=0)
+    other = tmp_path / "other.txt"
+    t.fd = os.open(other, os.O_WRONLY | os.O_CREAT)        # the number an ended terminal gave back
+    try:
+        terminal.write(t, b"typed after the exit")
+        terminal.resize(t, 80, 24)
+    finally:
+        os.close(t.fd)
+        os.close(w)
+    assert other.read_bytes() == b""
