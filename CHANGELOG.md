@@ -3,7 +3,7 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
-## Unreleased
+## 2.0.0-alpha.158 - 2026-11-19
 
 New:
 - **Jobs and agents start again right after the usage limit resets.** When a scheduled job or an agent run (started
@@ -11,6 +11,9 @@ New:
   it starts again by itself one minute after the reset time Claude gave ("resets 4pm"), instead of trying every 30
   minutes. Settings -> Usage -> **Start again after the usage limit** (on by default) turns it off or changes the
   delay.
+- **Mark all your agents as read.** On the Agents page, a **✓✓** button beside the chips of the list marks every
+  agent and group with something to read as read at once, as if you had opened each of them (with a topic chip on,
+  only that topic's). It shows only while something is unread. Thanks to Anthony14FR.
 
 Changed:
 - **Dependencies updated** (minor and patch versions only): Vite 8.3.8, React Router 8.5.1, TanStack Query 5.108,
@@ -33,6 +36,11 @@ Changed:
   sessions, a second click shows them all again. A counter at zero is hidden.
 - **Unread sessions are green on the dashboard too.** In the Activity card, a finished session you have not read
   yet has a green dot (it was orange), like in the session list; a failed one stays red.
+- **Tasks open as a list on a phone.** The board shows one column at a time on a small screen: the Tasks page now
+  opens on the list there, until you pick another view. Thanks to Anthony14FR.
+- **More room to read a session on a phone.** With a single session open, the tabs bar is gone (it repeated the
+  title under it); while you type, the tabs step aside like the place row; held sideways, the place rows are hidden
+  so the thread keeps most of the screen. Thanks to Anthony14FR.
 
 Fixed:
 - **Sharp image previews in sessions.** A wide picture (a screenshot, a photo in landscape) looked blurry in
@@ -44,6 +52,9 @@ Fixed:
   you leave the page, lands in the draft of its box. Queued messages taken back ("Edit") while you leave go to the draft.
 - **`maxxing agents list` answers several times faster when you have many agents.** It read every scheduled job
   again for each agent; it reads them once now (with 24 agents: about 290 ms down to 60 ms).
+- **A diff keeps its line numbers in sight when scrolled sideways.** In the Changes view and the pull requests, a
+  long line scrolled the numbers, the + / - and the `@@` headers off screen (often on a phone): they stay at the left
+  edge now. Thanks to Anthony14FR.
 
 ## 2.0.0-alpha.157 - 2026-11-18
 

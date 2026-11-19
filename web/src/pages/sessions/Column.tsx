@@ -124,7 +124,9 @@ export const StripContext = React.createContext<{
 
 /** Phone, tabs view: the open sessions' chips, under the app bar of the session's header. */
 function MobileTabs() {
-  return <>{React.useContext(MobileTabsSlot)}</>
+  const tabs = React.useContext(MobileTabsSlot)
+  // steps aside while typing, like the place row (but stays on a phone held sideways: globals.css)
+  return tabs && <div data-kbd-hide="" data-tabs="">{tabs}</div>
 }
 
 /* ---------------------------------------------------------------- shell */

@@ -6,13 +6,14 @@
 // of the Office (AgentsPage.tsx), and a "+" for New agent beside the Office link, on every page of Agents.
 // The groups of a project (agent_rooms: the owner talks to several of its agents) come first in its section: the
 // chips To read / Running keep the unread / busy ones, the other chips hide them.
+// Beside the chips, while something of the list (topic and search applied) is unread: Mark all as read.
 // On a phone it is the whole page at /agents (an agent then opens full screen); on a desktop, the page's left column.
 import * as React from 'react'
 import { Link, useLocation, useMatch, useSearchParams } from 'react-router'
-import { Bot, LayoutGrid, Plus, TriangleAlert, UsersRound, X } from 'lucide-react'
+import { Bot, CheckCheck, LayoutGrid, Plus, TriangleAlert, UsersRound, X } from 'lucide-react'
 import { ListChips, ListEntry } from '@/components/shell/PageList'
 import { useT, type TFn } from '@/i18n'
-import { agentRoute, groupRoute, useAgentGroups, useAgents, useWorkspace } from '@/lib/queries'
+import { agentRoute, groupRoute, useAgentGroups, useAgents, useMarkAllSeen, useWorkspace } from '@/lib/queries'
 import type { Agent, AgentGroup } from '@/lib/types'
 import { errorMessage } from '@/lib/api'
 import { cn } from '@/lib/utils'
@@ -101,14 +102,24 @@ export function AgentsList({ empty, nav, query = '', className }: { empty?: Reac
   }, [matching, filter])
 
   // The groups follow the same narrowing: the topic (one of their members is in it), then the chips.
+  const matchingRooms = React.useMemo(
+    () =>
+      (allGroups || [])
+        .filter((x) => !topic || x.members.some((m) => m.path.startsWith(`projects/${topic.replace('/', '/topics/')}/`)))
+        .filter((x) => !q || [x.display_name, x.name, x.project].some((y) => y?.toLowerCase().includes(q))),
+    [allGroups, topic, q],
+  )
   const rooms = React.useMemo(() => {
-    const g = filter === null || filter === 'unread' || filter === 'running' ? allGroups || [] : []
+    const g = filter === null || filter === 'unread' || filter === 'running' ? matchingRooms : []
     return g
-      .filter((x) => !topic || x.members.some((m) => m.path.startsWith(`projects/${topic.replace('/', '/topics/')}/`)))
-      .filter((x) => !q || [x.display_name, x.name, x.project].some((y) => y?.toLowerCase().includes(q)))
       .filter((x) => (filter === 'unread' ? x.unread > 0 : filter === 'running' ? x.busy : true))
       .sort((a, b) => (b.last_at || b.created) - (a.last_at || a.created))
-  }, [allGroups, filter, topic, q])
+  }, [matchingRooms, filter])
+  const markAll = useMarkAllSeen()
+  const unread = {
+    agents: matching.filter((a) => a.thread_unread).map((a) => a.path),
+    groups: matchingRooms.filter((g) => g.unread).map((g) => g.path),
+  }
 
   const layout = useAgentsLayout()
   const groups = React.useMemo(() => {
@@ -133,22 +144,38 @@ export function AgentsList({ empty, nav, query = '', className }: { empty?: Reac
     <div className={cn('flex min-h-0 flex-col [@media(max-height:500px)]:overflow-y-auto', className)} data-testid="agents-list">
       {nav}
       <div className="grid shrink-0 gap-2 px-3 pt-2 pb-1.5">
-        <ListChips<StateFilter | 'all'>
-          label={t('agents.side.filter')}
-          value={filter ?? 'all'}
-          onChange={(k) => setFilter(k === 'all' || k === filter ? null : k)}
-          items={[
-            { key: 'all', label: t('agents.side.all') },
-            ...STATE_GROUPS.filter((g) => counts[g.id] > 0 || filter === g.id).map((g) => ({
-              key: g.id,
-              label: g.label(t),
-              count: counts[g.id],
-              dot: <StatusDot tone={g.tone} pulse={g.id === 'waiting' || g.id === 'running'} className="size-1.5 shrink-0" />,
-              testid: `agents-filter-${g.id}`,
-            })),
-          ]}
-          className="min-w-0"
-        />
+        <div className="flex min-w-0 items-center gap-1">
+          <ListChips<StateFilter | 'all'>
+            label={t('agents.side.filter')}
+            value={filter ?? 'all'}
+            onChange={(k) => setFilter(k === 'all' || k === filter ? null : k)}
+            items={[
+              { key: 'all', label: t('agents.side.all') },
+              ...STATE_GROUPS.filter((g) => counts[g.id] > 0 || filter === g.id).map((g) => ({
+                key: g.id,
+                label: g.label(t),
+                count: counts[g.id],
+                dot: <StatusDot tone={g.tone} pulse={g.id === 'waiting' || g.id === 'running'} className="size-1.5 shrink-0" />,
+                testid: `agents-filter-${g.id}`,
+              })),
+            ]}
+            className="min-w-0 flex-1"
+          />
+          {unread.agents.length + unread.groups.length > 0 && (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="shrink-0"
+              onClick={() => markAll.mutate(unread)}
+              disabled={markAll.isPending}
+              aria-label={t('agents.side.markAllRead')}
+              title={t('agents.side.markAllRead')}
+              data-testid="agents-mark-all-read"
+            >
+              <CheckCheck />
+            </Button>
+          )}
+        </div>
         {topic && (
           <span className="flex min-w-0 items-center gap-1 self-start rounded-full bg-secondary py-0.5 pr-0.5 pl-2.5 text-xs">
             <span className="truncate">

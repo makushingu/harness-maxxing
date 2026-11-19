@@ -26,6 +26,7 @@ import { TaskCalendar } from '@/features/tasks/Calendar'
 import { weekColumns, weekDropDue } from '@/features/tasks/Week'
 import { FilterChips, FilterMenu, QuickAdd } from '@/features/tasks/Toolbar'
 import { ProjectDot } from '@/features/tasks/parts'
+import { isCompact } from '@/stores/media'
 import {
   EMPTY_FILTERS,
   activeFilterCount,
@@ -47,16 +48,25 @@ import {
 type View = 'board' | 'week' | 'calendar' | 'list'
 type Prefs = { view: View; groupBy: GroupBy; sort: SortKey; showDone: boolean; lanes: boolean; scope: Scope }
 const PREFS_KEY = 'mx-tasks'
-const DEFAULT_PREFS: Prefs = { view: 'board', groupBy: 'due', sort: 'due', showDone: false, lanes: false, scope: 'all' }
 const VIEWS: View[] = ['board', 'week', 'calendar', 'list']
+// a phone shows one board column at a time: it opens on the list until a view is picked
+const defaultPrefs = (): Prefs => ({
+  view: isCompact() ? 'list' : 'board',
+  groupBy: 'due',
+  sort: 'due',
+  showDone: false,
+  lanes: false,
+  scope: 'all',
+})
 
 function usePrefs(): [Prefs, (p: Partial<Prefs>) => void] {
   const [prefs, setPrefs] = React.useState<Prefs>(() => {
+    const def = defaultPrefs()
     try {
-      const p = { ...DEFAULT_PREFS, ...JSON.parse(localStorage.getItem(PREFS_KEY) || '{}') }
-      return VIEWS.includes(p.view) ? p : { ...p, view: 'board' }
+      const p = { ...def, ...JSON.parse(localStorage.getItem(PREFS_KEY) || '{}') }
+      return VIEWS.includes(p.view) ? p : { ...p, view: def.view }
     } catch {
-      return DEFAULT_PREFS
+      return def
     }
   })
   const update = React.useCallback((p: Partial<Prefs>) => {

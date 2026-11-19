@@ -5,8 +5,17 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
-## Unreleased
+## 2.0.0-alpha.158 - 2026-11-19
 
+- Web (from Anthony14FR's PRs #138 #140 #143 #145, rewritten): `useMarkAllSeen()` (`queries/agentGroups.ts`) posts
+  `/seen` for each given agent and group (`Promise.all`), patches `thread_unread` / `unread` to 0 at once and
+  invalidates both lists; `AgentsList` shows the `agents-mark-all-read` button while `matching` / `matchingRooms`
+  (topic + search, whatever the state chip) hold something unread. Tasks: `defaultPrefs()` picks `view: 'list'` when
+  `isCompact()`, a saved view wins. Phone session: `MobileOverlay` fills `MobileTabsSlot` only with several columns;
+  `MobileTabs` wraps them in `data-kbd-hide data-tabs` (hidden while typing); `globals.css` hides
+  `[data-col] [data-kbd-hide]:not([data-tabs])` in landscape below 500 px high on touch screens (the tabs stay, to
+  switch session). `DiffRows`: sticky opaque gutter (`diff-gutter`, `bg-popover` under the line's tint), the `@@`
+  text in a sticky inline span, the selection ring drawn by `after:` above the gutter.
 - Voice: settings `mic` / `call` (default true, `voice.DEFAULTS`, `PUT /api/voice/settings`): `VoiceButton` returns
   null when `mic` is false (unless recording), `VoiceCall` when `call` is false (unless a call is on). Card "Buttons
   of the message box" at the top of Settings -> Voice (texts `vmode.btn.*`, group `vmode`). Composer toolbar: the

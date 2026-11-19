@@ -50,6 +50,35 @@ def test_the_tasks_header_leaves_room_for_the_menu_button():
     assert int(back[1]) >= 480
 
 
+def test_the_tasks_open_as_a_list_on_a_phone():
+    # the board shows one column at a time on a phone: the list is the default there, a view picked by hand is kept
+    tasks = (WEB / "pages" / "tasks" / "index.tsx").read_text()
+    assert "view: isCompact() ? 'list' : 'board'," in tasks
+    assert "{ ...def, ...JSON.parse(localStorage.getItem(PREFS_KEY)" in tasks
+
+
+def test_a_session_header_on_a_phone_leaves_room_to_read():
+    # one tab repeated the title under it, the tabs stayed while typing, and held sideways only ~90 px were left to read
+    src = (WEB / "pages" / "sessions" / "index.tsx").read_text()
+    assert "const several = useSessionsUI((s) => s.cols.length > 1)" in src
+    assert "<MobileTabsSlot.Provider value={tabs && several ? <TabsBar" in src
+    column = (WEB / "pages" / "sessions" / "Column.tsx").read_text()
+    assert '<div data-kbd-hide="" data-tabs="">{tabs}</div>' in column
+    css = (WEB / "styles" / "globals.css").read_text()
+    assert re.search(
+        r"@media \(orientation: landscape\) and \(max-height: 500px\) and \(pointer: coarse\) \{\s*"
+        r"\[data-col\] \[data-kbd-hide\]:not\(\[data-tabs\]\) \{\s*display: none;",
+        css,
+    )  # the place rows go, the tabs stay (switching session with several open)
+
+
+def test_a_diff_keeps_its_line_numbers_and_hunk_heads_in_sight_when_scrolled_sideways():
+    src = (WEB / "features" / "code" / "DiffRows.tsx").read_text()
+    gutter = re.search(r'className="([^"]*)" data-testid="diff-gutter"', src)
+    assert gutter and {"sticky", "left-0", "bg-popover"} <= set(gutter[1].split())  # opaque: the code passes under it
+    assert '<span className="sticky left-0 inline-block px-3">{r.text}</span>' in src  # a full-width block never sticks
+
+
 def test_show_more_is_big_enough_to_tap():
     # "Show more" in the notifications was a 50x16 px target on a phone: a bigger tap area on touch screens only
     feed = (WEB / "features" / "feed" / "FeedItems.tsx").read_text()

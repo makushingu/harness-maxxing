@@ -209,7 +209,9 @@ it starts folded on screens narrower than 1600 px so the conversation keeps its 
 - **New group with this agent**, a link under Settings.
 
 Opening the page marks its results as read. In the list on the left, the *Waiting for you* and *To read* chips show
-only the agents waiting for your OK or with something to read.
+only the agents waiting for your OK or with something to read. While something is unread, the **✓✓** button beside
+the chips (*Mark all as read*) marks every agent and group of the list read at once (with a topic chip on, only that
+topic's).
 
 ## Triggers
 
