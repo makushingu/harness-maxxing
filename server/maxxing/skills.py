@@ -27,7 +27,7 @@ def _front(text: str) -> dict[str, str]:
     body = text[3:end if end > 0 else len(text)]
     out: dict[str, str] = {}
     key = ""
-    for line in body.splitlines():
+    for line in body.split("\n"):                                # not splitlines(): U+2028, U+0085... are no line ends in YAML
         m = _FIELD.match(line)
         if m:
             key = m.group(1)

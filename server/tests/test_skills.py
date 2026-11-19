@@ -57,3 +57,9 @@ def test_folders_with_a_name_that_is_not_utf8_are_left_out(client, mx, monkeypat
     r = client.get("/api/skills")
     assert r.status_code == 200
     assert {s["folder"] for s in r.json()["skills"] if s["origin"] != "product"} == {"fine"}
+
+
+def test_front_matter_is_split_on_newlines_only():
+    from maxxing import skills
+    out = skills._front("---\nname: x\ndescription: hello\u2028disable-model-invocation: true\n---\n")
+    assert list(out) == ["name", "description"]

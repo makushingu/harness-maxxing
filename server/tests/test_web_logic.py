@@ -234,3 +234,20 @@ def test_the_context_window_and_the_draft_attachments_read_stored_data_with_thei
     store = (WEB / "pages" / "sessions" / "store.ts").read_text(encoding="utf-8")
     atts = store[store.index("export function loadAtts"):store.index("export function saveAtts")]
     assert "typeof a.name === 'string'" in atts and "Number.isFinite(a.size)" in atts
+
+
+def test_durations_and_tokens_are_rounded_before_they_are_split(tmp_path):
+    util = (WEB / "pages" / "sessions" / "util.ts").read_text(encoding="utf-8")   # (it has runtime imports: cut out two helpers)
+    pick = lambda a, b: util[util.index(a):util.index(b)]  # noqa: E731
+    mod = tmp_path / "fmt.ts"
+    mod.write_text(pick("export function fmtTokens", "export function fmtCost")
+                   + pick("export function fmtMs", "export function fmtElapsed"), encoding="utf-8")
+    run = tmp_path / "run"
+    run.mkdir()
+    out = _run_ts(run, mod, "return [m.fmtMs(119600), m.fmtMs(59600), m.fmtMs(65000), m.fmtTokens(999999), m.fmtTokens(999400)]")
+    assert out == ["2 min 0 s", "1 min 0 s", "1 min 5 s", "1.0M", "999k"]
+
+
+def test_a_name_glued_to_a_word_is_not_a_mention():
+    src = (WEB / "pages" / "sessions" / "mentions.tsx").read_text(encoding="utf-8")
+    assert "(?<!\\\\S)@${label" in src                    # an "@Name" glued to a word (bob@Lea.fr) is no mention
