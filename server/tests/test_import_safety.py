@@ -207,3 +207,13 @@ def test_a_damaged_big_file_is_found_before_anything_is_written(client, mx, monk
     r = client.post(f"/api/import/{up.json()['id']}/apply")
     assert r.status_code == 400 and r.json()["error"] == "bad_zip", r.text
     assert not (workspace.root() / "projects" / "newone").exists()
+
+
+def test_a_zip_with_two_entries_of_the_same_name_is_refused(client, mx):
+    """The scan result was kept by name: a clean first `memory.md` hid a second one holding a token, which was written."""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("memory.md", "- clean\n")
+        z.writestr("memory.md", "- token ghp_" + "a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8" + "\n")
+    r = _upload(client, buf.getvalue())
+    assert r.status_code == 400 and r.json()["error"] == "bad_zip", r.text
