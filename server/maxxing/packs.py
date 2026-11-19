@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import shutil
 import threading
 from pathlib import Path
@@ -102,10 +103,10 @@ def _copy_missing(src_root: Path, dst_root: Path, rel_prefix: str, variables: di
 
 
 def _free_name(ws: Path, base: str) -> str:
-    if not (ws / "projects" / base).exists():
+    if not os.path.lexists(ws / "projects" / base):
         return base
     n = 2
-    while (ws / "projects" / f"{base}-{n}").exists():
+    while os.path.lexists(ws / "projects" / f"{base}-{n}"):
         n += 1
     return f"{base}-{n}"
 
