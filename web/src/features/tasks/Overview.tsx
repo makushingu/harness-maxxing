@@ -45,7 +45,7 @@ export function TaskOverview({ projects, stats, emojis, today, onPick }: Props) 
                 key={p.id}
                 type="button"
                 onClick={() => onPick(p.id)}
-                className="inline-flex h-8 items-center gap-1.5 rounded-full border bg-card px-3 text-[13px] text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                className="inline-flex h-8 items-center pointer-coarse:h-10 max-md:h-10 gap-1.5 rounded-full border bg-card px-3 text-[13px] text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
               >
                 <ProjectDot color={p.color} className="size-2" />
                 <Sensitive length={5}>{p.name}</Sensitive>
