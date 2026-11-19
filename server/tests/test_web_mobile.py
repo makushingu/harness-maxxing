@@ -286,3 +286,10 @@ def test_signing_out_and_deleting_a_session_forget_the_side_questions():
     assert re.search(r"export function forgetAllDrafts\(\)[\s\S]*?forgetAside\(\)", drafts)
     assert re.search(r"export function forgetDraft\(key: string\)[\s\S]*?forgetAside\(key\)", drafts)
     assert "ASIDE_FORGET_EVENT" in aside
+
+
+def test_the_chips_of_empty_task_projects_are_big_enough_to_tap():
+    # the chips of projects without a task were 32 px high on a phone, under the 40 px of the other buttons
+    overview = (WEB / "features" / "tasks" / "Overview.tsx").read_text()
+    chip = re.search(r'<button[^>]*onClick=\{\(\) => onPick\(p\.id\)\}[^>]*className="([^"]*)"', overview)
+    assert chip and "pointer-coarse:h-10" in chip[1].split()
