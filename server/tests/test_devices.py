@@ -784,3 +784,19 @@ def test_a_hello_with_a_lone_surrogate_in_caps_is_still_recorded(dv):
                       "caps": ["screen", "\ud800abc"], "screen": {"w": 1920, "h": 1080, "scale": 1}})
         wait_for(lambda: (dv.get("/api/devices").json()["devices"][0].get("hello") or {}).get("v") == "9.9.9", 5)
         assert ws.receive_json()["t"] == "access"
+
+
+def test_a_device_ask_answered_with_a_lone_surrogate_note_stays_encodable(monkeypatch):
+    import asyncio
+    from maxxing.devices import asks
+    monkeypatch.setattr(asks, "_announce", lambda d: None)
+
+    async def go():
+        t = asyncio.create_task(asks.ask("sess08", "web", {"id": "dev1", "name": "x"}, "go"))
+        await asyncio.sleep(0.05)
+        rid = asks.pending(session="sess08")[0]["id"]
+        done = asks.decide(rid, "done", "x\ud800")
+        json.dumps(done).encode("utf-8")
+        assert done["note"] == "x?"
+        await t
+    asyncio.run(go())

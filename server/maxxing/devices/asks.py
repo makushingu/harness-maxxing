@@ -85,7 +85,7 @@ async def ask(session: str, owner: str, dev: dict, message: str, alive=None) -> 
 def _finish(d: dict, status: str, note: str = "") -> None:
     if d["status"] != "pending":
         return
-    d.update(status=status, note=(note or "")[:500], decided_at=time.time())
+    d.update(status=status, note=_clean(note or "")[:500], decided_at=time.time())
     f = _futs.get(d["id"])
     if f is not None and not f.done():
         f.set_result(status)
