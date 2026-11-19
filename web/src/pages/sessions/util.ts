@@ -358,7 +358,7 @@ export function diffStats(lines: DiffLine[]) {
 }
 
 export function fmtTokens(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
+  if (n >= 999_500) return `${(n / 1_000_000).toFixed(1)}M`
   if (n >= 10_000) return `${Math.round(n / 1000)}k`
   if (n >= 1000) return `${(n / 1000).toFixed(1)}k`
   return String(n)
@@ -374,9 +374,9 @@ export function fmtCost(usd: number): string {
 export function fmtMs(ms: number): string {
   if (ms < 1000) return `${ms} ms`
   const s = ms / 1000
-  if (s < 60) return `${s.toFixed(s < 10 ? 1 : 0)} s`
-  const m = Math.floor(s / 60)
-  return `${m} min ${Math.round(s % 60)} s`
+  if (s < 59.5) return `${s.toFixed(s < 10 ? 1 : 0)} s`
+  const total = Math.round(s)                                  // round first: 119.6 s is 2 min 0 s, not 1 min 60 s
+  return `${Math.floor(total / 60)} min ${total % 60} s`
 }
 
 export function fmtElapsed(sec: number): string {
