@@ -6,7 +6,7 @@ import os
 import time
 from pathlib import Path
 
-from maxxing import trash
+from maxxing import config, trash
 
 from conftest import wait_idle
 
@@ -528,3 +528,21 @@ def test_restore_ignores_a_session_path_that_is_not_text(mx):
     (t / (item.name + ".json")).write_text(json.dumps({"original": str(dest), "at": 2e9, "kind": "topic"}))
     r = trash.restore(item.name)
     assert r["ok"] and dest.is_dir() and r["sessions"] == 1 and not sess.exists()
+
+
+def test_a_loop_of_links_or_a_name_too_long_does_not_break_the_trash(client, mx):
+    f = mx["files"] / "a" / "x.md"
+    f.parent.mkdir()
+    f.write_text("v1")
+    client.post("/api/files/delete", json={"path": str(f)})
+    it = _items(client)[0]
+    f.parent.rmdir()
+    (mx["files"] / "a").symlink_to(mx["files"] / "b")
+    (mx["files"] / "b").symlink_to(mx["files"] / "a")       # a -> b -> a
+    assert [i["id"] for i in client.get("/api/trash").json()["items"]] == [it["id"]]
+    assert client.post(f"/api/trash/{it['id']}/restore").status_code == 409
+    side = trash.trash_dir() / f"{it['id']}.json"
+    data = json.loads(side.read_text())
+    data["original"] = str(mx["files"] / ("n" * 300))
+    side.write_text(json.dumps(data))
+    assert client.post(f"/api/trash/{it['id']}/restore").status_code == 409

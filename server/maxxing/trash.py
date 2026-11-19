@@ -116,7 +116,7 @@ def _ws_rel(p: Path, real_root: Path | None = None) -> str:
         pass
     try:
         return str(p.resolve().relative_to(real_root or ws.resolve()))
-    except OSError as e:
+    except (OSError, RuntimeError) as e:                # RuntimeError: a loop of symbolic links
         raise ValueError(f"{p}: {e}") from None
 
 
@@ -359,7 +359,10 @@ def restore(item_id: str) -> dict[str, Any]:
         bus.invalidate("sessions", "workspace", "trash")
         return {"ok": True, "kind": kind, "restored_to": path, "sessions": n}
     original = Path(side["original"])
-    parents = original.resolve().parents                    # a sidecar never sends a file out of the roots
+    try:
+        parents = original.resolve().parents                # a sidecar never sends a file out of the roots
+    except (OSError, RuntimeError):                         # a name too long, a loop of symbolic links
+        raise TrashError(409, "not_restorable", "This item cannot be restored from here") from None
     if not any(r.resolve() in parents for r in (config.workspace(), config.files_root())):
         raise TrashError(409, "not_restorable", "This item cannot be restored from here")
     # Restoring a topic (an agent) first would make a bare project (topic) folder, which then came back as
