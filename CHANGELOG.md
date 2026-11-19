@@ -3,6 +3,12 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## Unreleased
+
+Changed:
+- **On a phone, the Tasks page explains how to select on a touch screen.** The hint under the tasks no longer
+  talks about Ctrl/⌘ + click there: it says to tap the round box. Thanks to Anthony14FR.
+
 ## 2.0.0-alpha.158 - 2026-11-19
 
 New:

@@ -2297,6 +2297,7 @@ export const fr: Record<keyof typeof en, string> = {
   'tasks.allDone': 'Plus rien à faire',
   'tasks.allDoneDesc': 'Toutes les tâches sont terminées. Activez « Afficher terminées » pour les voir.',
   'tasks.footerHint': 'Ctrl/⌘ + clic (ou la pastille ronde) sélectionne plusieurs tâches. Harness peut aussi gérer cette liste : les modifications de tasks.json apparaissent ici en direct.',
+  'tasks.footerHintTouch': 'Touchez la pastille ronde d\'une tâche pour en sélectionner plusieurs. Harness peut aussi gérer cette liste : les modifications de tasks.json apparaissent ici en direct.',
   'tasks.loadError': 'Impossible de charger les tâches',
   'tasks.corrupt.title': 'tasks.json est illisible',
   'tasks.corrupt.desc': 'Le fichier n\'est pas du JSON valide. Vos tâches sont en sécurité : rien n\'est écrit dans le fichier tant qu\'il n\'est pas réparé.',

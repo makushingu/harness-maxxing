@@ -330,3 +330,12 @@ def test_the_chips_of_empty_task_projects_are_big_enough_to_tap():
     overview = (WEB / "features" / "tasks" / "Overview.tsx").read_text()
     chip = re.search(r'<button[^>]*onClick=\{\(\) => onPick\(p\.id\)\}[^>]*className="([^"]*)"', overview)
     assert chip and "pointer-coarse:h-10" in chip[1].split()
+
+
+def test_the_tasks_footer_hint_has_a_touch_text_without_ctrl_click():
+    src = (WEB / "pages" / "tasks" / "index.tsx").read_text()
+    assert re.search(r'className="pointer-coarse:hidden">\{t\(\'tasks\.footerHint\'\)\}', src)
+    assert re.search(r'className="hidden pointer-coarse:inline">\{t\(\'tasks\.footerHintTouch\'\)\}', src)
+    for lang in ("en", "fr"):
+        touch = re.search(r"'tasks\.footerHintTouch': '((?:[^'\\]|\\.)*)'", (WEB / "i18n" / f"{lang}.ts").read_text())
+        assert touch and "Ctrl" not in touch[1], lang

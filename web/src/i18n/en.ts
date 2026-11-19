@@ -2315,6 +2315,7 @@ export const en = {
   'tasks.allDone': 'Nothing left to do',
   'tasks.allDoneDesc': 'Every task is done. Turn on "Show done" to see them.',
   'tasks.footerHint': 'Ctrl/⌘ + click (or the round box) selects several tasks. Harness can manage this list too: tasks.json updates appear here live.',
+  'tasks.footerHintTouch': 'Tap the round box of a task to select several tasks. Harness can manage this list too: tasks.json updates appear here live.',
   'tasks.loadError': 'Tasks could not be loaded',
   'tasks.corrupt.title': 'tasks.json cannot be read',
   'tasks.corrupt.desc': 'The file is not valid JSON. Your tasks are safe: nothing is written to the file until it is fixed.',

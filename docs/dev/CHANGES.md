@@ -5,6 +5,12 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## Unreleased
+
+- Tasks (`pages/tasks/index.tsx`, PR #150 of Anthony14FR): footer hint split in two spans, `tasks.footerHint`
+  (`pointer-coarse:hidden`) and new `tasks.footerHintTouch` (en+fr, `hidden pointer-coarse:inline`). Test in
+  `test_web_mobile.py`.
+
 ## 2.0.0-alpha.158 - 2026-11-19
 
 - Web (from Anthony14FR's PRs #138 #140 #143 #145, rewritten): `useMarkAllSeen()` (`queries/agentGroups.ts`) posts
