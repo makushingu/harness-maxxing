@@ -366,3 +366,13 @@ def test_check_lists_the_folders_a_few_at_a_time(env, monkeypatch):
     mcp.check(wait=True)
     assert len(calls) == len(set(calls)) == 12           # each folder once
     assert 1 < peak[0] <= mcp.CHECK_WORKERS
+
+
+def test_login_finish_refuses_an_address_with_a_control_character(env):
+    from maxxing import mcp
+    mcp.add("ads", {"type": "http", "url": "https://ads.example.com/mcp"}, None)
+    st = mcp.login_start(mcp.servers()[0]["id"], wait=10)
+    for bad in ("https://a.example/cb?code=1\x03", "https://a.example/cb?code=1\x04"):
+        with pytest.raises(mcp.McpError) as e:
+            mcp.login_finish(st["login"], bad)
+        assert e.value.code == "bad_redirect"
