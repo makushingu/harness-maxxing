@@ -1226,7 +1226,7 @@ const SessionRow = React.memo(function SessionRow({
           {s.favorite ? <StarOff /> : <Star />} {s.favorite ? t('sessions.fav.remove') : t('sessions.fav.add')}
         </DropdownMenuItem>
         {s.state !== 'running' && (
-          <DropdownMenuItem onSelect={() => mark.mutate({ id: s.id, unread: !s.unread })} data-testid="unread-toggle">
+          <DropdownMenuItem onSelect={() => mark.mutate({ s, unread: !s.unread })} data-testid="unread-toggle">
             {s.unread ? <MailOpen /> : <Mail />} {s.unread ? t('rmark.read') : t('rmark.unread')}
           </DropdownMenuItem>
         )}

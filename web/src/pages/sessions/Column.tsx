@@ -482,7 +482,7 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
     if (!(focused || variant !== 'column' || count === 1)) return
     if (seenFor.current === session.updated) return
     seenFor.current = session.updated
-    seen.mutate(session.id)
+    seen.mutate(session)
   }, [session, focused, visible, variant, count]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Queued messages of this tab that the server no longer holds (cleared elsewhere) disappear.
