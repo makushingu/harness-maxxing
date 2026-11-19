@@ -24,7 +24,7 @@ Creates or refreshes the configuration, workspace, skills and default jobs. Safe
 existing values and files are kept unless you pass a flag.
 Workspace templates (default projects `general`, `system`, `tutorial`) are copied only when
 missing, and a default project or topic you deleted is never re-created. Default jobs are created
-once each (Memory compaction, Check for updates, Morning tasks and Renewal reminder disabled).
+once each (Memory compaction, Check for updates, and Morning tasks, which starts disabled).
 As root on systemd it also writes the slices of the [CPU priorities](settings-and-keys#cpu-priorities)
 (`maxxing-live.slice`, `maxxing-turns.slice`, `maxxing-jobs.slice`; the server joins its slice at its next restart).
 

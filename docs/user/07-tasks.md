@@ -44,7 +44,8 @@ At the top right of the page: the view switch, **By project** (board, All tasks)
 - **Calendar**: the month, with each task on its due date. Click a day to list its tasks below the
   grid and add one for that day; on a computer, drag a task to another day.
 - **List**: grouped by due date, by project or (inside a project) by topic, sortable: **Group by**, **Sort** and
-  **Show done** sit above the list.
+  **Show done** sit above the list. On a phone the page opens on the list until you pick another view (the board
+  shows one column at a time there); the view you pick is kept.
 
 ## Using the board
 
@@ -53,7 +54,7 @@ At the top right of the page: the view switch, **By project** (board, All tasks)
   `^2026-05-04`). Then add notes (markdown), priority (none, low, medium, urgent), due
   date, labels, a task project (with a color) and optionally a linked workspace topic.
 - **Several at once**: Ctrl/⌘ + click cards (or click the round box in their corner, or the one
-  next to a column / group title) to select them. A bar appears at the bottom: change their
+  next to a column / group title) to select them; on a phone, tap the round box. A bar appears at the bottom: change their
   status, priority, due date, project or labels in one go, or delete them. Dragging a selected
   card moves the whole selection to the other column. **Esc** clears the selection; **Select all** in the bar
   (or Ctrl/⌘ + A once a task is selected) selects every visible task.

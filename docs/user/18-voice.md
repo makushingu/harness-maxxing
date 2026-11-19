@@ -38,7 +38,9 @@ Language) if you always speak the same one, or for very short or noisy notes.
 
 ## In the browser
 - The **mic button** sits next to *Send* in every session and in an agent's conversation (the same voice
-  messages; in an agent group, the transcript is put in the box).
+  messages; in an agent group, the transcript is put in the box). You do not use it? Settings -> Voice ->
+  **Buttons of the message box** hides the mic button and the voice mode button, from every message box on every
+  device.
 - **Tap** to start, tap ✓ to stop; or **hold** to talk and release to stop (push-to-talk). Slide left
   while holding, press **Esc** or ✕ to cancel.
 - **When you stop, the voice message is sent right away**, like on Telegram: it appears in the

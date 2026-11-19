@@ -5,8 +5,9 @@ section: Settings
 
 Everything is configurable from **Settings**; no file editing is needed.
 
-The sections are grouped in six blocks, in this order (on a phone they are the tabs at the top, a thin bar between
-two blocks):
+The sections are grouped in six blocks, in this order. On a phone, Settings opens on the list of every section,
+grouped the same way (one tap each); inside a section the tabs at the top go to the others (a thin bar between two
+blocks):
 
 | Block | Section | What you find |
 |---|---|---|

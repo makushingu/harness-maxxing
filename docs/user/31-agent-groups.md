@@ -88,6 +88,10 @@ you check it?"), that member speaks next. An agent that has nothing useful to ad
 member is dimmed at the top of the group; click it to let it speak again.
 
 ```mermaid
+---
+config:
+  look: handDrawn
+---
 sequenceDiagram
   participant You
   participant Writer

@@ -227,6 +227,20 @@ topic's).
 
 Events that arrive close together (within the agent's grouping delay, 60 s by default) go into one run.
 
+```mermaid
+---
+config:
+  look: handDrawn
+---
+flowchart LR
+  A["By hand<br/>or Telegram"] --> R(("Agent run"))
+  B["Schedule"] --> R
+  C["Webhook<br/>or notification"] --> R
+  F["Another agent"] --> R
+  R --> O["Answer in its page"]
+  R -- "After another agent" --> N(("Next agent"))
+```
+
 **Chain agents.** "After another agent" builds a pipeline without writing anything in their roles: a *Researcher* on
 a schedule, a *Writer* that starts after each of its successful runs, an *Editor* after the Writer. Add it from
 **When it works -> Add a trigger -> After another agent…**; **Try with its last result** starts the agent now on the

@@ -76,6 +76,20 @@ update: `maxxing custom save "..." --why "..." --check "<command>"`, or later `m
 "<command>"`. Extensions declare the version of the extension contract they use (`"api": 1` in
 `manifest.json`): a version that stops supporting it is announced before you update.
 
+```mermaid
+---
+config:
+  look: handDrawn
+---
+flowchart TB
+  V["New version"] --> T["Tested on a<br/>throw-away copy"]
+  T -- "everything compatible" --> U["Update"]
+  T -- "something to adapt" --> H["Update with Harness:<br/>adapts, tests"]
+  H --> U
+  U --> C["Checked after the update"]
+  C -- "something stopped" --> F["Fix with Harness"]
+```
+
 ## Careful updates
 
 `maxxing update` (or the topic `system/harness` (`system/update` on older servers), or Settings -> Updates) keeps you safe:

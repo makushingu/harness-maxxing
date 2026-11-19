@@ -10,8 +10,9 @@ Nothing outside that folder is reachable from the UI.
 
 - Breadcrumbs at the top, folders first, then files with size and date. On a computer the folder's listing sits
   in the second bar next to the sidebar (see [Sessions](04-sessions.md#layout)), with **Filter this folder** and
-  its toolbar; a file you click opens in the page, beside it. On a phone the listing opens from **☰** at the top
-  left: opening a folder keeps it open, opening a file closes it.
+  its toolbar; a file you click opens in the page, beside it. On a phone the folder is the page itself until you
+  open a file (no empty viewer, nothing to open first); with a file open, **☰** at the top left shows the folder
+  again (opening a folder keeps it open, opening a file closes it).
 - Search finds files and folders by name in the workspace.
 - Drag files from your computer onto the page to **upload** them into the current folder - or
   onto a folder row to upload them straight into that folder. One upload is limited to 2 GB, and

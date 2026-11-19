@@ -64,14 +64,15 @@ stopped.
   the page. Drag its right edge to widen or narrow it (220 to 520 px). Pages without a list (Dashboard, Git,
   Settings...) have no second bar. On a phone or a tablet, the same list opens from **☰** at the top left.
 - On a phone or a tablet (the *touch layout*), one session fills the screen and the app opens on the last one.
-  **☰** at the top left opens all your sessions: the **All / Running / Unread** chips with **New session** on
+  **☰** at the top left opens all your sessions: the [filters](#the-sessions-list) with **New session** on
   their right (in the topic of the session on screen), then your projects and topics. **Press and hold** a session, a
   topic or a project for its menu (rename, favorite, archive, delete...). Plan mode and *Notify me on
   Telegram* are in the session's **…** window. **⊞** at the
   top right opens the rest of the app (see [Settings](11-settings-and-keys.md#on-a-phone-or-a-tablet)).
   While you type in the message box, it takes at most a third of the screen (its text scrolls inside) so the answer
-  stays in sight, and the project line steps aside until the keyboard closes; held sideways, the session header
-  steps aside too.
+  stays in sight, and the project line and the tabs step aside until the keyboard closes. With a single session
+  open there is no tabs bar (it would only repeat the title); held sideways, the header keeps its top bar, the title
+  and the tabs.
 
 ## Move a session to another topic
 
@@ -95,9 +96,10 @@ top right of its head closes it (see [Layout](#layout)). To find a session by it
 
 The top of the list is the same on a computer and on a phone:
 
-- **All / Running / Unread**: the chips show every session, or only those working right now, or only the
-  answers you have not read yet (unfolded, with their count). On a computer, **Open all** opens them next to
-  the columns already open.
+- **Filters**: the first button (a stack of layers) shows every session; then two counters, the same as on the
+  **Sessions** entry of the sidebar: the sessions working right now, and the answers you have not read yet (green,
+  red when one of them ended in error). Click a counter to show only those sessions (unfolded), click it again for
+  all of them; a counter at 0 is hidden. On a computer, **Open all** opens them next to the columns already open.
 - **Display** (the sliders icon at the end of the chips): every display choice in one menu.
   - **Group by**: **Projects and topics** (the default: the tree) or **Sessions only**: every session in one
     list, whatever its project, sorted as you choose (**most used** first by default: the sessions you talk to
@@ -194,6 +196,7 @@ task (or use **Steer**).
 Claude answers about the session - where it is at, why it did something, what is left - without stopping
 its task. The answer opens in a larger panel above the composer; close it with its **×**. It is not added
 to the conversation and Claude's work is not affected (it answers from a copy of the conversation, read-only).
+The question and its answer stay there while you visit another page, and after a reload.
 
 **Quote part of an answer.** Select text in one of Claude's replies (or in a side-question answer) and
 click **Quote** above the selection (below it on a phone). The text goes into a **Quote** card above the
@@ -201,9 +204,10 @@ composer; quote several passages if you like, and remove one with its **×** (or
 When you send, the quotes go first, as Markdown blockquotes (`> …`), followed by what you typed - you can
 also send the quotes alone. Quotes are kept with the draft and shown as quote blocks in your message.
 
-**Nothing typed is lost on a reload.** What you type in a session's message box, its quotes and its attached
+**Nothing typed is lost on a reload or another page.** What you type in a session's message box, its quotes and its attached
 files stay saved in the browser: they are still there after a page reload, an update of Harness Maxxing or a
-server restart. A message being sent at the moment the page reloads comes back in the box (a notice says so)
+server restart, and while you visit another page (a dictation cut short by a change of page goes into the box). A
+message being sent at the moment the page reloads comes back in the box (a notice says so)
 unless the server had received it. Messages waiting in the queue are kept by the server. After an update the
 page switches to the new version only once nothing is being sent or uploaded. Signing out clears them from the browser
 (on a shared computer nothing unsent stays behind), and deleting a session clears its own.
@@ -406,10 +410,13 @@ The **…** of a session (or a right-click on its header, a long press on a phon
   it works in this browser. Unread answers show a green round counter in the sidebar, on the ☰ button and
   the tree, red when one of those sessions ended in error; it can pulse until you read them (*Pulsing badge*).
   Click a counter - running or finished, in the sidebar or on a project / topic of the tree -
-  and the session tree shows only those sessions, unfolded (the **Running** or **Unread** chip lights up; a click on a
+  and the session tree shows only those sessions, unfolded (the matching counter above the list lights up; a click on a
   project or topic still folds it, until the filter changes). **Open all** opens them next to the columns already
-  open; the **All** chip brings the whole tree back. The **Sessions** link
+  open; the first button of the filters (the layers) brings the whole tree back. The **Sessions** link
   itself brings back your last layout.
+- **Mark as read / Mark as unread** (the menu of a session in the list or the second bar, a long press on a phone):
+  the dot and the counters of its topic, project and of the sidebar follow at once. A session marked unread stays
+  so until you open it.
 - **Archive** hides a session from the list without deleting it (see the Archived filter).
 - **Delete** stops a running turn and removes the session files.
 

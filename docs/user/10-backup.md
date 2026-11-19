@@ -7,6 +7,18 @@ Your CLAUDE.md and memory.md files are the most valuable part of the installatio
 decisions, preferences and context. The backup pushes them every day to a **private GitHub
 repository**, with full history.
 
+```mermaid
+---
+config:
+  look: handDrawn
+---
+flowchart LR
+  M["CLAUDE.md, memory.md<br/>and the whitelist"] --> K{"Secret scanner<br/>+ repository private?"}
+  K -- "clean" --> G[("Private GitHub<br/>repository")]
+  K -- "secret found" --> X["Stops before pushing,<br/>tells you which file"]
+  G -- "Restore" --> N["This server<br/>or a new one"]
+```
+
 ## What is saved
 
 Only a **whitelist**, relative to the workspace:

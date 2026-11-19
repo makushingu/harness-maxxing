@@ -22,6 +22,18 @@ Claude Code loads every `CLAUDE.md` from the session folder up to the workspace 
 `projects/acme/topics/blog/` therefore reads all six files. (Claude Code itself only follows the import of the
 session's own folder; Harness passes the memory of the levels above with each turn, so nothing has to be approved.)
 
+```mermaid
+---
+config:
+  look: handDrawn
+---
+flowchart TB
+  W["Workspace<br/>CLAUDE.md + memory.md"] --> S(("Session in<br/>acme / blog"))
+  P["Project acme<br/>CLAUDE.md + memory.md"] --> S
+  T["Topic blog<br/>CLAUDE.md + memory.md"] --> S
+  S -. "memory skill" .-> T
+```
+
 | File | Contains | Who writes it |
 |---|---|---|
 | `CLAUDE.md` | stable instructions: what the project/topic is, how to work on it. The first paragraph under the title is the description shown in the UI. | you (or Claude when you ask) |
