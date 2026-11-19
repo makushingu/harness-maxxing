@@ -284,6 +284,7 @@ def _stripe(p: dict, h: dict) -> Event | None:
     typ = str(p.get("type") or "")
     obj = ((p.get("data") or {}).get("object") or {}) if isinstance(p.get("data"), dict) else {}
     eid = p.get("id")
+    eid = eid if isinstance(eid, str) and eid else None
     email = (obj.get("customer_details") or {}).get("email") or obj.get("receipt_email") or obj.get("customer_email") or ""
     dash = "https://dashboard.stripe.com/"
     if typ == "checkout.session.completed":

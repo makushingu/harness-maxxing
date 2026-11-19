@@ -775,3 +775,12 @@ def test_a_hello_with_nan_in_the_screen_stays_listable(dv):
 def test_an_action_with_a_lone_surrogate_enters_the_log(dv):
     store.log_action("d1", "click", {"name": "a\ud83db"}, False, 5, error="bad \ud83d")
     assert [a["tool"] for a in store.actions()] == ["click"]
+
+
+def test_a_hello_with_a_lone_surrogate_in_caps_is_still_recorded(dv):
+    p = _pair(dv, os_name="windows", name="pc", caps=CAPS_PC)
+    with _ws(dv, p["token"]) as ws:
+        ws.send_json({"t": "hello", "v": "9.9.9", "os": "windows", "arch": "amd64", "name": "pc",
+                      "caps": ["screen", "\ud800abc"], "screen": {"w": 1920, "h": 1080, "scale": 1}})
+        wait_for(lambda: (dv.get("/api/devices").json()["devices"][0].get("hello") or {}).get("v") == "9.9.9", 5)
+        assert ws.receive_json()["t"] == "access"

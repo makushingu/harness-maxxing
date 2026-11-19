@@ -19,6 +19,7 @@ import contextvars
 import copy
 import hashlib
 import inspect
+import unicodedata
 import json
 import logging
 import os
@@ -460,6 +461,11 @@ def check_emoji(value: str) -> str:
     except UnicodeEncodeError:                          # a lone surrogate: valid JSON, not storable
         raise WorkspaceError(400, "bad_emoji", "Use a single emoji") from None
     if len(v) > 8 or any(c.isspace() or c.isascii() and c.isalnum() for c in v) or all(c.isascii() for c in v):
+        raise WorkspaceError(400, "bad_emoji", "Use a single emoji")
+    # no control, format (bidi marks...) or separator characters, except the joiner and variation selector of emoji
+    if any(unicodedata.category(c) in ("Cc", "Cf", "Zs", "Zl", "Zp") and c not in "\u200d\ufe0f" for c in v):
+        raise WorkspaceError(400, "bad_emoji", "Use a single emoji")
+    if not any(unicodedata.category(c) in ("So", "Sk") or "\U0001f1e6" <= c <= "\U0001f1ff" for c in v):
         raise WorkspaceError(400, "bad_emoji", "Use a single emoji")
     return v
 

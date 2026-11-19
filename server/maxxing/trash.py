@@ -262,16 +262,16 @@ def _item(item_id: str) -> Path:
 
 def _free(dest: Path) -> Path:
     """dest, or "<name> (restored)", "<name> (restored 2)"... when something has the name now."""
-    if not dest.exists():
+    if not os.path.lexists(dest):                         # a dangling link is something too
         return dest
-    stem, suffix = (dest.stem, dest.suffix) if dest.is_file() or dest.suffix else (dest.name, "")
+    stem, suffix = (dest.name, "") if dest.is_dir() else (dest.stem, dest.suffix)   # "v1.2" is a folder, not "v1" + ".2"
     n = 1
     while True:
         tag = " (restored)" if n == 1 else f" (restored {n})"
         room = 255 - len(f"{tag}{suffix}".encode())          # a file name is at most 255 bytes
         short = stem.encode()[:max(room, 1)].decode(errors="ignore") if len(stem.encode()) > room else stem
         cand = dest.with_name(f"{short}{tag}{suffix}")
-        if not cand.exists():
+        if not os.path.lexists(cand):
             return cand
         n += 1
 
@@ -279,13 +279,13 @@ def _free(dest: Path) -> Path:
 def _free_dir_name(dest: Path) -> Path:
     """Topics and projects need slug names (at most 48 characters): "<name>-restored", "<name>-restored-2"...,
     the name cut to make room for the tag."""
-    if not dest.exists():
+    if not os.path.lexists(dest):
         return dest
     n = 1
     while True:
         tag = "-restored" + ("" if n == 1 else f"-{n}")
         cand = dest.with_name(dest.name[:48 - len(tag)].rstrip("-") + tag)   # still a slug (workspace.SLUG_RE)
-        if not cand.exists():
+        if not os.path.lexists(cand):
             return cand
         n += 1
 
