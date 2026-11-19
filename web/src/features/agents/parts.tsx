@@ -172,7 +172,10 @@ export function LimitsFields({ value, onChange, part }: { value: AgentLimits; on
   const t = useT()
   const num = (k: Exclude<keyof AgentLimits, 'chat_idle_h'>, scale = 1) => ({
     value: Math.round((value[k] / scale) * 100) / 100,
-    onValue: (n: number) => onChange({ ...value, [k]: k === 'usd_per_day' ? n : Math.round(n * scale) }),
+    onValue: (n: number) => {
+      const v = k === 'usd_per_day' ? n : Math.round(n * scale)
+      if (Number.isFinite(v)) onChange({ ...value, [k]: v }) // 1e308 * 60 is Infinity, which JSON.stringify sends as null
+    },
   })
   const budget = (
     <FormField label={t('agents.limits.usd')} hint={t('agents.limits.usdHint')}>
