@@ -138,7 +138,7 @@ def _value(tok: str, lo: int, hi: int, names: list[str] | None, what: str) -> in
     t = tok.lower()
     if names and t in names:                            # exact abbreviations only: cron refuses "monday"
         v = names.index(t) + (1 if names is MONTHS else 0)
-    elif t.isascii() and t.isdigit():                  # "²" or "٣" are digits for str.isdigit()
+    elif t.isascii() and t.isdigit() and len(t) <= 9:  # "²" or "٣" are digits for str.isdigit(); a huge number is out of range
         v = int(t)
     else:
         raise CronError(f"{what}: '{tok}' is not a number")
@@ -155,7 +155,7 @@ def _parse_field(text: str, lo: int, hi: int, names: list[str] | None, what: str
         step = 1
         if "/" in part:
             part, s = part.split("/", 1)
-            if not (s.isascii() and s.isdigit()) or int(s) == 0:
+            if not (s.isascii() and s.isdigit() and len(s) <= 9) or int(s) == 0:
                 raise CronError(f"{what}: bad step '/{s}'")
             step = int(s)
         if part == "*":
