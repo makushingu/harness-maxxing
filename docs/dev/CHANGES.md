@@ -7,6 +7,9 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Settings (PR #156 of Anthony14FR): route `settings/:section?` (was a redirect for `settings`); `SettingsRoute`
+  renders `SettingsList` (groups of `SETTINGS_SECTIONS`, 48 px rows) when `useIsMobile()` and no section, else the
+  redirect to General. Test in `test_web_mobile.py`.
 - Tasks (`pages/tasks/index.tsx`, PR #150 of Anthony14FR): footer hint split in two spans, `tasks.footerHint`
   (`pointer-coarse:hidden`) and new `tasks.footerHintTouch` (en+fr, `hidden pointer-coarse:inline`). Test in
   `test_web_mobile.py`.

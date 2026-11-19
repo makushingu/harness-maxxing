@@ -339,3 +339,12 @@ def test_the_tasks_footer_hint_has_a_touch_text_without_ctrl_click():
     for lang in ("en", "fr"):
         touch = re.search(r"'tasks\.footerHintTouch': '((?:[^'\\]|\\.)*)'", (WEB / "i18n" / f"{lang}.ts").read_text())
         assert touch and "Ctrl" not in touch[1], lang
+
+
+def test_settings_opens_on_the_list_of_its_sections_on_a_phone():
+    routes = (WEB / "routes.tsx").read_text()
+    assert "path: 'settings/:section?'" in routes and "path: 'settings', element: <Navigate" not in routes
+    src = (WEB / "pages" / "settings" / "index.tsx").read_text()
+    assert 'return mobile ? <SettingsList /> : <Navigate to="/settings/general" replace />' in src
+    lst = src[src.index("function SettingsList"):src.index("function SettingsPage")]
+    assert "SETTINGS_GROUPS.map" in lst and "min-h-12" in lst, "every section, grouped, big enough to tap"

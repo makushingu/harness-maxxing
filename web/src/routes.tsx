@@ -57,8 +57,7 @@ export const routes: RouteObject[] = [
           { path: 'mail', lazy: page(() => import('./features/mail/MailPage'), ['mail']) },
           { path: 'browser', element: <BrowserMoved /> },
           // Settings & docs
-          { path: 'settings', element: <Navigate to="/settings/general" replace /> },
-          { path: 'settings/:section', lazy: page(() => import('./pages/settings'), ['settings', 'auth', 'show', 'tasks', 'team', 'vmode']) },
+          { path: 'settings/:section?', lazy: page(() => import('./pages/settings'), ['settings', 'auth', 'show', 'tasks', 'team', 'vmode']) },
           { path: 'docs', lazy: page(() => import('./pages/docs')) },
           { path: 'docs/:slug', lazy: page(() => import('./pages/docs')) },
           // Extension pages: /x/<id> loads /ext/<id>/page.js

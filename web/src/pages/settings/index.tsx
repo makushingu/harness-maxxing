@@ -1,10 +1,12 @@
 // /settings/:section — left sub-nav on desktop, scrollable top tabs on mobile.
 // Each section is its own component in ./sections/*.tsx (Telegram/Backup/Claude reuse src/features).
 import * as React from 'react'
-import { Navigate, NavLink, useLocation, useParams } from 'react-router'
+import { Link, Navigate, NavLink, useLocation, useParams } from 'react-router'
+import { ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useT, withGroups } from '@/i18n'
 import { PageHeader, useDocumentTitle } from '@/components/shell/Page'
+import { useIsMobile } from '@/stores/media'
 import { SECTION_MOVED, SETTINGS_GROUPS, SETTINGS_SECTIONS, type SettingsSectionId } from './sections'
 import { GeneralSection } from './sections/General'
 import { ProfileSection } from './sections/Profile'
@@ -67,9 +69,45 @@ const COMPONENTS: Record<SettingsSectionId, React.ComponentType> = {
   devices: DevicesSection,
 }
 
-export default function SettingsPage() {
+export default function SettingsRoute() {
+  const { section } = useParams()
+  const mobile = useIsMobile()
+  if (section) return <SettingsPage section={section} />
+  // a phone opens on the list of the sections (26 of them: too many for the tab strip alone), a computer on General
+  return mobile ? <SettingsList /> : <Navigate to="/settings/general" replace />
+}
+
+/** Phones: /settings is the grouped list of the sections, as in the column of a computer. */
+function SettingsList() {
   const t = useT()
-  const { section = 'general' } = useParams()
+  useDocumentTitle(t('nav.settings'))
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <PageHeader title={t('nav.settings')} sensitiveTitle={t('nav.settings')} />
+      <nav aria-label={t('nav.settings')} data-testid="settings-list" className="grid gap-5 px-4 py-4">
+        {SETTINGS_GROUPS.map((g) => (
+          <div key={g.id} className="grid gap-1">
+            <div className="px-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">{t(g.label)}</div>
+            <ul className="divide-y overflow-hidden rounded-xl border bg-card">
+              {SETTINGS_SECTIONS.filter((s) => s.group === g.id).map((s) => (
+                <li key={s.id}>
+                  <Link to={`/settings/${s.id}`} className="flex min-h-12 items-center gap-3 px-3.5 py-2 text-[15px] outline-none active:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset">
+                    <s.icon className="size-[18px] shrink-0 text-muted-foreground" />
+                    <span className="min-w-0 flex-1 truncate">{t(s.label)}</span>
+                    <ChevronRight aria-hidden className="size-4 shrink-0 text-muted-foreground" />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </nav>
+    </div>
+  )
+}
+
+function SettingsPage({ section }: { section: string }) {
+  const t = useT()
   const { search, hash: anchor } = useLocation()
   const meta = SETTINGS_SECTIONS.find((s) => s.id === section)
   useDocumentTitle(meta ? `${t(meta.label)} · ${t('nav.settings')}` : t('nav.settings'))

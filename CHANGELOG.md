@@ -6,6 +6,9 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 ## Unreleased
 
 Changed:
+- **On a phone, Settings opens on the list of its sections.** The 26 sections were only in a strip to swipe
+  sideways (about six screens wide); they are now listed by group, one tap each. A computer still opens on General.
+  Thanks to Anthony14FR.
 - **On a phone, the Tasks page explains how to select on a touch screen.** The hint under the tasks no longer
   talks about Ctrl/⌘ + click there: it says to tap the round box. Thanks to Anthony14FR.
 
