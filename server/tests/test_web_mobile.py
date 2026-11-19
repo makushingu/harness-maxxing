@@ -72,6 +72,14 @@ def test_a_session_header_on_a_phone_leaves_room_to_read():
     )  # the place rows go, the tabs stay (switching session with several open)
 
 
+def test_the_send_button_wraps_under_the_tools_instead_of_leaving_the_screen():
+    # an agent conversation has model, gauge, new chat, call, Stop, microphone and Send: wider than a 412 px phone, the
+    # right group shrank to nothing and Send was cut by the right edge; the bar wraps so every button stays in sight
+    src = (WEB / "features" / "composer" / "MessageBox.tsx").read_text()
+    assert '<div className="@container flex min-w-0 flex-wrap items-center gap-1 px-1.5 pb-1.5">' in src
+    assert '<div className="ml-auto flex min-w-0 items-center gap-1.5">' in src
+
+
 def test_a_diff_keeps_its_line_numbers_and_hunk_heads_in_sight_when_scrolled_sideways():
     src = (WEB / "features" / "code" / "DiffRows.tsx").read_text()
     gutter = re.search(r'className="([^"]*)" data-testid="diff-gutter"', src)
