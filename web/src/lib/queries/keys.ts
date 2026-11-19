@@ -57,6 +57,7 @@ export const qk = {
     usage: ['system', 'usage'] as const,
     changelog: ['system', 'changelog'] as const,
     preflight: ['system', 'preflight'] as const,
+    cleanup: ['system', 'cleanup'] as const,
   },
   memory: ['memory'] as const,
   stats: { tokens: ['stats', 'tokens'] as const, budget: ['stats', 'budget'] as const },

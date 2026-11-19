@@ -7,6 +7,12 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Disk space (Settings -> System): `maxxing/cleanup.py` (`scan`, cached 60 s; `run(parts)` measures each part before
+  and after) over five parts `leftovers` / `caches` (`deps.clean`, new `leftovers=` flag to clean the caches alone),
+  `journal` (`journalctl --vacuum-size=200M`), `apt` (`apt-get clean`), `trash` (`trash.empty`, off by default);
+  system commands go through `cleanup._sh`, stubbed in every test by `conftest`. Routes `GET/POST
+  /api/system/cleanup` (API.md). `DiskCard` + `CleanupDialog` in `System.tsx`; "Clean up with Claude" =
+  `draftUrl(useHarnessTopic(), t('system.cleanupPrompt'))`.
 - Files (#151): touch with no file open renders `PageList` `inline` (the listing is the page, no viewer section,
   the "Open the folder" button of the empty state removed); `PageList` in place closes the drawer's `list` level
   (it would be empty). Composer (#148): the right group of `MessageBox` wraps.

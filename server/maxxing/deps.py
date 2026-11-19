@@ -1103,9 +1103,10 @@ def _drop(p: Path, why: str, out: list[dict], dry: bool) -> None:
     out.append({"path": str(p), "why": why, "bytes": size})
 
 
-def clean(dry: bool = False, caches: bool = False) -> list[dict]:
+def clean(dry: bool = False, caches: bool = False, leftovers: bool = True) -> list[dict]:
     """Caches (`caches`: root's uv/npm/pip/npx caches, shared with every other tool of the server - MCP servers run
-    from ~/.npm/_npx - so only on request), old versions, orphan browsers, leftovers and oversized logs -> what went."""
+    from ~/.npm/_npx - so only on request), old versions, orphan browsers, leftovers and oversized logs
+    (`leftovers`; Settings -> System -> Free up space asks for each part apart, maxxing/cleanup.py) -> what went."""
     out: list[dict] = []
     home = root_home()
     tools = config.STATE / "tools"
@@ -1114,6 +1115,8 @@ def clean(dry: bool = False, caches: bool = False) -> list[dict]:
                    (home / ".cache" / "pip", "pip cache"), (home / ".npm" / "_npx", "npx cache"),
                    (home / ".claude" / "downloads", "Claude Code installer downloads")) if caches else ():
         _drop(p, why, out, dry)
+    if not leftovers:
+        return out
     # old versions next to the one in use
     for base in (node_dir(), scrapling_dir()):
         cur = base / "current"

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, seg } from '../api'
-import type { Changelog, CpuSnapshot, Health, LogsPayload, MemoryInfo, Ok, Preflight, Service, ServiceAction, Session, TokenStats, UpdateReport, UsagePayload, VersionInfo } from '../types'
+import type { Changelog, CleanupPartId, CleanupResult, CleanupScan, CpuSnapshot, Health, LogsPayload, MemoryInfo, Ok, Preflight, Service, ServiceAction, Session, TokenStats, UpdateReport, UsagePayload, VersionInfo } from '../types'
 import { qk } from './keys'
 import { useMut } from './util'
 
@@ -87,6 +87,20 @@ export function useUsage(enabled = true, poll = false) {
 export function useServiceAction() {
   return useMut(({ name, action }: { name: string; action: ServiceAction }) => api.post<Ok>(`/api/system/services/${seg(name)}/${action}`), {
     invalidate: [qk.system.services, qk.health],
+  })
+}
+/** Settings -> System -> Disk space: measured when its dialog opens (nothing is deleted before "Free up"). */
+export function useCleanupScan(enabled: boolean) {
+  return useQuery({
+    queryKey: qk.system.cleanup,
+    queryFn: () => api.get<CleanupScan>('/api/system/cleanup'),
+    enabled,
+    staleTime: 0,
+  })
+}
+export function useCleanup() {
+  return useMut((parts: CleanupPartId[]) => api.post<CleanupResult>('/api/system/cleanup', { parts }), {
+    invalidate: [qk.system.cleanup, qk.health],
   })
 }
 export function useUpdate() {

@@ -1,14 +1,28 @@
 import * as React from 'react'
-import { Play, RefreshCw, RotateCw, Square } from 'lucide-react'
-import { useHealth, useLogs, useServiceAction, useServices, useSettings, useSaveSettings } from '@/lib/queries'
-import { fmtRelative } from '@/lib/format'
-import type { ServiceAction } from '@/lib/types'
+import { Brush, HardDrive, Play, RefreshCw, RotateCw, Sparkles, Square } from 'lucide-react'
+import { useNavigate } from 'react-router'
+import { useCleanup, useCleanupScan, useHealth, useLogs, useServiceAction, useServices, useSettings, useSaveSettings } from '@/lib/queries'
+import { fmtBytes, fmtRelative } from '@/lib/format'
+import type { CleanupPartId, ServiceAction } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { useLang, useT } from '@/i18n'
-import { Badge, Button, FormField, Input, Select, Sensitive, Skeleton, Spinner, StatusDot, Switch, confirm, toast } from '@/components/ui'
+import {
+  Badge,
+  Button,
+  Checkbox,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  FormField,
+  ProgressBar, Input, Select, Sensitive, Skeleton, Spinner, StatusDot, Switch, confirm, toast } from '@/components/ui'
 import { SettingRow } from '@/features/common'
 import { HealthSummary } from '@/components/shell/HealthIndicator'
+import { draftUrl } from '@/features/agents/EditWithClaude'
 import { SettingsCard, SectionStack } from './ui'
+import { useHarnessTopic } from './harnessTopic'
 
 function HealthCard() {
   const t = useT()
@@ -200,10 +214,119 @@ function CpuCard() {
   )
 }
 
+/** Disk space: what Harness frees by itself (measured in the dialog, maxxing/cleanup.py), and a session in the
+ *  Harness topic where Claude finds, project by project, where the rest comes from (never deletes without an OK). */
+function DiskCard() {
+  const t = useT()
+  const navigate = useNavigate()
+  const topic = useHarnessTopic()
+  const { data: h } = useHealth()
+  const [open, setOpen] = React.useState(false)
+  const d = h?.disk
+  return (
+    <SettingsCard
+      title={t('system.disk')}
+      description={t('system.diskDesc')}
+      actions={
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={() => setOpen(true)} data-testid="cleanup-open">
+            <Brush /> {t('system.cleanup')}
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => navigate(draftUrl(topic, t('system.cleanupPrompt')))}>
+            <Sparkles /> {t('system.cleanupClaude')}
+          </Button>
+        </div>
+      }
+    >
+      {!d ? (
+        <Skeleton className="h-10" />
+      ) : (
+        <div className="grid gap-2">
+          <div className="flex items-center gap-2 text-sm">
+            <HardDrive className="size-4 text-muted-foreground" />
+            <Sensitive length={12}>{t('system.diskUsed', { used: fmtBytes(d.total - d.free), total: fmtBytes(d.total), free: fmtBytes(d.free) })}</Sensitive>
+          </div>
+          <ProgressBar value={d.pct} tone={d.pct >= 90 ? 'error' : d.pct >= 80 ? 'warn' : undefined} label={t('system.disk')} />
+        </div>
+      )}
+      <CleanupDialog open={open} onOpenChange={setOpen} />
+    </SettingsCard>
+  )
+}
+
+function CleanupDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  const t = useT()
+  const { data, isFetching } = useCleanupScan(open)
+  const run = useCleanup()
+  const [picked, setPicked] = React.useState<Set<CleanupPartId> | null>(null)
+  React.useEffect(() => {
+    if (!open) setPicked(null)
+    else if (data && !picked) setPicked(new Set(data.parts.filter((p) => p.default).map((p) => p.id)))
+  }, [open, data, picked])
+  const parts = data?.parts.filter((p) => p.bytes > 0) ?? []
+  const total = parts.filter((p) => picked?.has(p.id)).reduce((n, p) => n + p.bytes, 0)
+  const toggle = (id: CleanupPartId, on: boolean) => {
+    const next = new Set(picked ?? [])
+    if (on) next.add(id)
+    else next.delete(id)
+    setPicked(next)
+  }
+  const free = () =>
+    run.mutate([...(picked ?? [])], {
+      onSuccess: (r) => {
+        const failed = r.parts.filter((p) => p.error).map((p) => t(`system.cleanup.${p.id}`))
+        if (failed.length) toast.error(t('system.cleanupFailed', { parts: failed.join(', ') }))
+        toast.success(t('system.cleanupDone', { size: fmtBytes(r.freed) }))
+        onOpenChange(false)
+      },
+    })
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{t('system.cleanup')}</DialogTitle>
+          <DialogDescription>{t('system.cleanupDesc')}</DialogDescription>
+        </DialogHeader>
+        {!data || (isFetching && !picked) ? (
+          <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
+            <Spinner /> {t('system.cleanupScanning')}
+          </div>
+        ) : !parts.length ? (
+          <p className="py-6 text-sm text-muted-foreground">{t('system.cleanupNothing')}</p>
+        ) : (
+          <ul className="grid gap-1">
+            {parts.map((p) => (
+              <li key={p.id}>
+                <label className="flex cursor-pointer items-start gap-3 rounded-lg p-2 hover:bg-fill-1" data-testid={`cleanup-${p.id}`}>
+                  <Checkbox className="mt-0.5" checked={!!picked?.has(p.id)} onCheckedChange={(v) => toggle(p.id, v === true)} />
+                  <span className="grid min-w-0 flex-1 gap-0.5">
+                    <span className="text-sm font-medium">{t(`system.cleanup.${p.id}`)}</span>
+                    <span className="text-xs text-muted-foreground">{t(`system.cleanup.${p.id}Desc`)}</span>
+                  </span>
+                  <span className="shrink-0 font-mono text-xs tabular-nums">{fmtBytes(p.bytes)}</span>
+                </label>
+              </li>
+            ))}
+          </ul>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            {t('common.cancel')}
+          </Button>
+          <Button onClick={free} loading={run.isPending} disabled={!total} data-testid="cleanup-run">
+            {t('system.cleanupRun', { size: fmtBytes(total) })}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 export function SystemSection() {
   return (
     <SectionStack>
       <HealthCard />
+      <DiskCard />
       <CpuCard />
       <ServicesCard />
       <AddressCard />

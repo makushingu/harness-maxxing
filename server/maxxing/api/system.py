@@ -87,6 +87,31 @@ async def service_action(name: str, action: Literal["start", "stop", "restart"])
     return {"ok": True}
 
 
+class CleanupBody(BaseModel):
+    parts: list[str]
+
+
+@router.get("/system/cleanup")
+async def cleanup_scan(force: bool = False):
+    """Disk space Harness can free by itself (Settings -> System -> Disk space): measured, nothing deleted."""
+    from .. import cleanup
+    return {"parts": await asyncio.to_thread(cleanup.scan, force), "disk": health.disk()}
+
+
+@router.post("/system/cleanup")
+async def cleanup_run(body: CleanupBody):
+    from .. import cleanup
+    if not body.parts:
+        raise _err(400, "nothing_chosen", "Choose at least one part to clean")
+    try:
+        r = await asyncio.to_thread(cleanup.run, body.parts)
+    except ValueError as e:
+        raise _err(400, "unknown_part", str(e)) from None
+    health.invalidate_cache()
+    bus.invalidate("health")
+    return {**r, "disk": health.disk()}
+
+
 def _logs(unit: str, lines: int) -> list[str]:
     r = subprocess.run(["journalctl", "-u", unit, "-n", str(lines), "--no-pager", "-o", "short-iso"],
                        capture_output=True, text=True, timeout=20)

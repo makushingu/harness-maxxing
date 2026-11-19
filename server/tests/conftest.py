@@ -44,8 +44,10 @@ def _never_the_real_server(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
 def _never_the_real_tools(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """`maxxing deps` / uninstall write commands to /usr/local/bin, remove Claude Code from root's home, a fail2ban
     jail, a swap line of /etc/fstab, the slices...: in tests every one of those paths is under tmp_path."""
-    from maxxing import cmd_core, cpu, deps
+    from maxxing import cleanup, cmd_core, cpu, deps
     fake = tmp_path / "_system"
+    monkeypatch.setattr(cleanup, "_sh", lambda cmd, timeout=120: "")    # never vacuum the real journal / apt cache
+    monkeypatch.setattr(cleanup, "APT_CACHE", fake / "apt-archives")
     monkeypatch.setattr(cpu, "SLICE_DIR", fake / "systemd-system")      # the CPU priority slices (uninstall removes them)
     monkeypatch.setattr(deps, "LINK_DIR", fake / "usr-local-bin")
     monkeypatch.setattr(deps, "root_home", lambda: fake / "root-home")

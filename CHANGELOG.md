@@ -5,6 +5,13 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 
 ## Unreleased
 
+New:
+- **Free up disk space from Settings -> System.** A new **Disk space** card shows how full the disk is. **Free up
+  space** lists what Harness can drop by itself with its size (old versions, download caches, system logs, apt
+  packages, the trash), you untick what you want to keep; your projects and files are never touched. **Clean up
+  with Claude** opens a session where Claude goes through every project, finds where the big folders come from
+  and asks you before deleting anything.
+
 Changed:
 - **On a phone, Settings opens on the list of its sections.** The 26 sections were only in a strip to swipe
   sideways (about six screens wide); they are now listed by group, one tap each. A computer still opens on General.

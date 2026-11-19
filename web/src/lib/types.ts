@@ -1679,3 +1679,22 @@ export type BrowserOwner = {
   sites: string[] | null
   asks: BrowserAsk[]
 }
+
+/** Settings -> System -> Disk space (GET /api/system/cleanup): what Harness can free by itself, measured only. */
+export type CleanupPartId = 'leftovers' | 'caches' | 'journal' | 'apt' | 'trash'
+export interface CleanupPart {
+  id: CleanupPartId
+  bytes: number
+  /** ticked when the dialog opens (the trash never is: what is in it can still be restored) */
+  default: boolean
+  items: { path: string; why: string; bytes: number }[]
+}
+export interface CleanupScan {
+  parts: CleanupPart[]
+  disk: { total: number; free: number; pct: number }
+}
+export interface CleanupResult {
+  freed: number
+  parts: { id: CleanupPartId; freed: number; error?: string }[]
+  disk: { total: number; free: number; pct: number }
+}
