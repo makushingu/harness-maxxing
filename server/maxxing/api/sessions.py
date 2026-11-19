@@ -280,9 +280,13 @@ async def handoff(sid: str):
     return await _call(service.handoff, sid)
 
 
+class SeenIn(BaseModel):
+    seen: bool = True
+
+
 @router.post("/sessions/{sid}/seen")
-async def seen(sid: str):
-    await _call(service.mark_seen, sid)
+async def seen(sid: str, body: SeenIn | None = None):
+    await _call(service.mark_seen, sid, body.seen if body else True)
     return {"ok": True}
 
 

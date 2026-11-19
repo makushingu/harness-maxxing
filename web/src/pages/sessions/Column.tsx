@@ -478,11 +478,14 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
   }, [])
   const seenFor = React.useRef<number>(0)
   React.useEffect(() => {
-    if (!session || !session.unread || !visible) return
+    if (!session) return
+    // Read when shown: a later "Mark as unread" (same `updated`) stays, only a new answer is marked seen again.
+    if (!session.unread) return void (seenFor.current = session.updated)
+    if (!visible) return
     if (!(focused || variant !== 'column' || count === 1)) return
     if (seenFor.current === session.updated) return
     seenFor.current = session.updated
-    seen.mutate(session.id)
+    seen.mutate(session)
   }, [session, focused, visible, variant, count]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Queued messages of this tab that the server no longer holds (cleared elsewhere) disappear.

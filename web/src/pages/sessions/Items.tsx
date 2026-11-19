@@ -494,7 +494,7 @@ export function AttachmentStrip({ paths }: { paths: string[] }) {
             className="relative size-20 shrink-0 overflow-hidden rounded-lg border bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
             aria-label={masked ? 'Attachment' : baseName(p)}
           >
-            {masked ? null : <Thumb path={p} w={160} anim loading="lazy" className="size-full object-cover" />}
+            {masked ? null : <Thumb path={p} w={160} h={320} anim loading="lazy" className="size-full object-cover" />}
             {isGif(p) && <GifBadge />}
             {isVideo(p) && (
               <span className="absolute inset-0 flex items-center justify-center bg-black/25">
@@ -570,7 +570,7 @@ export function MessageMedia({ text }: { text: string }) {
           {media.map((p) => (
             // a box of fixed shape: nothing in the thread moves when the picture arrives
             <button key={p} type="button" data-mx-file={p} draggable onClick={() => open(p)} onPointerEnter={() => prefetch(p)} onFocus={() => prefetch(p)} className="relative aspect-[4/3] h-28 overflow-hidden rounded-lg border bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
-              <Thumb path={p} w={320} anim within={within(p)} alt={baseName(p)} loading="lazy" className="size-full object-cover" />
+              <Thumb path={p} w={320} h={320} anim within={within(p)} alt={baseName(p)} loading="lazy" className="size-full object-cover" />
               {isGif(p) && <GifBadge />}
               {isVideo(p) && (
                 <span className="absolute inset-0 flex items-center justify-center bg-black/25">

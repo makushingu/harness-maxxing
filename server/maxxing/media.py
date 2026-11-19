@@ -55,11 +55,11 @@ def _warm_one(path: str) -> None:
             return
         ext = p.suffix.lower()
         if ext in files.VIDEO_EXT:
-            files._thumb(p, 320)                   # chat thumbnail
+            files._thumb(p, 320, 320)              # chat thumbnail
             files._thumb(p, 1280)                  # player poster
         elif ext in files.IMAGE_EXT:
-            files._thumb(p, 160)                   # attachment strip
-            files._thumb(p, 320)                   # chat media / viewer placeholder
+            files._thumb(p, 160, 320)              # attachment strip
+            files._thumb(p, 320, 320)              # chat media / viewer placeholder
             if p.stat().st_size > files.PREVIEW_MIN_BYTES and ext not in files.PREVIEW_ORIGINAL_EXT:
                 files._thumb(p, files.PREVIEW_W)   # viewer preview
     except Exception as e:                          # outside the files root, unreadable, no ffmpeg...

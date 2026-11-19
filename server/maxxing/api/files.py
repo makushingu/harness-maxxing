@@ -445,12 +445,13 @@ def _nice() -> list[str]:
     return [nice, "-n", "10"] if nice else []
 
 
-def _ffmpeg_thumb(src: Path, dest: Path, w: int, video: bool) -> bool | None:
-    """True: dest written; False: ffmpeg cannot read the file; None: no ffmpeg or it timed out (worth another try)."""
+def _ffmpeg_thumb(src: Path, dest: Path, w: int, video: bool, h: int = 0) -> bool | None:
+    """True: dest written; False: ffmpeg cannot read the file; None: no ffmpeg or it timed out (worth another try).
+    `h`: at least this height too (a wide picture shown in a box of fixed height is not stretched)."""
     ffmpeg = shutil.which("ffmpeg")
     if not ffmpeg:
         return None
-    scale = f"scale='min({w},iw)':-2"
+    scale = f"scale='min(iw,min(4096,max({w},{h}*iw/ih)))':-2" if h else f"scale='min({w},iw)':-2"
     # a temp file of its own, renamed once complete: a timeout, a crash or a parallel request for the same
     # thumbnail never sees (nor keeps in the cache) a half-written WebP; .webp: _trim_thumbs sweeps crash leftovers
     tmp = dest.with_name(f"{dest.stem}.{secrets.token_hex(4)}.part.webp")
@@ -551,10 +552,14 @@ def _remember_failure(key: str, ok: bool | None) -> None:
         _thumb_failed[key] = time.time()
 
 
-def _thumb(p: Path, w: int) -> tuple[Path, str]:
+def _bucket(n: int) -> int:
+    return next((b for b in THUMB_WIDTHS if b >= n), THUMB_WIDTHS[-1]) if n else 0
+
+
+def _thumb(p: Path, w: int, h: int = 0) -> tuple[Path, str]:
     if not p.is_file():
         raise _err(404, "not_found", "File not found")
-    w = next((b for b in THUMB_WIDTHS if b >= w), THUMB_WIDTHS[-1])
+    w, h = _bucket(w), _bucket(h)
     ext = p.suffix.lower()
     if ext in PDF_EXT:
         st = p.stat()
@@ -572,11 +577,11 @@ def _thumb(p: Path, w: int) -> tuple[Path, str]:
     if not video and ext not in IMAGE_EXT and not _mime(p).startswith("image/"):
         raise _err(415, "unsupported", "No thumbnail for this file type")
     st = p.stat()
-    key = hashlib.sha1(f"{p}|{st.st_mtime_ns}|{w}".encode()).hexdigest()
+    key = hashlib.sha1(f"{p}|{st.st_mtime_ns}|{w}{f'x{h}' if h else ''}".encode()).hexdigest()
     dest = config.state_dir("thumbs") / f"{key}.webp"
     if dest.exists():
         return dest, "image/webp"
-    ok = None if _failed_recently(f"{key}|{st.st_size}") else _ffmpeg_thumb(p, dest, w, video)
+    ok = None if _failed_recently(f"{key}|{st.st_size}") else _ffmpeg_thumb(p, dest, w, video, h)
     if ok:
         _trim_thumbs()
         return dest, "image/webp"
@@ -586,7 +591,7 @@ def _thumb(p: Path, w: int) -> tuple[Path, str]:
     return p, _mime(p)                        # fallback: the original image
 
 
-async def _render(p: Path, w: int) -> tuple[Path, str]:
+async def _render(p: Path, w: int, h: int = 0) -> tuple[Path, str]:
     """_thumb in the thumbnail pool (previews too: up to 30 s of ffmpeg each, never in the shared worker threads);
     requests for the same version of a file and width wait for one render instead of running ffmpeg each (a file
     rewritten meanwhile - a video still being written - gets its own render, never the old one's result)."""
@@ -594,7 +599,7 @@ async def _render(p: Path, w: int) -> tuple[Path, str]:
         mtime = (await _t(p.stat)).st_mtime_ns
     except OSError:
         mtime = 0
-    return await _pooled((str(p), mtime, next((b for b in THUMB_WIDTHS if b >= w), THUMB_WIDTHS[-1])), _thumb, p, w)
+    return await _pooled((str(p), mtime, _bucket(w), _bucket(h)), _thumb, p, w, h)
 
 
 async def _pooled(key: tuple, fn: Callable[..., Any], *a: Any) -> Any:
@@ -619,11 +624,11 @@ GIF_ANIM_MAX = 8 * 1024**2                # anim=1: a GIF up to this size is ser
 
 @router.get("/thumb")
 async def thumb(path: str, w: int = Query(320, ge=16, le=4096), v: str = "", anim: int = 0,
-                within: list[str] = Within):
+                within: list[str] = Within, h: int = Query(0, ge=0, le=4096)):
     p = await _t(confined, path, within)
     if anim and p.suffix.lower() == ".gif" and await _t(p.is_file) and (await _t(p.stat)).st_size <= GIF_ANIM_MAX:
         return _serve(p, v)
-    f, mime = await _render(p, w)
+    f, mime = await _render(p, w, h)
     return FileResponse(f, media_type=mime, headers=_file_headers(mime, _cache(v)))
 
 

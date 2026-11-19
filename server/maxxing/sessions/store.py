@@ -7,7 +7,7 @@ Meta (`<id>.json`, internal - service.public() turns it into the API.md Session)
   {tokens, cost}} (last 90 days), model, real_model, context_tokens, base_tokens (context of the
   first call of the current thread: the fixed part), context_window (from the last result), archived, notify,
   source, cron, last_text, error, csid (Claude session id), fresh (next turn uses --session-id),
-  pid (runner), unit, spawned_at, finished_at, seen_at, cache_at (last side question: it warmed the
+  pid (runner), unit, spawned_at, finished_at, seen_at, marked_unread ("Mark as unread", until read), cache_at (last side question: it warmed the
   thread's prompt cache too), env {..}, timeout_s, handoff_pending (continuation waiting for its hand-off
   summary: when it was created; queued messages wait behind the seed, service.HANDOFF_HOLD_S at most)
 QueueItem = {text, attachments:[path], source, at, kind:"user"|"compact"|"handoff"|"seed", target?, auto?, idle?}

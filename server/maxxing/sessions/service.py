@@ -164,7 +164,7 @@ def public(meta: dict, exits_waiting: dict[str, dict] | None = None) -> dict:
             "context_tokens": m.get("context_tokens"), "context_window": _context_window(m),
             "archived": bool(m.get("archived")), "favorite": bool(m.get("favorite")),
             "notify": bool(m.get("notify")), "source": m.get("source") or "web", "cron": bool(m.get("cron")),
-            "unread": bool(finished) and finished > seen and m.get("state") != "running",
+            "unread": (bool(finished) and finished > seen or bool(m.get("marked_unread"))) and m.get("state") != "running",
             "last_text": m.get("last_text") or "", "error": m.get("error") or None,
             "plan_mode": bool(m.get("plan_mode")), "plan_ready": bool(m.get("plan_ready")),
             "permission_mode": m.get("permission_mode") or "", "approvals": _approvals_waiting(m["id"]),
@@ -842,10 +842,15 @@ def delete_session(sid: str) -> None:
     bus.invalidate("sessions", "workspace")
 
 
-def mark_seen(sid: str) -> None:
+def mark_seen(sid: str, seen: bool = True) -> None:
+    """Read (opened, or "Mark as read"), or back to unread by hand ("Mark as unread": stays so until read again)."""
     _require(sid)
     with store.edit(sid) as m:
-        m["seen_at"] = time.time()
+        if seen:
+            m["seen_at"] = time.time()
+            m.pop("marked_unread", None)
+        else:
+            m["marked_unread"] = True
     bus.invalidate("sessions", "workspace")
 
 

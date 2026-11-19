@@ -25,7 +25,10 @@ import {
   FolderPlus,
   Globe,
   Hash,
+  Layers,
   List,
+  Mail,
+  MailOpen,
   ListTree,
   MoreHorizontal,
   Pencil,
@@ -62,6 +65,7 @@ import {
   useDeleteTopic,
   usePatchProject,
   usePatchSession,
+  useMarkUnread,
   usePatchTopic,
   useSessions,
   useReorderProjects,
@@ -404,8 +408,16 @@ function ListHeader({
   const chip = (on: boolean) =>
     cn(
       'flex items-center font-medium whitespace-nowrap outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
-      touch ? 'h-9 min-w-0 justify-center gap-1 rounded-lg px-1 text-[13px]' : 'h-6 shrink-0 gap-1.5 rounded-full px-2 text-xs',
-      on ? 'bg-foreground text-background' : cn('text-muted-foreground hover:text-foreground', touch ? 'active:bg-accent' : 'bg-muted active:bg-accent'),
+      touch ? 'h-8 shrink-0 justify-center gap-1 rounded-full px-1 text-[13px]' : 'h-6 shrink-0 gap-1.5 rounded-full px-2 text-xs',
+      on ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground hover:text-foreground active:bg-accent',
+    )
+  const pill = (on: boolean, tone: 'running' | 'unread') =>
+    cn(
+      'flex shrink-0 items-center gap-1.5 rounded-full font-semibold tabular-nums outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
+      touch ? 'h-8 px-3 text-[13px]' : 'h-6 px-2 text-xs',
+      tone === 'running'
+        ? on ? 'bg-primary text-primary-foreground' : 'bg-primary/15 text-primary hover:bg-primary/25'
+        : on ? 'bg-success text-background' : 'bg-success/15 text-success ring-1 ring-success/40 ring-inset hover:bg-success/25',
     )
   const newButton = touch && (
     <Button size="icon" className="size-10 shrink-0 rounded-xl [&_svg]:size-5" aria-label={t('sessions.newSession')} disabled={!onNew} onClick={onNew} data-tour="new-session">
@@ -425,23 +437,26 @@ function ListHeader({
       <div className={cn('grid shrink-0', touch ? 'gap-2.5 px-3 pt-1 pb-2' : 'gap-2 px-2 pt-2 pb-1.5')} data-testid="tree-header">
         <div className={cn('flex min-w-0 items-center', touch ? 'gap-2' : 'gap-1.5')}>
           <div
-            className={cn('min-w-0 flex-1', touch ? 'grid grid-cols-[auto_1fr_1fr] gap-1 rounded-xl bg-muted p-1' : '-my-1 flex gap-1.5 overflow-x-auto py-1')}
+            className={cn('min-w-0 flex-1', touch ? 'flex items-center gap-1.5' : '-my-1 flex items-center gap-1.5 overflow-x-auto py-1')}
             role="group"
             aria-label={t('sessions.filter.label')}
             data-testid="tree-filter"
             data-hscroll-ok={touch ? undefined : true}
           >
-            <button type="button" className={cn(chip(!show), touch && 'px-3')} aria-pressed={!show} onClick={() => onShow(null)}>
-              {t('sessions.filter.all')}
+            <button type="button" className={cn(chip(!show), 'px-2.5')} aria-pressed={!show} onClick={() => onShow(null)} aria-label={t('sessions.filter.all')} title={t('sessions.filter.all')} data-testid="chip-all">
+              <Layers className="size-3.5" />
             </button>
-            <button type="button" className={chip(show === 'running')} aria-pressed={show === 'running'} onClick={() => onShow(show === 'running' ? null : 'running')} data-testid="chip-running">
-              <StatusDot tone="running" pulse={running > 0} className="size-1.5 shrink-0" /> <span className="truncate">{t('sessions.filter.running')}</span>
-              {running > 0 && <span className="tabular-nums opacity-70">{running}</span>}
-            </button>
-            <button type="button" className={chip(show === 'unread')} aria-pressed={show === 'unread'} onClick={() => onShow(show === 'unread' ? null : 'unread')} data-testid="chip-unread">
-              <StatusDot tone="unread" className="size-1.5 shrink-0" /> <span className="truncate">{t('sessions.filter.unread')}</span>
-              {unread > 0 && <span className="tabular-nums opacity-70">{unread}</span>}
-            </button>
+            {/* The counters of the sidebar's Sessions entry (CountBadge colours): a click shows only those, again shows all */}
+            {(running > 0 || show === 'running') && (
+              <button type="button" className={pill(show === 'running', 'running')} aria-pressed={show === 'running'} onClick={() => onShow(show === 'running' ? null : 'running')} title={t('sessions.filter.running')} aria-label={`${t('sessions.filter.running')} ${running}`} data-testid="chip-running">
+                <span className={cn('size-1.5 shrink-0 rounded-full', show === 'running' ? 'bg-primary-foreground' : 'bg-primary')} /> {running}
+              </button>
+            )}
+            {(unread > 0 || show === 'unread') && (
+              <button type="button" className={pill(show === 'unread', 'unread')} aria-pressed={show === 'unread'} onClick={() => onShow(show === 'unread' ? null : 'unread')} title={t('sessions.filter.unread')} aria-label={`${t('sessions.filter.unread')} ${unread}`} data-testid="chip-unread">
+                <span className={cn('size-1.5 shrink-0 rounded-full', show === 'unread' ? 'bg-background' : 'bg-success/70 ring-2 ring-success/25')} /> {unread}
+              </button>
+            )}
           </div>
           {!lifted && <div className="ml-auto shrink-0">{menu}</div>}
           {!lifted && newButton}
@@ -1111,6 +1126,7 @@ const SessionRow = React.memo(function SessionRow({
   const [menu, setMenu] = React.useState(false)
   const [rename, setRename] = React.useState(false)
   const patch = usePatchSession()
+  const mark = useMarkUnread()
   const del = useDeleteSession()
   const closeSession = useSessionsUI((x) => x.closeSession)
   const mask = useMask()
@@ -1221,6 +1237,11 @@ const SessionRow = React.memo(function SessionRow({
         <DropdownMenuItem onSelect={() => patch.mutate({ id: s.id, favorite: !s.favorite })} data-testid="fav-toggle">
           {s.favorite ? <StarOff /> : <Star />} {s.favorite ? t('sessions.fav.remove') : t('sessions.fav.add')}
         </DropdownMenuItem>
+        {s.state !== 'running' && (
+          <DropdownMenuItem onSelect={() => mark.mutate({ s, unread: !s.unread })} data-testid="unread-toggle">
+            {s.unread ? <MailOpen /> : <Mail />} {s.unread ? t('rmark.read') : t('rmark.unread')}
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem onSelect={() => patch.mutate({ id: s.id, archived: !s.archived })}>
           <Archive /> {s.archived ? t('sessions.menu.unarchive') : t('sessions.menu.archive')}
         </DropdownMenuItem>

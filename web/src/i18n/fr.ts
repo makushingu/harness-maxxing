@@ -2092,6 +2092,8 @@ export const fr: Record<keyof typeof en, string> = {
   'files.openRaw': 'Ouvrir dans un nouvel onglet',
   'files.outsideRoot': 'Ce chemin est en dehors de la racine des fichiers.',
   'files.pathCopied': 'Chemin copié',
+  'rmark.read': 'Marquer comme lu',
+  'rmark.unread': 'Marquer comme non lu',
   'sel.count': '{count} sélectionnées',
   'sel.count#one': '1 sélectionnée',
   'sel.open': 'Ouvrir',

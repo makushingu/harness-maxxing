@@ -111,6 +111,24 @@ def test_thumbnail(client, tree):
 
 
 @pytest.mark.skipif(not shutil.which("ffmpeg"), reason="ffmpeg not installed")
+def test_thumbnail_with_a_height_is_not_stretched_in_a_box_of_fixed_height(client, tree):
+    img = tree / "wide.png"                                  # a wide screenshot shown in a square of the thread
+    subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "color=c=red:s=2400x1000", "-frames:v", "1",
+                    str(img)], check=True)
+
+    def size(**q):
+        r = client.get("/api/files/thumb", params={"path": str(img), **q})
+        assert r.status_code == 200 and r.headers["content-type"] == "image/webp"
+        out = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "stream=width,height", "-of", "csv=p=0", "-"],
+                             input=r.content, capture_output=True, check=True).stdout.decode().strip()
+        return tuple(int(x) for x in out.split(","))
+
+    assert size(w=160) == (160, 66)                          # by width only (unchanged)
+    assert size(w=160, h=320) == (768, 320)                  # high enough to fill the box
+    assert size(w=4096, h=320) == (2400, 1000)               # never bigger than the picture
+
+
+@pytest.mark.skipif(not shutil.which("ffmpeg"), reason="ffmpeg not installed")
 def test_thumbnail_of_an_animated_png(client, tree):
     img = tree / "anim.png"                                  # APNG: ffmpeg's apng demuxer, not png_pipe
     subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc=size=64x48:rate=4:d=1", "-plays", "0",
@@ -240,7 +258,7 @@ def test_thumb_and_preview_requests_for_the_same_image_share_one_render(client, 
     monkeypatch.setenv("PATH", f"{bindir}:{os.environ['PATH']}")
     seen = []
     real = F._thumb
-    monkeypatch.setattr(F, "_thumb", lambda p, w: (seen.append(threading.current_thread().name), real(p, w))[1])
+    monkeypatch.setattr(F, "_thumb", lambda p, w, h=0: (seen.append(threading.current_thread().name), real(p, w, h))[1])
     img = mx["files"] / "photo.jpg"
     img.write_bytes(b"\xff\xd8" + b"0" * (F.PREVIEW_MIN_BYTES + 10))
     out = {}

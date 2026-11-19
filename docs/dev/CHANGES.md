@@ -7,6 +7,23 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Web: `Column.tsx` remembers `updated` while the session is shown read, so a "Mark as unread" of the open, focused
+  session (same `updated`) is not undone at once; a new answer (new `updated`) is still marked seen.
+- Web: session list filters (`Tree.tsx` header): `chip-all` = `Layers` icon (label in `title` / `aria-label`),
+  `chip-running` / `chip-unread` = count pills in the `CountBadge` colours (filled when active), hidden at 0 unless
+  active; the touch layout is a plain flex row (no segmented grid).
+- Web: `useMarkSeen` / `useMarkUnread` take the session (`{id, path, state, archived, unread}`) and patch the
+  workspace tree too (topic `unread` / `errors`): the topic, project and sidebar counters follow at once instead of
+  after the bus refetch of `/api/sessions` (~1 MB with 1 000 sessions). Mock bench: 340-400 ms -> 65-125 ms.
+- Sessions: `POST /api/sessions/{id}/seen` takes an optional `{seen}`; `seen:false` sets meta `marked_unread`
+  (public `unread` = finished after `seen_at` or `marked_unread`, never while running), `seen:true` / opening clears
+  it. Web: `useMarkUnread` (optimistic, shared `readMark` with `useMarkSeen`), item `unread-toggle` in the session
+  row menu of `Tree.tsx` (tree and second bar), texts in the on-demand group `rmark`. Dashboard Activity: unread
+  items `ok` (green) instead of `warn`, "Unread" stat tone `ok`. Mock: `/seen` honours `{seen:false}`.
+- Files: `/api/files/thumb` takes `h` (min height, bucketed like `w`, in the cache key; ffmpeg `scale=min(iw,
+  min(4096,max(w,h*iw/ih)))`). Chat media (box 4:3, h-28) and the attachment strip ask `h=320`, quoted files and
+  composer chips `h=160`; viewer placeholder same URL as the chat (`w=320&h=320`); `media.warm` follows. Before: a
+  wide picture thumbnailed by width only was stretched in its object-cover box (blurry).
 - Web: state lost on unmount (another page unmounts the whole page tree, no keep-alive). Side question
   (`pages/sessions/Aside.tsx`): module zustand store per session, sessionStorage (answered ones only), `api.post`
   instead of a per-call `mutate` callback; `useAskAside` removed. Team composer keyed by chat, draft in

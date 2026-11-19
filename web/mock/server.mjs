@@ -1461,9 +1461,10 @@ R('POST', '/api/sessions/:id/handoff', async ({ params }) => {
   bus('sessions', 'workspace')
   return n
 })
-R('POST', '/api/sessions/:id/seen', ({ params }) => {
+R('POST', '/api/sessions/:id/seen', ({ params, body }) => {
   const s = findSession(params.id)
-  if (s.unread) { s.unread = false; bus('sessions', 'workspace') }
+  const unread = body?.seen === false
+  if (s.unread !== unread) { s.unread = unread; bus('sessions', 'workspace') }
   return { ok: true }
 })
 R('GET', '/api/sessions/:id/events', ({ params, q }) => {
