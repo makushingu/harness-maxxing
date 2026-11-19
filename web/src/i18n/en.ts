@@ -2110,6 +2110,8 @@ export const en = {
   'files.openRaw': 'Open in a new tab',
   'files.outsideRoot': 'This path is outside the files root.',
   'files.pathCopied': 'Path copied',
+  'rmark.read': 'Mark as read',
+  'rmark.unread': 'Mark as unread',
   'sel.count': '{count} selected',
   'sel.count#one': '1 selected',
   'sel.open': 'Open',

@@ -204,15 +204,23 @@ export function useHandoffSession() {
   const qc = useQueryClient()
   return useMut((id: string) => api.post<Session>(`/api/sessions/${seg(id)}/handoff`), { onSuccess: (s) => placeSession(qc, s), invalidate: inv })
 }
+const readMark = (id: string, unread: boolean) => [
+  { key: qk.sessions.one(id), update: (s: Session) => ({ ...s, unread }) },
+  { key: ['sessions', 'list'], update: (l: Session[]) => l.map((x) => (x.id === id && x.unread !== unread ? { ...x, unread } : x)) },
+]
 /** Read at once on screen (the unread mark goes away before the request); the bus then refreshes the tree's counters. */
 export function useMarkSeen() {
   return useMut((id: string) => api.post<Ok>(`/api/sessions/${seg(id)}/seen`), {
-    optimistic: (id) => [
-      { key: qk.sessions.one(id), update: (s: Session) => ({ ...s, unread: false }) },
-      { key: ['sessions', 'list'], update: (l: Session[]) => l.map((x) => (x.id === id && x.unread ? { ...x, unread: false } : x)) },
-    ],
+    optimistic: (id) => readMark(id, false),
     invalidate: inv,
     errorToast: false,
+  })
+}
+/** "Mark as read" / "Mark as unread" from a session's menu (unread stays until the session is read again). */
+export function useMarkUnread() {
+  return useMut(({ id, unread }: { id: string; unread: boolean }) => api.post<Ok>(`/api/sessions/${seg(id)}/seen`, { seen: !unread }), {
+    optimistic: ({ id, unread }) => readMark(id, unread),
+    invalidate: inv,
   })
 }
 export function useUpload() {

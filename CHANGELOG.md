@@ -18,6 +18,11 @@ Changed:
   websockets 17.4 and their own dependencies. Thanks to Anthony14FR, who flagged them.
 - **The session list loads about twice as fast on a busy server.** With thousands of sessions (scheduled jobs and
   agents add many), the list, the sidebar and the dashboard answer in half the time.
+- **Mark a session as read or unread.** The menu of a session (right click, or a long press on a phone) in the
+  session list and in the second sidebar has **Mark as read** / **Mark as unread**: the dot and the counters of its
+  topic and project follow. A session marked unread stays so until you open it.
+- **Unread sessions are green on the dashboard too.** In the Activity card, a finished session you have not read
+  yet has a green dot (it was orange), like in the session list; a failed one stays red.
 
 Fixed:
 - **Sharp image previews in sessions.** A wide picture (a screenshot, a photo in landscape) looked blurry in

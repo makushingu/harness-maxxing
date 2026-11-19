@@ -98,7 +98,7 @@ Session = {
   archived: bool, favorite: bool, notify: bool,
   source: "web"|"telegram"|"cron",
   cron: bool,                         // started by a scheduled job (not mirrored on Telegram)
-  unread: bool,                       // finished after the last /seen
+  unread: bool,                       // finished after the last /seen, or marked unread by hand (`{seen:false}`)
   last_text: string,                  // first 200 chars of the last assistant text
   error: string|null,
   plan_mode: bool,                    // turns run read-only (`--permission-mode plan`) and end with a plan
@@ -126,7 +126,7 @@ Session = {
 | POST | `/api/sessions/{id}/stop` | – | `{ok}` (clears the queue, aborts the running turn; returns once settled, ≤ ~10 s). During an idle-compaction summary only the summary is aborted: the message waiting behind it (queue item `held`) stays and runs |
 | POST | `/api/sessions/{id}/compact` | – | `{ok}` summary → fresh Claude context, same session · `409 busy` while running · `400 empty_session` |
 | POST | `/api/sessions/{id}/handoff` | – | `Session` (new session seeded with a summary; old one archived). Messages sent to the new session before the summary arrives are queued (`queued:true`) and run after the seed (10 min at most, or at once when the summary fails) |
-| POST | `/api/sessions/{id}/seen` | – | `{ok}` |
+| POST | `/api/sessions/{id}/seen` | `{seen=true}` (optional) | `{ok}` - read; `{seen:false}`: unread again until read ("Mark as unread") |
 | GET | `/api/sessions/{id}/events?tail=N` | – | last events, read backwards from the end (whole log lines, at least N events when available, max 5000): `{events, start, next, more_before:bool, state}` — `start` = offset of the first line returned, `next` = end offset (start the stream there). What the UI uses to open a thread |
 | GET | `/api/sessions/{id}/events?before=<offset>&limit=N` | – | events strictly before `offset` (backward paging, "Show earlier messages"): `{events, start, next:offset, more_before, state}` · `{events:[], reset:true, state}` when `offset` is not a line boundary of the current log |
 | GET | `/api/sessions/{id}/events?from=0` | – | forward reading `{events:[Event], next:int, state, more:bool}` (≤ 4 MB of log per call; `more` = call again from `next`) · `reset:true` when `from` is beyond the end / not a line boundary |
