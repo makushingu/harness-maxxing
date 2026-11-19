@@ -63,3 +63,30 @@ def test_front_matter_is_split_on_newlines_only():
     from maxxing import skills
     out = skills._front("---\nname: x\ndescription: hello\u2028disable-model-invocation: true\n---\n")
     assert list(out) == ["name", "description"]
+
+
+def test_a_skill_file_that_is_a_link_is_not_read(client, mx):
+    """SKILL.md -> any file starting with `---`: its name:/description: lines came out of GET /api/skills."""
+    secret = mx["tmp"] / "secret.txt"
+    secret.write_text("---\nname: leak\ndescription: TOPSECRET line\n---\n")
+    folder = mx["ws"] / ".claude/skills/linked"
+    folder.mkdir(parents=True)
+    (folder / "SKILL.md").symlink_to(secret)
+    assert "linked" not in {s["folder"] for s in client.get("/api/skills").json()["skills"]}
+
+
+def test_a_topic_menu_opens_only_the_skills_it_can_use(mx, monkeypatch):
+    """for_topic listed every skill of every topic of the server, then dropped the other topics' ones."""
+    from pathlib import Path
+    from maxxing import skills
+    ws = mx["ws"]
+    for t in ("t0", "t1", "t2"):
+        _skill(ws / f"projects/p0/topics/{t}/.claude/skills", f"s-{t}", "---\nname: s\n---")
+        _skill(ws / f"projects/p1/topics/{t}/.claude/skills", f"x-{t}", "---\nname: x\n---")
+    _skill(ws / ".claude/skills", "w", "---\nname: w\n---")
+    opened: list[str] = []
+    real = Path.open
+    monkeypatch.setattr(Path, "open", lambda self, *a, **k: (opened.append(str(self)), real(self, *a, **k))[1])
+    got = {s["folder"] for s in skills.for_topic("projects/p0/topics/t1")}
+    assert "s-t1" in got and "w" in got and not got & {"s-t0", "s-t2", "x-t1"}
+    assert not [o for o in opened if "/p1/" in o or "/t0/" in o or "/t2/" in o], opened

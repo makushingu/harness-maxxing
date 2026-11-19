@@ -162,6 +162,9 @@ def _entries(zf: zipfile.ZipFile) -> tuple[list[tuple[zipfile.ZipInfo, PurePosix
         raise ImportFailed(413, "too_many_files", f"More than {MAX_FILES} files in the zip")
     if sum(i.file_size for i in infos) > MAX_TOTAL:
         raise ImportFailed(413, "too_big", f"More than {MAX_TOTAL // 1024 // 1024} MB once unzipped")
+    if len({i.filename for i in infos}) != len(infos):
+        # the scan and the write both go by name: a second entry of the same name would be written unscanned
+        raise ImportFailed(400, "bad_zip", "This zip has two files with the same name")
     skipped: list[dict] = []
     ok: list[tuple[zipfile.ZipInfo, PurePosixPath]] = []
     for i in infos:

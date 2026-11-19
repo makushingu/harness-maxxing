@@ -65,7 +65,7 @@ PRUNE_DIRS = {".git", "node_modules", "attachments", ".venv", "venv", "__pycache
 DENY_FILES = [r"secrets\.json", r"keys\.json", r"\.env", r".*\.env", r"\.env\..*", r".*\.pem", r".*\.key",
               r".*\.p12", r".*\.pfx", r"id_(rsa|dsa|ecdsa|ed25519).*", r".*credentials.*", r".*\.log",
               r".*\.jsonl", r".*\.sqlite3?", r".*\.db", r"\.netrc", r"\.git-credentials", r".*\.kdbx"]
-_DENY = re.compile("^(?:" + "|".join(DENY_FILES) + ")$", re.I)
+_DENY = re.compile(r"\A(?:" + "|".join(DENY_FILES) + r")\Z", re.I | re.S)    # S, \Z: a newline in a name hides nothing
 
 # Secret FORMATS (not words: memory files legitimately mention variable names).
 LEAKS: list[tuple[str, re.Pattern[bytes]]] = [(k, re.compile(p.encode())) for k, p in [
@@ -430,7 +430,7 @@ def glob_re(pattern: str) -> re.Pattern[str]:
         else:
             out += re.escape(pattern[i])
             i += 1
-    return re.compile("^" + out + "$")
+    return re.compile(r"\A" + out + r"\Z", re.S)
 
 
 _PRUNE = {d.lower() for d in PRUNE_DIRS}

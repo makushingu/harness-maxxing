@@ -124,3 +124,16 @@ def test_parallel_installs_get_distinct_projects_and_job_names(mx):
     names = [j["name"] for j in crons.list_jobs()]
     assert len(projects) == 6 and len(set(projects)) == 6
     assert len(set(names)) == len(names)
+
+
+def test_basics_makes_no_folder_through_a_linked_project(client, mx, tmp_path):
+    """`projects/general` linked outside the workspace: the folders under it were made there (mkdir ran before the check)."""
+    import shutil
+    ws = workspace.root()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    client.post("/api/packs/basics/install")
+    shutil.rmtree(ws / "projects/general")
+    (ws / "projects/general").symlink_to(outside, target_is_directory=True)
+    client.post("/api/packs/basics/install")
+    assert list(outside.iterdir()) == []

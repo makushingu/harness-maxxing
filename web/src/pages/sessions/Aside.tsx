@@ -8,6 +8,7 @@ import { Copy, MessageCircleQuestion, X } from 'lucide-react'
 import { api, errorMessage, seg } from '@/lib/api'
 import { cn, copyText } from '@/lib/utils'
 import { useT } from '@/i18n'
+import { ASIDE_FORGET_EVENT } from '@/lib/drafts'
 import { Markdown } from '@/components/ui/markdown'
 import { Spinner, Tooltip, toast } from '@/components/ui'
 
@@ -36,6 +37,12 @@ const useAsides = create<AsideState>()(
     },
   ),
 )
+if (typeof window !== 'undefined')
+  window.addEventListener(ASIDE_FORGET_EVENT, (e) => {
+    const sid = (e as CustomEvent<string | undefined>).detail
+    if (sid === undefined) useAsides.setState({ bySid: {} })
+    else if (Object.hasOwn(useAsides.getState().bySid, sid)) useAsides.getState().set(sid, null)
+  })
 let seq = Date.now()
 const patch = (sid: string, id: number, p: Partial<Aside>) => {
   const a = useAsides.getState().bySid[sid]
