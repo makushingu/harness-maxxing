@@ -274,6 +274,7 @@ def save(data: dict) -> None:
         config.write_json(tasks_path(), out, before_replace=unchanged)
         _cache["sig"], _cache["data"] = _sig(tasks_path()), copy.deepcopy(data)
         _cache["raw"] = {t["id"]: t for t in copy.deepcopy(out["tasks"])}
+        _own["sig"] = _cache["sig"]
     bus.invalidate("tasks")
 
 
@@ -794,6 +795,7 @@ def delete_task(tid: str):
 
 # ---- external edits watcher -----------------------------------------------------------------
 _task: asyncio.Task | None = None
+_own: dict = {"sig": None}                           # the signature of the last file this process wrote
 
 
 async def _watch(interval: float = 2.0) -> None:
@@ -806,7 +808,7 @@ async def _watch(interval: float = 2.0) -> None:
             continue
         if cur != last:
             last = cur
-            if cur != _cache["sig"]:                 # our own writes are already announced
+            if cur != _own["sig"]:                   # our own writes are already announced (a read refreshes _cache)
                 bus.invalidate("tasks")
 
 
