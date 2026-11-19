@@ -76,7 +76,8 @@ def installed_version() -> str | None:
     if not b:
         return None
     try:
-        r = subprocess.run([b, "--version"], capture_output=True, text=True, timeout=20, env=spawn.base_env())
+        r = subprocess.run([b, "--version"], capture_output=True, text=True, errors="replace", timeout=20,
+                           env=spawn.base_env())
     except (OSError, subprocess.TimeoutExpired):
         return None
     m = _VERSION.search(r.stdout or "") if r.returncode == 0 else None
@@ -119,7 +120,7 @@ def run_update(version: str) -> tuple[bool, str]:
     kind, cmd = how
     arg = version if kind == "native" else f"@anthropic-ai/claude-code@{version}"
     try:
-        r = subprocess.run([*cmd, arg], capture_output=True, text=True, timeout=UPDATE_TIMEOUT_S,
+        r = subprocess.run([*cmd, arg], capture_output=True, text=True, errors="replace", timeout=UPDATE_TIMEOUT_S,
                            env=spawn.base_env(), stdin=subprocess.DEVNULL, cwd=str(config.STATE))
     except subprocess.TimeoutExpired:
         return False, f"No end within {UPDATE_TIMEOUT_S // 60} min"
