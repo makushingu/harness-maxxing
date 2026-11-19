@@ -15,7 +15,7 @@ import { useRegisterCommands, useRegisterProvider, type Command } from '@/comman
 import { useHotkey } from '@/commands/shortcuts'
 import { PageHeader } from '@/components/shell/Page'
 import { PageList } from '@/components/shell/PageList'
-import { keepPageListOpen, openPageList } from '@/components/shell/TouchNav'
+import { keepPageListOpen } from '@/components/shell/TouchNav'
 import {
   Button,
   confirm,
@@ -317,7 +317,9 @@ export default function FilesPage() {
   React.useEffect(() => setFilter(''), [cwd])
 
   const kindError = kindQ.isError ? kindQ.error : null
-  // the folder's list in the second-level sidebar (PageList; touch: the left drawer), the file in the page
+  // the folder's list in the second-level sidebar (PageList; touch: the left drawer), the file in the page. Touch, no
+  // file open: the folder is the page itself (no empty viewer, no drawer to open first)
+  const inline = mobile && !file
   const listing = (
     <Listing
       className="flex-1"
@@ -402,51 +404,47 @@ export default function FilesPage() {
         />
       ) : (
         <div className="flex min-h-0 flex-1">
-          <PageList id="files" label={t('nav.files')} search={{ value: filter, onChange: setFilter, placeholder: t('files.filter') }} actions={<ListTools />}>
+          <PageList id="files" label={t('nav.files')} inline={inline} search={{ value: filter, onChange: setFilter, placeholder: t('files.filter') }} actions={<ListTools />}>
             {listing}
           </PageList>
-          <section className="flex min-w-0 flex-1 flex-col" aria-label={t('files.viewer')}>
-            {file ? (
-              kindQ.data === 'missing' ? (
+          {!inline && (
+            <section className="flex min-w-0 flex-1 flex-col" aria-label={t('files.viewer')}>
+              {file ? (
+                kindQ.data === 'missing' ? (
+                  <EmptyState
+                    className="flex-1"
+                    icon={FileQuestion}
+                    title={t('files.notFound')}
+                    description={t('files.notFoundDesc')}
+                    action={
+                      <Button variant="secondary" onClick={() => go(dirname(file), 'dir')}>
+                        {t('files.openFolder')}
+                      </Button>
+                    }
+                  />
+                ) : (
+                  <FileView key={file} path={file} siblings={visible} folder={list?.entries} entry={entry} actions={viewActions} />
+                )
+              ) : kindQ.data ? (
                 <EmptyState
                   className="flex-1"
-                  icon={FileQuestion}
-                  title={t('files.notFound')}
-                  description={t('files.notFoundDesc')}
+                  icon={MousePointerClick}
+                  title={t('files.selectFile')}
+                  description={t('files.selectFileDesc')}
                   action={
-                    <Button variant="secondary" onClick={() => go(dirname(file), 'dir')}>
-                      {t('files.openFolder')}
-                    </Button>
+                    <>
+                      <Button variant="secondary" onClick={pickFiles}>
+                        <Upload />
+                        {t('files.upload')}
+                      </Button>
+                    </>
                   }
                 />
               ) : (
-                <FileView key={file} path={file} siblings={visible} folder={list?.entries} entry={entry} actions={viewActions} />
-              )
-            ) : kindQ.data ? (
-              <EmptyState
-                className="flex-1"
-                icon={MousePointerClick}
-                title={t('files.selectFile')}
-                description={t('files.selectFileDesc')}
-                action={
-                  <>
-                    {mobile && (
-                      <Button onClick={openPageList}>
-                        <Folder />
-                        {t('files.openFolder')}
-                      </Button>
-                    )}
-                    <Button variant="secondary" onClick={pickFiles}>
-                      <Upload />
-                      {t('files.upload')}
-                    </Button>
-                  </>
-                }
-              />
-            ) : (
-              <div className="flex-1" />
-            )}
-          </section>
+                <div className="flex-1" />
+              )}
+            </section>
+          )}
         </div>
       )}
       <NameDialog state={nameDialog} onClose={() => setNameDialog(null)} />

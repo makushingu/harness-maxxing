@@ -7,6 +7,9 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Files (#151): touch with no file open renders `PageList` `inline` (the listing is the page, no viewer section,
+  the "Open the folder" button of the empty state removed); `PageList` in place closes the drawer's `list` level
+  (it would be empty). Composer (#148): the right group of `MessageBox` wraps.
 - Settings (PR #156 of Anthony14FR): route `settings/:section?` (was a redirect for `settings`); `SettingsRoute`
   renders `SettingsList` (groups of `SETTINGS_SECTIONS`, 48 px rows) when `useIsMobile()` and no section, else the
   redirect to General. Test in `test_web_mobile.py`.

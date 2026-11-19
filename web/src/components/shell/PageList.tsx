@@ -209,6 +209,11 @@ export function PageList({ id, entry, label, icon: Icon, inline, search, actions
     }
     return () => useLists.setState((s) => (s.list === id ? { list: null, entry: null, peek: false } : s))
   }, [id, entry, here])
+  // in place, the drawer's level of the list would be empty (a page picked in the menu slides to it): closed
+  const panel = useTouchNav((s) => s.panel)
+  React.useEffect(() => {
+    if (here && panel === 'list') useTouchNav.getState().setPanel(null)
+  }, [here, panel])
   if (here) return <div className="flex min-h-0 min-w-0 flex-1 flex-col" data-testid="page-list-inline">{children}</div>
   if (!slot) return null
   const toggle = open ? t('shell.listHide') : t('shell.listKeep')

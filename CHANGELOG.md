@@ -12,6 +12,12 @@ Changed:
 - **On a phone, the Tasks page explains how to select on a touch screen.** The hint under the tasks no longer
   talks about Ctrl/⌘ + click there: it says to tap the round box. Thanks to Anthony14FR.
 
+Fixed:
+- **On a phone, the Files page opens on the folder.** It opened on an empty viewer asking to pick a file "on the
+  left", with the folder hidden in the menu; the folder is now the page until you open a file.
+- **On a phone, the Send button stays on the screen.** With many buttons under the message box (agent
+  conversations, a running turn), the row now wraps instead of pushing Send off the right edge.
+
 ## 2.0.0-alpha.158 - 2026-11-19
 
 New:

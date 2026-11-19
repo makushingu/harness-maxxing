@@ -348,3 +348,11 @@ def test_settings_opens_on_the_list_of_its_sections_on_a_phone():
     assert 'return mobile ? <SettingsList /> : <Navigate to="/settings/general" replace />' in src
     lst = src[src.index("function SettingsList"):src.index("function SettingsPage")]
     assert "SETTINGS_GROUPS.map" in lst and "min-h-12" in lst, "every section, grouped, big enough to tap"
+
+
+def test_files_on_a_phone_is_the_folder_until_a_file_is_open():
+    # a phone landed on an empty viewer ("pick a file on the left") with the folder behind the drawer (#151)
+    src = (WEB / "pages" / "files" / "index.tsx").read_text()
+    assert "const inline = mobile && !file" in src and "inline={inline}" in src and "{!inline && (" in src
+    page_list = (WEB / "components" / "shell" / "PageList.tsx").read_text()
+    assert "if (here && panel === 'list') useTouchNav.getState().setPanel(null)" in page_list
