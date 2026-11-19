@@ -130,7 +130,7 @@ class Hub:
             scr = msg.get("screen") if isinstance(msg.get("screen"), dict) else {}
             screen = {k: scr.get(k) for k in ("w", "h", "scale")
                       if isinstance(scr.get(k), (int, float)) and math.isfinite(scr.get(k))} or None
-            caps = [str(x)[:16] for x in (msg.get("caps") or [])[:10] if isinstance(x, str)]
+            caps = [store._text(x, 16) for x in (msg.get("caps") or [])[:10] if isinstance(x, str)]
             screens = []
             for x in (msg.get("screens") or [])[:16] if isinstance(msg.get("screens"), list) else []:
                 if isinstance(x, dict) and isinstance(x.get("i"), int):
