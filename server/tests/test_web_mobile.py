@@ -276,3 +276,13 @@ def test_a_dictation_arriving_during_a_team_edit_does_not_replace_the_edited_tex
     assert m
     body = m.group(1)
     assert body.index("editingNow.current") < body.index("setText(")
+
+
+def test_signing_out_and_deleting_a_session_forget_the_side_questions():
+    # the side questions persist in sessionStorage `mx-asides`; drafts.ts cleared the drafts but left them for the next user
+    drafts = (WEB / "lib" / "drafts.ts").read_text()
+    aside = (WEB / "pages" / "sessions" / "Aside.tsx").read_text()
+    assert "sessionStorage.removeItem('mx-asides')" in drafts
+    assert re.search(r"export function forgetAllDrafts\(\)[\s\S]*?forgetAside\(\)", drafts)
+    assert re.search(r"export function forgetDraft\(key: string\)[\s\S]*?forgetAside\(key\)", drafts)
+    assert "ASIDE_FORGET_EVENT" in aside
