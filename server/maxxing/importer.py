@@ -377,7 +377,10 @@ def _free(p: Path) -> Path:
         return p
     n = 1
     while True:
-        cand = p.with_name(f"{p.stem} (imported{'' if n == 1 else ' ' + str(n)}){p.suffix}")
+        tag = f" (imported{'' if n == 1 else ' ' + str(n)}){p.suffix}"
+        room = max(255 - len(tag.encode()), 1)               # a file name is at most 255 bytes
+        stem = p.stem.encode()[:room].decode(errors="ignore")
+        cand = p.with_name(f"{stem}{tag}")
         if not cand.exists():
             return cand
         n += 1

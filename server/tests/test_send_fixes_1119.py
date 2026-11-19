@@ -56,3 +56,10 @@ def test_an_emoji_is_only_an_emoji(bad):
 @pytest.mark.parametrize("ok", ["👨‍👩‍👧", "🇫🇷", "❤️", "🛒"])
 def test_real_emoji_still_pass(ok):
     assert workspace.check_emoji(ok) == ok
+
+
+def test_a_long_imported_name_gets_a_valid_free_name(tmp_path):
+    p = tmp_path / ("a" * 250 + ".md")
+    p.write_text("x")
+    cand = importer._free(p)
+    assert cand != p and len(cand.name.encode()) <= 255 and cand.name.endswith(" (imported).md")
