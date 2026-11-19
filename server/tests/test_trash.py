@@ -588,3 +588,22 @@ def test_two_restores_of_the_same_name_keep_both_files(client, mx):
     finally:
         trash._free = real
     assert sorted(p.read_text() for p in mx["files"].iterdir()) == ["v1", "v2"]
+
+
+def test_a_session_is_in_the_trash_with_its_sidecar_before_anything_can_empty_it(client, topic, monkeypatch):
+    s = client.post("/api/sessions", json={"path": topic, "message": "zebra NOTOOL"}).json()
+    wait_idle(client, s["id"])
+    emptied = []
+    real = config.write_json
+
+    def hook(path, data, *a, **k):
+        if Path(path).parent == trash.trash_dir():
+            emptied.append(trash.empty())                   # a concurrent "empty the trash"
+        return real(path, data, *a, **k)
+
+    client.patch(f"/api/sessions/{s['id']}", json={"title": "Zebra plan"})
+    monkeypatch.setattr(config, "write_json", hook)
+    client.delete(f"/api/sessions/{s['id']}")
+    monkeypatch.setattr(config, "write_json", real)
+    assert emptied == [0] and len(_items(client)) == 1      # nothing was there to empty yet; the session stays
+

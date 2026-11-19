@@ -485,18 +485,31 @@ def trash_session(sid: str) -> Path:
     meta = store.read(sid) or {}
     slug = re.sub(r"[^a-z0-9]+", "-", (meta.get("title") or "session").lower()).strip("-")[:40] or "session"
     stamp = time.strftime("%Y%m%d-%H%M%S")
-    dest, n = trash_dir() / f"{stamp}-session-{slug}", 1
-    while dest.exists():
+    base = f"{stamp}-session-{slug}"
+    dest, n = trash_dir() / base, 1
+    # The name is reserved by creating its sidecar exclusively (as workspace.move_to_trash does): empty() or a second
+    # delete in the same second must not take the folder before its sidecar exists.
+    while True:
+        sidecar = dest.with_name(dest.name + ".json")
+        if not os.path.lexists(dest):
+            try:
+                os.close(os.open(sidecar, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600))
+                break
+            except FileExistsError:
+                pass
         n += 1
-        dest = trash_dir() / f"{stamp}-session-{slug}-{n}"
-    dest.mkdir(parents=True)
-    for ext in (".json", ".log"):
-        src = store._path(sid, ext)                     # noqa: SLF001 - same package family
-        if src.exists():
-            shutil.move(str(src), str(dest / f"{sid}{ext}"))
+        dest = trash_dir() / f"{base}-{n}"
+    try:
+        config.write_json(sidecar, {"original": sid, "at": time.time(), "kind": "session",
+                                    "title": meta.get("title") or "Session", "path": meta.get("path") or ""})
+        dest.mkdir(parents=True)
+        for ext in (".json", ".log"):
+            src = store._path(sid, ext)                 # noqa: SLF001 - same package family
+            if src.exists():
+                shutil.move(str(src), str(dest / f"{sid}{ext}"))
+    except BaseException:
+        sidecar.unlink(missing_ok=True)
+        raise
     store.remove(sid)                                   # locks and run markers
-    config.write_json(dest.with_name(dest.name + ".json"),
-                      {"original": sid, "at": time.time(), "kind": "session",
-                       "title": meta.get("title") or "Session", "path": meta.get("path") or ""})
     bus.invalidate("trash")
     return dest
