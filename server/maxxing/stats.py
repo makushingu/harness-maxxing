@@ -87,7 +87,7 @@ def _finite(v) -> bool:
 
 def _when(v):
     """A date of a meta (Unix seconds or ISO text); anything else (NaN, a list...) would break the JSON answer."""
-    return v if isinstance(v, str) or _finite(v) else None
+    return _text(v) if isinstance(v, str) else v if _finite(v) else None
 
 
 def _project_of(path: str) -> str:
