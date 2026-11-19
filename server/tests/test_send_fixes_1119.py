@@ -45,3 +45,14 @@ def test_a_dangling_link_counts_as_taken_when_restoring(mx, tmp_path):
     assert trash._free(link) != link
     os.symlink(tmp_path / "nowhere", tmp_path / "proj")
     assert trash._free_dir_name(tmp_path / "proj").name == "proj-restored"
+
+
+@pytest.mark.parametrize("bad", ["😀\x00", "😀‮", "é", "你好", "😀​"])
+def test_an_emoji_is_only_an_emoji(bad):
+    with pytest.raises(workspace.WorkspaceError):
+        workspace.check_emoji(bad)
+
+
+@pytest.mark.parametrize("ok", ["👨‍👩‍👧", "🇫🇷", "❤️", "🛒"])
+def test_real_emoji_still_pass(ok):
+    assert workspace.check_emoji(ok) == ok
