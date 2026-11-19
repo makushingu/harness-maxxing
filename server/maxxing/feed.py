@@ -420,6 +420,7 @@ def list_events(source: str | None = None, unread: bool = False, before: int | N
     """Newest first. `pending`: only the alerts waiting for a click (buttons, not resolved). The totals of every
     source come along, with `pending` = how many alerts wait (first page only: "Load more" does not need it)."""
     limit = max(1, min(int(limit or 50), 200))
+    source = _utf8(source)                           # a lone surrogate: SQLite cannot take it (UnicodeEncodeError)
     where, args = ["at>?"], [time.time() - RETENTION_DAYS * 86400]
     if source:
         where.append("source=?")

@@ -434,3 +434,8 @@ def test_feed_read_with_a_lone_surrogate_source_is_not_a_500(client, mx):
 def test_an_action_id_with_a_trailing_newline_is_refused():
     with pytest.raises(feed.FeedError):
         feed.post("Bad", actions=[{"id": "fix\n"}])
+
+
+def test_feed_list_with_a_lone_surrogate_source_is_not_a_500(client, mx):
+    assert feed.list_events(source="a\ud800")["events"] == []
+    assert client.get("/api/feed", params={"source": "a%ED%A0%80"}).status_code == 200
