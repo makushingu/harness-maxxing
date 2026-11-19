@@ -214,7 +214,15 @@ export function PageList({ id, entry, label, icon: Icon, inline, search, actions
   React.useEffect(() => {
     if (here && panel === 'list') useTouchNav.getState().setPanel(null)
   }, [here, panel])
-  if (here) return <div className="flex min-h-0 min-w-0 flex-1 flex-col" data-testid="page-list-inline">{children}</div>
+  if (here) {
+    // the page itself: the head (filter, view and sort tools) would otherwise be mounted nowhere
+    return (
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col" data-testid="page-list-inline">
+        <ListHead label={label} icon={Icon} search={search}>{actions}</ListHead>
+        {children}
+      </div>
+    )
+  }
   if (!slot) return null
   const toggle = open ? t('shell.listHide') : t('shell.listKeep')
   return createPortal(

@@ -93,6 +93,16 @@ def test_signed_in_caps_per_route(app):
     assert bodylimit.cap_for("POST", "/api/sessions/abc/messages", False) == bodylimit.PUBLIC_MAX
 
 
+def test_multipart_is_capped_outside_the_upload_routes(app):
+    cookie = security.make_cookie()
+    h = {"X-Maxxing": "1", "Content-Type": "multipart/form-data; boundary=x"}
+    st, read, _ = _call(app, "POST", "/api/tasks", length=None, chunks=[b"x" * 65536] * 32, headers=h, cookie=cookie)
+    assert st == 413 and read <= bodylimit.DEFAULT_MAX + 65536
+    assert all(bodylimit.UPLOADS.match(p) for p in ("/api/uploads", "/api/files/upload", "/api/import/upload", "/api/team/files",
+                                                    "/api/browser/profiles/p1/files", "/api/ext/x/up"))
+    assert not bodylimit.UPLOADS.match("/api/tasks")
+
+
 def test_editor_saves_a_large_file(client, mx):
     p = mx["files"] / "big.txt"
     content = "\\" * (2 * MB)                                       # JSON-escaped: 4 MB on the wire

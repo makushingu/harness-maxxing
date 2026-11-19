@@ -39,6 +39,14 @@ def test_add_usage_and_stats(client, mx):
     assert stats.tokens()["at"] == r["at"]                     # cached
 
 
+def test_a_surrogate_in_updated_does_not_break_the_usage_page(client, mx):
+    a = _session("projects/acme/topics/blog", "A")
+    f = store._path(a, ".json")  # noqa: SLF001 - a hand edit, escaped as \\ud800 in the file
+    f.write_text(json.dumps({**json.loads(f.read_text()), "updated": "\ud800x"}))
+    json.dumps(stats.compute(), ensure_ascii=False).encode("utf-8")
+    assert client.get("/api/stats/tokens").status_code == 200
+
+
 def test_memory_files_limit_and_settings(client, mx):
     ws = config.workspace()
     (ws / "memory.md").write_text("# Global\n" + "- x\n" * 10)

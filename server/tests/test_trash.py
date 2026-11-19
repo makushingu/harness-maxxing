@@ -632,3 +632,33 @@ def test_two_restores_of_the_same_session_end_in_a_trash_error_not_a_crash(clien
         t.join()
     assert sum(isinstance(o, dict) for o in out) == 1
     assert all(isinstance(o, (dict, trash.TrashError)) for o in out), out
+
+
+def test_a_failed_move_of_a_session_to_the_trash_leaves_it_in_the_store(client, topic, mx, monkeypatch):
+    from maxxing.sessions import store
+    s = client.post("/api/sessions", json={"path": topic, "message": "hello NOTOOL"}).json()
+    wait_idle(client, s["id"])
+    real, calls = trash.shutil.move, []
+
+    def flaky(src, dst):
+        calls.append(src)
+        if len(calls) == 2:
+            raise OSError("disk full")
+        return real(src, dst)
+    monkeypatch.setattr(trash.shutil, "move", flaky)
+    with pytest.raises(OSError):
+        trash.trash_session(s["id"])
+    assert store.read(s["id"])["title"] and store.log_path(s["id"]).exists()
+    assert not list(trash.trash_dir().glob("*session*"))
+
+
+def test_a_failed_restore_leaves_no_partial_copy(client, topic, mx, monkeypatch):
+    item = _trash_file(mx, topic, "half.txt")
+
+    def half(src, dst):
+        Path(dst).write_text("part")                    # a copy across disks that stops half way
+        raise OSError("disk full")
+    monkeypatch.setattr(trash.shutil, "move", half)
+    r = client.post(f"/api/trash/{item.stem}/restore")
+    assert r.status_code == 409
+    assert not list((mx["ws"] / topic).glob("half*")) and item.exists()
