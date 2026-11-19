@@ -1760,7 +1760,7 @@ def changelog_since(old: str, new: str) -> list[str]:
     return [strip_show(ln[1:]) for ln in out.splitlines() if ln.startswith("+") and not ln.startswith("+++")]
 
 
-_BRANCH_RE = re.compile(r"^[A-Za-z0-9._/-]+$")
+_BRANCH_RE = re.compile(r"^[A-Za-z0-9._/-]+\Z")
 
 
 def valid_branch(branch: str) -> bool:

@@ -1089,3 +1089,9 @@ def test_update_branch_is_never_a_git_option(tmp_path, monkeypatch, branch):
     assert not ok and "invalid branch" in err and not mark.exists()
     assert cmd_core.check_update(branch.format(mark=mark))["ok"] is False and not mark.exists()
     assert cmd_core._fetch("main") == (True, "")
+
+
+def test_branch_names_reject_a_trailing_newline():
+    from maxxing import cmd_core
+    assert cmd_core._BRANCH_RE.match("feat/x")
+    assert not cmd_core._BRANCH_RE.match("feat/x\n")

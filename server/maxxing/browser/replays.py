@@ -9,7 +9,7 @@ from .. import browser
 
 MAX_ACTIONS = 500
 SECRET_ARGS = ("value", "text", "values", "key", "keys", "function", "script", "expression", "elements")
-SID_RE = re.compile(r"^[A-Za-z0-9_-]{6,80}$")
+SID_RE = re.compile(r"^[A-Za-z0-9_-]{6,80}\Z")
 
 
 def page(url: object) -> str:

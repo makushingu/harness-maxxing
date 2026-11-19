@@ -734,3 +734,9 @@ def test_an_action_with_a_line_separator_stays_in_the_log(dv):
     store.log_action("d1", "type", {"keys": "a b"}, True, 5)
     store.log_action("d1", "click", {"x": 1}, True, 5)
     assert [a["tool"] for a in store.actions()] == ["click", "type"]
+
+
+def test_device_turn_ids_reject_a_trailing_newline():
+    from maxxing.devices import turns
+    assert turns.SID_RE.match("abcdef")
+    assert not turns.SID_RE.match("abcdef\n")

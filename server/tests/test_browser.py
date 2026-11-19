@@ -1602,3 +1602,10 @@ def test_a_running_profile_never_waits_behind_another_profile_starting(mx):
         finally:
             p._start_lock.release()
     assert asyncio.run(go()) is b
+
+
+def test_turn_ids_reject_a_trailing_newline():
+    from maxxing.browser import replays, turns
+    assert turns.SID_RE.match("abcdef")
+    assert not turns.SID_RE.match("abcdef\n")
+    assert not replays.SID_RE.match("abcdef\n")
