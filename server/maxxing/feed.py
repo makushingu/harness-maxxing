@@ -207,7 +207,7 @@ def post(title: str, body: str = "", level: str = "info", source: str = "custom"
     acts = _clean_actions(actions)
     ref = (_utf8(str(ref)) or "")[:300] or None if ref else None
     agent = (_utf8(str(agent)) or "")[:300] or None if agent else None
-    dedupe, group = (_utf8(str(v)) if v else v for v in (dedupe, group))
+    dedupe, group = ((_utf8(str(v))[:200] or None) if v else None for v in (dedupe, group))
     title = " ".join((title or "").split())[:TITLE_MAX]
     if not title:
         raise FeedError(400, "empty", "An event needs a title")
