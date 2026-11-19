@@ -18,6 +18,7 @@ import { OpenAIVoice } from './call/openai'
 import { chimeOff, chimeOn, unlockChime } from './call/chime'
 import type { Brain, CallPhase, Outcome, Voice } from './call/types'
 import { LevelMeter } from './VoiceButton'
+import { useVoice } from './api'
 
 type Props = {
   /** The session the call talks to ('' while there is none yet: an agent's first message creates it). */
@@ -104,6 +105,7 @@ export function VoiceCall({ sid, callKey, stream, running, queueCount, onSend, o
   const t = useT()
   const navigate = useNavigate()
   const { data: st } = useCallStatus()
+  const { data: vs } = useVoice()
   const [phase, setPhase] = React.useState<CallPhase | 'off'>('off')
   const [level, setLevel] = React.useState(0)
   const [caption, setCaption] = React.useState<{ who: 'you' | 'voice'; text: string } | null>(null)
@@ -170,7 +172,8 @@ export function VoiceCall({ sid, callKey, stream, running, queueCount, onSend, o
     voice.current.notify(answer, lastOutcome(sid, answer))
   }, [resultKey, sid])
 
-  if (!st) return null
+  // Settings -> Voice -> "Voice mode button" off: hidden (a call under way stays until hung up)
+  if (!st || (vs?.settings.call === false && phase === 'off')) return null
 
   const brain: Brain = {
     ask: async (request, lang) => {

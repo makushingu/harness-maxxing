@@ -21,6 +21,11 @@ Changed:
 - **Mark a session as read or unread.** The menu of a session (right click, or a long press on a phone) in the
   session list and in the second sidebar has **Mark as read** / **Mark as unread**: the dot and the counters of its
   topic and project follow. A session marked unread stays so until you open it.
+- **Hide the voice buttons you do not use.** Settings -> Voice -> **Buttons of the message box**: the mic button
+  (dictation and voice messages) and the voice mode button can be turned off; they disappear from every message
+  box, on every device.
+- **A shorter toolbar in a narrow message box.** When the box is narrow (phone, side by side sessions), the model
+  picker shows only its icon; its tooltip and its menu still name the model.
 - **Clearer filters above the session list.** "All / Running / Unread" became an icon (all the sessions) and the
   two counters of the sidebar's Sessions entry, with the same colours: a click on a counter shows only those
   sessions, a second click shows them all again. A counter at zero is hidden.

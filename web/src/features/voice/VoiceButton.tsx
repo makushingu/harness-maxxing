@@ -151,7 +151,8 @@ export function VoiceButton({
   }
 
   // Engine off / not ready: muted button that leads to the settings.
-  if (!voice) return null
+  // Settings -> Voice -> "Mic button" off: hidden (a recording under way ends first)
+  if (!voice || (voice.settings.mic === false && !active)) return null
   if (!voice.ready) {
     const hint = voice.reason === 'off' ? t('voice.offHint') : t('voice.notReadyHint')
     return (

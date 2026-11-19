@@ -99,7 +99,8 @@ def test_a_burst_of_voice_notes_runs_at_most_two_conversions_at_once(mx, tmp_pat
 def test_status_defaults_and_settings(client, monkeypatch):
     monkeypatch.setattr(voice, "ram_gb", lambda: 2.0)
     s = client.get("/api/voice").json()
-    assert s["settings"] == {"engine": "off", "model": "base", "language": "auto", "auto_send": False, "direct": True}
+    assert s["settings"] == {"engine": "off", "model": "base", "language": "auto", "auto_send": False, "direct": True,
+                             "mic": True, "call": True}
     assert s["ready"] is False and s["reason"] == "off" and s["ffmpeg"] is True
     assert s["local"]["recommended"] == "base" and [m["id"] for m in s["local"]["models"]] == list(voice.MODELS)
     assert s["keys"] == {"groq": False, "openai": False} and s["install"]["state"] == "idle"
@@ -108,7 +109,8 @@ def test_status_defaults_and_settings(client, monkeypatch):
 
     r = client.put("/api/voice/settings", json={"engine": "groq", "model": "tiny", "language": "FR", "auto_send": True})
     assert r.status_code == 200, r.text
-    assert r.json()["settings"] == {"engine": "groq", "model": "tiny", "language": "fr", "auto_send": True, "direct": True}
+    assert r.json()["settings"] == {"engine": "groq", "model": "tiny", "language": "fr", "auto_send": True, "direct": True,
+                                     "mic": True, "call": True}
     assert config.load_config()["voice"]["engine"] == "groq"
     s = client.get("/api/voice").json()
     assert s["ready"] is False and s["reason"] == "no_key"
@@ -116,6 +118,9 @@ def test_status_defaults_and_settings(client, monkeypatch):
     s = client.get("/api/voice").json()
     assert s["ready"] is True and s["keys"]["groq"] is True
     assert client.put("/api/voice/settings", json={"engine": "nope"}).status_code == 422
+    # the buttons of the message boxes can be hidden
+    s = client.put("/api/voice/settings", json={"mic": False, "call": False}).json()["settings"]
+    assert s["mic"] is False and s["call"] is False and s["engine"] == "groq"
     assert client.put("/api/voice/settings", json={"language": "french!"}).json()["error"] == "invalid_language"
 
 
