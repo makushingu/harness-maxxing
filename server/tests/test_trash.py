@@ -559,3 +559,32 @@ def test_a_session_whose_id_is_in_use_again_is_not_deleted_by_a_restore(client, 
     r = client.post(f"/api/trash/{it['id']}/restore")
     assert r.status_code == 409
     assert [i["id"] for i in _items(client)] == [it["id"]]  # its copy is still in the trash
+
+
+def test_two_restores_of_the_same_name_keep_both_files(client, mx):
+    import threading
+    f = mx["files"] / "doc.txt"
+    for text in ("v1", "v2"):
+        f.write_text(text)
+        client.post("/api/files/delete", json={"path": str(f)})
+        time.sleep(1.1)                                      # two different stamps in the trash
+    ids = [i["id"] for i in _items(client)]
+    assert len(ids) == 2
+    real, gate = trash._free, threading.Barrier(2, timeout=1)
+
+    def slow(dest):
+        out = real(dest)
+        try:
+            gate.wait()                                      # both threads have chosen before either moves
+        except threading.BrokenBarrierError:
+            pass
+        return out
+
+    trash._free = slow
+    try:
+        ts = [threading.Thread(target=trash.restore, args=(i,)) for i in ids]
+        [t.start() for t in ts]
+        [t.join() for t in ts]
+    finally:
+        trash._free = real
+    assert sorted(p.read_text() for p in mx["files"].iterdir()) == ["v1", "v2"]

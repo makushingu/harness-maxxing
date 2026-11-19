@@ -260,6 +260,9 @@ def _item(item_id: str) -> Path:
     return p
 
 
+_restore_lock = threading.Lock()
+
+
 def _free(dest: Path) -> Path:
     """dest, or "<name> (restored)", "<name> (restored 2)"... when something has the name now."""
     if not os.path.lexists(dest):                         # a dangling link is something too
@@ -377,10 +380,11 @@ def restore(item_id: str) -> dict[str, Any]:
             raise TrashError(409, "project_in_trash", "Its project is in the trash: restore the project first")
         if kind == "agent" and not topic_dir.is_dir() and _in_trash(topic_dir, "topic"):
             raise TrashError(409, "topic_in_trash", "Its topic is in the trash: restore the topic first")
-    dest = _free_dir_name(original) if kind in ("project", "topic", "agent") else _free(original)
     try:
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        shutil.move(str(p), str(dest))
+        with _restore_lock:                                 # two restores of the same name must not pick the same free one
+            dest = _free_dir_name(original) if kind in ("project", "topic", "agent") else _free(original)
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(p), str(dest))
     except OSError as e:                                    # the folder it was in is now a file, a read-only disk...
         raise TrashError(409, "not_restorable", f"Cannot put it back there: {e.strerror or e}") from None
     n = 0
