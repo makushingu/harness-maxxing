@@ -740,3 +740,25 @@ def test_device_turn_ids_reject_a_trailing_newline():
     from maxxing.devices import turns
     assert turns.SID_RE.match("abcdef")
     assert not turns.SID_RE.match("abcdef\n")
+
+
+def test_a_device_ask_survives_a_lone_surrogate_and_a_cancel_during_the_announce(monkeypatch):
+    import asyncio
+    from maxxing.devices import asks
+
+    def slow(d):
+        time.sleep(0.3)
+
+    monkeypatch.setattr(asks, "_announce", slow)
+
+    async def go():
+        t = asyncio.create_task(asks.ask("sess07", "web", {"id": "dev1", "name": "x"}, "code \ud83d sent\x00"))
+        await asyncio.sleep(0.05)
+        p = asks.pending(session="sess07")
+        json.dumps(p).encode("utf-8")
+        assert p[0]["message"] == "code ? sent"
+        t.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await t
+    asyncio.run(go())
+    assert asks.pending() == [] and not asks._futs
