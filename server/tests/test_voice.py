@@ -519,3 +519,23 @@ def test_a_bad_topic_path_is_refused_before_the_transcription(client, mx, tmp_pa
                     files={"audio": ("rec.webm", audio.read_bytes(), "audio/webm")})
     assert r.status_code == 400 and r.json()["error"] == "bad_path"
     assert fake_engine == []                               # the transcriber (paid in the cloud) was never called
+
+
+def test_changing_the_model_does_not_wait_for_a_download(mx, monkeypatch):
+    import threading
+    started, release = threading.Event(), threading.Event()
+
+    def slow_download(name):
+        started.set()
+        release.wait(10)
+        raise voice.VoiceError(502, "download_failed", "test")
+
+    monkeypatch.setattr(voice, "download_model", slow_download)
+    t = threading.Thread(target=lambda: pytest.raises(voice.VoiceError, voice._load, "tiny"), daemon=True)
+    t.start()
+    assert started.wait(5)
+    t0 = time.time()
+    voice._unload()                                       # update_settings(model) does this
+    release.set()
+    t.join(5)
+    assert time.time() - t0 < 2

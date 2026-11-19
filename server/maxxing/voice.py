@@ -321,11 +321,11 @@ def download_model(name: str) -> Path:
 
 def _load(name: str) -> Any:
     global _model, _model_name
+    path = download_model(name)                        # outside _model_lock: a download of minutes must not block _unload
     with _model_lock:
         if _model is not None and _model_name == name:
             return _model
         _model, _model_name = None, None
-        path = download_model(name)
         fw = importlib.import_module("faster_whisper")
         t0 = time.time()
         _model = fw.WhisperModel(str(path), device="cpu", compute_type="int8", cpu_threads=os.cpu_count() or 1)
