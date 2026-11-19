@@ -7,6 +7,9 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Sessions: `DiffView` (`pages/sessions/Items.tsx`, the inline Edit / Write diff) wraps under `md`: rows drop
+  `min-w-max` (`max-md:min-w-0`), the text span is `max-md:whitespace-pre-wrap [overflow-wrap:anywhere]`. Desktop
+  keeps `whitespace-pre` + horizontal scroll. Test: `test_web_mobile.py::test_an_inline_edit_diff_wraps_its_lines_on_a_phone`.
 - Files (#151): touch with no file open renders `PageList` `inline` (the listing is the page, no viewer section,
   the "Open the folder" button of the empty state removed); `PageList` in place closes the drawer's `list` level
   (it would be empty). Composer (#148): the right group of `MessageBox` wraps.
