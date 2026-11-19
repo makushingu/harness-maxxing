@@ -36,6 +36,8 @@ class SettingsIn(BaseModel):
     language: Optional[str] = None
     auto_send: Optional[bool] = None
     direct: Optional[bool] = None
+    mic: Optional[bool] = None
+    call: Optional[bool] = None
 
 
 class InstallIn(BaseModel):

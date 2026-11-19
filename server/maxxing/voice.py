@@ -47,7 +47,9 @@ KEY_NAMES = {"groq": "GROQ_API_KEY", "openai": "OPENAI_API_KEY"}
 API_MODELS = {"groq": "whisper-large-v3-turbo", "openai": "gpt-4o-mini-transcribe"}
 # direct: the web mic sends the recording at once and the server transcribes it afterwards (like a voice note);
 # off = transcribe first into the composer to review it (auto_send then sends the transcript without review).
-DEFAULTS = {"engine": "off", "model": "small", "language": "auto", "auto_send": False, "direct": True}
+# mic / call: the mic button (dictation, voice messages) and the voice mode button of the message boxes.
+DEFAULTS = {"engine": "off", "model": "small", "language": "auto", "auto_send": False, "direct": True,
+            "mic": True, "call": True}
 
 # Tests: httpx transport for the API engines (httpx.MockTransport).
 http_transport: Any = None
@@ -73,6 +75,8 @@ def settings() -> dict:
     out["language"] = normalise_language(out.get("language"))
     out["auto_send"] = bool(out["auto_send"])
     out["direct"] = bool(out["direct"])
+    out["mic"] = out["mic"] is not False
+    out["call"] = out["call"] is not False
     return out
 
 
@@ -93,7 +97,7 @@ def update_settings(**kw: Any) -> dict:
         raise VoiceError(400, "invalid_model", f"model must be one of {', '.join(MODELS)}")
     if "language" in changes:
         changes["language"] = normalise_language(changes["language"])
-    for k in ("auto_send", "direct"):
+    for k in ("auto_send", "direct", "mic", "call"):
         if k in changes:
             changes[k] = bool(changes[k])
     if changes:
