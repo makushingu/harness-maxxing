@@ -41,6 +41,13 @@ def test_create_runs_first_turn(client, topic, mx):
     # seen clears unread
     client.post(f"/api/sessions/{s['id']}/seen")
     assert client.get(f"/api/sessions/{s['id']}").json()["unread"] is False
+    # "Mark as unread" until read again, counted by the topic
+    assert client.post(f"/api/sessions/{s['id']}/seen", json={"seen": False}).json() == {"ok": True}
+    assert client.get(f"/api/sessions/{s['id']}").json()["unread"] is True
+    tp = next(t for p in client.get("/api/workspace/tree").json()["projects"] for t in p["topics"] if t["path"] == topic)
+    assert tp["unread"] == 1
+    client.post(f"/api/sessions/{s['id']}/seen", json={"seen": True})
+    assert client.get(f"/api/sessions/{s['id']}").json()["unread"] is False
 
 
 def test_hide_message_appends_a_hide_event(client, topic):

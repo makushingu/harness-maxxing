@@ -20,6 +20,11 @@ Changed:
   agents add many), the list, the sidebar and the dashboard answer in half the time.
 - **The Agents page loads faster when your agents have many runs.** The list of agents read the browser state once
   per run to count them; it now reads it once.
+- **Mark a session as read or unread.** The menu of a session (right click, or a long press on a phone) in the
+  session list and in the second sidebar has **Mark as read** / **Mark as unread**: the dot and the counters of its
+  topic and project follow. A session marked unread stays so until you open it.
+- **Unread sessions are green on the dashboard too.** In the Activity card, a finished session you have not read
+  yet has a green dot (it was orange), like in the session list; a failed one stays red.
 
 Fixed:
 - **Sharp image previews in sessions.** A wide picture (a screenshot, a photo in landscape) looked blurry in

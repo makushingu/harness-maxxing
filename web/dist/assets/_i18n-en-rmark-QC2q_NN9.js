@@ -1,0 +1,1 @@
+var e={"rmark.read":`Mark as read`,"rmark.unread":`Mark as unread`};export{e as default};

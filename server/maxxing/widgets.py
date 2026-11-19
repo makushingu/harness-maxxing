@@ -100,14 +100,14 @@ def activity(force: bool = False) -> dict:
     items = [{"title": s.get("title") or "Untitled", "subtitle": s.get("path") or "/",
               "value": "…" if s.get("state") == "running" else ago(s.get("updated")),
               "href": f"/sessions/{s['id']}",
-              "status": "error" if s.get("state") == "error" else ("warn" if s.get("unread") else None)}
+              "status": "error" if s.get("state") == "error" else ("ok" if s.get("unread") else None)}
              for s in recent]
     if not sessions:
         return {"title": t("Activity"), "link": "/sessions", "blocks": _first_steps()}
     return {"title": t("Activity"), "link": "/sessions", "blocks": [
         {"type": "stats", "items": [
             {"type": "stat", "label": t("Running"), "value": len(running)},
-            {"type": "stat", "label": t("Unread"), "value": len(unread), "tone": "warn" if unread else None},
+            {"type": "stat", "label": t("Unread"), "value": len(unread), "tone": "ok" if unread else None},
             {"type": "stat", "label": t("Today"), "value": len(today)}]},
         {"type": "list", "items": items, "empty": t("No session yet")}]}
 

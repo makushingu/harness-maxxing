@@ -26,6 +26,8 @@ import {
   Globe,
   Hash,
   List,
+  Mail,
+  MailOpen,
   ListTree,
   MoreHorizontal,
   Pencil,
@@ -62,6 +64,7 @@ import {
   useDeleteTopic,
   usePatchProject,
   usePatchSession,
+  useMarkUnread,
   usePatchTopic,
   useSessions,
   useReorderProjects,
@@ -1111,6 +1114,7 @@ const SessionRow = React.memo(function SessionRow({
   const [menu, setMenu] = React.useState(false)
   const [rename, setRename] = React.useState(false)
   const patch = usePatchSession()
+  const mark = useMarkUnread()
   const del = useDeleteSession()
   const closeSession = useSessionsUI((x) => x.closeSession)
   const mask = useMask()
@@ -1221,6 +1225,11 @@ const SessionRow = React.memo(function SessionRow({
         <DropdownMenuItem onSelect={() => patch.mutate({ id: s.id, favorite: !s.favorite })} data-testid="fav-toggle">
           {s.favorite ? <StarOff /> : <Star />} {s.favorite ? t('sessions.fav.remove') : t('sessions.fav.add')}
         </DropdownMenuItem>
+        {s.state !== 'running' && (
+          <DropdownMenuItem onSelect={() => mark.mutate({ id: s.id, unread: !s.unread })} data-testid="unread-toggle">
+            {s.unread ? <MailOpen /> : <Mail />} {s.unread ? t('rmark.read') : t('rmark.unread')}
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem onSelect={() => patch.mutate({ id: s.id, archived: !s.archived })}>
           <Archive /> {s.archived ? t('sessions.menu.unarchive') : t('sessions.menu.archive')}
         </DropdownMenuItem>
