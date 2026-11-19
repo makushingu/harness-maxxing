@@ -785,7 +785,13 @@ def send_to(to: str, text: str, files: list[str] | None = None) -> dict:
 
 # ---- events from the other servers ---------------------------------------------------------------------------
 def _safe_name(name: str) -> str:
-    name = Path(str(name or "file")).name.strip().replace("\x00", "")[:120]
+    name = Path(str(name or "file")).name.strip().replace("\x00", "")
+    if len(name) > 120 or len(name.encode("utf-8", "replace")) > 200:   # a file name holds 255 bytes (CJK: 3 each)
+        stem, dot, ext = name.rpartition(".")
+        ext = dot + ext if stem and len((dot + ext).encode("utf-8", "replace")) <= 20 else ""
+        room = 200 - len(ext.encode("utf-8", "replace"))
+        base = name[:len(name) - len(ext)].encode("utf-8", "replace")[:room].decode("utf-8", "ignore")
+        name = base[:120 - len(ext)] + ext
     return name if name and name not in (".", "..") else "file"
 
 
@@ -994,14 +1000,18 @@ def _fetch(frm: str, cid: str, mid: str, f: dict) -> None:
     try:
         if room and (not max_b or f["size"] <= max_b) and free_bytes(d) - f["size"] >= reserve:
             with _slots:
-                dest, fd = reserve_path(d, f["name"])  # the name is taken at once: two "image.png" never collide
-                os.close(fd)
                 try:
-                    ok = teampeer.fetch_file(frm, f["fid"], dest, max_b, cid, reserve)
-                except Exception:                       # the file is then marked failed, never pending forever
-                    log.exception("team: download of %s", f["fid"])
-                if not ok:
-                    dest.unlink(missing_ok=True)
+                    dest, fd = reserve_path(d, f["name"])  # the name is taken at once: two "image.png" never collide
+                except OSError:                         # a name the file system refuses: marked failed below
+                    log.exception("team: no place for %s", f["fid"])
+                else:
+                    os.close(fd)
+                    try:
+                        ok = teampeer.fetch_file(frm, f["fid"], dest, max_b, cid, reserve)
+                    except Exception:                   # the file is then marked failed, never pending forever
+                        log.exception("team: download of %s", f["fid"])
+                    if not ok:
+                        dest.unlink(missing_ok=True)
     finally:
         with _lock:
             _queued[0] -= 1
