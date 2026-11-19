@@ -7,6 +7,7 @@ writes the person's answer: "done" (they took over and handed back), "skip". A r
 from __future__ import annotations
 
 import logging
+import math
 import re
 import time
 from pathlib import Path
@@ -42,11 +43,16 @@ def _file(rid: str) -> Path:
     return folder() / f"{rid}.json"
 
 
+def _num(v) -> bool:
+    """A usable timestamp (or none): a hand-edited file with at="yesterday" must not break every listing."""
+    return v is None or (isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v))
+
+
 def _all() -> list[dict]:
     out = []
     for f in folder().glob("*.json"):
         d = browser_mcp.read(f)
-        if d and ID_RE.match(str(d.get("id") or "")):
+        if d and ID_RE.match(str(d.get("id") or "")) and _num(d.get("at")) and _num(d.get("decided_at")):
             out.append(d)
     return sorted(out, key=lambda d: d.get("at") or 0)
 
