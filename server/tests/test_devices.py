@@ -762,3 +762,16 @@ def test_a_device_ask_survives_a_lone_surrogate_and_a_cancel_during_the_announce
             await t
     asyncio.run(go())
     assert asks.pending() == [] and not asks._futs
+
+
+def test_a_hello_with_nan_in_the_screen_stays_listable(dv):
+    import asyncio
+    from maxxing.devices import hub as hubmod
+    c = hubmod.Conn(None, "d1")
+    asyncio.run(hubmod.hub()._on(c, {"t": "hello", "screen": {"w": float("nan"), "h": 100, "scale": float("inf")}}))
+    assert c.hello["screen"] == {"h": 100}
+
+
+def test_an_action_with_a_lone_surrogate_enters_the_log(dv):
+    store.log_action("d1", "click", {"name": "a\ud83db"}, False, 5, error="bad \ud83d")
+    assert [a["tool"] for a in store.actions()] == ["click"]
