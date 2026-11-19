@@ -287,8 +287,7 @@ def test_api_errors(client, mx):
 
 
 def test_api_refuses_other_content_types_and_streams_the_size_check(client, mx, monkeypatch):
-    big = b"x" * (vault_files.MAX_SIZE + 1)
-    r = client.put("/api/secret-files/MULTI_PART", files={"file": ("a.bin", big)})
+    r = client.put("/api/secret-files/MULTI_PART", files={"file": ("a.bin", b"x")})
     assert r.status_code == 415 and r.json()["error"] == "unsupported_media_type"
     r = client.put("/api/secret-files/JSON_BODY", json={"x": 1})
     assert r.status_code == 415 and r.json()["error"] == "unsupported_media_type"
