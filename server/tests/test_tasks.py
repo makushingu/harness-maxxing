@@ -339,3 +339,26 @@ def test_a_lone_surrogate_sent_to_the_api_is_refused(client, org):
     r = client.post("/api/tasks/bulk", content='{"ids": ["%s"], "labels_add": ["\\ud800"]}' % a["id"], headers=js)
     assert r.status_code == 422
     assert f.read_text() == before
+
+
+def test_the_watcher_announces_an_external_edit_even_after_a_read_saw_it(client, org, monkeypatch):
+    import asyncio
+    from maxxing import bus
+    from maxxing.api import tasks
+    client.post("/api/tasks", json={"title": "mine"})                  # our own write: already announced
+    time.sleep(0.01)
+    (org.ws / "tasks.json").write_text(json.dumps({"version": 1, "projects": [],
+                                                   "tasks": [{"id": "t_aaaaaa", "title": "From a script"}]}))
+    seen: list[tuple] = []
+    monkeypatch.setattr(bus, "invalidate", lambda *a, **k: seen.append(a))
+
+    async def go():
+        t = asyncio.create_task(tasks._watch(0.05))
+        await asyncio.sleep(0.01)                                        # the watcher took its first signature...
+        (org.ws / "tasks.json").write_text(json.dumps({"version": 1, "projects": [], "tasks": [
+            {"id": "t_aaaaaa", "title": "From a script"}, {"id": "t_bbbbbb", "title": "again"}]}))
+        tasks.load()                                                     # ...then another request read the file
+        await asyncio.sleep(0.3)
+        t.cancel()
+    asyncio.run(go())
+    assert ("tasks",) in seen

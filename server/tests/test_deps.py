@@ -611,3 +611,41 @@ def test_cli_voice_download_prints_failures_to_stderr(st, monkeypatch, capsys):
     assert cli.main(["voice", "download", "tiny"]) == 1
     cap = capsys.readouterr()
     assert "not installed" in cap.err and "error:" not in cap.out
+
+
+def test_a_failed_scrapling_reinstall_does_not_claim_to_keep_a_removed_venv(st, monkeypatch):
+    c = deps.get("scrapling")
+    final = deps.scrapling_dir() / f"{c['version']}-{deps.lock_hash(c)}"
+    final.mkdir(parents=True)                                  # `current` -> `final`, but bin/scrapling is gone
+    (deps.scrapling_dir() / "current").symlink_to(final)
+    monkeypatch.setattr(deps, "uv_bin", lambda: "/bin/uv")
+    monkeypatch.setattr(deps, "uv_env", lambda: {})
+    monkeypatch.setattr(deps, "get", lambda name, _g=deps.get: _g(name) if name != "python" else {"version": "3.12"})
+    monkeypatch.setattr(deps, "_run", lambda *a, **k: (1, "uv is gone"))
+    with pytest.raises(deps.DepError) as e:
+        deps._up_scrapling(c)
+    assert "kept the previous one" not in str(e.value) and "uv is gone" in str(e.value)
+
+
+def test_a_tool_that_prints_a_non_utf8_byte_or_cannot_run_gives_a_code(st):
+    code, out = deps._run(["printf", r"\377"])
+    assert code == 0 and isinstance(out, str)
+    assert deps._run(["printf", "a\x00b"])[0] == 127              # a NUL in an argument: ValueError before
+    assert deps._run(["/"])[0] == 127                              # PermissionError
+
+
+def test_a_record_that_is_not_an_object_is_replaced_not_a_crash(st):
+    deps.record_path().parent.mkdir(parents=True, exist_ok=True)
+    for text in ("[]", "[" * 100000):
+        deps.record_path().write_text(text)
+        assert deps.read_record() == {}
+        deps.write_record("x", {"version": "1"})
+        assert deps.read_record()["x"]["version"] == "1"
+
+
+def test_a_lockfile_that_is_a_list_or_too_deep_gives_no_packages(tmp_path):
+    from maxxing import depcheck
+    lock = tmp_path / "package-lock.json"
+    for text in ("[]", "[" * 100000, '{"packages": []}'):
+        lock.write_text(text)
+        assert depcheck.npm_packages(lock) == []

@@ -955,7 +955,7 @@ def login_finish(key: str, redirect: str, wait: float = 60.0) -> dict:
         lg = _logins.get(key)
         if lg is None or lg.closed.is_set():
             raise McpError(404, "login_expired", "this connection attempt expired: start again")
-        if not redirect.isascii() or not re.match(r"\Ahttps?://\S+\Z", redirect):
+        if not redirect.isascii() or not redirect.isprintable() or not re.match(r"\Ahttps?://\S+\Z", redirect):
             raise McpError(400, "bad_redirect", "paste the full address of the page you landed on")
         if lg.finishing:
             raise McpError(409, "busy", "this connection is already being finished")

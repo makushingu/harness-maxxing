@@ -218,6 +218,8 @@ def take_token(tid: str, tok: str) -> Term:
 
 
 def write(t: Term, data: bytes) -> None:
+    if t.exit is not None:                     # _ended closed the fd: its number may now belong to another file
+        return
     t.last = time.time()
     view = memoryview(data)
     deadline = time.time() + 2
@@ -244,6 +246,8 @@ def _signal(t: Term, sig: int) -> None:
 
 
 def resize(t: Term, cols: int, rows: int) -> None:
+    if t.exit is not None:
+        return
     try:
         _set_size(t.fd, cols, rows)
         _signal(t, signal.SIGWINCH)

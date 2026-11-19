@@ -862,3 +862,10 @@ def test_cron_list_survives_a_bad_time_in_the_run_history(org, capsys, at):
     crons.runs_path().write_text(json.dumps({"cron_id": j["id"], "ok": True, "at": at}) + "\n")
     assert cmd_cron._handler(types.SimpleNamespace(cron_cmd="list")) == 0
     assert "????" in capsys.readouterr().out
+
+
+def test_a_one_time_date_before_the_year_1000_keeps_four_digits(org):
+    assert crons.parse_once("0500-01-01T00:00") == "0500-01-01T00:00"
+    with pytest.raises(crons.CronError) as e:
+        crons.create_job({"name": "x", "command": "true", "once_at": "0500-01-01T00:00"})
+    assert e.value.code == "invalid_once"

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import secrets
 import time
 
@@ -587,3 +588,23 @@ def test_a_write_from_another_process_refreshes_the_pages(sent, monkeypatch):
     config.write_json(team._path(), doc)                # what `maxxing team send` does in its own process
     team.notice_outside_writes()
     assert seen == [("team",)]
+
+
+def test_a_received_file_name_is_cut_in_bytes_and_keeps_its_extension(tmp_path):
+    from maxxing.api.sessions import reserve_path
+    for raw in ("\u6587" * 120 + ".txt", "\U0001f525" * 120 + ".png", "a" * 300 + ".txt"):
+        name = team._safe_name(raw)
+        assert len(name.encode()) <= 200 and name.endswith((".txt", ".png"))
+        _, fd = reserve_path(tmp_path, name)                 # ENAMETOOLONG before
+        os.close(fd)
+
+
+def test_a_name_the_file_system_refuses_marks_the_download_failed(client, sent, monkeypatch):
+    from maxxing.api import sessions as api_sessions
+
+    def refuse(folder, name):
+        raise OSError(36, "File name too long")
+    monkeypatch.setattr(api_sessions, "reserve_path", refuse)
+    dm, mid = _received_file(monkeypatch, lambda *a, **k: True)
+    f = team.messages(dm)["messages"][0]["files"][0]
+    assert f.get("failed") and not f.get("pending")

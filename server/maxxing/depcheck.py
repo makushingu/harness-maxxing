@@ -65,10 +65,11 @@ def python_packages(lock: Path) -> list[tuple[str, str]]:
 def npm_packages(lock: Path) -> list[tuple[str, str]]:
     try:
         data = json.loads(lock.read_text())
-    except (OSError, ValueError):
+    except (OSError, ValueError, RecursionError):
         return []
+    pkgs = data.get("packages") if isinstance(data, dict) else None
     out = set()
-    for key, v in (data.get("packages") or {}).items():
+    for key, v in (pkgs if isinstance(pkgs, dict) else {}).items():
         if key.startswith("node_modules/") and isinstance(v, dict) and v.get("version") and not v.get("link"):
             out.add((key.rsplit("node_modules/", 1)[-1], v["version"]))
     return sorted(out)

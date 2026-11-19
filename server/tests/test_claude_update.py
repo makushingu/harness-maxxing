@@ -186,3 +186,14 @@ def test_odd_stable_tag_is_never_installed(fake):
         fake["latest"] = bad
         assert cu.tick(force_check=True) == "unknown" and fake["calls"] == 0
         assert cu.load().get("latest") is None
+
+
+def test_an_installer_that_prints_a_non_utf8_byte_does_not_crash_the_tick(mx, monkeypatch, tmp_path):
+    exe = tmp_path / "claude"
+    exe.write_text("#!/bin/sh\nprintf '\\377'\nexit 1\n")
+    exe.chmod(0o755)
+    monkeypatch.setattr(cu, "install_method", lambda: ("npm", [str(exe)]))
+    ok, out = cu.run_update("2.1.5")
+    assert ok is False and isinstance(out, str)
+    monkeypatch.setattr(cu, "_bin", lambda: str(exe))
+    assert cu.installed_version() is None

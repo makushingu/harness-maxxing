@@ -356,3 +356,9 @@ def test_files_on_a_phone_is_the_folder_until_a_file_is_open():
     assert "const inline = mobile && !file" in src and "inline={inline}" in src and "{!inline && (" in src
     page_list = (WEB / "components" / "shell" / "PageList.tsx").read_text()
     assert "if (here && panel === 'list') useTouchNav.getState().setPanel(null)" in page_list
+
+
+def test_the_agent_limits_ignore_a_number_that_overflows_once_scaled():
+    # 1e308 * 60 (minutes -> seconds) is Infinity: JSON.stringify sends null for it
+    src = (WEB / "features" / "agents" / "parts.tsx").read_text(encoding="utf-8")
+    assert re.search(r"if \(Number\.isFinite\(v\)\) onChange\(\{ \.\.\.value, \[k\]: v \}\)", src)

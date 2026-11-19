@@ -128,9 +128,10 @@ def record_path() -> Path:
 
 def read_record() -> dict:
     try:
-        return json.loads(record_path().read_text())
-    except (OSError, ValueError):
+        rec = json.loads(record_path().read_text())
+    except (OSError, ValueError, RecursionError):        # RecursionError: 100000 "["
         return {}
+    return rec if isinstance(rec, dict) else {}
 
 
 def write_record(name: str, entry: dict | None) -> None:
@@ -185,7 +186,7 @@ def _load_sha_cache() -> dict:
     try:
         d = json.loads(_sha_cache_path().read_text())
         return d if isinstance(d, dict) else {}
-    except (OSError, ValueError):
+    except (OSError, ValueError, RecursionError):
         return {}
 
 
@@ -208,11 +209,13 @@ def _run(cmd: list[str], timeout: float = 600, env: dict | None = None, cwd: Pat
         tmp.mkdir(parents=True, exist_ok=True)
         os.chmod(tmp, 0o700)
     try:
-        p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, cwd=cwd,
+        p = subprocess.run(cmd, capture_output=True, text=True, errors="replace", timeout=timeout, cwd=cwd,
                            env={**os.environ, "TMPDIR": str(tmp), **(env or {})})
         return p.returncode, (p.stdout or "") + (p.stderr or "")
     except FileNotFoundError:
         return 127, f"{cmd[0]}: not found"
+    except (OSError, ValueError) as e:                 # PermissionError, a NUL in an argument
+        return 127, f"{cmd[0]}: {e}"
     except subprocess.TimeoutExpired:
         return 124, f"{cmd[0]}: timed out after {timeout:.0f}s"
 
@@ -899,7 +902,8 @@ def _up_scrapling(c: dict, explicit: bool = False) -> tuple[str, str]:
             code, out = _run([str(final / "bin" / "python"), "-I", "-c", "import scrapling.fetchers"], timeout=120)
         if code != 0:
             shutil.rmtree(final, ignore_errors=True)
-            raise DepError("Scrapling install failed (kept the previous one): " + out.strip()[-300:])
+            kept = " (kept the previous one)" if cur.exists() else ""     # `current` pointed at `final`: removed above
+            raise DepError(f"Scrapling install failed{kept}: " + out.strip()[-300:])
         _symlink(final, cur)
         for old in base.iterdir():
             if old.name not in (final.name, "current") and old.is_dir() and not old.is_symlink():
