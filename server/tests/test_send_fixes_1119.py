@@ -14,3 +14,10 @@ def test_the_feed_group_is_capped_and_a_falsy_dedupe_is_none(client, mx):
     assert ev is not None
     with feed._conn() as c:
         assert c.execute("SELECT MAX(LENGTH(grp)) FROM events").fetchone()[0] <= 200
+
+
+def test_a_stripe_event_with_a_falsy_or_odd_id_never_raises(client, mx):
+    for eid in (0, "", [], {}):
+        for n in range(2):
+            ev = feedhooks._stripe({"type": "charge.refunded", "id": eid, "n": n, "data": {"object": {}}}, {})
+            assert ev is not None and ev[4] is None
