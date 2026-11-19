@@ -351,17 +351,20 @@ def restore(item_id: str) -> dict[str, Any]:
             path = ""
         if not (workspace.root() / path).is_dir():          # its topic was deleted since: workspace root
             path = ""
-        for mp in p.glob("*.json"):
-            try:
-                meta = json.loads(mp.read_text())
-                meta["path"] = path
-                config.write_json(mp, meta)
-            except (OSError, ValueError, TypeError, RecursionError):
-                pass
-        n = _put_sessions(p)
-        if p.exists():                                      # a damaged file stayed: the item stays in the trash
-            raise TrashError(409, "not_restorable", "This session file is damaged and cannot be restored")
-        p.with_name(p.name + ".json").unlink(missing_ok=True)
+        with _restore_lock:                                 # a double click: the second finds the item gone
+            if not p.exists():
+                raise TrashError(404, "not_found", "This item is no longer in the trash")
+            for mp in p.glob("*.json"):
+                try:
+                    meta = json.loads(mp.read_text())
+                    meta["path"] = path
+                    config.write_json(mp, meta)
+                except (OSError, ValueError, TypeError, RecursionError):
+                    pass
+            n = _put_sessions(p)
+            if p.exists():                                      # a damaged file stayed: the item stays in the trash
+                raise TrashError(409, "not_restorable", "This session file is damaged and cannot be restored")
+            p.with_name(p.name + ".json").unlink(missing_ok=True)
         bus.invalidate("sessions", "workspace", "trash")
         return {"ok": True, "kind": kind, "restored_to": path, "sessions": n}
     original = Path(side["original"])

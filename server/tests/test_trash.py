@@ -607,3 +607,28 @@ def test_a_session_is_in_the_trash_with_its_sidecar_before_anything_can_empty_it
     monkeypatch.setattr(config, "write_json", real)
     assert emptied == [0] and len(_items(client)) == 1      # nothing was there to empty yet; the session stays
 
+
+
+def test_two_restores_of_the_same_session_end_in_a_trash_error_not_a_crash(client, topic, monkeypatch):
+    import threading
+    import time
+    s = client.post("/api/sessions", json={"path": topic, "message": "x NOTOOL"}).json()
+    wait_idle(client, s["id"])
+    client.delete(f"/api/sessions/{s['id']}")
+    item = _items(client)[0]["id"]
+    real = trash._put_sessions
+    monkeypatch.setattr(trash, "_put_sessions", lambda *a, **k: (time.sleep(0.3), real(*a, **k))[1])
+    out: list = []
+
+    def go():
+        try:
+            out.append(trash.restore(item))
+        except Exception as e:  # noqa: BLE001
+            out.append(e)
+    ts = [threading.Thread(target=go) for _ in range(2)]
+    for t in ts:
+        t.start()
+    for t in ts:
+        t.join()
+    assert sum(isinstance(o, dict) for o in out) == 1
+    assert all(isinstance(o, (dict, trash.TrashError)) for o in out), out
