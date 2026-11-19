@@ -7,6 +7,9 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Web: session list filters (`Tree.tsx` header): `chip-all` = `Layers` icon (label in `title` / `aria-label`),
+  `chip-running` / `chip-unread` = count pills in the `CountBadge` colours (filled when active), hidden at 0 unless
+  active; the touch layout is a plain flex row (no segmented grid).
 - Web: `useMarkSeen` / `useMarkUnread` take the session (`{id, path, state, archived, unread}`) and patch the
   workspace tree too (topic `unread` / `errors`): the topic, project and sidebar counters follow at once instead of
   after the bus refetch of `/api/sessions` (~1 MB with 1 000 sessions). Mock bench: 340-400 ms -> 65-125 ms.

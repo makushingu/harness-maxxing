@@ -21,6 +21,9 @@ Changed:
 - **Mark a session as read or unread.** The menu of a session (right click, or a long press on a phone) in the
   session list and in the second sidebar has **Mark as read** / **Mark as unread**: the dot and the counters of its
   topic and project follow. A session marked unread stays so until you open it.
+- **Clearer filters above the session list.** "All / Running / Unread" became an icon (all the sessions) and the
+  two counters of the sidebar's Sessions entry, with the same colours: a click on a counter shows only those
+  sessions, a second click shows them all again. A counter at zero is hidden.
 - **Unread sessions are green on the dashboard too.** In the Activity card, a finished session you have not read
   yet has a green dot (it was orange), like in the session list; a failed one stays red.
 
