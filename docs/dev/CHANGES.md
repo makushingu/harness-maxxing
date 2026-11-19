@@ -5,7 +5,7 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
-## Unreleased
+## 2.0.0-alpha.159 - 2026-11-19
 
 - Disk space (Settings -> System): `maxxing/cleanup.py` (`scan`, cached 60 s; `run(parts)` measures each part before
   and after) over five parts `leftovers` / `caches` (`deps.clean`, new `leftovers=` flag to clean the caches alone),

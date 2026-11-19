@@ -3,7 +3,7 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
-## Unreleased
+## 2.0.0-alpha.159 - 2026-11-19
 
 New:
 - **Free up disk space from Settings -> System.** A new **Disk space** card shows how full the disk is. **Free up
