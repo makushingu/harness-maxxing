@@ -362,3 +362,16 @@ def test_the_agent_limits_ignore_a_number_that_overflows_once_scaled():
     # 1e308 * 60 (minutes -> seconds) is Infinity: JSON.stringify sends null for it
     src = (WEB / "features" / "agents" / "parts.tsx").read_text(encoding="utf-8")
     assert re.search(r"if \(Number\.isFinite\(v\)\) onChange\(\{ \.\.\.value, \[k\]: v \}\)", src)
+
+
+def test_the_inline_page_list_keeps_its_filter_and_tools():
+    # on a phone with nothing open, the list is the page: its ListHead (filter, view, sort, hidden files) must be there
+    src = (WEB / "components" / "shell" / "PageList.tsx").read_text()
+    inline = src[src.index("  if (here) {"):src.index("  if (!slot) return null")]
+    assert "<ListHead" in inline and "search={search}" in inline and "{actions}" in inline
+
+
+def test_the_key_checks_of_an_agent_are_big_enough_to_tap():
+    src = (WEB / "features" / "agents" / "parts.tsx").read_text()
+    row = re.search(r'<label key=\{n\} className="([^"]*)"', src)
+    assert row and "pointer-coarse:min-h-10" in row[1].split()

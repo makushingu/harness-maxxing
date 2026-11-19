@@ -387,7 +387,16 @@ def restore(item_id: str) -> dict[str, Any]:
         with _restore_lock:                                 # two restores of the same name must not pick the same free one
             dest = _free_dir_name(original) if kind in ("project", "topic", "agent") else _free(original)
             dest.parent.mkdir(parents=True, exist_ok=True)
-            shutil.move(str(p), str(dest))
+            existed = os.path.lexists(dest)
+            try:
+                shutil.move(str(p), str(dest))
+            except OSError:
+                if not existed and os.path.lexists(p):  # a copy across disks failed half way: no partial copy left
+                    if dest.is_dir() and not dest.is_symlink():
+                        shutil.rmtree(dest, ignore_errors=True)
+                    else:
+                        dest.unlink(missing_ok=True)
+                raise
     except OSError as e:                                    # the folder it was in is now a file, a read-only disk...
         raise TrashError(409, "not_restorable", f"Cannot put it back there: {e.strerror or e}") from None
     n = 0
@@ -502,6 +511,7 @@ def trash_session(sid: str) -> Path:
                 pass
         n += 1
         dest = trash_dir() / f"{base}-{n}"
+    moved: list[tuple[Path, Path]] = []
     try:
         config.write_json(sidecar, {"original": sid, "at": time.time(), "kind": "session",
                                     "title": meta.get("title") or "Session", "path": meta.get("path") or ""})
@@ -510,7 +520,14 @@ def trash_session(sid: str) -> Path:
             src = store._path(sid, ext)                 # noqa: SLF001 - same package family
             if src.exists():
                 shutil.move(str(src), str(dest / f"{sid}{ext}"))
+                moved.append((dest / f"{sid}{ext}", src))
     except BaseException:
+        for done, src in moved:                         # the session stays in the store, not half in the trash
+            try:
+                shutil.move(str(done), str(src))
+            except OSError:
+                log.exception("putting back %s failed", src)
+        shutil.rmtree(dest, ignore_errors=True)
         sidecar.unlink(missing_ok=True)
         raise
     store.remove(sid)                                   # locks and run markers

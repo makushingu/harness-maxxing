@@ -1,4 +1,4 @@
-"""Request body caps for every non-multipart request under /api/, enforced before and while the body is read.
+"""Request body caps for every request under /api/ except the multipart uploads, enforced before and while the body is read.
 
 FastAPI reads (and parses) a JSON body BEFORE the route's dependencies run - the auth check included - so an
 anonymous client could make the server hold any amount of JSON in memory. `BodyLimit` is an ASGI middleware that
@@ -9,7 +9,7 @@ decides from the headers alone, before a byte of the body is received:
 - /api/hooks/<token> (public, the token is the permission): feedhooks.MAX_BODY;
 - signed in: DEFAULT_MAX, or a larger cap for the few routes whose JSON is legitimately big (`ROUTES`).
 A declared `Content-Length` over the cap -> 413 `too_large` at once; a chunked body is counted while it streams and
-the request is aborted with 413 as soon as it goes over. Multipart bodies are left to `uploads.UploadGuard` (auth,
+the request is aborted with 413 as soon as it goes over. Multipart bodies on the upload routes (`UPLOADS`) are left to `uploads.UploadGuard` (auth,
 CSRF, upload_max_mb and disk checks before reading).
 """
 from __future__ import annotations
@@ -31,6 +31,8 @@ ROUTES: tuple[tuple[str, re.Pattern[str], int], ...] = (
     ("POST", re.compile(r"^/api/settings/feedback$"), 2 * MB),  # one screenshot <= 1 MB (feedback.MAX_IMAGE), base64
 )
 _MUTATING = ("POST", "PUT", "PATCH", "DELETE")
+# The routes that take multipart files (UploadGuard checks them); on any other route a multipart body is capped like JSON.
+UPLOADS = re.compile(r"^/api/(?:uploads|files/upload|import/upload|team/files|browser/profiles/[^/]+/files|ext/.*)$")
 
 
 def _public(path: str) -> bool:
@@ -71,7 +73,7 @@ class BodyLimit:
                 or not scope.get("path", "").startswith("/api/"):
             return await self.app(scope, receive, send)
         headers = {k.decode("latin-1").lower(): v.decode("latin-1") for k, v in scope.get("headers", [])}
-        if headers.get("content-type", "").lower().startswith("multipart/"):
+        if headers.get("content-type", "").lower().startswith("multipart/") and UPLOADS.match(scope["path"]):
             return await self.app(scope, receive, send)             # UploadGuard
         path, method = scope["path"], scope["method"]
         if path.startswith("/api/auth/") and headers.get("x-maxxing") != "1":

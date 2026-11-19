@@ -183,7 +183,10 @@ def _url_masked(url: str, mask: str = MASK) -> str:
         parts = []
         for part in q.split("&"):
             k, eq, v = part.partition("=")
-            parts.append(f"{k}{eq}{mask}" if eq and not _only_refs(v) else part)
+            if not eq:                          # `?sk_live_...`: a bare token
+                parts.append(mask if _has_literal(part) else part)
+            else:
+                parts.append(f"{k}{eq}{mask}" if not _only_refs(v) else part)
         return "&".join(parts)
     frag = u.fragment if _only_refs(u.fragment) else mask
     if _has_literal(netloc.rsplit("@", 1)[-1] + u.path) or any(TOKEN_SEGMENT_RE.match(s) for s in u.path.split("/")):

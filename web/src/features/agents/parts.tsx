@@ -370,7 +370,7 @@ export function KeyChecks({ value, onChange }: { value: string[]; onChange: (key
       {names.length > 8 && <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('agents.settings.keysFilter', { count: names.length })} className="h-8 text-[13px]" />}
       <div className="grid max-h-56 gap-1.5 overflow-y-auto sm:grid-cols-2">
       {shown.map((n) => (
-        <label key={n} className="flex min-w-0 items-center gap-2 text-[13px]">
+        <label key={n} className="flex min-w-0 items-center gap-2 text-[13px] pointer-coarse:min-h-10">
           <Checkbox checked={value.includes(n)} onCheckedChange={(v) => onChange(v === true ? [...value, n] : value.filter((k) => k !== n))} />
           <span className="truncate font-mono">{n}</span>
         </label>
