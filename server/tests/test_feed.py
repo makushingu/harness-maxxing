@@ -429,3 +429,8 @@ def test_feed_read_with_a_lone_surrogate_source_is_not_a_500(client, mx):
     client.post("/api/feed", json={"title": "kept", "source": "shop"})
     r = client.post("/api/feed/read", content=b'{"source": "\\ud800"}', headers={"content-type": "application/json"})
     assert r.status_code == 200 and r.json()["unread"] == 1, r.text
+
+
+def test_an_action_id_with_a_trailing_newline_is_refused():
+    with pytest.raises(feed.FeedError):
+        feed.post("Bad", actions=[{"id": "fix\n"}])
