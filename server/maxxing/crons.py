@@ -268,7 +268,7 @@ def parse_once(value: str, zone: ZoneInfo | None = None) -> str:
         d = dt.datetime.fromisoformat(text)
         if d.tzinfo is not None:
             d = d.astimezone(zone or tz()).replace(tzinfo=None)   # year 1 / 9999 with an offset: out of range
-        return d.strftime("%Y-%m-%dT%H:%M")
+        return d.isoformat(timespec="minutes")      # strftime("%Y") has no zero padding on Linux: year 500 -> "500-..."
     except (ValueError, OverflowError):
         shown = str(value).encode("utf-8", "replace").decode()   # a lone surrogate: the JSON error could not hold it
         raise CronError(f"once_at: '{shown}' is not a date and time (YYYY-MM-DDTHH:MM)", "invalid_once") from None
