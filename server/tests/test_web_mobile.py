@@ -268,3 +268,11 @@ def test_the_role_protection_line_and_new_group_link_of_an_agent_are_big_enough_
     for testid in ("agent-sandbox-line", "agent-new-group", "agent-role"):
         cls = re.search(r"className=(?:\{cn\()?['\"]([^'\"]*)['\"][^\n]*\n(?:[^\n]*\n)?\s*data-testid=\"" + testid + '"', src)
         assert cls and "pointer-coarse:min-h-10" in cls[1].split(), testid
+
+
+def test_a_dictation_arriving_during_a_team_edit_does_not_replace_the_edited_text():
+    src = (WEB / "features" / "team" / "Chat.tsx").read_text(encoding="utf-8")
+    m = re.search(r"const onDraft = \(e: Event\) => \{(.*?)\n    \}\n", src, re.S)
+    assert m
+    body = m.group(1)
+    assert body.index("editingNow.current") < body.index("setText(")

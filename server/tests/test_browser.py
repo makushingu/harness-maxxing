@@ -1602,3 +1602,24 @@ def test_a_running_profile_never_waits_behind_another_profile_starting(mx):
         finally:
             p._start_lock.release()
     assert asyncio.run(go()) is b
+
+
+def test_turn_ids_reject_a_trailing_newline():
+    from maxxing.browser import replays, turns
+    assert turns.SID_RE.match("abcdef")
+    assert not turns.SID_RE.match("abcdef\n")
+    assert not replays.SID_RE.match("abcdef\n")
+
+
+def test_a_browser_ask_with_a_bad_timestamp_does_not_break_the_listing(tmp_path, mx):
+    from maxxing import browser
+    from maxxing.browser import asks
+    folder = browser.asks_dir()
+    folder.mkdir(parents=True)
+    ok = {"id": "a" * 16, "session": "s1", "owner": "web", "at": time.time(), "status": "pending"}
+    bad = {**ok, "id": "b" * 16, "at": "yesterday"}
+    (folder / f"{ok['id']}.json").write_text(json.dumps(ok))
+    (folder / f"{bad['id']}.json").write_text(json.dumps(bad))
+    assert [d["id"] for d in asks.pending()] == [ok["id"]]
+    asks.scan()
+    asks.prime()

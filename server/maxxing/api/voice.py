@@ -110,15 +110,19 @@ def _save(up: UploadFile, dest: Path) -> int:
     return size
 
 
-def _keep(tmp: Path, topic: str, ext: str) -> str:
-    """Copy the original audio to <topic>/attachments/voice/YYYY-MM/voice-YYYYMMDD-HHMMSS<ext>."""
+def _topic_folder(topic: str) -> Path:
     from .. import workspace
     if not topic:                                      # "/" would be the workspace root, not a topic
         raise VoiceError(400, "bad_path", "path must be a topic")
     try:
-        folder = workspace.topic_dir(topic) / "attachments" / "voice" / time.strftime("%Y-%m")
+        return workspace.topic_dir(topic) / "attachments" / "voice" / time.strftime("%Y-%m")
     except ValueError as e:
         raise VoiceError(400, "bad_path", str(e)) from None
+
+
+def _keep(tmp: Path, topic: str, ext: str) -> str:
+    """Copy the original audio to <topic>/attachments/voice/YYYY-MM/voice-YYYYMMDD-HHMMSS<ext>."""
+    folder = _topic_folder(topic)
     folder.mkdir(parents=True, exist_ok=True)
     base = f"voice-{time.strftime('%Y%m%d-%H%M%S')}"
     dest, n = folder / f"{base}{ext}", 1
@@ -141,6 +145,8 @@ async def transcribe(audio: UploadFile = File(...), path: Optional[str] = Form(N
     tmp = tmp_dir / f"in-{time.time_ns()}{ext}"
     try:
         await asyncio.to_thread(_save, audio, tmp)
+        if path is not None:                           # refuse a bad topic before the (paid) transcription, not after
+            await asyncio.to_thread(_topic_folder, path.strip("/"))
         out = await asyncio.to_thread(voice.transcribe_file, tmp, language or None)
         out["audio_path"] = None
         if path is not None:

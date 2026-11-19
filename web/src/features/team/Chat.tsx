@@ -1148,10 +1148,15 @@ function Composer({
   React.useEffect(() => {
     if (!editing) saveTeamDraft(chatId, text)
   }, [chatId, text, editing])
-  // Written from outside the box (a dictation that ended while it was gone): show it.
+  // Written from outside the box (a dictation that ended while it was gone): show it - except while a sent message is
+  // edited: the box holds that message, so the draft only waits for the end of the edit.
+  const editingNow = React.useRef(editing)
+  editingNow.current = editing
   React.useEffect(() => {
     const onDraft = (e: Event) => {
-      if ((e as CustomEvent<string>).detail === `team:${chatId}`) setText(loadTeamDraft(chatId))
+      if ((e as CustomEvent<string>).detail !== `team:${chatId}`) return
+      if (editingNow.current) draft.current = loadTeamDraft(chatId)
+      else setText(loadTeamDraft(chatId))
     }
     window.addEventListener(DRAFT_EVENT, onDraft)
     return () => window.removeEventListener(DRAFT_EVENT, onDraft)

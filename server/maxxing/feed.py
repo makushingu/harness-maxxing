@@ -183,7 +183,7 @@ def _utf8(s: str | None) -> str | None:
 def _clean_actions(actions: Any) -> str | None:
     out = []
     for a in (actions or [])[:4]:
-        if not isinstance(a, dict) or not re.match(r"^[a-z][a-z0-9_-]{0,19}$", str(a.get("id") or "")):
+        if not isinstance(a, dict) or not re.match(r"^[a-z][a-z0-9_-]{0,19}\Z", str(a.get("id") or "")):
             raise FeedError(400, "bad_action", "An action needs an id (a-z, 0-9, - _)")
         out.append({"id": a["id"], "label": " ".join(str(a.get("label") or a["id"]).split())[:40],
                     "style": a.get("style") if a.get("style") in ACTION_STYLES else "default"})

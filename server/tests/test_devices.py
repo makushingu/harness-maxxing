@@ -734,3 +734,44 @@ def test_an_action_with_a_line_separator_stays_in_the_log(dv):
     store.log_action("d1", "type", {"keys": "a b"}, True, 5)
     store.log_action("d1", "click", {"x": 1}, True, 5)
     assert [a["tool"] for a in store.actions()] == ["click", "type"]
+
+
+def test_device_turn_ids_reject_a_trailing_newline():
+    from maxxing.devices import turns
+    assert turns.SID_RE.match("abcdef")
+    assert not turns.SID_RE.match("abcdef\n")
+
+
+def test_a_device_ask_survives_a_lone_surrogate_and_a_cancel_during_the_announce(monkeypatch):
+    import asyncio
+    from maxxing.devices import asks
+
+    def slow(d):
+        time.sleep(0.3)
+
+    monkeypatch.setattr(asks, "_announce", slow)
+
+    async def go():
+        t = asyncio.create_task(asks.ask("sess07", "web", {"id": "dev1", "name": "x"}, "code \ud83d sent\x00"))
+        await asyncio.sleep(0.05)
+        p = asks.pending(session="sess07")
+        json.dumps(p).encode("utf-8")
+        assert p[0]["message"] == "code ? sent"
+        t.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await t
+    asyncio.run(go())
+    assert asks.pending() == [] and not asks._futs
+
+
+def test_a_hello_with_nan_in_the_screen_stays_listable(dv):
+    import asyncio
+    from maxxing.devices import hub as hubmod
+    c = hubmod.Conn(None, "d1")
+    asyncio.run(hubmod.hub()._on(c, {"t": "hello", "screen": {"w": float("nan"), "h": 100, "scale": float("inf")}}))
+    assert c.hello["screen"] == {"h": 100}
+
+
+def test_an_action_with_a_lone_surrogate_enters_the_log(dv):
+    store.log_action("d1", "click", {"name": "a\ud83db"}, False, 5, error="bad \ud83d")
+    assert [a["tool"] for a in store.actions()] == ["click"]

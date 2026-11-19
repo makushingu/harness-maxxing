@@ -33,7 +33,8 @@ def test_parse_fields():
 @pytest.mark.parametrize("bad", ["", "* * * *", "61 * * * *", "* * * * * *", "*/0 * * * *", "5-1 * * * *",
                                  "@sometimes", "a * * * *", "* * 0 * *", "1,,2 * * * *",
                                  "² * * * *", "٣ * * * *", "*/² * * * *",           # Unicode digits: refused
-                                 "0 9 * * monday", "0 9 * january *", "0 9 * * monkey"])  # cron refuses long names
+                                 "0 9 * * monday", "0 9 * january *", "0 9 * * monkey",
+                                 "9" * 5000 + " * * * *", "*/" + "9" * 5000 + " * * * *"])  # cron refuses long names
 def test_parse_errors(bad):
     with pytest.raises(crons.CronError):
         crons.parse(bad)

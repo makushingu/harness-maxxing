@@ -19,6 +19,7 @@ or commands (`.claude/commands/`). A report is written in imports/<stamp>/IMPORT
 from __future__ import annotations
 
 import datetime as dt
+import lzma
 import re
 import secrets as _secrets
 import shutil
@@ -313,7 +314,7 @@ def _plan(zf: zipfile.ZipFile, scans: dict[str, list[str] | None]) -> dict[str, 
 def _open(path: Path) -> zipfile.ZipFile:
     try:
         return zipfile.ZipFile(path)
-    except (zipfile.BadZipFile, OSError):
+    except (zipfile.BadZipFile, OSError, ValueError):       # ValueError: an entry name that is not valid UTF-8
         raise ImportFailed(400, "bad_zip", "This file is not a valid zip archive") from None
 
 
@@ -338,7 +339,7 @@ def _scans(path: Path) -> dict[str, list[str] | None]:
 
 # zf.read() of an encrypted (RuntimeError, NotImplementedError) or damaged (BadZipFile: bad CRC, zlib.error,
 # EOFError) entry
-_UNREADABLE = (zipfile.BadZipFile, RuntimeError, zlib.error, EOFError)
+_UNREADABLE = (zipfile.BadZipFile, RuntimeError, zlib.error, EOFError, OSError, lzma.LZMAError, NotImplementedError)
 
 
 def _unreadable() -> ImportFailed:
@@ -425,6 +426,14 @@ def _apply(path: Path) -> dict[str, Any]:
             raise _unreadable() from None
         if not plan["files"]:
             raise ImportFailed(400, "empty", EMPTY)
+        try:
+            for item in plan["_items"]:                      # big files are not read by the plan: check them before any write
+                if item["size"] > SCAN_MAX:
+                    with zf.open(item["src"]) as src:
+                        while src.read(1024 * 1024):
+                            pass
+        except _UNREADABLE:
+            raise _unreadable() from None
         for pr in plan["projects"]:
             if not (root / "projects" / pr["name"]).is_dir():
                 workspace.create_project(pr["name"])

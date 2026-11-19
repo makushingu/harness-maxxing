@@ -278,7 +278,7 @@ def log_action(device: str, tool: str, args: dict, ok: bool, ms: int, session: s
         keep["text"] = f"<{len(str(args['text']))} chars>"
     line = json.dumps({"at": time.time(), "device": device, "tool": tool, "args": keep, "ok": ok, "ms": ms,
                        "session": session, "owner": owner, **({"error": error[:200]} if error else {})},
-                      ensure_ascii=False)
+                      ensure_ascii=False).encode("utf-8", "replace").decode("utf-8")      # a lone surrogate would fail the write
     p = home() / "actions.jsonl"
     try:
         with _alock:

@@ -19,7 +19,7 @@ from pathlib import Path
 
 from .. import browser, config
 
-SID_RE = re.compile(r"^[A-Za-z0-9_-]{6,80}$")
+SID_RE = re.compile(r"^[A-Za-z0-9_-]{6,80}\Z")
 
 
 def turn_file(sid: str) -> Path:

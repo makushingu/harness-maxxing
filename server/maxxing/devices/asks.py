@@ -27,6 +27,11 @@ class AskError(Exception):
         self.status, self.code, self.message = status, code, message
 
 
+def _clean(text: str) -> str:
+    """No lone surrogate or NUL: the request is rendered as JSON for 10 minutes."""
+    return str(text).encode("utf-8", "replace").decode("utf-8").replace("\x00", "")
+
+
 def public(d: dict) -> dict:
     return {k: d.get(k) for k in ("id", "session", "owner", "device", "device_name", "message", "at", "expires",
                                   "status", "note", "decided_at")}
@@ -52,13 +57,13 @@ async def ask(session: str, owner: str, dev: dict, message: str, alive=None) -> 
     rid = secrets.token_hex(8)
     now = time.time()
     d = {"id": rid, "session": session, "owner": owner, "device": dev["id"], "device_name": dev.get("name") or "",
-         "message": (message or "Take over the device")[:300], "at": now, "expires": now + ASK_WAIT_S,
+         "message": _clean(message or "Take over the device")[:300], "at": now, "expires": now + ASK_WAIT_S,
          "status": "pending", "note": ""}
     fut = asyncio.get_running_loop().create_future()
     _asks[rid], _futs[rid] = d, fut
     _prune()
-    await asyncio.to_thread(_announce, d)
     try:
+        await asyncio.to_thread(_announce, d)
         while not fut.done():
             left = d["expires"] - time.time()
             if left <= 0:

@@ -169,3 +169,41 @@ def test_import_does_not_write_a_claude_command(client, mx):
     assert r.status_code == 200, r.text
     assert not (mx["ws"] / "projects/p/topics/t/.claude/commands").exists()
     assert "projects/p/topics/t/.claude/commands/deploy.md" in {s["file"] for s in r.json()["skipped"]}
+
+
+def test_a_zip_with_an_invalid_utf8_name_or_a_broken_bz2_entry_is_a_400(client, mx):
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_STORED) as z:
+        z.writestr("memory.md", "hi there, kept content\n")
+    plain = buf.getvalue()
+    badname = plain.replace(b"memory.md", b"memor\xff.md")
+    for sig, off in ((b"PK\x03\x04", 6), (b"PK\x01\x02", 8)):          # "name is UTF-8" flag, local + central headers
+        i = badname.index(sig)
+        badname = badname[:i + off] + bytes([badname[i + off] | 0x08]) + badname[i + off + 1:]
+        badname = badname[:i + off + 1] + bytes([badname[i + off + 1] | 0x08]) + badname[i + off + 2:]
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_BZIP2) as z:
+        z.writestr("memory.md", "hi there, kept content\n" * 50)
+    bz = buf.getvalue()
+    i = bz.index(b"BZh")
+    broken = bz[:i + 6] + b"\xff" * 12 + bz[i + 18:]
+    for data in (badname, broken):
+        r = _upload(client, data)
+        assert r.status_code == 400 and r.json()["error"] == "bad_zip", r.text
+    from maxxing import importer
+    assert not any(importer.uploads_dir().iterdir())
+
+
+def test_a_damaged_big_file_is_found_before_anything_is_written(client, mx, monkeypatch):
+    from maxxing import importer
+    monkeypatch.setattr(importer, "SCAN_MAX", 100)
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_STORED) as z:
+        z.writestr("projects/newone/CLAUDE.md", "# New one\n")
+        z.writestr("projects/newone/big.bin", b"A" * 4000)
+    damaged = buf.getvalue().replace(b"A" * 4000, b"A" * 2000 + b"B" + b"A" * 1999)
+    up = _upload(client, damaged)
+    assert up.status_code == 200, up.text
+    r = client.post(f"/api/import/{up.json()['id']}/apply")
+    assert r.status_code == 400 and r.json()["error"] == "bad_zip", r.text
+    assert not (workspace.root() / "projects" / "newone").exists()
