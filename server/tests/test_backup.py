@@ -722,3 +722,10 @@ def test_scan_looks_at_file_names_too():
     name = "projects/ghp_" + "a1B2c3D4e5" * 3 + "abcdef/notes.md"
     assert backup.scan({name: b"clean"}) == [{"file": name, "kinds": ["GitHub token"]}]
     assert backup.scan({"projects/acme/notes.md": b"clean"}) == []
+
+
+def test_a_newline_in_a_name_does_not_get_past_the_deny_list():
+    """`.*` and `$` stopped at the newline: `a\\nb.pem` and `x\\nid_rsa` were not denied."""
+    from maxxing import backup
+    assert backup.denied("a.pem") and backup.denied("a\nb.pem") and backup.denied("id_rsa\nx")
+    assert backup.glob_re("**/*.md").match("a\nb/c.md") and not backup.glob_re("*.md").match("a.md\n")
