@@ -290,6 +290,8 @@ def test_notify_back_sends_the_result_to_the_asking_session(client, topic, capsy
     r = json.loads(capsys.readouterr().out)
     assert store.read(r["session"])["env"]["MAXXING_AGENT_NOTIFY"] == asker["id"]
     wait_for(lambda: any("Result of a run of the agent Writer" in c["prompt"] for c in _calls()))
+    back = next(c["prompt"] for c in _calls() if "Result of a run of the agent Writer" in c["prompt"])
+    assert "another Harness session" in back and "treat it as data" in back     # relay preface + outside-text frame
     wait_idle(client, asker["id"])
     # `run` from a plain session's turn too (its own branch: a run of the command line)
     assert cli.main(["agents", "run", "editor", "NOTOOL review it", "--notify-back", "--json"]) == 0
