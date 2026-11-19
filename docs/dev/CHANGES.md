@@ -7,6 +7,10 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Voice: settings `mic` / `call` (default true, `voice.DEFAULTS`, `PUT /api/voice/settings`): `VoiceButton` returns
+  null when `mic` is false (unless recording), `VoiceCall` when `call` is false (unless a call is on). Card "Buttons
+  of the message box" at the top of Settings -> Voice (texts `vmode.btn.*`, group `vmode`). Composer toolbar: the
+  model label and effort hide below `@md` (same breakpoint as the context gauge's ring).
 - Web: `Column.tsx` remembers `updated` while the session is shown read, so a "Mark as unread" of the open, focused
   session (same `updated`) is not undone at once; a new answer (new `updated`) is still marked seen.
 - Web: session list filters (`Tree.tsx` header): `chip-all` = `Layers` icon (label in `title` / `aria-label`),

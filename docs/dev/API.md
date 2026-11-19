@@ -391,7 +391,7 @@ node, text}`, `apps {id}`, `open {id, app}`, `state {busy, by: "claude"|"human"|
 ## Voice (speech-to-text)
 Claude cannot listen: audio is transcribed on the server (web mic button + Telegram voice notes).
 ```
-VoiceStatus = {settings:{engine:"off"|"local"|"groq"|"openai", model:"tiny"|"base"|"small"|"medium", language:"auto"|"<iso>", auto_send:bool, direct:bool},   // direct (default true): the web mic sends the recording at once
+VoiceStatus = {settings:{engine:"off"|"local"|"groq"|"openai", model:"tiny"|"base"|"small"|"medium", language:"auto"|"<iso>", auto_send:bool, direct:bool, mic:bool, call:bool},   // mic / call (default true): the mic button and the voice mode button of the message boxes;   // direct (default true): the web mic sends the recording at once
   ready:bool, reason:"off"|"no_ffmpeg"|"not_installed"|"no_key"|null, ffmpeg:bool,
   local:{installed, loaded:str|null, recommended, ram_gb, cpus, models:[{id, size_mb, present}]},
   keys:{groq:bool, openai:bool}, key_names:{groq:"GROQ_API_KEY", openai:"OPENAI_API_KEY"},

@@ -7,6 +7,9 @@ import { qk } from '@/lib/queries/keys'
 export type VoiceEngine = 'off' | 'local' | 'groq' | 'openai'
 export type VoiceModel = 'tiny' | 'base' | 'small' | 'medium'
 export type VoiceSettings = {
+  /** The mic button of the message boxes (dictation, voice messages) / the voice mode button. */
+  mic?: boolean
+  call?: boolean
   engine: VoiceEngine
   model: VoiceModel
   language: string
