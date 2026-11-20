@@ -21,10 +21,11 @@ _FIELD = re.compile(r"^([\w-]+):[ \t]*(.*)$")
 
 def _front(text: str) -> dict[str, str]:
     """`key: value` pairs of the front matter (a value may go on over indented or folded lines)."""
+    text = text.removeprefix("\ufeff")                           # a BOM from an editor
     if not text.startswith("---"):
         return {}
-    end = text.find("\n---", 3)
-    body = text[3:end if end > 0 else len(text)]
+    end = re.search(r"\n---[ \t]*(?:\r?\n|\Z)", text[3:])         # the closing line is `---` alone, not `----`
+    body = text[3:3 + end.start()] if end else text[3:]
     out: dict[str, str] = {}
     key = ""
     for line in body.split("\n"):                                # not splitlines(): U+2028, U+0085... are no line ends in YAML
@@ -36,8 +37,11 @@ def _front(text: str) -> dict[str, str]:
             out[key] = f"{out[key]} {line.strip()}".strip()
     for k, v in out.items():
         v = re.sub(r"^[|>][-+]?", "", v).strip()                  # a block scalar header: | |- |+ > >- >+
-        if len(v) >= 2 and v[0] == v[-1] and v[0] in "'\"":
-            v = v[1:-1]
+        q = re.match(r"""^(['"])(.*?)\1(?:[ \t]+#.*)?$""", v)
+        if q:                                                     # quoted, maybe followed by a comment
+            v = q.group(2)
+        else:
+            v = re.split(r"[ \t]#", v, maxsplit=1)[0].strip()      # a trailing ` # comment`
         out[k] = " ".join(v.split())
     return out
 

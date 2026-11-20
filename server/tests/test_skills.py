@@ -96,3 +96,11 @@ def test_a_nul_in_the_topic_path_gives_a_list_not_a_500(mx):
     from maxxing import skills
     assert isinstance(skills.for_topic("projects/a\x00b"), list)
     assert isinstance(skills.for_topic("projects/a/topics/t\x00"), list)
+
+
+def test_the_front_matter_survives_a_bom_comments_and_a_dashed_line():
+    assert skills._front("﻿---\nname: x\n---\n") == {"name": "x"}
+    out = skills._front('---\nname: h\ndisable-model-invocation: true # c\ndescription: "Hi there" # c\n---\n')
+    assert out == {"name": "h", "disable-model-invocation": "true", "description": "Hi there"}
+    assert skills._front("---\nname: h\ndescription: a\n  ----\n  b\n---\n")["description"] == "a ---- b"
+    assert skills._front("---\nname: h\n----\n---\n") == {"name": "h"}
