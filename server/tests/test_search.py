@@ -421,3 +421,11 @@ def test_a_group_line_with_a_non_text_value_does_not_stop_the_index(client, topi
     search.refresh()
     assert [r["title"] for r in _q(client, "zqxfreshfile321")] == ["fresh.md"]
     assert _q(client, "zqxgroupline")
+
+
+def test_env_example_files_are_indexed(client, mx):
+    d = config.workspace() / "projects" / "acme" / "topics" / "blog"
+    d.mkdir(parents=True)
+    (d / ".env.example").write_text("ZQX_FOO_BAR=1\n")
+    search.refresh()
+    assert [r["title"] for r in _q(client, "ZQX_FOO_BAR")] == [".env.example"]

@@ -334,7 +334,7 @@ def _text_file(name: str) -> bool:
     low = name.lower()
     if low in SKIP_FILES:
         return False
-    return Path(low).suffix in TEXT_EXT or low in MEMORY_NAMES
+    return Path(low).suffix in TEXT_EXT or low.endswith(".env.example") or low in MEMORY_NAMES
 
 
 def _index_one(con: sqlite3.Connection, base: str, fp: str, st: os.stat_result, known: dict) -> None:
