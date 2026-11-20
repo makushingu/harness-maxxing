@@ -297,13 +297,15 @@ def _index_groups(con: sqlite3.Connection) -> None:
                     m = json.loads(line)
                 except ValueError:
                     continue
-                text = (m.get("text") or "").strip() if isinstance(m, dict) and m.get("kind") == "message" else ""
+                raw = m.get("text") if isinstance(m, dict) and m.get("kind") == "message" else None
+                text = raw.strip() if isinstance(raw, str) else ""
                 if not text:
                     continue
                 author = str(m.get("author") or "")
                 who = "Owner" if author == "me" else "@" + hs.get(author, agent_rooms.slug(author))
                 con.execute("INSERT INTO items(src, kind, ref, path, title, body, at) VALUES (?,?,?,?,?,?,?)",
-                            (key, "group", path, path, "", f"{who}: {text}"[:MAX_MESSAGE_CHARS], m.get("at")))
+                            (key, "group", path, path, "", f"{who}: {text}"[:MAX_MESSAGE_CHARS],
+                             m.get("at") if isinstance(m.get("at"), (int, float)) else None))
             sig["offset"] += end
         con.execute("INSERT OR REPLACE INTO src(key, sig) VALUES (?, ?)", (key, json.dumps(sig)))
         if sig["offset"] >= size:
