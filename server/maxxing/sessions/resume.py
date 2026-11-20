@@ -75,7 +75,7 @@ def candidate(m: dict, item: dict, cfg: dict, now: float, window: object = None)
         return None
     limit, warm = fit(limit, window), fit(limit * WARM_FACTOR, window)
     if (item.get("kind") or "user") != "user" or item.get("source") in ("system", "cron") or item.get("steer") \
-            or item.get("plan_approved") or item.get("held"):
+            or item.get("plan_approved") or item.get("held") or item.get("keep"):
         return None
     if m.get("fresh", True) or store.unattended(m) or m.get("plan_ready"):
         return None
@@ -95,6 +95,38 @@ def candidate(m: dict, item: dict, cfg: dict, now: float, window: object = None)
     if now - last < after and ctx < warm:
         return None                                    # cache still warm and a medium context: just go on
     return now - last, ctx
+
+
+def summary_at(m: dict, cfg: dict, window: object = None, idle_min: int = 0) -> float | None:
+    """When a web message sent to session `m` starts to get a summary first (smart resume, or the idle rule with
+    `idle_min` = runner.IDLE_COMPACT_MIN), as a timestamp; None: not at any time from now. The composer asks before
+    sending from then on (summary, a new session or the whole history: `keep_context`)."""
+    if m.get("fresh", True) or store.unattended(m) or m.get("plan_ready") or m.get("state") == "running":
+        return None
+    try:
+        ctx = int(m.get("context_tokens") or 0)
+        last = max(float(m.get("finished_at") or 0), float(m.get("cache_at") or 0))
+        base = int(m.get("base_tokens") or 0)
+        after = float(cfg.get("idle_compact_after_s") or 3600)
+        idle = int(cfg.get("idle_compact_tokens") or 0)
+        idle_after = float(cfg.get("idle_compact_after_s") or 0)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    if not last or not math.isfinite(last) or not math.isfinite(after) or not math.isfinite(idle_after):
+        return None
+    times = []
+    limit = threshold(cfg)
+    if limit:
+        limit, warm = fit(limit, window), fit(limit * WARM_FACTOR, window)
+        if ctx >= warm and not (base and ctx - base < limit // 2):
+            times.append(last + MIN_PAUSE_S)
+        elif ctx >= limit and not (base and ctx - base < limit // 2):
+            times.append(last + max(after, MIN_PAUSE_S))
+    if idle > 0 and idle_after > 0:
+        lim = fit(max(idle, idle_min), window)
+        if ctx >= lim and not (base and ctx - base < lim // 2):
+            times.append(last + idle_after)
+    return min(times) if times else None
 
 
 def summary_prompt(message: str) -> str:

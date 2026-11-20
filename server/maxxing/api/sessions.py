@@ -112,6 +112,8 @@ class MessageIn(_Text):
     client_id: str | None = Field(None, pattern=CLIENT_ID_RE)
     # @ of the composer: who the message names (mentions.resolve); Claude is told how to write to each
     mentions: list[MentionIn] = Field(default_factory=list, max_length=20)
+    # the user chose to keep the whole history after a pause: no summary first (Session.resume_at)
+    keep_context: bool = False
 
 
 async def _call(fn: Callable[..., Any], *args: Any, **kw: Any) -> Any:
@@ -226,7 +228,7 @@ async def delete_session(sid: str):
 async def send_message(sid: str, body: MessageIn):
     return await _call(service.send_message, sid, body.text, body.attachments, "web",
                        call=body.call, voice_path=body.voice, client_id=body.client_id,
-                       mentions=[m.model_dump() for m in body.mentions])
+                       mentions=[m.model_dump() for m in body.mentions], keep_context=body.keep_context)
 
 
 @router.get("/sessions/{sid}/mentions")

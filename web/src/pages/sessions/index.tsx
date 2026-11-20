@@ -740,7 +740,7 @@ function Workspace() {
           </StripContext.Provider>
         )}
       </div>
-      {mobileOpen && focusedCol && <MobileOverlay col={focusedCol} tabs={tabs} sessions={sessions} onPick={pickTab} />}
+      {mobileOpen && focusedCol && <MobileOverlay col={focusedCol} sessions={sessions} onPick={pickTab} />}
       <ShortcutsHelp open={helpOpen} onOpenChange={setHelpOpen} />
     </div>
   )
@@ -755,7 +755,7 @@ const ColumnFor = React.memo(function ColumnFor({ col, index, count, variant, pl
 
 /** Touch layout: the session is a full-screen layer, sized to the visual viewport so the composer stays pinned right
  *  above the on-screen keyboard. Its header opens the sessions (☰) and the app menu (⊞). */
-function MobileOverlay({ col, tabs, sessions, onPick }: { col: Col; tabs: boolean; sessions: Session[] | undefined; onPick: (c: Col) => void }) {
+function MobileOverlay({ col, sessions, onPick }: { col: Col; sessions: Session[] | undefined; onPick: (c: Col) => void }) {
   const several = useSessionsUI((s) => s.cols.length > 1) // one tab only would repeat the title under it
   const ref = React.useRef<HTMLDivElement>(null)
   const body = React.useRef<HTMLDivElement>(null)
@@ -766,7 +766,9 @@ function MobileOverlay({ col, tabs, sessions, onPick }: { col: Col; tabs: boolea
     },
     [onPick],
   )
-  useSwipe(body, tabs, go)
+  // A phone shows one session at a time in both modes: the open sessions stay on top as tabs (a swipe goes to the
+  // next one), else the others of a Zones layout could only be found again in the list.
+  useSwipe(body, several, go)
   React.useLayoutEffect(() => {
     const vv = window.visualViewport
     const el = ref.current
@@ -800,7 +802,7 @@ function MobileOverlay({ col, tabs, sessions, onPick }: { col: Col; tabs: boolea
   return (
     <div ref={ref} className="fixed inset-0 z-[45] flex flex-col bg-background pr-[var(--safe-right)] pl-[var(--safe-left)]" data-touch-layer data-testid="touch-session">
       <div ref={body} className="flex min-h-0 flex-1 flex-col">
-        <MobileTabsSlot.Provider value={tabs && several ? <TabsBar sessions={sessions} onPick={onPick} edge className="-mx-3 border-b-0 bg-transparent px-0 py-1 [&>button]:mr-3" /> : null}>
+        <MobileTabsSlot.Provider value={several ? <TabsBar sessions={sessions} onPick={onPick} edge className="-mx-3 border-b-0 bg-transparent px-0 py-1 [&>button]:mr-3" /> : null}>
           <ColumnFor col={col} index={0} count={1} variant="mobile" />
         </MobileTabsSlot.Provider>
       </div>

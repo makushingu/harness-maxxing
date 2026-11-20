@@ -3,6 +3,18 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## Unreleased
+
+New:
+- **Choose how to resume a big session.** When the message you are about to send would make Harness summarize the
+  session first (its cache expired), a small card above the message box asks: **Summarize** (recommended), **New
+  session** or **Keep everything**, with a **?** that explains the cost. Settings -> Claude -> **Ask before resuming**
+  turns it off.
+
+Fixed:
+- **On a phone, the open sessions show as tabs in Zones mode too.** They were missing unless Tabs mode was on; a
+  sideways swipe now goes from one to the next in both modes.
+
 ## 2.0.0-alpha.159 - 2026-11-19
 
 New:

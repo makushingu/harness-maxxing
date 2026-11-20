@@ -47,8 +47,8 @@ stopped.
   right edges (Alt+← / Alt+→). Its cross closes the session. **Waiting** jumps to the next session that finished and
   waits for your answer. With many tabs open, the buttons of the bar keep only their icon to leave
   the room to the tabs. Switch to **Zones**: the same sessions are side by side, and your columns are exactly as
-  you left them. On a phone, the **Tabs** button (window icon) in the session's header turns the tabs on or off;
-  they show under the top bar, and a sideways swipe on the session shows the previous or next one.
+  you left them. A phone shows one session at a time in both modes: as soon as two sessions are open, they show as
+  tabs under the top bar, and a sideways swipe on the session shows the previous or next one.
 - **The same sessions on every device**: the sessions open on your computer are the tabs of your phone (Tabs
   on, as it is on a new phone), and the other way round. Open one on either, it appears on the other; close it anywhere, it closes
   everywhere. Each device keeps its own layout (Tabs or Zones, widths, stacks, the session in front), and a new
@@ -361,6 +361,13 @@ values, errors, the plan in progress or the question Claude asked), then your me
 thread, with the note "Back after 2 h: Harness summarized the session ... for your message". Measured on real
 returns: 38 to 67 % fewer tokens from 100k, and details kept better than with the plain summary. Below the threshold
 the full thread goes on. Off = the "Compact when you come back" rule alone.
+
+**Ask before resuming** (Settings -> Claude, on by default): when the message you are about to send would trigger
+one of the two summaries above, a small card shows above the message box first ("Back after 2 h · 240k tokens to
+re-read") with three choices: **Summarize** (the default, Enter), **New session** (your message starts a new session
+in the same topic, this one stays as it is) and **Keep everything** (the full history is re-read, the most
+expensive). The **?** explains why; Esc closes the explanation, then cancels: your message comes back in the box.
+Turn the setting off and the summary happens by itself, as before.
 
 **Models with a smaller context window.** The three thresholds above are written for models with a 1M window. On a
 model with a smaller one (200k for some), a threshold above *the window minus 70k* counts as that value: 130k on a

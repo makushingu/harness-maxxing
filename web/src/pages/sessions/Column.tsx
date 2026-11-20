@@ -71,12 +71,13 @@ import {
 import { Combobox } from '@/components/ui/combobox'
 import { endingCut, forgetLog, getLog, loadEarlier, loadLog, seedEmptyLog, useLogSelect, useSessionLog, useSessionStream } from './log'
 import { PlanChip, PlanNotice } from './Plan'
+import { resumeAsks, useResumeChoice } from './ResumeChoice'
 import { ApprovalCards } from './Approvals'
 import { SessionBrowserBar } from '@/features/browser/SessionBrowser'
 import { SessionDevicesBar } from '@/features/devices/SessionDevices'
 import { MaxxingControls, MaxxingMeter } from './MaxxingMeter'
 import { notifySendFailed, notifySent, useMaxxingEnabled } from './maxxing'
-import { MobileTabsSlot, TabsToggle } from './Tabs'
+import { MobileTabsSlot } from './Tabs'
 import { AsidePanel, useAside } from './Aside'
 import { LayoutPicker } from './LayoutPicker'
 import { MIN_W } from './layouts'
@@ -497,6 +498,14 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
   }, [session?.queue, sid, trimQueued]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const onSend = async (text: string, attachments: string[], clientId?: string, named?: SentMention[], call?: string) => {
+    // A big session whose cache expired: the user picks how it goes on before anything is sent.
+    let keep = false
+    if (!call && session && resumeAsks(session, running)) {
+      const choice = await askResume(session, text)
+      if (!choice) return false
+      if (choice === 'fresh') return startFresh(text, attachments, clientId)
+      keep = choice === 'keep'
+    }
     const add = usePending.getState().add
     const remove = usePending.getState().remove
     const mentions = named?.map((m) => ({ kind: m.kind, ref: m.ref }))
@@ -504,7 +513,7 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
     thread.current?.scrollToBottom()
     notifySent(sid)
     try {
-      const r = await send.mutateAsync({ id: sid, text, attachments, client_id: clientId, mentions, ...(call ? { call } : {}) })
+      const r = await send.mutateAsync({ id: sid, text, attachments, client_id: clientId, mentions, ...(call ? { call } : {}), ...(keep ? { keep_context: true } : {}) })
       if (r.queued !== running) {
         remove(sid, lid)
         add(sid, { text, attachments, queued: r.queued, mentions: named })
@@ -513,6 +522,23 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
     } catch {
       remove(sid, lid)
       notifySendFailed(sid)
+      return false
+    }
+  }
+
+  const [askResume, resumeCard] = useResumeChoice()
+  const createFresh = useCreateSession()
+  // "New session": the message starts a session of its own in the same topic, shown in place of this one.
+  const startFresh = async (text: string, attachments: string[], clientId?: string) => {
+    if (!session) return false
+    try {
+      const s = await createFresh.mutateAsync({ path: session.path, message: text, attachments, client_id: clientId, model: session.model || undefined, effort: session.effort || undefined })
+      seedEmptyLog(s.id)
+      usePending.getState().add(s.id, { text, attachments, queued: false })
+      becomeSession(col.key, s.id)
+      return true
+    } catch (e) {
+      toast.error(errorMessage(e))
       return false
     }
   }
@@ -860,6 +886,7 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
             commands={commands}
             mentionsFor={sid}
             placeholder={session?.plan_mode ? t(session.plan_ready ? 'plan.placeholderAdjust' : 'plan.placeholder') : undefined}
+            held={resumeCard}
             notice={session?.plan_ready && !running ? <PlanNotice session={session} onAdjust={() => composer.current?.focus()} /> : null}
             topicPath={path}
             running={running}
@@ -976,7 +1003,6 @@ function ColumnHeader({
           <TouchSessionsButton className="-ml-2" />
           <Logo className="min-w-0 flex-1 gap-2 [&_img]:size-6" nameClassName={maxxing ? 'max-[479px]:sr-only' : undefined} />
           <div className="flex shrink-0 items-center">
-            <TabsToggle />
             {maxxing && <MaxxingControls compact />}
             {menu}
           </div>

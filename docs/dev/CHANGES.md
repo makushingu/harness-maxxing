@@ -5,6 +5,17 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## Unreleased
+
+- Ask before resuming: `resume.summary_at(m, cfg, window, idle_min)` gives when a web message starts to get a summary
+  first (smart resume or idle rule), exposed as `Session.resume_at` (`service._resume_at`, null when the setting
+  `resume_ask` is off, default true, `/api/claude/settings`). `POST /messages` takes `keep_context`: queue item
+  `keep`, skipped by `smart_resume` and `runner._idle_compact`. Web: `sessions/ResumeChoice.tsx` (card above the
+  composer, Summarize / New session / Keep everything, `?` bubble, Esc), `Composer` prop `held`, i18n group `resume`,
+  toggle in `ClaudeDefaults`. Tests: `test_resume.py`.
+- Phone: `MobileOverlay` shows the tabs and the swipe whenever 2+ sessions are open, in both modes (was Tabs mode
+  only); the phone header's `TabsToggle` (now useless) is gone, with `tabs.tabs` / `tabs.tabsTip`.
+
 ## 2.0.0-alpha.159 - 2026-11-19
 
 - Disk space (Settings -> System): `maxxing/cleanup.py` (`scan`, cached 60 s; `run(parts)` measures each part before

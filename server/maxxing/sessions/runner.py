@@ -1448,7 +1448,7 @@ def _idle_compact(m: dict, item: dict, cfg: dict, now: float, window: object = N
     if base and ctx - base < limit // 2:
         return None                                    # mostly fixed context: a summary would save nothing
     if (item.get("kind") or "user") != "user" or item.get("source") in ("system", "cron") or item.get("steer") \
-            or item.get("plan_approved"):
+            or item.get("plan_approved") or item.get("keep"):
         return None
     if m.get("fresh", True) or store.unattended(m) or m.get("plan_ready"):
         return None

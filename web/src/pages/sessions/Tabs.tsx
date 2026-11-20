@@ -3,7 +3,7 @@
 // change; its cross closes the session. The other mode, Zones, shows the sessions side by side: going there puts the
 // columns back exactly as they were (Tabs never moves them).
 import * as React from 'react'
-import { ChevronLeft, ChevronRight, PanelTop, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, X } from 'lucide-react'
 import { useT } from '@/i18n'
 import { cn } from '@/lib/utils'
 import type { Session } from '@/lib/types'
@@ -42,27 +42,6 @@ export function ViewSwitch() {
           <i />
         </span>
       </button>
-    </Tooltip>
-  )
-}
-
-/** Phone: one button in the session's header shows or hides the chips of the open sessions (pressed = Tabs). */
-export function TabsToggle() {
-  const t = useT()
-  const on = useSessionsUI((s) => s.tabs)
-  return (
-    <Tooltip content={t('tabs.tabsTip')}>
-      <Button
-        variant={on ? 'secondary' : 'ghost'}
-        size="icon-sm"
-        aria-pressed={on}
-        aria-label={t('tabs.tabs')}
-        onClick={() => useSessionsUI.getState().setTabs(!on)}
-        className="pointer-coarse:size-10"
-        data-testid="tabs-toggle"
-      >
-        <PanelTop />
-      </Button>
     </Tooltip>
   )
 }
