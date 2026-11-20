@@ -79,6 +79,16 @@ signing secret if you have it, **Create**: copy the URL into the service. The di
   a duplicate too: to send the same alert again within the day, put a time or an `id` in it. Up to 120 deliveries
   per minute per source.
 
+A *Generic JSON* source with a signing secret takes only signed requests: the sender adds the header
+`X-Signature: sha256=<hex>`, the HMAC-SHA256 of the exact body with the secret as the key. A missing or wrong
+signature is refused (401). From a shell, with the secret in `$SECRET`:
+
+```bash
+body='{"title": "Backup done", "level": "success"}'
+sig=$(printf %s "$body" | openssl dgst -sha256 -hmac "$SECRET" | sed 's/^.* //')
+curl -H "X-Signature: sha256=$sig" --data-binary "$body" https://your-server/api/hooks/TOKEN
+```
+
 ## From any script
 
 ```bash
