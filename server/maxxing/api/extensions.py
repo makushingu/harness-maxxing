@@ -49,7 +49,7 @@ class PatchIn(BaseModel):
 
 @router.patch("/api/extensions/{eid}")
 async def patch_extension(eid: str, body: PatchIn):
-    if extensions.get(eid) is None:
+    if await asyncio.to_thread(extensions.get, eid) is None:
         raise _err(404, "not_found", f"no extension {eid}")
     if body.pinned is not None and not await asyncio.to_thread(extensions.set_pinned, eid, body.pinned):
         raise _err(400, "not_a_page", f"{eid} is not a page extension")

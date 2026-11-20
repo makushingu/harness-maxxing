@@ -981,3 +981,20 @@ def handle(ctx, method, path, query, body):
     r = client.get("/api/ext/codes/204")
     assert r.status_code == 204 and r.content == b""
     assert client.get("/api/ext/codes/201").json() == {"ok": True}
+
+
+def test_patch_reads_the_extension_in_a_thread(client, org, monkeypatch):
+    import asyncio
+    on_loop = []
+
+    def get(eid):
+        try:
+            asyncio.get_running_loop()
+            on_loop.append(eid)
+        except RuntimeError:
+            pass
+        return real(eid)
+    real = extensions.get
+    monkeypatch.setattr(extensions, "get", get)
+    assert client.patch("/api/extensions/nope", json={"enabled": True}).status_code == 404
+    assert not on_loop
