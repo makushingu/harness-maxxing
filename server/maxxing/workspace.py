@@ -458,6 +458,9 @@ def check_description(value: str | None) -> str | None:
         value.encode("utf-8")
     except UnicodeEncodeError:
         raise WorkspaceError(400, "bad_description", "The description contains an invalid character") from None
+    # CLAUDE.md ends the description at these lines: kept in it, the rest would come back outside of it after an update
+    if any(ln.strip() == "@memory.md" or ln.startswith("## ") for ln in value.splitlines()):
+        raise WorkspaceError(400, "bad_description", "The description cannot hold a line `@memory.md` or one starting with `## `")
     return value
 
 

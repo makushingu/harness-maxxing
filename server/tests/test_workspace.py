@@ -262,3 +262,12 @@ def test_updating_a_project_keeps_the_bytes_of_the_rest_of_claude_md(client, mx)
     got = f.read_bytes()
     assert b"## Notes\ncaf\xe9 latin-1\n" in got and b"New shop" in got and b"\xef\xbf\xbd" not in got
     assert not (mx["ws"] / "projects/acme/CLAUDE.md.tmp").exists()
+
+
+def test_a_description_with_a_claude_md_marker_line_is_refused(client, mx):
+    for bad in ("a\n@memory.md\nb", "a\n## Notes\nb"):
+        r = client.post("/api/workspace/projects", json={"name": "acme", "description": bad})
+        assert r.status_code == 400 and r.json()["error"] == "bad_description"
+    assert client.post("/api/workspace/projects", json={"name": "acme", "description": "a\nb ## c"}).status_code == 200
+    r = client.patch("/api/workspace/projects/acme", json={"description": "x\n@memory.md\ny"})
+    assert r.status_code == 400
