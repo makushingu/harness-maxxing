@@ -743,3 +743,12 @@ def test_restore_skips_a_path_longer_than_the_system_accepts(ws, mx_state):
     assert backup._safe_rel(long) is None
     r = backup._apply({long: b"x", "memory.md": b"- fact\n"})
     assert (ws / "memory.md").read_text() == "- fact\n" and r["files"] == 1
+
+
+def test_a_history_file_that_is_not_utf8_does_not_break_the_backup_or_its_history(mx_state):
+    p = backup._history_path()
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_bytes(b'{"ok": true, "note": "caf\xe9"}\n')
+    assert backup.history()[0]["ok"] is True
+    backup._record({"ok": True})
+    assert len(backup.history()) == 2

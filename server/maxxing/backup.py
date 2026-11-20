@@ -660,7 +660,7 @@ def _history_path() -> Path:
 def _record(entry: dict) -> None:
     p = _history_path()
     try:
-        lines = p.read_text().splitlines() if p.exists() else []
+        lines = p.read_text(encoding="utf-8", errors="replace").splitlines() if p.exists() else []
     except OSError:
         lines = []
     # a file name that is not UTF-8 (a lone surrogate from os.walk) is written as "?", not raised from run()
@@ -676,7 +676,7 @@ def history(limit: int = 100) -> list[dict]:
     """Most recent first."""
     out = []
     try:
-        for ln in _history_path().read_text().splitlines():
+        for ln in _history_path().read_text(encoding="utf-8", errors="replace").splitlines():
             try:
                 e = json.loads(ln)
             except ValueError:
