@@ -736,3 +736,10 @@ def test_a_repository_name_with_a_line_break_is_refused(gh, ws):
     assert r["ok"] is False and "owner/name" in r["error"]
     assert backup.REPO_RE.match("alice/repo\n") is None
     assert backup._CLAUDE_SETTINGS.search(".claude/settings.json\n") is None
+
+
+def test_restore_skips_a_path_longer_than_the_system_accepts(ws, mx_state):
+    long = "/".join(["a" * 200] * 21) + "/CLAUDE.md"          # every part is fine, the whole is over 4096 bytes
+    assert backup._safe_rel(long) is None
+    r = backup._apply({long: b"x", "memory.md": b"- fact\n"})
+    assert (ws / "memory.md").read_text() == "- fact\n" and r["files"] == 1

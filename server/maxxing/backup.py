@@ -772,6 +772,8 @@ def _safe_rel(name: str) -> str | None:
         return None
     if any(len(part.encode(errors="replace")) > 255 for part in p.parts):   # no file system takes it (ENAMETOOLONG)
         return None
+    if len(name.encode(errors="replace")) > 4000:                          # PATH_MAX is 4096 with the workspace in front
+        return None
     return p.as_posix()
 
 
