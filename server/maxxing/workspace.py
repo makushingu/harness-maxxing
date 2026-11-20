@@ -167,21 +167,31 @@ def _parse_description(f: Path) -> str:
 def _write_claude_md(folder: Path, kind: str, name: str, description: str | None) -> None:
     """Rewrite heading (+ description when given) keeping whatever the user added after it."""
     f = folder / "CLAUDE.md"
-    try:
-        lines = f.read_text(errors="replace").splitlines()
+    try:       # bytes that are not UTF-8 (café in latin-1) go back as they came: surrogateescape, never U+FFFD
+        lines = f.read_bytes().decode("utf-8", errors="surrogateescape").splitlines()
     except OSError:
         lines = []
     desc = read_description(folder) if description is None else description
     _forget(f)
     if not lines or not any(ln.startswith("# ") for ln in lines):
-        f.write_text(_render_claude_md(kind, name, desc))
+        _put_text(f, _render_claude_md(kind, name, desc))
         return
     start = next(i for i, ln in enumerate(lines) if ln.startswith("# "))
     end = next((i for i in range(start + 1, len(lines))
                 if lines[i].strip() == "@memory.md" or lines[i].startswith("## ")), len(lines))
-    head = [_heading(kind, name), ""] + ([desc.strip(), ""] if desc.strip() else [])
+    if description is None:                              # the description stays as written, byte for byte
+        head = [_heading(kind, name)] + lines[start + 1:end]
+    else:
+        head = [_heading(kind, name), ""] + ([desc.strip(), ""] if desc.strip() else [])
     rest = lines[end:] or ["@memory.md"]
-    f.write_text("\n".join(lines[:start] + head + rest) + "\n")
+    _put_text(f, "\n".join(lines[:start] + head + rest) + "\n")
+
+
+def _put_text(f: Path, text: str) -> None:
+    """Write through a temporary file: a crash never leaves CLAUDE.md empty. Surrogate escapes become their bytes."""
+    tmp = f.with_name(f.name + ".tmp")
+    tmp.write_bytes(text.encode("utf-8", errors="surrogateescape"))
+    os.replace(tmp, f)
 
 
 def _init_level(folder: Path, kind: str, name: str, description: str) -> None:
