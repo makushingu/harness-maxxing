@@ -380,3 +380,12 @@ def test_prune_drops_photos_of_gone_sessions_and_old_ones(repo, monkeypatch):
     assert "aaaaaaaa" in refs and "bbbbbbbb" not in refs
     monkeypatch.setattr(codediff.time, "time", lambda: 4_000_000_000)
     assert codediff.prune(live={"aaaaaaaa"}) == 1
+
+
+def test_commit_of_chosen_files_leaves_the_other_staged_files(repo):
+    (repo / "a.txt").write_text("changed\n")
+    (repo / "keep.txt").write_text("also changed\n")
+    _git(repo, "add", "keep.txt")
+    codediff.commit(repo, "Only a", ["a.txt"])
+    assert _git(repo, "show", "--name-only", "--format=", "HEAD").split() == ["a.txt"]
+    assert _git(repo, "diff", "--cached", "--name-only").split() == ["keep.txt"]
