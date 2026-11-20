@@ -464,3 +464,19 @@ def test_a_join_answer_with_a_lone_surrogate_is_scrubbed_or_refused_not_a_crash(
     mode["nonce"] = "AA\ud800"                              # (json.dumps writes it as \ud800)
     teampeer.forget(addr)
     assert teampeer.join(invitation)["status"] == "waiting"    # the nonce is scrubbed too: no UnicodeEncodeError
+
+
+def test_accepting_a_request_that_was_withdrawn_meanwhile_is_a_409_not_a_crash(mx, monkeypatch):
+    _setup(monkeypatch)
+    doc = teampeer._load()
+    doc["peers"][MALLORY] = {"key": teampeer._b64(b"m" * 32), "status": "request", "name": "Mal"}
+    teampeer._save(doc)
+
+    def deliver(address, event, **kw):
+        teampeer.forget(address)                  # their bye / refusal arrives while our accept is being sent
+        return True
+
+    monkeypatch.setattr(teampeer, "_deliver_now", deliver)
+    with pytest.raises(teampeer.PeerError) as e:
+        teampeer.answer(MALLORY, True)
+    assert e.value.status == 409 and MALLORY not in teampeer.peers()

@@ -466,7 +466,10 @@ def answer(address: str, accept: bool) -> dict:
     _deliver_now(address, {"type": "accept", "profile": _profile()}, raise_on_error=True)
     with _lock:
         doc = _load()
-        doc["peers"][address]["status"] = "accepted"
+        cur = doc["peers"].get(address)
+        if not cur or cur.get("status") != "request":      # a bye / refusal / forget came in while the accept was going out
+            raise PeerError(409, "gone", "This request is gone")
+        cur["status"] = "accepted"
         _save(doc)
     return {"ok": True}
 
