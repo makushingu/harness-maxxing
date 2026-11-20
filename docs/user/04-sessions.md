@@ -334,7 +334,7 @@ When a conversation gets long, the context fills up and answers get slower and m
 
 | Action | Effect |
 |---|---|
-| **Compact** | Claude summarizes the conversation, then continues **in the same session** with a fresh context seeded by the summary. The history stays visible. |
+| **Compact** | Claude summarizes the conversation, then continues **in the same session** with a fresh context seeded by the summary: your next message starts it, nothing is answered in between. The history stays visible. |
 | **Hand off** | Creates a **new session** seeded with a summary of this one; the old one is archived. Good when the work changes direction. You can write in the new session right away: your message waits for the summary, then runs with it. |
 
 **Automatic compaction** (Settings -> Claude, 300k tokens by default): when a turn ends with more context than the

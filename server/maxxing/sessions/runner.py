@@ -519,6 +519,8 @@ class Runner:
             env["MAXXING_COPY_PATH"] = str(wt.get("path") or "")
             if wt.get("port"):
                 env["MAXXING_PORT"] = str(wt["port"])
+        if meta.get("seed") and meta.get("fresh", True):   # first message after a compaction: it carries the summary
+            item = {**item, "preface": "\n\n".join(p for p in (meta["seed"], item.get("preface") or "") if p)}
         text = (PLAN_PREFACE if plan else "") + build_prompt(item)
         prompt = text
         if STREAM_INPUT:                                # always a user message: stdin stays open (steer)
@@ -574,7 +576,9 @@ class Runner:
         if dev:                                        # nor the devices
             devices_done(self.sid)
         if a.saw_init:
-            store.update(self.sid, fresh=False)
+            with store.edit(self.sid) as m:
+                m["fresh"] = False
+                m.pop("seed", None)                    # the thread holds the summary now
         if a.stopped and self.interrupted and not a.timed_out:
             self.note("Interrupted to take your new message into account - Harness continues the task with it."
                       + (" Background tasks keep running." if a.handover else ""))
@@ -1095,16 +1099,13 @@ class Runner:
         summary = a.final_text.strip()
         if kind == "compact":
             if err is None and summary and not a.stopped:
-                seed = SEED_COMPACT.format(summary=summary)
                 with store.edit(self.sid) as m:
                     m["csid"], m["fresh"] = str(uuid.uuid4()), True
-                    q = m.get("queue") or []
-                    if item.get("idle") and q and (q[0].get("kind") or "user") == "user":
-                        q[0]["preface"] = seed             # idle compaction: the message itself carries the seed
-                        m["queue"] = q
-                    else:
-                        m["queue"] = [_seed(seed)] + q
-                self.note("Context compacted: Harness continues in a fresh thread seeded with the summary "
+                    # No turn of its own (Claude would answer the summary with a second one): the next message
+                    # of the session carries it (turn), the one that waited for an idle compaction included.
+                    m["seed"] = SEED_COMPACT.format(summary=summary)
+                    m["context_tokens"] = m.get("base_tokens") or None   # the fresh thread, until its first call
+                self.note("Context compacted: the next message starts a fresh thread seeded with the summary "
                           "above; the history stays displayed here.")
             else:
                 self.note("Compaction impossible (the summary turn failed) - session unchanged.", "warn")
@@ -1184,7 +1185,7 @@ def build_prompt(item: dict) -> str:
         text = PLAN_APPROVED_PREFACE + text
     if item.get("steer"):
         text = STEER_PREFACE + text
-    if item.get("preface"):                            # the seed of an idle compaction (not displayed)
+    if item.get("preface"):                            # the summary of a compaction (not displayed)
         text = item["preface"] + "\n\n" + text
     if (item.get("relay") or {}).get("from"):
         text = relay_preface(item["relay"]) + text
