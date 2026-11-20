@@ -76,7 +76,7 @@ import { SessionBrowserBar } from '@/features/browser/SessionBrowser'
 import { SessionDevicesBar } from '@/features/devices/SessionDevices'
 import { MaxxingControls, MaxxingMeter } from './MaxxingMeter'
 import { notifySendFailed, notifySent, useMaxxingEnabled } from './maxxing'
-import { MobileTabsSlot, TabsToggle } from './Tabs'
+import { MobileTabsSlot } from './Tabs'
 import { AsidePanel, useAside } from './Aside'
 import { LayoutPicker } from './LayoutPicker'
 import { MIN_W } from './layouts'
@@ -976,7 +976,6 @@ function ColumnHeader({
           <TouchSessionsButton className="-ml-2" />
           <Logo className="min-w-0 flex-1 gap-2 [&_img]:size-6" nameClassName={maxxing ? 'max-[479px]:sr-only' : undefined} />
           <div className="flex shrink-0 items-center">
-            <TabsToggle />
             {maxxing && <MaxxingControls compact />}
             {menu}
           </div>
