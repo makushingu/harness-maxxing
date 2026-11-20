@@ -101,7 +101,9 @@ soon as a GitHub key is in the vault. An install made before 2.0.0a132 keeps the
 
 Under **Sessions**, indented: **Maxxing mode (beta)** and the **line under the answers** (cost, tokens, duration, model: tick what
 it shows) for everyone, and, saved in this browser only (marked **This browser**): the **Tabs mode** (Alt+T; off = Zones). Below
-the pages: **Harness Browser** (see [Harness Browser](browser)) and **Devices**, off by default (Claude uses your own
+the pages: **Badges**, one switch per page with a counter in the sidebar (Home: unread notifications, red when one is an
+error; Sessions; Team; Agents), all on by default: turn one off and its page shows no number nor dot (the counts stay on
+the page itself); then **Harness Browser** (see [Harness Browser](browser)) and **Devices**, off by default (Claude uses your own
 computers and phones, see [Devices](devices)). Under **Team**, while Team is on: **Team bubbles** (the chat bubbles at the bottom right of every page,
 saved in this browser). The notification when a session finishes is in **Settings -> Notifications**, the Claude plan usage
 widget in **Settings -> Usage**, the presentation mode by default in **Settings -> Security**, the Telegram mode in

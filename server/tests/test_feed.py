@@ -45,6 +45,15 @@ def test_post_list_group_dedupe_read(client, mx):
     assert client.get("/api/feed", params={"limit": 1, "before": page["events"][0]["id"]}).json()["events"]
 
 
+def test_unread_errors_count_for_the_home_badge(client, mx):
+    feed.post("Boom", level="error", source="shop")
+    feed.post("Fyi", level="info", source="shop")
+    d = client.get("/api/feed").json()
+    assert d["unread"] == 2 and d["unread_errors"] == 1 and d["sources"][0]["unread_errors"] == 1
+    feed.mark_read(everything=True)
+    assert client.get("/api/feed").json()["unread_errors"] == 0
+
+
 def test_rules_and_telegram_routing(client, mx, monkeypatch):
     sent = []
     from maxxing.telegram import gateway

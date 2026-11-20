@@ -101,6 +101,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "donation_hidden": False,          # Settings -> About: hide the donation links shown elsewhere in the app
     "mail_page": False,                # Settings -> Features: the E-mail page (IMAP/SMTP mailboxes)
     "sidebar_order": [],               # sidebar: the pages in the order the user dragged them (routes; empty = default)
+    "nav_badges_hidden": [],           # Settings -> Features -> Badges: sidebar pages whose counter badge is off (routes)
     "browser_feature": False,          # Settings -> Features: the Harness Browser (one Chromium for the user, sessions, agents)
     "browser": {},                     # its settings (maxxing/browser DEFAULTS: sites, sign-ins, asks, sleep)
     "devices_feature": False,          # Settings -> Features: Devices (Claude uses the user's computers and phones)

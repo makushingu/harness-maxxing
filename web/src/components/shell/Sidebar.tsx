@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
 import { openPalette } from '@/commands/registry'
 import { Button, CountBadge, CountDot, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, KeepTooltipShape, Kbd, MOD, NamedIcon, Tooltip } from '@/components/ui'
-import { iconBtn, navRow, navTourId, useNavEntries, type NavItem, type PinnedPage } from './nav'
+import { iconBtn, navRow, navTourId, useBadgeOn, useNavEntries, type NavItem, type PinnedPage } from './nav'
 import { armEntryPeek, entryPeek, SecondBar, useClosedList } from './PageList'
 import { Logo } from './Logo'
 import { ResizeEdge } from './ResizeEdge'
@@ -24,10 +24,11 @@ import { usePrefetchLink } from '@/pages/pageData'
 /** Unread/running counters for the Sessions nav item (from the workspace tree). */
 function useSessionBadge() {
   const { data } = useWorkspace()
+  const on = useBadgeOn('/sessions')
   let unread = 0
   let running = 0
   let errors = 0
-  for (const p of data?.projects || [])
+  for (const p of on ? data?.projects || [] : [])
     for (const tp of p.topics) {
       unread += tp.unread
       running += tp.running
@@ -39,7 +40,8 @@ function useSessionBadge() {
 /** Team entry: its unread count (a chat goes into a bubble from the Team page: "Open in a bubble"). */
 function TeamNavExtra({ collapsed }: { collapsed: boolean }) {
   const { data } = useTeam()
-  const unread = data?.chats.reduce((n, c) => n + (c.muted ? 0 : c.unread), 0) || 0
+  const on = useBadgeOn('/team')
+  const unread = (on && data?.chats.reduce((n, c) => n + (c.muted ? 0 : c.unread), 0)) || 0
   if (collapsed) return unread ? <span className={FOLDED_DOT}><CountDot tone="unread" /></span> : null
   return <CountBadge count={unread} />
 }
@@ -47,7 +49,8 @@ function TeamNavExtra({ collapsed }: { collapsed: boolean }) {
 /** Agents entry: new results + approvals waiting, summed over the agents. */
 function AgentsNavExtra({ collapsed }: { collapsed: boolean }) {
   const t = useT()
-  const n = useAgentsAttention()
+  const attention = useAgentsAttention()
+  const n = useBadgeOn('/agents') ? attention : 0
   if (collapsed) return n ? <span className={FOLDED_DOT}><CountDot tone="unread" /></span> : null
   return (
     <span className="empty:hidden">
@@ -56,15 +59,19 @@ function AgentsNavExtra({ collapsed }: { collapsed: boolean }) {
   )
 }
 
-/** Home entry: the unread notifications (the dashboard holds their panel, its bell opens /feed). */
+/** Home entry: the unread notifications (the dashboard holds their panel, its bell opens /feed), red when one of them
+ *  is an error. */
 function HomeNavExtra({ collapsed }: { collapsed: boolean }) {
   const t = useT()
   const { data } = useFeed()
-  const unread = data?.unread ?? 0
-  if (collapsed) return unread ? <span className={FOLDED_DOT}><CountDot tone="unread" /></span> : null
+  const on = useBadgeOn('/')
+  const unread = on ? (data?.unread ?? 0) : 0
+  const tone = data?.unread_errors ? 'error' : 'unread'
+  const title = (data?.unread_errors ? `${t('sessions.state.error')} - ` : '') + t('feed.unreadCount', { count: unread })
+  if (collapsed) return unread ? <span className={FOLDED_DOT} title={title}><CountDot tone={tone} /></span> : null
   return (
     <span className="empty:hidden" data-testid="home-feed-count">
-      <CountBadge count={unread} title={t('feed.unreadCount', { count: unread })} />
+      <CountBadge count={unread} tone={tone} title={title} />
     </span>
   )
 }

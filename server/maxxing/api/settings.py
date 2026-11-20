@@ -17,9 +17,10 @@ from ..security import require_auth
 router = APIRouter(prefix="/api/settings", tags=["settings"], dependencies=[Depends(require_auth)])
 
 KEYS = ("timezone", "language", "public_url", "files_root", "presentation_default", "usage_widget", "tasks_page", "git_page", "infra_page", "team_page", "agents_page", "mail_page", "browser_feature", "devices_feature",
-        "maxxing_mode", "memory_max_lines", "cpu_priorities", "result_line_hidden", "donation_hidden", "sidebar_order",
+        "maxxing_mode", "memory_max_lines", "cpu_priorities", "result_line_hidden", "donation_hidden", "sidebar_order", "nav_badges_hidden",
         "daily_budget_usd", "limit_retry", "limit_retry_delay_s")
 RESULT_FIELDS = ("model", "duration", "cost", "tokens", "cache")   # parts of the line under each answer
+BADGE_PAGES = ("/", "/sessions", "/team", "/agents")                 # sidebar entries with a counter badge
 _ROUTE = re.compile(r"^/(x/[a-z0-9][a-z0-9-]{0,47}|[a-z0-9-]{0,40})\Z")   # a page (/sessions) or a pinned extension page (/x/<id>)
 _URL = config.PUBLIC_URL_RE
 
@@ -45,6 +46,7 @@ class SettingsIn(BaseModel):
     donation_hidden: Optional[bool] = None
     cpu_priorities: Optional[bool] = None         # Settings -> System: the UI first when the processor is full
     sidebar_order: Optional[list[str]] = None     # routes of the sidebar pages, in the order the user dragged them
+    nav_badges_hidden: Optional[list[Literal[BADGE_PAGES]]] = None  # type: ignore[valid-type]  # Features: pages whose badge is off
     daily_budget_usd: Optional[float] = None      # Settings -> Usage: dollars a day for the whole server, 0 = none
     limit_retry: Optional[bool] = None            # Settings -> Usage: a run stopped by the usage limit starts again
     limit_retry_delay_s: Optional[int] = None     # ...this many seconds after the reset (0-3600)
@@ -79,7 +81,12 @@ def current() -> dict:
             "cpu_priorities": cfg.get("cpu_priorities", True) is not False,
             "result_line_hidden": [f for f in RESULT_FIELDS if f in hidden],
             "donation_hidden": bool(cfg.get("donation_hidden", False)),
-            "sidebar_order": sidebar_order(cfg.get("sidebar_order"))}
+            "sidebar_order": sidebar_order(cfg.get("sidebar_order")),
+            "nav_badges_hidden": [p for p in BADGE_PAGES if p in _list(cfg.get("nav_badges_hidden"))]}
+
+
+def _list(v: object) -> list:
+    return v if isinstance(v, list) else []          # a hand-edited value of another type: nothing
 
 
 def sidebar_order(raw: object) -> list[str]:
@@ -374,6 +381,8 @@ def put_settings(body: SettingsIn):
         changes["daily_budget_usd"] = round(usd, 2)
     if "result_line_hidden" in changes:
         changes["result_line_hidden"] = [f for f in RESULT_FIELDS if f in changes["result_line_hidden"]]
+    if "nav_badges_hidden" in changes:
+        changes["nav_badges_hidden"] = [p for p in BADGE_PAGES if p in changes["nav_badges_hidden"]]
     if "sidebar_order" in changes:
         order = changes["sidebar_order"]
         if len(order) > 40 or not all(_ROUTE.match(r) for r in order):

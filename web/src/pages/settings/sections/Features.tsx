@@ -14,6 +14,7 @@ import { useSessionsUI } from '@/pages/sessions/store'
 import { useTeamUI } from '@/features/team/store'
 import { RESULT_FIELDS, useResultLine } from '@/pages/sessions/resultLine'
 import { SettingsCard, SectionStack } from './ui'
+import { BADGE_PAGES, NAV } from '@/components/shell/nav'
 import { BrowserFeature } from '@/features/browser/BrowserFeature'
 import { DevicesFeature } from '@/features/devices/DevicesFeature'
 
@@ -74,6 +75,10 @@ export function FeaturesSection() {
         <FeaturePages core sub={{ '/sessions': sessionOptions, '/agents': agentsOptions, '/team': teamOptions }} />
       </SettingsCard>
 
+      <SettingsCard title={t('features.badges')} description={t('features.badgesDesc')}>
+        <BadgesPicker />
+      </SettingsCard>
+
       <BrowserFeature link />
       <DevicesFeature link />
     </SectionStack>
@@ -91,6 +96,36 @@ function ResultLinePicker() {
           {t(f.label)}
         </label>
       ))}
+    </div>
+  )
+}
+
+const BADGE_DESC = { '/': 'features.badge.home', '/sessions': 'features.badge.sessions', '/team': 'features.badge.team', '/agents': 'features.badge.agents' } as const
+
+/** One switch per sidebar page with a counter badge (only the pages turned on), saved on the server
+ *  (`nav_badges_hidden`, the routes whose badge is off). */
+function BadgesPicker() {
+  const t = useT()
+  const { data: s } = useSettings()
+  const save = useSaveSettings()
+  if (!s) return <Skeleton className="h-36" />
+  const hidden = s.nav_badges_hidden || []
+  const rows = BADGE_PAGES.map((to) => NAV.find((n) => n.to === to)!).filter((n) => !n.setting || s[n.setting])
+  return (
+    <div className="divide-y [&>*:first-child]:pt-0">
+      {rows.map((n) => {
+        const id = `ft-badge-${n.to.slice(1) || 'home'}`
+        const to = n.to as (typeof BADGE_PAGES)[number]
+        return (
+          <SettingRow key={n.to} label={t(n.label)} description={t(BADGE_DESC[to])} htmlFor={id}>
+            <Switch
+              id={id}
+              checked={!hidden.includes(to)}
+              onCheckedChange={(v) => save.mutate({ nav_badges_hidden: v ? hidden.filter((r) => r !== to) : [...hidden, to] })}
+            />
+          </SettingRow>
+        )
+      })}
     </div>
   )
 }

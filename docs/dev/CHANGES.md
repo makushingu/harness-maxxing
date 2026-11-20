@@ -7,6 +7,11 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Badges: setting `nav_badges_hidden` (routes among `api/settings.BADGE_PAGES` = `/`, `/sessions`, `/team`, `/agents`;
+  default `[]`, restored from a backup), Settings -> Features -> Badges (`BadgesPicker` in `sections/Features.tsx`),
+  read by `nav.useBadgeOn(route)` in the sidebar entries and the phone ☰ (Sessions). `GET /api/feed` adds
+  `unread_errors` (total and per source, `feed._aggregate`): the Home badge takes the `error` tone; the optimistic
+  mark-read lowers it too.
 - Ask before resuming: `resume.summary_at(m, cfg, window, idle_min)` gives when a web message starts to get a summary
   first (smart resume or idle rule), exposed as `Session.resume_at` (`service._resume_at`, null when the setting
   `resume_ask` is off, default true, `/api/claude/settings`). `POST /messages` takes `keep_context`: queue item

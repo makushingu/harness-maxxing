@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils'
 import { useT, withGroups } from '@/i18n'
 import { openPalette } from '@/commands/registry'
 import { CountBadge, CountDot } from '@/components/ui'
+import { useBadgeOn } from './nav'
 import { Drawer, DrawerContent, DrawerTitle } from '@/components/ui/drawer'
 import { isStandalone, installApp, useInstallMode } from '@/pwa'
 import { useTour } from '@/tour/store'
@@ -45,10 +46,11 @@ function MenuButton({ className }: { className?: string }) {
   const pending = usePendingUpdate()
   const { data: h } = useHealth()
   const tone = healthTone(h)
+  const on = useBadgeOn('/sessions')
   let unread = 0
   let running = 0
   let errors = 0
-  for (const p of data?.projects || [])
+  for (const p of on ? data?.projects || [] : [])
     for (const tp of p.topics) {
       unread += tp.unread
       running += tp.running

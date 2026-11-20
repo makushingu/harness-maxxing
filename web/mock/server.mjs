@@ -137,7 +137,7 @@ function buildState(scenario) {
     lockUntil: 0,
     onboarding_completed: ready,
     settings: { timezone: 'Europe/Paris', language: 'en', public_url: 'https://ui.example.com', files_root: ROOT, presentation_default: false, daily_budget_usd: 0, usage_widget: false, maxxing_mode: false, memory_max_lines: 200, donation_hidden: false,
-      ...Object.fromEntries(PAGE_FLAGS.map((k) => [k, MOCK_ALL])), sidebar_order: [] },
+      ...Object.fromEntries(PAGE_FLAGS.map((k) => [k, MOCK_ALL])), sidebar_order: [], nav_badges_hidden: [] },
     claude: {
       installed: true, version: '2.4.1',
       auth: ready ? { ok: true, method: 'oauth_token', detail: 'Long-lived OAuth token (claude setup-token), Max plan' } : { ok: false, method: null, detail: 'Not connected' },
@@ -1855,7 +1855,7 @@ R('GET', '/api/settings', () => S.settings)
 R('PUT', '/api/settings', ({ body }) => {
   if (body.language !== undefined && !['en', 'fr'].includes(body.language)) fail(422, 'invalid', 'language must be en or fr')
   if (body.public_url !== undefined && body.public_url && !/^https?:\/\//.test(body.public_url)) fail(422, 'invalid', 'public_url must start with http(s)://')
-  for (const k of ['timezone', 'language', 'public_url', 'files_root', 'presentation_default', 'daily_budget_usd', 'usage_widget', 'memory_max_lines', 'donation_hidden', ...PAGE_FLAGS, 'sidebar_order']) if (body[k] !== undefined) S.settings[k] = body[k]
+  for (const k of ['timezone', 'language', 'public_url', 'files_root', 'presentation_default', 'daily_budget_usd', 'usage_widget', 'memory_max_lines', 'donation_hidden', ...PAGE_FLAGS, 'sidebar_order', 'nav_badges_hidden']) if (body[k] !== undefined) S.settings[k] = body[k]
   return S.settings
 })
 /* ---- feedback: checked first (a word decides here: "bug" or "idea" is sent, "model" or "API" is for this
@@ -2041,7 +2041,7 @@ R('POST', '/api/team/chats/:id/messages', ({ params, body }) => {
   return m
 })
 R('POST', '/api/team/presence', () => ({ ok: true }))
-R('GET', '/api/feed', () => ({ events: [], more: false, unread: 0, pending: 0, sources: [] }))
+R('GET', '/api/feed', () => ({ events: [], more: false, unread: 0, unread_errors: 0, pending: 0, sources: [] }))
 
 /* ---- docs */
 R('GET', '/api/docs', () => DOCS.map(({ slug, title, section, order }) => ({ slug, title, section, order })))

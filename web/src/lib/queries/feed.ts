@@ -35,11 +35,13 @@ export function useMarkFeedRead() {
       const hit = (e: FeedEvent) => all || (source ? e.source === source : !!ids?.includes(e.id))
       const mark = (l: FeedList): FeedList => {
         const n = l.events.filter((e) => !e.read && hit(e)).length
+        const errs = l.events.filter((e) => !e.read && hit(e) && e.level === 'error').length
         return {
           ...l,
           events: l.events.map((e) => (hit(e) ? { ...e, read: true } : e)),
           unread: all ? 0 : Math.max(0, l.unread - n),
-          sources: l.sources.map((x) => (all || x.source === source ? { ...x, unread: 0 } : x)),
+          unread_errors: all ? 0 : Math.max(0, (l.unread_errors ?? 0) - errs),
+          sources: l.sources.map((x) => (all || x.source === source ? { ...x, unread: 0, unread_errors: 0 } : x)),
         }
       }
       return [

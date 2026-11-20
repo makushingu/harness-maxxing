@@ -552,7 +552,7 @@ export type FeedEvent = {
   resolved?: number | null
   resolution?: string
 }
-export type FeedList = { events: FeedEvent[]; more: boolean; unread: number; pending?: number; sources: { source: string; total: number; unread: number }[] }
+export type FeedList = { events: FeedEvent[]; more: boolean; unread: number; unread_errors?: number; pending?: number; sources: { source: string; total: number; unread: number; unread_errors?: number }[] }
 export type FeedRule = 'auto' | 'off' | 'silent' | 'loud'
 export type FeedHookKind = 'stripe' | 'shopify' | 'github' | 'generic'
 export type FeedHook = { id: string; name: string; kind: FeedHookKind; created: number; url: string; has_secret: boolean }
@@ -892,6 +892,7 @@ export type Settings = {
   cpu_priorities?: boolean
   /** Sidebar pages in the order the user dragged them (routes, e.g. "/sessions"); empty = the default order. */
   sidebar_order?: string[]
+  nav_badges_hidden?: string[]   // Settings -> Features -> Badges: sidebar pages whose counter badge is off
   /** Settings -> Features: the Harness Browser (each topic / agent may then be let use it) */
   browser_feature?: boolean
   /** Settings -> Features: Devices (Claude uses the person's computers and phones running Harness Link) */

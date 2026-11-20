@@ -120,3 +120,11 @@ export function useNavEntries(): { pages: NavItem[]; pins: PinnedPage[]; end: Na
   const pins = usePinnedPages()
   return { pages: orderPages(pages, order), pins, end: pages.filter((n) => n.group !== 'main') }
 }
+
+/** The sidebar entries that carry a counter badge, in the order of Settings -> Features -> Badges. */
+export const BADGE_PAGES = ['/', '/sessions', '/team', '/agents'] as const
+/** Whether the counter badge of a sidebar entry is shown (Settings -> Features -> Badges, on by default). */
+export function useBadgeOn(route: (typeof BADGE_PAGES)[number]) {
+  const { data: s } = useSettings()
+  return !s?.nav_badges_hidden?.includes(route)
+}
