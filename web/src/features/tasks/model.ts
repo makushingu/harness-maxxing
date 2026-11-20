@@ -38,7 +38,7 @@ const SWATCH: Record<string, string> = {
 export function projectColor(c: string | undefined | null): string {
   if (!c) return SWATCH.zinc
   if (/^#[0-9a-f]{6}$/i.test(c)) return c
-  return SWATCH[c] || SWATCH.zinc
+  return Object.hasOwn(SWATCH, c) ? SWATCH[c] : SWATCH.zinc
 }
 
 /* ------------------------------------------------------------------ dates */

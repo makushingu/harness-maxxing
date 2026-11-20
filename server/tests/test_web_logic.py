@@ -262,3 +262,10 @@ def test_the_initials_of_a_sender_starting_with_an_emoji_are_not_cut_in_half(tmp
     run.mkdir()
     out = _run_ts(run, mod, "return [m.initials({ name: '😀 Bob' }), m.initials({ name: 'Ann Lee' })]")
     assert out == ["😀B", "AL"]
+
+
+def test_a_project_colour_named_like_an_object_property_falls_back_to_zinc(tmp_path):
+    out = _run_ts(tmp_path, WEB / "features" / "tasks" / "model.ts",
+                  "return ['constructor', '__proto__', 'toString', 'blue'].map((c) => m.projectColor(c))")
+    zinc, blue = "oklch(0.6 0.01 286)", "oklch(0.62 0.185 258)"
+    assert out == [zinc, zinc, zinc, blue]
