@@ -88,14 +88,14 @@ export function ResourceRow({ r, byId, v, onOpen }: { r: InfraResource; byId: Ma
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
-              className="grid size-6 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-primary"
+              className="grid size-6 place-items-center rounded-md pointer-coarse:size-10 text-muted-foreground hover:bg-accent hover:text-primary"
               title={r.urls[0]}
               aria-label={r.urls[0]}
             >
               <ArrowUpRight className="size-3.5" />
             </a>
           ) : (
-            <span className="size-6" />
+            <span className="size-6 pointer-coarse:size-10" />
           )}
         </span>
       </div>
