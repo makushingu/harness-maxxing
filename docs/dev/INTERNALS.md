@@ -67,9 +67,13 @@ Python modules call each other only through these functions. Keep signatures sta
   `idle_compact_after_s` with `context_tokens >= max(idle_compact_tokens, IDLE_COMPACT_MIN)`, unless
   `context_tokens - base_tokens` (meta `base_tokens` = context of the first call of the current thread, i.e. its
   fixed part) is under half of that threshold - a summary would save nothing. The message goes back
-  to the queue head marked `held: true` (removed when it pops) and a `compact` item (`auto`, `idle`) runs first; `_post`
-  then puts the seed into the message as `preface` (prepended by `build_prompt`, not displayed) instead of a separate
-  seed turn. `service.stop` keeps `held` items: a Stop cancels the summary only, the message then runs.
+  to the queue head marked `held: true` (removed when it pops) and a `compact` item (`auto`, `idle`) runs first.
+  `service.stop` keeps `held` items: a Stop cancels the summary only, the message then runs.
+- After any summary turn (Compact, automatic, idle, smart resume), `_post` starts no turn: it stores the seed in
+  meta `seed` with a new `csid` and `fresh`. The next item that runs in the session (`turn`) gets it as `preface`
+  (prepended by `build_prompt`, not displayed); `seed` is dropped once that thread exists (`saw_init`), so a turn
+  that never reached Claude leaves it for the following message. A seed turn would only make Claude answer the
+  summary with a second one. Hand-off still seeds its new session with a `seed` item (the first turn there).
 - Smart resume (`sessions/resume.py`, config `smart_resume_tokens`, 0 = off): in `_take` (under the session lock),
   `resume.candidate(meta, head, cfg, now)` (same exclusions as idle compaction, plus `held`; pause >= `MIN_PAUSE_S`
   300 s; context >= max(threshold, 20k); cache expired, or context >= `WARM_FACTOR` (2) x threshold; not mostly

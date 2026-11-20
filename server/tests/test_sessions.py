@@ -181,11 +181,20 @@ def test_compact_and_handoff(client, topic, mx):
     wait_idle(client, s["id"])
     assert client.post(f"/api/sessions/{s['id']}/compact").json() == {"ok": True}
     s2 = wait_idle(client, s["id"])
-    assert s2["turns"] == 3                     # summary turn + seeded fresh-thread turn
+    assert s2["turns"] == 2                     # the summary turn only: no turn answers the summary
     meta = store.read(s["id"])
-    assert meta["csid"] != s["id"]
-    last = calls(mx)[-1]
+    assert meta["csid"] != s["id"] and meta["fresh"] and meta["seed"].startswith("Context of this session")
+    assert "Summarize this conversation" in calls(mx)[-1]["prompt"]
+    client.post(f"/api/sessions/{s['id']}/messages", json={"text": "go on NOTOOL"})
+    wait_for(lambda: client.get(f"/api/sessions/{s['id']}").json()["turns"] == 3, 20)
+    wait_idle(client, s["id"])
+    last = calls(mx)[-1]                        # the next message starts the fresh thread and carries the summary
     assert "--session-id" in last["argv"] and last["prompt"].startswith("Context of this session")
+    assert last["prompt"].endswith("go on NOTOOL")
+    meta = store.read(s["id"])
+    assert "seed" not in meta and not meta["fresh"]
+    users = [e for e in all_events(client, s["id"]) if e["type"] == "user"]
+    assert users[-1]["text"] == "go on NOTOOL"  # the summary is not displayed in the message
     new = client.post(f"/api/sessions/{s['id']}/handoff").json()
     assert new["title"].endswith("(cont.)") and new["id"] != s["id"]
     wait_for(lambda: client.get(f"/api/sessions/{s['id']}").json()["archived"], 20)
@@ -645,13 +654,22 @@ def test_auto_compact_after_a_big_context(client, topic, mx):
     assert client.get("/api/claude/status").json()["auto_compact_tokens"] == 300000
     assert client.put("/api/claude/settings", json={"auto_compact_tokens": 100000}).json() == {"ok": True}
     s = client.post("/api/sessions", json={"path": topic, "message": "long work BIGCTX NOTOOL"}).json()
-    s2 = wait_for(lambda: (lambda x: x if x["turns"] == 3 and x["state"] == "idle" else None)(
+    s2 = wait_for(lambda: (lambda x: x if x["turns"] == 2 and x["state"] == "idle" else None)(
         client.get(f"/api/sessions/{s['id']}").json()), 30)
-    assert s2 is not None                       # the turn, the summary turn, the seeded fresh-thread turn
+    assert s2 is not None                       # the turn and the summary turn: nothing answers the summary
     evs = all_events(client, s["id"])
     notes = [e["text"] for e in evs if e["type"] == "note"]
     assert any("150k tokens" in n for n in notes) and any(n.startswith("Context compacted") for n in notes)
-    assert store.read(s["id"])["csid"] != s["id"]
+    meta = store.read(s["id"])
+    assert meta["csid"] != s["id"] and meta["seed"] and (meta["context_tokens"] or 0) < 100000   # the gauge starts again
+    time.sleep(1)
+    assert client.get(f"/api/sessions/{s['id']}").json()["turns"] == 2
+    client.post(f"/api/sessions/{s['id']}/messages", json={"text": "and then NOTOOL"})
+    wait_for(lambda: client.get(f"/api/sessions/{s['id']}").json()["turns"] == 3, 20)
+    wait_idle(client, s["id"])
+    last = calls(mx)[-1]                        # the next message carries the summary into the fresh thread
+    assert last["prompt"].startswith("Context of this session") and last["prompt"].endswith("and then NOTOOL")
+    assert "seed" not in store.read(s["id"])
     # below the threshold, or off: nothing happens
     config.update_config(auto_compact_tokens=0)
     s3 = client.post("/api/sessions", json={"path": topic, "message": "again BIGCTX NOTOOL"}).json()
@@ -664,7 +682,7 @@ def test_auto_compact_follows_the_model_window(client, topic, mx, monkeypatch):
     monkeypatch.setenv("FAKE_CLAUDE_WINDOW", "200000")
     assert client.get("/api/claude/status").json()["auto_compact_tokens"] == 300000
     s = client.post("/api/sessions", json={"path": topic, "message": "long work BIGCTX NOTOOL"}).json()
-    s2 = wait_for(lambda: (lambda x: x if x["turns"] == 3 and x["state"] == "idle" else None)(
+    s2 = wait_for(lambda: (lambda x: x if x["turns"] == 2 and x["state"] == "idle" else None)(
         client.get(f"/api/sessions/{s['id']}").json()), 30)
     assert s2 is not None and s2["context_window"] == 200000
     notes = [e["text"] for e in all_events(client, s["id"]) if e["type"] == "note"]

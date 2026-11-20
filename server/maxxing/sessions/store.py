@@ -6,7 +6,8 @@ Meta (`<id>.json`, internal - service.public() turns it into the API.md Session)
   sessions created before 2.0.0a6 until stats.py backfills it from the log), days {YYYY-MM-DD:
   {tokens, cost}} (last 90 days), model, real_model, context_tokens, base_tokens (context of the
   first call of the current thread: the fixed part), context_window (from the last result), archived, notify,
-  source, cron, last_text, error, csid (Claude session id), fresh (next turn uses --session-id),
+  source, cron, last_text, error, csid (Claude session id), fresh (next turn uses --session-id), seed (summary of
+  a compaction, carried by the first message of the fresh thread),
   pid (runner), unit, spawned_at, finished_at, seen_at, marked_unread ("Mark as unread", until read), cache_at (last side question: it warmed the
   thread's prompt cache too), env {..}, timeout_s, handoff_pending (continuation waiting for its hand-off
   summary: when it was created; queued messages wait behind the seed, service.HANDOFF_HOLD_S at most)

@@ -22,7 +22,9 @@ def test_the_owners_conversation_is_compacted_from_its_first_turn(client, topic,
     r = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL long work BIGCTX"})
     assert r.status_code == 200, r.text
     sid = r.json()["session"]["id"]
-    m = _turns(client, sid, 3)                   # the turn, the summary turn, the seeded fresh-thread turn
+    assert _turns(client, sid, 2) is not None    # the turn, the summary turn
+    client.post(f"/api/sessions/{sid}/messages", json={"text": "NOTOOL go on"})
+    m = _turns(client, sid, 3)                   # the next message starts the fresh thread with the summary
     assert m is not None
     meta = store.read(sid)
     assert meta["csid"] != sid and agents.manager_turn(meta)
@@ -30,6 +32,7 @@ def test_the_owners_conversation_is_compacted_from_its_first_turn(client, topic,
     argvs = [c["argv"] for c in _calls()[-2:]]
     assert all("manager of this agent" in a[a.index("--append-system-prompt") + 1] for a in argvs)
     assert "Summarize this conversation" in _calls()[-2]["prompt"]
+    assert _calls()[-1]["prompt"].startswith("Context of this session")
 
 
 def test_a_run_is_never_compacted(client, topic, mx):
@@ -66,20 +69,23 @@ def test_idle_rules_follow_the_conversation_not_the_flag():
 
 
 def test_a_summary_is_never_posted_as_the_agents_answer(client, topic, mx):
-    """The summary turn and the fresh thread reading it are Harness's own turns: costed, never a result in the flow
-    (nor on Telegram, nor in a group) - like Telegram's own sessions (gateway: compact / handoff / seed)."""
+    """The summary turn is Harness's own turn: costed, never a result in the flow (nor on Telegram, nor in a
+    group) - like Telegram's own sessions (gateway: compact / handoff / seed)."""
     _on(client)
     _create(client)
     config.update_config(auto_compact_tokens=100000)
     r = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL PAUSE long work BIGCTX"})
     sid = r.json()["session"]["id"]
-    assert _turns(client, sid, 3) is not None
+    assert _turns(client, sid, 2) is not None
     r = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL and now?"})
     assert r.json()["session"]["id"] == sid                    # the same conversation goes on
-    assert _turns(client, sid, 4) is not None
+    assert _turns(client, sid, 3) is not None
     results = wait_for(lambda: (lambda x: x if len(x) == 2 else None)(
         [m for m in agents.thread(A, 50) if m.get("kind") == "result"]), 10)
     assert results is not None, [m.get("text") for m in agents.thread(A, 50)]
-    assert [m["text"] for m in results] == ["Echo: NOTOOL PAUSE long work BIGCTX", "Echo: NOTOOL and now?"]
+    # (the fake echoes the first line of its prompt: the second message carries the summary into the fresh thread)
+    assert [m["text"] for m in results] == ["Echo: NOTOOL PAUSE long work BIGCTX",
+                                            "Echo: Context of this session before compaction (automatic summary):"]
+    assert _calls()[-1]["prompt"].endswith("NOTOOL and now?")
     # the summary still counts in the day's spending (the sessions' own costs, not the flow)
     assert agents.day_cost(A) > sum(float(m.get("cost") or 0) for m in results)
