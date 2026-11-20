@@ -39,7 +39,7 @@ export function QuotePill({ scope, onQuote, selector = '.mx-assistant' }: { scop
       // Above the selection (below on touch, or when there is no room above), clamped to the viewport.
       const below = touch || rect.top < 56
       const x = Math.min(Math.max(rect.left + rect.width / 2, 56), window.innerWidth - 56)
-      const y = below ? Math.min(rect.bottom + 8, window.innerHeight - 48) : rect.top - 8
+      const y = below ? Math.min(rect.bottom + 8, window.innerHeight - 56) : rect.top - 8
       setPill({ x, y, below, text: hit.text, from: hit.from })
     }
     const later = (ms: number) => {
@@ -110,7 +110,7 @@ export function QuotePill({ scope, onQuote, selector = '.mx-assistant' }: { scop
           setPill(null)
         }}
         className={cn(
-          'mx-queue-in pointer-events-auto flex h-8 -translate-x-1/2 items-center gap-1.5 rounded-lg border bg-card px-2.5 text-[13px] font-medium whitespace-nowrap shadow-xs hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+          'mx-queue-in pointer-events-auto flex h-8 -translate-x-1/2 items-center gap-1.5 rounded-lg border bg-card px-2.5 pointer-coarse:h-10 pointer-coarse:px-3 text-[13px] font-medium whitespace-nowrap shadow-xs hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
           !pill.below && '-translate-y-full',
         )}
       >

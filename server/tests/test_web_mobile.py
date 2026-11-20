@@ -375,3 +375,9 @@ def test_the_key_checks_of_an_agent_are_big_enough_to_tap():
     src = (WEB / "features" / "agents" / "parts.tsx").read_text()
     row = re.search(r'<label key=\{n\} className="([^"]*)"', src)
     assert row and "pointer-coarse:min-h-10" in row[1].split()
+
+
+def test_the_quote_button_is_big_enough_to_tap():
+    src = (WEB / "pages" / "sessions" / "Quote.tsx").read_text()
+    btn = re.search(r"'(mx-queue-in [^']*)'", src)
+    assert btn and "pointer-coarse:h-10" in btn[1].split() and "window.innerHeight - 56" in src
