@@ -385,3 +385,9 @@ def test_an_inline_edit_diff_wraps_its_lines_on_a_phone():
     assert row and "max-md:min-w-0" in row[1].split()
     text = re.search(r'<span className="whitespace-pre ([^"]*)">\{l\.s', view)
     assert text and {"max-md:whitespace-pre-wrap", "max-md:[overflow-wrap:anywhere]"} <= set(text[1].split())
+
+
+def test_the_quote_button_is_big_enough_to_tap():
+    src = (WEB / "pages" / "sessions" / "Quote.tsx").read_text()
+    btn = re.search(r"'(mx-queue-in [^']*)'", src)
+    assert btn and "pointer-coarse:h-10" in btn[1].split() and "window.innerHeight - 56" in src

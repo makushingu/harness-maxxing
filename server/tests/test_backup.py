@@ -11,7 +11,7 @@ import httpx
 import pytest
 
 from _conn_helpers import GH_TOKEN, FakeGitHub, bare_app, mx_state  # noqa: F401
-from maxxing import backup, config
+from maxxing import backup, config, crons
 from maxxing.api import backup as backup_api
 
 REPO = "alice/memory"
@@ -752,3 +752,21 @@ def test_a_history_file_that_is_not_utf8_does_not_break_the_backup_or_its_histor
     assert backup.history()[0]["ok"] is True
     backup._record({"ok": True})
     assert len(backup.history()) == 2
+
+
+def test_scanner_reads_a_cut_utf16_file():
+    tok = ("token: ghp_" + "a1B2c3D4e5" * 4).encode("utf-16")
+    assert "GitHub token" in backup.scan_bytes(tok + b"x")          # an odd length: the last byte is half a character
+    assert "GitHub token" in backup.scan_bytes(b"\xff\xfe" + tok[2:] + b"\x00\xd8")   # a lone high surrogate at the end
+
+
+def test_only_the_servers_own_backup_command_is_kept_enabled():
+    assert backup._is_own_job("maxxing backup run") and backup._is_own_job(f"{crons.maxxing_bin()} backup run")
+    for c in ("/tmp/evil/maxxing backup run", "/opt/x/maxxing backup run", "maxxing backup run\n", "maxxing backup run; id"):
+        assert not backup._is_own_job(c), c
+
+
+def test_a_pattern_with_many_stars_is_refused_before_it_can_hang_the_scan():
+    with pytest.raises(backup.BackupError):
+        backup.clean_include(["*a" * 15 + "*b"])
+    assert backup.clean_include(["notes/*/*.md", "a*b*c"]) == ["notes/*/*.md", "a*b*c"]

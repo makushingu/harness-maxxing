@@ -1054,3 +1054,20 @@ def test_a_rule_with_a_lone_surrogate_is_refused(client, topic):
         assert r.status_code == 400 and r.json()["error"] == "bad_rule", r.text
     assert client.get("/api/agents").status_code == 200
     assert agents.clean({"rules": [{"tool": "Bash", "match": "a\ud800"}]})["rules"][0]["match"] == "a?"
+
+
+def test_a_lone_surrogate_in_tools_folders_or_triggers_is_not_a_500(client, topic):
+    _on(client)
+    _create(client)
+    h = {"Content-Type": "application/json"}
+    trig = {"kind": "feed", "source": "shop", "match": "a\ud800", "prompt": "b\udfff"}
+    for body in ({"allowed_tools": ["\ud800"]}, {"disallowed_tools": ["Bash\udfff"]}, {"writable": ["a\ud800"]},
+                 {"triggers": [trig]}):
+        r = client.patch("/api/agents/acme/blog/writer", content=json.dumps(body), headers=h)
+        assert r.status_code < 500, (body, r.text)
+    assert agents.clean({"allowed_tools": ["\ud800", "Read"]})["allowed_tools"] == ["Read"]
+    assert agents.clean({"writable": ["a\ud800"]})["writable"] == []
+    t = agents.clean({"triggers": [trig]})["triggers"][0]
+    assert t["match"] == "a?" and t["prompt"] == "b?"
+    with pytest.raises(agents.AgentError):
+        agents.clean({"writable": ["a\ud800"]}, strict=True)

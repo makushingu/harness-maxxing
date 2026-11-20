@@ -352,7 +352,7 @@ def remove_schedule() -> None:
 MAX_INCLUDE = 100            # patterns
 MAX_PATTERN = 200            # characters
 MAX_DEEP = 3                 # `**` per pattern: each one is a `.*` the regex may backtrack over
-MAX_STARS = 16               # `*` per pattern: each one is a `[^/]*`, `*a*a*a…` backtracks as well
+MAX_STARS = 5                # `*` per pattern: each one is a `[^/]*`, `*a*a*a…` backtracks (15 of them hang a regex scan)
 
 
 def clean_schedule(schedule: Any) -> str:
@@ -488,11 +488,8 @@ def scan_bytes(data: bytes) -> list[str]:
     """Secret kinds found in a blob (empty = clean); UTF-16 text (BOM, or NULs between ASCII) is decoded first."""
     blobs = [data]
     if data[:2] in (b"\xff\xfe", b"\xfe\xff") or (len(data) > 1 and data.count(b"\0") * 3 > len(data)):
-        for enc in ("utf-16", "utf-16-le", "utf-16-be"):
-            try:
-                blobs.append(data.decode(enc).encode())
-            except UnicodeDecodeError:
-                continue
+        for enc in ("utf-16", "utf-16-le", "utf-16-be"):      # "replace": a cut or odd-length file is read as far as it goes
+            blobs.append(data.decode(enc, "replace").encode())
     return sorted({kind for kind, rx in LEAKS for b in blobs if rx.search(b)})
 
 
@@ -1071,7 +1068,7 @@ def _hold_new_jobs(blob: bytes) -> tuple[bytes, list[str], list[str]]:
     names, ids = [], []
     for j in (data.get("jobs") if isinstance(data, dict) else None) or []:
         if isinstance(j, dict) and j.get("enabled", True) and _job_key(j) not in current \
-                and not (j.get("kind", "shell") == "shell" and _OWN_JOB.match(str(j.get("command") or ""))):
+                and not (j.get("kind", "shell") == "shell" and _is_own_job(str(j.get("command") or ""))):
             j["enabled"] = False
             names.append(str(j.get("name") or j.get("id")))
             ids.append(str(j.get("id")))
@@ -1082,7 +1079,10 @@ def _job_key(j: dict) -> tuple:
     return (j.get("id"), *(str(j.get(k) or ("shell" if k == "kind" else "")) for k in _JOB_CODE))
 
 
-_OWN_JOB = re.compile(r"^(/[\w./-]+/)?maxxing backup run$")       # Harness' own memory backup job
+def _is_own_job(command: str) -> bool:
+    """Harness' own memory backup job: this server's `maxxing` binary, no other folder."""
+    from . import crons
+    return command in {f"{b} backup run" for b in ("maxxing", "/usr/local/bin/maxxing", crons.maxxing_bin())}
 
 
 def _current_jobs() -> list[dict]:

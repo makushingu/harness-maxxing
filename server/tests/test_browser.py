@@ -1623,3 +1623,24 @@ def test_a_browser_ask_with_a_bad_timestamp_does_not_break_the_listing(tmp_path,
     assert [d["id"] for d in asks.pending()] == [ok["id"]]
     asks.scan()
     asks.prime()
+
+
+def test_a_decision_is_announced_once_even_if_the_scan_runs_in_between(tmp_path, mx, monkeypatch):
+    from maxxing import browser
+    from maxxing.browser import asks
+    folder = browser.asks_dir()
+    folder.mkdir(parents=True)
+    rid = "0123456789abcdef"
+    assert asks.ID_RE.match(rid) and not asks.ID_RE.match(rid + "\n")
+    from maxxing import browser_mcp
+    browser_mcp.write_atomic(folder / f"{rid}.json", {"id": rid, "status": "pending", "at": time.time(), "owner": "x"})
+    asks._seen[rid] = "pending"
+    done = []
+
+    def fake_done(d):
+        done.append(d["id"])
+        if len(done) == 1:
+            asks.scan()                                  # the periodic scan runs between the write and the bookkeeping
+    monkeypatch.setattr(asks, "_done", fake_done)
+    asks.decide(rid, "skip")
+    assert done == [rid]

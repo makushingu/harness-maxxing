@@ -392,10 +392,12 @@ def commit(repo: Path, message: str, paths: list[str] | None = None) -> dict:
     if not message:
         raise GitError(400, "no_message", "a commit message is needed")
     if paths:
-        _git(repo, "add", "-A", "--", *_safe_paths(repo, paths), write=True, timeout=WRITE_TIMEOUT)
+        safe = _safe_paths(repo, paths)
+        _git(repo, "add", "-A", "--", *safe, write=True, timeout=WRITE_TIMEOUT)
+        _git(repo, "commit", "-m", message, "--only", "--", *safe, write=True, timeout=WRITE_TIMEOUT)   # not what else is staged
     else:
         _git(repo, "add", "-A", write=True, timeout=WRITE_TIMEOUT)
-    _git(repo, "commit", "-m", message, write=True, timeout=WRITE_TIMEOUT)
+        _git(repo, "commit", "-m", message, write=True, timeout=WRITE_TIMEOUT)
     return {"sha": _git(repo, "rev-parse", "HEAD").strip(), **repo_head(repo)}
 
 

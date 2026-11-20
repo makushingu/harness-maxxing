@@ -16,7 +16,7 @@ from .. import browser, bus, browser_mcp
 
 log = logging.getLogger("maxxing.browser")
 
-ID_RE = re.compile(r"^[0-9a-f]{16}$")
+ID_RE = re.compile(r"\A[0-9a-f]{16}\Z")
 ORPHAN_GRACE_S = 15.0
 KEEP_S = 86400.0
 WHAT = {"captcha": "a captcha", "sign_in": "a sign-in", "code": "a code", "payment": "a payment",
@@ -97,9 +97,9 @@ def decide(rid: str, action: str, by: str = "web", note: str = "", extra: dict |
             raise AskError(409, "decided", "This request is already answered")
         d.update({k: v for k, v in (extra or {}).items() if k in HANDBACK})
         d.update(status=action, note=(note or "")[:500], decided_by=by, decided_at=time.time())
+        _seen[rid] = action                          # before the file: a scan in between must not announce it too
         browser_mcp.write_atomic(_file(rid), d)
     _done(d)
-    _seen[rid] = action
     _recount()
     bus.invalidate("browser", "sessions", "agents")
     return public(d)
