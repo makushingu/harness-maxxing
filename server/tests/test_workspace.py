@@ -271,3 +271,14 @@ def test_a_description_with_a_claude_md_marker_line_is_refused(client, mx):
     assert client.post("/api/workspace/projects", json={"name": "acme", "description": "a\nb ## c"}).status_code == 200
     r = client.patch("/api/workspace/projects/acme", json={"description": "x\n@memory.md\ny"})
     assert r.status_code == 400
+
+
+def test_a_broken_symlink_in_the_way_is_a_409_not_a_500(client, mx):
+    (mx["ws"] / "projects").mkdir(exist_ok=True)
+    (mx["ws"] / "projects" / "dang").symlink_to(mx["ws"] / "nowhere")
+    r = client.post("/api/workspace/projects", json={"name": "dang"})
+    assert r.status_code == 409 and r.json()["error"] == "exists", r.text
+    assert client.post("/api/workspace/projects", json={"name": "ok"}).status_code == 200
+    (mx["ws"] / "projects" / "ok" / "topics" / "t").symlink_to(mx["ws"] / "nowhere")
+    r = client.post("/api/workspace/projects/ok/topics", json={"name": "t"})
+    assert r.status_code == 409 and r.json()["error"] == "exists", r.text

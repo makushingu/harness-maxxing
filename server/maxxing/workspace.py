@@ -531,7 +531,7 @@ def create_project(name: str, description: str = "") -> dict:
     check_description(description)
     ensure_root()
     d = project_dir(name)
-    if d.exists():
+    if os.path.lexists(d):
         raise WorkspaceError(409, "exists", f"Project {name!r} already exists")
     _init_level(d, "project", name, description or "")
     (d / "topics").mkdir(exist_ok=True)
@@ -545,7 +545,7 @@ def create_topic(project: str, name: str, description: str = "") -> dict:
     if not project_dir(check_slug(project)).is_dir():
         raise WorkspaceError(404, "not_found", f"Project {project!r} not found")
     d = project_dir(project) / "topics" / name
-    if d.exists():
+    if os.path.lexists(d):
         raise WorkspaceError(409, "exists", f"Topic {project}/{name} already exists")
     _init_level(d, "topic", name, description or "")
     _changed("created", "topic", topic_path(project, name))
@@ -561,7 +561,7 @@ def update_project(project: str, name: str | None = None, description: str | Non
     new = check_slug(name) if name and name != project else project
     if new != project:
         _ensure_idle(topic_path(project))
-    if new != project and (root() / topic_path(new)).exists():
+    if new != project and os.path.lexists(root() / topic_path(new)):
         raise WorkspaceError(409, "exists", f"{topic_path(new)} already exists")
     if emoji is not None:
         set_project_emoji(project, check_emoji(emoji))
@@ -592,7 +592,7 @@ def update_topic(project: str, topic: str, name: str | None = None, description:
     new = check_slug(name) if name and name != topic else topic
     if new != topic:
         _ensure_idle(topic_path(project, topic))
-    if new != topic and (root() / topic_path(project, new)).exists():
+    if new != topic and os.path.lexists(root() / topic_path(project, new)):
         raise WorkspaceError(409, "exists", f"{topic_path(project, new)} already exists")
     mode = check_permission_mode(permission_mode) if permission_mode is not None else None
     tools = check_allowed_tools(allowed_tools) if allowed_tools is not None else None
@@ -650,7 +650,7 @@ def _rename(old: str, new: str) -> None:
     """Move the folder, then remap session paths, Claude transcripts and Telegram mappings."""
     sessions = _ensure_idle(old)
     src, dst = root() / old, root() / new
-    if dst.exists():
+    if os.path.lexists(dst):
         raise WorkspaceError(409, "exists", f"{new} already exists")
     shutil.move(str(src), str(dst))
     from .sessions import service
