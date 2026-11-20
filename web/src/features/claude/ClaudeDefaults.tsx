@@ -93,9 +93,6 @@ export function ClaudeDefaults() {
           data-testid="smart-resume"
         />
       </FormField>
-      <SettingRow label={t('cdef.resumeAsk')} description={t('cdef.resumeAskHint')} htmlFor="mx-resume-ask">
-        <Switch id="mx-resume-ask" checked={s.resume_ask ?? true} onCheckedChange={(v) => save.mutate({ resume_ask: v })} />
-      </SettingRow>
       <SettingRow label={t('cdef.protectSecrets')} description={t('cdef.protectSecretsHint')} htmlFor="mx-protect-secrets">
         <Switch id="mx-protect-secrets" checked={s.protect_secrets ?? true} onCheckedChange={(v) => save.mutate({ protect_secrets: v })} />
       </SettingRow>

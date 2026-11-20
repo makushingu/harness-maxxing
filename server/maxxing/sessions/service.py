@@ -172,20 +172,7 @@ def public(meta: dict, exits_waiting: dict[str, dict] | None = None) -> dict:
             "worktree": _worktree_public(m),
             "browser_asks": _browser_waiting(m["id"]),
             "browser_exit": _exit_waiting(m["id"]) if exits_waiting is None else exits_waiting.get(m["id"]),
-            "device_asks": _devices_waiting(m["id"]),
-            "resume_at": _resume_at(m)}
-
-
-def _resume_at(m: dict) -> float | None:
-    """From when a message sent from the web gets a summary first (resume.summary_at): the composer asks before."""
-    from . import resume
-    from .runner import IDLE_COMPACT_MIN
-    cfg = config._config_cached()[1]          # read only
-    if not cfg.get("resume_ask", True):     # Settings -> Claude: no question, the summary goes by itself
-        return None
-    if resume.never(m):                     # before window_for: it reads context_windows.json
-        return None
-    return resume.summary_at(m, cfg, store.window_for(m, cfg), IDLE_COMPACT_MIN)
+            "device_asks": _devices_waiting(m["id"])}
 
 
 def _worktree_public(m: dict) -> dict | None:
@@ -471,13 +458,12 @@ def _enqueue_voice(sid: str, item: dict, audio: str, *, reset_cron: bool = False
 def send_message(sid: str, text: str, attachments: list[str] | None = None, source: str = "web",
                  voice_path: str | None = None, ref: str | None = None,
                  client_id: str | None = None, silent_ok: bool = False, mentions: list[dict] | None = None,
-                 relay: dict | None = None, call: str | None = None, keep_context: bool = False) -> dict:
+                 relay: dict | None = None, call: str | None = None) -> dict:
     """`ref`: an id the caller (Telegram) finds again in the meta of the turn that ran this message
     (`turn_refs` while it runs, `last_turn.refs` once it ended; see live_refs). `client_id`: the web page's own id
     for it, kept in its queue item and its log line (`client_ids`). `mentions`: the @ of the composer ({kind, ref},
     see mentions.resolve): Claude reads with the message how to write to each. `relay`: sent by another session's
-    turn (relay_message). `call`: sent during a voice call, in that language (runner.CALL_PREFACE). `keep_context`: the
-    user chose to keep the whole history: no summary first, even after a pause (resume.summary_at)."""
+    turn (relay_message). `call`: sent during a voice call, in that language (runner.CALL_PREFACE)."""
     _require(sid)
     files = _check_attachments(attachments)
     audio = _check_voice(voice_path)
@@ -497,8 +483,6 @@ def send_message(sid: str, text: str, attachments: list[str] | None = None, sour
             extra["mentions"] = found
     if relay:
         extra["relay"] = relay
-    if keep_context:
-        extra["keep"] = True
     if text.strip():
         titles.first_message(sid, text.strip())
     item = _item(text.strip(), files, source, **extra)

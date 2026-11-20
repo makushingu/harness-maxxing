@@ -64,8 +64,6 @@ export const Composer = React.forwardRef<ComposerHandle, {
   toolbar?: React.ReactNode
   /** One-line notice tucked on top of the composer, like the waiting messages (which take priority). */
   notice?: React.ReactNode
-  /** A sent message held on top of the box until the user picks how it goes (the choice of ResumeChoice.tsx). */
-  held?: React.ReactNode
   placeholder?: string
   autoFocus?: boolean
   /** Lines the text grows to before it scrolls (fewer in a small grid pane, so the conversation stays visible). */
@@ -75,7 +73,7 @@ export const Composer = React.forwardRef<ComposerHandle, {
   /** The "@" menu (mentions.tsx): the id of the session it writes to (none: "@" is plain text). */
   mentionsFor?: string
 }>(function Composer(props, ref) {
-  const { colKey, draftKey, topicPath, running, disabledReason, queueCount = 0, queued = [], queueItems = NO_ITEMS, onClearQueue, clearingQueue, onSteer, steering, steerPending, onInject, injecting, onTakeQueue, onAsk, asking, onSend, onStop, stopping, toolbar, notice, held, placeholder, autoFocus, maxRows = 12 } = props
+  const { colKey, draftKey, topicPath, running, disabledReason, queueCount = 0, queued = [], queueItems = NO_ITEMS, onClearQueue, clearingQueue, onSteer, steering, steerPending, onInject, injecting, onTakeQueue, onAsk, asking, onSend, onStop, stopping, toolbar, notice, placeholder, autoFocus, maxRows = 12 } = props
   const t = useT()
   const [text, setText] = React.useState(() => loadDraft(draftKey))
   const [quotes, setQuotes] = React.useState<string[]>(() => loadQuotes(draftKey))
@@ -615,7 +613,7 @@ export const Composer = React.forwardRef<ComposerHandle, {
     : queued.slice(-stackCount).map((p) => ({ key: p.lid, text: p.voice ? `🎤 ${t('voice.message')}` : p.text || p.attachments.map(baseName).join(', ') }))
   const extraQueued = Math.max(0, stackCount - queuedShown.length)
   // The notice (e.g. "plan ready") waits while the queue is shown; the quotes card sits right on top of the box.
-  const hasNotice = !!notice && stackCount === 0 && !held
+  const hasNotice = !!notice && stackCount === 0
   const removeQuote = (q: string) => setQuotes((cur) => cur.filter((x) => x !== q))
   const small = 'h-7 px-2 text-xs max-md:h-8 pointer-coarse:h-10 max-md:pointer-coarse:h-10 pointer-coarse:min-w-10'
 
@@ -623,7 +621,6 @@ export const Composer = React.forwardRef<ComposerHandle, {
     <>
       {/* Same surface as the box (card, border, shadow) so it reads as part of it; the theme color is only on the
           icon and the Steer button (like the send button). */}
-      <TuckedCard open={!!held}>{held}</TuckedCard>
       <TuckedCard open={stackCount > 0} aria-live="polite">
         <div className="flex items-center gap-1.5 px-3 pt-2 text-xs text-muted-foreground">
           {steerPending ? <Spinner className="size-3.5 text-primary" /> : <Clock className="size-3.5 shrink-0 text-primary" />}
@@ -758,7 +755,7 @@ export const Composer = React.forwardRef<ComposerHandle, {
       toolbar={toolbar}
       actions={running && onStop ? <StopButton onClick={onStop} busy={stopping} label={t('sessions.stop')} /> : null}
       voice={<VoiceButton draftKey={draftKey} onTranscript={onVoice} onVoiceMessage={props.onSendVoice ? onVoiceMessage : undefined} />}
-      send={{ onClick: () => send(), disabled: !!blocked || empty, busy: sending && !held, label: running ? t('sessions.composer.queue') : t('sessions.composer.send') }}
+      send={{ onClick: () => send(), disabled: !!blocked || empty, busy: sending, label: running ? t('sessions.composer.queue') : t('sessions.composer.send') }}
       reason={reason}
       dimmed={!!disabledReason}
       boxProps={{ 'data-tour': 'composer', 'data-kbd-box': '' }}

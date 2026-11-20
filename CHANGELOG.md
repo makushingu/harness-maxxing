@@ -6,10 +6,6 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 ## Unreleased
 
 New:
-- **Choose how to resume a big session.** When the message you are about to send would make Harness summarize the
-  session first (its cache expired), a small card above the message box asks: **Summarize** (recommended), **New
-  session** or **Keep everything**, with a **?** that explains the cost. Settings -> Claude -> **Ask before resuming**
-  turns it off.
 - **Turn off the badge of any page.** Settings -> Features -> **Badges** has one switch per page with a counter in the
   sidebar (Home, Sessions, Team, Agents), all on by default: off, that page shows no number nor dot.
 

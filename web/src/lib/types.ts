@@ -52,8 +52,6 @@ export type ClaudeStatus = {
   /** A user message after a pause of 5 min+ to a session with at least this context (cache expired, or 100k+) is
    *  sorted by a small model call: new subject -> summary first, follow-up -> the thread goes on; 0 = off. */
   smart_resume_tokens: number
-  /** Ask before a message to a big session whose cache expired (summary, new session, whole history). */
-  resume_ask?: boolean
   protect_secrets?: boolean
   /** New sessions get a short title (2-5 words) naming their subject. */
   short_titles?: boolean
@@ -71,7 +69,7 @@ export type ClaudeAutoUpdate = {
 export type ClaudeAuthBody = { kind: 'oauth_token' | 'api_key'; value: string }
 export type ClaudeAuthResult = { ok: boolean; error?: string }
 export type ClaudeTestResult = { ok: boolean; model: string; ms: number; error?: string }
-export type ClaudeSettingsBody = { default_model?: string; permission_mode?: PermissionMode; auto_compact_tokens?: number; idle_compact_tokens?: number; idle_compact_after_s?: number; smart_resume_tokens?: number; resume_ask?: boolean; protect_secrets?: boolean; short_titles?: boolean; short_titles_model?: boolean; claude_auto_update?: boolean }
+export type ClaudeSettingsBody = { default_model?: string; permission_mode?: PermissionMode; auto_compact_tokens?: number; idle_compact_tokens?: number; idle_compact_after_s?: number; smart_resume_tokens?: number; protect_secrets?: boolean; short_titles?: boolean; short_titles_model?: boolean; claude_auto_update?: boolean }
 
 /* ---------------------------------------------------------------- Workspace */
 export type Topic = {
@@ -389,9 +387,6 @@ export type Session = {
   browser_exit?: BrowserWaiter | null
   /** `ask_human` requests on the person's devices waiting for them (GET /api/devices/session/<id>). */
   device_asks?: number
-  /** From when a message sent from here gets a summary first (cache expired on a big context; Unix seconds), null:
-   * never from now. The composer asks before: the summary, a new session, or the whole history (`keep_context`). */
-  resume_at?: number | null
 }
 /** A session's separate copy (server: maxxing/worktrees.py). */
 export type SessionCopy = {
@@ -430,7 +425,7 @@ export const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const
 export type Effort = (typeof EFFORTS)[number]
 export type CreateSessionBody = { path: string; message?: string; title?: string; model?: string; effort?: Effort | ''; attachments?: string[]; plan_mode?: boolean; /** Absolute path of a voice message sent directly. */ voice?: string; /** This page's id for the first message (see SendMessageBody). */ client_id?: string; /** Work on a separate copy (Code mode). */ worktree?: { repo: string; base?: string; prepare?: string; copy_env?: boolean; remember?: boolean } }
 export type PatchSessionBody = { title?: string; model?: string; effort?: Effort | ''; archived?: boolean; notify?: boolean; plan_mode?: boolean; favorite?: boolean; /** Move to another topic (idle sessions only). */ path?: string }
-export type SendMessageBody = { text: string; attachments?: string[]; /** Sent during a voice call, in that language: Claude answers short and easy to say. */ call?: string; /** Absolute path of a voice message sent directly: the server transcribes it, then sends it. */ voice?: string; /** This page's id for the message, found again in `client_ids` of its queue item and its log event (a reload mid-send checks it). */ client_id?: string; /** The @ of the composer: the server tells Claude how to write to each. */ mentions?: Mention[]; /** The user chose to keep the whole history: no summary first after a pause (Session.resume_at). */ keep_context?: boolean }
+export type SendMessageBody = { text: string; attachments?: string[]; /** Sent during a voice call, in that language: Claude answers short and easy to say. */ call?: string; /** Absolute path of a voice message sent directly: the server transcribes it, then sends it. */ voice?: string; /** This page's id for the message, found again in `client_ids` of its queue item and its log event (a reload mid-send checks it). */ client_id?: string; /** The @ of the composer: the server tells Claude how to write to each. */ mentions?: Mention[] }
 export type SendMessageResult = { queued: boolean; session: Session }
 /** Who the composer's @ can name (GET /api/sessions/{id}/mentions). */
 export type MentionKind = 'session' | 'agent' | 'team'

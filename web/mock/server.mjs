@@ -253,8 +253,6 @@ function seedSessions(st, t) {
       archived: !!d.archived, notify: d.src !== 'web', source: d.src, unread: !!d.unread,
       last_text: d.last.slice(0, 200), error: d.error || null,
     }
-    // like the server (sessions/resume.py): a big context whose cache expired is summarized first, the composer asks
-    s.resume_at = s.context_tokens >= 100000 ? s.updated + 3600 : null
     st.sessions.push(s)
     st.events[id] = conversation(s, d)
   }
@@ -740,7 +738,6 @@ function startTurn(s, text, attachments = [], cid = '') {
     const answer = `Sure. Here is what I found for **“${text.slice(0, 60)}”**:\n\n- The topic contains a \`CLAUDE.md\`, a \`memory.md\` and a \`drafts/\` folder.\n- Nothing needed to change yet.\n\n\`\`\`bash\nls -la ${s.path}\n\`\`\`\n\nTell me if you want me to go further.`
     const cost = +(0.02 + Math.random() * 0.12).toFixed(4)
     s.turns += 1; s.cost_usd = +(s.cost_usd + cost).toFixed(4); s.real_model = model; s.context_tokens = 20000 + Math.floor(Math.random() * 30000)
-    s.resume_at = null
     s.last_text = answer.replace(/[*`#]/g, '').slice(0, 200); s.updated = now(); s.unread = true; s.state = 'idle'
     addEvents(s, { type: 'assistant', text: answer, at: now() },
       { type: 'result', ok: true, cost_usd: cost, duration_ms: 3400, model, usage: { input: 820, output: 164, cache_read: 19870, cache_write: 512 }, at: now() })
@@ -1221,7 +1218,6 @@ R('PUT', '/api/claude/settings', ({ body }) => {
   if (body.permission_mode !== undefined && !['bypass', 'acceptEdits', 'default'].includes(body.permission_mode)) fail(422, 'invalid', 'Unknown permission mode')
   if (body.default_model !== undefined) S.claude.default_model = String(body.default_model)
   if (body.permission_mode !== undefined) S.claude.permission_mode = body.permission_mode
-  if (body.resume_ask !== undefined) S.claude.resume_ask = !!body.resume_ask
   return { ok: true }
 })
 

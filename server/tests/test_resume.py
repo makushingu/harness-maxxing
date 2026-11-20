@@ -197,39 +197,3 @@ def test_idle_compaction_still_runs_with_sane_numbers():
     m = {"fresh": False, "context_tokens": 300_000, "finished_at": 1.0}
     assert runner._idle_compact(m, {"text": "hi"}, {"idle_compact_tokens": 100_000, "idle_compact_after_s": 60},
                                 10_000.0) == ("3 h", 300)
-
-
-def test_resume_at_tells_the_composer_when_to_ask(client, topic, mx):
-    """Session.resume_at: from when a message gets a summary first (cache expired: finished_at + 1 h at 150k; a
-    small context: never). The composer asks the user before sending from then on."""
-    sid = _session(client, topic)
-    fin = store.read(sid)["finished_at"]
-    s = client.get(f"/api/sessions/{sid}").json()
-    assert s["resume_at"] == pytest.approx(fin + 3600)
-    assert s["resume_at"] < time.time()
-    store.update(sid, context_tokens=30000)
-    assert client.get(f"/api/sessions/{sid}").json()["resume_at"] is None
-    store.update(sid, context_tokens=250000)          # 2x the threshold: after 5 min already
-    assert client.get(f"/api/sessions/{sid}").json()["resume_at"] == pytest.approx(fin + 300)
-
-
-def test_keep_context_sends_without_a_summary(client, topic, mx):
-    """The user chose "Keep everything": the message goes on in the same thread, no summary turn."""
-    sid = _session(client, topic)
-    csid = store.read(sid)["csid"]
-    client.post(f"/api/sessions/{sid}/messages", json={"text": "go on NOTOOL", "keep_context": True})
-    wait_for(lambda: client.get(f"/api/sessions/{sid}").json()["turns"] == 2, 30)
-    wait_idle(client, sid)
-    assert _summaries(mx) == []
-    assert store.read(sid)["csid"] == csid
-
-
-def test_listing_sessions_that_never_get_a_summary_does_not_read_the_windows_file(mx, monkeypatch):
-    from maxxing.sessions import service
-    reads = []
-    real = config.read_json
-    monkeypatch.setattr(config, "read_json", lambda *a, **k: (reads.append(a), real(*a, **k))[1])
-    for m in ({"id": "a" * 8, "fresh": True}, {"id": "b" * 8, "fresh": False, "state": "running"},
-              {"id": "c" * 8, "fresh": False, "plan_ready": True}):
-        assert service._resume_at(m) is None
-    assert not [a for a in reads if a and "context_windows" in str(a[0])]
