@@ -222,3 +222,14 @@ def test_keep_context_sends_without_a_summary(client, topic, mx):
     wait_idle(client, sid)
     assert _summaries(mx) == []
     assert store.read(sid)["csid"] == csid
+
+
+def test_listing_sessions_that_never_get_a_summary_does_not_read_the_windows_file(mx, monkeypatch):
+    from maxxing.sessions import service
+    reads = []
+    real = config.read_json
+    monkeypatch.setattr(config, "read_json", lambda *a, **k: (reads.append(a), real(*a, **k))[1])
+    for m in ({"id": "a" * 8, "fresh": True}, {"id": "b" * 8, "fresh": False, "state": "running"},
+              {"id": "c" * 8, "fresh": False, "plan_ready": True}):
+        assert service._resume_at(m) is None
+    assert not [a for a in reads if a and "context_windows" in str(a[0])]

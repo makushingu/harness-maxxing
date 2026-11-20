@@ -97,11 +97,16 @@ def candidate(m: dict, item: dict, cfg: dict, now: float, window: object = None)
     return now - last, ctx
 
 
+def never(m: dict) -> bool:
+    """A session that never gets a summary first: new, unattended, waiting on a plan, or running."""
+    return bool(m.get("fresh", True) or store.unattended(m) or m.get("plan_ready") or m.get("state") == "running")
+
+
 def summary_at(m: dict, cfg: dict, window: object = None, idle_min: int = 0) -> float | None:
     """When a web message sent to session `m` starts to get a summary first (smart resume, or the idle rule with
     `idle_min` = runner.IDLE_COMPACT_MIN), as a timestamp; None: not at any time from now. The composer asks before
     sending from then on (summary, a new session or the whole history: `keep_context`)."""
-    if m.get("fresh", True) or store.unattended(m) or m.get("plan_ready") or m.get("state") == "running":
+    if never(m):
         return None
     try:
         ctx = int(m.get("context_tokens") or 0)

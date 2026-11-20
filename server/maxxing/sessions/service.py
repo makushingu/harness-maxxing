@@ -183,6 +183,8 @@ def _resume_at(m: dict) -> float | None:
     cfg = config._config_cached()[1]          # read only
     if not cfg.get("resume_ask", True):     # Settings -> Claude: no question, the summary goes by itself
         return None
+    if resume.never(m):                     # before window_for: it reads context_windows.json
+        return None
     return resume.summary_at(m, cfg, store.window_for(m, cfg), IDLE_COMPACT_MIN)
 
 
