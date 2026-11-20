@@ -662,3 +662,17 @@ def test_a_failed_restore_leaves_no_partial_copy(client, topic, mx, monkeypatch)
     r = client.post(f"/api/trash/{item.stem}/restore")
     assert r.status_code == 409
     assert not list((mx["ws"] / topic).glob("half*")) and item.exists()
+
+
+def test_restoring_a_project_with_a_session_title_that_cannot_be_written_does_not_crash(client, mx, topic):
+    s1 = client.post("/api/sessions", json={"path": topic, "message": "hi NOTOOL"}).json()
+    s2 = client.post("/api/sessions", json={"path": topic, "message": "hi NOTOOL"}).json()
+    wait_idle(client, s1["id"]); wait_idle(client, s2["id"])
+    assert client.delete("/api/workspace/projects/acme").status_code == 200
+    item = _items(client)[0]
+    folder = next(p for p in config.state_dir("trash").iterdir() if p.is_dir() and any(p.glob("*.json")))
+    meta = sorted(q for q in folder.glob("*.json") if q.stem == s2["id"])[0]
+    data = json.loads(meta.read_text()); data["title"] = "\ud800"
+    meta.write_text(json.dumps(data))                   # json.dumps escapes it: a lone surrogate once loaded
+    r = client.post(f"/api/trash/{item['id']}/restore")
+    assert r.status_code == 200, r.text
