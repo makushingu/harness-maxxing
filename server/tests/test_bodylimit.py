@@ -117,3 +117,10 @@ def test_webhooks_keep_their_own_cap(client):
     client.cookies.clear()
     r = client.post("/api/hooks/nope", content=b"x" * 100)
     assert r.status_code == 404                                    # public: token checked by the route
+
+
+def test_a_mail_attachment_is_not_capped_like_json(client, mx):
+    assert bodylimit.UPLOADS.match("/api/mail/acc1/send") and bodylimit.UPLOADS.match("/api/mail/acc1/draft")
+    assert not bodylimit.UPLOADS.match("/api/mail/acc1/actions")
+    r = client.post("/api/mail/x/send", data={"data": "{}"}, files={"files": ("a.bin", b"x" * 2 * 1024 * 1024)})
+    assert r.status_code != 413, r.text
