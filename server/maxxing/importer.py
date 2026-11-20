@@ -210,7 +210,7 @@ def _plan(zf: zipfile.ZipFile, scans: dict[str, list[str] | None]) -> dict[str, 
     entries, skipped = _entries(zf)
     scanned = 0
     root = workspace.root()
-    stamp = time.strftime("%Y%m%d-%H%M%S")
+    stamp = time.strftime("%Y%m%d-%H%M%S") + "-" + _secrets.token_hex(2)    # two imports in one second never share a folder
     projects: dict[str, dict] = {}
     skills: dict[str, dict] = {}
     items: list[dict] = []

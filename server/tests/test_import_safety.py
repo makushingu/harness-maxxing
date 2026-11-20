@@ -217,3 +217,10 @@ def test_a_zip_with_two_entries_of_the_same_name_is_refused(client, mx):
         z.writestr("memory.md", "- token ghp_" + "a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8" + "\n")
     r = _upload(client, buf.getvalue())
     assert r.status_code == 400 and r.json()["error"] == "bad_zip", r.text
+
+
+def test_two_imports_in_the_same_second_keep_their_own_report(client, mx):
+    first = _import(client, {"tasks.md": "- one\n"}).json()
+    second = _import(client, {"tasks.md": "- two\n"}).json()
+    assert first["report"] != second["report"]
+    assert (mx["ws"] / first["report"]).is_file() and (mx["ws"] / second["report"]).is_file()
