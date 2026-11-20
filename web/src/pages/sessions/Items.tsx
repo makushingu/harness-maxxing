@@ -812,14 +812,15 @@ export function DiffView({ lines }: { lines: DiffLine[] }) {
         <div
           key={i}
           className={cn(
-            'flex min-w-max px-2',
+            // on a phone a line wraps in its column (about 34 characters fit at 360 px): no sideways scroll per line
+            'flex min-w-max px-2 max-md:min-w-0',
             l.t === '+' && 'bg-success/12 text-foreground',
             l.t === '-' && 'bg-destructive/12 text-foreground',
             l.t === ' ' && l.s.startsWith('⋯') && 'text-muted-foreground',
           )}
         >
           <span className={cn('w-4 shrink-0 select-none', l.t === '+' ? 'text-success' : l.t === '-' ? 'text-destructive' : 'text-muted-foreground')}>{l.t === ' ' ? '' : l.t}</span>
-          <span className="whitespace-pre">{l.s || ' '}</span>
+          <span className="whitespace-pre max-md:min-w-0 max-md:whitespace-pre-wrap max-md:[overflow-wrap:anywhere]">{l.s || ' '}</span>
         </div>
       ))}
       {shown.length < lines.length && (

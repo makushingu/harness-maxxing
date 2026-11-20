@@ -375,3 +375,13 @@ def test_the_key_checks_of_an_agent_are_big_enough_to_tap():
     src = (WEB / "features" / "agents" / "parts.tsx").read_text()
     row = re.search(r'<label key=\{n\} className="([^"]*)"', src)
     assert row and "pointer-coarse:min-h-10" in row[1].split()
+
+
+def test_an_inline_edit_diff_wraps_its_lines_on_a_phone():
+    # at 360 px about 34 characters of a diff line fit: every edit had to be scrolled sideways to be read
+    src = (WEB / "pages" / "sessions" / "Items.tsx").read_text()
+    view = src[src.index("export function DiffView"):src.index("function ToolOutput")]
+    row = re.search(r"'flex min-w-max px-2([^']*)'", view)
+    assert row and "max-md:min-w-0" in row[1].split()
+    text = re.search(r'<span className="whitespace-pre ([^"]*)">\{l\.s', view)
+    assert text and {"max-md:whitespace-pre-wrap", "max-md:[overflow-wrap:anywhere]"} <= set(text[1].split())

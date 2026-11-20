@@ -13,6 +13,9 @@ New:
   and asks you before deleting anything.
 
 Changed:
+- **On a phone, an edit shown in a session wraps its long lines.** About 34 characters of a line fitted at 360 px,
+  so every change made by Claude had to be scrolled sideways, line by line, to be read; each line now wraps in its
+  column, next to its + / - mark. A computer shows the diff as before. Thanks to Anthony14FR.
 - **On a phone, Settings opens on the list of its sections.** The 26 sections were only in a strip to swipe
   sideways (about six screens wide); they are now listed by group, one tap each. A computer still opens on General.
   Thanks to Anthony14FR.

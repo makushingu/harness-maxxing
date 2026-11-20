@@ -230,7 +230,7 @@ into another app, the content arrives as plain text (a file as its path).
   button and loads only when you click it (a page Claude read cannot make the answer send data to its server);
   links to other websites open in a new tab.
 - **Tool calls** (reading files, running commands, editing) appear as compact cards; expand them
-  to see input and output. Edits are shown as diffs.
+  to see input and output. Edits are shown as diffs (on a phone their long lines wrap, no sideways scrolling).
 - **Agents and background commands**: when Claude hands work to a sub-agent, or runs a command in the background,
   its card keeps spinning, with the time it has been running, until that work really ends (✓ done, ✗ failed, ⊘
   stopped or interrupted). Expand it for where it is: its last action, the tools and tokens used so far, then the
