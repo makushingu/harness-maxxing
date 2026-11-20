@@ -6,10 +6,15 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 ## Unreleased
 
 New:
+- **Comment a document, then send every comment to the session at once.** In the file viewer of a document opened
+  from a session, select a passage and click **Comment**: as many as you want, they wait under the document like
+  queued messages. **Send to the session** posts them as one message, each passage quoted with its comment.
 - **Turn off the badge of any page.** Settings -> Features -> **Badges** has one switch per page with a counter in the
   sidebar (Home, Sessions, Team, Agents), all on by default: off, that page shows no number nor dot.
 
 Changed:
+- **A shorter bar in the file viewer.** Copy, download, Open in Files and Parent folder moved to its ⋮ menu,
+  Preview / Source and Edit are icons: the file name has room again, on a phone too.
 - **Shorter memory files by default: 100 lines (10 KB) instead of 200.** Every session reads the memory of its
   folder on each call, so the daily compaction now keeps them at half the size and long sessions cost fewer tokens.
   An installation that kept the default gets it at the next 05:00 compaction; Settings -> Memory sets another limit.

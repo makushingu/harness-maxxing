@@ -7,6 +7,11 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Viewer comments: `features/files/docComments.tsx` (zustand, localStorage `mx-doc-comments`, per session). The session
+  is the thread the file was opened from (`data-sid` on `[data-thread]`, set in `FilePreview.show`, reset when the
+  viewer closes). Passages marked with the CSS Custom Highlight API (`::highlight(mx-doc-comment)`), sent with
+  `useSendMessage` as one message. Viewer bar: copy / download / Files / parent folder only in the ⋮ menu (all sizes;
+  test ids `viewer-download`, `viewer-open-files`, `viewer-zip` gone, `viewer-more-download` stays).
 - Memory: `memory.DEFAULT_MAX_LINES` 200 -> 100 (10 KB). Only installs without `memory_max_lines` in config.json
   follow it; the next compaction shrinks every memory.md over 100 lines / 10 KB. Token test with Romain (11-20).
 - Badges: setting `nav_badges_hidden` (routes among `api/settings.BADGE_PAGES` = `/`, `/sessions`, `/team`, `/agents`;

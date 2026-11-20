@@ -2,6 +2,7 @@
 // the same thread (attachments, media, files Claude read or wrote, paths in its answers), in order.
 import * as React from 'react'
 import { openFileViewer, threadFiles } from '@/features/files/viewerStore'
+import { setCommentSession } from '@/features/files/docComments'
 
 const PreviewCtx = React.createContext<(path: string) => void>(() => {})
 export const useOpenPreview = () => React.useContext(PreviewCtx)
@@ -19,6 +20,7 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
   }, [])
   const show = React.useCallback((p: string) => {
     const thread = last.current?.closest?.('[data-thread]') ?? document.activeElement?.closest?.('[data-thread]')
+    setCommentSession((thread as HTMLElement | null)?.dataset.sid || null)
     openFileViewer(p, thread ? threadFiles(thread) : undefined)
   }, [])
   return <PreviewCtx.Provider value={show}>{children}</PreviewCtx.Provider>

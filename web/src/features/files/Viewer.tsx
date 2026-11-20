@@ -17,6 +17,7 @@ import { fmtBytes } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
 import { useIsMobile, useMediaQuery } from '@/stores/media'
+import { DocComments } from './docComments'
 import { basename, dirname, iconFor, isRendered, isTextDoc, isTextual, kindOf, type FileKind } from './kinds'
 import { PreviewBody } from './FilePreview'
 import { TextZoomControl, zoomsText } from './textZoom'
@@ -28,7 +29,7 @@ import { CodeBlock, CopyButton } from '@/components/ui/code-block'
 import { DIAGRAM_PREFIX, diagramCode } from '@/components/ui/diagram'
 import { useFileViewer } from './viewerStore'
 import { downloadProps, useDownloadZip } from './download'
-import { CopyTextButton, CopyTextItems } from './copyText'
+import { CopyTextItems } from './copyText'
 import { ChangesPane } from '@/features/code/ChangesPane'
 import { isChangesPath } from '@/features/code/api'
 import { PrPane } from '@/features/code/PrPane'
@@ -115,6 +116,7 @@ function ViewerPane({ path, index, count, fullscreen, canFull, onFull }: { path:
   const multi = count > 1
   const parent = dirname(path)
   const swipe = useSwipe((d) => go(d), multi)
+  const docRef = React.useRef<HTMLDivElement>(null)
 
   const qc = useQueryClient()
   /** A file of a folder shown here: browse that folder's files with ← / →. */
@@ -150,7 +152,7 @@ function ViewerPane({ path, index, count, fullscreen, canFull, onFull }: { path:
             {[multi ? `${index + 1} / ${count}` : null, content.data ? fmtBytes(content.data.size) : null].filter(Boolean).join(' · ') || <Sensitive length={14}>{parent}</Sensitive>}
           </span>
         </div>
-        {!isDir && (isTextDoc(name) || (isTextual(kind) && content.data && zoomsText(kind, view === 'preview'))) && <TextZoomControl />}
+        {!isDir && (isTextDoc(name) || (isTextual(kind) && content.data && zoomsText(kind, view === 'preview'))) && <span className="contents max-sm:hidden"><TextZoomControl inlineFrom={100000} /></span>}
         {!isDir && isRendered(kind) && (
           <Segmented
             size="sm"
@@ -158,15 +160,14 @@ function ViewerPane({ path, index, count, fullscreen, canFull, onFull }: { path:
             onChange={setView}
             aria-label={t('files.view')}
             options={[
-              { value: 'preview', label: <span className="max-md:sr-only">{t('files.preview')}</span>, icon: <Eye /> },
-              { value: 'source', label: <span className="max-md:sr-only">{t('files.source')}</span>, icon: <Code2 /> },
+              { value: 'preview', label: <span className="sr-only">{t('files.preview')}</span>, icon: <Eye /> },
+              { value: 'source', label: <span className="sr-only">{t('files.source')}</span>, icon: <Code2 /> },
             ]}
           />
         )}
-        {isFile && <CopyTextButton path={path} kind={kind} text={content.data?.content} className="max-sm:hidden" />}
         {editable && (
-          <Tooltip content={canFull ? t('viewer.editNewTab') : null}>
-            <Button asChild variant="secondary" size="sm" className="mx-1 h-8" data-testid="viewer-edit">
+          <Tooltip content={canFull ? t('viewer.editNewTab') : t('common.edit')}>
+            <Button asChild variant="ghost" size="icon-sm" className="max-sm:hidden" data-testid="viewer-edit">
               <a
                 href={editUrl}
                 target={canFull ? '_blank' : undefined}
@@ -179,7 +180,7 @@ function ViewerPane({ path, index, count, fullscreen, canFull, onFull }: { path:
                 }}
               >
                 <Pencil />
-                <span className="max-sm:sr-only">{t('common.edit')}</span>
+                <span className="sr-only">{t('common.edit')}</span>
               </a>
             </Button>
           </Tooltip>
@@ -198,54 +199,26 @@ function ViewerPane({ path, index, count, fullscreen, canFull, onFull }: { path:
             </Tooltip>
           </>
         )}
-        {canUp && (
-          <Tooltip content={t('viewer.up')}>
-            <Button variant="ghost" size="icon-sm" onClick={up} aria-label={t('viewer.up')} className="max-sm:hidden">
-              <FolderUp />
-            </Button>
-          </Tooltip>
-        )}
-        {isDir ? (
-          <Tooltip content={t('files.downloadZip')}>
-            <Button variant="ghost" size="icon-sm" onClick={() => downloadZip(path)} aria-label={t('files.downloadZip')} className="max-sm:hidden" data-testid="viewer-zip">
-              <FolderDown />
-            </Button>
-          </Tooltip>
-        ) : (
-          <Tooltip content={t('files.download')}>
-            <Button asChild variant="ghost" size="icon-sm" className="max-sm:hidden" data-testid="viewer-download">
-              <a {...download} aria-label={t('files.download')}>
-                <Download />
-              </a>
-            </Button>
-          </Tooltip>
-        )}
-        <Tooltip content={t('files.openInFiles')}>
-          {/* A new tab on desktop (the viewer stays open); in place on a phone (PWA). */}
-          <Button asChild variant="ghost" size="icon-sm" className="max-sm:hidden" data-testid="viewer-open-files">
-            <a
-              href={`/files?path=${encodeURIComponent(path)}`}
-              target={canFull ? '_blank' : undefined}
-              rel="noopener"
-              aria-label={t('files.openInFiles')}
-              onClick={(e) => {
-                if (canFull) return
-                e.preventDefault()
-                openInFiles()
-              }}
-            >
-              <FolderOpen />
-            </a>
-          </Button>
-        </Tooltip>
-        {/* Phone: the header has no room for every button; copy, download, Files and the parent folder go in a menu. */}
+        {/* Copy, download, Files and the parent folder: in this menu (a short header). */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon-sm" aria-label={t('common.more')} className="sm:hidden" data-testid="viewer-more">
+            <Button variant="ghost" size="icon-sm" aria-label={t('common.more')} data-testid="viewer-more">
               <MoreVertical />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
+            {editable && (
+              <DropdownMenuItem
+                className="sm:hidden"
+                onSelect={() => {
+                  close()
+                  navigate(editUrl)
+                }}
+              >
+                <Pencil />
+                {t('common.edit')}
+              </DropdownMenuItem>
+            )}
             {isFile && <CopyTextItems path={path} kind={kind} text={content.data?.content} />}
             {isDir ? (
               <DropdownMenuItem onSelect={() => downloadZip(path)}>
@@ -285,7 +258,7 @@ function ViewerPane({ path, index, count, fullscreen, canFull, onFull }: { path:
           </Button>
         </DialogPrimitive.Close>
       </div>
-      <div className="relative flex min-h-0 flex-1 flex-col" {...swipe}>
+      <div ref={docRef} className="relative flex min-h-0 flex-1 flex-col" {...swipe}>
         {isFile ? (
           STAMPED.has(kind) && !stamp.ready ? (
             <FileSkeleton kind={kind} preview={view === 'preview'} name={name} />
@@ -312,6 +285,7 @@ function ViewerPane({ path, index, count, fullscreen, canFull, onFull }: { path:
             }}
           />
         )}
+        {isFile && view === 'preview' && <DocComments path={path} scope={docRef} />}
       </div>
     </>
   )
@@ -362,8 +336,8 @@ function DiagramPane({ id, index, count, fullscreen, canFull, onFull }: { id: st
               onChange={setView}
               aria-label={t('files.view')}
               options={[
-                { value: 'preview', label: <span className="max-md:sr-only">{t('files.preview')}</span>, icon: <Eye /> },
-                { value: 'source', label: <span className="max-md:sr-only">{t('files.source')}</span>, icon: <Code2 /> },
+                { value: 'preview', label: <span className="sr-only">{t('files.preview')}</span>, icon: <Eye /> },
+                { value: 'source', label: <span className="sr-only">{t('files.source')}</span>, icon: <Code2 /> },
               ]}
             />
             <CopyButton text={code} className="size-8" />
