@@ -1402,3 +1402,9 @@ def test_a_sqlite_file_with_a_hash_or_question_mark_in_its_name_is_backed_up_who
         with sqlite3.connect(r["file"]) as c:
             assert c.execute("select x from t").fetchone()[0] == 7
     assert sorted(p.name for p in (tmp_path / "db").iterdir()) == ["a#b.db", "c?d.db"]
+
+
+def test_declaring_a_sqlite_path_with_a_nul_byte_or_unknown_user_is_an_action_error(org):
+    for bad in ("a\0b.db", "~no-such-user-zz/app.db"):
+        with pytest.raises(actions.ActionError):
+            actions.declare_sqlite(bad)

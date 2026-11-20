@@ -230,12 +230,15 @@ def backup_all() -> list[dict]:
 
 def declare_sqlite(path: str, project: str | None = None) -> dict:
     from . import registry
-    p = Path(path).expanduser().resolve()
+    try:
+        p = Path(path).expanduser().resolve()
+    except (OSError, ValueError, RuntimeError):         # a NUL byte, an unknown ~user
+        raise ActionError(f"no file at {path!r}", "invalid_file") from None
     try:
         with open(p, "rb") as f:
             if f.read(16) != b"SQLite format 3\x00":
                 raise ActionError(f"{p} is not a SQLite database", "invalid_file")
-    except OSError:
+    except (OSError, ValueError):
         raise ActionError(f"no file at {p}", "invalid_file") from None
     rid = f"db:local:sqlite:{p}"
     registry.declare(rid, kind="database", name=p.name, server="local", project=project, details={"path": str(p)},

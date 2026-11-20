@@ -56,3 +56,8 @@ def test_set_refuses_a_value_that_is_not_utf8_or_too_long_without_reading_it_all
     monkeypatch.setattr("sys.stdin", io.TextIOWrapper(big, encoding="utf-8"))
     assert cli.main(["keys", "set", "BIG_KEY"]) == 2
     assert big.tell() < 100_000 and vault.get("BIG_KEY") is None
+
+
+def test_put_file_with_a_nul_byte_in_the_path_is_refused_without_a_traceback(mx, monkeypatch, capsys):
+    assert run(monkeypatch, "put-file", "n", "a\0b") == 2
+    assert "a\0b" in capsys.readouterr().err

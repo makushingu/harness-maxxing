@@ -66,7 +66,11 @@ def _send(a) -> int:
     sender = None
     if meta:
         sender = {"id": meta.get("id") or "", "title": meta.get("title") or "", "path": meta.get("path") or ""}
-    files = [str(Path(f).expanduser().resolve()) for f in a.file]
+    try:
+        files = [str(Path(f).expanduser().resolve()) for f in a.file]
+    except (OSError, ValueError, RuntimeError) as e:    # a NUL byte, an unknown ~user
+        print(f"--file: {e}", file=sys.stderr)
+        return 2
     try:
         r = service.relay_message(a.to, " ".join(a.text).strip(), files, sender=sender, hops=turn["depth"] + 1)
     except service.SessionError as e:
@@ -100,7 +104,11 @@ def _new(a) -> int:
     meta = agent_guard.turn_meta()
     turn = agent_guard.agent_turn()
     text = " ".join(a.text).strip()
-    files = [str(Path(f).expanduser().resolve()) for f in a.file]
+    try:
+        files = [str(Path(f).expanduser().resolve()) for f in a.file]
+    except (OSError, ValueError, RuntimeError) as e:    # a NUL byte, an unknown ~user
+        print(f"--file: {e}", file=sys.stderr)
+        return 2
     try:
         # created empty, then the first message goes in like a send: from a turn it says who sent it, and the
         # sends in a row stay capped (MAX_HOPS) - a session that starts sessions never loops forever
