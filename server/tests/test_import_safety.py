@@ -234,3 +234,14 @@ def test_a_big_text_file_is_refused_because_it_cannot_be_checked_for_secrets(cli
     assert r.status_code == 200, r.text
     assert any(s["file"].endswith("projects/p/notes.md") for s in r.json()["skipped"]), r.json()
     assert not list(mx["ws"].glob("projects/p/notes*"))
+
+
+def test_many_folders_with_the_same_slug_are_planned_in_linear_time():
+    import time
+    from maxxing import importer
+    z = _zip({f"projects/{chr(0x4e00 + i)}/memory.md": "- x\n" for i in range(6000)})   # non ASCII: all slug to one name
+    t = time.monotonic()
+    with zipfile.ZipFile(io.BytesIO(z)) as zf:
+        plan = importer._plan(zf, {})
+    assert len(plan["projects"]) == 6000 and len({p["name"] for p in plan["projects"]}) == 6000
+    assert time.monotonic() - t < 4          # was ~9 s (quadratic)

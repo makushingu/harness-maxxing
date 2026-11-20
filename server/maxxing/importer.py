@@ -218,6 +218,8 @@ def _plan(zf: zipfile.ZipFile, scans: dict[str, list[str] | None]) -> dict[str, 
     items: list[dict] = []
     secrets_found: list[dict] = []
     renamed: list[dict] = []
+    memo: dict[tuple, str] = {}                  # (names in use, slug, source) -> name already given
+    next_n: dict[tuple, int] = {}                # (names in use, slug) -> first "-N" not tried yet
 
     def unique(raw: str, taken: dict[str, dict], on_disk: Path, source: str = "") -> str:
         """Each source folder gets its own name: "Блог" and "Продажи" (or "My Blog" and "my-blog") both slug
@@ -225,11 +227,17 @@ def _plan(zf: zipfile.ZipFile, scans: dict[str, list[str] | None]) -> dict[str, 
         already in `on_disk`: a "-2" picked here never lands in an unrelated existing one. `source` tells two
         folders of the same name apart (skills in two categories)."""
         base = name = slug(raw)
-        n = 2
+        key = (id(taken), base, source or raw)
+        if key in memo and memo[key] in taken:
+            return memo[key]
+        n = next_n.get((id(taken), base), 2) if name in taken or (on_disk / name).exists() else 2
         while ((name in taken and taken[name]["source"] != (source or raw))
                or (name != base and name not in taken and (on_disk / name).exists())):
             name = f"{base[:44].rstrip('-')}-{n}"
             n += 1
+        if name != base:
+            next_n[(id(taken), base)] = n
+        memo[key] = name
         return name
 
     def proj(raw: str) -> dict:
