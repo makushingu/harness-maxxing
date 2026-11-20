@@ -391,3 +391,9 @@ def test_the_quote_button_is_big_enough_to_tap():
     src = (WEB / "pages" / "sessions" / "Quote.tsx").read_text()
     btn = re.search(r"'(mx-queue-in [^']*)'", src)
     assert btn and "pointer-coarse:h-10" in btn[1].split() and "window.innerHeight - 56" in src
+
+
+def test_the_open_url_link_of_the_infra_type_view_is_big_enough_to_tap():
+    src = (WEB / "features" / "infra" / "TypeView.tsx").read_text()
+    link = re.search(r'target="_blank".{0,200}?className="([^"]*)"', src, re.S)
+    assert link and "pointer-coarse:size-10" in link[1].split()

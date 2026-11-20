@@ -217,3 +217,31 @@ def test_a_zip_with_two_entries_of_the_same_name_is_refused(client, mx):
         z.writestr("memory.md", "- token ghp_" + "a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8" + "\n")
     r = _upload(client, buf.getvalue())
     assert r.status_code == 400 and r.json()["error"] == "bad_zip", r.text
+
+
+def test_two_imports_in_the_same_second_keep_their_own_report(client, mx):
+    first = _import(client, {"tasks.md": "- one\n"}).json()
+    second = _import(client, {"tasks.md": "- two\n"}).json()
+    assert first["report"] != second["report"]
+    assert (mx["ws"] / first["report"]).is_file() and (mx["ws"] / second["report"]).is_file()
+
+
+def test_a_big_text_file_is_refused_because_it_cannot_be_checked_for_secrets(client, mx, monkeypatch):
+    from maxxing import importer
+    monkeypatch.setattr(importer, "SCAN_MAX", 100)
+    token = "ghp_" + "a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8"
+    r = _import(client, {"memory.md": "- ok\n", "projects/p/notes.md": "x" * 500 + token + "\n"})
+    assert r.status_code == 200, r.text
+    assert any(s["file"].endswith("projects/p/notes.md") for s in r.json()["skipped"]), r.json()
+    assert not list(mx["ws"].glob("projects/p/notes*"))
+
+
+def test_many_folders_with_the_same_slug_are_planned_in_linear_time():
+    import time
+    from maxxing import importer
+    z = _zip({f"projects/{chr(0x4e00 + i)}/memory.md": "- x\n" for i in range(6000)})   # non ASCII: all slug to one name
+    t = time.monotonic()
+    with zipfile.ZipFile(io.BytesIO(z)) as zf:
+        plan = importer._plan(zf, {})
+    assert len(plan["projects"]) == 6000 and len({p["name"] for p in plan["projects"]}) == 6000
+    assert time.monotonic() - t < 4          # was ~9 s (quadratic)

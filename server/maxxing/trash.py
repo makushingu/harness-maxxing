@@ -316,7 +316,11 @@ def _put_sessions(folder: Path, old_prefix: str | None = None, new_prefix: str |
             meta["path"] = new_prefix + path[len(old_prefix):]
         meta["state"] = "idle" if meta.get("state") == "running" else meta.get("state", "idle")
         meta.update(pid=None, queue=[])
-        config.write_json(store.meta_path(sid), meta)
+        try:
+            config.write_json(store.meta_path(sid), meta)
+        except (OSError, ValueError):                  # e.g. a title with a lone surrogate: nothing was written
+            damaged = True
+            continue
         log_p = meta_p.with_suffix(".log")
         if log_p.exists():
             shutil.move(str(log_p), str(store.log_path(sid)))

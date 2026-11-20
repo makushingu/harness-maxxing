@@ -38,6 +38,8 @@ MAX_FILES = 20000
 MAX_TOTAL = 500 * 1024 * 1024          # uncompressed
 MAX_FILE = 100 * 1024 * 1024
 SCAN_MAX = 5 * 1024 * 1024             # files scanned for secrets (larger: binary data, kept)
+TEXT_EXT = frozenset({".md", ".txt", ".json", ".yaml", ".yml", ".toml", ".env", ".cfg", ".ini", ".csv", ".log",
+                      ".py", ".js", ".ts", ".sh", ".html", ".xml", ".jsonl"})   # text over SCAN_MAX is refused, not kept unchecked
 SCAN_TOTAL = 50 * 1024 * 1024          # bytes scanned per zip; files past it are not imported
 JUNK_PARTS = {"__MACOSX", ".git", "node_modules", ".venv", "venv", "__pycache__", ".DS_Store", "Thumbs.db"}
 # Harness's own folder settings (a topic's permission mode, the project order): set in the app, never by an export.
@@ -210,12 +212,14 @@ def _plan(zf: zipfile.ZipFile, scans: dict[str, list[str] | None]) -> dict[str, 
     entries, skipped = _entries(zf)
     scanned = 0
     root = workspace.root()
-    stamp = time.strftime("%Y%m%d-%H%M%S")
+    stamp = time.strftime("%Y%m%d-%H%M%S") + "-" + _secrets.token_hex(2)    # two imports in one second never share a folder
     projects: dict[str, dict] = {}
     skills: dict[str, dict] = {}
     items: list[dict] = []
     secrets_found: list[dict] = []
     renamed: list[dict] = []
+    memo: dict[tuple, str] = {}                  # (names in use, slug, source) -> name already given
+    next_n: dict[tuple, int] = {}                # (names in use, slug) -> first "-N" not tried yet
 
     def unique(raw: str, taken: dict[str, dict], on_disk: Path, source: str = "") -> str:
         """Each source folder gets its own name: "Блог" and "Продажи" (or "My Blog" and "my-blog") both slug
@@ -223,11 +227,17 @@ def _plan(zf: zipfile.ZipFile, scans: dict[str, list[str] | None]) -> dict[str, 
         already in `on_disk`: a "-2" picked here never lands in an unrelated existing one. `source` tells two
         folders of the same name apart (skills in two categories)."""
         base = name = slug(raw)
-        n = 2
+        key = (id(taken), base, source or raw)
+        if key in memo and memo[key] in taken:
+            return memo[key]
+        n = next_n.get((id(taken), base), 2) if name in taken or (on_disk / name).exists() else 2
         while ((name in taken and taken[name]["source"] != (source or raw))
                or (name != base and name not in taken and (on_disk / name).exists())):
             name = f"{base[:44].rstrip('-')}-{n}"
             n += 1
+        if name != base:
+            next_n[(id(taken), base)] = n
+        memo[key] = name
         return name
 
     def proj(raw: str) -> dict:
@@ -284,6 +294,10 @@ def _plan(zf: zipfile.ZipFile, scans: dict[str, list[str] | None]) -> dict[str, 
         else:
             dest = PurePosixPath("imports", stamp, *parts)       # tasks.md, crons.md, SECRETS.md, the rest
             data_kind = "aside"
+        if info.file_size > SCAN_MAX and p.suffix.lower() in TEXT_EXT:
+            skipped.append({"file": info.filename,
+                            "reason": f"text file over {SCAN_MAX // 1024 // 1024} MB (cannot be checked for secrets)"})
+            continue
         if info.file_size <= SCAN_MAX:
             if info.filename not in scans:
                 if scanned + info.file_size > SCAN_TOTAL:
