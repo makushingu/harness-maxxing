@@ -66,3 +66,9 @@ def test_a_failing_system_command_is_reported(tmp_path, monkeypatch):
     monkeypatch.setenv("PATH", f"{fake}:/usr/bin:/bin")
     with pytest.raises(subprocess.SubprocessError, match="dpkg lock held"):
         _REAL_SH(["apt-get", "clean"], check=True)
+
+
+def test_an_unknown_part_with_a_surrogate_is_a_400(client):
+    r = client.post("/api/system/cleanup", content=b'{"parts":["\\ud800"]}', headers={"content-type": "application/json"})
+    assert r.status_code == 400
+    assert r.json()["error"] == "unknown_part"

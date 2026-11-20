@@ -112,7 +112,7 @@ def run(parts: list[str]) -> dict:
     """Free the chosen parts -> {freed, parts: [{id, freed, error?}]} (freed = measured before minus after)."""
     unknown = [p for p in parts if p not in PARTS]
     if unknown:
-        raise ValueError(f"unknown part: {', '.join(unknown)}")
+        raise ValueError(f"unknown part: {', '.join(u.encode('utf-8', 'replace').decode() for u in unknown)}")
     out = []
     with _lock:
         for p in dict.fromkeys(parts):
