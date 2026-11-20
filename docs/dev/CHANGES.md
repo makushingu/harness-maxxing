@@ -7,6 +7,10 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Compaction: no `seed` queue item after a summary turn any more. `Runner._post` stores the seed in the session meta
+  (`seed`, with the new `csid` and `fresh`) and resets `context_tokens` to `base_tokens`; `Runner.turn` gives it to the
+  next item as `preface` and drops it once the thread exists (`saw_init`). A compacted session therefore counts one
+  turn less (turn + summary, no third). Hand-off unchanged (`seed` item in the new session).
 - Viewer comments: `features/files/docComments.tsx` (zustand, localStorage `mx-doc-comments`, per session). The session
   is the thread the file was opened from (`data-sid` on `[data-thread]`, set in `FilePreview.show`, reset when the
   viewer closes). Passages marked with the CSS Custom Highlight API (`::highlight(mx-doc-comment)`), sent with

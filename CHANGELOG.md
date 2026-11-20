@@ -21,6 +21,10 @@ Changed:
 - **The Home badge turns red when a notification is an error,** as the Sessions badge does for a failed session.
 
 Fixed:
+- **After a compaction, Claude no longer answers its own summary.** A compacted session (automatic or **Compact
+  context**) used to run one more turn in which Claude read the summary and summed it up again, so the same points
+  came twice in a row. The summary now simply waits: your next message starts the fresh context with it, and that
+  extra turn is no longer paid.
 - **On a phone, the open sessions show as tabs in Zones mode too.** They were missing unless Tabs mode was on; a
   sideways swipe now goes from one to the next in both modes.
 
