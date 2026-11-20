@@ -2825,7 +2825,7 @@ export const en = {
   'memory.desc': 'Keeps every memory.md short and well ordered: duplicates merged, contradictions settled, old history summarised, sections sorted. Runs every night (job "Memory compaction") and on demand.',
   'memory.cleanNow': 'Clean now',
   'memory.limit': 'Maximum length per file',
-  'memory.limitDesc': 'Files longer than this, or heavier (1 KB for 10 lines: 200 lines = 20 KB), are compacted and reorganised to fit (about 80 % of it, to leave room). A memory file is sent to Claude again in full each time it changes: a short one costs less and sessions are summarized less often.',
+  'memory.limitDesc': 'Files longer than this, or heavier (1 KB for 10 lines: 100 lines = 10 KB), are compacted and reorganised to fit (about 80 % of it, to leave room). A memory file is sent to Claude again in full each time it changes: a short one costs less and sessions are summarized less often.',
   'memory.lines': '{count} lines',
   'memory.noLimit': 'No limit',
   'memory.daily': 'Nightly clean',

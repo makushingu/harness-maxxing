@@ -18,7 +18,7 @@ export function MemorySection() {
   const save = useSaveSettings()
   const mem = useMemory()
   const compact = useCompactMemory()
-  const limit = settings?.memory_max_lines ?? mem.data?.max_lines ?? 200
+  const limit = settings?.memory_max_lines ?? mem.data?.max_lines ?? 100
   const files = mem.data?.files || []
   const size = fmtBytes((limit * 1024) / 10) // the weight that goes with the line limit (memory.py)
   const over = files.filter((f) => f.over)

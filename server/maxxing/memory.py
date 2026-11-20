@@ -9,8 +9,8 @@ from pathlib import Path
 
 from . import config
 
-DEFAULT_MAX_LINES = 200
-LINES_PER_KB = 10              # the limit also weighs the file: 200 lines = 20 KB. A memory.md is loaded by every
+DEFAULT_MAX_LINES = 100
+LINES_PER_KB = 10              # the limit also weighs the file: 100 lines = 10 KB. A memory.md is loaded by every
                                # session of its folder and sent again IN FULL each time it changes (Claude Code
                                # re-reads instruction files when a turn starts), so a few very long bullets cost
                                # as much as many lines - and fill the context until the session is summarized

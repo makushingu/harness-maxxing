@@ -7,6 +7,8 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Memory: `memory.DEFAULT_MAX_LINES` 200 -> 100 (10 KB). Only installs without `memory_max_lines` in config.json
+  follow it; the next compaction shrinks every memory.md over 100 lines / 10 KB. Token test with Romain (11-20).
 - Badges: setting `nav_badges_hidden` (routes among `api/settings.BADGE_PAGES` = `/`, `/sessions`, `/team`, `/agents`;
   default `[]`, restored from a backup), Settings -> Features -> Badges (`BadgesPicker` in `sections/Features.tsx`),
   read by `nav.useBadgeOn(route)` in the sidebar entries and the phone ☰ (Sessions). `GET /api/feed` adds

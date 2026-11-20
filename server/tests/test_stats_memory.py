@@ -54,11 +54,11 @@ def test_memory_files_limit_and_settings(client, mx):
     t.mkdir(parents=True)
     (t / "memory.md").write_text("line\n" * 250)
     r = client.get("/api/memory").json()
-    assert r["max_lines"] == 200
+    assert r["max_lines"] == 100
     by = {f["path"]: f for f in r["files"]}
     assert by["memory.md"]["lines"] == 11 and not by["memory.md"]["over"]
     assert by["projects/acme/topics/blog/memory.md"]["over"] and by["projects/acme/topics/blog/memory.md"]["level"] == "topic"
-    assert r["max_bytes"] == 20 * 1024 and not by["projects/acme/topics/blog/memory.md"]["heavy"]
+    assert r["max_bytes"] == 10 * 1024 and not by["projects/acme/topics/blog/memory.md"]["heavy"]
     (t / "memory.md").write_text(("- " + "x" * 2000 + "\n") * 12)   # few lines, very long bullets: as heavy to load
     heavy = {f["path"]: f for f in client.get("/api/memory").json()["files"]}["projects/acme/topics/blog/memory.md"]
     assert heavy["lines"] == 12 and heavy["over"] and heavy["heavy"]

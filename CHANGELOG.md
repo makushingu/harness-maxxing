@@ -10,6 +10,9 @@ New:
   sidebar (Home, Sessions, Team, Agents), all on by default: off, that page shows no number nor dot.
 
 Changed:
+- **Shorter memory files by default: 100 lines (10 KB) instead of 200.** Every session reads the memory of its
+  folder on each call, so the daily compaction now keeps them at half the size and long sessions cost fewer tokens.
+  An installation that kept the default gets it at the next 05:00 compaction; Settings -> Memory sets another limit.
 - **The Home badge turns red when a notification is an error,** as the Sessions badge does for a failed session.
 
 Fixed:

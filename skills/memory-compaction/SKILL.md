@@ -11,7 +11,7 @@ is the expected outcome.
 ## Procedure
 1. Run `maxxing memory`: it lists every memory file (`memory.md`, `projects/*/memory.md`,
    `projects/*/topics/*/memory.md`, `projects/*/topics/*/agents/*/memory.md`) with its line count and weight, and the
-   **limit** set in Settings -> Memory (default 200 lines and 20 KB, 1 KB for 10 lines; `none` = no limit). A limit
+   **limit** set in Settings -> Memory (default 100 lines and 10 KB, 1 KB for 10 lines; `none` = no limit). A limit
    given in the prompt wins.
 2. Compact a file **only if** at least one is true:
    - it has more lines than the limit **or is heavier** (`<- too heavy`: few lines but very long bullets; without a

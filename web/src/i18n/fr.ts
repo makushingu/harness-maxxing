@@ -2807,7 +2807,7 @@ export const fr: Record<keyof typeof en, string> = {
   'memory.desc': 'Garde chaque memory.md court et bien rangé : doublons fusionnés, contradictions réglées, historique ancien résumé, sections ordonnées. Tourne chaque nuit (tâche « Memory compaction ») et à la demande.',
   'memory.cleanNow': 'Nettoyer maintenant',
   'memory.limit': 'Longueur maximale par fichier',
-  'memory.limitDesc': 'Les fichiers plus longs, ou plus lourds (1 Ko pour 10 lignes : 200 lignes = 20 Ko), sont compactés et réorganisés pour tenir dessous (vers 80 %, pour garder de la marge). Un fichier mémoire est renvoyé en entier à Claude à chaque modification : court, il coûte moins et les sessions sont résumées moins souvent.',
+  'memory.limitDesc': 'Les fichiers plus longs, ou plus lourds (1 Ko pour 10 lignes : 100 lignes = 10 Ko), sont compactés et réorganisés pour tenir dessous (vers 80 %, pour garder de la marge). Un fichier mémoire est renvoyé en entier à Claude à chaque modification : court, il coûte moins et les sessions sont résumées moins souvent.',
   'memory.lines': '{count} lignes',
   'memory.noLimit': 'Aucune limite',
   'memory.daily': 'Nettoyage nocturne',
