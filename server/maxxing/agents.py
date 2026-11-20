@@ -344,7 +344,7 @@ def _clean_tools(v: Any) -> list[str]:
     out = []
     for t in v if isinstance(v, list) else []:
         t = str(t).strip()
-        if t and len(t) <= 200 and not any(c in t for c in "\n\r\0") and t not in out:
+        if t and len(t) <= 200 and not any(c in t for c in "\n\r\0") and _utf8(t) == t and t not in out:
             out.append(t)
     return out[:50]
 
@@ -374,7 +374,8 @@ def _clean_writable(v: Any, strict: bool = False) -> list[str]:
     for p in v if isinstance(v, list) else []:
         p = str(p).strip().strip("/") or "."
         parts = p.split("/")
-        if len(p) > 200 or any(x in ("..", "") for x in parts) or any(c in p for c in "\n\r\0*?["):
+        if len(p) > 200 or any(x in ("..", "") for x in parts) or any(c in p for c in "\n\r\0*?[") \
+                or _utf8(p) != p:
             if strict:
                 raise AgentError(400, "bad_path", f"Not a folder of the topic: {p!r}")
             continue
@@ -432,8 +433,8 @@ def _clean_trigger(t: Any, strict: bool, own: str = "") -> dict | None:
         raise AgentError(400, "bad_trigger", f"The source {ALERT_SOURCE!r} is the agents' own alerts: an agent cannot "
                                              "start on it (it would start itself again)")
     out = {"id": tid, "kind": "feed", "enabled": t.get("enabled") is not False, "source": source,
-           "levels": levels, "match": str(t.get("match") or "").strip()[:200],
-           "prompt": str(t.get("prompt") or "").strip()[:PROMPT_MAX]}
+           "levels": levels, "match": _utf8(str(t.get("match") or "").strip()[:200]),
+           "prompt": _utf8(str(t.get("prompt") or "").strip()[:PROMPT_MAX])}
     if isinstance(t.get("hook_id"), str) and re.fullmatch(r"[A-Za-z0-9_-]{1,40}", t["hook_id"]):
         out["hook_id"] = t["hook_id"]            # the feed hook made for this trigger (deleted with it)
     return out
@@ -456,7 +457,8 @@ def _clean_chain(t: dict, tid: str, strict: bool, own: str) -> dict | None:
     if strict and t.get("on") not in (None, "", *CHAIN_ON):
         raise AgentError(400, "bad_trigger", f"on: one of {', '.join(CHAIN_ON)}")
     return {"id": tid, "kind": "agent", "enabled": t.get("enabled") is not False, "agent": src, "on": on,
-            "match": str(t.get("match") or "").strip()[:200], "prompt": str(t.get("prompt") or "").strip()[:PROMPT_MAX]}
+            "match": _utf8(str(t.get("match") or "").strip()[:200]),
+            "prompt": _utf8(str(t.get("prompt") or "").strip()[:PROMPT_MAX])}
 
 
 def _clean_mail(v: Any, strict: bool) -> list[dict]:
