@@ -224,3 +224,13 @@ def test_two_imports_in_the_same_second_keep_their_own_report(client, mx):
     second = _import(client, {"tasks.md": "- two\n"}).json()
     assert first["report"] != second["report"]
     assert (mx["ws"] / first["report"]).is_file() and (mx["ws"] / second["report"]).is_file()
+
+
+def test_a_big_text_file_is_refused_because_it_cannot_be_checked_for_secrets(client, mx, monkeypatch):
+    from maxxing import importer
+    monkeypatch.setattr(importer, "SCAN_MAX", 100)
+    token = "ghp_" + "a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8"
+    r = _import(client, {"memory.md": "- ok\n", "projects/p/notes.md": "x" * 500 + token + "\n"})
+    assert r.status_code == 200, r.text
+    assert any(s["file"].endswith("projects/p/notes.md") for s in r.json()["skipped"]), r.json()
+    assert not list(mx["ws"].glob("projects/p/notes*"))
