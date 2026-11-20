@@ -368,8 +368,8 @@ def join(invitation: str) -> dict:
         msg = "The invitation was refused (used, expired or wrong)" if r.status_code in (403, 404, 410) else f"{addr} answered {r.status_code}"
         raise PeerError(400 if r.status_code < 500 else 502, "refused", msg)
     try:
-        data = r.json()
-        nonce_a, proof_a = str(data["nonce"]), str(data["proof"])
+        data = _scrub(r.json())      # like hello: a lone surrogate would fail the MAC or the save
+        nonce_a, proof_a = str(data["nonce"])[:64], str(data["proof"])
     except (ValueError, KeyError, TypeError):
         raise PeerError(502, "bad_answer", "Unexpected answer") from None
     if not _same(proof_a, _mac(key0, "welcome", addr, me, nonce_a, nonce_b)):
@@ -466,7 +466,10 @@ def answer(address: str, accept: bool) -> dict:
     _deliver_now(address, {"type": "accept", "profile": _profile()}, raise_on_error=True)
     with _lock:
         doc = _load()
-        doc["peers"][address]["status"] = "accepted"
+        cur = doc["peers"].get(address)
+        if not cur or cur.get("status") != "request":      # a bye / refusal / forget came in while the accept was going out
+            raise PeerError(409, "gone", "This request is gone")
+        cur["status"] = "accepted"
         _save(doc)
     return {"ok": True}
 

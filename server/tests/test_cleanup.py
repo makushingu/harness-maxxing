@@ -5,6 +5,8 @@ from pathlib import Path
 
 from maxxing import cleanup, config, deps
 
+_REAL_SH = cleanup._sh    # the autouse fixture replaces it in every test
+
 
 def _fill(p: Path, size: int) -> None:
     p.parent.mkdir(parents=True, exist_ok=True)
@@ -16,7 +18,7 @@ def test_scan_measures_without_deleting(client, monkeypatch):
     _fill(home / ".cache" / "uv" / "a.whl", 4000)
     _fill(home / ".npm" / "_cacache" / "b", 1000)
     _fill(cleanup.APT_CACHE / "x.deb", 500)
-    monkeypatch.setattr(cleanup, "_sh", lambda cmd, timeout=120:
+    monkeypatch.setattr(cleanup, "_sh", lambda cmd, timeout=120, **_:
                         "Archived and active journals take up 1.0G in the file system." if "--disk-usage" in cmd else "")
     r = client.get("/api/system/cleanup").json()
     parts = {p["id"]: p for p in r["parts"]}
@@ -35,7 +37,7 @@ def test_run_frees_only_the_chosen_parts(client, monkeypatch):
     _fill(home / ".cache" / "pip" / "c", 2000)
     _fill(cleanup.APT_CACHE / "x.deb", 500)
     ran: list[list[str]] = []
-    monkeypatch.setattr(cleanup, "_sh", lambda cmd, timeout=120: ran.append(cmd) or "")
+    monkeypatch.setattr(cleanup, "_sh", lambda cmd, timeout=120, **_: ran.append(cmd) or "")
     ws_file = config.workspace() / "projects" / "keep.bin"
     _fill(ws_file, 100)
     r = client.post("/api/system/cleanup", json={"parts": ["caches"]})
@@ -51,3 +53,22 @@ def test_run_frees_only_the_chosen_parts(client, monkeypatch):
 def test_run_refuses_unknown_or_empty(client):
     assert client.post("/api/system/cleanup", json={"parts": ["projects"]}).json()["error"] == "unknown_part"
     assert client.post("/api/system/cleanup", json={"parts": []}).status_code == 400
+
+
+def test_a_failing_system_command_is_reported(tmp_path, monkeypatch):
+    import subprocess
+
+    import pytest
+    fake = tmp_path / "bin"
+    fake.mkdir()
+    (fake / "apt-get").write_text("#!/bin/sh\necho 'dpkg lock held' >&2\nexit 100\n")
+    (fake / "apt-get").chmod(0o755)
+    monkeypatch.setenv("PATH", f"{fake}:/usr/bin:/bin")
+    with pytest.raises(subprocess.SubprocessError, match="dpkg lock held"):
+        _REAL_SH(["apt-get", "clean"], check=True)
+
+
+def test_an_unknown_part_with_a_surrogate_is_a_400(client):
+    r = client.post("/api/system/cleanup", content=b'{"parts":["\\ud800"]}', headers={"content-type": "application/json"})
+    assert r.status_code == 400
+    assert r.json()["error"] == "unknown_part"

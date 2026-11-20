@@ -121,8 +121,8 @@ def _files(a) -> int:
     if a.action == "put-file":
         try:
             data = _read_input(a.path, vault_files.MAX_SIZE)
-        except OSError as e:
-            print(f"{a.path}: {e.strerror or e}", file=sys.stderr)
+        except (OSError, ValueError) as e:                  # ValueError: a NUL byte in the path
+            print(f"{a.path}: {getattr(e, 'strerror', None) or e}", file=sys.stderr)
             return 2
         existed = vault_files.exists(a.name)
         try:

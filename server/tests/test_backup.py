@@ -729,3 +729,26 @@ def test_a_newline_in_a_name_does_not_get_past_the_deny_list():
     from maxxing import backup
     assert backup.denied("a.pem") and backup.denied("a\nb.pem") and backup.denied("id_rsa\nx")
     assert backup.glob_re("**/*.md").match("a\nb/c.md") and not backup.glob_re("*.md").match("a.md\n")
+
+
+def test_a_repository_name_with_a_line_break_is_refused(gh, ws):
+    r = backup.configure("alice/repo\n.git", GH_TOKEN)
+    assert r["ok"] is False and "owner/name" in r["error"]
+    assert backup.REPO_RE.match("alice/repo\n") is None
+    assert backup._CLAUDE_SETTINGS.search(".claude/settings.json\n") is None
+
+
+def test_restore_skips_a_path_longer_than_the_system_accepts(ws, mx_state):
+    long = "/".join(["a" * 200] * 21) + "/CLAUDE.md"          # every part is fine, the whole is over 4096 bytes
+    assert backup._safe_rel(long) is None
+    r = backup._apply({long: b"x", "memory.md": b"- fact\n"})
+    assert (ws / "memory.md").read_text() == "- fact\n" and r["files"] == 1
+
+
+def test_a_history_file_that_is_not_utf8_does_not_break_the_backup_or_its_history(mx_state):
+    p = backup._history_path()
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_bytes(b'{"ok": true, "note": "caf\xe9"}\n')
+    assert backup.history()[0]["ok"] is True
+    backup._record({"ok": True})
+    assert len(backup.history()) == 2

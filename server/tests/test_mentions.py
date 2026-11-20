@@ -182,3 +182,10 @@ def test_sessions_new_with_a_missing_file_makes_nothing(client, topic, monkeypat
     n = len(service.list_sessions())
     assert cli.main(["sessions", "new", topic, "x", "--file", "/nope/missing.txt"]) == 1
     assert "not found" in capsys.readouterr().err and len(service.list_sessions()) == n
+
+
+def test_sessions_send_and_new_refuse_a_file_path_they_cannot_resolve(client, topic, mx, capsys):
+    assert cli.main(["sessions", "send", "x", "hi", "--file", "a\0b"]) == 2
+    assert cli.main(["sessions", "send", "x", "hi", "--file", "~no-such-user-zz/f"]) == 2
+    assert cli.main(["sessions", "new", "general/inbox", "hi", "--file", "a\0b"]) == 2
+    assert capsys.readouterr().err.count("--file") == 3

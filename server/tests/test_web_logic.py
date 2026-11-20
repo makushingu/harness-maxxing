@@ -251,3 +251,36 @@ def test_durations_and_tokens_are_rounded_before_they_are_split(tmp_path):
 def test_a_name_glued_to_a_word_is_not_a_mention():
     src = (WEB / "pages" / "sessions" / "mentions.tsx").read_text(encoding="utf-8")
     assert "(?<!\\\\S)@${label" in src                    # an "@Name" glued to a word (bob@Lea.fr) is no mention
+
+
+def test_the_initials_of_a_sender_starting_with_an_emoji_are_not_cut_in_half(tmp_path):
+    src = (WEB / "features" / "mail" / "shared.tsx").read_text(encoding="utf-8")
+    mod = tmp_path / "initials.ts"
+    mod.write_text(src[src.index("export function initials"):src.index("const HUES")].replace(
+        "a: MailAddress | undefined", "a: any"), encoding="utf-8")
+    run = tmp_path / "run"
+    run.mkdir()
+    out = _run_ts(run, mod, "return [m.initials({ name: '😀 Bob' }), m.initials({ name: 'Ann Lee' })]")
+    assert out == ["😀B", "AL"]
+
+
+def test_a_project_colour_named_like_an_object_property_falls_back_to_zinc(tmp_path):
+    out = _run_ts(tmp_path, WEB / "features" / "tasks" / "model.ts",
+                  "return ['constructor', '__proto__', 'toString', 'blue'].map((c) => m.projectColor(c))")
+    zinc, blue = "oklch(0.6 0.01 286)", "oklch(0.62 0.185 258)"
+    assert out == [zinc, zinc, zinc, blue]
+
+
+def test_a_voice_call_failure_reads_the_message_the_server_sends(tmp_path):
+    src = (WEB / "features" / "voice" / "call" / "api.ts").read_text(encoding="utf-8")
+    mod = tmp_path / "failure.ts"
+    mod.write_text(src[src.index("async function failure"):src.index("/** One exchange")].replace(
+        "async function failure", "export async function failure"), encoding="utf-8")
+    run = tmp_path / "run"
+    run.mkdir()
+    out = _run_ts(run, mod, """
+        const res = (status, body) => new Response(JSON.stringify(body), { status })
+        return [await m.failure(res(413, { error: 'too_large', message: 'audio too long' })),
+                await m.failure(res(422, { detail: { message: 'old shape' } })),
+                await m.failure(new Response('<html>', { status: 502 }))]""")
+    assert out == ["audio too long", "old shape", "HTTP 502"]

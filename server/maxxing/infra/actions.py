@@ -204,12 +204,15 @@ def backup_all() -> list[dict]:
         safe = re.sub(r"[^A-Za-z0-9_.-]", "_", Path(p).name) + "-" + hashlib.sha1(str(p).encode()).hexdigest()[:8]
         target = d / f"sqlite-{safe}-{stamp}.db"
         try:
-            src = sqlite3.connect(f"file:{p}?mode=ro", uri=True, timeout=30)
+            # as_uri() percent-encodes "#" and "?": a raw path would cut the URI, lose mode=ro and open another file
+            src = sqlite3.connect(Path(p).as_uri() + "?mode=ro", uri=True, timeout=30)
             dst = sqlite3.connect(target)
-            with dst:
-                src.backup(dst)
-            src.close()
-            dst.close()
+            try:
+                with dst:
+                    src.backup(dst)
+            finally:
+                src.close()
+                dst.close()
             os.chmod(target, 0o600)
             _rotate(f"sqlite-{safe}")
             results.append({"id": rid, "name": Path(p).name, "ok": True, "file": str(target), "size": target.stat().st_size,
@@ -227,12 +230,15 @@ def backup_all() -> list[dict]:
 
 def declare_sqlite(path: str, project: str | None = None) -> dict:
     from . import registry
-    p = Path(path).expanduser().resolve()
+    try:
+        p = Path(path).expanduser().resolve()
+    except (OSError, ValueError, RuntimeError):         # a NUL byte, an unknown ~user
+        raise ActionError(f"no file at {path!r}", "invalid_file") from None
     try:
         with open(p, "rb") as f:
             if f.read(16) != b"SQLite format 3\x00":
                 raise ActionError(f"{p} is not a SQLite database", "invalid_file")
-    except OSError:
+    except (OSError, ValueError):
         raise ActionError(f"no file at {p}", "invalid_file") from None
     rid = f"db:local:sqlite:{p}"
     registry.declare(rid, kind="database", name=p.name, server="local", project=project, details={"path": str(p)},

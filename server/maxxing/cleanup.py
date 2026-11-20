@@ -37,14 +37,18 @@ _last: dict[str, Any] = {"at": 0.0, "parts": None}
 _UNITS = {"B": 1, "K": 1024, "M": 1024 ** 2, "G": 1024 ** 3, "T": 1024 ** 4}
 
 
-def _sh(cmd: list[str], timeout: float = 120) -> str:
-    """Run a system command (journalctl, apt-get) -> its output, "" when it is missing or fails. Tests replace it."""
+def _sh(cmd: list[str], timeout: float = 120, check: bool = False) -> str:
+    """Run a system command (journalctl, apt-get) -> its output, "" when it is missing or fails. Tests replace it.
+    With check=True a non-zero exit raises SubprocessError carrying the end of stderr."""
     if not shutil.which(cmd[0]):
         return ""
     try:
-        return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout).stdout
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
     except (OSError, subprocess.SubprocessError):
         return ""
+    if check and r.returncode:
+        raise subprocess.SubprocessError(f"{cmd[0]} exited {r.returncode}: {(r.stderr or '').strip()[-200:]}")
+    return r.stdout
 
 
 def _journal_bytes() -> int:
@@ -96,9 +100,9 @@ def _free_part(part: str) -> None:
     if part in ("leftovers", "caches"):
         deps.clean(caches=part == "caches", leftovers=part == "leftovers")
     elif part == "journal":
-        _sh(["journalctl", f"--vacuum-size={JOURNAL_KEEP // (1024 * 1024)}M"])
+        _sh(["journalctl", f"--vacuum-size={JOURNAL_KEEP // (1024 * 1024)}M"], check=True)
     elif part == "apt":
-        _sh(["apt-get", "clean"])
+        _sh(["apt-get", "clean"], check=True)
     elif part == "trash":
         trash.empty()
         trash.invalidate_sizes()
@@ -108,7 +112,7 @@ def run(parts: list[str]) -> dict:
     """Free the chosen parts -> {freed, parts: [{id, freed, error?}]} (freed = measured before minus after)."""
     unknown = [p for p in parts if p not in PARTS]
     if unknown:
-        raise ValueError(f"unknown part: {', '.join(unknown)}")
+        raise ValueError(f"unknown part: {', '.join(u.encode('utf-8', 'replace').decode() for u in unknown)}")
     out = []
     with _lock:
         for p in dict.fromkeys(parts):

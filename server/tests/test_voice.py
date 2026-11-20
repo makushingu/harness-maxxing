@@ -539,3 +539,15 @@ def test_changing_the_model_does_not_wait_for_a_download(mx, monkeypatch):
     release.set()
     t.join(5)
     assert time.time() - t0 < 2
+
+
+def test_an_engine_answer_with_a_lone_surrogate_still_encodes(mx, tmp_path, monkeypatch):
+    body = b'{"text": "ab\\ud800c", "language": "fr\\ud800"}'
+    monkeypatch.setattr(voice, "http_transport", httpx.MockTransport(
+        lambda req: httpx.Response(200, content=body, headers={"content-type": "application/json"})))
+    voice.update_settings(engine="groq")
+    vault.put("GROQ_API_KEY", "secret-key-123")
+    out = voice.transcribe_file(make_audio(tmp_path / "v.ogg", 1.5, ["-c:a", "libopus"]))
+    out["text"].encode("utf-8")
+    assert out["language"] in (None, "auto") or str(out["language"]).encode("utf-8")
+    assert out["text"].startswith("ab") and out["text"].endswith("c")

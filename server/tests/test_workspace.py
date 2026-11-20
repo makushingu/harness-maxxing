@@ -251,3 +251,23 @@ def test_an_unread_session_that_failed_is_counted_as_an_error(monkeypatch):
             {"path": p, "archived": True, "state": "error", "unread": True}]
     monkeypatch.setattr(service, "list_sessions", lambda archived=None: rows)
     assert workspace._session_stats()[p] == {"sessions": 3, "archived": 1, "running": 0, "unread": 2, "errors": 1}
+
+
+def test_updating_a_project_keeps_the_bytes_of_the_rest_of_claude_md(client, mx):
+    client.post("/api/workspace/projects", json={"name": "acme", "description": "Shop"})
+    f = mx["ws"] / "projects/acme/CLAUDE.md"
+    f.write_bytes(f.read_bytes() + b"\n## Notes\ncaf\xe9 latin-1\n")
+    r = client.patch("/api/workspace/projects/acme", json={"description": "New shop"})
+    assert r.status_code == 200, r.text
+    got = f.read_bytes()
+    assert b"## Notes\ncaf\xe9 latin-1\n" in got and b"New shop" in got and b"\xef\xbf\xbd" not in got
+    assert not (mx["ws"] / "projects/acme/CLAUDE.md.tmp").exists()
+
+
+def test_a_description_with_a_claude_md_marker_line_is_refused(client, mx):
+    for bad in ("a\n@memory.md\nb", "a\n## Notes\nb"):
+        r = client.post("/api/workspace/projects", json={"name": "acme", "description": bad})
+        assert r.status_code == 400 and r.json()["error"] == "bad_description"
+    assert client.post("/api/workspace/projects", json={"name": "acme", "description": "a\nb ## c"}).status_code == 200
+    r = client.patch("/api/workspace/projects/acme", json={"description": "x\n@memory.md\ny"})
+    assert r.status_code == 400

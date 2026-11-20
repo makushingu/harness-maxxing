@@ -46,7 +46,7 @@ from . import bus, config
 
 log = logging.getLogger("maxxing.backup")
 
-REPO_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]{1,100}$")
+REPO_RE = re.compile(r"\A[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]{1,100}\Z")
 TOKEN_RE = re.compile(r"\A[\x21-\x7e]{1,255}\Z")   # printable ASCII: it goes into an HTTP header
 ALWAYS = ["**/CLAUDE.md", "**/memory.md", "CUSTOMIZATIONS.md", "customizations/*.patch", "projects/*/.maxxing.json",
           "projects/*/topics/*/.maxxing.json", "projects/.order.json", "projects/*/topics/*/agents/*/agent.json",
@@ -660,7 +660,7 @@ def _history_path() -> Path:
 def _record(entry: dict) -> None:
     p = _history_path()
     try:
-        lines = p.read_text().splitlines() if p.exists() else []
+        lines = p.read_text(encoding="utf-8", errors="replace").splitlines() if p.exists() else []
     except OSError:
         lines = []
     # a file name that is not UTF-8 (a lone surrogate from os.walk) is written as "?", not raised from run()
@@ -676,7 +676,7 @@ def history(limit: int = 100) -> list[dict]:
     """Most recent first."""
     out = []
     try:
-        for ln in _history_path().read_text().splitlines():
+        for ln in _history_path().read_text(encoding="utf-8", errors="replace").splitlines():
             try:
                 e = json.loads(ln)
             except ValueError:
@@ -771,6 +771,8 @@ def _safe_rel(name: str) -> str | None:
     if p.is_absolute() or ".." in p.parts or not name or name.startswith("/"):
         return None
     if any(len(part.encode(errors="replace")) > 255 for part in p.parts):   # no file system takes it (ENAMETOOLONG)
+        return None
+    if len(name.encode(errors="replace")) > 4000:                          # PATH_MAX is 4096 with the workspace in front
         return None
     return p.as_posix()
 
@@ -1109,7 +1111,7 @@ def _hold_new_extension_code(restored: list[str]) -> list[str]:
     return ids
 
 
-_CLAUDE_SETTINGS = re.compile(r"(^|/)\.claude/settings(\.local)?\.json$")
+_CLAUDE_SETTINGS = re.compile(r"(^|/)\.claude/settings(\.local)?\.json\Z")
 
 
 # Claude Code settings that run a command or redirect Claude (hooks, status line, key helpers, environment, the

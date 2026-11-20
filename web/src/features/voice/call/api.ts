@@ -91,7 +91,7 @@ export const sortSentence = (text: string, language: string, expecting: boolean)
 async function failure(r: Response): Promise<string> {
   try {
     const j = await r.json()
-    return String(j?.detail?.message || j?.detail || `HTTP ${r.status}`)
+    return String(j?.message || j?.detail?.message || j?.error || j?.detail || `HTTP ${r.status}`)
   } catch {
     return `HTTP ${r.status}`
   }
