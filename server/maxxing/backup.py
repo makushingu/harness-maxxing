@@ -1068,7 +1068,7 @@ def _hold_new_jobs(blob: bytes) -> tuple[bytes, list[str], list[str]]:
     names, ids = [], []
     for j in (data.get("jobs") if isinstance(data, dict) else None) or []:
         if isinstance(j, dict) and j.get("enabled", True) and _job_key(j) not in current \
-                and not (j.get("kind", "shell") == "shell" and _OWN_JOB.match(str(j.get("command") or ""))):
+                and not (j.get("kind", "shell") == "shell" and _is_own_job(str(j.get("command") or ""))):
             j["enabled"] = False
             names.append(str(j.get("name") or j.get("id")))
             ids.append(str(j.get("id")))
@@ -1079,7 +1079,10 @@ def _job_key(j: dict) -> tuple:
     return (j.get("id"), *(str(j.get(k) or ("shell" if k == "kind" else "")) for k in _JOB_CODE))
 
 
-_OWN_JOB = re.compile(r"^(/[\w./-]+/)?maxxing backup run$")       # Harness' own memory backup job
+def _is_own_job(command: str) -> bool:
+    """Harness' own memory backup job: this server's `maxxing` binary, no other folder."""
+    from . import crons
+    return command in {f"{b} backup run" for b in ("maxxing", "/usr/local/bin/maxxing", crons.maxxing_bin())}
 
 
 def _current_jobs() -> list[dict]:
