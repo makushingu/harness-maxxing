@@ -13,6 +13,8 @@ New:
   sidebar (Home, Sessions, Team, Agents), all on by default: off, that page shows no number nor dot.
 
 Changed:
+- **Search answers faster while you type.** A common word or the first letters of one no longer slow the search
+  palette down: the results come back several times sooner on a well-filled workspace.
 - **A shorter bar in the file viewer.** Copy, download, Open in Files and Parent folder moved to its ⋮ menu,
   Preview / Source and Edit are icons: the file name has room again, on a phone too.
 - **Shorter memory files by default: 100 lines (10 KB) instead of 200.** Every session reads the memory of its
