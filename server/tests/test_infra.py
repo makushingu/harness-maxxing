@@ -1384,3 +1384,21 @@ def test_parse_nginx_regex_location_that_proxies_stays_listed():
     sites = {s["path"]: s for s in probe.parse_nginx(conf)}
     assert set(sites) == {"", "^/api"}
     assert sites["^/api"]["kind"] == "proxy" and sites["^/api"]["upstreams"] == ["127.0.0.1:4000"]
+
+
+def test_a_sqlite_file_with_a_hash_or_question_mark_in_its_name_is_backed_up_whole(org, monkeypatch, tmp_path):
+    import sqlite3
+    monkeypatch.setenv("MAXXING_INFRA_BACKUP_DIR", str(tmp_path / "bk"))
+    monkeypatch.setattr(actions, "pg_installed", lambda: False)
+    (tmp_path / "db").mkdir()
+    for name in ("a#b.db", "c?d.db"):
+        with sqlite3.connect(tmp_path / "db" / name) as c:
+            c.execute("create table t(x)")
+            c.execute("insert into t values (7)")
+        actions.declare_sqlite(str(tmp_path / "db" / name))
+    res = actions.backup_all()
+    assert len(res) == 2 and all(r["ok"] for r in res)
+    for r in res:
+        with sqlite3.connect(r["file"]) as c:
+            assert c.execute("select x from t").fetchone()[0] == 7
+    assert sorted(p.name for p in (tmp_path / "db").iterdir()) == ["a#b.db", "c?d.db"]

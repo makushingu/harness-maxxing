@@ -204,12 +204,15 @@ def backup_all() -> list[dict]:
         safe = re.sub(r"[^A-Za-z0-9_.-]", "_", Path(p).name) + "-" + hashlib.sha1(str(p).encode()).hexdigest()[:8]
         target = d / f"sqlite-{safe}-{stamp}.db"
         try:
-            src = sqlite3.connect(f"file:{p}?mode=ro", uri=True, timeout=30)
+            # as_uri() percent-encodes "#" and "?": a raw path would cut the URI, lose mode=ro and open another file
+            src = sqlite3.connect(Path(p).as_uri() + "?mode=ro", uri=True, timeout=30)
             dst = sqlite3.connect(target)
-            with dst:
-                src.backup(dst)
-            src.close()
-            dst.close()
+            try:
+                with dst:
+                    src.backup(dst)
+            finally:
+                src.close()
+                dst.close()
             os.chmod(target, 0o600)
             _rotate(f"sqlite-{safe}")
             results.append({"id": rid, "name": Path(p).name, "ok": True, "file": str(target), "size": target.stat().st_size,
