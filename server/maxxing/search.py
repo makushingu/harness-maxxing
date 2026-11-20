@@ -61,7 +61,7 @@ MAX_FILES = 20_000                   # other text files, whole workspace (memory
 BUCKET_MIN, BUCKET_MAX = 50, 1_000    # per topic / project / root: MAX_FILES // buckets, clamped to this range
 MAX_SCAN_ENTRIES = 20_000            # directory entries one bucket's walk may visit (big data folders)
 FILES_EVERY_S = 600                  # background loop: full walk of the files at most this often
-FILE_RULES = "2"                     # bump when the indexing rules change: rows are cleaned, then VACUUM
+FILE_RULES = "3"                     # bump when the indexing rules change: rows are cleaned, then VACUUM
 MAX_MESSAGE_CHARS = 20_000
 READ_CHUNK = 4 * 1024 * 1024         # session log bytes read per pass and session
 WAL_LIMIT = 4 * 1024 * 1024          # journal_size_limit: bytes the WAL keeps after a checkpoint
@@ -374,7 +374,11 @@ def _file_stat(fp: str, base: str) -> os.stat_result | None:
             return None
         if os.path.islink(fp):
             root = os.path.realpath(base)
-            if os.path.commonpath([os.path.realpath(fp), root]) != root:
+            real = os.path.realpath(fp)
+            if os.path.commonpath([real, root]) != root:
+                return None
+            # the folders the walk skips stay skipped through a link
+            if any(d in SKIP_DIRS or d.startswith(".") for d in Path(os.path.relpath(real, root)).parts[:-1]):
                 return None
     except (OSError, ValueError):                            # UnicodeEncodeError is a ValueError
         return None

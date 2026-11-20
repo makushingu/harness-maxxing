@@ -429,3 +429,16 @@ def test_env_example_files_are_indexed(client, mx):
     (d / ".env.example").write_text("ZQX_FOO_BAR=1\n")
     search.refresh()
     assert [r["title"] for r in _q(client, "ZQX_FOO_BAR")] == [".env.example"]
+
+
+def test_a_link_into_a_hidden_or_skipped_folder_is_not_indexed(client, mx):
+    ws = config.workspace()
+    (ws / ".hid").mkdir()
+    (ws / ".hid" / "k.md").write_text("zqxhiddenlink789\n")
+    (ws / "node_modules").mkdir()
+    (ws / "node_modules" / "n.md").write_text("zqxhiddenlink789\n")
+    os.symlink(ws / ".hid" / "k.md", ws / "sl1.md")
+    os.symlink(ws / "node_modules" / "n.md", ws / "sl2.md")
+    (ws / "real.md").write_text("zqxhiddenlink789 dans une vraie note\n")
+    search.refresh()
+    assert [r["title"] for r in _q(client, "zqxhiddenlink789")] == ["real.md"]
