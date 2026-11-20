@@ -46,7 +46,7 @@ def _never_the_real_tools(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> No
     jail, a swap line of /etc/fstab, the slices...: in tests every one of those paths is under tmp_path."""
     from maxxing import cleanup, cmd_core, cpu, deps
     fake = tmp_path / "_system"
-    monkeypatch.setattr(cleanup, "_sh", lambda cmd, timeout=120: "")    # never vacuum the real journal / apt cache
+    monkeypatch.setattr(cleanup, "_sh", lambda cmd, timeout=120, **_: "")    # never vacuum the real journal / apt cache
     monkeypatch.setattr(cleanup, "APT_CACHE", fake / "apt-archives")
     monkeypatch.setattr(cpu, "SLICE_DIR", fake / "systemd-system")      # the CPU priority slices (uninstall removes them)
     monkeypatch.setattr(deps, "LINK_DIR", fake / "usr-local-bin")
