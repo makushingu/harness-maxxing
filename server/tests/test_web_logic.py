@@ -251,3 +251,14 @@ def test_durations_and_tokens_are_rounded_before_they_are_split(tmp_path):
 def test_a_name_glued_to_a_word_is_not_a_mention():
     src = (WEB / "pages" / "sessions" / "mentions.tsx").read_text(encoding="utf-8")
     assert "(?<!\\\\S)@${label" in src                    # an "@Name" glued to a word (bob@Lea.fr) is no mention
+
+
+def test_the_initials_of_a_sender_starting_with_an_emoji_are_not_cut_in_half(tmp_path):
+    src = (WEB / "features" / "mail" / "shared.tsx").read_text(encoding="utf-8")
+    mod = tmp_path / "initials.ts"
+    mod.write_text(src[src.index("export function initials"):src.index("const HUES")].replace(
+        "a: MailAddress | undefined", "a: any"), encoding="utf-8")
+    run = tmp_path / "run"
+    run.mkdir()
+    out = _run_ts(run, mod, "return [m.initials({ name: '😀 Bob' }), m.initials({ name: 'Ann Lee' })]")
+    assert out == ["😀B", "AL"]

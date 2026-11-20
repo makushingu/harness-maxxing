@@ -60,7 +60,7 @@ export function shortDate(ts: number | null, lang: string): string {
 export function initials(a: MailAddress | undefined): string {
   const s = (a?.name || a?.email || '?').replace(/["']/g, '').trim()
   const parts = s.split(/[\s@._-]+/).filter(Boolean)
-  return ((parts[0]?.[0] || '?') + (parts.length > 1 ? parts[1][0] : '')).toUpperCase()
+  return (([...(parts[0] || '')][0] || '?') + (parts.length > 1 ? [...parts[1]][0] : '')).toUpperCase()
 }
 
 const HUES = ['bg-blue-500/15 text-blue-600 dark:text-blue-300', 'bg-violet-500/15 text-violet-600 dark:text-violet-300',
