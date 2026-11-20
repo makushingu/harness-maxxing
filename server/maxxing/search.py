@@ -61,7 +61,7 @@ MAX_FILES = 20_000                   # other text files, whole workspace (memory
 BUCKET_MIN, BUCKET_MAX = 50, 1_000    # per topic / project / root: MAX_FILES // buckets, clamped to this range
 MAX_SCAN_ENTRIES = 20_000            # directory entries one bucket's walk may visit (big data folders)
 FILES_EVERY_S = 600                  # background loop: full walk of the files at most this often
-FILE_RULES = "2"                     # bump when the indexing rules change: rows are cleaned, then VACUUM
+FILE_RULES = "3"                     # bump when the indexing rules change: rows are cleaned, then VACUUM
 MAX_MESSAGE_CHARS = 20_000
 READ_CHUNK = 4 * 1024 * 1024         # session log bytes read per pass and session
 WAL_LIMIT = 4 * 1024 * 1024          # journal_size_limit: bytes the WAL keeps after a checkpoint
@@ -297,13 +297,15 @@ def _index_groups(con: sqlite3.Connection) -> None:
                     m = json.loads(line)
                 except ValueError:
                     continue
-                text = (m.get("text") or "").strip() if isinstance(m, dict) and m.get("kind") == "message" else ""
+                raw = m.get("text") if isinstance(m, dict) and m.get("kind") == "message" else None
+                text = raw.strip() if isinstance(raw, str) else ""
                 if not text:
                     continue
                 author = str(m.get("author") or "")
                 who = "Owner" if author == "me" else "@" + hs.get(author, agent_rooms.slug(author))
                 con.execute("INSERT INTO items(src, kind, ref, path, title, body, at) VALUES (?,?,?,?,?,?,?)",
-                            (key, "group", path, path, "", f"{who}: {text}"[:MAX_MESSAGE_CHARS], m.get("at")))
+                            (key, "group", path, path, "", f"{who}: {text}"[:MAX_MESSAGE_CHARS],
+                             m.get("at") if isinstance(m.get("at"), (int, float)) else None))
             sig["offset"] += end
         con.execute("INSERT OR REPLACE INTO src(key, sig) VALUES (?, ?)", (key, json.dumps(sig)))
         if sig["offset"] >= size:
@@ -332,7 +334,7 @@ def _text_file(name: str) -> bool:
     low = name.lower()
     if low in SKIP_FILES:
         return False
-    return Path(low).suffix in TEXT_EXT or low in MEMORY_NAMES
+    return Path(low).suffix in TEXT_EXT or low.endswith(".env.example") or low in MEMORY_NAMES
 
 
 def _index_one(con: sqlite3.Connection, base: str, fp: str, st: os.stat_result, known: dict) -> None:
@@ -372,7 +374,11 @@ def _file_stat(fp: str, base: str) -> os.stat_result | None:
             return None
         if os.path.islink(fp):
             root = os.path.realpath(base)
-            if os.path.commonpath([os.path.realpath(fp), root]) != root:
+            real = os.path.realpath(fp)
+            if os.path.commonpath([real, root]) != root:
+                return None
+            # the folders the walk skips stay skipped through a link
+            if any(d in SKIP_DIRS or d.startswith(".") for d in Path(os.path.relpath(real, root)).parts[:-1]):
                 return None
     except (OSError, ValueError):                            # UnicodeEncodeError is a ValueError
         return None

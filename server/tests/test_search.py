@@ -401,3 +401,44 @@ async def test_an_aborted_request_stops_its_query(monkeypatch):
             return True
     r = await asyncio.wait_for(search_api.search(Gone(), q="de", kinds="", limit=30), 5)
     assert r["cancelled"]
+
+
+def test_a_group_line_with_a_non_text_value_does_not_stop_the_index(client, topic, mx):
+    assert client.put("/api/settings", json={"agents_page": True}).status_code == 200
+    for name in ("writer", "editor"):
+        r = client.post("/api/agents", json={"topic_path": topic, "name": name, "display_name": name.capitalize(),
+                                             "sandbox": False})
+        assert r.status_code == 200, r.text
+    r = client.post("/api/agent-groups", json={"project": "acme", "name": "team", "display_name": "Team",
+                                               "goal": "Write.", "members": [
+                                                   {"path": f"{topic}/agents/writer", "role": "writes"},
+                                                   {"path": f"{topic}/agents/editor", "role": "edits"}]})
+    assert r.status_code == 200, r.text
+    room = config.state_dir("agents", "rooms") / "acme__team.jsonl"
+    room.write_text(json.dumps({"kind": "message", "text": 5, "at": "x"}) + "\n"
+                    + json.dumps({"kind": "message", "text": "zqxgroupline", "at": 1.0}) + "\n")
+    (config.workspace() / "fresh.md").write_text("zqxfreshfile321\n")
+    search.refresh()
+    assert [r["title"] for r in _q(client, "zqxfreshfile321")] == ["fresh.md"]
+    assert _q(client, "zqxgroupline")
+
+
+def test_env_example_files_are_indexed(client, mx):
+    d = config.workspace() / "projects" / "acme" / "topics" / "blog"
+    d.mkdir(parents=True)
+    (d / ".env.example").write_text("ZQX_FOO_BAR=1\n")
+    search.refresh()
+    assert [r["title"] for r in _q(client, "ZQX_FOO_BAR")] == [".env.example"]
+
+
+def test_a_link_into_a_hidden_or_skipped_folder_is_not_indexed(client, mx):
+    ws = config.workspace()
+    (ws / ".hid").mkdir()
+    (ws / ".hid" / "k.md").write_text("zqxhiddenlink789\n")
+    (ws / "node_modules").mkdir()
+    (ws / "node_modules" / "n.md").write_text("zqxhiddenlink789\n")
+    os.symlink(ws / ".hid" / "k.md", ws / "sl1.md")
+    os.symlink(ws / "node_modules" / "n.md", ws / "sl2.md")
+    (ws / "real.md").write_text("zqxhiddenlink789 dans une vraie note\n")
+    search.refresh()
+    assert [r["title"] for r in _q(client, "zqxhiddenlink789")] == ["real.md"]
