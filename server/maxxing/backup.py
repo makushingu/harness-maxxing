@@ -46,7 +46,7 @@ from . import bus, config
 
 log = logging.getLogger("maxxing.backup")
 
-REPO_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]{1,100}$")
+REPO_RE = re.compile(r"\A[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]{1,100}\Z")
 TOKEN_RE = re.compile(r"\A[\x21-\x7e]{1,255}\Z")   # printable ASCII: it goes into an HTTP header
 ALWAYS = ["**/CLAUDE.md", "**/memory.md", "CUSTOMIZATIONS.md", "customizations/*.patch", "projects/*/.maxxing.json",
           "projects/*/topics/*/.maxxing.json", "projects/.order.json", "projects/*/topics/*/agents/*/agent.json",
@@ -1109,7 +1109,7 @@ def _hold_new_extension_code(restored: list[str]) -> list[str]:
     return ids
 
 
-_CLAUDE_SETTINGS = re.compile(r"(^|/)\.claude/settings(\.local)?\.json$")
+_CLAUDE_SETTINGS = re.compile(r"(^|/)\.claude/settings(\.local)?\.json\Z")
 
 
 # Claude Code settings that run a command or redirect Claude (hooks, status line, key helpers, environment, the

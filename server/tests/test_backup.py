@@ -729,3 +729,10 @@ def test_a_newline_in_a_name_does_not_get_past_the_deny_list():
     from maxxing import backup
     assert backup.denied("a.pem") and backup.denied("a\nb.pem") and backup.denied("id_rsa\nx")
     assert backup.glob_re("**/*.md").match("a\nb/c.md") and not backup.glob_re("*.md").match("a.md\n")
+
+
+def test_a_repository_name_with_a_line_break_is_refused(gh, ws):
+    r = backup.configure("alice/repo\n.git", GH_TOKEN)
+    assert r["ok"] is False and "owner/name" in r["error"]
+    assert backup.REPO_RE.match("alice/repo\n") is None
+    assert backup._CLAUDE_SETTINGS.search(".claude/settings.json\n") is None
