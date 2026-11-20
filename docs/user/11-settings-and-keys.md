@@ -136,7 +136,7 @@ bar at the bottom, the conversation fills the screen. Two buttons sit at the top
   task projects, the Infra sections, the folder, the mailboxes and folders, the notification sources. Pages without
   a list (Home, Git, Settings...) have no ☰.
 - **⊞** (top right) opens everything else, laid out like the sidebar: a search field (the same as ⌘K), every page
-  in your sidebar order (the unread notifications count on the Home tile), the extension pages apart, Feedback and Settings, then the status
+  in your sidebar order (the unread notifications count on the Home tile, red when one is an error), the extension pages apart, Feedback and Settings, then the status
   card - server health (tap it for the issues), CPU / RAM / disk (opens Settings -> System), your Claude plan
   (opens Settings -> Usage), presentation mode, the theme, the docs and General settings. A dot on ⊞ means an
   update is waiting or the server needs attention.

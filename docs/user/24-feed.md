@@ -8,8 +8,8 @@ important e-mails, any script's result - in one place instead of chat messages.
 
 ## Where you see it
 
-- **Sidebar**: the unread count sits on **Home** (a dot when the sidebar is folded); on a phone, on the Home
-  tile of the **⊞** menu. On a computer with the second bar closed, rest the mouse on **Home** to show the list of
+- **Sidebar**: the unread count sits on **Home** (a dot when the sidebar is folded), red when one of them is an
+  error; on a phone, on the Home tile of the **⊞** menu. Settings -> Features -> **Badges** -> Home turns it off. On a computer with the second bar closed, rest the mouse on **Home** to show the list of
   sources.
 - **Dashboard**: a panel next to the widgets (wide screens). The bell in the dashboard's header shows the unread
   count and hides / shows the panel; on a narrow screen it opens the list.
