@@ -488,11 +488,8 @@ def scan_bytes(data: bytes) -> list[str]:
     """Secret kinds found in a blob (empty = clean); UTF-16 text (BOM, or NULs between ASCII) is decoded first."""
     blobs = [data]
     if data[:2] in (b"\xff\xfe", b"\xfe\xff") or (len(data) > 1 and data.count(b"\0") * 3 > len(data)):
-        for enc in ("utf-16", "utf-16-le", "utf-16-be"):
-            try:
-                blobs.append(data.decode(enc).encode())
-            except UnicodeDecodeError:
-                continue
+        for enc in ("utf-16", "utf-16-le", "utf-16-be"):      # "replace": a cut or odd-length file is read as far as it goes
+            blobs.append(data.decode(enc, "replace").encode())
     return sorted({kind for kind, rx in LEAKS for b in blobs if rx.search(b)})
 
 

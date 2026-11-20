@@ -752,3 +752,9 @@ def test_a_history_file_that_is_not_utf8_does_not_break_the_backup_or_its_histor
     assert backup.history()[0]["ok"] is True
     backup._record({"ok": True})
     assert len(backup.history()) == 2
+
+
+def test_scanner_reads_a_cut_utf16_file():
+    tok = ("token: ghp_" + "a1B2c3D4e5" * 4).encode("utf-16")
+    assert "GitHub token" in backup.scan_bytes(tok + b"x")          # an odd length: the last byte is half a character
+    assert "GitHub token" in backup.scan_bytes(b"\xff\xfe" + tok[2:] + b"\x00\xd8")   # a lone high surrogate at the end
