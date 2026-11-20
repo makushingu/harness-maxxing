@@ -423,7 +423,7 @@ def _engine_api(engine: str, wav: Path, language: str, s: dict) -> dict:
             msg = (r.json().get("error") or {}).get("message") or r.text
         except Exception:  # noqa: BLE001
             msg = r.text
-        raise VoiceError(502, "engine_error", f"{engine} error {r.status_code}: {str(msg)[:200]}")
+        raise VoiceError(502, "engine_error", f"{engine} error {r.status_code}: {_clean(str(msg)[:200])}")
     try:
         j = r.json()
     except ValueError:
@@ -431,8 +431,15 @@ def _engine_api(engine: str, wav: Path, language: str, s: dict) -> dict:
     if not isinstance(j, dict) or not isinstance(j.get("text") or "", str):   # a proxy answering a list, null...
         raise VoiceError(502, "engine_error", f"{engine}: unexpected answer")
     lang = j.get("language") if isinstance(j.get("language"), str) else None
+    if lang and not re.fullmatch(r"[A-Za-z-]{2,20}", lang):   # a code or an English name: nothing else is passed on
+        lang = None
     lang = _LANG_NAMES.get(lang.lower(), lang) if lang else (None if language == "auto" else language)
-    return {"text": (j.get("text") or "").strip(), "language": lang, "model": model}
+    return {"text": _clean((j.get("text") or "").strip()), "language": lang, "model": model}
+
+
+def _clean(text: str) -> str:
+    """A lone surrogate from an engine or a proxy cannot be encoded to JSON or UTF-8: replace it."""
+    return text.encode("utf-8", "replace").decode("utf-8")
 
 
 # verbose_json returns English names ("french"); map the common ones to ISO codes.
