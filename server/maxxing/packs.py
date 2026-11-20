@@ -83,26 +83,29 @@ def _copy_missing(src_root: Path, dst_root: Path, rel_prefix: str, variables: di
     from .cmd_core import render_template
     created: list[str] = []
     for src in sorted(src_root.rglob("*")):
-        rel = src.relative_to(src_root)
-        dst = dst_root / rel
-        if src.is_dir():
-            try:                                       # a linked folder leading out of the destination gets no folders
-                dst.resolve().relative_to(dst_root.resolve())
-            except ValueError:
-                continue
-            dst.mkdir(parents=True, exist_ok=True)
-        elif not dst.exists() and not dst.is_symlink():  # a dangling link is never written through
-            try:                                       # nor a linked folder leading out of the destination
-                dst.parent.resolve().relative_to(dst_root.resolve())
-            except ValueError:
-                continue
-            dst.parent.mkdir(parents=True, exist_ok=True)
-            if src.suffix in RENDERED_SUFFIXES:
-                dst.write_text(render_template(src.read_text(encoding="utf-8"), variables), encoding="utf-8")
-                shutil.copymode(src, dst)
-            else:
-                shutil.copy2(src, dst)
-            created.append(f"{rel_prefix}/{rel}")
+        try:
+            rel = src.relative_to(src_root)
+            dst = dst_root / rel
+            if src.is_dir():
+                try:                                       # a linked folder leading out of the destination gets no folders
+                    dst.resolve().relative_to(dst_root.resolve())
+                except ValueError:
+                    continue
+                dst.mkdir(parents=True, exist_ok=True)
+            elif not dst.exists() and not dst.is_symlink():  # a dangling link is never written through
+                try:                                       # nor a linked folder leading out of the destination
+                    dst.parent.resolve().relative_to(dst_root.resolve())
+                except ValueError:
+                    continue
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                if src.suffix in RENDERED_SUFFIXES:
+                    dst.write_text(render_template(src.read_text(encoding="utf-8"), variables), encoding="utf-8")
+                    shutil.copymode(src, dst)
+                else:
+                    shutil.copy2(src, dst)
+                created.append(f"{rel_prefix}/{rel}")
+        except OSError as e:                           # a file where a folder goes, a read-only folder...
+            raise PackError(409, "blocked", f"Cannot write {rel_prefix}/{rel}: {e.strerror or e}") from None
     return created
 
 
