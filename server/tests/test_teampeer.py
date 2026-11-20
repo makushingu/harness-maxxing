@@ -439,3 +439,28 @@ def test_normalize_keeps_the_brackets_of_an_ipv6_literal():
     assert teampeer.normalize("https://[2001:DB8::1]:8443/x") == "https://[2001:db8::1]:8443"
     assert teampeer.normalize("http://[::1]") == "http://[::1]"
     assert teampeer.normalize("https://Ui.Example.com/") == "https://ui.example.com"
+
+
+def test_a_join_answer_with_a_lone_surrogate_is_scrubbed_or_refused_not_a_crash(mx, monkeypatch):
+    import httpx
+    _setup(monkeypatch)
+    me, addr = "http://127.0.0.1:8801", "http://127.0.0.1:8803"
+    key0 = b"i" * 32
+    mode = {"nonce": "AAAA"}
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        sent = json.loads(req.content)
+        nonce_a = mode["nonce"]
+        proof = teampeer._mac(key0, "welcome", addr, me, nonce_a.encode("utf-8", "replace").decode(), sent["nonce"])
+        raw = ('{"nonce": %s, "proof": "%s", "profile": {"name": "Bo\\ud800b"}}'
+               % (json.dumps(nonce_a), proof)).encode()
+        return httpx.Response(200, content=raw, headers={"content-type": "application/json"})
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    monkeypatch.setattr(teampeer, "_http", lambda: client)
+    invitation = addr + "#" + teampeer._b64(key0)
+    assert teampeer.join(invitation)["status"] == "waiting"
+    assert teampeer._load()["peers"][addr]["name"] == "Bo?b"
+    mode["nonce"] = "AA\ud800"                              # (json.dumps writes it as \ud800)
+    teampeer.forget(addr)
+    assert teampeer.join(invitation)["status"] == "waiting"    # the nonce is scrubbed too: no UnicodeEncodeError
