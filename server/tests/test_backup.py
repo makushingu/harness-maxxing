@@ -764,3 +764,9 @@ def test_only_the_servers_own_backup_command_is_kept_enabled():
     assert backup._is_own_job("maxxing backup run") and backup._is_own_job(f"{crons.maxxing_bin()} backup run")
     for c in ("/tmp/evil/maxxing backup run", "/opt/x/maxxing backup run", "maxxing backup run\n", "maxxing backup run; id"):
         assert not backup._is_own_job(c), c
+
+
+def test_a_pattern_with_many_stars_is_refused_before_it_can_hang_the_scan():
+    with pytest.raises(backup.BackupError):
+        backup.clean_include(["*a" * 15 + "*b"])
+    assert backup.clean_include(["notes/*/*.md", "a*b*c"]) == ["notes/*/*.md", "a*b*c"]

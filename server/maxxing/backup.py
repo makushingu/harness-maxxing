@@ -352,7 +352,7 @@ def remove_schedule() -> None:
 MAX_INCLUDE = 100            # patterns
 MAX_PATTERN = 200            # characters
 MAX_DEEP = 3                 # `**` per pattern: each one is a `.*` the regex may backtrack over
-MAX_STARS = 16               # `*` per pattern: each one is a `[^/]*`, `*a*a*a…` backtracks as well
+MAX_STARS = 5                # `*` per pattern: each one is a `[^/]*`, `*a*a*a…` backtracks (15 of them hang a regex scan)
 
 
 def clean_schedule(schedule: Any) -> str:
