@@ -1,6 +1,7 @@
 """Trash: list, restore (topics with their sessions, files, single sessions), delete, empty, purge."""
 from __future__ import annotations
 
+import errno
 import json
 import os
 import time
@@ -652,16 +653,46 @@ def test_a_failed_move_of_a_session_to_the_trash_leaves_it_in_the_store(client, 
     assert not list(trash.trash_dir().glob("*session*"))
 
 
+def _across_disks(monkeypatch):
+    real = os.rename
+
+    def rename(src, dst, *a, **k):
+        if Path(src).parent == trash.trash_dir():
+            raise OSError(errno.EXDEV, "cross-device")
+        return real(src, dst, *a, **k)
+    monkeypatch.setattr(trash.os, "rename", rename)
+
+
 def test_a_failed_restore_leaves_no_partial_copy(client, topic, mx, monkeypatch):
     item = _trash_file(mx, topic, "half.txt")
+    _across_disks(monkeypatch)
 
-    def half(src, dst):
+    def half(src, dst, **k):
         Path(dst).write_text("part")                    # a copy across disks that stops half way
         raise OSError("disk full")
-    monkeypatch.setattr(trash.shutil, "move", half)
+    monkeypatch.setattr(trash.shutil, "copy2", half)
     r = client.post(f"/api/trash/{item.stem}/restore")
     assert r.status_code == 409
-    assert not list((mx["ws"] / topic).glob("half*")) and item.exists()
+    assert not list((mx["ws"] / topic).glob("*half*")) and item.exists()
+
+
+def test_a_restore_across_disks_keeps_the_copy_when_the_source_cannot_be_emptied(client, topic, mx, monkeypatch):
+    from maxxing import workspace
+    d = mx["ws"] / topic / "box"
+    d.mkdir()
+    (d / "a.txt").write_text("a")
+    (d / "b.txt").write_text("b")
+    workspace.move_to_trash(d)
+    (item,) = _items(client)
+    _across_disks(monkeypatch)
+
+    def rmtree(path, *a, **k):
+        (Path(path) / "a.txt").unlink()                 # the removal stops after a.txt
+        if not k.get("ignore_errors"):
+            raise OSError(errno.EPERM, "not permitted")
+    monkeypatch.setattr(trash.shutil, "rmtree", rmtree)
+    assert client.post(f"/api/trash/{item['id']}/restore").status_code == 200
+    assert sorted(q.name for q in d.iterdir()) == ["a.txt", "b.txt"]
 
 
 def test_restoring_a_project_with_a_session_title_that_cannot_be_written_does_not_crash(client, mx, topic):
@@ -768,3 +799,15 @@ def test_a_topic_deleted_from_the_file_manager_comes_back_with_a_slug_name(clien
     (it,) = [i for i in _items(client) if i["kind"] == "topic"]
     r = client.post(f"/api/trash/{it['id']}/restore").json()
     assert r["ok"] and (mx["ws"] / "projects/acme/topics/blog-restored").is_dir()
+
+
+def test_an_old_item_with_a_damaged_sidecar_is_not_purged_at_once(client, topic, mx):
+    from maxxing import workspace
+    f = mx["ws"] / topic / "old.txt"
+    f.write_text("x")
+    os.utime(f, (time.time() - 90 * 86400,) * 2)
+    workspace.move_to_trash(f)
+    side = next(trash.trash_dir().glob("*old.txt.json"))
+    side.write_text("{not json")
+    assert trash.purge_old() == 0
+    assert any(trash.trash_dir().glob("*old.txt"))

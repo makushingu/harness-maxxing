@@ -171,6 +171,20 @@ def _is_extra(p: Path) -> bool:
     return p.name.endswith((".json", ".sessions", ".agents")) and not p.with_name(p.name + ".json").exists()
 
 
+def _deleted_at(p: Path, side: dict) -> float:
+    """When it went to the trash. Without a valid date in the sidecar: the newer of the item and its sidecar (the
+    item keeps the date of the original file, so an old file would be purged at once)."""
+    at = side.get("at")
+    if at:
+        return float(at)
+    t = p.lstat().st_mtime
+    try:
+        t = max(t, p.with_name(p.name + ".json").lstat().st_mtime)
+    except OSError:
+        pass
+    return t
+
+
 def _entries() -> list[Path]:
     t = trash_dir()
     out = []
@@ -234,7 +248,7 @@ def _build(t: Path, root: Path) -> list[dict[str, Any]]:
             continue
         side = _side(p)
         try:
-            at = float(side.get("at") or p.lstat().st_mtime)
+            at = _deleted_at(p, side)
         except OSError:                            # removed meanwhile
             continue
         kind = "previous_versions" if not side and p.name.startswith("backup-restore-") else _kind(p, side)
@@ -261,6 +275,33 @@ def _item(item_id: str) -> Path:
 
 
 _restore_lock = threading.Lock()
+
+
+def _move_back(p: Path, dest: Path) -> None:
+    """Put p at dest. Across disks the item is copied to a temporary name next to dest and renamed in place
+    before the source is removed, so a source that cannot be removed completely never costs the copy."""
+    try:
+        os.rename(p, dest)
+        return
+    except OSError:
+        pass
+    tmp = dest.with_name(f".{dest.name[:200]}.restoring-{os.getpid()}")
+    try:
+        if p.is_dir() and not p.is_symlink():
+            shutil.copytree(p, tmp, symlinks=True)
+        else:
+            shutil.copy2(p, tmp, follow_symlinks=False)
+        os.rename(tmp, dest)
+    except OSError:                                         # a copy that stopped half way: no partial copy left
+        if tmp.is_dir() and not tmp.is_symlink():
+            shutil.rmtree(tmp, ignore_errors=True)
+        else:
+            tmp.unlink(missing_ok=True)
+        raise
+    if p.is_dir() and not p.is_symlink():
+        shutil.rmtree(p, ignore_errors=True)
+    else:
+        p.unlink(missing_ok=True)
 
 
 def _free(dest: Path) -> Path:
@@ -397,16 +438,7 @@ def restore(item_id: str) -> dict[str, Any]:
         with _restore_lock:                                 # two restores of the same name must not pick the same free one
             dest = _free_dir_name(original) if kind in ("project", "topic", "agent") else _free(original)
             dest.parent.mkdir(parents=True, exist_ok=True)
-            existed = os.path.lexists(dest)
-            try:
-                shutil.move(str(p), str(dest))
-            except OSError:
-                if not existed and os.path.lexists(p):  # a copy across disks failed half way: no partial copy left
-                    if dest.is_dir() and not dest.is_symlink():
-                        shutil.rmtree(dest, ignore_errors=True)
-                    else:
-                        dest.unlink(missing_ok=True)
-                raise
+            _move_back(p, dest)
     except OSError as e:                                    # the folder it was in is now a file, a read-only disk...
         raise TrashError(409, "not_restorable", f"Cannot put it back there: {e.strerror or e}") from None
     n = 0
@@ -498,7 +530,7 @@ def purge_old(days: int = KEEP_DAYS) -> int:
     n = 0
     for p in _entries():
         try:
-            at = float(_side(p).get("at") or p.lstat().st_mtime)
+            at = _deleted_at(p, _side(p))
         except OSError:                                 # a broken link or an item removed meanwhile
             continue
         if at < cutoff:
