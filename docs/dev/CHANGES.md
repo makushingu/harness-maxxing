@@ -23,7 +23,9 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 - Server loop (`api/jarvis.py`, 30 s): `jarvis.tick` sends the morning brief (a new conversation when `daily`) and
   starts the night pass (a separate session, skill `jarvis-dream`, `maxxing jarvis digest [--mark]`) once a day after
   their local time. API `GET /api/jarvis`, `POST /open|/new|/brief|/dream|/work/{ref}/close`, `PUT /settings`; bus
-  topic `jarvis`. New CLI `maxxing jarvis …` and `maxxing topics list|new`.
+  topic `jarvis`. New CLI `maxxing jarvis …` and `maxxing topics list|new`. The scheduled night pass runs on
+  `dream_model` (default `sonnet`) and is skipped when no session, memory.md or tasks.json moved since the last mark
+  (`jarvis.quiet_since`). `SessionColumn own`: no place picker, archive, delete or terminal (Jarvis's page).
 
 ## 2.0.0-alpha.161 - 2026-11-21
 

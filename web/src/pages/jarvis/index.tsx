@@ -69,19 +69,13 @@ export default function JarvisPage() {
                 <ListTodo />
               </Button>
             </Tooltip>
-            <Tooltip content={t('jarvis.new.hint')}>
-              <Button variant="ghost" size="sm" onClick={() => fresh.mutate()} disabled={fresh.isPending} data-testid="jarvis-new">
-                <MessageSquarePlus />
-                <span className="max-sm:hidden">{t('jarvis.new')}</span>
-              </Button>
-            </Tooltip>
-            <SettingsMenu settings={st.settings} />
+            <SettingsMenu settings={st.settings} onNew={() => fresh.mutate()} renewing={fresh.isPending} />
           </div>
         }
       />
       <div className="flex min-h-0 flex-1" style={{ '--safe-top': '0px' } as React.CSSProperties}>
         <div className={cn('flex min-h-0 min-w-0 flex-1 flex-col', board && 'max-lg:hidden')}>
-          {sid ? <SessionColumn key={sid} col={col} sid={sid} index={0} count={1} variant="solo" /> : <Skeleton className="m-6 h-40" />}
+          {sid ? <SessionColumn key={sid} col={col} sid={sid} index={0} count={1} variant="solo" own /> : <Skeleton className="m-6 h-40" />}
         </div>
         <aside className={cn('flex min-h-0 w-80 shrink-0 flex-col border-l max-lg:w-full max-lg:border-l-0', !board && 'max-lg:hidden')} data-testid="jarvis-board">
           <Board work={st.work} />
@@ -188,7 +182,7 @@ function WorkCard({ w }: { w: JarvisWork }) {
 }
 
 /* ---------------------------------------------------------------- its settings */
-function SettingsMenu({ settings }: { settings: JarvisSettings }) {
+function SettingsMenu({ settings, onNew, renewing }: { settings: JarvisSettings; onNew: () => void; renewing: boolean }) {
   const t = useT()
   const save = useJarvisSettings()
   const brief = useJarvisBrief()
@@ -226,7 +220,14 @@ function SettingsMenu({ settings }: { settings: JarvisSettings }) {
           <TimeField icon={Sun} label={t('jarvis.set.brief')} value={settings.brief} onSave={(v) => set('brief', v)} />
           <TimeField icon={Moon} label={t('jarvis.set.dream')} value={settings.dream} onSave={(v) => set('dream', v)} />
         </div>
+        <p className="text-xs text-muted-foreground">{t('jarvis.set.cost')}</p>
         <div className="flex flex-wrap gap-2 border-t pt-3">
+          <Tooltip content={t('jarvis.new.hint')}>
+            <Button variant="outline" size="sm" onClick={onNew} disabled={renewing} data-testid="jarvis-new">
+              <MessageSquarePlus />
+              {t('jarvis.new')}
+            </Button>
+          </Tooltip>
           <Button variant="outline" size="sm" onClick={() => brief.mutate()} disabled={brief.isPending}>
             <Sun />
             {t('jarvis.set.briefNow')}

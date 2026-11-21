@@ -5030,7 +5030,7 @@ export const en = {
   'jarvis.header.work': "{count} piece(s) of work in progress",
   'jarvis.header.workAsks': "{count} piece(s) of work in progress · {asks} waiting for you",
   'jarvis.new': "New conversation",
-  'jarvis.new.hint': "Start a new conversation (the work in progress still reports here)",
+  'jarvis.new.hint': "Start again with an empty context (cheaper turns): Jarvis keeps what matters in its memory, and the work in progress reports into the new one",
   'jarvis.board.title': "Work",
   'jarvis.board.asks': "Waiting for you",
   'jarvis.board.running': "In progress",
@@ -5060,4 +5060,6 @@ export const en = {
   'jarvis.set.none': "None",
   'jarvis.set.briefNow': "Brief now",
   'jarvis.set.dreamNow': "Night pass now",
+  'features.need.jarvis': "Uses more of your Claude plan than plain sessions: each answer that comes back from a session is one more Jarvis turn, plus a morning brief and a night pass (Sonnet, skipped on a quiet day). Turn off the brief or the night pass in its settings to spend less.",
+  'jarvis.set.cost': "What it costs: one turn per message, one per report that comes back, the brief and the night pass (Sonnet, skipped when nothing changed). A new conversation each day keeps each turn small.",
 }

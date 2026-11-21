@@ -382,8 +382,11 @@ function useSlimHeader(head: React.RefObject<HTMLElement | null>, stacked: boole
 const TermDrawer = React.lazy(withGroups(['term'], () => import('@/features/terminal/TermDrawer')))
 
 /** `agentRun`: a run of an agent shown on the Agents page - it stays where it is (no move, archive or delete: the
- *  agent manages its runs, archiving them by itself), and the archived banner is not shown. */
-export function SessionColumn({ col, sid, variant, index, count, place, agentRun }: { col: Col; sid: string; variant: ColumnVariant; index: number; count: number; place?: Place; agentRun?: boolean }) {
+ *  agent manages its runs, archiving them by itself), and the archived banner is not shown.
+ *  `own`: the conversation of a feature page (Jarvis): like an agent run, and its place is not shown at all (it lives
+ *  in the feature's hidden folder, not in one of the owner's topics). */
+export function SessionColumn({ col, sid, variant, index, count, place, agentRun: runOfAgent, own }: { col: Col; sid: string; variant: ColumnVariant; index: number; count: number; place?: Place; agentRun?: boolean; own?: boolean }) {
+  const agentRun = runOfAgent || own
   // Opened behind the session in front (another device of the user opened it, a link opened beside): the keyboard
   // stays where the user is typing.
   const [background] = React.useState(() => {
@@ -758,6 +761,7 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
           rootLabel={t('sessions.root')}
           onClose={() => close(col.key)}
           fixedPlace={agentRun}
+          hidePlace={own}
           headRef={head}
           headProps={menuCtx.props}
           slim={slim}
@@ -946,6 +950,7 @@ function ColumnHeader({
   contextMenu,
   slim,
   fixedPlace,
+  hidePlace,
 }: {
   col: Col
   variant: ColumnVariant
@@ -956,6 +961,8 @@ function ColumnHeader({
   onRename: (title: string) => void
   /** The place is shown, not a picker (a run of an agent stays in the agent's folder). */
   fixedPlace?: boolean
+  /** No place at all (a feature's own conversation: Jarvis). */
+  hidePlace?: boolean
   headRef?: React.Ref<HTMLElement>
   /** The session's options window, opened by `menu` and by a right click / long press on the header. */
   headProps?: ContextMenuHandlers
@@ -988,7 +995,7 @@ function ColumnHeader({
         <div data-kbd-hide="" className="mt-0.5 flex h-6 min-w-0 items-center gap-2 text-[13px] text-muted-foreground">
           {session ? (
             <>
-              <MoveSessionPicker session={session} rootLabel={rootLabel} locked={fixedPlace || (!!session.worktree && !session.worktree.removed)} />
+              {!hidePlace && <MoveSessionPicker session={session} rootLabel={rootLabel} locked={fixedPlace || (!!session.worktree && !session.worktree.removed)} />}
               <CopyMark session={session} />
               {session.source === 'cron' && <Clock className="size-3.5 shrink-0" aria-label={t('sessions.source.cron')} />}
               <SessionMarks session={session} className="size-3.5" />
@@ -1034,7 +1041,7 @@ function ColumnHeader({
       <div data-kbd-hide="" className={cn('flex h-5 min-w-0 items-center gap-2 text-[11px] text-muted-foreground', slim && 'hidden')}>
         {session ? (
           <>
-            <MoveSessionPicker session={session} rootLabel={rootLabel} locked={fixedPlace || (!!session.worktree && !session.worktree.removed)} />
+            {!hidePlace && <MoveSessionPicker session={session} rootLabel={rootLabel} locked={fixedPlace || (!!session.worktree && !session.worktree.removed)} />}
               <CopyMark session={session} />
             {session.source === 'cron' && (
               <Tooltip content={t('sessions.source.cron')}>

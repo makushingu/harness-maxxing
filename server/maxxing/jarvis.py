@@ -36,6 +36,7 @@ TEMPLATE = config.TEMPLATES_DIR / "jarvis"
 
 DEFAULTS: dict[str, Any] = {
     "model": "",              # its conversation's model ("" = the server's)
+    "dream_model": "sonnet",  # the night pass's model (a reading and writing job: no need for the biggest one)
     "root": True,             # the sessions it starts run without permission prompts (mode bypass), like itself
     "ask_first": True,        # it asks the owner before publishing, paying, deleting or writing to someone
     "internals": False,       # show its project, sessions and night passes in the tree and the lists
@@ -511,7 +512,23 @@ def brief(now: float | None = None) -> dict:
     return conversation(text, source="cron", new=s["daily"])
 
 
-def dream(now: float | None = None) -> dict:
+def quiet_since(since: float) -> bool:
+    """Nothing to read since `since`: no session of the owner moved, no memory file or task changed. The night pass
+    is then skipped (no Claude turn: a quiet day costs nothing)."""
+    from . import workspace
+    from .sessions import service
+    if any((x.get("updated") or 0) > since and not is_internal(x.get("path")) for x in service.list_sessions()):
+        return False
+    root = workspace.root()
+    files = [root / "tasks.json", root / "memory.md"] + list((root / "projects").glob("*/memory.md")) \
+        + list((root / "projects").glob("*/topics/*/memory.md"))
+    return not any(f.exists() and f.stat().st_mtime > since and not is_internal(str(f.relative_to(root)))
+                   for f in files)
+
+
+def dream(now: float | None = None, force: bool = True) -> dict | None:
+    """The night pass: a separate session (skill jarvis-dream). `force` False (the schedule): skipped when nothing
+    changed since the last one -> None."""
     from .sessions import service
     if not feature_on():
         raise JarvisError(409, "off", "Jarvis is off: Settings -> Features -> Jarvis")
@@ -521,9 +538,12 @@ def dream(now: float | None = None) -> dict:
         st = _read_state()
         st["last_dream"] = _local_now(now).strftime("%Y-%m-%d")
         _write_state(st)
+    mark = st.get("dream_mark")
+    if not force and isinstance(mark, (int, float)) and quiet_since(float(mark)):
+        return None
     return service.create_session(PATH, message=DREAM_TEXT, title="Jarvis · night pass "
                                   + _local_now(now).strftime("%Y-%m-%d"), source="cron", cron=True,
-                                  permission_mode="bypass", notify=False)
+                                  permission_mode="bypass", notify=False, model=settings()["dream_model"] or None)
 
 
 def _opened_after_brief(st: dict, hhmm: str, now: float) -> bool:
@@ -545,8 +565,7 @@ def tick(now: float | None = None) -> str:
     s, st = settings(), _read_state()
     try:
         if _due(s["dream"], st.get("last_dream"), now):
-            dream(now)
-            return "dream"
+            return "dream" if dream(now, force=False) else "quiet"
         if _due(s["brief"], st.get("last_brief"), now):
             if _opened_after_brief(st, s["brief"], now):
                 st["last_brief"] = _local_now(now).strftime("%Y-%m-%d")    # the owner just started talking today

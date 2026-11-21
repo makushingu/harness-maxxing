@@ -5012,7 +5012,7 @@ export const fr: Record<keyof typeof en, string> = {
   'jarvis.header.work': "{count} travail(aux) en cours",
   'jarvis.header.workAsks': "{count} travail(aux) en cours · {asks} vous attend(ent)",
   'jarvis.new': "Nouvelle conversation",
-  'jarvis.new.hint': "Commencer une nouvelle conversation (les travaux en cours continuent de rendre compte ici)",
+  'jarvis.new.hint': "Repartir d’un contexte vide (tours moins chers) : Jarvis garde l’essentiel dans sa mémoire, et les travaux en cours rendent compte dans la nouvelle",
   'jarvis.board.title': "Travaux",
   'jarvis.board.asks': "Vous attendent",
   'jarvis.board.running': "En cours",
@@ -5042,4 +5042,6 @@ export const fr: Record<keyof typeof en, string> = {
   'jarvis.set.none': "Aucun",
   'jarvis.set.briefNow': "Brief maintenant",
   'jarvis.set.dreamNow': "Passe de nuit maintenant",
+  'features.need.jarvis': "Consomme plus de votre forfait Claude que des sessions seules : chaque réponse qui revient d’une session est un tour de Jarvis en plus, avec un brief le matin et une passe de nuit (Sonnet, sautée un jour calme). Coupez le brief ou la passe de nuit dans ses réglages pour dépenser moins.",
+  'jarvis.set.cost': "Ce qu’il consomme : un tour par message, un par rapport qui revient, le brief et la passe de nuit (Sonnet, sautée quand rien n’a changé). Une nouvelle conversation par jour garde chaque tour léger.",
 }

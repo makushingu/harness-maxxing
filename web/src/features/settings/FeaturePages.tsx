@@ -14,6 +14,7 @@ type PageSetting = NonNullable<NavItem['setting']>
 
 /** What a page needs before it is useful (shown under its sentence), and where to set it. */
 const NEEDS: Partial<Record<PageSetting, { text: TKey; to?: string; link?: TKey }>> = {
+  jarvis_feature: { text: 'features.need.jarvis' },
   team_page: { text: 'features.need.team' },
   mail_page: { text: 'features.need.mail' },
   infra_page: { text: 'features.need.infra', to: '/settings/keys', link: 'settings.keys' },

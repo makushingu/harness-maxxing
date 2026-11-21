@@ -50,6 +50,7 @@ async def new_conversation():
 
 class SettingsIn(BaseModel):
     model: Optional[str] = None
+    dream_model: Optional[str] = None
     root: Optional[bool] = None
     ask_first: Optional[bool] = None
     internals: Optional[bool] = None

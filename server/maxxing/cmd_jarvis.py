@@ -9,7 +9,7 @@
                                             what changed since the last night pass (or H hours); --mark: the night
                                             pass is done (the next digest starts here)
   maxxing jarvis brief | dream              the morning brief / the night pass, now
-  maxxing jarvis set KEY VALUE              a setting: model, root, ask_first, internals, daily, brief, dream
+  maxxing jarvis set KEY VALUE              a setting: model, dream_model, root, ask_first, internals, daily, brief, dream
 """
 from __future__ import annotations
 
@@ -37,7 +37,7 @@ def _configure(p) -> None:
     sub.add_parser("brief", help="the morning brief, now")
     sub.add_parser("dream", help="the night pass, now (a separate session)")
     se = sub.add_parser("set", help="a setting")
-    se.add_argument("key", choices=["model", "root", "ask_first", "internals", "daily", "brief", "dream"])
+    se.add_argument("key", choices=["model", "dream_model", "root", "ask_first", "internals", "daily", "brief", "dream"])
     se.add_argument("value")
 
 

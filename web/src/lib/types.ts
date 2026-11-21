@@ -1722,6 +1722,7 @@ export interface JarvisWork {
 }
 export interface JarvisSettings {
   model: string
+  dream_model: string
   root: boolean
   ask_first: boolean
   internals: boolean

@@ -15,7 +15,9 @@ Turn it on in **Settings -> Features -> Jarvis**. It then sits at the top of the
   what it launched, with a link to the session: open it and type in it to take over at any time.
 - **Work**, on the right (the list icon on a phone): everything Jarvis handed over. **Waiting for you** (the session
   asks a question), **In progress**, **Answered**. **Open** goes to the session, **Done** closes the entry.
-- **New conversation** starts afresh; the work in progress still reports into the new one.
+- **New conversation** (gear menu) starts again with an empty context, so its turns cost less; Jarvis keeps what
+  matters in its memory, and the work in progress still reports into the new one. With **New conversation each
+  morning** this happens by itself every day.
 
 ## How the work comes back
 Each session Jarvis starts or writes to is on its work board. When one of its turns ends, its answer comes back into
@@ -28,6 +30,12 @@ session yourself, its answers are not reported (you read them there).
 - **Night pass** (03:30 by default): Jarvis reads what changed in your projects, sessions, tasks and notifications
   and rewrites its own memory, so the next conversation knows where everything is. It changes nothing else.
 Both times are in Jarvis's settings (gear icon); **Brief now** and **Night pass now** run them at once.
+
+## What it costs
+Jarvis uses your Claude plan like any session, a bit more: one turn per message you send, one per answer that comes
+back from a session it launched, the morning brief, and the night pass. The night pass runs on Sonnet and is skipped
+when nothing changed since the last one; a new conversation each day keeps each turn small. To spend less, clear the
+brief or night pass time in its settings.
 
 ## Settings (gear icon)
 - **Full rights** (on): Jarvis and the sessions it starts work without permission prompts.

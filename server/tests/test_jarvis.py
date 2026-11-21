@@ -197,3 +197,14 @@ def test_the_board_shows_jarvis_s_own_work(client, topic):
     jarvis.register("b" * 36, topic, "other's", "y", to="c" * 36)
     assert [i["title"] for i in jarvis.work()] == ["mine"]
     assert len(jarvis.work(everyone=True)) == 2
+
+
+def test_a_quiet_night_costs_nothing(client, topic, mx):
+    _on(client)
+    client.post("/api/jarvis/open")
+    jarvis.mark_dream(time.time() + 5)
+    assert jarvis.dream(force=False) is None                   # nothing moved since the last pass
+    (mx["ws"] / topic / "memory.md").write_text("# m\n- new\n")
+    jarvis.mark_dream(time.time() - 60)
+    s = jarvis.dream(force=False)
+    assert s and s["model"] == "sonnet"
