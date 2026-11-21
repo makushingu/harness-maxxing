@@ -770,3 +770,13 @@ def test_a_pattern_with_many_stars_is_refused_before_it_can_hang_the_scan():
     with pytest.raises(backup.BackupError):
         backup.clean_include(["*a" * 15 + "*b"])
     assert backup.clean_include(["notes/*/*.md", "a*b*c"]) == ["notes/*/*.md", "a*b*c"]
+
+
+def test_restore_on_a_used_server_keeps_its_permission_mode_and_budget(ws, mx_state):
+    config.update_config(permission_mode="acceptEdits", daily_budget_usd=5)
+    saved = {"permission_mode": "bypassPermissions", "daily_budget_usd": 99999, "language": "fr"}
+    _in_use()
+    backup._apply({f"{backup.META_DIR}/config.json": json.dumps(saved).encode()})
+    cfg = config.load_config()
+    assert cfg["permission_mode"] == "acceptEdits" and cfg["daily_budget_usd"] == 5
+    assert cfg["language"] == "fr"

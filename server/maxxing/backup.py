@@ -108,6 +108,8 @@ LEAKS: list[tuple[str, re.Pattern[bytes]]] = [(k, re.compile(p.encode())) for k,
 RESTORABLE_CONFIG = ("timezone", "language", "default_model", "permission_mode", "dashboard", "extensions",
                      "usage_widget", "tasks_page", "git_page", "infra_page", "team_page", "agents_page", "mail_page", "browser_feature", "devices_feature", "maxxing_mode", "sidebar_order",
                      "daily_budget_usd")
+# Settings a restore on a server already in use leaves as they are: they decide what Claude may do and spend.
+HELD_CONFIG = ("permission_mode", "daily_budget_usd")
 
 
 class BackupError(Exception):
@@ -962,6 +964,9 @@ def _apply(files: dict[str, bytes], hold: bool | None = None) -> dict:
         try:
             saved = json.loads(cfg_blob)
             changes = {k: saved[k] for k in RESTORABLE_CONFIG if k in saved}
+            if hold:                                     # what loosens the rules of this server is not taken from a repository
+                for k in HELD_CONFIG:
+                    changes.pop(k, None)
             if isinstance(saved.get("telegram"), dict):
                 changes["telegram"] = {k: v for k, v in saved["telegram"].items()
                                        if k in ("notify_crons", "notify_system", "login_alerts", "reply_mode", "reply_mode_chosen") and v is not None}
