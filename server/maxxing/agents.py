@@ -1568,7 +1568,7 @@ def post(path: str, kind: str, text: str, *, cap: int = TEXT_MAX, **extra: Any) 
     f = _state_file(path, "jsonl")
     with _lock:
         with f.open("a") as fh:
-            fh.write(json.dumps(msg, ensure_ascii=False) + "\n")
+            fh.write(_utf8(json.dumps(msg, ensure_ascii=False)) + "\n")   # a lone surrogate must not lose the result
         size = f.stat().st_size
         if size > max(THREAD_KEEP * 2 * 1024, _trimmed.get(str(f), 0) + THREAD_KEEP * 1024):
             lines = _kept_lines(f.read_text(errors="replace").splitlines())
@@ -2991,7 +2991,16 @@ class Debouncer:
 
     def requeue(self, path: str, tid: str, p: dict) -> None:
         with self._mu:
-            self.pending.setdefault((path, tid), p)
+            cur = self.pending.get((path, tid))
+            if cur is None:
+                self.pending[(path, tid)] = p
+                return
+            # events added while the batch was busy: keep both, the older texts first
+            cur["texts"] = list(p.get("texts") or []) + list(cur["texts"])
+            cur["dropped"] = int(p.get("dropped") or 0) + int(cur.get("dropped") or 0)
+            cur["depth"] = max(int(p.get("depth") or 0), int(cur.get("depth") or 0))
+            cur["first"] = min(cur["first"], p.get("first", cur["first"]))
+            cur["due"] = max(cur["due"], p.get("due", cur["due"]))
 
     def dump(self) -> list[dict]:
         with self._mu:

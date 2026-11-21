@@ -397,6 +397,22 @@ def test_cron_trigger_goes_through_the_agent(client, topic, monkeypatch):
     assert client.get("/api/workspace/tree").json()["projects"][0]["topics"][0]["agents"] == []
 
 
+def test_a_batch_put_back_for_a_busy_agent_keeps_the_events_added_meanwhile(mx):
+    d = agents.Debouncer()
+    d.add(A, "t_1", "mail 1", "feed", 0)
+    [(path, tid, batch)] = d.due()
+    d.add(A, "t_1", "mail 2", "feed", 0)                 # arrives while fire() answered "busy"
+    d.requeue(path, tid, batch)
+    assert d.pending[(A, "t_1")]["texts"] == ["mail 1", "mail 2"]
+
+
+def test_a_result_with_a_lone_surrogate_is_still_written(client, topic):
+    _on(client)
+    _create(client)
+    agents.post(A, "result", "a \ud800 b", ok=True)
+    assert agents.thread(A)[-1]["text"] == "a ? b"
+
+
 def test_events_waiting_for_a_busy_agent_keep_only_what_its_turn_reads(monkeypatch, mx):
     from maxxing import agents
     d = agents.Debouncer()
