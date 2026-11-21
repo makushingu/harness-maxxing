@@ -384,8 +384,9 @@ const TermDrawer = React.lazy(withGroups(['term'], () => import('@/features/term
 /** `agentRun`: a run of an agent shown on the Agents page - it stays where it is (no move, archive or delete: the
  *  agent manages its runs, archiving them by itself), and the archived banner is not shown.
  *  `own`: the conversation of a feature page (Jarvis): like an agent run, and no session header at all - no title,
- *  place, options or fork (it lives in the feature's hidden folder; the page has its own header and settings). */
-export function SessionColumn({ col, sid, variant, index, count, place, agentRun: runOfAgent, own }: { col: Col; sid: string; variant: ColumnVariant; index: number; count: number; place?: Place; agentRun?: boolean; own?: boolean }) {
+ *  place, options or fork (it lives in the feature's hidden folder; the page has its own header and settings);
+ *  `ownPlaceholder`: its message box's placeholder ("Message Jarvis…", from the feature page's own texts). */
+export function SessionColumn({ col, sid, variant, index, count, place, agentRun: runOfAgent, own, ownPlaceholder }: { col: Col; sid: string; variant: ColumnVariant; index: number; count: number; place?: Place; agentRun?: boolean; own?: boolean; ownPlaceholder?: string }) {
   const agentRun = runOfAgent || own
   // Opened behind the session in front (another device of the user opened it, a link opened beside): the keyboard
   // stays where the user is typing.
@@ -863,7 +864,7 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
             draftKey={sid}
             commands={commands}
             mentionsFor={sid}
-            placeholder={session?.plan_mode ? t(session.plan_ready ? 'plan.placeholderAdjust' : 'plan.placeholder') : own ? t('jarvis.placeholder') : undefined}
+            placeholder={session?.plan_mode ? t(session.plan_ready ? 'plan.placeholderAdjust' : 'plan.placeholder') : own ? ownPlaceholder : undefined}
             notice={session?.plan_ready && !running ? <PlanNotice session={session} onAdjust={() => composer.current?.focus()} /> : null}
             topicPath={path}
             running={running}

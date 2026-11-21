@@ -108,7 +108,7 @@ export default function JarvisPage() {
       />
       <div className="flex min-h-0 flex-1" style={{ '--safe-top': '0px' } as React.CSSProperties}>
         <div className={cn('flex min-h-0 min-w-0 flex-1 flex-col', board && 'max-lg:hidden')}>
-          {sid ? <SessionColumn key={sid} col={col} sid={sid} index={0} count={1} variant="solo" own /> : <Skeleton className="m-6 h-40" />}
+          {sid ? <SessionColumn key={sid} col={col} sid={sid} index={0} count={1} variant="solo" own ownPlaceholder={t('jarvis.placeholder')} /> : <Skeleton className="m-6 h-40" />}
         </div>
         <aside
           ref={aside}
