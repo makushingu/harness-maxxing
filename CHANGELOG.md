@@ -5,6 +5,10 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 
 ## Unreleased
 
+New:
+- **Mark all sessions as read in one click.** The double tick at the top of the session list (as in Agents), and
+  **Mark all as read** in the right-click menu of a project or a topic for its sessions only.
+
 Fixed:
 - **A file still uploading no longer vanishes when you go to another session or page.** The upload goes on and
   the file is back in the message box when you return. Same in the message box of an agent or a group.
