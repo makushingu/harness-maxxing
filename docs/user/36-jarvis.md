@@ -15,7 +15,8 @@ Turn it on in **Settings -> Features -> Jarvis**. It then sits at the top of the
   place or options: Jarvis is not one of your sessions. It answers short and says what it launched, with a link to
   the session: open it and type in it to take over at any time.
 - **Work**, on the right (the list icon on a phone): everything Jarvis handed over. **Waiting for you** (the session
-  asks a question), **In progress**, **Answered**. **Open** goes to the session, **Done** closes the entry.
+  asks a question), **In progress**, **Answered**. **Open** goes to the session, **Done** closes the entry. On a computer, the list icon hides or shows it and its left edge
+  can be dragged to make it wider (double-click: back to the default).
 - **New conversation** (gear menu) starts again with an empty context, so its turns cost less; Jarvis keeps what
   matters in its memory, and the work in progress still reports into the new one. With **New conversation each
   morning** this happens by itself every day.
@@ -39,7 +40,7 @@ back from a session it launched, the morning brief, and the night pass. The nigh
 when nothing changed since the last one; a new conversation each day keeps each turn small. To spend less, clear the
 brief or night pass time in its settings.
 
-## Settings (gear icon)
+## Settings (gear icon: a window, from the bottom on a phone)
 - **Full rights** (on): Jarvis and the sessions it starts work without permission prompts.
 - **Ask me first** (on): before publishing, paying, deleting or writing to someone, it says what it will do and waits
   for your yes. Off: it acts and tells you after.

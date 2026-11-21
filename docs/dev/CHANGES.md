@@ -40,6 +40,8 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   characters), link `/jarvis`.
 - Jarvis's templates are rendered with `cmd_core.template_vars` (+ `{{SKILLS_DIR}}`); its CLAUDE.md says where
   Harness's commands, skills and docs are; skill `jarvis` § 4 = rules to create projects, topics and agents.
+- Jarvis page: Work panel hidden/shown (`mx.jarvis.workOpen`) and resized (`mx.jarvis.workWidth`, `ResizeEdge
+  edge="left"`, new prop), settings in a `Dialog` (`JarvisSettingsDialog`) instead of a popover.
 
 ## 2.0.0-alpha.161 - 2026-11-21
 
