@@ -61,7 +61,7 @@ def test_a_session_header_on_a_phone_leaves_room_to_read():
     # one tab repeated the title under it, the tabs stayed while typing, and held sideways only ~90 px were left to read
     src = (WEB / "pages" / "sessions" / "index.tsx").read_text()
     assert "const several = useSessionsUI((s) => s.cols.length > 1)" in src
-    assert "<MobileTabsSlot.Provider value={tabs && several ? <TabsBar" in src
+    assert "<MobileTabsSlot.Provider value={several ? <TabsBar" in src  # the phone always shows its open sessions as tabs
     column = (WEB / "pages" / "sessions" / "Column.tsx").read_text()
     assert '<div data-kbd-hide="" data-tabs="">{tabs}</div>' in column
     css = (WEB / "styles" / "globals.css").read_text()
