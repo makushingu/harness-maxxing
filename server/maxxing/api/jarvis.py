@@ -102,6 +102,11 @@ async def startup() -> None:
     global _task
     from ..sessions import service
     service.on_turn_end(_turn_end)
+    if jarvis.feature_on():             # a new version: its role and skills are brought up to date at once
+        try:
+            await asyncio.to_thread(jarvis.ensure)
+        except Exception:  # noqa: BLE001
+            log.exception("jarvis: folder update")
     _task = asyncio.get_running_loop().create_task(_loop())
 
 
