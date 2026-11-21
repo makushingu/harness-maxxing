@@ -146,6 +146,17 @@ def test_malformed_peer_input_is_refused_not_a_crash(client, monkeypatch):
     assert client.post("/api/team-peer/inbox", content=body, headers=h).status_code == 403
 
 
+def test_message_files_that_is_not_a_list_is_refused_not_a_crash(client, monkeypatch):
+    key = _setup(monkeypatch)
+    dm = team.dm_id("http://127.0.0.1:8801", LEA)
+    event = _msg(dm)
+    event["message"]["files"] = {"a": 1}
+    r = client.post("/api/team-peer/inbox", content=json.dumps(event).encode(),
+                    headers=_signed(key, json.dumps(event).encode()))
+    assert r.status_code == 400
+    assert r.json()["error"] == "bad_event"
+
+
 MALLORY = "http://127.0.0.1:8803"
 LEA = "http://127.0.0.1:8802"
 
