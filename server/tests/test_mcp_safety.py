@@ -436,3 +436,15 @@ def test_connect_again_during_a_finish_does_not_cancel_it(env, monkeypatch):  # 
     t.join(15)
     assert res == {"ok": True}
     mcp.login_cancel(second["login"])
+
+
+def test_a_secret_in_command_or_an_unknown_key_is_not_shown_nor_backed_up(env, client):  # noqa: F811
+    from maxxing import mcp
+    tok = "sk-" + "a1B2c3D4e5F6g7H8i9J0k1L2m3N4"
+    (env.tmp / "claude" / ".claude.json").write_text(json.dumps({"mcpServers": {
+        "a": {"type": "stdio", "command": f"srv --api-key={tok}", "args": [],
+              "oauth": {"clientSecret": "topsecretvalue123456"}}}}))
+    shown = json.dumps(client.get("/api/mcp").json())
+    exported = json.dumps(mcp.export())
+    for text in (shown, exported):
+        assert tok not in text and "topsecretvalue123456" not in text
