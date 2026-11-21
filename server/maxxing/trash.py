@@ -171,6 +171,20 @@ def _is_extra(p: Path) -> bool:
     return p.name.endswith((".json", ".sessions", ".agents")) and not p.with_name(p.name + ".json").exists()
 
 
+def _deleted_at(p: Path, side: dict) -> float:
+    """When it went to the trash. Without a valid date in the sidecar: the newer of the item and its sidecar (the
+    item keeps the date of the original file, so an old file would be purged at once)."""
+    at = side.get("at")
+    if at:
+        return float(at)
+    t = p.lstat().st_mtime
+    try:
+        t = max(t, p.with_name(p.name + ".json").lstat().st_mtime)
+    except OSError:
+        pass
+    return t
+
+
 def _entries() -> list[Path]:
     t = trash_dir()
     out = []
@@ -234,7 +248,7 @@ def _build(t: Path, root: Path) -> list[dict[str, Any]]:
             continue
         side = _side(p)
         try:
-            at = float(side.get("at") or p.lstat().st_mtime)
+            at = _deleted_at(p, side)
         except OSError:                            # removed meanwhile
             continue
         kind = "previous_versions" if not side and p.name.startswith("backup-restore-") else _kind(p, side)
@@ -498,7 +512,7 @@ def purge_old(days: int = KEEP_DAYS) -> int:
     n = 0
     for p in _entries():
         try:
-            at = float(_side(p).get("at") or p.lstat().st_mtime)
+            at = _deleted_at(p, _side(p))
         except OSError:                                 # a broken link or an item removed meanwhile
             continue
         if at < cutoff:

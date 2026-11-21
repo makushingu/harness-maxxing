@@ -768,3 +768,15 @@ def test_a_topic_deleted_from_the_file_manager_comes_back_with_a_slug_name(clien
     (it,) = [i for i in _items(client) if i["kind"] == "topic"]
     r = client.post(f"/api/trash/{it['id']}/restore").json()
     assert r["ok"] and (mx["ws"] / "projects/acme/topics/blog-restored").is_dir()
+
+
+def test_an_old_item_with_a_damaged_sidecar_is_not_purged_at_once(client, topic, mx):
+    from maxxing import workspace
+    f = mx["ws"] / topic / "old.txt"
+    f.write_text("x")
+    os.utime(f, (time.time() - 90 * 86400,) * 2)
+    workspace.move_to_trash(f)
+    side = next(trash.trash_dir().glob("*old.txt.json"))
+    side.write_text("{not json")
+    assert trash.purge_old() == 0
+    assert any(trash.trash_dir().glob("*old.txt"))
