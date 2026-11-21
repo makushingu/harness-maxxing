@@ -5,6 +5,15 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## Unreleased
+
+- Thread: "Show earlier" no longer mounts a whole page in one render. Loaded rows: `loadEarlier` sets `growTo` to
+  `from - PAGE` and shows `STEP` rows, the progressive first-render effect (one `STEP` slice per idle callback,
+  `prevHeight` anchoring) reveals the rest. A page fetched from the server (`items` gain `added` rows at the head):
+  `start` moves to `start + added - STEP` during the render and grows back to the old `start` the same way. Longest
+  task on a 4 MB log 223 -> 144 ms (945 -> 639 ms at 4x CPU slowdown); on 120 loaded rows 268 -> 117 ms
+  (876 -> 400 ms at 4x). Same final rows, reading position kept.
+
 ## 2.0.0-alpha.161 - 2026-11-21
 
 - Thread: `web/src/pages/sessions/toolLabel.ts`. `toolLabel(name, input, t, rel)` -> `{title, detail, kind, danger}`:

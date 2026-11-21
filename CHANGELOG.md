@@ -3,6 +3,13 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## Unreleased
+
+Changed:
+- **Scrolling up a long session no longer freezes the page.** Show earlier (and the automatic loading when you reach
+  the top) now adds the older messages a few at a time instead of all at once: the page stays responsive, mostly
+  felt on a phone.
+
 ## 2.0.0-alpha.161 - 2026-11-21
 
 Changed:
