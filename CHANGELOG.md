@@ -25,6 +25,8 @@ Changed:
 - **The Home badge turns red when a notification is an error,** as the Sessions badge does for a failed session.
 
 Fixed:
+- **A file still uploading no longer vanishes when you go to another session or page.** The upload goes on and
+  the file is back in the message box when you return.
 - **After a compaction, Claude no longer answers its own summary.** A compacted session (automatic or **Compact
   context**) used to run one more turn in which Claude read the summary and summed it up again, so the same points
   came twice in a row. The summary now simply waits: your next message starts the fresh context with it, and that
