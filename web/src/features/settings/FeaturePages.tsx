@@ -28,6 +28,7 @@ const CORE_DESC: Record<string, TKey> = {
 }
 
 const DESC: Record<PageSetting, TKey> = {
+  jarvis_feature: 'features.page.jarvis',
   agents_page: 'features.page.agents',
   tasks_page: 'features.page.tasks',
   team_page: 'features.page.team',

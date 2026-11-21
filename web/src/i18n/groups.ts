@@ -19,6 +19,8 @@ export const GROUPS = {
   browser: ['browser'],
   // Devices (Settings -> Devices, the session line, the live view window, an agent's devices)
   devices: ['devices'],
+  // Jarvis's page (Settings -> Features -> Jarvis)
+  jarvis: ['jarvis'],
   tasks: ['tasks', 'crons'],
   files: ['files', 'viewer'],
   // the media player: on the first player shown (a conversation shows one only for an audio file or in the viewer)

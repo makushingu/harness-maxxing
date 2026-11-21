@@ -733,6 +733,7 @@ def _handler(a) -> int:
     if a.agents_cmd == "run" and not sender:
         r = agents.fire(path, trigger="manual", source="command line",
                         **({"text": text} if a.data else {"prompt": text}))
+        _jarvis_board(path, r, text, turn["depth"] + 1)
         return _print_fire(path, r, a.json)
     if a.agents_cmd == "run" and sender == path and turn.get("manager"):
         # the owner asked its conversation to run the automation now: a run of its own (a new session, shown as an
@@ -758,6 +759,20 @@ def _handler(a) -> int:
         trigger, source = "agent:session", "session"
     r = agents.fire(path, trigger=trigger, text=text, source=source, depth=turn["depth"] + 1)
     return _print_fire(path, r, a.json)
+
+
+def _jarvis_board(path: str, r: dict, text: str, hops: int) -> None:
+    """`agents run` from Jarvis's conversation: the run goes on its work board (its answer comes back to Jarvis)."""
+    from . import agent_guard, jarvis
+    meta = agent_guard.turn_meta()
+    s = r.get("session") if isinstance(r, dict) else None
+    if not (meta and meta.get("path") == jarvis.PATH and jarvis.feature_on() and isinstance(s, dict) and s.get("id")):
+        return
+    try:
+        name = agents.load(path)["name"] or agents.parse(path)[2]
+    except Exception:  # noqa: BLE001
+        name = path
+    jarvis.register(s["id"], path, f"agent {name}", text, hops=hops)
 
 
 cli.register("agents", "agents: create, add triggers, list, run, send work from one agent to another, switch on / off",

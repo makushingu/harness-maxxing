@@ -116,6 +116,8 @@ export const BUS_KEYS: Record<BusTopic, readonly (readonly unknown[])[]> = {
   browser: [['browser']],
   // a device paired, came online / went away, was paused, used by Claude or taken over; an ask_human on a device
   devices: [['devices']],
+  // Jarvis's conversation changed, its work board moved, its settings
+  jarvis: [['jarvis']],
 }
 
 /** Query keys of one bus topic: `agents:<path>` = that agent's thread or unread changed (a message, a feed event

@@ -8,8 +8,13 @@
  *   other static files      stale-while-revalidate (icons, fonts, manifest, favicon)
  *   /api/*, /ext/*, non-GET, cross-origin   never touched (straight to the network)
  */
+<<<<<<< HEAD
 const VERSION = "ca568d9c71d3"
 const PRECACHE = ["/assets/index-5xN8M_gx.js","/assets/rolldown-runtime-XKyaHtl9.js","/assets/vendor-react-BNCMh3YF.js","/assets/i18n-CR47hLax.js","/assets/preload-helper-7y9sWmk5.js","/assets/react-DurwoXPM.js","/assets/middleware-CpWMw2yu.js","/assets/media-e_0vcnlc.js","/assets/pwa-Ijo3mTN0.js","/assets/vendor-query-CjPNRXKi.js","/assets/queries-D6OdZeSm.js","/assets/api-3Fl_6_qz.js","/assets/vendor-ui-Ww2uvVWZ.js","/assets/upload-D7xoZycI.js","/assets/createLucideIcon-BESczn8r.js","/assets/utils-BtPbbl_M.js","/assets/vendor-router-D5oKdmts.js","/assets/spinner-T-f3wq6M.js","/assets/check-CMuzREZG.js","/assets/sheet-drag-BJHxTpPf.js","/assets/bot-BXWWT0HQ.js","/assets/git-branch-BFDLcfSG.js","/assets/x-XOpLhFOU.js","/assets/folder-open-CBeClfta.js","/assets/index-DQhAa7gu.css","/assets/inter-latin-wght-normal-Dx4kXJAl.woff2"]
+=======
+const VERSION = "fe457d4c8287"
+const PRECACHE = ["/assets/index-ClOCByPs.js","/assets/rolldown-runtime-XKyaHtl9.js","/assets/vendor-react-BNCMh3YF.js","/assets/i18n-0VjW8HvP.js","/assets/preload-helper-7y9sWmk5.js","/assets/react-DurwoXPM.js","/assets/middleware-CpWMw2yu.js","/assets/media-CyYrcqq8.js","/assets/pwa-Ijo3mTN0.js","/assets/vendor-query-CjPNRXKi.js","/assets/queries-CT_oP67y.js","/assets/api-DoHRhqJ1.js","/assets/vendor-ui-Ww2uvVWZ.js","/assets/upload-CpERkFtS.js","/assets/createLucideIcon-BESczn8r.js","/assets/utils-BtPbbl_M.js","/assets/vendor-router-D5oKdmts.js","/assets/spinner-T-f3wq6M.js","/assets/check-CMuzREZG.js","/assets/sheet-drag-CkBAOcCC.js","/assets/bot-BXWWT0HQ.js","/assets/git-branch-BFDLcfSG.js","/assets/x-XOpLhFOU.js","/assets/folder-open-CBeClfta.js","/assets/index-DDhkdW9B.css","/assets/inter-latin-wght-normal-Dx4kXJAl.woff2"]
+>>>>>>> 3a3ff2fcb (Jarvis: one assistant who runs Harness (conversation, work board with reports, morning brief, night pass))
 const SHELL = `mx-shell-${VERSION}`
 const ASSETS = `mx-assets-${VERSION}`
 const OFFLINE = '/offline.html'

@@ -103,6 +103,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "browser_feature": False,          # Settings -> Features: the Harness Browser (one Chromium for the user, sessions, agents)
     "browser": {},                     # its settings (maxxing/browser DEFAULTS: sites, sign-ins, asks, sleep)
     "devices_feature": False,          # Settings -> Features: Devices (Claude uses the user's computers and phones)
+    "jarvis_feature": False,           # Settings -> Features: Jarvis (one assistant who runs Harness: jarvis.py)
+    "jarvis": {},                      # its settings (jarvis.DEFAULTS: model, root, ask_first, internals, daily, brief, dream)
     "dashboard": {"order": [], "hidden": []},
     "extensions": {"disabled": [], "pinned": []},
     "telegram": {

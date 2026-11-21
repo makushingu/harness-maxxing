@@ -1084,6 +1084,27 @@ and `topic`); `name` falls back to the folder; `hidden` = `disable-model-invocat
 | GET | `/api/skills` | - | `{skills: Skill[]}` (product and user first, then workspace, then project by project, its topics after it) |
 | GET | `/api/skills?path=projects/<p>/topics/<t>` | - | `{skills: Skill[]}`: only those a session of that topic sees (product, user, workspace, its project, the topic itself): the composer's `/` menu |
 
+## Jarvis
+
+Settings -> Features -> `jarvis_feature` (off by default; `PUT /api/settings`). One assistant whose conversation is a
+session of the hidden topic `projects/jarvis/topics/main` (server `jarvis.py`). Bus topic `jarvis`.
+
+| Method | Path | Body | Answer |
+|---|---|---|---|
+| GET | `/api/jarvis` | | `JarvisStatus` |
+| POST | `/api/jarvis/open` | | its conversation, made the first time (409 `off`; 409 `taken`: an owner's project named `jarvis`) -> `JarvisStatus` |
+| POST | `/api/jarvis/new` | | a new conversation (the old one is kept in `conversations`) -> `JarvisStatus` |
+| PUT | `/api/jarvis/settings` | any of `model`, `root`, `ask_first`, `internals`, `daily` (bool), `brief`, `dream` (`HH:MM` or "") | `JarvisStatus` (400 `bad_time`) |
+| POST | `/api/jarvis/work/{ref}/close` | | `ref` = the entry's number or its session id -> `JarvisStatus` |
+| POST | `/api/jarvis/brief` | | the morning brief now -> `JarvisStatus` |
+| POST | `/api/jarvis/dream` | | the night pass now: `{session}` (a separate session) |
+
+`JarvisStatus` = `{on, path, session: Session | null, settings, last_brief, last_dream, work: JarvisWork[] (newest
+first, 100), open, asks, conversations: [{id, title, updated, state, current}]}`. `JarvisWork` = `{id, session, path,
+title, brief, state: running | replied | failed | closed, created, updated, result, cost, question, turns}`.
+While `internals` is off, `GET /api/workspace/tree`, `GET /api/sessions` (without `path`) and `GET /api/search` leave
+Jarvis's project out; `POST /api/workspace/projects` refuses the name `jarvis` (409 `reserved`).
+
 ## Search
 
 One SQLite FTS5 index (`<state>/search.db`, `maxxing/search.py`) over session messages, workspace text

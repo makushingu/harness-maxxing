@@ -4,13 +4,15 @@
                                               their system lines (what the runner does at write time)
   maxxing sessions token-report [--days N] [--json]
                                               where the tokens go (Claude Code transcripts) + compaction simulation
-  maxxing sessions send TO TEXT... [--file P] [--json]
+  maxxing sessions send TO TEXT... [--file P] [--report-to S] [--json]
                                               write to another session as if typed in it (TO = its id or title);
                                               from a turn, the message says which session sent it
   maxxing sessions list [--json]              the sessions that are not archived (id, state, topic, title)
-  maxxing sessions new TOPIC [TEXT...] [--title T] [--model M] [--effort E] [--file P] [--json]
+  maxxing sessions new TOPIC [TEXT...] [--title T] [--model M] [--effort E] [--file P] [--report-to S] [--json]
                                               start a session in a topic (TOPIC = <project>/<topic> or its path) with
                                               a first message; from a turn, the message says which session sent it
+  --report-to me|<session>                    its answers come back to that session when its turns end (the
+                                              work board of jarvis.py); a turn of Jarvis's conversation always does
 """
 from __future__ import annotations
 
@@ -29,6 +31,8 @@ def _configure(p) -> None:
     s.add_argument("to", help="the session: its id (or its first 8 characters) or its title")
     s.add_argument("text", nargs="+", help="the message")
     s.add_argument("--file", action="append", default=[], help="attach a file (absolute path), repeatable")
+    s.add_argument("--report-to", default="", help="the session its next answers are reported to (`me` = the session "
+                                                   "of this turn); from Jarvis's conversation: always Jarvis")
     s.add_argument("--json", action="store_true")
     n = sub.add_parser("new", help="start a session in a topic, with a first message (from a turn: says who sent it)")
     n.add_argument("topic", help="<project>/<topic>, or its path projects/<project>/topics/<topic>")
@@ -37,6 +41,8 @@ def _configure(p) -> None:
     n.add_argument("--model", default="", help="its model (default: the server's)")
     n.add_argument("--effort", default="", help="low, medium, high, xhigh, max (default: Claude Code's)")
     n.add_argument("--file", action="append", default=[], help="attach a file (absolute path), repeatable")
+    n.add_argument("--report-to", default="", help="the session its answers are reported to (`me` = the session of "
+                                                   "this turn); from Jarvis's conversation: always Jarvis")
     n.add_argument("--json", action="store_true")
     ls = sub.add_parser("list", help="the sessions that are not archived")
     ls.add_argument("--json", action="store_true")
@@ -72,7 +78,9 @@ def _send(a) -> int:
         print(f"--file: {e}", file=sys.stderr)
         return 2
     try:
+        report = _reporting(meta, a.report_to)
         r = service.relay_message(a.to, " ".join(a.text).strip(), files, sender=sender, hops=turn["depth"] + 1)
+        _register(meta, report, r["session"] or {}, " ".join(a.text).strip(), turn["depth"] + 1)
     except service.SessionError as e:
         print(e.message, file=sys.stderr)
         return 1
@@ -82,6 +90,33 @@ def _send(a) -> int:
     else:
         print(f"sent to {s.get('id', '')[:8]} {s.get('title', '')}" + (" (queued: it is busy)" if r["queued"] else ""))
     return 0
+
+
+def _reporting(meta: dict | None, report_to: str) -> tuple[bool, str]:
+    """-> (put the work on the board, the session its answers go to: "" = Jarvis's current conversation).
+    A turn of Jarvis's conversation always reports to Jarvis; `--report-to me|<session>` from any turn or shell."""
+    from . import jarvis
+    from .sessions import service
+    jarvis_turn = bool(meta) and meta.get("path") == jarvis.PATH and jarvis.feature_on()
+    want = (report_to or "").strip()
+    if jarvis_turn and want in ("", "me", "jarvis"):
+        return True, ""
+    if not want:
+        return False, ""
+    if want == "jarvis":
+        return True, ""
+    if want == "me":
+        if not meta:
+            raise service.SessionError(400, "no_session", "--report-to me: only from a session's turn")
+        return True, str(meta.get("id") or "")
+    return True, service.find_session(want)["id"]
+
+
+def _register(meta: dict | None, report: tuple[bool, str], s: dict, text: str, hops: int) -> None:
+    if not report[0] or not s.get("id"):
+        return
+    from . import jarvis
+    jarvis.register(s["id"], s.get("path") or "", s.get("title") or "", text, hops=hops, to=report[1])
 
 
 def _topic(raw: str) -> str:
@@ -115,9 +150,14 @@ def _new(a) -> int:
         hops = turn["depth"] + 1
         service.check_hops(hops)                         # refused before anything is created
         service._check_attachments(files)               # a missing --file too
+        report = _reporting(meta, a.report_to)
+        from . import jarvis
+        root = bool(meta) and meta.get("path") == jarvis.PATH and jarvis.feature_on() and jarvis.settings()["root"]
         s = service.create_session(path, title=a.title or (titles.provisional(text) if text else None),
                                    model=a.model or None, effort=a.effort or None,
-                                   source="session" if meta else "cli", auto_title=not a.title and bool(text))
+                                   source="session" if meta else "cli", auto_title=not a.title and bool(text),
+                                   permission_mode="bypass" if root else "")
+        _register(meta, report, s, text, hops)
         if text or files:
             sender = {"id": meta.get("id") or "", "title": meta.get("title") or "",
                       "path": meta.get("path") or ""} if meta else None

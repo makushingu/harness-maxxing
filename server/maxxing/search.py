@@ -736,8 +736,11 @@ def search(q: str, kinds: list[str] | None = None, limit: int = 30,
             con.set_progress_handler(None, 0)
     finally:
         _rlock.release()
+    from . import jarvis
     out = []
     for kind, ref, path, title, at, snip, score in rows:
+        if jarvis.hides(path):
+            continue
         title = title or titles.get(ref) or "Untitled"       # a message row: the title of its session
         if not snip.strip() and kind in ("session", "group"):
             snip = title

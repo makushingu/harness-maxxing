@@ -5,6 +5,26 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## Unreleased
+
+- Jarvis (`jarvis.py`, `api/jarvis.py`, `cmd_jarvis.py`, page `web/src/pages/jarvis`): config `jarvis_feature` (off) and
+  `jarvis` (DEFAULTS: model, root, ask_first, internals, daily, brief, dream). Its folder is the reserved project
+  `projects/jarvis` (marker `"system": "jarvis"` in its `.maxxing.json`; an owner's project of that name is never taken,
+  `create_project("jarvis")` is refused), topic `main` in mode bypass, from `templates/jarvis/` (CLAUDE.md and
+  `.claude/` kept up to date by each version, the rest only when missing; `rules.md` written from the settings;
+  `brain/**` added to `backup.include`). Hidden unless `internals`: `workspace.tree()`, `list_topics()`,
+  `GET /api/sessions` without `path`, `search.search()` (`jarvis.hides`).
+- State `<state>/jarvis/state.json` (current conversation, past ones, last brief / night pass, digest mark) and the
+  work board `<state>/jarvis/work.json` (`{next, items: [{id, session, path, title, brief, state, ...}]}`, 300 kept).
+  `maxxing sessions new|send` from a turn of Jarvis's conversation (or with `--report-to me|<session>` from any turn)
+  registers the target session; `service.on_turn_end` -> `jarvis.on_turn_end` reports each ended turn (queue empty,
+  not a turn the owner typed) into the conversation as a relayed message (`relay.report`, hops = the work's + 1).
+  `maxxing agents run` from Jarvis registers the run's session too. Sessions it starts get mode bypass when `root`.
+- Server loop (`api/jarvis.py`, 30 s): `jarvis.tick` sends the morning brief (a new conversation when `daily`) and
+  starts the night pass (a separate session, skill `jarvis-dream`, `maxxing jarvis digest [--mark]`) once a day after
+  their local time. API `GET /api/jarvis`, `POST /open|/new|/brief|/dream|/work/{ref}/close`, `PUT /settings`; bus
+  topic `jarvis`. New CLI `maxxing jarvis …` and `maxxing topics list|new`.
+
 ## 2.0.0-alpha.161 - 2026-11-21
 
 - Thread: `web/src/pages/sessions/toolLabel.ts`. `toolLabel(name, input, t, rel)` -> `{title, detail, kind, danger}`:

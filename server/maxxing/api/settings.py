@@ -16,7 +16,7 @@ from ..security import require_auth
 
 router = APIRouter(prefix="/api/settings", tags=["settings"], dependencies=[Depends(require_auth)])
 
-KEYS = ("timezone", "language", "public_url", "files_root", "presentation_default", "usage_widget", "tasks_page", "git_page", "infra_page", "team_page", "agents_page", "mail_page", "browser_feature", "devices_feature",
+KEYS = ("timezone", "language", "public_url", "files_root", "presentation_default", "usage_widget", "tasks_page", "git_page", "infra_page", "team_page", "agents_page", "mail_page", "browser_feature", "devices_feature", "jarvis_feature",
         "maxxing_mode", "memory_max_lines", "cpu_priorities", "result_line_hidden", "donation_hidden", "sidebar_order", "nav_badges_hidden",
         "daily_budget_usd", "limit_retry", "limit_retry_delay_s")
 RESULT_FIELDS = ("model", "duration", "cost", "tokens", "cache")   # parts of the line under each answer
@@ -41,6 +41,7 @@ class SettingsIn(BaseModel):
     mail_page: Optional[bool] = None
     browser_feature: Optional[bool] = None
     devices_feature: Optional[bool] = None
+    jarvis_feature: Optional[bool] = None
     memory_max_lines: Optional[int] = None
     result_line_hidden: Optional[list[Literal[RESULT_FIELDS]]] = None  # type: ignore[valid-type]
     donation_hidden: Optional[bool] = None
@@ -76,6 +77,7 @@ def current() -> dict:
             "mail_page": bool(cfg.get("mail_page", False)),
             "browser_feature": bool(cfg.get("browser_feature", False)),
             "devices_feature": bool(cfg.get("devices_feature", False)),
+            "jarvis_feature": bool(cfg.get("jarvis_feature", False)),
             "maxxing_mode": bool(cfg.get("maxxing_mode", False)),
             "memory_max_lines": memory.max_lines(),
             "cpu_priorities": cfg.get("cpu_priorities", True) is not False,

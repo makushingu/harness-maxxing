@@ -70,6 +70,9 @@ missing and never re-create a project or topic you deleted.
 - **Devices** (Settings -> Features): Claude uses your own computers and phones with the Harness Link app - it sees
   the screen, clicks, types and opens apps; you choose View only or Control per device, watch it live and take over.
   See [Devices](devices).
+- **Jarvis** (Settings -> Features): one assistant to talk to - it creates projects and topics, hands the work to
+  sessions and agents, gets their answers back and carries on the conversation, with a morning brief and a night
+  pass that tidies its memory. See [Jarvis](jarvis).
 - **Tasks** (optional, **Settings -> Features**): a kanban board stored in `tasks.json`, which Claude can read and update.
 - **Crons** (in **Settings**): scheduled shell commands or Harness prompts, with history and Telegram reports.
 - **Telegram**: talk to the same sessions from your phone, one thread per open session.

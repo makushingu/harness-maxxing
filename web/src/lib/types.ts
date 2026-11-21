@@ -500,7 +500,7 @@ export type SessionEventsBackPage = {
 export type SessionStreamEvents = { events: SessionEvent[]; next: number }
 
 /* ---------------------------------------------------------------- Global bus */
-export type BusTopic = 'agents' | 'agents_layout' | 'agent-groups' | 'sessions' | 'workspace' | 'tasks' | 'crons' | 'telegram' | 'backup' | 'health' | 'extensions' | 'trash' | 'feed' | 'profile' | 'register' | 'license' | 'infra' | 'mcp' | 'team' | 'team_live' | 'approvals' | 'open_sessions' | 'browser' | 'devices'
+export type BusTopic = 'agents' | 'agents_layout' | 'agent-groups' | 'sessions' | 'workspace' | 'tasks' | 'crons' | 'telegram' | 'backup' | 'health' | 'extensions' | 'trash' | 'feed' | 'profile' | 'register' | 'license' | 'infra' | 'mcp' | 'team' | 'team_live' | 'approvals' | 'open_sessions' | 'browser' | 'devices' | 'jarvis'
 
 /* ---------------------------------------------------------------- MCP servers (Settings -> MCP) */
 export type McpState = 'connected' | 'needs_auth' | 'failed' | 'pending' | 'unknown'
@@ -892,6 +892,8 @@ export type Settings = {
   browser_feature?: boolean
   /** Settings -> Features: Devices (Claude uses the person's computers and phones running Harness Link) */
   devices_feature?: boolean
+  /** Settings -> Features: Jarvis (one assistant who runs Harness: /jarvis) */
+  jarvis_feature?: boolean
   /** memory-compaction line limit per memory.md (0 = none). */
   memory_max_lines: number
   /** Parts of the line under each answer that are hidden (every browser of the installation). */
@@ -1698,4 +1700,44 @@ export interface CleanupResult {
   freed: number
   parts: { id: CleanupPartId; freed: number; error?: string }[]
   disk: { total: number; free: number; pct: number }
+}
+
+/* ---------------------------------------------------------------- Jarvis (Settings -> Features -> jarvis_feature) */
+export type JarvisWorkState = 'running' | 'replied' | 'failed' | 'closed'
+/** One piece of work Jarvis handed to a session (server jarvis.py work board). */
+export interface JarvisWork {
+  id: number
+  session: string
+  path: string
+  title: string
+  brief: string
+  state: JarvisWorkState
+  created: number
+  updated: number
+  result: string
+  cost: number
+  /** its last answer ends on a question: it waits for the owner */
+  question: boolean
+  turns: number
+}
+export interface JarvisSettings {
+  model: string
+  root: boolean
+  ask_first: boolean
+  internals: boolean
+  daily: boolean
+  brief: string
+  dream: string
+}
+export interface JarvisStatus {
+  on: boolean
+  path: string
+  session: Session | null
+  settings: JarvisSettings
+  last_brief: string
+  last_dream: string
+  work: JarvisWork[]
+  open: number
+  asks: number
+  conversations: { id: string; title: string; updated: number; state: string; current: boolean }[]
 }

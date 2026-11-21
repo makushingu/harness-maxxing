@@ -57,6 +57,9 @@ _Coming soon: dashboard, sessions (desktop and mobile), files, tasks, crons, onb
 - **Devices** (optional) - Claude uses your own computers (Windows, Mac, Linux) and Android phones through the
   Harness Link app: screen, clicks, typing, apps; View only or Control per device, chosen projects and agents, watched
   live (take over, hand back); Claude asks you for passwords and codes (`maxxing devices`).
+- **Jarvis** (optional) - one assistant to talk to who runs Harness: it creates projects and topics, hands work to
+  sessions and agents, gets their answers back by itself (work board), gives a morning brief and tidies its memory
+  every night (`maxxing jarvis`).
 - **Tasks** (optional) - kanban and list on a plain `tasks.json` that Claude can edit too.
 - **Crons** - shell commands or Harness prompts on a schedule, run history, Telegram reports.
 - **Telegram** - built-in gateway: one thread per open session, the same sessions as the web UI, photos

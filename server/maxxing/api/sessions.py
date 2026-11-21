@@ -142,8 +142,12 @@ async def shutdown() -> None:
 @router.get("/sessions")
 async def list_sessions(path: str | None = None, archived: int | None = Query(None, ge=0, le=1)):
     arch = None if archived is None else bool(archived)
+    rows = await _call(service.list_sessions, path.strip("/") if path is not None else None, arch)
+    if path is None:                    # Jarvis's sessions live on its page (unless its setting shows them)
+        from .. import jarvis
+        rows = [s for s in rows if not jarvis.hides(s.get("path"))]
     # Plain JSON data: a JSONResponse skips FastAPI's jsonable_encoder walk (~11 ms for 300 sessions), same body.
-    return JSONResponse(await _call(service.list_sessions, path.strip("/") if path is not None else None, arch))
+    return JSONResponse(rows)
 
 
 @router.post("/sessions")

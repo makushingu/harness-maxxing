@@ -3,6 +3,16 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## Unreleased
+
+New:
+- **Jarvis: one assistant who runs Harness for you.** Turn it on in Settings -> Features -> Jarvis: it sits at the
+  top of the sidebar. Say what you want; it picks or creates the right project and topic, hands the work to a session
+  there, gets the answer back by itself when the session is done and tells you, in the same conversation. Its Work
+  list shows what waits for you, what is in progress and what was answered; a morning brief opens each day, and a
+  night pass tidies its memory so it always knows where everything is. Full rights and "Ask me first" are in its
+  settings. [Show me](#show:jarvis)
+
 ## 2.0.0-alpha.161 - 2026-11-21
 
 Changed:

@@ -42,6 +42,7 @@ export const routes: RouteObject[] = [
         children: [
           { index: true, lazy: page(() => import('./pages/dashboard')) },
           // Feature pages — implemented in src/pages/<name>/index.tsx
+          { path: 'jarvis', lazy: page(() => import('./pages/jarvis'), ['jarvis', 'files']) },
           { path: 'sessions/*', lazy: page(() => import('./pages/sessions'), ['files']) },
           { path: 'files/*', lazy: page(() => import('./pages/files'), ['files', 'media', 'ctext']) },
           { path: 'tasks/*', lazy: page(() => import('./pages/tasks'), ['tasks']) },

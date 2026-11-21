@@ -1,5 +1,5 @@
 // Primary navigation — single source for the sidebar, the mobile tab bar, the palette and shortcuts.
-import { Bot, FolderOpen, GitBranch, LayoutDashboard, ListChecks, Mail, MessagesSquare, Network, Settings, UsersRound, type LucideIcon } from 'lucide-react'
+import { Bot, FolderOpen, GitBranch, LayoutDashboard, ListChecks, Mail, MessagesSquare, Network, Settings, Sparkles, UsersRound, type LucideIcon } from 'lucide-react'
 import type { TKey } from '@/i18n'
 import { useExtensions, useSettings } from '@/lib/queries'
 import { cn } from '@/lib/utils'
@@ -29,7 +29,7 @@ export const iconBtn = (active?: boolean) =>
     active && 'bg-accent text-foreground [&_svg]:text-primary [&_svg]:[stroke-width:2]',
   )
 
-type FeatureSetting = 'tasks_page' | 'git_page' | 'infra_page' | 'team_page' | 'agents_page' | 'mail_page' | 'browser_feature'
+type FeatureSetting = 'tasks_page' | 'git_page' | 'infra_page' | 'team_page' | 'agents_page' | 'mail_page' | 'browser_feature' | 'jarvis_feature'
 
 export type NavItem = {
   to: string
@@ -58,6 +58,7 @@ export const navTourId = (n: NavItem) => `nav-${n.to === '/' ? 'dashboard' : n.t
  *  (settings `sidebar_order`, see orderPages); Settings always stays last. */
 export const NAV: NavItem[] = [
   { to: '/', label: 'nav.home', icon: LayoutDashboard, key: 'd', end: true, group: 'main' },
+  { to: '/jarvis', label: 'nav.jarvis', icon: Sparkles, key: 'j', setting: 'jarvis_feature', group: 'main' },
   { to: '/sessions', label: 'nav.sessions', icon: MessagesSquare, key: 's', group: 'main' },
   { to: '/agents', label: 'nav.agents', icon: Bot, key: 'a', setting: 'agents_page', group: 'main' },
   { to: '/tasks', label: 'nav.tasks', icon: ListChecks, key: 't', setting: 'tasks_page', defaultOn: true, group: 'main' },

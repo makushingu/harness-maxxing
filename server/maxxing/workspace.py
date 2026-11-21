@@ -504,14 +504,18 @@ def tree() -> dict:
     stats = _session_stats()
     threads = config.load_config().get("telegram", {}).get("threads") or {}
     with _one_root():
-        projects = [_project_obj(p, stats, threads) for p in project_names()]
+        from . import jarvis
+        projects = [_project_obj(p, stats, threads) for p in project_names() if not jarvis.hides(topic_path(p))]
         return {"root": str(root()), "projects": projects}
 
 
 def list_topics() -> list[dict]:
+    from . import jarvis
     out = []
     with _one_root():
         for p in project_names():
+            if jarvis.hides(topic_path(p)):
+                continue
             for t in topic_names(p):
                 out.append({"path": topic_path(p, t), "project": p, "name": t,
                             "description": read_description(project_dir(p) / "topics" / t)})
@@ -533,6 +537,9 @@ def get_topic(project: str, name: str) -> dict:
 # ---- mutations -----------------------------------------------------------------------------
 def create_project(name: str, description: str = "") -> dict:
     check_slug(name)
+    from . import jarvis
+    if name == jarvis.PROJECT:
+        raise WorkspaceError(409, "reserved", f"{name!r} is kept for Jarvis (Settings -> Features): pick another name")
     check_description(description)
     ensure_root()
     d = project_dir(name)
