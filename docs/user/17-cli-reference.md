@@ -125,7 +125,7 @@ Changes made to the product code, recorded so updates carry them over (see [Cust
 
 | Command | Effect |
 |---|---|
-| `maxxing custom` / `status [--json]` | customizations, unsaved changes in the code directory, the customized interface, pending update |
+| `maxxing custom` / `status [--json]` / `list` | customizations, unsaved changes in the code directory, the customized interface, pending update |
 | `maxxing custom save "TITLE" --why "REASON" [--files F…] [--check "CMD"]` | commit the uncommitted changes as one customization (refused under `web/dist`, the shipped interface build); `--check` = a command that succeeds while it works, run after every update |
 | `maxxing custom check ID "CMD"` | set (or clear with `""`) the check of a customization |
 | `maxxing custom drop ID` | remove one customization |
@@ -163,6 +163,8 @@ Remotion, the Whisper models, Garage). As root.
 | `maxxing cron list` | jobs, schedules, last results |
 | `maxxing cron run <id>` | run a job now in your terminal and wait for it; `--detach` starts it in its own systemd unit with the memory limits and returns (it runs it here if systemd refuses) (what the crontab calls); `--if-due` runs it only if its schedule matches now in your zone (server clock kept) |
 | `maxxing cron sync` | rewrite the managed crontab block from the job list |
+| `maxxing cron tick` | start the missed runs and the retries that are due (what the server does every 5 minutes) |
+| `maxxing cron deleted` / `restore <id>` | list the removed jobs that can be restored / put one back |
 
 ## Notifications feed
 
@@ -224,6 +226,7 @@ OAuth sign-ins (state "To connect") are done in Settings -> MCP -> **Connect**. 
 | `maxxing agents run AGENT [TASK] [--data] [--json]` | start it now (a new session); `--data`: the text is outside data, not a task; exit 1 when a limit refused it |
 | `maxxing agents send AGENT TEXT [--json]` | from an agent's session: hand work to another agent (the text is given as data; 3 hops at most) |
 | `maxxing agents on AGENT` / `off AGENT` | switch it on / off |
+| `maxxing agents set AGENT FIELD=VALUE... [--json FIELDS]` | change its settings (name, model, Telegram, limits...); from its manager, a safety setting waits for your OK |
 | `maxxing agents silent AGENT` / `loud AGENT` | it works without notifying you (no Telegram, notifications already read, nothing unread) / back to normal |
 | `maxxing agents templates [--lang L] [--json]` | the ready-made agents (id, name, trigger) |
 | `maxxing agents create P/T/A --role TEXT\|--role-file F\|--template ID [--lang L] [--name N] [--model M] [--permission M] [--approvals] [--keys A,B] [--trust-outside] [--telegram] [--usd-per-day N] [--runs-per-hour N] [--domains H,H] [--writable D,D] [--mail ADDRESS] [--no-sandbox] [--off] [--json]` | create an agent in a topic (sandboxed unless `--no-sandbox`; `--template`: a ready-made agent, the other options override it; `--mail`: a mailbox for the agent - the one an e-mail template needs, or for a role-only agent read + drafts with the `maxxing mail` tool allowed) |
@@ -319,6 +322,7 @@ See [Harness Browser](33-browser.md).
 | `maxxing backup run` | back up now (exit code 2 if a secret was found) |
 | `maxxing backup restore [--ref COMMIT]` | restore the whitelisted files |
 | `maxxing backup restore --from OWNER/NAME [--token T]` | new server: configure an existing backup repository, then restore (token also from `$MAXXING_GITHUB_TOKEN`) |
+| `maxxing backup held` / `release` | what the last restore kept off (jobs, extensions, hooks, local MCP servers) / turn it on once you checked it |
 
 ## Telegram
 
