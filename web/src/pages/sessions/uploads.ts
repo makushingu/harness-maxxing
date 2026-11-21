@@ -22,7 +22,8 @@ const emit = (e: Event) => {
   return taken
 }
 
-export function startUpload(key: string, topicPath: string, f: File, lid: string) {
+/** `key`: the draft the file goes to ('' = none: lost if its box is gone). `url`: the upload route (see uploadAttachment). */
+export function startUpload(key: string, topicPath: string, f: File, lid: string, url?: string) {
   const ctrl = new AbortController()
   const up = { lid, key, name: f.name || 'file', size: f.size, progress: 0, ctrl }
   ups.set(lid, up)
@@ -30,11 +31,11 @@ export function startUpload(key: string, topicPath: string, f: File, lid: string
   uploadAttachment(topicPath, f, (l, tot) => {
     up.progress = tot ? l / tot : 0
     emit({ kind: 'progress', up })
-  }, ctrl.signal)
+  }, ctrl.signal, url)
     .then((saved) => {
       ups.delete(lid)
       // no composer open on that draft: the file goes straight into the stored draft
-      if (!emit({ kind: 'done', up, path: saved.path, name: saved.name })) saveAtts(up.key, [...loadAtts(up.key), { path: saved.path, name: saved.name, size: up.size }])
+      if (!emit({ kind: 'done', up, path: saved.path, name: saved.name }) && up.key) saveAtts(up.key, [...loadAtts(up.key), { path: saved.path, name: saved.name, size: up.size }])
     })
     .catch((error) => {
       ups.delete(lid)
