@@ -189,6 +189,16 @@ def test_humanize(expr, text):
 EXTERNAL = "MAILTO=\"\"\n# my own jobs\n0 3 * * * /usr/bin/backup.sh --all\n@reboot /opt/start.sh\n"
 
 
+def test_a_crontab_line_of_the_user_with_a_form_feed_or_bad_bytes_is_kept_as_it_is(org, monkeypatch):
+    monkeypatch.setattr(crons, "maxxing_bin", lambda: "/usr/local/bin/maxxing")
+    raw = b"30 2 * * * echo a\x0cb\xe2\x80\xa8c\n0 4 * * * echo \xff\xfe\n"
+    org.crontab.write_bytes(raw)
+    j = crons.create_job({"name": "Hello", "schedule": "*/5 * * * *", "command": "echo hi"})
+    assert org.crontab.read_bytes().startswith(raw)
+    crons.delete_job(j["id"])
+    assert org.crontab.read_bytes() == raw
+
+
 def test_crontab_block_preserves_external_lines(org, monkeypatch):
     monkeypatch.setattr(crons, "maxxing_bin", lambda: "/usr/local/bin/maxxing")
     org.crontab.write_text(EXTERNAL)
@@ -272,12 +282,12 @@ def test_crontab_without_file_uses_crontab_command(org, monkeypatch):
     def fake_run(cmd, **kw):
         calls.append((cmd, kw.get("input")))
         if cmd == ["crontab", "-l"]:
-            return types.SimpleNamespace(returncode=1, stdout="", stderr="no crontab for root")
-        return types.SimpleNamespace(returncode=0, stdout="", stderr="")
+            return types.SimpleNamespace(returncode=1, stdout=b"", stderr=b"no crontab for root")
+        return types.SimpleNamespace(returncode=0, stdout=b"", stderr=b"")
     monkeypatch.setattr(crons.subprocess, "run", fake_run)
     crons.create_job({"name": "x", "schedule": "@hourly", "command": "true"})
     written = [i for c, i in calls if c == ["crontab", "-"]]
-    assert written and written[0].startswith(crons.BLOCK_BEGIN)
+    assert written and written[0].startswith(crons.BLOCK_BEGIN.encode())
 
 
 # ---- runs -----------------------------------------------------------------------------------

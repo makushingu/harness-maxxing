@@ -857,14 +857,14 @@ def read_crontab() -> str:
     f = _crontab_file()
     if f is not None:
         try:
-            return f.read_text()
+            return f.read_bytes().decode("utf-8", "surrogateescape")   # a line of the user's own may not be UTF-8
         except OSError:
             return ""
     try:
-        r = subprocess.run(["crontab", "-l"], capture_output=True, text=True, timeout=10)
+        r = subprocess.run(["crontab", "-l"], capture_output=True, timeout=10)
     except (OSError, subprocess.TimeoutExpired):
         return ""
-    return r.stdout if r.returncode == 0 else ""      # "no crontab for root" -> empty
+    return r.stdout.decode("utf-8", "surrogateescape") if r.returncode == 0 else ""      # "no crontab for root" -> empty
 
 
 def write_crontab(text: str) -> None:
@@ -872,12 +872,13 @@ def write_crontab(text: str) -> None:
     if f is not None:
         f.parent.mkdir(parents=True, exist_ok=True)
         tmp = f.with_suffix(f.suffix + ".tmp")
-        tmp.write_text(text)
+        tmp.write_bytes(text.encode("utf-8", "surrogateescape"))
         os.replace(tmp, f)
         return
-    r = subprocess.run(["crontab", "-"], input=text, capture_output=True, text=True, timeout=10)
+    r = subprocess.run(["crontab", "-"], input=text.encode("utf-8", "surrogateescape"), capture_output=True, timeout=10)
     if r.returncode != 0:
-        raise CronError(f"crontab refused the update: {r.stderr.strip()[:300]}", "crontab_error")
+        err = r.stderr.decode("utf-8", "replace").strip()[:300]
+        raise CronError(f"crontab refused the update: {err}", "crontab_error")
 
 
 def align_system_timezone(tz: str) -> bool:
@@ -906,7 +907,8 @@ def align_system_timezone(tz: str) -> bool:
 def split_crontab(text: str) -> tuple[list[str], list[str]]:
     """-> (lines outside the managed block, lines inside it)."""
     outside, inside, in_block = [], [], False
-    for line in text.splitlines():
+    # only "\n" ends a line (str.splitlines() also cuts at \x0c, \x85, \u2028...: a line of the user's own would break)
+    for line in text.split("\n")[:-1] if text.endswith("\n") else text.split("\n"):
         s = line.strip()
         if s == BLOCK_BEGIN:
             in_block = True
@@ -1132,7 +1134,7 @@ def external_jobs() -> list[dict]:
             sched, cmd = " ".join(parts[:5]), s.split(None, 5)[5]
         else:
             continue
-        out.append({"schedule": sched, "command": cmd, "human": humanize(sched)})
+        out.append({"schedule": sched, "command": cmd.encode("utf-8", "replace").decode(), "human": humanize(sched)})
     return out
 
 
