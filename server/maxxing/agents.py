@@ -1092,6 +1092,8 @@ def continue_in_sessions(path: str, sid: str) -> dict:
                 last_text=src.get("last_text") or "", turns=src.get("turns") or 0)
     if isinstance(src.get("thread_cost"), dict):
         meta["thread_cost"] = dict(src["thread_cost"])
+    if src.get("seed"):                             # the compaction summary still waiting for the next message
+        meta["seed"] = src["seed"]
     try:
         shutil.copyfile(store.log_path(sid), store.log_path(meta["id"]))
     except OSError:
