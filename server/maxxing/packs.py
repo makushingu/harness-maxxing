@@ -211,6 +211,14 @@ def _invalidate(crons_too: bool) -> None:
         pass
 
 
+def _timeout(v: Any) -> int:
+    """A pack job's timeout; a value that is not a number must not stop the install half way."""
+    try:
+        return int(v) if v is not None else 900
+    except (TypeError, ValueError, OverflowError):
+        return 900
+
+
 def _create_jobs(data: dict, project: str, suffix: str = "") -> list[str]:
     from . import crons
     made: list[str] = []
@@ -225,7 +233,7 @@ def _create_jobs(data: dict, project: str, suffix: str = "") -> list[str]:
         job = {"name": c["name"] + suffix, "schedule": c.get("schedule", "0 9 * * 1"), "kind": "claude",
                "topic_path": f"projects/{project}/topics/{topic}" if topic else f"projects/{project}",
                "prompt": c.get("prompt", ""), "model": "", "reuse_session": False, "enabled": False,
-               "notify": c.get("notify", "always"), "timeout_s": int(c.get("timeout_s", 900))}
+               "notify": c.get("notify", "always"), "timeout_s": _timeout(c.get("timeout_s"))}
         try:
             crons.create_job(job)
             made.append(c["name"] + suffix)
