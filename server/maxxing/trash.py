@@ -277,6 +277,33 @@ def _item(item_id: str) -> Path:
 _restore_lock = threading.Lock()
 
 
+def _move_back(p: Path, dest: Path) -> None:
+    """Put p at dest. Across disks the item is copied to a temporary name next to dest and renamed in place
+    before the source is removed, so a source that cannot be removed completely never costs the copy."""
+    try:
+        os.rename(p, dest)
+        return
+    except OSError:
+        pass
+    tmp = dest.with_name(f".{dest.name[:200]}.restoring-{os.getpid()}")
+    try:
+        if p.is_dir() and not p.is_symlink():
+            shutil.copytree(p, tmp, symlinks=True)
+        else:
+            shutil.copy2(p, tmp, follow_symlinks=False)
+        os.rename(tmp, dest)
+    except OSError:                                         # a copy that stopped half way: no partial copy left
+        if tmp.is_dir() and not tmp.is_symlink():
+            shutil.rmtree(tmp, ignore_errors=True)
+        else:
+            tmp.unlink(missing_ok=True)
+        raise
+    if p.is_dir() and not p.is_symlink():
+        shutil.rmtree(p, ignore_errors=True)
+    else:
+        p.unlink(missing_ok=True)
+
+
 def _free(dest: Path) -> Path:
     """dest, or "<name> (restored)", "<name> (restored 2)"... when something has the name now."""
     if not os.path.lexists(dest):                         # a dangling link is something too
@@ -411,16 +438,7 @@ def restore(item_id: str) -> dict[str, Any]:
         with _restore_lock:                                 # two restores of the same name must not pick the same free one
             dest = _free_dir_name(original) if kind in ("project", "topic", "agent") else _free(original)
             dest.parent.mkdir(parents=True, exist_ok=True)
-            existed = os.path.lexists(dest)
-            try:
-                shutil.move(str(p), str(dest))
-            except OSError:
-                if not existed and os.path.lexists(p):  # a copy across disks failed half way: no partial copy left
-                    if dest.is_dir() and not dest.is_symlink():
-                        shutil.rmtree(dest, ignore_errors=True)
-                    else:
-                        dest.unlink(missing_ok=True)
-                raise
+            _move_back(p, dest)
     except OSError as e:                                    # the folder it was in is now a file, a read-only disk...
         raise TrashError(409, "not_restorable", f"Cannot put it back there: {e.strerror or e}") from None
     n = 0
