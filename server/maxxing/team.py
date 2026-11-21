@@ -1051,3 +1051,13 @@ def fail_stale_downloads() -> None:
                         f["failed"] = changed = True
         if changed:
             _save(doc)
+        kept = {str(x["path"]) for c in doc["chats"] for m in c.get("messages") or []
+                for x in m.get("files") or [] if x.get("path")}
+    # the .part file and the empty file reserved for a download the restart cut
+    root = config.workspace() / "team" / "attachments"
+    for f in root.glob("*/*") if root.is_dir() else []:
+        try:
+            if f.is_file() and (f.name.endswith(".part") or (f.stat().st_size == 0 and str(f) not in kept)):
+                f.unlink(missing_ok=True)
+        except OSError:
+            log.exception("team: cleaning %s", f)
