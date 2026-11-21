@@ -48,10 +48,13 @@ Old links keep working: `/settings/stats` opens **Usage**, `/settings/license` a
 
 - **Free up space** measures what Harness can drop by itself and lists it with its size: old versions and
   leftovers (previous versions of the components, browsers no longer used, temporary files, oversized logs),
-  download caches (uv, npm, pip, npx: downloaded again when needed), the system journal (cut down to its last
-  200 MB), the system packages apt already installed and the Harness trash. Untick what you want to keep, then
-  **Free**. The trash is never ticked by default: once emptied, nothing in it can be restored. Your projects,
-  attachments and renders are never touched. From a terminal, `maxxing deps clean --caches` does the first two.
+  download caches (uv, npm, pip, npx: downloaded again when needed; what a running tool such as an MCP server
+  uses stays), the system journal (cut down to its last 200 MB), the system packages apt already installed, the
+  video previews and thumbnails of the file viewer (made again when shown) and the Harness trash. Untick what you
+  want to keep, then **Free**. The previews and the trash are never ticked by default: once emptied, nothing in
+  the trash can be restored. While the components are being updated, old versions and caches are not cleaned
+  (the part says so): run it again afterwards. Your projects, attachments and renders are never touched. From a
+  terminal, `maxxing deps clean --caches` does the first two.
 - **Clean up with Claude** opens a session in the Harness topic with a ready prompt: Claude measures the disk,
   goes through every project and topic (attachments, renders, `node_modules`, environments, builds, worktrees,
   other tools' caches), finds where each big folder comes from and whether it keeps growing, and gives you a

@@ -95,7 +95,11 @@ def cmd_deps(a) -> int:
     if what == "clean":
         if not _root_only():
             return 1
-        out = deps.clean(dry=a.dry_run, caches=a.caches)
+        try:
+            out = deps.clean(dry=a.dry_run, caches=a.caches)
+        except deps.Busy as e:                          # the weekly job meets an update: next week (not a failure)
+            print(f"  skipped: {e}")
+            return 0
         total = sum(x["bytes"] for x in out)
         if not a.quiet or a.dry_run:
             for x in out:

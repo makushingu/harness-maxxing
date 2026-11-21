@@ -48,6 +48,7 @@ def _never_the_real_tools(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> No
     fake = tmp_path / "_system"
     monkeypatch.setattr(cleanup, "_sh", lambda cmd, timeout=120: "")    # never vacuum the real journal / apt cache
     monkeypatch.setattr(cleanup, "APT_CACHE", fake / "apt-archives")
+    monkeypatch.setattr(cleanup, "JOURNAL_DIRS", (fake / "journal",))     # never read the real journal
     monkeypatch.setattr(cpu, "SLICE_DIR", fake / "systemd-system")      # the CPU priority slices (uninstall removes them)
     monkeypatch.setattr(deps, "LINK_DIR", fake / "usr-local-bin")
     monkeypatch.setattr(deps, "root_home", lambda: fake / "root-home")
