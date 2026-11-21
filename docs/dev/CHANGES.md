@@ -11,6 +11,8 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   longer aborted on unmount. A remounted composer shows them again (`uploadsOf`) and follows them (`onUploads`); a
   file that finishes with no composer open on its draft is written to the stored draft (`saveAtts`). The draft key
   change moves them (`moveUploads`).
+  `features/agents/attach.tsx` (agents, groups) uses the same store; a box without a draft key still cancels its
+  uploads when it goes away.
 - Sessions, mark all as read: `useMarkAllRead` (lib/queries/sessions.ts) posts `/seen` for each unread session, with
   the optimistic patch of the list, each session and the topic counters (unread, errors). Tree: the double tick in
   `ListHeader` (all unread live sessions) and `MarkAllReadItem` in the project / topic menus (right click, ⋯,

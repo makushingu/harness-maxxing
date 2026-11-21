@@ -26,7 +26,7 @@ Changed:
 
 Fixed:
 - **A file still uploading no longer vanishes when you go to another session or page.** The upload goes on and
-  the file is back in the message box when you return.
+  the file is back in the message box when you return. Same in the message box of an agent or a group.
 - **After a compaction, Claude no longer answers its own summary.** A compacted session (automatic or **Compact
   context**) used to run one more turn in which Claude read the summary and summed it up again, so the same points
   came twice in a row. The summary now simply waits: your next message starts the fresh context with it, and that
