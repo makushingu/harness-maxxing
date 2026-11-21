@@ -393,16 +393,24 @@ def _file_stat(fp: str, base: str) -> os.stat_result | None:
 def _subdirs(d: str, base: str) -> list[str]:
     """Sub-folders of `d`; a linked folder only when it points inside the workspace (as _file_stat does for files)."""
     try:
-        out, root = [], None
+        out, root = [], os.path.realpath(base)
+        try:
+            if os.path.commonpath([os.path.realpath(d), root]) != root:      # projects/, topics/, agents/ linked outside
+                return []
+        except ValueError:
+            return []
         for e in os.scandir(d):
             if not e.is_dir(follow_symlinks=True) or e.name in SKIP_DIRS or e.name.startswith("."):
                 continue
             if e.is_symlink():
-                root = root or os.path.realpath(base)
+                real = os.path.realpath(e.path)
                 try:
-                    if os.path.commonpath([os.path.realpath(e.path), root]) != root:
+                    if os.path.commonpath([real, root]) != root:
                         continue
                 except ValueError:
+                    continue
+                # the folders the walk skips stay skipped through a link (as in _file_stat), the target itself included
+                if any(n in SKIP_DIRS or n.startswith(".") for n in Path(os.path.relpath(real, root)).parts):
                     continue
             out.append(e.path)
         return sorted(out)

@@ -264,6 +264,11 @@ def _plan(zf: zipfile.ZipFile, scans: dict[str, list[str] | None]) -> dict[str, 
     for info, p in entries:
         parts = p.parts
         data_kind = "file"
+        name_b = info.filename.encode("utf-8", "replace")
+        if name_kinds := sorted({kind for kind, rx in backup.LEAKS if rx.search(name_b)}):
+            # a secret in the NAME of a file would be written to the disk, the report and the API answer
+            secrets_found.append({"file": "(name hidden: it holds a secret)", "kinds": name_kinds})
+            continue
         if parts[0] == "projects" and len(parts) >= 6 and parts[2] == "topics" and parts[4] == "agents":
             # an agent runs by itself (triggers, permissions): never planted by an import, created in Harness
             skipped.append({"file": info.filename, "reason": "agent folder (not imported: create agents in Harness)"})
@@ -415,6 +420,36 @@ def _check_dest(dest: Path, root: Path) -> None:
 _APPLY_LOCK = threading.Lock()
 
 
+_IMPORT_REF_RE = re.compile(r"(?<!\S)@(?!memory\.md(?!\S))(?=[~/.\w])(?=\S*[~/.])\S*")
+
+
+def _defang_imports(text: str) -> str:
+    """Claude Code loads `@path` in a CLAUDE.md / memory.md into the context: an imported file must not pull in
+    another file of this server (a key, a credential). The reference stays readable, in a code span."""
+    return _IMPORT_REF_RE.sub(lambda m: f"`{m.group(0)}`", text)
+
+
+def _strip_skill_hooks(text: str) -> str:
+    """Remove the `hooks:` field of the front matter of a SKILL.md: a hook runs a command by itself."""
+    lines = text.split("\n")
+    if not lines or lines[0].strip() != "---":
+        return text
+    try:
+        end = next(i for i in range(1, len(lines)) if lines[i].strip() == "---")
+    except StopIteration:
+        return text
+    out, skipping = [lines[0]], False
+    for ln in lines[1:end]:
+        if re.match(r"hooks\s*:", ln):
+            skipping = True
+            continue
+        if skipping and (not ln.strip() or ln[:1] in (" ", "\t", "-")):
+            continue
+        skipping = False
+        out.append(ln)
+    return "\n".join(out + lines[end:])
+
+
 def apply(path: Path) -> dict[str, Any]:
     """One import applied at a time (a double click on Apply raced on the projects and topics it creates)."""
     from . import workspace
@@ -499,6 +534,10 @@ def _apply(path: Path) -> dict[str, Any]:
                 plan["skipped"].append({"file": item["src"],
                                         "reason": "a folder, a file or a link is in the way (not imported)"})
                 continue
+            if item["kind"] == "skill" and dest.name.lower() == "skill.md":
+                data = _strip_skill_hooks(data.decode("utf-8", errors="replace")).encode("utf-8")
+            elif dest.name in ("CLAUDE.md", "memory.md"):
+                data = _defang_imports(data.decode("utf-8", errors="replace")).encode("utf-8")
             rel_parent = str(PurePosixPath(item["dest"]).parent)
             is_md_level = dest.name in ("memory.md", "CLAUDE.md") and item["kind"] in ("project", "topic", "root_memory") \
                 and len(PurePosixPath(item["dest"]).parts) in (1, 3, 5)

@@ -450,10 +450,15 @@ def project_emoji(project: str) -> str:
     return e if isinstance(e, str) else ""
 
 
+DESCRIPTION_MAX = 2000
+
+
 def check_description(value: str | None) -> str | None:
     """A description must be writable as UTF-8 (a lone surrogate would fail half-way through a create)."""
     if value is None:
         return None
+    if len(value) > DESCRIPTION_MAX:
+        raise WorkspaceError(400, "bad_description", f"The description is limited to {DESCRIPTION_MAX} characters")
     try:
         value.encode("utf-8")
     except UnicodeEncodeError:

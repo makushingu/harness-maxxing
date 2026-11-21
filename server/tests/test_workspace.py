@@ -282,3 +282,10 @@ def test_a_broken_symlink_in_the_way_is_a_409_not_a_500(client, mx):
     (mx["ws"] / "projects" / "ok" / "topics" / "t").symlink_to(mx["ws"] / "nowhere")
     r = client.post("/api/workspace/projects/ok/topics", json={"name": "t"})
     assert r.status_code == 409 and r.json()["error"] == "exists", r.text
+
+
+def test_a_huge_description_is_refused(client, mx, topic):
+    r = client.post("/api/workspace/projects", json={"name": "big", "description": "x" * 100_000})
+    assert r.status_code == 400 and r.json()["error"] == "bad_description"
+    assert not (mx["ws"] / "projects/big").exists()
+    assert client.post("/api/workspace/projects", json={"name": "big", "description": "x" * 2000}).status_code == 200
