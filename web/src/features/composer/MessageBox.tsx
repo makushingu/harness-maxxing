@@ -128,6 +128,22 @@ export function MessageBox(p: MessageBoxProps) {
         {p.above}
         <div
           {...boxRest}
+          // A click on the box around the text (its margins, the empty part of its bar) puts the caret in the text
+          // instead of selecting nothing or the page.
+          onMouseDown={(e) => {
+            boxRest.onMouseDown?.(e)
+            if (e.defaultPrevented || e.button !== 0 || p.closed) return
+            const ta = e.currentTarget.querySelector('textarea')
+            if (!ta || e.target === ta) return
+            // something of its own in the box (a button, a file, a menu): not the text (the page around does not count)
+            const own = (e.target as Element).closest('button, a, input, select, textarea, label, [role], [contenteditable], [data-testid$="attachments"]')
+            if (own && own !== e.currentTarget && e.currentTarget.contains(own)) return
+            e.preventDefault()
+            if (document.activeElement !== ta) {
+              ta.focus({ preventScroll: true })
+              ta.setSelectionRange(ta.value.length, ta.value.length)
+            }
+          }}
           className={cn(
             'mx-lg relative z-10 rounded-xl border bg-card shadow-xs transition-[border-color,box-shadow] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/20',
             p.dimmed && 'opacity-80',

@@ -7,6 +7,8 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- MessageBox (sessions, agents, groups, Team): a mousedown on the box outside its own controls (button, link, field,
+  `[role]`, attachments strip) focuses the textarea, caret at the end, with `preventDefault` (no stray selection).
 - Composer uploads: in-flight uploads live in `pages/sessions/uploads.ts` (per draft key, outside the component), no
   longer aborted on unmount. A remounted composer shows them again (`uploadsOf`) and follows them (`onUploads`); a
   file that finishes with no composer open on its draft is written to the stored draft (`saveAtts`). The draft key
