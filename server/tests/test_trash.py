@@ -759,3 +759,12 @@ def test_a_link_standing_in_the_place_of_a_deleted_file_does_not_stop_its_restor
     (item,) = _items(client)
     assert client.post(f"/api/trash/{item['id']}/restore").status_code == 200
     assert elsewhere.read_text() == "outside" and (d / "a (restored).txt").read_text() == "x"
+
+
+def test_a_topic_deleted_from_the_file_manager_comes_back_with_a_slug_name(client, topic, mx):
+    config.save_config({**config.load_config(), "files_root": str(mx["tmp"])})    # the workspace is under the files root
+    assert client.post("/api/files/delete", json={"path": str(mx["ws"] / topic)}).json() == {"ok": True}
+    assert client.post("/api/workspace/projects/acme/topics", json={"name": "blog"}).status_code == 200
+    (it,) = [i for i in _items(client) if i["kind"] == "topic"]
+    r = client.post(f"/api/trash/{it['id']}/restore").json()
+    assert r["ok"] and (mx["ws"] / "projects/acme/topics/blog-restored").is_dir()
