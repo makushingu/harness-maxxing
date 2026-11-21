@@ -8,13 +8,12 @@ the person has it (the live view), or a protected / locked screen (the device sa
 from __future__ import annotations
 
 import asyncio
-import math
 import time
 from typing import Any, Awaitable, Callable
 
 from . import OS_NAMES, store, visible
 from .asks import ask as ask_person
-from .hub import DeviceError, Offline, hub
+from .hub import DeviceError, Offline, finite, hub
 
 SHOT_MAX_W = 1280
 SHOT_QUALITY = 70
@@ -94,7 +93,7 @@ def _err(t: str) -> dict:
 
 def _num(args: dict, k: str, default: float | None = None) -> float:
     v = args.get(k, default)
-    if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v):
+    if not finite(v):
         raise Refused(f"`{k}` must be a number")
     return float(v)
 

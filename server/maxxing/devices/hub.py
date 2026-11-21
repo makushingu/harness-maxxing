@@ -29,6 +29,16 @@ LIVE_QUALITY = 55
 TIMEOUTS = {"shot": 20.0, "input": 15.0, "tree": 20.0, "tap_node": 15.0, "set_text": 15.0, "apps": 20.0, "open": 20.0}
 
 
+def finite(v) -> bool:
+    """A real, finite number (a huge integer such as 10**400 is not: math.isfinite raises OverflowError on it)."""
+    if isinstance(v, bool) or not isinstance(v, (int, float)):
+        return False
+    try:
+        return math.isfinite(v)
+    except OverflowError:
+        return False
+
+
 class Offline(Exception):
     pass
 
@@ -129,7 +139,7 @@ class Hub:
         if t == "hello":
             scr = msg.get("screen") if isinstance(msg.get("screen"), dict) else {}
             screen = {k: scr.get(k) for k in ("w", "h", "scale")
-                      if isinstance(scr.get(k), (int, float)) and math.isfinite(scr.get(k))} or None
+                      if finite(scr.get(k))} or None
             caps = [store._text(x, 16) for x in (msg.get("caps") or [])[:10] if isinstance(x, str)]
             screens = []
             for x in (msg.get("screens") or [])[:16] if isinstance(msg.get("screens"), list) else []:
