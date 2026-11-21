@@ -462,3 +462,33 @@ def test_a_title_with_a_lone_surrogate_does_not_stop_the_index(client, mx):
     good = _session("", "Saine", [("assistant", "fine quokkaword")])
     search.refresh()
     assert [x["id"] for x in search.search("quokkaword")["results"]] == [good]
+
+
+def test_a_folder_link_to_a_hidden_or_skipped_folder_is_not_indexed(client, mx):
+    ws = config.workspace()
+    (ws / ".hid").mkdir()
+    (ws / ".hid" / "memory.md").write_text("zqxfolderlink321\n")
+    (ws / "projects" / "p" / "attachments").mkdir(parents=True)
+    (ws / "projects" / "p" / "attachments" / "memory.md").write_text("zqxfolderlink321\n")
+    topics = ws / "projects" / "p" / "topics"
+    topics.mkdir(parents=True)
+    os.symlink(ws / ".hid", topics / "hid")
+    os.symlink(ws / "projects" / "p" / "attachments", topics / "att")
+    real = topics / "real"
+    real.mkdir()
+    (real / "notes.md").write_text("zqxfolderlink321 dans une vraie note\n")
+    search.refresh(True, True)
+    hits = [r["path"] for r in _q(client, "zqxfolderlink321")]
+    assert len(hits) == 1 and hits[0].endswith("projects/p/topics/real/notes.md")
+
+
+def test_a_container_folder_linked_outside_the_workspace_is_not_indexed(client, mx, tmp_path):
+    ws = config.workspace()
+    outside = tmp_path / "outside"
+    (outside / "t").mkdir(parents=True)
+    (outside / "t" / "memory.md").write_text("zqxcontainer654\n")
+    (outside / "t" / "notes.md").write_text("zqxcontainer654\n")
+    (ws / "projects" / "p").mkdir(parents=True)
+    os.symlink(outside, ws / "projects" / "p" / "topics")
+    search.refresh(True, True)
+    assert _q(client, "zqxcontainer654") == []
