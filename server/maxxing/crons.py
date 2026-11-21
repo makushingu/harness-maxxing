@@ -853,18 +853,33 @@ def _crontab_file() -> Path | None:
     return Path(p) if p else None
 
 
-def read_crontab() -> str:
+def _read_crontab_strict() -> str:
+    """The crontab as it is. "no crontab for root" is an empty crontab; any other failure raises CronError:
+    a crontab that could not be read is not an empty one (rewriting it would erase the user's own lines)."""
     f = _crontab_file()
     if f is not None:
         try:
             return f.read_bytes().decode("utf-8", "surrogateescape")   # a line of the user's own may not be UTF-8
-        except OSError:
+        except FileNotFoundError:
             return ""
+        except OSError as e:
+            raise CronError(f"crontab file cannot be read: {e}", "crontab_error") from None
     try:
         r = subprocess.run(["crontab", "-l"], capture_output=True, timeout=10)
-    except (OSError, subprocess.TimeoutExpired):
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise CronError(f"crontab -l failed: {e}", "crontab_error") from None
+    if r.returncode == 0:
+        return r.stdout.decode("utf-8", "surrogateescape")
+    if b"no crontab for" in r.stderr:
         return ""
-    return r.stdout.decode("utf-8", "surrogateescape") if r.returncode == 0 else ""      # "no crontab for root" -> empty
+    raise CronError("crontab -l failed: " + r.stderr.decode("utf-8", "replace").strip()[:300], "crontab_error")
+
+
+def read_crontab() -> str:
+    try:
+        return _read_crontab_strict()
+    except CronError:
+        return ""
 
 
 def write_crontab(text: str) -> None:
@@ -1101,7 +1116,8 @@ def sync_crontab(jobs: list[dict] | None = None) -> str:
                 log.warning("jobs.json cannot be read: crontab left as it is")
                 return read_crontab()
             _remember(jobs, "vanished (jobs.json edited outside Harness Maxxing)")
-        outside, inside = split_crontab(read_crontab())
+        current = _read_crontab_strict()
+        outside, inside = split_crontab(current)
         while outside and not outside[-1].strip():
             outside.pop()
         lines = [ln for ln in inside if not _ours(ln)] + managed_lines(jobs)
@@ -1111,7 +1127,7 @@ def sync_crontab(jobs: list[dict] | None = None) -> str:
                 new.append("")
             new += [BLOCK_BEGIN, *lines, BLOCK_END]
         text = "\n".join(new) + "\n" if new else ""
-        if text != read_crontab():
+        if text != current:
             write_crontab(text)
         return text
 
