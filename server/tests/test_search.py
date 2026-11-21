@@ -452,3 +452,12 @@ def test_a_unicode_line_separator_in_a_message_does_not_split_the_log_line(clien
     search.refresh()
     rows = search._db().execute("SELECT count(*) FROM items WHERE src=? AND body LIKE '%zebraxyz%'", (f"s:{sid}",)).fetchone()
     assert rows[0] == 2
+
+
+def test_a_title_with_a_lone_surrogate_does_not_stop_the_index(client, mx):
+    bad = _session("", "x", [("assistant", "broken quokkatitle")])
+    p = store.meta_path(bad)
+    p.write_text(p.read_text().replace('"title": "x"', '"title": "a\\ud800b"'), encoding="utf-8")   # valid JSON
+    good = _session("", "Saine", [("assistant", "fine quokkaword")])
+    search.refresh()
+    assert [x["id"] for x in search.search("quokkaword")["results"]] == [good]
