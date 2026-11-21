@@ -1055,13 +1055,29 @@ async def move(body: MoveIn):
     return await _t(_move, resolve(body.from_, follow=False), resolve(body.to, follow=False, new=True))
 
 
+def _level_kind(p: Path) -> str | None:
+    """"project" / "topic" for projects/<p> and projects/<p>/topics/<t> (a restore then keeps a slug name when the
+    name is taken again), else None."""
+    if p.is_symlink() or not p.is_dir():
+        return None
+    try:
+        parts = p.relative_to(workspace.root().resolve()).parts
+    except ValueError:
+        return None
+    if len(parts) == 2 and parts[0] == "projects":
+        return "project"
+    if len(parts) == 4 and parts[0] == "projects" and parts[2] == "topics":
+        return "topic"
+    return None
+
+
 def _delete(p: Path) -> dict:
     if p == _root():
         raise _err(403, "forbidden", "Cannot delete the files root")
     if not p.exists() and not p.is_symlink():
         raise _err(404, "not_found", "Not found")
     _guard_workspace(p)
-    workspace.move_to_trash(p)
+    workspace.move_to_trash(p, kind=_level_kind(p))
     return {"ok": True}
 
 

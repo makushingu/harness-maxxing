@@ -291,7 +291,7 @@ def _index_groups(con: sqlite3.Connection) -> None:
         if sig is None:
             sig = {"ino": ino, "offset": 0, "group": list(stamp[1])}
             con.execute("INSERT INTO items(src, kind, ref, path, title, body, at) VALUES (?,?,?,?,?,?,?)",
-                        (key, "group", path, path, g.get("name") or parts[1], "", stamp[0][1] / 1e9))
+                        (key, "group", path, path, _clean(g.get("name") or parts[1]), "", stamp[0][1] / 1e9))
         if sig["offset"] < size:
             with open(f, "rb") as fh:
                 fh.seek(sig["offset"])
@@ -309,7 +309,7 @@ def _index_groups(con: sqlite3.Connection) -> None:
                 author = str(m.get("author") or "")
                 who = "Owner" if author == "me" else "@" + hs.get(author, agent_rooms.slug(author))
                 con.execute("INSERT INTO items(src, kind, ref, path, title, body, at) VALUES (?,?,?,?,?,?,?)",
-                            (key, "group", path, path, "", f"{who}: {text}"[:MAX_MESSAGE_CHARS],
+                            (key, "group", path, path, "", _clean(f"{who}: {text}")[:MAX_MESSAGE_CHARS],
                              m.get("at") if isinstance(m.get("at"), (int, float)) else None))
             sig["offset"] += end
         con.execute("INSERT OR REPLACE INTO src(key, sig) VALUES (?, ?)", (key, json.dumps(sig)))

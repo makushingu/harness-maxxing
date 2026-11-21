@@ -565,7 +565,8 @@ def clean(data: Any, strict: bool = False, own: str = "") -> dict:
             "browser": _clean_browser(d.get("browser"), strict),
             "devices": _clean_devices(d.get("devices"), strict),
             "limits": limits, "triggers": triggers,
-            "created": c if isinstance(c := d.get("created"), (int, float)) and math.isfinite(c) else time.time()}
+            "created": c if isinstance(c := d.get("created"), (int, float)) and 0 <= c < 32503680000
+                       else time.time()}   # a date a hand edit pushed out of any calendar is the current time
 
 
 def _clean_browser(raw: Any, strict: bool) -> dict:
@@ -1568,7 +1569,7 @@ def post(path: str, kind: str, text: str, *, cap: int = TEXT_MAX, **extra: Any) 
     f = _state_file(path, "jsonl")
     with _lock:
         with f.open("a") as fh:
-            fh.write(json.dumps(msg, ensure_ascii=False) + "\n")
+            fh.write(_utf8(json.dumps(msg, ensure_ascii=False)) + "\n")   # a lone surrogate must not lose the result
         size = f.stat().st_size
         if size > max(THREAD_KEEP * 2 * 1024, _trimmed.get(str(f), 0) + THREAD_KEEP * 1024):
             lines = _kept_lines(f.read_text(errors="replace").splitlines())
@@ -2991,7 +2992,16 @@ class Debouncer:
 
     def requeue(self, path: str, tid: str, p: dict) -> None:
         with self._mu:
-            self.pending.setdefault((path, tid), p)
+            cur = self.pending.get((path, tid))
+            if cur is None:
+                self.pending[(path, tid)] = p
+                return
+            # events added while the batch was busy: keep both, the older texts first
+            cur["texts"] = list(p.get("texts") or []) + list(cur["texts"])
+            cur["dropped"] = int(p.get("dropped") or 0) + int(cur.get("dropped") or 0)
+            cur["depth"] = max(int(p.get("depth") or 0), int(cur.get("depth") or 0))
+            cur["first"] = min(cur["first"], p.get("first", cur["first"]))
+            cur["due"] = max(cur["due"], p.get("due", cur["due"]))
 
     def dump(self) -> list[dict]:
         with self._mu:

@@ -374,9 +374,13 @@ def test_a_download_that_raises_is_marked_failed(client, sent, monkeypatch):
     doc = team._load()                                  # a download cut by a restart
     doc["chats"][0]["messages"][0]["files"][0] |= {"pending": True, "failed": False}
     team._save(doc)
+    d = team.files_dir()
+    (d / "big.bin").write_bytes(b"")                    # reserved for the download
+    (d / "big.bin.part").write_bytes(b"half")
     team.fail_stale_downloads()
     f = team.messages(dm)["messages"][0]["files"][0]
     assert f.get("failed") and not f.get("pending")
+    assert not (d / "big.bin").exists() and not (d / "big.bin.part").exists()
 
 
 def test_reading_typing_and_seen_do_not_reload_or_rewrite_team_json(client, sent, monkeypatch):
