@@ -420,6 +420,36 @@ def _check_dest(dest: Path, root: Path) -> None:
 _APPLY_LOCK = threading.Lock()
 
 
+_IMPORT_REF_RE = re.compile(r"(?<!\S)@(?!memory\.md(?!\S))(?=[~/.\w])(?=\S*[~/.])\S*")
+
+
+def _defang_imports(text: str) -> str:
+    """Claude Code loads `@path` in a CLAUDE.md / memory.md into the context: an imported file must not pull in
+    another file of this server (a key, a credential). The reference stays readable, in a code span."""
+    return _IMPORT_REF_RE.sub(lambda m: f"`{m.group(0)}`", text)
+
+
+def _strip_skill_hooks(text: str) -> str:
+    """Remove the `hooks:` field of the front matter of a SKILL.md: a hook runs a command by itself."""
+    lines = text.split("\n")
+    if not lines or lines[0].strip() != "---":
+        return text
+    try:
+        end = next(i for i in range(1, len(lines)) if lines[i].strip() == "---")
+    except StopIteration:
+        return text
+    out, skipping = [lines[0]], False
+    for ln in lines[1:end]:
+        if re.match(r"hooks\s*:", ln):
+            skipping = True
+            continue
+        if skipping and (not ln.strip() or ln[:1] in (" ", "\t", "-")):
+            continue
+        skipping = False
+        out.append(ln)
+    return "\n".join(out + lines[end:])
+
+
 def apply(path: Path) -> dict[str, Any]:
     """One import applied at a time (a double click on Apply raced on the projects and topics it creates)."""
     from . import workspace
@@ -504,6 +534,10 @@ def _apply(path: Path) -> dict[str, Any]:
                 plan["skipped"].append({"file": item["src"],
                                         "reason": "a folder, a file or a link is in the way (not imported)"})
                 continue
+            if item["kind"] == "skill" and dest.name.lower() == "skill.md":
+                data = _strip_skill_hooks(data.decode("utf-8", errors="replace")).encode("utf-8")
+            elif dest.name in ("CLAUDE.md", "memory.md"):
+                data = _defang_imports(data.decode("utf-8", errors="replace")).encode("utf-8")
             rel_parent = str(PurePosixPath(item["dest"]).parent)
             is_md_level = dest.name in ("memory.md", "CLAUDE.md") and item["kind"] in ("project", "topic", "root_memory") \
                 and len(PurePosixPath(item["dest"]).parts) in (1, 3, 5)
