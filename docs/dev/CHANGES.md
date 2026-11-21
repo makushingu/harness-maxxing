@@ -5,6 +5,24 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## 2.0.0-alpha.161 - 2026-11-21
+
+- Thread: `web/src/pages/sessions/toolLabel.ts`. `toolLabel(name, input, t, rel)` -> `{title, detail, kind, danger}`:
+  Bash uses `input.description` (only ~1/3 of real Bash calls carry one), else `bashAction(command)` recognises the
+  first real command of the line (skips `cd`, env assignments, `env -u`, `sudo`, `timeout`, loop words,
+  redirections, here-docs; parses at most `PARSE_MAX` = 4000 chars, split without `\s*` to stay linear). Unknown
+  tools (MCP…) return an empty title: the card keeps name + server summary. `isDangerous` (rm -rf, git push --force,
+  reset --hard, branch -D, clean -f, DROP/TRUNCATE, DELETE FROM, mkfs, dd) sets the badge, on the full command.
+- Grouping: `groupRows` (Thread.tsx) folds runs of >= `GROUP_MIN` (3) tool items where `groupable` (Items.tsx) is
+  true into `ToolGroup`, keyed by the first item. `toolKind` is the security boundary of the fold: a Bash line is
+  read/search/list/look only if EVERY segment (`&&`, `||`, `;`, `|`) classifies as such; refused outright: `$(`,
+  backticks, `<(`/`>(`, newlines, a lone `&`, any `>` except to /dev/null or fd dup, `tee`, `find -delete/-exec/-ok/
+  -fprint`, `--output`, `rg --pre`, `sort -o`, `git -c/--config-env/--exec-path`, `sed -i`, longer than PARSE_MAX,
+  dangerous. Sub-agents and background tasks never group.
+- `RunningRow` shows the label of the pending tool instead of `use.summary`.
+- i18n: namespace `tl` in the on-demand group `tlabel` (not declared on the sessions route: it would overflow the
+  first-load dictionary budget; listed in ON_DEMAND of test_web_i18n_groups).
+
 ## 2.0.0-alpha.160 - 2026-11-21
 
 - Tests: the bare-token fixture of `test_mcp_safety.py` is built by concatenation, so the leak scanners of the

@@ -3,6 +3,15 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.161 - 2026-11-21
+
+Changed:
+- **Tool calls read in plain words.** Each card of a session says what Claude does ("Runs the tests", "Searches
+  “useT”", "Reads app.py", "Restarts the service") with the real command in grey after it, instead of `Bash: cd … &&
+  grep …`. A command that deletes or rewrites things for good carries a red **Deletes or rewrites** badge.
+- **Reads in a row fold into one line.** Three files read and two searches in a row show as "Explored 3 files · 2
+  searches"; a click lists them. Anything that writes or runs something keeps its own card.
+
 ## 2.0.0-alpha.160 - 2026-11-21
 
 New:

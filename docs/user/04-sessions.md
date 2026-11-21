@@ -229,8 +229,15 @@ into another app, the content arrives as plain text (a file as its path).
 - Answers stream live (markdown, code, images). A picture from another website shows as a **Load image from …**
   button and loads only when you click it (a page Claude read cannot make the answer send data to its server);
   links to other websites open in a new tab.
-- **Tool calls** (reading files, running commands, editing) appear as compact cards; expand them
-  to see input and output. Edits are shown as diffs (on a phone their long lines wrap, no sideways scrolling).
+- **Tool calls** (reading files, running commands, editing) appear as compact cards with a title in plain words
+  ("Runs the tests", "Searches “useT”", "Reads app.py") and, in grey after it, what really runs (the command, the
+  file, the pattern; in full when you hover it); expand them to see input and output. Edits are shown as diffs (on a
+  phone their long lines wrap, no sideways scrolling). A command that deletes or rewrites things for good (`rm -rf`,
+  `git push --force`, `git reset --hard`, `DROP TABLE`…) carries a red **Deletes or rewrites** badge, whatever its
+  title says.
+- **Reads in a row become one line**: three or more calls that only read (files read, searches, folder listings,
+  `git status`) show as "Explored 4 files · 2 searches", a click lists them. A command joins it only when every part
+  of it reads: anything that writes, deletes, runs a script or sends data stays on its own card.
 - **Agents and background commands**: when Claude hands work to a sub-agent, or runs a command in the background,
   its card keeps spinning, with the time it has been running, until that work really ends (✓ done, ✗ failed, ⊘
   stopped or interrupted). Expand it for where it is: its last action, the tools and tokens used so far, then the
