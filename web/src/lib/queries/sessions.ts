@@ -243,6 +243,32 @@ export function useMarkUnread() {
     invalidate: inv,
   })
 }
+/** "Mark all as read" (top of the session list, a project's or a topic's menu): the same POST /seen as opening each
+ *  unread session, dots and counters at 0 at once. */
+export function useMarkAllRead() {
+  return useMut((list: ReadMark[]) => Promise.all(list.map((s) => api.post<Ok>(`/api/sessions/${seg(s.id)}/seen`))), {
+    optimistic: (list) => {
+      const ids = new Set(list.map((s) => s.id))
+      const live = list.filter((s) => s.unread && !s.archived)
+      const by = (path: string, err?: boolean) => live.filter((s) => s.path === path && (!err || s.state === 'error')).length
+      return [
+        ...list.map((s) => ({ key: qk.sessions.one(s.id), update: (x: Session) => ({ ...x, unread: false }) })),
+        { key: ['sessions', 'list'], update: (l: Session[]) => l.map((x) => (ids.has(x.id) && x.unread ? { ...x, unread: false } : x)) },
+        {
+          key: qk.workspace,
+          update: (w: WorkspaceTree) => ({
+            ...w,
+            projects: w.projects.map((p) => ({
+              ...p,
+              topics: p.topics.map((t) => (by(t.path) ? { ...t, unread: Math.max(0, t.unread - by(t.path)), errors: Math.max(0, (t.errors || 0) - by(t.path, true)) } : t)),
+            })),
+          }),
+        },
+      ]
+    },
+    invalidate: inv,
+  })
+}
 export function useUpload() {
   return useMut(({ path, files }: { path: string; files: File[] }) => api.upload<UploadResult>('/api/uploads', files, { path }))
 }
