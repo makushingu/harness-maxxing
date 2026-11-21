@@ -5015,6 +5015,8 @@ export const en = {
   "tl.group.searches#one": "1 search",
   "tl.group.lists": "{count} folders",
   "tl.group.lists#one": "1 folder",
+  "tl.group.looks": "{count} checks",
+  "tl.group.looks#one": "1 check",
   "tl.group.explored": "Explored",
   "tl.group.exploring": "Exploring",
 }

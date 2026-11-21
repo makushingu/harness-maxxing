@@ -764,7 +764,7 @@ export function groupable(it: Item): boolean {
 export function ToolGroup({ items, live }: { items: Extract<Item, { kind: 'tool' }>[]; live: boolean[] }) {
   const t = useT()
   const [open, setOpen] = React.useState(false)
-  const n = { read: 0, search: 0, list: 0 }
+  const n = { read: 0, search: 0, list: 0, look: 0 }
   let pending = false
   let failed = false
   items.forEach((it, i) => {
@@ -774,7 +774,7 @@ export function ToolGroup({ items, live }: { items: Extract<Item, { kind: 'tool'
     if (live[i]) pending = true
     if (it.result?.is_error) failed = true
   })
-  const parts = [n.read && t('tl.group.files', { count: n.read }), n.search && t('tl.group.searches', { count: n.search }), n.list && t('tl.group.lists', { count: n.list })].filter(Boolean)
+  const parts = [n.read && t('tl.group.files', { count: n.read }), n.search && t('tl.group.searches', { count: n.search }), n.list && t('tl.group.lists', { count: n.list }), n.look && t('tl.group.looks', { count: n.look })].filter(Boolean)
   return (
     <div className="min-w-0 overflow-hidden rounded-lg border bg-card text-[13px]">
       <button

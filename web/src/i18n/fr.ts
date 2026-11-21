@@ -4997,6 +4997,8 @@ export const fr: Record<keyof typeof en, string> = {
   "tl.group.searches#one": "1 recherche",
   "tl.group.lists": "{count} dossiers",
   "tl.group.lists#one": "1 dossier",
+  "tl.group.looks": "{count} vérifications",
+  "tl.group.looks#one": "1 vérification",
   "tl.group.explored": "A exploré",
   "tl.group.exploring": "Explore",
 }

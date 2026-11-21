@@ -8,7 +8,7 @@ type T = TFn
 type Input = Record<string, unknown>
 
 /** What a call does, for the grouping of read-only calls ("Explored 4 files · 2 searches"). */
-export type ToolKind = 'read' | 'search' | 'list' | 'other'
+export type ToolKind = 'read' | 'search' | 'list' | 'look' | 'other'
 
 export type ToolLabel = {
   /** The sentence shown in front ("Runs the tests"). */
@@ -134,7 +134,7 @@ export function bashAction(command: string): [string, Record<string, string>, To
       const s = args.find((a, i) => !a.startsWith('-') && !(i > 0 && args[i - 1] === '-C') && !(i > 0 && args[i - 1] === '-c')) || ''
       if (!known.includes(s)) return ['tl.bash.git', {}, 'other']
       const readOnly = ['status', 'log', 'diff', 'show', 'blame'].includes(s)
-      return [`tl.bash.git.${s === 'switch' ? 'checkout' : s}`, {}, readOnly ? 'read' : 'other']
+      return [`tl.bash.git.${s === 'switch' ? 'checkout' : s}`, {}, readOnly ? 'look' : 'other']
     }
     case 'npm':
     case 'pnpm':
@@ -184,10 +184,10 @@ export function bashAction(command: string): [string, Record<string, string>, To
       return host ? ['tl.bash.http', { host }, 'other'] : ['tl.bash.httpAny', {}, 'other']
     }
     case 'systemctl':
-      if (sub === 'status' || sub === 'is-active' || sub === 'list-units') return ['tl.bash.service', {}, 'read']
+      if (sub === 'status' || sub === 'is-active' || sub === 'list-units') return ['tl.bash.service', {}, 'look']
       return sub === 'restart' || sub === 'start' || sub === 'stop' || sub === 'reload' ? [`tl.bash.svc.${sub}`, { name: args[args.indexOf(sub) + 1] || '' }, 'other'] : null
     case 'journalctl':
-      return ['tl.bash.logs', {}, 'read']
+      return ['tl.bash.logs', {}, 'look']
     case 'mkdir':
       return ['tl.bash.mkdir', {}, 'other']
     case 'cp':
@@ -208,7 +208,7 @@ export function bashAction(command: string): [string, Record<string, string>, To
     case 'top':
     case 'free':
     case 'uptime':
-      return ['tl.bash.procs', {}, 'read']
+      return ['tl.bash.procs', {}, 'look']
     case 'kill':
     case 'pkill':
     case 'killall':
@@ -243,14 +243,14 @@ export function bashAction(command: string): [string, Record<string, string>, To
     case 'whoami':
     case 'pwd':
     case 'type':
-      return ['tl.bash.check', {}, 'read']
+      return ['tl.bash.check', {}, 'look']
     case 'tar':
     case 'zip':
     case 'unzip':
     case 'gzip':
       return ['tl.bash.archive', {}, 'other']
     case 'maxxing':
-      return ['tl.bash.maxxing', { what: sub }, sub === 'status' || sub === 'doctor' || (sub && args.includes('list')) ? 'read' : 'other']
+      return ['tl.bash.maxxing', { what: sub }, sub === 'status' || sub === 'doctor' || (sub && args.includes('list')) ? 'look' : 'other']
   }
   return null
 }
@@ -267,7 +267,7 @@ export function toolLabel(name: string, input: Input, tr: T, rel: (path: string)
       const danger = isDangerous(g('command'))
       const action = bashAction(g('command'))
       const desc = one(g('description'), 120)
-      if (desc) return label(desc, cmd, action?.[2] === 'read' || action?.[2] === 'search' || action?.[2] === 'list' ? action[2] : 'other', danger)
+      if (desc) return label(desc, cmd, action?.[2] ?? 'other', danger)
       if (action) return label(t(action[0], action[1]), cmd, danger ? 'other' : action[2], danger)
       return label(t('tl.bash.run'), cmd, 'other', danger)
     }
