@@ -695,3 +695,23 @@ def test_a_folder_named_like_a_companion_is_not_mixed_with_the_sessions_of_a_del
     kept = [i for i in _items(client) if i["name"].endswith(".sessions")]
     assert kept, "the folder must still be in the trash"
     assert (trash.trash_dir() / kept[0]["id"] / "precious.txt").read_text() == "keep"
+
+
+def test_session_copies_left_by_a_topic_restore_stay_listed_and_are_not_purged(client, topic, mx):
+    from maxxing import workspace
+    from maxxing.sessions import store
+    s = client.post("/api/sessions", json={"path": topic, "message": "zebra NOTOOL"}).json()
+    wait_idle(client, s["id"])
+    meta = store.read(s["id"])
+    workspace.delete_topic(topic.split("/")[1], topic.rsplit("/", 1)[-1])
+    config.write_json(store.meta_path(s["id"]), meta)       # that session id exists again: its copy cannot go back
+    (it,) = [i for i in _items(client) if i["kind"] == "topic"]
+    assert client.post(f"/api/trash/{it['id']}/restore").status_code == 200
+    left = [i for i in _items(client) if i["kind"] == "session"]
+    assert len(left) == 1
+    old = time.time() - 31 * 86400
+    for q in trash.trash_dir().iterdir():
+        if q.name.endswith(".sessions"):
+            os.utime(q, (old, old))
+    trash.purge_old()
+    assert [i["id"] for i in _items(client) if i["kind"] == "session"] == [left[0]["id"]]
