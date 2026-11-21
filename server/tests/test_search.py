@@ -442,3 +442,13 @@ def test_a_link_into_a_hidden_or_skipped_folder_is_not_indexed(client, mx):
     (ws / "real.md").write_text("zqxhiddenlink789 dans une vraie note\n")
     search.refresh()
     assert [r["title"] for r in _q(client, "zqxhiddenlink789")] == ["real.md"]
+
+
+def test_a_unicode_line_separator_in_a_message_does_not_split_the_log_line(client, mx):
+    sid = _session("", "Separators", [("user", "second zebraxyz")])
+    with open(store.log_path(sid), "a", encoding="utf-8") as f:     # a writer that keeps non-ASCII text as it is
+        f.write(json.dumps({"type": "mx_user", "text": "avant\u2028zebraxyz apres", "attachments": [], "source": "web",
+                            "at": 1.0}, ensure_ascii=False) + "\n")
+    search.refresh()
+    rows = search._db().execute("SELECT count(*) FROM items WHERE src=? AND body LIKE '%zebraxyz%'", (f"s:{sid}",)).fetchone()
+    assert rows[0] == 2

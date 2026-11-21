@@ -228,7 +228,7 @@ def _index_sessions(con: sqlite3.Connection) -> None:
                 # or the session would stop being indexed and re-read on every query.
                 sig["offset"] += _skip_line(p, sig["offset"] + len(chunk)) - sig["offset"]
             if end:
-                lines = chunk[:end].decode("utf-8", "replace").splitlines()
+                lines = chunk[:end].decode("utf-8", "replace").split("\n")
                 for ev in normalize.normalize_lines(lines):
                     if ev.get("type") in ("user", "assistant", "voice_text") and (ev.get("text") or "").strip():
                         con.execute(
@@ -292,7 +292,7 @@ def _index_groups(con: sqlite3.Connection) -> None:
                 fh.seek(sig["offset"])
                 chunk = fh.read(READ_CHUNK)
             end = chunk.rfind(b"\n") + 1                     # complete lines only
-            for line in chunk[:end].decode("utf-8", "replace").splitlines():
+            for line in chunk[:end].decode("utf-8", "replace").split("\n"):
                 try:
                     m = json.loads(line)
                 except ValueError:
