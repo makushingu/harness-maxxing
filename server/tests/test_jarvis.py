@@ -137,6 +137,9 @@ def test_tick_starts_the_brief_in_a_new_conversation(client):
     client.put("/api/jarvis/settings", json={"dream": ""})
     from maxxing import crons
     now = datetime.now(crons.tz()).replace(hour=23, minute=0).timestamp()
+    st = jarvis._read_state()
+    st["since"] = now - 86400                        # the conversation began before today's brief time
+    jarvis._write_state(st)
     assert jarvis.tick(now) == "brief"
     st = client.get("/api/jarvis").json()
     assert st["session"]["id"] != first and st["last_brief"]
@@ -178,3 +181,19 @@ def test_report_to_needs_a_turn_for_me(client):
     assert cmd_sessions._reporting({"path": jarvis.PATH, "id": "x"}, "") == (True, "")
     assert cmd_sessions._reporting({"path": "projects/a/topics/b", "id": "x"}, "") == (False, "")
     assert cmd_sessions._reporting({"path": "projects/a/topics/b", "id": "x"}, "me") == (True, "x")
+
+
+def test_no_brief_right_after_the_conversation_began(client):
+    _on(client)
+    client.post("/api/jarvis/open")
+    client.put("/api/jarvis/settings", json={"dream": "", "brief": "00:01"})
+    sid = client.get("/api/jarvis").json()["session"]["id"]
+    assert jarvis.tick() == ""
+    assert client.get("/api/jarvis").json()["session"]["id"] == sid and jarvis._read_state()["last_brief"]
+
+
+def test_the_board_shows_jarvis_s_own_work(client, topic):
+    jarvis.register("a" * 36, topic, "mine", "x")
+    jarvis.register("b" * 36, topic, "other's", "y", to="c" * 36)
+    assert [i["title"] for i in jarvis.work()] == ["mine"]
+    assert len(jarvis.work(everyone=True)) == 2

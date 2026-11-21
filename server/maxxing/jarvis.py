@@ -369,8 +369,9 @@ def register(sid: str, path: str, title: str, brief: str, hops: int = 1, to: str
         return item
 
 
-def work(state: str | None = None) -> list[dict]:
-    items = _read_work()["items"]
+def work(state: str | None = None, everyone: bool = False) -> list[dict]:
+    """Jarvis's own entries (reported to its conversation); `everyone`: those of other sessions' --report-to too."""
+    items = [i for i in _read_work()["items"] if everyone or not i.get("to")]
     if state == "open":
         items = [i for i in items if i.get("state") != "closed"]
     elif state:
@@ -525,6 +526,17 @@ def dream(now: float | None = None) -> dict:
                                   permission_mode="bypass", notify=False)
 
 
+def _opened_after_brief(st: dict, hhmm: str, now: float) -> bool:
+    """The current conversation began today after the brief's time (Jarvis was switched on, or the owner opened a new
+    one): no brief on top of it, the next one is tomorrow."""
+    since = st.get("since")
+    if not (isinstance(since, (int, float)) and _alive(st.get("session"))):
+        return False
+    d, h = _local_now(now), [int(x) for x in hhmm.split(":")]
+    at = d.replace(hour=h[0], minute=h[1], second=0, microsecond=0).timestamp()
+    return since >= at
+
+
 def tick(now: float | None = None) -> str:
     """Server loop: the brief and the night pass when their time came -> what started ("" = nothing)."""
     if not feature_on():
@@ -536,6 +548,10 @@ def tick(now: float | None = None) -> str:
             dream(now)
             return "dream"
         if _due(s["brief"], st.get("last_brief"), now):
+            if _opened_after_brief(st, s["brief"], now):
+                st["last_brief"] = _local_now(now).strftime("%Y-%m-%d")    # the owner just started talking today
+                _write_state(st)
+                return ""
             brief(now)
             return "brief"
     except Exception:  # noqa: BLE001

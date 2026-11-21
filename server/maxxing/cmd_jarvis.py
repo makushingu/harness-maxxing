@@ -86,7 +86,7 @@ def _handler(a) -> int:
                 i = jarvis.close(a.ref)
                 print(f"closed #{i['id']} {i['title']}")
                 return 0
-            items = jarvis.work(None if a.all else "open")
+            items = jarvis.work(None if a.all else "open", everyone=a.all)
             if a.json:
                 print(json.dumps(items, indent=2))
             else:
