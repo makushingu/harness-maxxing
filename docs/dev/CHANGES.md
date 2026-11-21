@@ -5,6 +5,13 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## Unreleased
+
+- Composer uploads: in-flight uploads live in `pages/sessions/uploads.ts` (per draft key, outside the component), no
+  longer aborted on unmount. A remounted composer shows them again (`uploadsOf`) and follows them (`onUploads`); a
+  file that finishes with no composer open on its draft is written to the stored draft (`saveAtts`). The draft key
+  change moves them (`moveUploads`).
+
 ## 2.0.0-alpha.159 - 2026-11-19
 
 - Disk space (Settings -> System): `maxxing/cleanup.py` (`scan`, cached 60 s; `run(parts)` measures each part before
