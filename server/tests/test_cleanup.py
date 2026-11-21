@@ -88,8 +88,8 @@ def test_previews_drop_old_copies_and_thumbnails_only(client):
     import time
     from maxxing.videos import COPY_KEEP_S
     old, playing, encoding = (config.STATE / "videos" / n for n in ("a-720.mp4", "b-720.mp4", "c-720.part.mp4"))
-    thumb = config.STATE / "thumbs" / "t.webp"
-    for f in (old, playing, encoding, thumb):
+    thumb, thumb_part = (config.STATE / "thumbs" / n for n in ("t.webp", "u.1234abcd.part.webp"))
+    for f in (old, playing, encoding, thumb, thumb_part):
         _fill(f, 100)
     then = time.time() - COPY_KEEP_S - 60
     os.utime(old, (then, then))
@@ -97,6 +97,7 @@ def test_previews_drop_old_copies_and_thumbnails_only(client):
     assert parts["previews"]["bytes"] == 200 and not parts["previews"]["default"]
     assert client.post("/api/system/cleanup", json={"parts": ["previews"]}).json()["freed"] == 200
     assert not old.exists() and not thumb.exists() and playing.exists() and encoding.exists()
+    assert thumb_part.exists()                          # ffmpeg is still writing it
 
 
 def test_caches_in_use_and_the_upload_folder_stay(monkeypatch):

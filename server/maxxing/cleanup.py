@@ -77,7 +77,7 @@ def _previews(dry: bool = True) -> int:
     total = 0
     for pattern, keep_recent in (("videos/*.mp4", True), ("thumbs/*.webp", False)):
         for f in config.STATE.glob(pattern):
-            if f.name.endswith(".part.mp4"):           # being encoded
+            if ".part." in f.name:                     # being encoded (video copy or thumbnail)
                 continue
             try:
                 st = f.stat()
