@@ -1682,7 +1682,7 @@ export type BrowserOwner = {
 }
 
 /** Settings -> System -> Disk space (GET /api/system/cleanup): what Harness can free by itself, measured only. */
-export type CleanupPartId = 'leftovers' | 'caches' | 'journal' | 'apt' | 'trash'
+export type CleanupPartId = 'leftovers' | 'caches' | 'journal' | 'apt' | 'previews' | 'trash'
 export interface CleanupPart {
   id: CleanupPartId
   bytes: number

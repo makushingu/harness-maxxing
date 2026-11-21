@@ -651,10 +651,37 @@ PYTHON_FLOOR = (3, 11)       # requires-python of server/pyproject.toml
 UPDATE_ORDER = ("uv", "python", "node", "claude", "scrapling", "chromium", "remotion", "whisper", "garage")
 
 
+class Busy(DepError):
+    """Another update or clean of the components is running."""
+
+
+@contextlib.contextmanager
+def run_lock(wait: bool = True) -> Iterator[None]:
+    """One update or clean of the components at a time, across processes (the weekly job, the Settings button,
+    `maxxing update`): a clean must not take the version an update is unpacking for an old one. Not deps.lock:
+    write_record takes that one inside an update. wait=False raises Busy instead of waiting."""
+    p = record_path().with_name("deps-run.lock")
+    p.parent.mkdir(parents=True, exist_ok=True)
+    with open(p, "a") as lk:
+        try:
+            fcntl.flock(lk, fcntl.LOCK_EX | (0 if wait else fcntl.LOCK_NB))
+        except BlockingIOError:
+            raise Busy("an update of the components is running: try again when it is done") from None
+        try:
+            yield
+        finally:
+            fcntl.flock(lk, fcntl.LOCK_UN)
+
+
 def update(names: list[str] | None = None, log=print, explicit: bool | None = None) -> list[dict]:
     """Bring components to the versions of this release (side by side, checked, then switched).
     `explicit` (default: names given) = the user asked for these: foreign copies may be replaced, the venv moved.
     -> [{"name", "result": "ok"|"updated"|"installed"|"skipped"|"failed", "text"}]"""
+    with run_lock():
+        return _update(names, log, explicit)
+
+
+def _update(names: list[str] | None, log, explicit: bool | None) -> list[dict]:
     todo = [n for n in UPDATE_ORDER if (names is None or n in names)]
     explicit = (names is not None) if explicit is None else explicit
     report = []
@@ -1103,7 +1130,35 @@ def _drop(p: Path, why: str, out: list[dict], dry: bool) -> None:
     out.append({"path": str(p), "why": why, "bytes": size})
 
 
+def _in_use(roots: list[Path]) -> set[Path]:
+    """The roots a running process works from (its command line, folder or program is under one): an npx MCP
+    server, a `uv run --with` environment. Never deleted from under it."""
+    if not roots:
+        return set()
+    seen: set[str] = set()
+    for d in Path("/proc").glob("[0-9]*"):
+        with contextlib.suppress(OSError):
+            seen.update(x for x in (d / "cmdline").read_bytes().decode("utf-8", "replace").split("\0") if x.startswith("/"))
+        for link in ("cwd", "exe"):
+            with contextlib.suppress(OSError):
+                seen.add(os.readlink(d / link))
+    out = set()
+    for r in roots:
+        pre = str(r).rstrip("/") + "/"
+        if any(s == str(r) or s.startswith(pre) for s in seen):
+            out.add(r)
+    return out
+
+
 def clean(dry: bool = False, caches: bool = False, leftovers: bool = True) -> list[dict]:
+    """See _clean; the real run waits for no update (raises Busy while one runs)."""
+    if dry:
+        return _clean(True, caches, leftovers)
+    with run_lock(wait=False):
+        return _clean(False, caches, leftovers)
+
+
+def _clean(dry: bool, caches: bool, leftovers: bool) -> list[dict]:
     """Caches (`caches`: root's uv/npm/pip/npx caches, shared with every other tool of the server - MCP servers run
     from ~/.npm/_npx - so only on request), old versions, orphan browsers, leftovers and oversized logs
     (`leftovers`; Settings -> System -> Free up space asks for each part apart, maxxing/cleanup.py) -> what went."""
@@ -1111,10 +1166,17 @@ def clean(dry: bool = False, caches: bool = False, leftovers: bool = True) -> li
     home = root_home()
     tools = config.STATE / "tools"
     # caches (re-downloaded when needed)
-    for p, why in ((home / ".cache" / "uv", "uv cache"), (home / ".npm" / "_cacache", "npm cache"),
-                   (home / ".cache" / "pip", "pip cache"), (home / ".npm" / "_npx", "npx cache"),
-                   (home / ".claude" / "downloads", "Claude Code installer downloads")) if caches else ():
-        _drop(p, why, out, dry)
+    if caches:
+        # npx: one folder per package, those a running MCP server uses stay; uv: kept whole while a
+        # `uv run --with` environment of it runs
+        npx = home / ".npm" / "_npx"
+        npx_dirs = sorted(npx.iterdir()) if npx.is_dir() and not npx.is_symlink() else []
+        uv = home / ".cache" / "uv"
+        busy = _in_use([uv, *npx_dirs])
+        for p, why in ((uv, "uv cache"), (home / ".npm" / "_cacache", "npm cache"), (home / ".cache" / "pip", "pip cache"),
+                       *((d, "npx cache") for d in npx_dirs), (home / ".claude" / "downloads", "Claude Code installer downloads")):
+            if p not in busy:
+                _drop(p, why, out, dry)
     if not leftovers:
         return out
     # old versions next to the one in use
@@ -1146,6 +1208,8 @@ def clean(dry: bool = False, caches: bool = False, leftovers: bool = True) -> li
     tmp = config.STATE / "tmp"
     if tmp.is_dir():
         for p in tmp.iterdir():                         # a day old: no run of ours still uses it
+            if p.name == "uploads":                     # where uploads are received (uploads.spool_dir), kept
+                continue
             with contextlib.suppress(OSError):
                 if time.time() - p.lstat().st_mtime > 86400:
                     _drop(p, "temporary file of an earlier run", out, dry)

@@ -7,6 +7,13 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Cleanup: `deps.run_lock` (flock on `tools/deps-run.lock`, not deps.lock that `write_record` takes inside an
+  update) wraps `deps.update` and a real `deps.clean`; a clean during an update raises `deps.Busy` (row error in
+  Settings, `deps clean` prints "skipped" and exits 0). Caches: `_in_use` reads /proc (cmdline, cwd, exe) and
+  keeps the uv cache and each `~/.npm/_npx/<hash>` a process runs from. `tmp/uploads` (upload spool) is kept.
+  Journal estimate capped at the archived files (`JOURNAL_DIRS`), the only ones `--vacuum-size` removes. New
+  part `previews` (off by default): `state/videos/*.mp4` not played in `COPY_KEEP_S` (never `.part.mp4`) and
+  `state/thumbs/*.webp`.
 - MessageBox (sessions, agents, groups, Team): a mousedown on the box outside its own controls (button, link, field,
   `[role]`, attachments strip) focuses the textarea, caret at the end, with `preventDefault` (no stray selection).
 - Composer uploads: in-flight uploads live in `pages/sessions/uploads.ts` (per draft key, outside the component), no
