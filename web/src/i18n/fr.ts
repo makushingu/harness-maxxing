@@ -170,6 +170,7 @@ export const fr: Record<keyof typeof en, string> = {
   'sessions.filter.all': "Toutes",
   'sessions.filter.running': "En cours",
   'sessions.filter.unread': "Non lues",
+  'sessions.markAllRead': 'Tout marquer comme lu',
   'sessions.touch.emptyTitle': "Aucune session ouverte",
   'sessions.touch.emptyDesc': "Démarrez une nouvelle session ou choisissez-en une dans la liste.",
   'sessions.touch.loadError': "Impossible de charger les sessions",

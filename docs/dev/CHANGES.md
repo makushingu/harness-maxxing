@@ -7,6 +7,10 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Sessions, mark all as read: `useMarkAllRead` (lib/queries/sessions.ts) posts `/seen` for each unread session, with
+  the optimistic patch of the list, each session and the topic counters (unread, errors). Tree: the double tick in
+  `ListHeader` (all unread live sessions) and `MarkAllReadItem` in the project / topic menus (right click, ⋯,
+  drill-down). No new route.
 - Compaction: no `seed` queue item after a summary turn any more. `Runner._post` stores the seed in the session meta
   (`seed`, with the new `csid` and `fresh`) and resets `context_tokens` to `base_tokens`; `Runner.turn` gives it to the
   next item as `preface` and drops it once the thread exists (`saw_init`). A compacted session therefore counts one

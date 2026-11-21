@@ -45,6 +45,7 @@ import {
   Trash2,
   X,
   GitBranch,
+  CheckCheck,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useLongPress } from '@/lib/long-press'
@@ -66,6 +67,7 @@ import {
   usePatchProject,
   usePatchSession,
   useMarkUnread,
+  useMarkAllRead,
   usePatchTopic,
   useSessions,
   useReorderProjects,
@@ -405,6 +407,7 @@ function ListHeader({
   const t = useT()
   const running = sessions.filter((s) => s.state === 'running').length
   const unread = sessions.filter((s) => s.unread).length
+  const markAll = useMarkAllRead()
   const chip = (on: boolean) =>
     cn(
       'flex items-center font-medium whitespace-nowrap outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
@@ -458,7 +461,21 @@ function ListHeader({
               </button>
             )}
           </div>
-          {!lifted && <div className="ml-auto shrink-0">{menu}</div>}
+          {unread > 0 && (
+            <Button
+              variant="ghost"
+              size={touch ? 'icon' : 'icon-sm'}
+              className={cn('shrink-0', !lifted && 'ml-auto', touch ? 'size-8' : 'size-6')}
+              onClick={() => markAll.mutate(sessions.filter((s) => s.unread))}
+              disabled={markAll.isPending}
+              aria-label={t('sessions.markAllRead')}
+              title={t('sessions.markAllRead')}
+              data-testid="sessions-mark-all-read"
+            >
+              <CheckCheck />
+            </Button>
+          )}
+          {!lifted && <div className={cn('shrink-0', !unread && 'ml-auto')}>{menu}</div>}
           {!lifted && newButton}
         </div>
       </div>
@@ -1301,6 +1318,20 @@ function RowMenu({ open, onOpenChange, label, children }: { open: boolean; onOpe
 }
 
 /* ---------------------------------------------------------------- menus shared by the tree and drill-down */
+/** "Mark all as read" for the unread sessions of a project or a topic (shown only when there are some). */
+function MarkAllReadItem({ under }: { under: (s: Session) => boolean }) {
+  const t = useT()
+  const { data } = useSessions(undefined, false)
+  const markAll = useMarkAllRead()
+  const unread = (data || []).filter((s) => s.unread && under(s))
+  if (!unread.length) return null
+  return (
+    <DropdownMenuItem onSelect={() => markAll.mutate(unread)} data-testid="menu-mark-all-read">
+      <CheckCheck /> {t('sessions.markAllRead')}
+    </DropdownMenuItem>
+  )
+}
+
 function ProjectMenuItems({ project, onDialog }: { project: Project; onDialog: (d: DialogState) => void }) {
   const t = useT()
   const { data: settings } = useSettings()
@@ -1309,6 +1340,7 @@ function ProjectMenuItems({ project, onDialog }: { project: Project; onDialog: (
       <DropdownMenuItem onSelect={() => onDialog({ kind: 'topic', project: project.name })}>
         <Plus /> {t('sessions.tree.newTopic')}
       </DropdownMenuItem>
+      <MarkAllReadItem under={(s) => project.topics.some((tp) => tp.path === s.path)} />
       <DropdownMenuItem onSelect={() => onDialog({ kind: 'rename-project', project })}>
         <Pencil /> {t('sessions.tree.rename')}
       </DropdownMenuItem>
@@ -1340,6 +1372,7 @@ function TopicMenuItems({ topic, rootDir, onNewSession, onDialog }: { topic: Top
       <DropdownMenuItem onSelect={() => onNewSession(topic.path)}>
         <Plus /> {t('sessions.newSession')}
       </DropdownMenuItem>
+      <MarkAllReadItem under={(s) => s.path === topic.path} />
       <DropdownMenuItem disabled={!rootDir} onSelect={() => rootDir && navigate(`/files?path=${encodeURIComponent(rootDir)}`)}>
         <FolderOpen /> {t('sessions.menu.openFolder')}
       </DropdownMenuItem>

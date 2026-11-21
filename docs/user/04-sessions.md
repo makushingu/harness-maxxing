@@ -418,6 +418,8 @@ The **…** of a session (or a right-click on its header, a long press on a phon
 - **Mark as read / Mark as unread** (the menu of a session in the list or the second bar, a long press on a phone):
   the dot and the counters of its topic, project and of the sidebar follow at once. A session marked unread stays
   so until you open it.
+- **Mark all as read** (the double tick at the top of the list, when sessions are unread; also in the menu of a
+  project or a topic, for its sessions only): every unread session is read at once, as in the Agents list.
 - **Archive** hides a session from the list without deleting it (see the Archived filter).
 - **Delete** stops a running turn and removes the session files.
 

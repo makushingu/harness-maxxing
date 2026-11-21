@@ -6,6 +6,8 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 ## Unreleased
 
 New:
+- **Mark all sessions as read in one click.** The double tick at the top of the session list (as in Agents), and
+  **Mark all as read** in the right-click menu of a project or a topic for its sessions only.
 - **Comment a document, then send every comment to the session at once.** In the file viewer of a document opened
   from a session, select a passage and click **Comment**: as many as you want, they wait under the document like
   queued messages. **Send to the session** posts them as one message, each passage quoted with its comment.

@@ -172,6 +172,7 @@ export const en = {
   'sessions.filter.all': "All",
   'sessions.filter.running': "Running",
   'sessions.filter.unread': "Unread",
+  'sessions.markAllRead': 'Mark all as read',
   'sessions.touch.emptyTitle': "No session open",
   'sessions.touch.emptyDesc': "Start a new session, or pick one in the list.",
   'sessions.touch.loadError': "Sessions could not be loaded",
