@@ -6,10 +6,15 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 ## Unreleased
 
 New:
+- **Free up the video previews and thumbnails too.** Settings -> System -> Free up space has a new part, unticked
+  by default, for the lighter video copies of the player and the file thumbnails (made again when shown).
 - **Mark all sessions as read in one click.** The double tick at the top of the session list (as in Agents), and
   **Mark all as read** in the right-click menu of a project or a topic for its sessions only.
 
 Fixed:
+- **Freeing up disk space no longer breaks a tool in use.** The download caches a running tool needs (an MCP
+  server started with npx, for example) stay, and a cleanup that meets an update of the components waits for the
+  next time instead of removing the version being installed.
 - **A click anywhere in the message box now puts the cursor in it.** Its margins and the empty part of its bar
   used to leave the cursor outside, so what you typed went nowhere.
 - **A file still uploading no longer vanishes when you go to another session or page.** The upload goes on and

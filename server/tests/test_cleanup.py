@@ -72,3 +72,67 @@ def test_an_unknown_part_with_a_surrogate_is_a_400(client):
     r = client.post("/api/system/cleanup", content=b'{"parts":["\\ud800"]}', headers={"content-type": "application/json"})
     assert r.status_code == 400
     assert r.json()["error"] == "unknown_part"
+
+
+def test_journal_counts_only_archived_files(tmp_path, monkeypatch):
+    j = tmp_path / "journal"
+    _fill(j / "m" / "system.journal", 900)                      # active: --vacuum-size leaves it
+    _fill(j / "m" / "system@0001-0002.journal", 300)
+    monkeypatch.setattr(cleanup, "JOURNAL_DIRS", (j,))
+    monkeypatch.setattr(cleanup, "_journal_bytes", lambda: cleanup.JOURNAL_KEEP + 10_000)
+    assert cleanup._measure("journal")[0] == 300
+
+
+def test_previews_drop_old_copies_and_thumbnails_only(client):
+    import os
+    import time
+    from maxxing.videos import COPY_KEEP_S
+    old, playing, encoding = (config.STATE / "videos" / n for n in ("a-720.mp4", "b-720.mp4", "c-720.part.mp4"))
+    thumb = config.STATE / "thumbs" / "t.webp"
+    for f in (old, playing, encoding, thumb):
+        _fill(f, 100)
+    then = time.time() - COPY_KEEP_S - 60
+    os.utime(old, (then, then))
+    parts = {p["id"]: p for p in client.get("/api/system/cleanup?force=true").json()["parts"]}
+    assert parts["previews"]["bytes"] == 200 and not parts["previews"]["default"]
+    assert client.post("/api/system/cleanup", json={"parts": ["previews"]}).json()["freed"] == 200
+    assert not old.exists() and not thumb.exists() and playing.exists() and encoding.exists()
+
+
+def test_caches_in_use_and_the_upload_folder_stay(monkeypatch):
+    home = deps.root_home()
+    used, idle = home / ".npm" / "_npx" / "used", home / ".npm" / "_npx" / "idle"
+    _fill(used / "x.js", 10)
+    _fill(idle / "x.js", 10)
+    _fill(config.STATE / "tmp" / "uploads" / ".keep", 1)
+    monkeypatch.setattr(deps, "_in_use", lambda roots: {r for r in roots if r.name == "used"})
+    gone = {x["path"] for x in deps.clean(caches=True)}
+    assert str(idle) in gone and str(used) not in gone and used.exists()
+    assert (config.STATE / "tmp" / "uploads").exists()
+
+
+def test_in_use_sees_a_process_working_in_a_folder(tmp_path):
+    import subprocess
+    busy, free = tmp_path / "busy", tmp_path / "free"
+    busy.mkdir()
+    free.mkdir()
+    p = subprocess.Popen(["sleep", "30"], cwd=busy)
+    try:
+        assert deps._in_use([busy, free]) == {busy}
+    finally:
+        p.kill()
+        p.wait()
+
+
+def test_no_clean_while_an_update_runs(capsys):
+    from maxxing import cmd_deps
+    import pytest
+    with deps.run_lock():
+        with pytest.raises(deps.Busy):
+            deps.clean()
+        r = cleanup.run(["leftovers"])
+        assert "update" in r["parts"][0]["error"]
+        import argparse
+        assert cmd_deps.cmd_deps(argparse.Namespace(action="clean", names=[], dry_run=False, caches=False, quiet=True)) == 0
+        assert "skipped" in capsys.readouterr().out
+    assert deps.clean(dry=True) is not None                     # measuring never waits

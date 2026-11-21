@@ -1,13 +1,16 @@
-"""Free up disk space (Settings -> System -> Disk space, `maxxing cleanup`).
+"""Free up disk space (Settings -> System -> Disk space; `maxxing deps clean [--caches]` does the first two parts).
 
 Only what comes back by itself or that the user asked to drop: never a file of the workspace. Each part is
 measured first (`scan`), then the user picks which ones go (`run`):
 
 - leftovers: old versions of the components, browsers no longer used, temporary files of earlier runs,
   oversized logs (`deps.clean`, also the weekly "Clean caches and old versions" job);
-- caches: root's uv / npm / pip / npx caches and Claude Code installer downloads, re-downloaded when needed;
+- caches: root's uv / npm / pip / npx caches and Claude Code installer downloads, re-downloaded when needed (what a
+  running process uses - an npx MCP server, a `uv run --with` environment - stays);
 - journal: the systemd journal, cut down to JOURNAL_KEEP (`journalctl --vacuum-size`);
 - apt: downloaded packages (`apt-get clean`);
+- previews: the lighter video copies of the player and the file thumbnails, made again when shown (off by default:
+  remaking them costs CPU; a copy played in the last COPY_KEEP_S stays, it may be playing);
 - trash: the Harness trash (off by default: what is in it can still be restored).
 
 Anything else (projects, attachments, renders, models, other tools' caches) is for Claude to look into with the
@@ -24,12 +27,13 @@ import time
 from pathlib import Path
 from typing import Any
 
-from . import deps, trash
+from . import config, deps, trash
 
 JOURNAL_KEEP = 200 * 1024 * 1024
 APT_CACHE = Path("/var/cache/apt/archives")
+JOURNAL_DIRS = (Path("/var/log/journal"), Path("/run/log/journal"))      # tests point them elsewhere
 SCAN_TTL = 60
-PARTS = ("leftovers", "caches", "journal", "apt", "trash")
+PARTS = ("leftovers", "caches", "journal", "apt", "previews", "trash")
 DEFAULT_ON = {"leftovers", "caches", "journal", "apt"}
 
 _lock = threading.Lock()
@@ -56,6 +60,40 @@ def _journal_bytes() -> int:
     return int(float(m.group(1)) * _UNITS[m.group(2)]) if m else 0
 
 
+def _journal_archived() -> int:
+    """Bytes of the archived journal files (name with an @): the only ones --vacuum-size removes."""
+    total = 0
+    for d in JOURNAL_DIRS:
+        for f in d.glob("*/*@*.journal*"):
+            with contextlib.suppress(OSError):
+                total += f.stat().st_size
+    return total
+
+
+def _previews(dry: bool = True) -> int:
+    """Video copies not played in the last COPY_KEEP_S and every thumbnail -> their bytes (deleted unless dry)."""
+    from .videos import COPY_KEEP_S
+    recent = time.time() - COPY_KEEP_S
+    total = 0
+    for pattern, keep_recent in (("videos/*.mp4", True), ("thumbs/*.webp", False)):
+        for f in config.STATE.glob(pattern):
+            if f.name.endswith(".part.mp4"):           # being encoded
+                continue
+            try:
+                st = f.stat()
+            except OSError:
+                continue
+            if keep_recent and st.st_atime > recent:
+                continue
+            if not dry:
+                try:
+                    f.unlink()
+                except OSError:
+                    continue
+            total += st.st_size
+    return total
+
+
 def _apt_bytes() -> int:
     if not APT_CACHE.is_dir():
         return 0
@@ -73,9 +111,12 @@ def _measure(part: str) -> tuple[int, list[dict]]:
         return sum(i["bytes"] for i in items), items
     if part == "journal":
         used = _journal_bytes()
-        return max(0, used - JOURNAL_KEEP), []
+        known = any(d.is_dir() for d in JOURNAL_DIRS)
+        return max(0, min(used - JOURNAL_KEEP, _journal_archived()) if known else used - JOURNAL_KEEP), []
     if part == "apt":
         return _apt_bytes(), []
+    if part == "previews":
+        return _previews(), []
     if part == "trash":
         d = trash.trash_dir()
         return (deps._size(d) if d.is_dir() else 0), []
@@ -103,6 +144,8 @@ def _free_part(part: str) -> None:
         _sh(["journalctl", f"--vacuum-size={JOURNAL_KEEP // (1024 * 1024)}M"], check=True)
     elif part == "apt":
         _sh(["apt-get", "clean"], check=True)
+    elif part == "previews":
+        _previews(dry=False)
     elif part == "trash":
         trash.empty()
         trash.invalidate_sizes()
@@ -120,7 +163,7 @@ def run(parts: list[str]) -> dict:
             row: dict[str, Any] = {"id": p}
             try:
                 _free_part(p)
-            except (OSError, subprocess.SubprocessError) as e:
+            except (OSError, subprocess.SubprocessError, deps.DepError) as e:
                 row["error"] = str(e)[:300]
             after, _ = _measure(p)
             row["freed"] = max(0, before - after)
