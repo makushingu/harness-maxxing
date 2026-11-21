@@ -356,7 +356,7 @@ def register(sid: str, path: str, title: str, brief: str, hops: int = 1, to: str
     with _lock:
         w = _read_work()
         for i in w["items"]:
-            if i.get("session") == sid and i.get("state") != "closed":
+            if sid and i.get("session") == sid and i.get("state") != "closed":
                 i.update(state="running", updated=time.time(), brief=(brief or i.get("brief") or "")[:2000],
                          hops=max(int(i.get("hops") or 1), hops))
                 _write_work(w)
@@ -430,6 +430,13 @@ def on_turn_end(session: dict, result: dict | None) -> None:
     with _lock:
         w = _read_work()
         item = next((i for i in w["items"] if i.get("session") == sid and i.get("state") != "closed"), None)
+        if item is None and session.get("source") == "agent":
+            # a run handed to an agent that was busy waited in its queue (no session yet): this run is it
+            created = float(session.get("created") or 0)
+            item = next((i for i in w["items"] if not i.get("session") and i.get("path") == session.get("path")
+                         and i.get("state") == "running" and created >= float(i.get("created") or 0) - 1), None)
+            if item is not None:
+                item["session"] = sid
         if item is None:
             return
         from .sessions import store
@@ -638,12 +645,17 @@ def digest(since_h: float | None = None, now: float | None = None) -> str:
     items = tasks.get("tasks") if isinstance(tasks, dict) else None
     if isinstance(items, list):
         today = _local_now(now).strftime("%Y-%m-%d")
+        names = {p.get("id"): p.get("name") for p in (tasks.get("projects") or []) if isinstance(p, dict)}
         open_ = [t for t in items if isinstance(t, dict) and t.get("status") not in ("done", "archived")]
         late = [t for t in open_ if str(t.get("due") or "")[:10] and str(t.get("due"))[:10] < today]
         due = [t for t in open_ if str(t.get("due") or "")[:10] == today]
         out.append(f"- open: {len(open_)}, late: {len(late)}, due today: {len(due)}")
         for t in (late + due)[:15]:
-            out.append(f"  - {str(t.get('due') or '')[:10]} {t.get('title')} ({t.get('project') or ''})")
+            out.append(f"  - {str(t.get('due') or '')[:10]} {t.get('title')} ({names.get(t.get('project_id')) or ''}, "
+                       f"{t.get('id')})")
+        doing = [t for t in open_ if t.get("status") not in ("todo",)]
+        if doing:
+            out.append(f"- in progress: " + "; ".join(f"{t.get('title')} ({t.get('id')})" for t in doing[:10]))
     else:
         out.append("- no task board")
     out += ["", "## Notifications", ""]

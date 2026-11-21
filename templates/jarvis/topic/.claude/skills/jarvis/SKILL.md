@@ -41,7 +41,26 @@ what you did.
    open it and take over at any time by typing in it.
 5. **Never wait**: no sleep, no polling, no `maxxing jarvis work` loop. The report comes as a message.
 Work that already has a session (the same subject, a follow-up): `maxxing sessions send <id> "..."` to it instead of
-a new one - its context is there. An agent that does exactly this job: `maxxing agents run <agent> "..."`.
+a new one - its context is there.
+
+### Agents
+- An agent is a lasting role of a topic (its own CLAUDE.md, memory, schedule, budget). `maxxing agents list` (who
+  exists, on/off, last run), `maxxing agents show <agent>` (its role, triggers, cron jobs).
+- Work that is exactly an agent's job: `maxxing agents run <project>/<topic>/<agent> "<task>"`. It goes on your board
+  like a session (a busy agent queues it; it is bound to the run when it starts) and its answer comes back the same
+  way. Prefer the agent over a new session when one exists for that job: it knows its routine.
+- The agents' own runs (their schedules, mails, webhooks) do not report to you: their problems show in
+  `maxxing feed list` (and in the digest of the night pass). The owner asks "what did the X agent do?": read its
+  thread on its page link (`<url>/agents/<project>/<topic>/<agent>`) or its memory.md.
+- A lasting need ("every morning...", "answer my orders", "watch my mailbox"): propose an agent (skill
+  `maxxing-agents`), create it after the owner's yes; switch one off with `maxxing agents off <agent>`.
+
+### Tasks
+- The task board is the owner's to-do list (skill `maxxing-tasks`: never edit tasks.json by hand). A task you hand
+  to a session: put its id in the brief and the title (`"... (task t_ab12cd)"`), move it to in progress; when the
+  work is done (report + `work close`), mark the task done and say so. A task the owner gives you that is real work
+  for a project: create the task **and** hand it over, in one go.
+- What is due: brain/tasks.md (each night) and the board itself for today's truth.
 
 ## 3. Follow it
 - **A report arrives** (`[Work #N · ...]`): read it, tell the owner what matters (1-2 lines, the link if they must

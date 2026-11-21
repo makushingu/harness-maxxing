@@ -208,3 +208,14 @@ def test_a_quiet_night_costs_nothing(client, topic, mx):
     jarvis.mark_dream(time.time() - 60)
     s = jarvis.dream(force=False)
     assert s and s["model"] == "sonnet"
+
+
+def test_a_queued_agent_run_is_bound_when_it_ends(client, topic):
+    item = jarvis.register("", f"{topic}/agents/writer", "agent writer", "write")
+    assert item["session"] == ""
+    s = {"id": "s" * 36, "path": f"{topic}/agents/writer", "source": "agent", "state": "idle",
+         "created": time.time(), "last_turn": {}}
+    config.update_config(jarvis_feature=True)
+    jarvis.on_turn_end(s, {"ok": True})
+    w = next(i for i in jarvis.work() if i["id"] == item["id"])
+    assert w["session"] == s["id"] and w["state"] == "replied"

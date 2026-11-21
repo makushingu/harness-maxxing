@@ -758,6 +758,8 @@ def _handler(a) -> int:
     else:
         trigger, source = "agent:session", "session"
     r = agents.fire(path, trigger=trigger, text=text, source=source, depth=turn["depth"] + 1)
+    if not agents.is_agent_path(sender):
+        _jarvis_board(path, r, text, turn["depth"] + 1)
     return _print_fire(path, r, a.json)
 
 
@@ -766,13 +768,19 @@ def _jarvis_board(path: str, r: dict, text: str, hops: int) -> None:
     from . import agent_guard, jarvis
     meta = agent_guard.turn_meta()
     s = r.get("session") if isinstance(r, dict) else None
-    if not (meta and meta.get("path") == jarvis.PATH and jarvis.feature_on() and isinstance(s, dict) and s.get("id")):
+    if not (meta and meta.get("path") == jarvis.PATH and jarvis.feature_on()):
+        return
+    if isinstance(s, dict) and s.get("id"):
+        sid = s["id"]
+    elif isinstance(r, dict) and r.get("waiting"):
+        sid = ""                        # it waits for the run in progress: bound to its session when it ends
+    else:
         return
     try:
         name = agents.load(path)["name"] or agents.parse(path)[2]
     except Exception:  # noqa: BLE001
         name = path
-    jarvis.register(s["id"], path, f"agent {name}", text, hops=hops)
+    jarvis.register(sid, path, f"agent {name}", text, hops=hops)
 
 
 cli.register("agents", "agents: create, add triggers, list, run, send work from one agent to another, switch on / off",
