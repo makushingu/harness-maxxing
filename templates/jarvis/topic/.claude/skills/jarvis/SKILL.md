@@ -52,7 +52,7 @@ a new one - its context is there.
 - The agents' own runs (their schedules, mails, webhooks) do not report to you: their problems show in
   `maxxing feed list` (and in the digest of the night pass). The owner asks "what did the X agent do?": read its
   thread on its page link (`<url>/agents/<project>/<topic>/<agent>`) or its memory.md.
-- A lasting need ("every morning...", "answer my orders", "watch my mailbox"): propose an agent (skill
+- A lasting need ("every morning...", "answer my orders", "watch my mailbox"): an agent (§ 4, skill
   `maxxing-agents`), create it after the owner's yes; switch one off with `maxxing agents off <agent>`.
 
 ### Tasks
@@ -72,12 +72,35 @@ a new one - its context is there.
   waits for the owner first.
 - A send refused with "too many sends in a row": the chain of hand-offs is long enough; ask the owner before going on.
 
-## 4. Create projects and topics
-- `maxxing topics new <project>/<topic> --description "<one sentence: what it is for>"` (+ `--project-description`
-  when the project is new). Names: lowercase, digits, dashes. Ask the owner before creating a **project**; a topic
-  inside an existing project for a clear new subject: do it and say so.
-- Then write the first facts in its memory.md (`{{WORKSPACE}}/projects/<p>/topics/<t>/memory.md`), and a task project
-  of the same name if they track tasks (skill `maxxing-tasks`).
+## 4. Create projects, topics and agents
+Look first, create last: `maxxing topics list` and `maxxing agents list`; a near match (another name, a typo, the
+same subject) = use it. Names: lowercase letters, digits, dashes, short and plain (`acme`, `blog`, `orders`).
+
+**A project** = one business, client, channel or area of life that lasts (a shop, a YouTube channel, a client, "home").
+- Never one per task or per idea: an idea goes to `brain/inbox.md` or a topic of the project it belongs to.
+- **Always ask the owner first**, with the name and one sentence of what it is for. After their yes:
+  `maxxing topics new <project>/<first-topic> --project-description "<one sentence>" --description "<one sentence>"`.
+- Then its project memory.md: what is true for all its topics (who, what, links, rules the owner gave), dated.
+
+**A topic** = one lasting stream of work inside a project, that will come back (blog, orders, website, ads, accounting).
+- Never one per task: a task is a session in the topic it belongs to. Two to six topics make a typical project.
+- A clear new subject in an existing project: create it yourself and say so in one line; anything unclear: ask.
+  `maxxing topics new <project>/<topic> --description "<one sentence: what it is for>"`.
+- Then fill it, so its sessions start well (they only know what is written there):
+  - its CLAUDE.md, under the description: how to work there - where things are (folders, repos, URLs), tools and
+    skills to use, the owner's rules for it (tone, language, what needs their OK);
+  - its memory.md: the first facts (state, decisions, dates);
+  - a task project of the same name if the owner tracks tasks for it (skill `maxxing-tasks`).
+
+**An agent** = a role that runs by itself, again and again, inside one topic: on a schedule, on each e-mail, webhook
+or feed event, or when another agent hands it work.
+- Only for a lasting routine (a daily article, answering orders, watching a mailbox). One-off work -> a session; a
+  plain script at set times with no thinking -> a cron (skill `maxxing-cron`).
+- **Read the skill `maxxing-agents` first**, then propose to the owner, in a few lines: its name, its topic, what
+  starts it, what it does each time, what it may do alone and what waits for their OK, its daily budget, where it
+  reports (the Notifications feed). Create it only after their yes, in the topic of the work.
+- Start it with one test run (`maxxing agents run <project>/<topic>/<agent> "..."`, on your board): show the owner
+  the result before its schedule takes over. Never give it more rights than the job needs.
 
 ## 5. Use what Harness already has
 Before building anything, pick the part of Harness made for it (`maxxing status` line Pages says which are on; one

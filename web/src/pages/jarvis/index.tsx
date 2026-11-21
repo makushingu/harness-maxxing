@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils'
 import { fmtRelative } from '@/lib/format'
 import { Button, EmptyState, Input, Popover, PopoverContent, PopoverTrigger, Select, Skeleton, StatusDot, Switch, Tooltip } from '@/components/ui'
 import { PageHeader } from '@/components/shell/Page'
+import { useTelegram } from '@/lib/queries/telegram'
 import { SessionColumn } from '@/pages/sessions/Column'
 import type { Col } from '@/pages/sessions/store'
 import { sessionsUrl } from '@/pages/sessions/util'
@@ -190,6 +191,7 @@ function SettingsMenu({ settings, onNew, renewing }: { settings: JarvisSettings;
   const save = useJarvisSettings()
   const brief = useJarvisBrief()
   const dream = useJarvisDream()
+  const { data: tg } = useTelegram()
   const set = (k: keyof JarvisSettings, v: boolean | string | number) => save.mutate({ [k]: v })
   const toggles: { k: 'root' | 'ask_first' | 'daily' | 'internals'; label: TKey; hint: TKey }[] = [
     { k: 'root', label: 'jarvis.set.root', hint: 'jarvis.set.rootHint' },
@@ -233,6 +235,25 @@ function SettingsMenu({ settings, onNew, renewing }: { settings: JarvisSettings;
             data-testid="jarvis-compact"
           />
           <p className="text-xs text-muted-foreground">{t('jarvis.set.compactHint')}</p>
+        </div>
+        <div className="grid gap-1">
+          <span className="text-sm">{t('jarvis.set.telegram')}</span>
+          <Select
+            value={settings.telegram || 'important'}
+            onValueChange={(v) => set('telegram', v)}
+            options={(['important', 'all', 'off'] as const).map((v) => ({ value: v, label: t(`jarvis.set.telegram.${v}`) }))}
+            className="h-8"
+            data-testid="jarvis-telegram"
+          />
+          <p className="text-xs text-muted-foreground">
+            {tg && !tg.chat ? (
+              <Link to="/settings/telegram" className="underline underline-offset-2">
+                {t('jarvis.set.telegramOff')}
+              </Link>
+            ) : (
+              t('jarvis.set.telegramHint')
+            )}
+          </p>
         </div>
         <p className="text-xs text-muted-foreground">{t('jarvis.set.cost')}</p>
         <div className="flex flex-wrap gap-2 border-t pt-3">

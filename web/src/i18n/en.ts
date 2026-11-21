@@ -5064,5 +5064,11 @@ export const en = {
   'jarvis.set.compact': "Summarize its conversation at",
   'jarvis.set.compactHint': "Lower = cheaper turns. What it must keep lives in its notes, not in the thread.",
   'jarvis.set.compactSame': "As every session",
+  'jarvis.set.telegram': "On Telegram",
+  'jarvis.set.telegram.important': "The brief, questions and failures",
+  'jarvis.set.telegram.all': "Every answer",
+  'jarvis.set.telegram.off': "Nothing",
+  'jarvis.set.telegramHint': "Reply to its message on Telegram to answer it.",
+  'jarvis.set.telegramOff': "Telegram is not connected: Settings -> Telegram.",
   'jarvis.set.cost': "What it costs: one turn per message, one per report that comes back, the brief and the night pass (Sonnet, skipped when nothing changed). A new conversation each day keeps each turn small.",
 }

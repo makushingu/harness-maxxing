@@ -194,6 +194,7 @@ PASTE_WAIT = 1.5                 # the next part comes within this delay
 AGENT_GATHER = 1.5               # pieces of one gesture for an agent (album, split text, forward + comment): one run
 QUOTE_CHARS = 500                # quoted part of a replied-to message given to Claude
 NOTIFY_PREVIEW = 300
+JARVIS_PREVIEW = 2500          # Jarvis's answers come whole (within one Telegram message)
 THREAD_DAYS = 30               # default of config.telegram.thread_days
 MAX_THREADS = 50               # open sessions mirrored as threads (most recent first)
 NEW_WAIT = 300                 # "where?" unanswered -> the default topic
@@ -2806,6 +2807,10 @@ def rings(session: dict) -> bool:
     """The bell (Notify on): a finished turn that did not come from Telegram (already answered there) nor from a
     job; agents' and jobs' sessions never ring. The source of the TURN counts: a session started on the phone
     and continued in the web UI rings."""
+    from .. import jarvis
+    own = jarvis.rings(session)                         # Jarvis's conversation: its own setting
+    if own is not None:
+        return own
     last = session.get("last_turn") if isinstance(session.get("last_turn"), dict) else {}
     return bool(session.get("notify")) and is_human(session) and (last.get("kind") or "user") == "user" \
         and (last.get("source") or "web") not in ("telegram", "cron", "system")
@@ -2813,15 +2818,20 @@ def rings(session: dict) -> bool:
 
 def finished_message(session: dict) -> str:
     """HTML notification for a finished web session (notify=True)."""
-    title = fmt.escape(session.get("title") or "Session")
+    from .. import jarvis
+    own = (session.get("path") or "").strip("/") == jarvis.PATH       # Jarvis: its name, a link to its page
+    title = fmt.escape("Jarvis" if own else session.get("title") or "Session")
     if session.get("state") == "error":
         head = f"⚠️ <b>{title}</b> - {fmt.escape(str(session.get('error') or 'error')[:NOTIFY_PREVIEW])}"
+    elif own:                                           # Jarvis talks to the owner: its whole answer (a brief...)
+        head = f"<b>{title}</b>\n" + fmt.to_html(fmt.head(jarvis.last_answer(session), JARVIS_PREVIEW))
     else:
         preview = fmt.preview(session.get("last_text") or "", NOTIFY_PREVIEW)   # markdown -> one clean line
         head = f"✅ <b>{title}</b>" + (f" - {fmt.escape(preview)}" if preview else "")
     base = (config.load_config().get("public_url") or "").rstrip("/")
     if base and session.get("id"):
-        head += f'\n<a href="{fmt.escape(base)}/sessions/{fmt.escape(session["id"])}">Open</a>'
+        page = "/jarvis" if own else f"/sessions/{session['id']}"
+        head += f'\n<a href="{fmt.escape(base)}{fmt.escape(page)}">Open</a>'
     return head
 
 

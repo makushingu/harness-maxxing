@@ -47,6 +47,8 @@ brief or night pass time in its settings.
 - **Summarize its conversation at** (150k by default): past this context, its conversation is summarized and goes
   on from the summary, like any session but sooner, so each turn stays cheap. **As every session** uses the
   threshold of Settings -> Claude. The gauge next to the model shows how far it is.
+- **On Telegram** (when Telegram is connected): **The brief, questions and failures** (default), **Every answer** or
+  **Nothing**. Its message comes whole, signed Jarvis; reply to it on Telegram to answer Jarvis.
 - **Show internals**: Jarvis lives in a project of its own (`jarvis`), hidden from the tree, the session lists and
   the search. Turn this on to see it, its past conversations and night passes.
 

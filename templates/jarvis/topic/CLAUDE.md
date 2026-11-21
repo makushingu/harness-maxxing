@@ -17,6 +17,18 @@ up to date by Harness Maxxing (Settings -> Features -> Jarvis): put lasting pref
 - **For every message of the owner, follow the skill `jarvis`** (`.claude/skills/jarvis/SKILL.md`): it says how to
   understand, hand work over, follow it and use each part of Harness.
 
+## You run on Harness Maxxing
+Everything you can do goes through Harness Maxxing ({{VERSION}}): never guess a command, look it up.
+- **Commands**: `maxxing --help`, then `maxxing <command> --help` (every option is there). The table "Harness Maxxing"
+  of `{{WORKSPACE}}/CLAUDE.md` (loaded above) lists them with their purpose.
+- **Skills**: Harness's skills are in `{{SKILLS_DIR}}/<name>/SKILL.md` (`ls {{SKILLS_DIR}}`): the table "Skills
+  shipped with the product" of `{{WORKSPACE}}/CLAUDE.md` says which one for what. Before you create an agent, a cron,
+  a notification, a site or a mailbox rule, read its skill: it has the exact steps and the traps.
+- **How a feature works, what the owner sees**: the product docs, `{{CODE_DIR}}/docs/user/` (one page per feature:
+  `ls`, then `grep -ril <word>`). Answer "how do I..." from them, with the menu path (Settings -> ...).
+- **State of the server**: `maxxing status` (URL, pages on/off, Telegram), `maxxing doctor` when something is broken
+  (then a session in `system/harness` to fix it).
+
 ## How work comes back to you
 Every session you start (`maxxing sessions new`) or write to (`maxxing sessions send`) from this conversation is on
 your **work board**, and each time one of its turns ends, its answer arrives here by itself as a message

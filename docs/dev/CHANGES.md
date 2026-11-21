@@ -33,6 +33,13 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 - `relay_message(..., short=True)` (`maxxing sessions new|send` that reports back): `relay.short` makes
   `runner.build_prompt` append `SHORT_ANSWER_NOTE` (final answer of 6 lines at most, the long parts in a file; not
   displayed). The skill `jarvis` no longer asks for the 5-line report itself.
+- Jarvis setting `telegram` (`off` | `important` (default) | `all`): `jarvis.rings(session)` decides for its
+  conversation in `telegram/gateway.rings` (the session's bell is not used): `important` = a turn from the brief
+  (`source` cron), a failed turn, or an answer that ends on a question; never a turn from Telegram, a summary or the
+  night pass. `finished_message` of Jarvis: title "Jarvis", its whole last answer (`jarvis.last_answer`, 2500
+  characters), link `/jarvis`.
+- Jarvis's templates are rendered with `cmd_core.template_vars` (+ `{{SKILLS_DIR}}`); its CLAUDE.md says where
+  Harness's commands, skills and docs are; skill `jarvis` § 4 = rules to create projects, topics and agents.
 
 ## 2.0.0-alpha.161 - 2026-11-21
 

@@ -242,3 +242,32 @@ def test_a_session_reporting_back_is_asked_for_a_short_answer():
     relayed = {"text": "do it", "relay": {"from": "abc", "title": "Jarvis", "path": jarvis.PATH, "hops": 1, "short": True}}
     assert runner.build_prompt(relayed).endswith(runner.SHORT_ANSWER_NOTE)
     assert runner.SHORT_ANSWER_NOTE not in runner.build_prompt({**relayed, "relay": {"from": "abc", "hops": 1}})
+
+
+def test_telegram_follows_its_own_setting(client):
+    from maxxing.telegram import gateway
+    _on(client)
+    sid = client.post("/api/jarvis/open").json()["session"]["id"]
+    s = {"id": sid, "path": jarvis.PATH, "state": "idle", "notify": False, "source": "cron",
+         "last_text": "All done.", "last_turn": {"kind": "user", "source": "session", "at": None}}
+    assert gateway.rings(s) is False                                  # a report, nothing asked: not important
+    assert gateway.rings({**s, "last_text": "Shall I publish it?"}) is True
+    assert gateway.rings({**s, "last_turn": {"kind": "user", "source": "cron"}}) is True     # the brief
+    assert gateway.rings({**s, "last_turn": {"kind": "user", "source": "telegram"}}) is False
+    assert gateway.rings({**s, "cron": True, "last_turn": {"kind": "user", "source": "cron"}}) is False  # night pass
+    client.put("/api/jarvis/settings", json={"telegram": "all"})
+    assert gateway.rings(s) is True
+    client.put("/api/jarvis/settings", json={"telegram": "off"})
+    assert gateway.rings({**s, "last_turn": {"kind": "user", "source": "cron"}}) is False
+    assert client.put("/api/jarvis/settings", json={"telegram": "loud"}).json()["error"] == "bad_telegram"
+    msg = gateway.finished_message({**s, "title": "Jarvis · 2026-11-22 06:07"})
+    assert "<b>Jarvis</b>" in msg and "06:07" not in msg
+
+
+def test_its_files_say_where_harness_s_help_is(client, mx):
+    _on(client)
+    client.post("/api/jarvis/open")
+    text = (mx["ws"] / jarvis.PATH / "CLAUDE.md").read_text()
+    assert "{{" not in text and "maxxing --help" in text and "/docs/user/" in text
+    skill = (mx["ws"] / jarvis.PATH / ".claude/skills/jarvis/SKILL.md").read_text()
+    assert "## 4. Create projects, topics and agents" in skill and "{{" not in skill

@@ -1733,6 +1733,8 @@ export interface JarvisSettings {
   dream: string
   /** its conversation is summarized past this context; 0 = as every session */
   compact_tokens: number
+  /** its answers on Telegram: the brief, questions and failures (important), every answer (all), none (off) */
+  telegram: 'off' | 'important' | 'all'
 }
 export interface JarvisStatus {
   on: boolean

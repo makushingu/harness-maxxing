@@ -58,6 +58,7 @@ class SettingsIn(BaseModel):
     brief: Optional[str] = None
     dream: Optional[str] = None
     compact_tokens: Optional[int] = None
+    telegram: Optional[str] = None
 
 
 @router.put("/settings")

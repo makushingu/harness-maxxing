@@ -44,7 +44,9 @@ DEFAULTS: dict[str, Any] = {
     "brief": "08:00",         # local time of the morning brief ("" = none)
     "dream": "03:30",         # local time of the night pass ("" = none)
     "compact_tokens": config.JARVIS_COMPACT,  # its conversation is summarized past this context (0 = as every session)
+    "telegram": "important",  # its answers on Telegram: off | important (brief, questions, failures) | all
 }
+TELEGRAM_CHOICES = ("off", "important", "all")
 COMPACT_CHOICES = (0, 100000, 150000, 200000, 300000)
 WORK_MAX = 300                # board entries kept (the oldest closed ones go first)
 REPORT_CHARS = 3000           # of a session's answer, in the report Jarvis reads
@@ -86,6 +88,8 @@ def settings() -> dict:
             out[k] = _clean_time(v)
         elif isinstance(d, int):
             out[k] = _clean_int(v, d)
+        elif k == "telegram":
+            out[k] = v if v in TELEGRAM_CHOICES else d
         else:
             out[k] = str(v or "").strip()[:80]
     return out
@@ -110,6 +114,10 @@ def save_settings(changes: dict) -> dict:
             cur[k] = t
         elif isinstance(DEFAULTS[k], bool):
             cur[k] = bool(v)
+        elif k == "telegram":
+            if v not in TELEGRAM_CHOICES:
+                raise JarvisError(400, "bad_telegram", f"{k}: one of {', '.join(TELEGRAM_CHOICES)}")
+            cur[k] = v
         elif isinstance(DEFAULTS[k], int):
             if _clean_int(v, -1) not in COMPACT_CHOICES:
                 raise JarvisError(400, "bad_compact", f"{k}: one of {', '.join(map(str, COMPACT_CHOICES))}")
@@ -166,8 +174,10 @@ OWNED = ("CLAUDE.md", ".claude/")           # Harness's own files: brought up to
 
 
 def _render(text: str) -> str:
-    from . import workspace
-    return text.replace("{{WORKSPACE}}", str(workspace.root()))
+    """{{WORKSPACE}}, {{CODE_DIR}} (the product: its docs), {{STATE_DIR}}, {{VERSION}}, {{SKILLS_DIR}} (Harness's skills)."""
+    from . import cmd_core, workspace
+    out = cmd_core.render_template(text, cmd_core.template_vars(workspace.root()))
+    return out.replace("{{SKILLS_DIR}}", str(cmd_core.skills_target()))
 
 
 def _copy(src: Path, dst: Path) -> int:
@@ -415,6 +425,35 @@ def close(ref: str | int) -> dict:
                 _write_work(w)
                 return i
     raise JarvisError(404, "not_found", f"No work {ref}")
+
+
+def rings(session: dict) -> bool | None:
+    """Telegram (telegram/gateway.rings): does this finished turn notify the owner? None = not Jarvis's conversation
+    (the session's own bell decides). Its setting `telegram`, not the bell: `important` = the morning brief, an
+    answer that asks them something, a failed turn; `all` = every answer. Never a turn sent from Telegram (answered
+    there), a summary, or the night pass (its own session, a job)."""
+    if (session.get("path") or "").strip("/") != PATH:
+        return None
+    if session.get("cron"):                              # the night pass
+        return False
+    mode = settings()["telegram"]
+    last = session.get("last_turn") if isinstance(session.get("last_turn"), dict) else {}
+    if mode == "off" or (last.get("source") or "web") == "telegram" or (last.get("kind") or "user") != "user":
+        return False
+    if mode == "all" or session.get("state") == "error":
+        return True
+    return last.get("source") == "cron" or _asks(last_answer(session))
+
+
+def last_answer(session: dict) -> str:
+    """The whole answer of its last turn (`last_text` keeps 200 characters): what Telegram shows of Jarvis."""
+    from .sessions import service
+    at = (session.get("last_turn") or {}).get("at") if isinstance(session.get("last_turn"), dict) else None
+    try:
+        return service.ended_turn_text(session.get("id") or "", float(at) if isinstance(at, (int, float)) else None,
+                                       bool(session.get("turn_died"))) or session.get("last_text") or ""
+    except Exception:  # noqa: BLE001
+        return session.get("last_text") or ""
 
 
 def _asks(text: str) -> bool:

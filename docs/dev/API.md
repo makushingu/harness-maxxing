@@ -1095,7 +1095,7 @@ session of the hidden topic `projects/jarvis/topics/main` (server `jarvis.py`). 
 | GET | `/api/jarvis` | | `JarvisStatus` |
 | POST | `/api/jarvis/open` | | its conversation, made the first time (409 `off`; 409 `taken`: an owner's project named `jarvis`) -> `JarvisStatus` |
 | POST | `/api/jarvis/new` | | a new conversation (the old one is kept in `conversations`) -> `JarvisStatus` |
-| PUT | `/api/jarvis/settings` | any of `model`, `root`, `ask_first`, `internals`, `daily` (bool), `brief`, `dream` (`HH:MM` or ""), `compact_tokens` (0 = as every session, 100000, 150000, 200000, 300000) | `JarvisStatus` (400 `bad_time`, `bad_compact`) |
+| PUT | `/api/jarvis/settings` | any of `model`, `root`, `ask_first`, `internals`, `daily` (bool), `brief`, `dream` (`HH:MM` or ""), `compact_tokens` (0 = as every session, 100000, 150000, 200000, 300000), `telegram` (`off`, `important`: brief, questions and failures, `all`) | `JarvisStatus` (400 `bad_time`, `bad_compact`, `bad_telegram`) |
 | POST | `/api/jarvis/work/{ref}/close` | | `ref` = the entry's number or its session id -> `JarvisStatus` |
 | POST | `/api/jarvis/brief` | | the morning brief now -> `JarvisStatus` |
 | POST | `/api/jarvis/dream` | | the night pass now: `{session}` (a separate session) |

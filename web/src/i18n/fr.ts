@@ -5046,5 +5046,11 @@ export const fr: Record<keyof typeof en, string> = {
   'jarvis.set.compact': "Résumer sa conversation à",
   'jarvis.set.compactHint': "Plus bas = des tours moins chers. Ce qu’il doit garder vit dans ses notes, pas dans le fil.",
   'jarvis.set.compactSame': "Comme toutes les sessions",
+  'jarvis.set.telegram': "Sur Telegram",
+  'jarvis.set.telegram.important': "Le brief, les questions et les échecs",
+  'jarvis.set.telegram.all': "Chaque réponse",
+  'jarvis.set.telegram.off': "Rien",
+  'jarvis.set.telegramHint': "Répondez à son message sur Telegram pour lui répondre.",
+  'jarvis.set.telegramOff': "Telegram n’est pas connecté : Réglages → Telegram.",
   'jarvis.set.cost': "Ce qu’il consomme : un tour par message, un par rapport qui revient, le brief et la passe de nuit (Sonnet, sautée quand rien n’a changé). Une nouvelle conversation par jour garde chaque tour léger.",
 }
