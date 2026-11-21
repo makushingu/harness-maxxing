@@ -11,6 +11,9 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   the optimistic patch of the list, each session and the topic counters (unread, errors). Tree: the double tick in
   `ListHeader` (all unread live sessions) and `MarkAllReadItem` in the project / topic menus (right click, ⋯,
   drill-down). No new route.
+- Search: `search.search` ranks first (bm25 only, best rowid per kind/ref), then runs `snippet()` on the shown rows
+  only (`rowid IN (...)`, at most `limit`). `snippet()` re-tokenizes the whole text, so it ran on every matching row
+  before (up to `RANK_MAX`): 114-162 ms -> 13-19 ms for 3-letter prefixes on a 4,700-item index, same results.
 - Compaction: no `seed` queue item after a summary turn any more. `Runner._post` stores the seed in the session meta
   (`seed`, with the new `csid` and `fresh`) and resets `context_tokens` to `base_tokens`; `Runner.turn` gives it to the
   next item as `preface` and drops it once the thread exists (`saw_init`). A compacted session therefore counts one

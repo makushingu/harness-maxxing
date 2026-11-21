@@ -692,17 +692,25 @@ def search(q: str, kinds: list[str] | None = None, limit: int = 30,
                     WHERE fts MATCH ? AND items.kind IN ({marks}) ORDER BY fts.rowid DESC LIMIT ?)""",
                 (match, *wanted, RANK_MAX)).fetchone()[0] or 0
             # best row per session / file / task (bare columns of MIN)
-            # (MATERIALIZED: bm25/snippet cannot run inside the aggregate itself)
-            rows = con.execute(
+            # (MATERIALIZED: bm25 cannot run inside the aggregate itself)
+            best = con.execute(
                 f"""WITH hits AS MATERIALIZED (
                         SELECT items.kind AS kind, items.ref AS ref, items.path AS path, items.title AS title,
-                               items.at AS at, snippet(fts, 1, char(2), char(3), '…', 16) AS snip,
-                               bm25(fts, 4.0, 1.0) AS score
+                               items.at AS at, fts.rowid AS id, bm25(fts, 4.0, 1.0) AS score
                         FROM fts JOIN items ON items.id = fts.rowid
                         WHERE fts MATCH ? AND fts.rowid >= ? AND items.kind IN ({marks}))
-                    SELECT kind, ref, path, title, at, snip, MIN(score) AS best FROM hits
+                    SELECT kind, ref, path, title, at, id, MIN(score) AS best FROM hits
                     GROUP BY kind, ref ORDER BY best LIMIT ?""",
                 (match, floor, *wanted, limit)).fetchall()
+            # snippets of the shown rows only: snippet() tokenizes the whole text again, so running it on every
+            # matching row (thousands for a common prefix) cost ten times the ranking itself
+            ids = [r[5] for r in best]
+            snips = dict(con.execute(
+                f"""SELECT rowid, snippet(fts, 1, char(2), char(3), '…', 16) FROM fts
+                    WHERE fts MATCH ? AND rowid IN ({','.join('?' * len(ids))})""",
+                (match, *ids)).fetchall()) if ids else {}
+            rows = [(kind, ref, path, title, at, snips.get(rid) or "", score)
+                    for kind, ref, path, title, at, rid, score in best]
             untitled = [f"{r[0][0]}:{r[1]}" for r in rows if r[0] in ("session", "group") and not r[3]]
             titles = dict(con.execute(
                 f"SELECT ref, title FROM items WHERE body='' AND src IN ({','.join('?' * len(untitled))})",

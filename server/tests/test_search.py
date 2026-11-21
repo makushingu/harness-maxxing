@@ -442,3 +442,19 @@ def test_a_link_into_a_hidden_or_skipped_folder_is_not_indexed(client, mx):
     (ws / "real.md").write_text("zqxhiddenlink789 dans une vraie note\n")
     search.refresh()
     assert [r["title"] for r in _q(client, "zqxhiddenlink789")] == ["real.md"]
+
+
+def test_snippets_come_from_the_best_row_of_each_shown_result(mx):
+    # snippets are made for the shown rows only, after the ranking: each one must still be its own session's text
+    ids = {_session("", f"Run {i}", [("user", f"harbour report number{i} filed"),
+                                     ("assistant", f"the harbour harbour harbour summary number{i}")])
+           for i in range(40)}
+    search.refresh()
+    r = search.search("harbour", limit=5)["results"]
+    assert len(r) == 5 and {x["id"] for x in r} <= ids
+    for x in r:
+        n = x["title"].split()[1]
+        assert "\x02harbour\x03" in x["snippet"] and f"number{n}" in x["snippet"]
+        assert "summary" in x["snippet"]                       # the best row (most hits), not the first message
+    one = search.search("number7 report")["results"]
+    assert len(one) == 1 and one[0]["title"] == "Run 7" and "\x02number7\x03" in one[0]["snippet"]
