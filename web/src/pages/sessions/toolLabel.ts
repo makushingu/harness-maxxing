@@ -34,11 +34,14 @@ export function isDangerous(command: string): boolean {
   return DANGER.test(command)
 }
 
+/** Longer commands are parsed on their start only (a here-document, a pasted script): bounded work per card. */
+const PARSE_MAX = 4000
+
 /** The command a Bash line is about: `cd x && env A=1 sudo timeout 5 grep …` -> ["grep", "…"]. */
 function mainCommand(command: string): string[] {
   // redirections and here-documents are not arguments (`cat a 2>/dev/null`, `python3 - <<EOF`)
-  const line = command.split('\n', 1)[0].replace(/\d*>&\d/g, '').replace(/\d*>>?\s*\S+/g, '').replace(/<<-?\s*['"]?\w+['"]?/g, '-').replace(/<\s*\S+/g, '')
-  const parts = line.split(/\s*(?:&&|\|\||;|\|)\s*/)
+  const line = command.slice(0, PARSE_MAX).split('\n', 1)[0].replace(/\d*>&\d/g, '').replace(/\d*>>?\s*\S+/g, '').replace(/<<-?\s*['"]?\w+['"]?/g, '-').replace(/<\s*\S+/g, '')
+  const parts = line.split(/&&|\|\||;|\|/) // no \s* around: quadratic on a long run of spaces
   for (const part of parts) {
     // control words and subshells around the real command (`for f in …; do convert …`, `(cd x; ls)`)
     const words = part.trim().replace(/^[({]+\s*/, '').replace(/^(do|then|else)\s+/, '').split(/\s+/).filter(Boolean)
@@ -310,14 +313,32 @@ export function toolLabel(name: string, input: Input, tr: T, rel: (path: string)
   return { title: '', detail: '', kind: 'other', danger: false } // the card keeps its name and summary
 }
 
-/** The kind of a call without its texts (grouping in the thread): read-only calls are grouped, never a dangerous one. */
+/** Options that make a read-only command write or run something (`find -delete`, `sort -o`, `rg --pre`, `git -c`). */
+const UNSAFE_OPT = /^(-delete|-exec\S*|-ok\S*|-fprint\S*|-fls|--output\S*|--pre\S*)$/
+const UNSAFE_BY_CMD: Record<string, RegExp> = { sort: /^-o/, git: /^(-c|--config-env\S*|--exec-path\S*)$/, sed: /^(-[a-z]*i|--in-place)/ }
+
+/** The kind of a call without its texts (grouping in the thread). A group is folded, so a Bash line joins one only
+ *  when EVERY command in it only reads: no pipe into another program, no `$(…)`, no second line, no background job,
+ *  no redirection into a file, no option that writes or runs something. Anything unsure is 'other' (shown alone). */
 export function toolKind(name: string, input: Input): ToolKind {
   if (name === 'Read' || name === 'NotebookRead') return 'read'
   if (name === 'Grep' || name === 'Glob') return 'search'
   if (name === 'LS') return 'list'
   if (name !== 'Bash') return 'other'
   const cmd = str(input.command)
-  const writes = cmd.replace(/\d*>>?\s*\/dev\/null/g, '').replace(/\d*>&\d/g, '')
-  if (isDangerous(cmd) || /(^|[^-=])>|\btee\b/.test(writes)) return 'other' // writes a file
-  return bashAction(cmd)?.[2] ?? 'other'
+  if (cmd.length > PARSE_MAX || /[\n\r`]|\$\(|<\(|>\(/.test(cmd) || isDangerous(cmd)) return 'other'
+  const plain = cmd.replace(/\d*>>?\s*\/dev\/null/g, '').replace(/\d*>&\d/g, '')
+  if (/>|\btee\b/.test(plain) || /(^|[^&])&([^&]|$)/.test(plain)) return 'other' // writes a file, or runs in the background
+  let kind: ToolKind | null = null
+  for (const seg of plain.split(/&&|\|\||;|\|/)) {
+    const words = seg.trim().split(/\s+/).filter(Boolean)
+    if (!words.length) continue
+    if (words[0] === 'cd' && words.length <= 2) continue
+    const by = UNSAFE_BY_CMD[words[0].split('/').pop() || '']
+    if (words.slice(1).some((w) => UNSAFE_OPT.test(w) || by?.test(w))) return 'other'
+    const k = bashAction(seg)?.[2]
+    if (!k || k === 'other') return 'other'
+    kind ??= k
+  }
+  return kind ?? 'other'
 }
