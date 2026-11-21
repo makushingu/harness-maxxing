@@ -40,11 +40,14 @@ function mainCommand(command: string): string[] {
   const line = command.split('\n', 1)[0].replace(/\d*>&\d/g, '').replace(/\d*>>?\s*\S+/g, '').replace(/<<-?\s*['"]?\w+['"]?/g, '-').replace(/<\s*\S+/g, '')
   const parts = line.split(/\s*(?:&&|\|\||;|\|)\s*/)
   for (const part of parts) {
-    const words = part.trim().split(/\s+/).filter(Boolean)
+    // control words and subshells around the real command (`for f in …; do convert …`, `(cd x; ls)`)
+    const words = part.trim().replace(/^[({]+\s*/, '').replace(/^(do|then|else)\s+/, '').split(/\s+/).filter(Boolean)
+    if (/^(for|if|elif|fi|done|esac|case|[)}]+)$/.test(words[0] || '')) continue
     // prefixes that do not say what the line does
     while (words.length) {
       const w = words[0]
-      if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(w) || w === 'sudo' || w === 'nice' || w === 'nohup' || w === 'exec' || w === 'time' || w === 'command') words.shift()
+      if (/^[A-Za-z_][A-Za-z0-9_]*=\$\(/.test(w)) words.length = 0
+      else if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(w) || w === 'sudo' || w === 'nice' || w === 'nohup' || w === 'exec' || w === 'time' || w === 'command') words.shift()
       else if (w === 'env') {
         words.shift()
         while (words.length && (words[0].startsWith('-') || /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[0]))) if (words.shift() === '-u') words.shift()
@@ -53,6 +56,7 @@ function mainCommand(command: string): string[] {
         while (words.length && (words[0].startsWith('-') || /^\d/.test(words[0]))) words.shift()
       } else break
     }
+    if (words[0] === 'cd' && parts.length === 1) return words
     if (!words.length || words[0] === 'cd' || words[0] === 'set' || words[0] === 'export' || words[0] === 'source' || words[0] === '.') continue
     return words
   }
@@ -79,6 +83,9 @@ export function bashAction(command: string): [string, Record<string, string>, To
   const args = w.slice(1)
   const sub = args.find((a) => !a.startsWith('-')) || ''
   const line = w.join(' ')
+  if ((cmd === 'until' || cmd === 'while') && /\bsleep\b/.test(command)) return ['tl.bash.wait', {}, 'other']
+  if (cmd === 'cd') return ['tl.bash.cd', {}, 'list']
+  if (w[0].startsWith('./') || w[0].startsWith('../') || (w[0].startsWith('/') && /\.(py|sh|js|mjs|ts)$/.test(w[0]))) return ['tl.bash.script', { name: cmd }, 'other']
   if (/\b(pytest|vitest|jest|playwright test)\b/.test(line) || /^(npm|pnpm|yarn|bun) (run )?test\b/.test(line) || /^(go|cargo) test\b/.test(line)) return ['tl.bash.test', {}, 'other']
   switch (cmd) {
     case 'grep':
@@ -104,6 +111,16 @@ export function bashAction(command: string): [string, Record<string, string>, To
     case 'less':
     case 'bat':
     case 'wc':
+    case 'cut':
+    case 'sort':
+    case 'uniq':
+    case 'diff':
+    case 'cmp':
+    case 'md5sum':
+    case 'sha256sum':
+    case 'xxd':
+    case 'od':
+    case 'strings':
     case 'jq':
     case 'stat':
     case 'file': {
@@ -201,7 +218,19 @@ export function bashAction(command: string): [string, Record<string, string>, To
       return ['tl.bash.media', {}, 'other']
     case 'magick':
     case 'convert':
+    case 'identify':
+    case 'rsvg-convert':
+    case 'cwebp':
+    case 'optipng':
+    case 'exiftool':
       return ['tl.bash.image', {}, 'other']
+    case 'scrapling':
+    case 'scrapling-python':
+      return ['tl.bash.scrape', {}, 'other']
+    case 'wrangler':
+    case 'vercel':
+    case 'netlify':
+      return sub === 'deploy' || sub === 'publish' ? ['tl.bash.deploy', {}, 'other'] : ['tl.bash.script', { name: cmd }, 'other']
     case 'gh':
       return ['tl.bash.github', {}, 'other']
     case 'ssh':
