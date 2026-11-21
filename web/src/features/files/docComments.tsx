@@ -115,6 +115,7 @@ export function DocComments({ path, scope }: { path: string; scope: React.RefObj
   const [editing, setEditing] = React.useState(false)
   const [comment, setComment] = React.useState('')
   const [fixing, setFixing] = React.useState<{ id: number; text: string } | null>(null)
+  const cancelled = React.useRef(false) // Escape: the blur that follows must not save
   const phone = useIsMobile()
   const [open, setOpen] = React.useState<boolean | null>(null) // null: unfolded on a computer, folded on a phone
   const unfolded = open ?? !phone
@@ -319,7 +320,8 @@ export function DocComments({ path, scope }: { path: string; scope: React.RefObj
                       rows={2}
                       onChange={(e) => setFixing({ id: i.id, text: e.target.value })}
                       onBlur={() => {
-                        if (fixing.text.trim()) edit(sid, i.id, fixing.text.trim())
+                        if (!cancelled.current && fixing.text.trim()) edit(sid, i.id, fixing.text.trim())
+                        cancelled.current = false
                         setFixing(null)
                       }}
                       onKeyDown={(e) => {
@@ -328,7 +330,7 @@ export function DocComments({ path, scope }: { path: string; scope: React.RefObj
                           e.currentTarget.blur()
                         } else if (e.key === 'Escape') {
                           e.stopPropagation()
-                          setFixing({ id: i.id, text: '' })
+                          cancelled.current = true
                           e.currentTarget.blur()
                         }
                       }}
