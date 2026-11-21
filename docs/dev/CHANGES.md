@@ -5,6 +5,11 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## Unreleased
+
+- Tests: `test_dashboard.py::test_day_timeline` freezes `widgets.time` at 00:05 of today; it failed every evening
+  (after ~21:36 fewer than `MAX_PLANNED` one-minute runs are left, the lane is not dense).
+
 ## 2.0.0-alpha.161 - 2026-11-21
 
 - Thread: `web/src/pages/sessions/toolLabel.ts`. `toolLabel(name, input, t, rel)` -> `{title, detail, kind, danger}`:
