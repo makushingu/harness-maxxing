@@ -749,6 +749,22 @@ def test_device_turn_ids_reject_a_trailing_newline():
     assert not turns.SID_RE.match("abcdef\n")
 
 
+def test_a_device_ask_whose_alive_check_raises_is_not_left_pending(monkeypatch):
+    import asyncio
+    from maxxing.devices import asks
+    monkeypatch.setattr(asks, "_announce", lambda d: None)
+    monkeypatch.setattr(asks, "ASK_WAIT_S", 0.3)
+
+    async def alive():
+        raise RuntimeError("boom")
+
+    async def go():
+        with pytest.raises(RuntimeError):
+            await asks.ask("sess09", "web", {"id": "dev1", "name": "x"}, "go", alive=alive)
+    asyncio.run(go())
+    assert asks.pending(session="sess09") == [] and not asks._futs
+
+
 def test_a_device_ask_survives_a_lone_surrogate_and_a_cancel_during_the_announce(monkeypatch):
     import asyncio
     from maxxing.devices import asks

@@ -74,7 +74,7 @@ async def ask(session: str, owner: str, dev: dict, message: str, alive=None) -> 
             except asyncio.TimeoutError:
                 if alive is not None and not await alive():
                     _finish(d, "expired")
-    except asyncio.CancelledError:
+    except BaseException:                          # cancelled, or alive() / the announcement failed: never left pending
         _finish(d, "expired")
         raise
     finally:
