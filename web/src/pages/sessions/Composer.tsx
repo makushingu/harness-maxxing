@@ -4,10 +4,11 @@ import * as React from 'react'
 import { Clock, CornerDownRight, ListPlus, MessageCircleQuestion, Pencil, Quote, X } from 'lucide-react'
 import { loadGroups, useT } from '@/i18n'
 import { Button, Sensitive, Spinner, Tooltip, toast } from '@/components/ui'
-import { uploadAttachment, useMentionTargets } from '@/lib/queries'
+import { useMentionTargets } from '@/lib/queries'
 import { errorMessage } from '@/lib/api'
 import { DRAFT_EVENT, leftOutbox, loadAtts, loadDraft, loadQuotes, onSeed, outboxAdd, outboxDone, outboxMove, registerComposer, saveAtts, saveDraft, saveQuotes, takeSeed, type DraftAtt, type OutboxEntry, type Pending, type Seed } from './store'
 import { busyEnd, busyStart } from '@/lib/busy'
+import { cancelUpload, moveUploads, onUploads, startUpload, uploadsOf } from './uploads'
 import type { MentionTarget, QueueItem, SentMention } from '@/lib/types'
 import { baseName, isImage, quotedFile, quotesMarkdown, thumbUrl } from './util'
 import { QuotedFile } from './QuotedFile'
@@ -77,10 +78,10 @@ export const Composer = React.forwardRef<ComposerHandle, {
   const t = useT()
   const [text, setText] = React.useState(() => loadDraft(draftKey))
   const [quotes, setQuotes] = React.useState<string[]>(() => loadQuotes(draftKey))
-  const [atts, setAtts] = React.useState<Att[]>(() => loadAtts(draftKey).map(fromDraftAtt))
+  // files still uploading from a previous visit come back with their progress (see uploads.ts)
+  const [atts, setAtts] = React.useState<Att[]>(() => [...loadAtts(draftKey).map(fromDraftAtt), ...uploadsOf(draftKey).map((u) => ({ lid: u.lid, name: u.name, size: u.size, path: null, progress: u.progress, error: null, preview: null }))])
   const [sending, setSending] = React.useState(false)
   const ta = React.useRef<HTMLTextAreaElement | null>(null)
-  const ctrls = React.useRef(new Map<string, AbortController>())
   const previews = React.useRef(new Set<string>())
   const live = React.useRef({ text, quotes, atts, draftKey })
   live.current = { text, quotes, atts, draftKey }
@@ -112,6 +113,7 @@ export const Composer = React.forwardRef<ComposerHandle, {
       saveQuotes(prevKey.current, [])
       saveAtts(prevKey.current, [])
       outboxMove(prevKey.current, draftKey)
+      moveUploads(prevKey.current, draftKey)
       prevKey.current = draftKey
     }
   }, [draftKey])
@@ -156,7 +158,6 @@ export const Composer = React.forwardRef<ComposerHandle, {
       // Only what this box has not stored yet (quotes and files are stored at once): another tab on the same
       // session may have written the draft since.
       if (unsaved.current) saveDraft(live.current.draftKey, live.current.text)
-      ctrls.current.forEach((c) => c.abort())
       previews.current.forEach((p) => URL.revokeObjectURL(p))
       previews.current.clear()
     }
@@ -171,28 +172,32 @@ export const Composer = React.forwardRef<ComposerHandle, {
         const preview = f.type.startsWith('image/') ? URL.createObjectURL(f) : null
         if (preview) previews.current.add(preview)
         setAtts((a) => [...a, { lid, name: f.name || 'file', size: f.size, path: null, progress: 0, error: null, preview }])
-        const ctrl = new AbortController()
-        ctrls.current.set(lid, ctrl)
-        busyStart()
-        uploadAttachment(topicPath, f, (l, tot) => setAtts((a) => a.map((x) => (x.lid === lid ? { ...x, progress: tot ? l / tot : 0 } : x))), ctrl.signal)
-          .then((saved) => setAtts((a) => a.map((x) => (x.lid === lid ? { ...x, path: saved.path, name: saved.name, progress: 1 } : x))))
-          .catch((e) => {
-            if ((e as Error)?.name === 'AbortError') return
-            setAtts((a) => a.map((x) => (x.lid === lid ? { ...x, error: errorMessage(e) } : x)))
-            toast.error(t('sessions.uploadFailed', { name: f.name }))
-          })
-          .finally(() => {
-            ctrls.current.delete(lid)
-            busyEnd()
-          })
+        startUpload(live.current.draftKey, topicPath, f, lid)
       }
       return lids
     },
-    [topicPath, t],
+    [topicPath],
+  )
+
+  // Uploads keep going when the composer goes away (another session, another tab): this box follows the ones of its draft.
+  React.useEffect(
+    () =>
+      onUploads((e) => {
+        if (e.up.key !== live.current.draftKey || !mounted.current) return false
+        const { lid } = e.up
+        if (e.kind === 'progress') setAtts((a) => a.map((x) => (x.lid === lid ? { ...x, progress: e.up.progress } : x)))
+        else if (e.kind === 'done') setAtts((a) => a.map((x) => (x.lid === lid ? { ...x, path: e.path, name: e.name, progress: 1, preview: x.preview ?? (isImage(e.path) ? thumbUrl(e.path, 160, 160) : null) } : x)))
+        else {
+          setAtts((a) => a.map((x) => (x.lid === lid ? { ...x, error: errorMessage(e.error) } : x)))
+          toast.error(t('sessions.uploadFailed', { name: e.up.name }))
+        }
+        return true
+      }),
+    [t],
   )
 
   const removeAtt = (lid: string) => {
-    ctrls.current.get(lid)?.abort()
+    cancelUpload(lid)
     setAtts((a) => {
       const x = a.find((y) => y.lid === lid)
       releasePreview(x?.preview ?? null)

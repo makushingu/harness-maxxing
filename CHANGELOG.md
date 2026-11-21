@@ -3,6 +3,12 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## Unreleased
+
+Fixed:
+- **A file still uploading no longer vanishes when you go to another session or page.** The upload goes on and
+  the file is back in the message box when you return.
+
 ## 2.0.0-alpha.159 - 2026-11-19
 
 New:
