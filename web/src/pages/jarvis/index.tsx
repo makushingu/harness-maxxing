@@ -4,13 +4,15 @@
 // Its settings (rights, ask first, daily conversation, brief and night pass times, internals) sit in the gear menu.
 import * as React from 'react'
 import { Link } from 'react-router'
-import { Check, ExternalLink, ListTodo, MessageSquarePlus, Moon, Settings2, Sparkles, Sun, X } from 'lucide-react'
+import { CalendarDays, Check, ExternalLink, Eye, Hand, ListTodo, MessageSquarePlus, Minimize2, Moon, PanelRightClose, Send, Settings2, ShieldCheck, Sparkles, Sun, X, type LucideIcon } from 'lucide-react'
 import { useLang, useT, type TKey } from '@/i18n'
 import { useCloseJarvisWork, useJarvis, useJarvisBrief, useJarvisDream, useJarvisSettings, useNewJarvisConversation, useOpenJarvis } from '@/lib/queries'
 import type { JarvisSettings, JarvisWork } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { fmtRelative } from '@/lib/format'
-import { Button, EmptyState, Input, Popover, PopoverContent, PopoverTrigger, Select, Skeleton, StatusDot, Switch, Tooltip } from '@/components/ui'
+import { Button, EmptyState, Input, Select, Skeleton, StatusDot, Switch, Tooltip } from '@/components/ui'
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
+import { ResizeEdge } from '@/components/shell/ResizeEdge'
 import { PageHeader } from '@/components/shell/Page'
 import { useTelegram } from '@/lib/queries/telegram'
 import { SessionColumn } from '@/pages/sessions/Column'
@@ -22,7 +24,24 @@ export default function JarvisPage() {
   const { data: st, isLoading } = useJarvis()
   const open = useOpenJarvis()
   const fresh = useNewJarvisConversation()
-  const [board, setBoard] = React.useState(false)
+  const [board, setBoard] = React.useState(false) // phone / tablet: the Work list in place of the conversation
+  const [workOpen, setWorkOpen] = React.useState(() => localStorage.getItem(WORK_OPEN_KEY) !== '0') // desktop
+  const [workW, setWorkW] = React.useState(() => Number(localStorage.getItem(WORK_W_KEY)) || WORK_W.def)
+  const [settingsOpen, setSettingsOpen] = React.useState(false)
+  const aside = React.useRef<HTMLElement>(null)
+  const toggleWork = () => {
+    if (window.matchMedia('(min-width: 1024px)').matches) {
+      const v = !workOpen
+      setWorkOpen(v)
+      localStorage.setItem(WORK_OPEN_KEY, v ? '1' : '0')
+    } else setBoard((b) => !b)
+  }
+  const saveWorkW = (w: number | null) => {
+    const v = w == null ? WORK_W.def : Math.round(w)
+    setWorkW(v)
+    if (w == null) localStorage.removeItem(WORK_W_KEY)
+    else localStorage.setItem(WORK_W_KEY, String(v))
+  }
   const sid = st?.session?.id || ''
   // the first visit (or the conversation was removed): its conversation is made now
   const opening = open.isPending
@@ -66,11 +85,24 @@ export default function JarvisPage() {
         actions={
           <div className="flex items-center gap-1">
             <Tooltip content={t('jarvis.board.title')}>
-              <Button variant={board ? 'secondary' : 'ghost'} size="icon-sm" className="lg:hidden" aria-label={t('jarvis.board.title')} onClick={() => setBoard((b) => !b)}>
+              <Button
+                variant={board ? 'secondary' : 'ghost'}
+                size="icon-sm"
+                className={cn(workOpen && 'lg:bg-secondary')}
+                aria-label={t('jarvis.board.title')}
+                aria-pressed={board || undefined}
+                onClick={toggleWork}
+                data-testid="jarvis-work-toggle"
+              >
                 <ListTodo />
               </Button>
             </Tooltip>
-            <SettingsMenu settings={st.settings} onNew={() => fresh.mutate()} renewing={fresh.isPending} />
+            <Tooltip content={t('jarvis.set.title')}>
+              <Button variant="ghost" size="icon-sm" aria-label={t('jarvis.set.title')} aria-haspopup="dialog" onClick={() => setSettingsOpen(true)} data-testid="jarvis-settings">
+                <Settings2 />
+              </Button>
+            </Tooltip>
+            <JarvisSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} settings={st.settings} onNew={() => fresh.mutate()} renewing={fresh.isPending} />
           </div>
         }
       />
@@ -78,8 +110,14 @@ export default function JarvisPage() {
         <div className={cn('flex min-h-0 min-w-0 flex-1 flex-col', board && 'max-lg:hidden')}>
           {sid ? <SessionColumn key={sid} col={col} sid={sid} index={0} count={1} variant="solo" own /> : <Skeleton className="m-6 h-40" />}
         </div>
-        <aside className={cn('flex min-h-0 w-80 shrink-0 flex-col border-l max-lg:w-full max-lg:border-l-0', !board && 'max-lg:hidden')} data-testid="jarvis-board">
-          <Board work={st.work} />
+        <aside
+          ref={aside}
+          className={cn('relative flex min-h-0 shrink-0 flex-col border-l max-lg:!w-full max-lg:border-l-0', !board && 'max-lg:hidden', !workOpen && 'lg:hidden')}
+          style={{ width: workW }}
+          data-testid="jarvis-board"
+        >
+          <ResizeEdge side={aside} edge="left" min={WORK_W.min} max={WORK_W.max} onWidth={saveWorkW} />
+          <Board work={st.work} onHide={toggleWork} />
         </aside>
       </div>
     </div>
@@ -89,7 +127,7 @@ export default function JarvisPage() {
 /* ---------------------------------------------------------------- the work board */
 type Group = { key: string; title: TKey; items: JarvisWork[] }
 
-function Board({ work }: { work: JarvisWork[] }) {
+function Board({ work, onHide }: { work: JarvisWork[]; onHide: () => void }) {
   const t = useT()
   const [closed, setClosed] = React.useState(false)
   const groups: Group[] = [
@@ -101,13 +139,19 @@ function Board({ work }: { work: JarvisWork[] }) {
   const empty = groups.every((g) => !g.items.length)
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex h-11 shrink-0 items-center justify-between border-b px-4">
-        <span className="text-sm font-medium">{t('jarvis.board.title')}</span>
+      <div className="flex h-11 shrink-0 items-center gap-2 border-b pr-2 pl-4">
+        <span className="min-w-0 flex-1 truncate text-sm font-medium">{t('jarvis.board.title')}</span>
         {old.length > 0 && (
-          <button type="button" className="text-xs text-muted-foreground hover:text-foreground" onClick={() => setClosed((c) => !c)}>
+          <button type="button" className="shrink-0 text-xs text-muted-foreground hover:text-foreground" onClick={() => setClosed((c) => !c)}>
             {t(closed ? 'jarvis.board.hideClosed' : 'jarvis.board.showClosed', { count: old.length })}
           </button>
         )}
+        <Tooltip content={t('jarvis.board.hide')}>
+          <Button variant="ghost" size="icon-sm" aria-label={t('jarvis.board.hide')} onClick={onHide} data-testid="jarvis-work-hide">
+            <PanelRightClose className="max-lg:hidden" />
+            <X className="lg:hidden" />
+          </Button>
+        </Tooltip>
       </div>
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-3">
         {empty && !closed && <p className="px-1 py-6 text-center text-[13px] text-muted-foreground">{t('jarvis.board.empty')}</p>}
@@ -185,95 +229,124 @@ function WorkCard({ w }: { w: JarvisWork }) {
 /* ---------------------------------------------------------------- its settings */
 /** Its compaction threshold (server jarvis.COMPACT_CHOICES; 0 = the server's, as every session). */
 const COMPACT_AT = [100_000, 150_000, 200_000, 300_000, 0]
+/** The Work panel on a wide screen: shown or not, and its width (dragged on its left edge), kept in this browser. */
+const WORK_OPEN_KEY = 'mx.jarvis.workOpen'
+const WORK_W_KEY = 'mx.jarvis.workWidth'
+const WORK_W = { min: 260, def: 320, max: 640 }
 
-function SettingsMenu({ settings, onNew, renewing }: { settings: JarvisSettings; onNew: () => void; renewing: boolean }) {
+/** Its settings: a window like a session's options (a sheet from the bottom on a phone, centered on a computer). */
+function JarvisSettingsDialog({ open, onOpenChange, settings, onNew, renewing }: { open: boolean; onOpenChange: (v: boolean) => void; settings: JarvisSettings; onNew: () => void; renewing: boolean }) {
   const t = useT()
   const save = useJarvisSettings()
   const brief = useJarvisBrief()
   const dream = useJarvisDream()
   const { data: tg } = useTelegram()
   const set = (k: keyof JarvisSettings, v: boolean | string | number) => save.mutate({ [k]: v })
-  const toggles: { k: 'root' | 'ask_first' | 'daily' | 'internals'; label: TKey; hint: TKey }[] = [
-    { k: 'root', label: 'jarvis.set.root', hint: 'jarvis.set.rootHint' },
-    { k: 'ask_first', label: 'jarvis.set.ask', hint: 'jarvis.set.askHint' },
-    { k: 'daily', label: 'jarvis.set.daily', hint: 'jarvis.set.dailyHint' },
-    { k: 'internals', label: 'jarvis.set.internals', hint: 'jarvis.set.internalsHint' },
+  const toggles: { k: 'root' | 'ask_first' | 'daily' | 'internals'; icon: LucideIcon; label: TKey; hint: TKey }[] = [
+    { k: 'root', icon: ShieldCheck, label: 'jarvis.set.root', hint: 'jarvis.set.rootHint' },
+    { k: 'ask_first', icon: Hand, label: 'jarvis.set.ask', hint: 'jarvis.set.askHint' },
+    { k: 'daily', icon: CalendarDays, label: 'jarvis.set.daily', hint: 'jarvis.set.dailyHint' },
+    { k: 'internals', icon: Eye, label: 'jarvis.set.internals', hint: 'jarvis.set.internalsHint' },
   ]
+  const run = (f: () => void) => () => {
+    onOpenChange(false)
+    f()
+  }
   return (
-    <Popover>
-      <Tooltip content={t('jarvis.set.title')}>
-        <PopoverTrigger asChild>
-          <Button variant="ghost" size="icon-sm" aria-label={t('jarvis.set.title')} data-testid="jarvis-settings">
-            <Settings2 />
-          </Button>
-        </PopoverTrigger>
-      </Tooltip>
-      <PopoverContent align="end" className="w-80 space-y-4 p-4">
-        <p className="text-sm font-medium">{t('jarvis.set.title')}</p>
-        {toggles.map((x) => (
-          <div key={x.k} className="flex items-start gap-3">
-            <div className="min-w-0 flex-1">
-              <label htmlFor={`jv-${x.k}`} className="text-sm">
-                {t(x.label)}
-              </label>
-              <p className="text-xs text-muted-foreground">{t(x.hint)}</p>
-            </div>
-            <Switch id={`jv-${x.k}`} checked={settings[x.k]} onCheckedChange={(v) => set(x.k, v)} />
-          </div>
-        ))}
-        <div className="grid grid-cols-2 gap-3">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="gap-0 p-0 md:max-w-md" data-testid="jarvis-settings-dialog">
+        <div className="px-5 pt-5 pb-3 max-md:pt-1">
+          <DialogTitle>{t('jarvis.set.title')}</DialogTitle>
+          <DialogDescription className="text-xs">{t('jarvis.set.cost')}</DialogDescription>
+        </div>
+
+        <div className="border-t px-2 py-2">
+          {toggles.map((x) => (
+            <ToggleRow key={x.k} icon={x.icon} label={t(x.label)} hint={t(x.hint)} checked={settings[x.k]} onChange={(v) => set(x.k, v)} />
+          ))}
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 border-t px-5 py-3">
           <TimeField icon={Sun} label={t('jarvis.set.brief')} value={settings.brief} onSave={(v) => set('brief', v)} />
           <TimeField icon={Moon} label={t('jarvis.set.dream')} value={settings.dream} onSave={(v) => set('dream', v)} />
         </div>
-        <div className="grid gap-1">
-          <span className="text-sm">{t('jarvis.set.compact')}</span>
-          <Select
-            value={String(settings.compact_tokens ?? 0)}
-            onValueChange={(v) => set('compact_tokens', Number(v))}
-            options={COMPACT_AT.map((n) => ({ value: String(n), label: n ? `${n / 1000}k` : t('jarvis.set.compactSame') }))}
-            className="h-8"
-            data-testid="jarvis-compact"
-          />
-          <p className="text-xs text-muted-foreground">{t('jarvis.set.compactHint')}</p>
+
+        <div className="space-y-3 border-t px-5 py-3">
+          <label className="grid gap-1">
+            <span className="flex items-center gap-2 text-sm">
+              <Send className="size-4 text-muted-foreground" />
+              {t('jarvis.set.telegram')}
+            </span>
+            <Select
+              value={settings.telegram || 'important'}
+              onValueChange={(v) => set('telegram', v)}
+              options={(['important', 'all', 'off'] as const).map((v) => ({ value: v, label: t(`jarvis.set.telegram.${v}`) }))}
+              data-testid="jarvis-telegram"
+            />
+            <span className="text-xs text-muted-foreground">
+              {tg && !tg.chat ? (
+                <Link to="/settings/telegram" className="underline underline-offset-2" onClick={() => onOpenChange(false)}>
+                  {t('jarvis.set.telegramOff')}
+                </Link>
+              ) : (
+                t('jarvis.set.telegramHint')
+              )}
+            </span>
+          </label>
+          <label className="grid gap-1">
+            <span className="flex items-center gap-2 text-sm">
+              <Minimize2 className="size-4 text-muted-foreground" />
+              {t('jarvis.set.compact')}
+            </span>
+            <Select
+              value={String(settings.compact_tokens ?? 0)}
+              onValueChange={(v) => set('compact_tokens', Number(v))}
+              options={COMPACT_AT.map((n) => ({ value: String(n), label: n ? `${n / 1000}k` : t('jarvis.set.compactSame') }))}
+              data-testid="jarvis-compact"
+            />
+            <span className="text-xs text-muted-foreground">{t('jarvis.set.compactHint')}</span>
+          </label>
         </div>
-        <div className="grid gap-1">
-          <span className="text-sm">{t('jarvis.set.telegram')}</span>
-          <Select
-            value={settings.telegram || 'important'}
-            onValueChange={(v) => set('telegram', v)}
-            options={(['important', 'all', 'off'] as const).map((v) => ({ value: v, label: t(`jarvis.set.telegram.${v}`) }))}
-            className="h-8"
-            data-testid="jarvis-telegram"
-          />
-          <p className="text-xs text-muted-foreground">
-            {tg && !tg.chat ? (
-              <Link to="/settings/telegram" className="underline underline-offset-2">
-                {t('jarvis.set.telegramOff')}
-              </Link>
-            ) : (
-              t('jarvis.set.telegramHint')
-            )}
-          </p>
+
+        <div className="border-t px-2 py-2">
+          <ActionRow icon={MessageSquarePlus} label={t('jarvis.new')} hint={t('jarvis.new.hint')} disabled={renewing} onClick={run(onNew)} testId="jarvis-new" />
+          <ActionRow icon={Sun} label={t('jarvis.set.briefNow')} disabled={brief.isPending} onClick={run(() => brief.mutate())} />
+          <ActionRow icon={Moon} label={t('jarvis.set.dreamNow')} disabled={dream.isPending} onClick={run(() => dream.mutate())} />
         </div>
-        <p className="text-xs text-muted-foreground">{t('jarvis.set.cost')}</p>
-        <div className="flex flex-wrap gap-2 border-t pt-3">
-          <Tooltip content={t('jarvis.new.hint')}>
-            <Button variant="outline" size="sm" onClick={onNew} disabled={renewing} data-testid="jarvis-new">
-              <MessageSquarePlus />
-              {t('jarvis.new')}
-            </Button>
-          </Tooltip>
-          <Button variant="outline" size="sm" onClick={() => brief.mutate()} disabled={brief.isPending}>
-            <Sun />
-            {t('jarvis.set.briefNow')}
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => dream.mutate()} disabled={dream.isPending}>
-            <Moon />
-            {t('jarvis.set.dreamNow')}
-          </Button>
-        </div>
-      </PopoverContent>
-    </Popover>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function ToggleRow({ icon: Icon, label, hint, checked, onChange }: { icon: LucideIcon; label: string; hint: string; checked: boolean; onChange: (v: boolean) => void }) {
+  const id = React.useId()
+  return (
+    <label htmlFor={id} className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-muted">
+      <Icon className={cn('size-4 shrink-0', checked ? 'text-primary' : 'text-muted-foreground')} />
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm">{label}</span>
+        <span className="block text-xs text-muted-foreground">{hint}</span>
+      </span>
+      <Switch id={id} checked={checked} onCheckedChange={onChange} />
+    </label>
+  )
+}
+
+function ActionRow({ icon: Icon, label, hint, disabled, onClick, testId }: { icon: LucideIcon; label: string; hint?: string; disabled?: boolean; onClick: () => void; testId?: string }) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      data-testid={testId}
+      className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 pointer-coarse:py-2.5"
+    >
+      <Icon className="size-4 shrink-0 text-muted-foreground" />
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm">{label}</span>
+        {hint && <span className="block text-xs text-muted-foreground">{hint}</span>}
+      </span>
+    </button>
   )
 }
 

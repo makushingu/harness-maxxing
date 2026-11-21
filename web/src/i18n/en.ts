@@ -5070,5 +5070,6 @@ export const en = {
   'jarvis.set.telegram.off': "Nothing",
   'jarvis.set.telegramHint': "Reply to its message on Telegram to answer it.",
   'jarvis.set.telegramOff': "Telegram is not connected: Settings -> Telegram.",
+  'jarvis.board.hide': "Hide the Work list",
   'jarvis.set.cost': "What it costs: one turn per message, one per report that comes back, the brief and the night pass (Sonnet, skipped when nothing changed). A new conversation each day keeps each turn small.",
 }

@@ -2,8 +2,9 @@
 import * as React from 'react'
 import { useT } from '@/i18n'
 
-/** Right edge: drag to resize `side` between `min` and `max`, saved by `onWidth` (double-click: null = the default). */
-export function ResizeEdge({ side, min, max, onWidth }: { side: React.RefObject<HTMLElement | null>; min: number; max: number; onWidth: (w: number | null) => void }) {
+/** Right edge: drag to resize `side` between `min` and `max`, saved by `onWidth` (double-click: null = the default).
+ *  `edge="left"`: the handle sits on the left edge of a panel docked on the right (dragging left widens it). */
+export function ResizeEdge({ side, min, max, onWidth, edge = 'right' }: { side: React.RefObject<HTMLElement | null>; min: number; max: number; onWidth: (w: number | null) => void; edge?: 'left' | 'right' }) {
   const t = useT()
   return (
     <div
@@ -22,7 +23,7 @@ export function ResizeEdge({ side, min, max, onWidth }: { side: React.RefObject<
         const startW = el.getBoundingClientRect().width
         let w = startW
         const onMove = (ev: PointerEvent) => {
-          w = Math.max(min, Math.min(max, startW + ev.clientX - startX))
+          w = Math.max(min, Math.min(max, startW + (edge === 'left' ? startX - ev.clientX : ev.clientX - startX)))
           el.style.width = `${w}px`
         }
         const onUp = () => {
@@ -39,7 +40,7 @@ export function ResizeEdge({ side, min, max, onWidth }: { side: React.RefObject<
         target.addEventListener('pointerup', onUp)
         target.addEventListener('pointercancel', onUp)
       }}
-      className="absolute inset-y-0 -right-1 z-40 w-2 cursor-col-resize touch-none after:absolute after:inset-y-0 after:left-[3px] after:w-[3px] after:transition-colors hover:after:bg-primary/40 active:after:bg-primary/60"
+      className={`absolute inset-y-0 ${edge === 'left' ? '-left-1' : '-right-1'} z-40 w-2 cursor-col-resize touch-none after:absolute after:inset-y-0 after:left-[3px] after:w-[3px] after:transition-colors hover:after:bg-primary/40 active:after:bg-primary/60`}
     />
   )
 }

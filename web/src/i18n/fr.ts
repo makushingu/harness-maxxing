@@ -5052,5 +5052,6 @@ export const fr: Record<keyof typeof en, string> = {
   'jarvis.set.telegram.off': "Rien",
   'jarvis.set.telegramHint': "Répondez à son message sur Telegram pour lui répondre.",
   'jarvis.set.telegramOff': "Telegram n’est pas connecté : Réglages → Telegram.",
+  'jarvis.board.hide': "Masquer les travaux",
   'jarvis.set.cost': "Ce qu’il consomme : un tour par message, un par rapport qui revient, le brief et la passe de nuit (Sonnet, sautée quand rien n’a changé). Une nouvelle conversation par jour garde chaque tour léger.",
 }
