@@ -676,3 +676,22 @@ def test_restoring_a_project_with_a_session_title_that_cannot_be_written_does_no
     meta.write_text(json.dumps(data))                   # json.dumps escapes it: a lone surrogate once loaded
     r = client.post(f"/api/trash/{item['id']}/restore")
     assert r.status_code == 200, r.text
+
+
+def test_a_folder_named_like_a_companion_is_not_mixed_with_the_sessions_of_a_deleted_topic(client, topic, mx, monkeypatch):
+    from maxxing import workspace
+    monkeypatch.setattr(workspace.time, "strftime", lambda *a, **k: "20260101-000000")   # the same second
+    name = topic.rsplit("/", 1)[-1]
+    odd = mx["files"] / f"topic-{name}.sessions"
+    odd.mkdir()
+    (odd / "precious.txt").write_text("keep")
+    workspace.move_to_trash(odd)
+    sid = client.post("/api/sessions", json={"path": topic, "message": "NOTOOL hi"}).json()["id"]
+    wait_idle(client, sid)
+    workspace.delete_topic(topic.split("/")[1], name)
+    assert sorted(x.name for x in trash.trash_dir().joinpath(f"20260101-000000-topic-{name}.sessions").iterdir()) == ["precious.txt"]
+    for it in [i for i in _items(client) if i["name"].endswith(f"topic-{name}")]:
+        assert client.post(f"/api/trash/{it['id']}/restore").status_code == 200
+    kept = [i for i in _items(client) if i["name"].endswith(".sessions")]
+    assert kept, "the folder must still be in the trash"
+    assert (trash.trash_dir() / kept[0]["id"] / "precious.txt").read_text() == "keep"
