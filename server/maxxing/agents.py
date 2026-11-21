@@ -1148,8 +1148,11 @@ def list_agents(with_status: bool = False, counts: bool = True) -> list[dict]:
     from . import workspace
     by = _agent_metas() if counts or with_status else {}
     stats = _session_stats(by)
+    from . import jarvis
     out = []
     for p in workspace.project_names():
+        if jarvis.hides(f"projects/{p}"):              # Jarvis's backstage agent: shown with its "internals" setting
+            continue
         for t in workspace.topic_names(p):
             out.extend(list_in_topic(p, t, stats))
     if with_status:

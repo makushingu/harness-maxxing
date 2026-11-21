@@ -42,6 +42,16 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   Harness's commands, skills and docs are; skill `jarvis` § 4 = rules to create projects, topics and agents.
 - Jarvis page: Work panel hidden/shown (`mx.jarvis.workOpen`) and resized (`mx.jarvis.workWidth`, `ResizeEdge
   edge="left"`, new prop), settings in a `Dialog` (`JarvisSettingsDialog`) instead of a popover.
+- Jarvis's backstage agent `projects/jarvis/topics/main/agents/backstage` (`jarvis._ensure_agent`: made at `ensure`,
+  role from `templates/jarvis/agent/CLAUDE.md`, model = `dream_model`, `silent`, $3/day): the night pass is
+  `agents.fire(AGENT_PATH, prompt=DREAM_TEXT)`; the brief opens the new conversation, fires the agent with
+  `PREPARE_TEXT` and registers a board item `kind: brief` (hidden from `JarvisStatus.work` unless `internals`); its end
+  sends `[Morning brief]` + the prepared text into the conversation (source cron), else Jarvis makes it itself.
+  `agents.list_agents` leaves out Jarvis's project when it is hidden (`jarvis.hides`).
+- `jarvis._asks` ignores links, code and inline code, and reads the last two lines only. `jarvis.current_for`:
+  `telegram/gateway.bound` sends a reply to a past conversation of Jarvis to its current one; `rings` and
+  `finished_message` run off the gateway loop. TimeField saves 0.5 s after a complete time (and when the window
+  closes). Composer placeholder of Jarvis's page: `jarvis.placeholder`.
 
 ## 2.0.0-alpha.161 - 2026-11-21
 

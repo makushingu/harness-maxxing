@@ -558,6 +558,9 @@ def bound(chat: Any, mid: Any) -> dict | None:
     except (OSError, sqlite3.Error, ValueError):
         log.warning("telegram message map not read", exc_info=True)
         return None
+    if isinstance(v, dict) and v.get("sid"):
+        from .. import jarvis
+        v = {**v, "sid": jarvis.current_for(v["sid"])}   # a reply to Jarvis goes to its conversation of today
     return v if isinstance(v, dict) and (v.get("sid") or v.get("agent")) else None
 
 
@@ -2420,10 +2423,11 @@ class Gateway:
         if mirror_web() and uses_threads() and is_human(session) \
                 and not session.get("archived") and await self._mirror(session, result):
             return
-        if rings(session):
+        if await asyncio.to_thread(rings, session):    # Jarvis's reads its last answer from the log: off the loop
             chat = tg_config().get("chat_id")
             if chat:
-                await self.send_parts(chat, thread_of(sid), [finished_message(session)], bind={"sid": sid})
+                msg = await asyncio.to_thread(finished_message, session)
+                await self.send_parts(chat, thread_of(sid), [msg], bind={"sid": sid})
 
     async def _mirror(self, session: dict, result: dict | None) -> bool:
         """Copy a turn made in the web UI into the session's thread (reopened if it was deleted): the

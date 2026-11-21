@@ -5,7 +5,7 @@ description: "Jarvis's night pass: read what changed since the last pass (maxxin
 
 # Night pass: consolidate brain/
 
-Folder: this topic's `brain/` (noted `B/`). Read anywhere; **write only in `B/`**: no project memory, no tasks.json,
+Folder: Jarvis's `{{WORKSPACE}}/projects/jarvis/topics/main/brain/` (noted `B/`). Read anywhere; **write only in `B/`**: no project memory, no tasks.json,
 no session, agent or cron changes (propose them in the journal). Do not write to the owner (no `sessions send`).
 
 ## 1. Collect

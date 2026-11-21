@@ -354,6 +354,25 @@ function TimeField({ icon: Icon, label, value, onSave }: { icon: typeof Sun; lab
   const t = useT()
   const [v, setV] = React.useState(value)
   React.useEffect(() => setV(value), [value])
+  // saved as soon as the time is complete (a short pause), and when the window closes before that: never lost
+  const pending = React.useRef<string | null>(null)
+  const saveRef = React.useRef(onSave)
+  saveRef.current = onSave
+  React.useEffect(() => {
+    if (v === value || !/^\d\d:\d\d$/.test(v)) return
+    pending.current = v
+    const id = window.setTimeout(() => {
+      pending.current = null
+      saveRef.current(v)
+    }, 500)
+    return () => window.clearTimeout(id)
+  }, [v, value])
+  React.useEffect(
+    () => () => {
+      if (pending.current) saveRef.current(pending.current)
+    },
+    [],
+  )
   return (
     <label className="grid gap-1 text-xs text-muted-foreground">
       <span className="flex items-center gap-1">
@@ -361,7 +380,7 @@ function TimeField({ icon: Icon, label, value, onSave }: { icon: typeof Sun; lab
         {label}
       </span>
       <div className="flex items-center gap-1">
-        <Input type="time" value={v} onChange={(e) => setV(e.target.value)} onBlur={() => v !== value && onSave(v)} className="h-8" />
+        <Input type="time" value={v} onChange={(e) => setV(e.target.value)} className="h-8" />
         {v && (
           <Tooltip content={t('jarvis.set.none')}>
             <Button variant="ghost" size="icon-sm" aria-label={t('jarvis.set.none')} onClick={() => onSave('')}>

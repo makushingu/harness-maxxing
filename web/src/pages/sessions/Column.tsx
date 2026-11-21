@@ -863,7 +863,7 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
             draftKey={sid}
             commands={commands}
             mentionsFor={sid}
-            placeholder={session?.plan_mode ? t(session.plan_ready ? 'plan.placeholderAdjust' : 'plan.placeholder') : undefined}
+            placeholder={session?.plan_mode ? t(session.plan_ready ? 'plan.placeholderAdjust' : 'plan.placeholder') : own ? t('jarvis.placeholder') : undefined}
             notice={session?.plan_ready && !running ? <PlanNotice session={session} onAdjust={() => composer.current?.focus()} /> : null}
             topicPath={path}
             running={running}

@@ -5054,7 +5054,7 @@ export const en = {
   'jarvis.set.daily': "New conversation each morning",
   'jarvis.set.dailyHint': "The brief opens it; off: one long conversation.",
   'jarvis.set.internals': "Show internals",
-  'jarvis.set.internalsHint': "Its project, conversations and night passes in Sessions and the tree.",
+  'jarvis.set.internalsHint': "Its project and past conversations in Sessions and the tree, its backstage agent (brief and night pass) in Agents.",
   'jarvis.set.brief': "Morning brief",
   'jarvis.set.dream': "Night pass",
   'jarvis.set.none': "None",
@@ -5071,5 +5071,6 @@ export const en = {
   'jarvis.set.telegramHint': "Reply to its message on Telegram to answer it.",
   'jarvis.set.telegramOff': "Telegram is not connected: Settings -> Telegram.",
   'jarvis.board.hide': "Hide the Work list",
+  'jarvis.placeholder': "Message Jarvis…",
   'jarvis.set.cost': "What it costs: one turn per message, one per report that comes back, the brief and the night pass (Sonnet, skipped when nothing changed). A new conversation each day keeps each turn small.",
 }

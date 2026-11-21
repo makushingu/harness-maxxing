@@ -5036,7 +5036,7 @@ export const fr: Record<keyof typeof en, string> = {
   'jarvis.set.daily': "Nouvelle conversation chaque matin",
   'jarvis.set.dailyHint': "Le brief l’ouvre ; désactivé : une seule longue conversation.",
   'jarvis.set.internals': "Afficher les coulisses",
-  'jarvis.set.internalsHint': "Son projet, ses conversations et ses passes de nuit dans Sessions et l’arbre.",
+  'jarvis.set.internalsHint': "Son projet et ses anciennes conversations dans Sessions et l’arbre, son agent des coulisses (brief et passe de nuit) dans Agents.",
   'jarvis.set.brief': "Brief du matin",
   'jarvis.set.dream': "Passe de nuit",
   'jarvis.set.none': "Aucun",
@@ -5053,5 +5053,6 @@ export const fr: Record<keyof typeof en, string> = {
   'jarvis.set.telegramHint': "Répondez à son message sur Telegram pour lui répondre.",
   'jarvis.set.telegramOff': "Telegram n’est pas connecté : Réglages → Telegram.",
   'jarvis.board.hide': "Masquer les travaux",
+  'jarvis.placeholder': "Écrire à Jarvis…",
   'jarvis.set.cost': "Ce qu’il consomme : un tour par message, un par rapport qui revient, le brief et la passe de nuit (Sonnet, sautée quand rien n’a changé). Une nouvelle conversation par jour garde chaque tour léger.",
 }

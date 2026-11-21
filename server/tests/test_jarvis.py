@@ -142,16 +142,46 @@ def test_tick_starts_the_brief_in_a_new_conversation(client):
     jarvis._write_state(st)
     assert jarvis.tick(now) == "brief"
     st = client.get("/api/jarvis").json()
-    assert st["session"]["id"] != first and st["last_brief"]
+    conv = st["session"]["id"]
+    assert conv != first and st["last_brief"]
+    assert all(w.get("kind") != "brief" for w in st["work"])          # its preparation is backstage
     assert jarvis.tick(now) == ""
+    # the backstage agent prepares it, then it comes into the new conversation as a [Morning brief] message
+    assert wait_for(lambda: client.get(f"/api/sessions/{conv}").json()["turns"] >= 1, timeout=30)
+    from maxxing.sessions import service
+    assert (service.last_user_message(conv) or {}).get("text", "").startswith("[Morning brief]")
+    assert all(i.get("state") == "closed" for i in jarvis.work() if i.get("kind") == "brief")
 
 
-def test_dream_is_a_separate_session(client):
+def test_dream_is_a_run_of_its_backstage_agent(client):
     _on(client)
     jsid = client.post("/api/jarvis/open").json()["session"]["id"]
     s = client.post("/api/jarvis/dream").json()["session"]
-    assert s["id"] != jsid and s["path"] == jarvis.PATH
+    assert s["id"] != jsid and s["path"] == jarvis.AGENT_PATH
     assert client.get("/api/jarvis").json()["session"]["id"] == jsid
+    client.put("/api/settings", json={"agents_page": True})
+    names = lambda: [a["path"] for a in client.get("/api/agents").json()["agents"]]   # noqa: E731
+    assert jarvis.AGENT_PATH not in names()                           # backstage: hidden from Agents
+    client.put("/api/jarvis/settings", json={"internals": True, "dream_model": "haiku"})
+    assert jarvis.AGENT_PATH in names()
+    from maxxing import agents
+    assert agents.load(jarvis.AGENT_PATH)["model"] == "haiku" and agents.load(jarvis.AGENT_PATH)["silent"]
+
+
+def test_asks_ignores_links_and_code():
+    assert jarvis._asks("Shall I publish it?") and not jarvis._asks("Done: https://x.io/a?id=3")
+    assert not jarvis._asks("Ran `ls?`.\n```\nwhy?\n```") and not jarvis._asks("Ok?\nline 2\nline 3")
+
+
+def test_a_telegram_reply_to_an_old_conversation_goes_to_today_s(client):
+    _on(client)
+    old = client.post("/api/jarvis/open").json()["session"]["id"]
+    new = client.post("/api/jarvis/new").json()["session"]
+    new = new["id"] if new else jarvis.current_session()
+    if new == old:
+        jarvis.conversation("hello")
+        new = jarvis.current_session()
+    assert jarvis.current_for(old) == new and jarvis.current_for("other") == "other"
 
 
 def test_digest_lists_what_changed(client, topic, mx):

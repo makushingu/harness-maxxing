@@ -1097,8 +1097,8 @@ session of the hidden topic `projects/jarvis/topics/main` (server `jarvis.py`). 
 | POST | `/api/jarvis/new` | | a new conversation (the old one is kept in `conversations`) -> `JarvisStatus` |
 | PUT | `/api/jarvis/settings` | any of `model`, `root`, `ask_first`, `internals`, `daily` (bool), `brief`, `dream` (`HH:MM` or ""), `compact_tokens` (0 = as every session, 100000, 150000, 200000, 300000), `telegram` (`off`, `important`: brief, questions and failures, `all`) | `JarvisStatus` (400 `bad_time`, `bad_compact`, `bad_telegram`) |
 | POST | `/api/jarvis/work/{ref}/close` | | `ref` = the entry's number or its session id -> `JarvisStatus` |
-| POST | `/api/jarvis/brief` | | the morning brief now -> `JarvisStatus` |
-| POST | `/api/jarvis/dream` | | the night pass now: `{session}` (a separate session) |
+| POST | `/api/jarvis/brief` | | the morning brief now (a new conversation with `daily`; its backstage agent prepares it, then it comes in as a `[Morning brief]` message) -> `JarvisStatus` |
+| POST | `/api/jarvis/dream` | | the night pass now: `{session}` (a run of its backstage agent `<path>/agents/backstage`; 409 `agent` when it cannot start) |
 
 `JarvisStatus` = `{on, path, session: Session | null, settings, last_brief, last_dream, work: JarvisWork[] (newest
 first, 100), open, asks, conversations: [{id, title, updated, state, current}]}`. `JarvisWork` = `{id, session, path,

@@ -32,7 +32,10 @@ session yourself, its answers are not reported (you read them there).
   With **New conversation each morning** (on by default), each day starts a new conversation with the brief.
 - **Night pass** (03:30 by default): Jarvis reads what changed in your projects, sessions, tasks and notifications
   and rewrites its own memory, so the next conversation knows where everything is. It changes nothing else.
-Both times are in Jarvis's settings (gear icon); **Brief now** and **Night pass now** run them at once.
+Both are done by Jarvis's **backstage agent** (on Sonnet): it does the reading, and the brief it prepares comes into
+the conversation, where Jarvis gives it to you. It is hidden like the rest of Jarvis's internals: **Show internals**
+shows it on the Agents page with its runs and their cost. Both times are in Jarvis's settings (gear icon); **Brief
+now** and **Night pass now** run them at once.
 
 ## What it costs
 Jarvis uses your Claude plan like any session, a bit more: one turn per message you send, one per answer that comes
