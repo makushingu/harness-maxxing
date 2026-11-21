@@ -59,6 +59,8 @@ export const GROUPS = {
   cpuwho: ['cpuwho'],
   // the hands-free voice mode of a session (features/voice/VoiceCall.tsx, its card in Settings -> Voice): on its first text asked
   vmode: ['vmode'],
+  // the plain-language titles of tool calls in a thread (pages/sessions/toolLabel.ts): with the Sessions page
+  tlabel: ['tl'],
 } as const satisfies Record<string, readonly string[]>
 
 export type Group = keyof typeof GROUPS

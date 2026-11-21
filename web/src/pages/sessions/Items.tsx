@@ -2,7 +2,7 @@
 // when the log grows, see log.ts), so appending events only renders the new rows.
 import * as React from 'react'
 import { Link } from 'react-router'
-import { AlertTriangle, Brain, Check, ChevronRight, CircleAlert, Copy, FileText, GripVertical, History, Info, MessageSquarePlus, Mic, Paperclip, Pause, Pencil, Play, ScrollText, Trash2, X } from 'lucide-react'
+import { AlertTriangle, Brain, FolderSearch, Check, ChevronRight, CircleAlert, Copy, FileText, GripVertical, History, Info, MessageSquarePlus, Mic, Paperclip, Pause, Pencil, Play, ScrollText, Trash2, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useT, useLang } from '@/i18n'
 import { fmtDate, fmtNumber } from '@/lib/format'
@@ -24,6 +24,7 @@ import { CutCard } from './Cut'
 import { useRevert } from '@/features/code/useRevert'
 import { SendToDialog, SendToSub, type SendTarget } from '@/features/team/SendTo'
 import { gripRef } from './contentDrag'
+import { toolKind, toolLabel } from './toolLabel'
 import { authServerOf, McpAuthButton } from '@/features/mcp/AuthButton'
 import { audioPaths, baseName, diffStats, FILE_HREF, fileHrefPath, fmtCost, fmtMs, fmtTokens, isAudio, isImage, isVideo, lineDiff, linkifyMarkdown, mediaPaths, modelLabel, scopeOf, quotedFile, relPath, relPaths, splitQuotes, toolIcon, type DiffLine } from './util'
 
@@ -682,6 +683,10 @@ function ToolCard({ item, live }: { item: Extract<Item, { kind: 'tool' }>; live:
   // Full one-line description (server summaries are cut at 120 chars: rebuild file ones from the input).
   const full = file && FILE_TOOLS.has(use.name) ? file : use.summary.startsWith(use.name) ? use.summary.slice(use.name.length).replace(/^[:\s]+/, '') : use.summary
   const summary = file && FILE_TOOLS.has(use.name) ? relPath(file, bases) : relPaths(full, bases)
+  // A plain-language title ("Runs the tests") and what it runs after it; '' = a tool it does not know (name + summary).
+  const label = toolLabel(use.name, input, t, (p) => relPath(p, bases))
+  const detail = label.title && label.detail ? (file && FILE_TOOLS.has(use.name) ? label.detail : relPaths(label.detail, bases)) : ''
+  const detailFull = use.name === 'Bash' ? (typeof input.command === 'string' ? input.command : '') : file && FILE_TOOLS.has(use.name) ? file : label.detail
   return (
     <div ref={root} className={cn('min-w-0 overflow-hidden rounded-lg border bg-card text-[13px]', err && 'border-destructive/40')}>
       <button
@@ -691,12 +696,32 @@ function ToolCard({ item, live }: { item: Extract<Item, { kind: 'tool' }>; live:
         className="flex h-8 w-full min-w-0 items-center gap-2 px-2.5 text-left hover:bg-muted focus-visible:bg-accent focus-visible:outline-none max-md:h-10"
       >
         <Icon className={cn('size-3.5 shrink-0', err ? 'text-destructive' : 'text-muted-foreground')} />
-        <span className="shrink-0 font-medium">{name}</span>
-        <Tooltip content={summary !== full ? <Sensitive length={20}><span className="max-w-[min(80vw,640px)] font-mono break-all">{full}</span></Sensitive> : null}>
-          <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-muted-foreground">
-            <Sensitive length={14}>{summary}</Sensitive>
-          </span>
-        </Tooltip>
+        {label.title ? (
+          <>
+            <span className="max-w-[75%] shrink-0 truncate font-medium">
+              <Sensitive length={14}>{label.title}</Sensitive>
+            </span>
+            {label.danger && (
+              <span className="inline-flex shrink-0 items-center gap-1 rounded bg-destructive/10 px-1.5 text-[11px] font-medium text-destructive">
+                <AlertTriangle className="size-3" /> {t('tl.danger')}
+              </span>
+            )}
+            <Tooltip content={detail && detailFull ? <Sensitive length={20}><span className="max-w-[min(80vw,640px)] font-mono break-all whitespace-pre-wrap">{detailFull}</span></Sensitive> : null}>
+              <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-muted-foreground/80">
+                <Sensitive length={14}>{detail}</Sensitive>
+              </span>
+            </Tooltip>
+          </>
+        ) : (
+          <>
+            <span className="shrink-0 font-medium">{name}</span>
+            <Tooltip content={summary !== full ? <Sensitive length={20}><span className="max-w-[min(80vw,640px)] font-mono break-all">{full}</span></Sensitive> : null}>
+              <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-muted-foreground">
+                <Sensitive length={14}>{summary}</Sensitive>
+              </span>
+            </Tooltip>
+          </>
+        )}
         {stats && (stats.add > 0 || stats.del > 0) && (
           <span className="shrink-0 font-mono text-[11px] tabular-nums">
             <span className="text-success">+{stats.add}</span> <span className="text-destructive">−{stats.del}</span>
@@ -720,6 +745,57 @@ function ToolCard({ item, live }: { item: Extract<Item, { kind: 'tool' }>; live:
               <p className="text-xs text-muted-foreground">{pendingNow ? t('sessions.tool.running') : t('sessions.tool.noResult')}</p>
             )}
           </Sensitive>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** Read-only calls in a row (reads, searches, listings) worth one line: at least GROUP_MIN of them, none running a
+ *  sub-agent or a background command. */
+export const GROUP_MIN = 3
+export function groupable(it: Item): boolean {
+  if (it.kind !== 'tool' || isShownTask(it.task)) return false
+  const input = (it.use.input && typeof it.use.input === 'object' ? it.use.input : {}) as Record<string, unknown>
+  return toolKind(it.use.name, input) !== 'other'
+}
+
+/** "Explored 4 files · 2 searches": the read-only calls of a row as one line, their cards inside. */
+export function ToolGroup({ items, live }: { items: Extract<Item, { kind: 'tool' }>[]; live: boolean[] }) {
+  const t = useT()
+  const [open, setOpen] = React.useState(false)
+  const n = { read: 0, search: 0, list: 0 }
+  let pending = false
+  let failed = false
+  items.forEach((it, i) => {
+    const input = (it.use.input && typeof it.use.input === 'object' ? it.use.input : {}) as Record<string, unknown>
+    const k = toolKind(it.use.name, input)
+    if (k !== 'other') n[k]++
+    if (live[i]) pending = true
+    if (it.result?.is_error) failed = true
+  })
+  const parts = [n.read && t('tl.group.files', { count: n.read }), n.search && t('tl.group.searches', { count: n.search }), n.list && t('tl.group.lists', { count: n.list })].filter(Boolean)
+  return (
+    <div className="min-w-0 overflow-hidden rounded-lg border bg-card text-[13px]">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="flex h-8 w-full min-w-0 items-center gap-2 px-2.5 text-left hover:bg-muted focus-visible:bg-accent focus-visible:outline-none max-md:h-10"
+      >
+        <FolderSearch className="size-3.5 shrink-0 text-muted-foreground" />
+        <span className="shrink-0 font-medium">{pending ? t('tl.group.exploring') : t('tl.group.explored')}</span>
+        <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">{parts.join(' · ')}</span>
+        <span className="flex size-4 shrink-0 items-center justify-center">
+          {pending ? <Spinner className="size-3.5" /> : failed ? <CircleAlert className="size-3.5 text-muted-foreground" /> : <Check className="size-3.5 text-success" />}
+        </span>
+        <ChevronRight className={cn('size-3.5 shrink-0 text-muted-foreground transition-transform', open && 'rotate-90')} />
+      </button>
+      {open && (
+        <div className="grid gap-1.5 border-t bg-sunken p-1.5">
+          {items.map((it, i) => (
+            <ToolCard key={it.key} item={it} live={live[i]} />
+          ))}
         </div>
       )}
     </div>

@@ -13,13 +13,14 @@ import { errorMessage } from '@/lib/api'
 import { hideMessage } from '@/lib/queries'
 import { reducedMotion } from '@/lib/presence'
 import type { SentItem, Session } from '@/lib/types'
-import { ItemRow, UserMessage } from './Items'
+import { groupable, GROUP_MIN, ItemRow, ToolGroup, UserMessage } from './Items'
 import { onThreadDragEnd, onThreadDragStart } from './contentDrag'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
 import { endingCut, setHiddenLocal, turnKeys, unanswered, withoutHidden, type Item, type LogState } from './log'
 import { runningTasks, TasksRunning } from './Tasks'
 import type { Pending, Seed } from './store'
-import { fmtElapsed } from './util'
+import { baseName, fmtElapsed } from './util'
+import { toolLabel } from './toolLabel'
 
 const PAGE = 120
 /** A freshly opened thread first renders only its last rows (they fill the screen), then grows to PAGE rows by
@@ -300,6 +301,9 @@ export const Thread = React.forwardRef<ThreadHandle, {
   forkRef.current = onFork
   const onForkItem = React.useCallback((seed: Seed) => forkRef.current?.(seed), [])
   const turnStart = React.useMemo(() => lastTurnStart(items), [items])
+  // Read-only calls in a row (reads, searches, listings) become one line ("Explored 4 files · 2 searches").
+  const rows = React.useMemo(() => groupRows(visible), [visible])
+  const isLive = (it: Item, i: number) => running && it.kind === 'tool' && !it.result && from + i > turnStart
 
   return (
     <div className="relative min-h-0 flex-1">
@@ -333,8 +337,17 @@ export const Thread = React.forwardRef<ThreadHandle, {
                 </div>
               )}
               {items.length === 0 && optimistic.length === 0 && !running && (empty ?? <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">{t('sessions.emptyThread')}</div>)}
-              {visible.map((it, i) => {
-                const anim = rowAnim(it.key, visible.length - 1 - i)
+              {rows.map((row, r) => {
+                const anim = rowAnim(row.key, rows.length - 1 - r)
+                if (row.group)
+                  return (
+                    <div key={row.key} style={anim.style} className={anim.className}>
+                      <ErrorBoundary>
+                        <ToolGroup items={row.group as Extract<Item, { kind: 'tool' }>[]} live={row.group.map((it, k) => isLive(it, row.i0 + k))} />
+                      </ErrorBoundary>
+                    </div>
+                  )
+                const { it, i } = row
                 return (
                   <div
                     key={it.key}
@@ -342,7 +355,7 @@ export const Thread = React.forwardRef<ThreadHandle, {
                     className={cn(anim.className, leaving.has(it.key) && 'pointer-events-none translate-x-4 opacity-0 transition-[opacity,transform] duration-150 ease-in')}
                   >
                     <ErrorBoundary>
-                      <ItemRow item={it} live={running && it.kind === 'tool' && !it.result && from + i > turnStart} last={it.key === cutKey} onHide={hideable.has(it.key) ? onHide : undefined} onEdit={onEdit && onEditItem} onFork={onFork && onForkItem} />
+                      <ItemRow item={it} live={isLive(it, i)} last={it.key === cutKey} onHide={hideable.has(it.key) ? onHide : undefined} onEdit={onEdit && onEditItem} onFork={onFork && onForkItem} />
                     </ErrorBoundary>
                   </div>
                 )
@@ -376,6 +389,26 @@ export const Thread = React.forwardRef<ThreadHandle, {
   )
 })
 
+type Row = { key: string; group: Item[]; i0: number; it?: undefined; i?: undefined } | { key: string; group?: undefined; it: Item; i: number }
+
+/** The rows of the thread: an item each, except read-only tool calls in a row (GROUP_MIN or more), kept together under
+ *  the key of the first one (the group grows as calls come, its row stays). */
+function groupRows(visible: Item[]): Row[] {
+  const rows: Row[] = []
+  for (let i = 0; i < visible.length; ) {
+    let j = i
+    while (j < visible.length && groupable(visible[j])) j++
+    if (j - i >= GROUP_MIN) {
+      rows.push({ key: visible[i].key, group: visible.slice(i, j), i0: i })
+      i = j
+    } else {
+      rows.push({ key: visible[i].key, it: visible[i], i })
+      i++
+    }
+  }
+  return rows
+}
+
 /** Index of the last user/result row: only tool calls after it can still be running. */
 function lastTurnStart(items: Item[]): number {
   for (let i = items.length - 1; i >= 0; i--) if (items[i].kind === 'result' || items[i].kind === 'user') return i
@@ -403,7 +436,12 @@ export function RunningRow({ session, log, tasks = true }: { session: Session; l
     const it = log.items[i]
     if (it.kind === 'user' || it.kind === 'result') break
     if (it.kind === 'tool') {
-      if (!it.result) [activity, pending] = [it.use.summary, it.use.id]
+      if (!it.result) {
+        // What Claude does now, in plain words ("Runs the tests", "Reads Items.tsx")
+        const l = toolLabel(it.use.name, (it.use.input && typeof it.use.input === 'object' ? it.use.input : {}) as Record<string, unknown>, t, baseName)
+        activity = l.title ? (l.detail && it.use.name !== 'Bash' ? `${l.title} ${l.detail}` : l.title) : it.use.summary
+        pending = it.use.id
+      }
       break
     }
   }
