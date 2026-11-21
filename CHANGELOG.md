@@ -25,6 +25,8 @@ Changed:
 - **The Home badge turns red when a notification is an error,** as the Sessions badge does for a failed session.
 
 Fixed:
+- **A click anywhere in the message box now puts the cursor in it.** Its margins and the empty part of its bar
+  used to leave the cursor outside, so what you typed went nowhere.
 - **A file still uploading no longer vanishes when you go to another session or page.** The upload goes on and
   the file is back in the message box when you return. Same in the message box of an agent or a group.
 - **After a compaction, Claude no longer answers its own summary.** A compacted session (automatic or **Compact
