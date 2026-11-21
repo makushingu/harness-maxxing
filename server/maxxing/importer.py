@@ -264,6 +264,11 @@ def _plan(zf: zipfile.ZipFile, scans: dict[str, list[str] | None]) -> dict[str, 
     for info, p in entries:
         parts = p.parts
         data_kind = "file"
+        name_b = info.filename.encode("utf-8", "replace")
+        if name_kinds := sorted({kind for kind, rx in backup.LEAKS if rx.search(name_b)}):
+            # a secret in the NAME of a file would be written to the disk, the report and the API answer
+            secrets_found.append({"file": "(name hidden: it holds a secret)", "kinds": name_kinds})
+            continue
         if parts[0] == "projects" and len(parts) >= 6 and parts[2] == "topics" and parts[4] == "agents":
             # an agent runs by itself (triggers, permissions): never planted by an import, created in Harness
             skipped.append({"file": info.filename, "reason": "agent folder (not imported: create agents in Harness)"})

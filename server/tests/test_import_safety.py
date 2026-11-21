@@ -245,3 +245,12 @@ def test_many_folders_with_the_same_slug_are_planned_in_linear_time():
         plan = importer._plan(zf, {})
     assert len(plan["projects"]) == 6000 and len({p["name"] for p in plan["projects"]}) == 6000
     assert time.monotonic() - t < 4          # was ~9 s (quadratic)
+
+
+def test_a_secret_in_a_file_name_is_not_imported_nor_shown(client, mx):
+    token = "ghp_" + "a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8"
+    r = _import(client, {"memory.md": "- ok\n", f"notes/{token}.md": "- hello\n"})
+    assert r.status_code == 200, r.text
+    assert token not in r.text and r.json()["secrets"]
+    assert not any(token in str(p) for p in mx["ws"].rglob("*"))
+    assert token not in (mx["ws"] / r.json()["report"]).read_text()
