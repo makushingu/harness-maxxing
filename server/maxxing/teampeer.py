@@ -71,6 +71,10 @@ def insecure() -> bool:
     return os.environ.get("MAXXING_TEAM_INSECURE") == "1" or bool(config.load_config().get("team_insecure"))
 
 
+_NAT64_LOCAL = ipaddress.ip_network("64:ff9b:1::/48")
+_NAT64 = ipaddress.ip_network("64:ff9b::/96")
+
+
 def _ip_kind(host: str) -> str:
     """public | tailscale | private for an IP or a host name (resolved)."""
     if host.endswith(".ts.net"):
@@ -85,6 +89,10 @@ def _ip_kind(host: str) -> str:
         except OSError:
             return "unknown"
     for ip in ips:
+        if ip.version == 6 and ip in _NAT64_LOCAL:            # local-use NAT64: any address behind it may be internal
+            return "private"
+        if ip.version == 6 and ip in _NAT64:                  # an IPv4 address in disguise: judge the one inside
+            ip = ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)
         if ip.version == 4 and ip in ipaddress.ip_network("100.64.0.0/10"):
             return "tailscale"
         if not ip.is_global:
