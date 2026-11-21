@@ -413,6 +413,12 @@ def test_a_result_with_a_lone_surrogate_is_still_written(client, topic):
     assert agents.thread(A)[-1]["text"] == "a ? b"
 
 
+def test_an_absurd_created_date_in_agent_json_is_replaced_by_now(mx):
+    for v in (1e300, -1e300, 10**40, 10**400, float("nan")):
+        assert 0 < agents.clean({"created": v})["created"] < 32503680000
+    assert agents.clean({"created": 1700000000})["created"] == 1700000000
+
+
 def test_events_waiting_for_a_busy_agent_keep_only_what_its_turn_reads(monkeypatch, mx):
     from maxxing import agents
     d = agents.Debouncer()

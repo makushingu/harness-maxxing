@@ -565,7 +565,8 @@ def clean(data: Any, strict: bool = False, own: str = "") -> dict:
             "browser": _clean_browser(d.get("browser"), strict),
             "devices": _clean_devices(d.get("devices"), strict),
             "limits": limits, "triggers": triggers,
-            "created": c if isinstance(c := d.get("created"), (int, float)) and math.isfinite(c) else time.time()}
+            "created": c if isinstance(c := d.get("created"), (int, float)) and 0 <= c < 32503680000
+                       else time.time()}   # a date a hand edit pushed out of any calendar is the current time
 
 
 def _clean_browser(raw: Any, strict: bool) -> dict:
