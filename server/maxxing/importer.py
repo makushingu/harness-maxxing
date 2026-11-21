@@ -18,6 +18,7 @@ or commands (`.claude/commands/`). A report is written in imports/<stamp>/IMPORT
 """
 from __future__ import annotations
 
+import contextlib
 import datetime as dt
 import lzma
 import re
@@ -454,14 +455,23 @@ def _apply(path: Path) -> dict[str, Any]:
                             pass
         except _UNREADABLE:
             raise _unreadable() from None
-        for pr in plan["projects"]:
-            if not (root / "projects" / pr["name"]).is_dir():
-                workspace.create_project(pr["name"])
-                created_projects.append(pr["name"])
-            for t in pr["topics"]:
-                if not (root / "projects" / pr["name"] / "topics" / t["name"]).is_dir():
-                    workspace.create_topic(pr["name"], t["name"])
-                    created_topics.append(f"{pr['name']}/{t['name']}")
+        try:
+            for pr in plan["projects"]:
+                if not (root / "projects" / pr["name"]).is_dir():
+                    workspace.create_project(pr["name"])
+                    created_projects.append(pr["name"])
+                for t in pr["topics"]:
+                    if not (root / "projects" / pr["name"] / "topics" / t["name"]).is_dir():
+                        workspace.create_topic(pr["name"], t["name"])
+                        created_topics.append(f"{pr['name']}/{t['name']}")
+        except Exception:                                    # a topic that cannot be made: no half-created project is left behind
+            for t in reversed(created_topics):
+                with contextlib.suppress(Exception):
+                    workspace.delete_topic(*t.split("/"))
+            for name in reversed(created_projects):
+                with contextlib.suppress(Exception):
+                    workspace.delete_project(name)
+            raise
         new_levels = {f"projects/{p}" for p in created_projects} | {
             f"projects/{t.split('/')[0]}/topics/{t.split('/')[1]}" for t in created_topics}
         for item in plan["_items"]:

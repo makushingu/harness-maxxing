@@ -51,6 +51,18 @@ def test_prompt(client):
     assert client.get("/api/import/prompt", params={"agent": "nope"}).json()["agent"] == "other"
 
 
+def test_a_topic_that_cannot_be_made_leaves_no_new_project(client, mx, monkeypatch):
+    from maxxing import workspace
+    p = _upload(client, _zip(EXPORT)).json()
+
+    def boom(project, name, description=""):
+        raise workspace.WorkspaceError(409, "exists", "no")
+    monkeypatch.setattr(workspace, "create_topic", boom)
+    assert client.post(f"/api/import/{p['id']}/apply").status_code == 409
+    assert not (mx["ws"] / "projects").exists() or not list((mx["ws"] / "projects").iterdir())
+    assert not (mx["ws"] / "projects/coffee-shop").exists()
+
+
 def test_preview_then_import_into_an_existing_workspace(client, mx):
     client.post("/api/workspace/projects", json={"name": "acme"})
     client.post("/api/workspace/projects/acme/topics", json={"name": "seo"})
