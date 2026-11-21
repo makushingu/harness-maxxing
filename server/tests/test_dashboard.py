@@ -394,3 +394,18 @@ def test_a_lone_surrogate_widget_id_is_dropped_from_the_layout(client, org, fake
     assert r.status_code == 200, r.text
     assert client.get("/api/dashboard").status_code == 200
     assert config.load_config()["dashboard"] == {"order": ["x"], "hidden": []}
+
+
+def test_usage_times_in_the_workspace_time_zone(client, org, monkeypatch):
+    # the server clock is often UTC: reset and retry times are shown on the workspace clock (Settings timezone)
+    import datetime as dt
+    from zoneinfo import ZoneInfo
+    from maxxing import widgets
+    config.update_config(timezone="Asia/Kathmandu")                  # UTC+5:45: no server runs on it
+    at = time.time() + 600
+    local = dt.datetime.fromtimestamp(at, ZoneInfo("Asia/Kathmandu"))
+    assert widgets._clock(at) == local.strftime("%H:%M")
+    today = dt.datetime.now(ZoneInfo("Asia/Kathmandu")).date()
+    assert widgets._reset(at) == local.strftime("%H:%M" if local.date() == today else "%d/%m %H:%M")
+    later = at + 3 * 86400
+    assert widgets._reset(later) == dt.datetime.fromtimestamp(later, ZoneInfo("Asia/Kathmandu")).strftime("%d/%m %H:%M")
