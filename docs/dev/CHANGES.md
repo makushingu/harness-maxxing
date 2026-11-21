@@ -5,7 +5,7 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
-## Unreleased
+## 2.0.0-alpha.160 - 2026-11-21
 
 - Tests: the bare-token fixture of `test_mcp_safety.py` is built by concatenation, so the leak scanners of the
   maintainers' push hooks no longer take it for a live key. `CHANGELOG.md`: one Fixed section in Unreleased.

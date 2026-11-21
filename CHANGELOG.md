@@ -3,7 +3,7 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
-## Unreleased
+## 2.0.0-alpha.160 - 2026-11-21
 
 New:
 - **Free up the video previews and thumbnails too.** Settings -> System -> Free up space has a new part, unticked
