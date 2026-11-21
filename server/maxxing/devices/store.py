@@ -299,7 +299,7 @@ def actions(limit: int = 30, device: str | None = None) -> list[dict]:
     out: list[dict] = []
     try:
         # split on "\n" only: str.splitlines() also cuts on U+2028 and friends, which JSON keeps inside a string
-        for ln in (home() / "actions.jsonl").read_text().split("\n"):
+        for ln in (home() / "actions.jsonl").read_text(errors="replace").split("\n"):
             try:
                 a = json.loads(ln)
             except (ValueError, RecursionError):

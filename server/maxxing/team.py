@@ -821,7 +821,10 @@ def _remote_message(frm_pid: str, raw: dict) -> dict:
         summ = raw.get("summary") if isinstance(raw.get("summary"), dict) else {}
         msg["summary"] = {"count": int(_finite(summ.get("count"), 0)) % 100000, "from": at, "to": at}
     files = []
-    for f in (raw.get("files") or [])[:FILES_MAX]:
+    raw_files = raw.get("files") or []
+    if not isinstance(raw_files, list):
+        raise ValueError("files must be a list")
+    for f in raw_files[:FILES_MAX]:
         if isinstance(f, dict) and f.get("id"):
             name = _safe_name(f.get("name"))
             size = max(int(_finite(f.get("size"), 0)), 0)
