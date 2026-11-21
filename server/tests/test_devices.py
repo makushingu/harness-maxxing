@@ -807,3 +807,15 @@ def test_a_device_ask_answered_with_a_lone_surrogate_note_stays_encodable(monkey
         assert done["note"] == "x?"
         await t
     asyncio.run(go())
+
+
+def test_a_huge_number_from_the_app_or_a_tool_is_refused_not_a_crash(dv):
+    from maxxing.devices import tools
+    with pytest.raises(tools.Refused):
+        tools._num({"x": 10 ** 400}, "x")
+    p = _pair(dv, os_name="windows", name="pc", caps=CAPS_PC)
+    with _ws(dv, p["token"]) as ws:
+        ws.send_json({"t": "hello", "v": "0.1.0", "os": "windows", "arch": "amd64", "name": "pc", "caps": CAPS_PC,
+                      "screen": {"w": 10 ** 400, "h": 1080, "scale": 1}})
+        ws.send_json({"t": "paused", "on": True})
+        wait_for(lambda: dv.get("/api/devices").json()["devices"][0]["paused"], 5)

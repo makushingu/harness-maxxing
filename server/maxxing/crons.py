@@ -785,7 +785,7 @@ def _all_runs() -> list[dict]:
             r = json.loads(line)
         except (ValueError, RecursionError):
             continue
-        if isinstance(r, dict):
+        if isinstance(r, dict) and isinstance(r.get("cron_id"), str):   # a list or dict id cannot key last_runs
             runs.append(r)
     with _runs_lock:
         _runs_cache = (ident, runs)

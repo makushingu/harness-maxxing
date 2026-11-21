@@ -1071,3 +1071,16 @@ def test_a_lone_surrogate_in_tools_folders_or_triggers_is_not_a_500(client, topi
     assert t["match"] == "a?" and t["prompt"] == "b?"
     with pytest.raises(agents.AgentError):
         agents.clean({"writable": ["a\ud800"]}, strict=True)
+
+
+def test_continue_in_sessions_keeps_the_pending_compaction_summary(client, topic):
+    from maxxing.sessions import store
+    _on(client)
+    _create(client)
+    run = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL hi"}).json()
+    sid = run["session"]["id"]
+    wait_idle(client, sid)
+    with store.edit(sid) as e:
+        e["seed"] = "SUMMARY OF THE EARLIER TURNS"
+    copy = client.post(f"/api/agents/acme/blog/writer/runs/{sid}/continue").json()["session"]
+    assert store.read(copy["id"])["seed"] == "SUMMARY OF THE EARLIER TURNS"

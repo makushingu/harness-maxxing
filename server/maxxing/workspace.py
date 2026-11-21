@@ -718,7 +718,8 @@ def move_to_trash(src: Path, label: str | None = None, kind: str | None = None) 
     # picked the same name and the second one replaced the first file in the trash (lost for good).
     while True:
         sidecar = dest.with_name(dest.name + ".json")
-        if not os.path.lexists(dest):
+        # the companions of a workspace delete (.sessions, .agents) share the name: none may be taken by another item
+        if not any(os.path.lexists(dest.with_name(dest.name + x)) for x in ("", ".sessions", ".agents")):
             try:
                 os.close(os.open(sidecar, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600))
                 break

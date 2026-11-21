@@ -869,3 +869,11 @@ def test_a_one_time_date_before_the_year_1000_keeps_four_digits(org):
     with pytest.raises(crons.CronError) as e:
         crons.create_job({"name": "x", "command": "true", "once_at": "0500-01-01T00:00"})
     assert e.value.code == "invalid_once"
+
+
+def test_a_run_line_with_an_unhashable_cron_id_does_not_break_the_job_list(org):
+    crons.append_run({"cron_id": "a", "at": 1})
+    with open(crons.runs_path(), "a", encoding="utf-8") as f:
+        f.write(json.dumps({"cron_id": [1], "at": 2}) + "\n" + json.dumps({"cron_id": {"x": 1}, "at": 3}) + "\n")
+    assert crons.last_runs()["a"]["at"] == 1
+    assert isinstance(crons.list_jobs(), list)

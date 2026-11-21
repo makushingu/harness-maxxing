@@ -104,3 +104,9 @@ def test_the_front_matter_survives_a_bom_comments_and_a_dashed_line():
     assert out == {"name": "h", "disable-model-invocation": "true", "description": "Hi there"}
     assert skills._front("---\nname: h\ndescription: a\n  ----\n  b\n---\n")["description"] == "a ---- b"
     assert skills._front("---\nname: h\n----\n---\n") == {"name": "h"}
+
+
+def test_a_hash_inside_a_block_scalar_description_is_kept():
+    text = "---\nname: x\ndescription: |\n  Use for C # and F # code\n  also # this\n---\nBody\n"
+    assert skills._front(text)["description"] == "Use for C # and F # code also # this"
+    assert skills._front("---\nname: x\ndescription: plain # comment\n---\n")["description"] == "plain"

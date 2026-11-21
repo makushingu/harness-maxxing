@@ -33,6 +33,9 @@ Fixed:
   extra turn is no longer paid.
 - **On a phone, the open sessions show as tabs in Zones mode too.** They were missing unless Tabs mode was on; a
   sideways swipe now goes from one to the next in both modes.
+Fixed:
+- **A file still uploading no longer vanishes when you go to another session or page.** The upload goes on and
+  the file is back in the message box when you return. Same in the message box of an agent or a group.
 
 ## 2.0.0-alpha.159 - 2026-11-19
 

@@ -491,3 +491,14 @@ def test_accepting_a_request_that_was_withdrawn_meanwhile_is_a_409_not_a_crash(m
     with pytest.raises(teampeer.PeerError) as e:
         teampeer.answer(MALLORY, True)
     assert e.value.status == 409 and MALLORY not in teampeer.peers()
+
+
+def test_a_nat64_address_is_judged_by_the_ipv4_address_inside(mx, monkeypatch):
+    monkeypatch.delenv("MAXXING_TEAM_INSECURE", raising=False)
+    assert teampeer._ip_kind("64:ff9b::7f00:1") == "private"          # 127.0.0.1
+    assert teampeer._ip_kind("64:ff9b::a00:1") == "private"           # 10.0.0.1
+    assert teampeer._ip_kind("64:ff9b:1::7f00:1") == "private"
+    assert teampeer._ip_kind("64:ff9b::101:101") == "public"          # 1.1.1.1
+    for bad in ("https://[64:ff9b::7f00:1]", "https://[64:ff9b:1::1]"):
+        with pytest.raises(teampeer.PeerError):
+            teampeer._check_target(bad)

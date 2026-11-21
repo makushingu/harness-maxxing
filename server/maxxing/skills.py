@@ -36,11 +36,12 @@ def _front(text: str) -> dict[str, str]:
         elif key and line[:1] in (" ", "\t"):
             out[key] = f"{out[key]} {line.strip()}".strip()
     for k, v in out.items():
-        v = re.sub(r"^[|>][-+]?", "", v).strip()                  # a block scalar header: | |- |+ > >- >+
+        block = bool(re.match(r"^[|>]", v))                       # a block scalar: a # inside it is text
+        v = re.sub(r"^[|>][-+]?", "", v).strip()                  # its header: | |- |+ > >- >+
         q = re.match(r"""^(['"])(.*?)\1(?:[ \t]+#.*)?$""", v)
-        if q:                                                     # quoted, maybe followed by a comment
+        if q and not block:                                       # quoted, maybe followed by a comment
             v = q.group(2)
-        else:
+        elif not block:
             v = re.split(r"[ \t]#", v, maxsplit=1)[0].strip()      # a trailing ` # comment`
         out[k] = " ".join(v.split())
     return out

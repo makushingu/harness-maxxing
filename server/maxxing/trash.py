@@ -419,6 +419,13 @@ def restore(item_id: str) -> dict[str, Any]:
         except (ValueError, OSError):                       # its crons, thread and state stay in the box
             log.exception("agents of %s not restored (state left in %s)", dest, box)
     p.with_name(p.name + ".json").unlink(missing_ok=True)   # last: what is left without it is purged as orphans
+    if sess.is_dir():                                       # conflicting copies stayed: a listed item, not an orphan
+        try:
+            config.write_json(sess.with_name(sess.name + ".json"),
+                              {"original": sess.name, "at": time.time(), "kind": "session",
+                               "title": "Sessions left after a restore", "path": ""})
+        except (OSError, ValueError):
+            log.exception("sessions left in %s", sess)
     if kind == "project":                                   # its agent groups get their conversations back
         try:
             from . import agent_rooms

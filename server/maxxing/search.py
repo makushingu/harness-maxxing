@@ -173,6 +173,11 @@ def _log_ident(p: Path) -> str:
         return ""
 
 
+def _clean(v) -> str:
+    """Text SQLite can store: a lone surrogate (valid in JSON, not in UTF-8) would stop the whole index pass."""
+    return str(v).encode("utf-8", "replace").decode("utf-8")
+
+
 def _stat_key(p: Path) -> tuple | None:
     try:
         st = p.stat()
@@ -198,7 +203,7 @@ def _index_sessions(con: sqlite3.Connection) -> None:
         if m is None or size < 0:                            # unreadable / no log: drop its rows
             alive.discard(key)
             continue
-        title, path = m.get("title") or "Untitled", m.get("path") or ""
+        title, path = _clean(m.get("title") or "Untitled"), _clean(m.get("path") or "")
         row = con.execute("SELECT sig FROM src WHERE key=?", (key,)).fetchone()
         sig = json.loads(row[0]) if row else None
         read_all = True
@@ -228,7 +233,7 @@ def _index_sessions(con: sqlite3.Connection) -> None:
                 # or the session would stop being indexed and re-read on every query.
                 sig["offset"] += _skip_line(p, sig["offset"] + len(chunk)) - sig["offset"]
             if end:
-                lines = chunk[:end].decode("utf-8", "replace").splitlines()
+                lines = chunk[:end].decode("utf-8", "replace").split("\n")
                 for ev in normalize.normalize_lines(lines):
                     if ev.get("type") in ("user", "assistant", "voice_text") and (ev.get("text") or "").strip():
                         con.execute(
@@ -292,7 +297,7 @@ def _index_groups(con: sqlite3.Connection) -> None:
                 fh.seek(sig["offset"])
                 chunk = fh.read(READ_CHUNK)
             end = chunk.rfind(b"\n") + 1                     # complete lines only
-            for line in chunk[:end].decode("utf-8", "replace").splitlines():
+            for line in chunk[:end].decode("utf-8", "replace").split("\n"):
                 try:
                     m = json.loads(line)
                 except ValueError:
