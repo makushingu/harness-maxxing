@@ -7,6 +7,11 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Docs: `docs/user/17-cli-reference.md` gets the sub-commands it lacked (`cron tick|deleted|restore`, `backup
+  held|release`, `custom list`, `agents set`, `topics list|new`, the `jarvis` section, `sessions --report-to`). New guard
+  `tests/test_cli_reference.py`: every top-level command and every argparse sub-command of each registered command
+  (`cli.COMMANDS`, built with its `configure`, since `main()` only configures the chosen one) must appear on a
+  reference line naming `maxxing <command>`.
 - Mail attachments in the file viewer: `POST /api/mail/{id}/attachments/view` (`imap.attachments_of`, one fetch)
   copies them to `<workspace>/mail/attachments/<id>/<folder hash>-<uid>/<index>/<name>` (rewritten at each view, dirs
   older than a day pruned; `409 outside` when the workspace is not under the files root: `MessageView` then opens /

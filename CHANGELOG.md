@@ -26,6 +26,9 @@ Added:
 Fixed:
 - **The "Harness has finished" notification now works on Android Chrome** when the app is open in the background (it
   was silently dropped: only the banner inside the app showed).
+- **The command line reference lists every command.** `maxxing cron tick`, `cron deleted`, `cron restore`,
+  `backup held`, `backup release`, `custom list`, `agents set`, `topics`, `jarvis` and `sessions --report-to` were
+  missing from it.
 
 Fixed:
 - **Usage reset times are on your clock.** The Claude usage card of the dashboard showed when the 5-hour and
