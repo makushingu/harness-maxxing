@@ -423,6 +423,24 @@ def hello(body: dict, ip: str) -> dict:
     """A's side: a server uses one of our invitations."""
     body = _scrub(body)  # type: ignore[assignment]
     me = own_address()
+    checked = False
+    while True:
+        out = _hello_locked(body, ip, me, checked)
+        if out is not None:
+            return out
+        # the invitation is valid: resolve the sender's address WITHOUT the global lock (a slow DNS answer must not
+        # stall every other peer), then run the whole check again
+        try:
+            _check_target(normalize(str(body["from"])))        # an address we could never answer (or refuse) is not stored
+        except PeerError:
+            with _lock:
+                _fails.setdefault(ip, []).append(time.time())
+            raise
+        checked = True
+
+
+def _hello_locked(body: dict, ip: str, me: str, checked: bool) -> dict | None:
+    """One pass of `hello` under the lock; None = the address of the sender still has to be checked."""
     with _lock:
         if _rate(_fails, ip, HELLO_FAILS, 3600):
             raise PeerError(429, "blocked", "Too many wrong invitations")
@@ -444,8 +462,8 @@ def hello(body: dict, ip: str) -> dict:
             # The key of a contact is never replaced through an invitation: whoever got the invitation could
             # otherwise speak as that contact (and cut the real one off). Remove the contact first.
             raise PeerError(409, "already_connected", "Already connected with this address: remove it first")
-        if not insecure():
-            _check_target(frm)                             # an address we could never answer (or refuse) is not stored
+        if not checked and not insecure():
+            return None
         doc["invites"].remove(found)
         key0 = _unb64(found["code"])
         nonce_a = _b64(secrets.token_bytes(16))

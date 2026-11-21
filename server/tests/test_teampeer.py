@@ -502,3 +502,33 @@ def test_a_nat64_address_is_judged_by_the_ipv4_address_inside(mx, monkeypatch):
     for bad in ("https://[64:ff9b::7f00:1]", "https://[64:ff9b:1::1]"):
         with pytest.raises(teampeer.PeerError):
             teampeer._check_target(bad)
+
+
+def test_a_slow_hello_address_does_not_hold_the_global_lock(client, monkeypatch):
+    import threading
+    _setup(monkeypatch)
+    inv = teampeer.create_invite()["invitation"]
+    code = teampeer._unb64(inv.rsplit("#", 1)[1])
+    me = "http://127.0.0.1:8801"
+    frm = "https://slow.example.com"
+    monkeypatch.delenv("MAXXING_TEAM_INSECURE")
+    monkeypatch.setattr(teampeer, "own_address", lambda: me)
+    entered, release = threading.Event(), threading.Event()
+
+    def slow(addr):                                              # a DNS answer that takes a long time
+        entered.set()
+        release.wait(5)
+        return addr
+    monkeypatch.setattr(teampeer, "_check_target", slow)
+    body = {"from": frm, "to": me, "nonce": "n1", "proof": teampeer._mac(code, "hello", frm, me, "n1"), "profile": {}}
+    t = threading.Thread(target=lambda: teampeer.hello(body, "9.9.9.9"))
+    t.start()
+    try:
+        assert entered.wait(3)
+        t0 = time.time()
+        with teampeer._lock:
+            pass
+        assert time.time() - t0 < 0.5
+    finally:
+        release.set()
+        t.join(5)
