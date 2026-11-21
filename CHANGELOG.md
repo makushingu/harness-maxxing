@@ -3,6 +3,13 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## Unreleased
+
+Fixed:
+- **Usage reset times are on your clock.** The Claude usage card of the dashboard showed when the 5-hour and
+  7-day windows reset (and the next reading) in the server's time, often UTC, instead of the time zone set in
+  Settings.
+
 ## 2.0.0-alpha.161 - 2026-11-21
 
 Changed:
