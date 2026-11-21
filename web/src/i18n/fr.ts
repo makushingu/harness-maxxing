@@ -5043,5 +5043,8 @@ export const fr: Record<keyof typeof en, string> = {
   'jarvis.set.briefNow': "Brief maintenant",
   'jarvis.set.dreamNow': "Passe de nuit maintenant",
   'features.need.jarvis': "Consomme plus de votre forfait Claude que des sessions seules : chaque réponse qui revient d’une session est un tour de Jarvis en plus, avec un brief le matin et une passe de nuit (Sonnet, sautée un jour calme). Coupez le brief ou la passe de nuit dans ses réglages pour dépenser moins.",
+  'jarvis.set.compact': "Résumer sa conversation à",
+  'jarvis.set.compactHint': "Plus bas = des tours moins chers. Ce qu’il doit garder vit dans ses notes, pas dans le fil.",
+  'jarvis.set.compactSame': "Comme toutes les sessions",
   'jarvis.set.cost': "Ce qu’il consomme : un tour par message, un par rapport qui revient, le brief et la passe de nuit (Sonnet, sautée quand rien n’a changé). Une nouvelle conversation par jour garde chaque tour léger.",
 }

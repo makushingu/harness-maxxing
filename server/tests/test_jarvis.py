@@ -219,3 +219,26 @@ def test_a_queued_agent_run_is_bound_when_it_ends(client, topic):
     jarvis.on_turn_end(s, {"ok": True})
     w = next(i for i in jarvis.work() if i["id"] == item["id"])
     assert w["session"] == s["id"] and w["state"] == "replied"
+
+
+def test_its_conversation_has_its_own_compaction(client):
+    cfg = {**config.load_config(), "auto_compact_tokens": 300000, "idle_compact_tokens": 200000,
+           "smart_resume_tokens": 100000, "jarvis": {}}
+    own = config.session_config(cfg, jarvis.PATH)
+    assert own["auto_compact_tokens"] == 150000 and own["idle_compact_tokens"] == 150000
+    assert own["smart_resume_tokens"] == 100000
+    assert config.session_config(cfg, "projects/acme/topics/blog") is cfg      # every other session: the server's
+    same = {**cfg, "jarvis": {"compact_tokens": 0}}
+    assert config.session_config(same, jarvis.PATH) is same
+    _on(client)
+    assert client.put("/api/jarvis/settings", json={"compact_tokens": 12345}).json()["error"] == "bad_compact"
+    assert client.put("/api/jarvis/settings", json={"compact_tokens": 100000}).json()["settings"]["compact_tokens"] == 100000
+    sid = client.post("/api/jarvis/open").json()["session"]["id"]
+    assert client.get(f"/api/sessions/{sid}").json()["compact_tokens"] == 100000
+
+
+def test_a_session_reporting_back_is_asked_for_a_short_answer():
+    from maxxing.sessions import runner
+    relayed = {"text": "do it", "relay": {"from": "abc", "title": "Jarvis", "path": jarvis.PATH, "hops": 1, "short": True}}
+    assert runner.build_prompt(relayed).endswith(runner.SHORT_ANSWER_NOTE)
+    assert runner.SHORT_ANSWER_NOTE not in runner.build_prompt({**relayed, "relay": {"from": "abc", "hops": 1}})

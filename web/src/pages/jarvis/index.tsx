@@ -10,7 +10,7 @@ import { useCloseJarvisWork, useJarvis, useJarvisBrief, useJarvisDream, useJarvi
 import type { JarvisSettings, JarvisWork } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { fmtRelative } from '@/lib/format'
-import { Button, EmptyState, Input, Popover, PopoverContent, PopoverTrigger, Skeleton, StatusDot, Switch, Tooltip } from '@/components/ui'
+import { Button, EmptyState, Input, Popover, PopoverContent, PopoverTrigger, Select, Skeleton, StatusDot, Switch, Tooltip } from '@/components/ui'
 import { PageHeader } from '@/components/shell/Page'
 import { SessionColumn } from '@/pages/sessions/Column'
 import type { Col } from '@/pages/sessions/store'
@@ -182,12 +182,15 @@ function WorkCard({ w }: { w: JarvisWork }) {
 }
 
 /* ---------------------------------------------------------------- its settings */
+/** Its compaction threshold (server jarvis.COMPACT_CHOICES; 0 = the server's, as every session). */
+const COMPACT_AT = [100_000, 150_000, 200_000, 300_000, 0]
+
 function SettingsMenu({ settings, onNew, renewing }: { settings: JarvisSettings; onNew: () => void; renewing: boolean }) {
   const t = useT()
   const save = useJarvisSettings()
   const brief = useJarvisBrief()
   const dream = useJarvisDream()
-  const set = (k: keyof JarvisSettings, v: boolean | string) => save.mutate({ [k]: v })
+  const set = (k: keyof JarvisSettings, v: boolean | string | number) => save.mutate({ [k]: v })
   const toggles: { k: 'root' | 'ask_first' | 'daily' | 'internals'; label: TKey; hint: TKey }[] = [
     { k: 'root', label: 'jarvis.set.root', hint: 'jarvis.set.rootHint' },
     { k: 'ask_first', label: 'jarvis.set.ask', hint: 'jarvis.set.askHint' },
@@ -219,6 +222,17 @@ function SettingsMenu({ settings, onNew, renewing }: { settings: JarvisSettings;
         <div className="grid grid-cols-2 gap-3">
           <TimeField icon={Sun} label={t('jarvis.set.brief')} value={settings.brief} onSave={(v) => set('brief', v)} />
           <TimeField icon={Moon} label={t('jarvis.set.dream')} value={settings.dream} onSave={(v) => set('dream', v)} />
+        </div>
+        <div className="grid gap-1">
+          <span className="text-sm">{t('jarvis.set.compact')}</span>
+          <Select
+            value={String(settings.compact_tokens ?? 0)}
+            onValueChange={(v) => set('compact_tokens', Number(v))}
+            options={COMPACT_AT.map((n) => ({ value: String(n), label: n ? `${n / 1000}k` : t('jarvis.set.compactSame') }))}
+            className="h-8"
+            data-testid="jarvis-compact"
+          />
+          <p className="text-xs text-muted-foreground">{t('jarvis.set.compactHint')}</p>
         </div>
         <p className="text-xs text-muted-foreground">{t('jarvis.set.cost')}</p>
         <div className="flex flex-wrap gap-2 border-t pt-3">

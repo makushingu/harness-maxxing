@@ -11,8 +11,9 @@ the same conversation. You never have to think about projects, topics, sessions 
 Turn it on in **Settings -> Features -> Jarvis**. It then sits at the top of the sidebar.
 
 ## The page
-- **The conversation**, on the left: talk to it like in any session (text, files, voice). It answers short and says
-  what it launched, with a link to the session: open it and type in it to take over at any time.
+- **The conversation**, on the left: talk to it like in any session (text, files, voice), without a session's title,
+  place or options: Jarvis is not one of your sessions. It answers short and says what it launched, with a link to
+  the session: open it and type in it to take over at any time.
 - **Work**, on the right (the list icon on a phone): everything Jarvis handed over. **Waiting for you** (the session
   asks a question), **In progress**, **Answered**. **Open** goes to the session, **Done** closes the entry.
 - **New conversation** (gear menu) starts again with an empty context, so its turns cost less; Jarvis keeps what
@@ -20,7 +21,8 @@ Turn it on in **Settings -> Features -> Jarvis**. It then sits at the top of the
   morning** this happens by itself every day.
 
 ## How the work comes back
-Each session Jarvis starts or writes to is on its work board. When one of its turns ends, its answer comes back into
+Each session Jarvis starts or writes to is on its work board, and is asked to end with a short report (anything
+long goes to a file it names). When one of its turns ends, its answer comes back into
 Jarvis's conversation by itself, and Jarvis tells you what matters and decides the next step. If you take over a
 session yourself, its answers are not reported (you read them there).
 
@@ -42,6 +44,9 @@ brief or night pass time in its settings.
 - **Ask me first** (on): before publishing, paying, deleting or writing to someone, it says what it will do and waits
   for your yes. Off: it acts and tells you after.
 - **New conversation each morning**: off = one long conversation (compacted when it gets long).
+- **Summarize its conversation at** (150k by default): past this context, its conversation is summarized and goes
+  on from the summary, like any session but sooner, so each turn stays cheap. **As every session** uses the
+  threshold of Settings -> Claude. The gauge next to the model shows how far it is.
 - **Show internals**: Jarvis lives in a project of its own (`jarvis`), hidden from the tree, the session lists and
   the search. Turn this on to see it, its past conversations and night passes.
 

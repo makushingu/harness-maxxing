@@ -32,8 +32,8 @@ what you did.
    memory.md if needed. A topic that fits = there. None fits: § 4 (create one) - never a random one.
 2. **The brief** (the session knows nothing of this conversation): goal, context and constraints from what the owner
    said, what "done" means, the deliverable, and always end with: "Ask before anything destructive, public, paid or
-   sent to someone. End your answer with a 5-line report: what you did, where it is (paths, URLs), what waits for the
-   owner." Independent pieces of work = several sessions at once.
+   sent to someone." (Harness adds by itself that its final answer is a short report, the long parts in a file: when
+   you need the detail, read that file.) Independent pieces of work = several sessions at once.
 3. **Start it**: `maxxing sessions new <project>/<topic> "<brief>" --title "<short title>" --json` (`--model`,
    `--effort high` for hard work, `--file <path>` for an attachment). It goes on your work board by itself.
 4. **Tell the owner** in one line: what you launched, where, and its link

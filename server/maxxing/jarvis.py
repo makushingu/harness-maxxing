@@ -29,7 +29,7 @@ log = logging.getLogger("maxxing.jarvis")
 
 PROJECT = "jarvis"
 TOPIC = "main"
-PATH = f"projects/{PROJECT}/topics/{TOPIC}"
+PATH = config.JARVIS_PATH                 # f"projects/{PROJECT}/topics/{TOPIC}"
 PREFIX = f"projects/{PROJECT}"
 MARK = "jarvis"                              # projects/jarvis/.maxxing.json {"system": "jarvis"}: made by Harness
 TEMPLATE = config.TEMPLATES_DIR / "jarvis"
@@ -43,7 +43,9 @@ DEFAULTS: dict[str, Any] = {
     "daily": True,            # a new conversation each morning (with the brief); False = one long conversation
     "brief": "08:00",         # local time of the morning brief ("" = none)
     "dream": "03:30",         # local time of the night pass ("" = none)
+    "compact_tokens": config.JARVIS_COMPACT,  # its conversation is summarized past this context (0 = as every session)
 }
+COMPACT_CHOICES = (0, 100000, 150000, 200000, 300000)
 WORK_MAX = 300                # board entries kept (the oldest closed ones go first)
 REPORT_CHARS = 3000           # of a session's answer, in the report Jarvis reads
 CONVERSATIONS_KEPT = 30       # past conversations listed
@@ -82,9 +84,18 @@ def settings() -> dict:
             out[k] = bool(v)
         elif k in ("brief", "dream"):
             out[k] = _clean_time(v)
+        elif isinstance(d, int):
+            out[k] = _clean_int(v, d)
         else:
             out[k] = str(v or "").strip()[:80]
     return out
+
+
+def _clean_int(v: Any, default: int) -> int:
+    try:
+        return max(0, min(2_000_000, int(v)))
+    except (TypeError, ValueError, OverflowError):
+        return default
 
 
 def save_settings(changes: dict) -> dict:
@@ -99,6 +110,10 @@ def save_settings(changes: dict) -> dict:
             cur[k] = t
         elif isinstance(DEFAULTS[k], bool):
             cur[k] = bool(v)
+        elif isinstance(DEFAULTS[k], int):
+            if _clean_int(v, -1) not in COMPACT_CHOICES:
+                raise JarvisError(400, "bad_compact", f"{k}: one of {', '.join(map(str, COMPACT_CHOICES))}")
+            cur[k] = _clean_int(v, -1)
         else:
             cur[k] = str(v).strip()[:80]
     config.update_config(jarvis=cur)

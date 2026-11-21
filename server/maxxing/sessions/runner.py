@@ -365,7 +365,7 @@ class Runner:
                 m.pop("turn_id", None)
                 m.pop("turn_refs", None)
                 return None
-            return self._take(m, q, config.load_config(), time.time())
+            return self._take(m, q, config.session_config(config.load_config(), m.get("path")), time.time())
 
     def _take(self, m: dict, q: list, cfg: dict, now: float) -> dict:
         """Pop the queue head (under the session lock), with the summary turn first when the return is worth it."""
@@ -427,7 +427,7 @@ class Runner:
         handed = self.keep_proc                        # the previous turn left its process to this item
         self.keep_proc = False                         # set again only when this turn hands its process over
         meta = store.read(self.sid) or {}
-        cfg = config.load_config()
+        cfg = config.session_config(config.load_config(), meta.get("path"))   # Jarvis: its own compaction
         kind = item.get("kind") or "user"
         voices = [v for v in item.get("voice") or [] if isinstance(v, dict) and v.get("path")]
         self.turn_at = time.time()                     # its message's time: on_turn_end finds this turn by it
@@ -514,6 +514,9 @@ class Runner:
         base = argv(mcp_plan)
         env = spawn.claude_env(meta.get("env") or {}, mode, agent.get("keys") if agent else None)
         env["MAXXING_SESSION"] = self.sid               # `maxxing mcp load` run by the turn finds its session
+        window = spawn.compact_window(cfg)              # the session's own threshold (Jarvis), else the server's
+        if window:
+            env["CLAUDE_CODE_AUTO_COMPACT_WINDOW"] = str(window)
         if copy:                                        # a separate copy: its folder and its own ports
             wt = meta["worktree"]
             env["MAXXING_COPY_PATH"] = str(wt.get("path") or "")
@@ -1191,6 +1194,8 @@ def build_prompt(item: dict) -> str:
         text = relay_preface(item["relay"]) + text
     if item.get("mentions"):
         text = text + "\n\n" + mentions_note(item["mentions"])
+    if (item.get("relay") or {}).get("short"):
+        text = text + "\n\n" + SHORT_ANSWER_NOTE
     return text
 
 
@@ -1199,6 +1204,13 @@ def _mentions_shown(item: dict) -> dict:
     keep = ("kind", "ref", "label", "group", "avatar")
     found = [{k: x[k] for k in keep if x.get(k) not in (None, "")} for x in item.get("mentions") or [] if isinstance(x, dict)]
     return {"mentions": found} if found else {}
+
+
+# A message whose answer goes back as a report (Jarvis's board, `--report-to`): another turn reads it, so the final
+# answer stays short and what is long goes to a file. Added after the message, not displayed.
+SHORT_ANSWER_NOTE = ("[Your final answer is read by an assistant, not shown to a person: at most 6 short lines - what "
+                     "you did, where it is (paths, URLs), what waits for a decision. No recap, no greeting. Anything "
+                     "long (results, lists, a report) goes to a file in this topic: give its path.]")
 
 
 def _relay_from(item: dict) -> dict:

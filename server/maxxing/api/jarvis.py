@@ -57,6 +57,7 @@ class SettingsIn(BaseModel):
     daily: Optional[bool] = None
     brief: Optional[str] = None
     dream: Optional[str] = None
+    compact_tokens: Optional[int] = None
 
 
 @router.put("/settings")

@@ -152,15 +152,16 @@ export function ModelPicker({
 /** The context left before the next compaction, next to the model picker of a composer. The threshold is the
  *  server's (runner._auto_compact): `auto_compact_tokens` raised to 100k, capped by the model's window
  *  (resume.fit: window - 70k, never under half of it). Automatic compaction off: the model's window.
+ *  `setting`: the session's own threshold when it has one (Session.compact_tokens: Jarvis's conversation).
  *  Two looks from the toolbar's width (`@container` of the composer bar): a bar + "75 % · 188k / 250k" with room,
  *  a ring + "75 %" without. */
-export function CompactGauge({ tokens, window: reported, model, realModel }: { tokens: number | null | undefined; window?: number | null; model?: string | null; realModel?: string | null }) {
+export function CompactGauge({ tokens, window: reported, model, realModel, setting }: { tokens: number | null | undefined; window?: number | null; model?: string | null; realModel?: string | null; setting?: number | null }) {
   const t = useT()
   const { data: claude } = useClaudeStatus()
   if (!tokens) return null
   const windows = Object.fromEntries((claude?.models || []).map((m) => [m.id, m.context_window]))
   const win = contextWindow(tokens, reported, { chosen: model || claude?.default_model || null, real: realModel, windows })
-  const at = compactAt(claude?.auto_compact_tokens, win)
+  const at = compactAt(setting ?? claude?.auto_compact_tokens, win) // `setting`: the session's own threshold (Jarvis)
   const max = at ?? win
   const pct = Math.round(Math.min(1, tokens / max) * 100)
   const tip = at

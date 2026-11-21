@@ -421,6 +421,31 @@ def int_setting(cfg: dict, name: str) -> int:
     return 0
 
 
+JARVIS_PATH = "projects/jarvis/topics/main"   # Jarvis's own topic (jarvis.PATH)
+JARVIS_COMPACT = 150000                     # its conversation's compaction threshold by default (jarvis.DEFAULTS)
+
+
+def session_config(cfg: dict, path: str | None) -> dict:
+    """The settings a session's turn runs with: Jarvis's conversation has its own compaction threshold (its
+    settings, `compact_tokens`: 0 = the same as every session). Its turns stay small: what it must keep lives in
+    its brain files, not in a long thread. The idle and smart-resume thresholds never go above it."""
+    if (path or "").strip("/") != JARVIS_PATH:
+        return cfg
+    raw = cfg.get("jarvis") if isinstance(cfg.get("jarvis"), dict) else {}
+    try:
+        n = int(raw.get("compact_tokens", JARVIS_COMPACT) or 0)
+    except (TypeError, ValueError, OverflowError):
+        n = JARVIS_COMPACT
+    if n <= 0:
+        return cfg
+    out = {**cfg, "auto_compact_tokens": n}
+    for k in ("idle_compact_tokens", "smart_resume_tokens"):
+        v = int_setting(cfg, k)
+        if v > 0:
+            out[k] = min(v, n)
+    return out
+
+
 def update_config(**changes: Any) -> dict:
     """Shallow-merge top-level keys (dict values are deep-merged) and save."""
     with _lock:

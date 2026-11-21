@@ -383,8 +383,8 @@ const TermDrawer = React.lazy(withGroups(['term'], () => import('@/features/term
 
 /** `agentRun`: a run of an agent shown on the Agents page - it stays where it is (no move, archive or delete: the
  *  agent manages its runs, archiving them by itself), and the archived banner is not shown.
- *  `own`: the conversation of a feature page (Jarvis): like an agent run, and its place is not shown at all (it lives
- *  in the feature's hidden folder, not in one of the owner's topics). */
+ *  `own`: the conversation of a feature page (Jarvis): like an agent run, and no session header at all - no title,
+ *  place, options or fork (it lives in the feature's hidden folder; the page has its own header and settings). */
 export function SessionColumn({ col, sid, variant, index, count, place, agentRun: runOfAgent, own }: { col: Col; sid: string; variant: ColumnVariant; index: number; count: number; place?: Place; agentRun?: boolean; own?: boolean }) {
   const agentRun = runOfAgent || own
   // Opened behind the session in front (another device of the user opened it, a link opened beside): the keyboard
@@ -754,7 +754,7 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
           composer.current?.addFiles(Array.from(e.dataTransfer.files))
         }}
       >
-        <ColumnHeader
+        {!own && <ColumnHeader
           col={col}
           variant={variant}
           session={session}
@@ -774,7 +774,7 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
           }
           contextMenu={optionsWindow}
           onRename={actions.rename}
-        />
+        />}
         {session?.archived && !agentRun && (
           <div className="flex items-center gap-2 border-b bg-muted px-4 py-1.5 text-xs text-muted-foreground">
             <Archive className="size-3.5" /> {t('sessions.archivedBanner')}
@@ -793,7 +793,7 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
             </div>
           ) : (
             <CutContext.Provider value={cut}>
-              <LiveThread ref={thread} sid={sid} session={session} pending={pending} onRetry={onRetry} onLoadEarlier={onLoadEarlier} onEdit={onEdit} onFork={path ? onFork : undefined} />
+              <LiveThread ref={thread} sid={sid} session={session} pending={pending} onRetry={onRetry} onLoadEarlier={onLoadEarlier} onEdit={onEdit} onFork={path && !own ? onFork : undefined} />
             </CutContext.Provider>
           )}
         </ItemContext.Provider>
@@ -913,7 +913,7 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
               session ? (
                 <>
                   <ModelPicker chosen={session.model} real={session.real_model} contextTokens={session.context_tokens} onChange={actions.model} effort={session.effort || ''} onEffort={actions.effort} />
-                  <CompactGauge tokens={session.context_tokens} window={session.context_window} model={session.model} realModel={session.real_model} />
+                  <CompactGauge tokens={session.context_tokens} window={session.context_window} model={session.model} realModel={session.real_model} setting={session.compact_tokens} />
                   {session.plan_mode && <PlanChip session={session} />}
                   <VoiceCall sid={sid} running={running} queueCount={session.queue || 0} onSend={(text, atts, call) => onSend(text, atts, undefined, undefined, call)} onStop={onStop} />
                 </>

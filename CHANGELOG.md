@@ -10,8 +10,8 @@ New:
   top of the sidebar. Say what you want; it picks or creates the right project and topic, hands the work to a session
   there, gets the answer back by itself when the session is done and tells you, in the same conversation. Its Work
   list shows what waits for you, what is in progress and what was answered; a morning brief opens each day, and a
-  night pass tidies its memory so it always knows where everything is. Full rights and "Ask me first" are in its
-  settings. [Show me](#show:jarvis)
+  night pass tidies its memory so it always knows where everything is. Full rights, "Ask me first" and its own compaction threshold
+  are in its settings. [Show me](#show:jarvis)
 
 ## 2.0.0-alpha.161 - 2026-11-21
 

@@ -106,6 +106,7 @@ Session = {
   plan_ready: bool,                   // a plan-mode turn finished OK: its plan waits for POST /plan/approve
   approvals: int,                     // tool calls waiting for the user's Allow / Deny (agent with `approvals`)
   device_asks: int,                   // ask_human requests on the person's devices waiting for them (Devices)
+  compact_tokens: int | null,         // its own compaction threshold (Jarvis's conversation: Jarvis settings), null = the server's
   code_repos: [str]                   // git repositories its turns changed (Changes view, terminal tabs), at most 8
 }
 ```
@@ -1094,7 +1095,7 @@ session of the hidden topic `projects/jarvis/topics/main` (server `jarvis.py`). 
 | GET | `/api/jarvis` | | `JarvisStatus` |
 | POST | `/api/jarvis/open` | | its conversation, made the first time (409 `off`; 409 `taken`: an owner's project named `jarvis`) -> `JarvisStatus` |
 | POST | `/api/jarvis/new` | | a new conversation (the old one is kept in `conversations`) -> `JarvisStatus` |
-| PUT | `/api/jarvis/settings` | any of `model`, `root`, `ask_first`, `internals`, `daily` (bool), `brief`, `dream` (`HH:MM` or "") | `JarvisStatus` (400 `bad_time`) |
+| PUT | `/api/jarvis/settings` | any of `model`, `root`, `ask_first`, `internals`, `daily` (bool), `brief`, `dream` (`HH:MM` or ""), `compact_tokens` (0 = as every session, 100000, 150000, 200000, 300000) | `JarvisStatus` (400 `bad_time`, `bad_compact`) |
 | POST | `/api/jarvis/work/{ref}/close` | | `ref` = the entry's number or its session id -> `JarvisStatus` |
 | POST | `/api/jarvis/brief` | | the morning brief now -> `JarvisStatus` |
 | POST | `/api/jarvis/dream` | | the night pass now: `{session}` (a separate session) |

@@ -25,7 +25,14 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   their local time. API `GET /api/jarvis`, `POST /open|/new|/brief|/dream|/work/{ref}/close`, `PUT /settings`; bus
   topic `jarvis`. New CLI `maxxing jarvis …` and `maxxing topics list|new`. The scheduled night pass runs on
   `dream_model` (default `sonnet`) and is skipped when no session, memory.md or tasks.json moved since the last mark
-  (`jarvis.quiet_since`). `SessionColumn own`: no place picker, archive, delete or terminal (Jarvis's page).
+  (`jarvis.quiet_since`). `SessionColumn own`: no session header (title, place, options window), no fork, archive,
+  delete or terminal (Jarvis's page).
+- Jarvis setting `compact_tokens` (default 150000; 0 = the server's; 100k/150k/200k/300k): `config.session_config(cfg,
+  path)` gives its conversation's turns their own `auto_compact_tokens` (idle and smart-resume thresholds capped by
+  it, `CLAUDE_CODE_AUTO_COMPACT_WINDOW` from it); `Session.compact_tokens` (null elsewhere) feeds the composer gauge.
+- `relay_message(..., short=True)` (`maxxing sessions new|send` that reports back): `relay.short` makes
+  `runner.build_prompt` append `SHORT_ANSWER_NOTE` (final answer of 6 lines at most, the long parts in a file; not
+  displayed). The skill `jarvis` no longer asks for the 5-line report itself.
 
 ## 2.0.0-alpha.161 - 2026-11-21
 

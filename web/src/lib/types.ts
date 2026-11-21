@@ -387,6 +387,8 @@ export type Session = {
   browser_exit?: BrowserWaiter | null
   /** `ask_human` requests on the person's devices waiting for them (GET /api/devices/session/<id>). */
   device_asks?: number
+  /** Its own compaction threshold (Jarvis's conversation), else null: the server's auto_compact_tokens. */
+  compact_tokens?: number | null
 }
 /** A session's separate copy (server: maxxing/worktrees.py). */
 export type SessionCopy = {
@@ -1729,6 +1731,8 @@ export interface JarvisSettings {
   daily: boolean
   brief: string
   dream: string
+  /** its conversation is summarized past this context; 0 = as every session */
+  compact_tokens: number
 }
 export interface JarvisStatus {
   on: boolean

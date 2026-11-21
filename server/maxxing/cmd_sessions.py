@@ -79,7 +79,8 @@ def _send(a) -> int:
         return 2
     try:
         report = _reporting(meta, a.report_to)
-        r = service.relay_message(a.to, " ".join(a.text).strip(), files, sender=sender, hops=turn["depth"] + 1)
+        r = service.relay_message(a.to, " ".join(a.text).strip(), files, sender=sender, hops=turn["depth"] + 1,
+                                  short=report[0])
         _register(meta, report, r["session"] or {}, " ".join(a.text).strip(), turn["depth"] + 1)
     except service.SessionError as e:
         print(e.message, file=sys.stderr)
@@ -161,7 +162,7 @@ def _new(a) -> int:
         if text or files:
             sender = {"id": meta.get("id") or "", "title": meta.get("title") or "",
                       "path": meta.get("path") or ""} if meta else None
-            s = service.relay_message(s["id"], text, files, sender=sender, hops=hops)["session"] or s
+            s = service.relay_message(s["id"], text, files, sender=sender, hops=hops, short=report[0])["session"] or s
     except service.SessionError as e:
         print(e.message, file=sys.stderr)
         return 1

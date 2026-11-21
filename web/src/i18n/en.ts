@@ -5061,5 +5061,8 @@ export const en = {
   'jarvis.set.briefNow': "Brief now",
   'jarvis.set.dreamNow': "Night pass now",
   'features.need.jarvis': "Uses more of your Claude plan than plain sessions: each answer that comes back from a session is one more Jarvis turn, plus a morning brief and a night pass (Sonnet, skipped on a quiet day). Turn off the brief or the night pass in its settings to spend less.",
+  'jarvis.set.compact': "Summarize its conversation at",
+  'jarvis.set.compactHint': "Lower = cheaper turns. What it must keep lives in its notes, not in the thread.",
+  'jarvis.set.compactSame': "As every session",
   'jarvis.set.cost': "What it costs: one turn per message, one per report that comes back, the brief and the night pass (Sonnet, skipped when nothing changed). A new conversation each day keeps each turn small.",
 }

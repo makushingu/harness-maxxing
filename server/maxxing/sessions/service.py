@@ -172,7 +172,16 @@ def public(meta: dict, exits_waiting: dict[str, dict] | None = None) -> dict:
             "worktree": _worktree_public(m),
             "browser_asks": _browser_waiting(m["id"]),
             "browser_exit": _exit_waiting(m["id"]) if exits_waiting is None else exits_waiting.get(m["id"]),
-            "device_asks": _devices_waiting(m["id"])}
+            "device_asks": _devices_waiting(m["id"]), "compact_tokens": _own_compact(m)}
+
+
+def _own_compact(m: dict) -> int | None:
+    """A session with its own compaction threshold (Jarvis's conversation: config.session_config), else None."""
+    if (m.get("path") or "").strip("/") != config.JARVIS_PATH:
+        return None
+    cfg = config.load_config()
+    own = config.session_config(cfg, m.get("path"))
+    return config.int_setting(own, "auto_compact_tokens") if own is not cfg else None
 
 
 def _worktree_public(m: dict) -> dict | None:
@@ -497,12 +506,13 @@ MAX_HOPS = 3                                           # session -> session -> .
 
 
 def relay_message(to: str, text: str, attachments: list[str] | None = None, sender: dict | None = None,
-                  hops: int = 0) -> dict:
+                  hops: int = 0, short: bool = False) -> dict:
     """`maxxing sessions send`: a turn (or the owner's shell) writes to another session, as a message typed in it.
     `to`: a session id (or its first 6+ characters) or its title (case and accents ignored, a unique beginning is
     enough). `sender`: the session of the turn ({id, title, path}) or None. `hops`: how many sends led to this one
     (the sender turn's, + 1): refused above MAX_HOPS, so two sessions never answer each other forever.
-    -> {queued, session}"""
+    `short`: its answer is a report read by another turn (Jarvis's board): Claude is asked for a short final answer
+    (runner.SHORT_ANSWER_NOTE, not displayed). -> {queued, session}"""
     target = find_session(to)
     if sender and target["id"] == sender.get("id"):
         raise SessionError(400, "self", "A session cannot send a message to itself")
@@ -511,6 +521,8 @@ def relay_message(to: str, text: str, attachments: list[str] | None = None, send
     if sender:
         relay.update({"from": sender.get("id") or "", "title": sender.get("title") or "",
                       "path": sender.get("path") or ""})
+    if short:
+        relay["short"] = True
     return send_message(target["id"], text, attachments, "session" if sender else "cli", relay=relay)
 
 
