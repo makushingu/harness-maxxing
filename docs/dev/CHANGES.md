@@ -7,6 +7,8 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Tests: the bare-token fixture of `test_mcp_safety.py` is built by concatenation, so the leak scanners of the
+  maintainers' push hooks no longer take it for a live key. `CHANGELOG.md`: one Fixed section in Unreleased.
 - Cleanup: `deps.run_lock` (flock on `tools/deps-run.lock`, not deps.lock that `write_record` takes inside an
   update) wraps `deps.update` and a real `deps.clean`; a clean during an update raises `deps.Busy` (row error in
   Settings, `deps clean` prints "skipped" and exits 0). Caches: `_in_use` reads /proc (cmdline, cwd, exe) and
