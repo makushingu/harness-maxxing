@@ -301,7 +301,8 @@ def _put_sessions(folder: Path, old_prefix: str | None = None, new_prefix: str |
         sid = meta_p.stem
         if not store.is_valid_id(sid):
             continue
-        if store.meta_path(sid).exists():              # that id is in use again: its copy stays in the folder
+        if store.meta_path(sid).exists() or store.log_path(sid).exists():   # that id is in use again (or its log is still
+            # there): its copy stays in the folder, nothing is overwritten
             damaged = True
             continue
         try:
@@ -318,13 +319,15 @@ def _put_sessions(folder: Path, old_prefix: str | None = None, new_prefix: str |
         meta.update(pid=None, queue=[])
         try:
             config.write_json(store.meta_path(sid), meta)
-        except (OSError, ValueError):                  # e.g. a title with a lone surrogate: nothing was written
+            log_p = meta_p.with_suffix(".log")
+            if log_p.exists():
+                shutil.move(str(log_p), str(store.log_path(sid)))
+            meta_p.unlink()
+        except (OSError, ValueError):                  # e.g. a title with a lone surrogate, a full disk: the rest goes on
+            if meta_p.with_suffix(".log").exists():     # the log did not come back: no half-restored session
+                store.meta_path(sid).unlink(missing_ok=True)
             damaged = True
             continue
-        log_p = meta_p.with_suffix(".log")
-        if log_p.exists():
-            shutil.move(str(log_p), str(store.log_path(sid)))
-        meta_p.unlink()
         done += 1
     if not damaged:
         shutil.rmtree(folder, ignore_errors=True)
@@ -373,7 +376,10 @@ def restore(item_id: str) -> dict[str, Any]:
         return {"ok": True, "kind": kind, "restored_to": path, "sessions": n}
     original = Path(side["original"])
     try:
-        parents = original.resolve().parents                # a sidecar never sends a file out of the roots
+        if original.name in ("", ".", ".."):
+            raise TrashError(409, "not_restorable", "This item cannot be restored from here")
+        rp = original.parent.resolve()                      # not the place itself: a link standing there is no reason to refuse
+        parents = [rp, *rp.parents]                         # a sidecar never sends a file out of the roots
     except (OSError, RuntimeError):                         # a name too long, a loop of symbolic links
         raise TrashError(409, "not_restorable", "This item cannot be restored from here") from None
     if not any(r.resolve() in parents for r in (config.workspace(), config.files_root())):

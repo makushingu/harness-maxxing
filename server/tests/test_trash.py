@@ -715,3 +715,47 @@ def test_session_copies_left_by_a_topic_restore_stay_listed_and_are_not_purged(c
             os.utime(q, (old, old))
     trash.purge_old()
     assert [i["id"] for i in _items(client) if i["kind"] == "session"] == [left[0]["id"]]
+
+
+def test_restoring_a_session_never_overwrites_a_log_that_is_already_there(client, topic):
+    from maxxing.sessions import store
+    s = client.post("/api/sessions", json={"path": topic, "message": "zebra NOTOOL"}).json()
+    wait_idle(client, s["id"])
+    client.delete(f"/api/sessions/{s['id']}")
+    store.log_path(s["id"]).write_text("mine")              # a log of that id stands there without its meta
+    it = _items(client)[0]
+    assert client.post(f"/api/trash/{it['id']}/restore").status_code == 409
+    assert store.log_path(s["id"]).read_text() == "mine" and [i["id"] for i in _items(client)] == [it["id"]]
+
+
+def test_a_session_whose_log_cannot_move_stays_listed_after_its_topic_is_restored(client, topic, monkeypatch):
+    import shutil
+    from maxxing import workspace
+    from maxxing.sessions import store
+    s = client.post("/api/sessions", json={"path": topic, "message": "zebra NOTOOL"}).json()
+    wait_idle(client, s["id"])
+    workspace.delete_topic(topic.split("/")[1], topic.rsplit("/", 1)[-1])
+    real = shutil.move
+
+    def move(src, dst, *a, **k):
+        if str(src).endswith(".log"):
+            raise OSError("disk full")
+        return real(src, dst, *a, **k)
+    monkeypatch.setattr(trash.shutil, "move", move)
+    (it,) = [i for i in _items(client) if i["kind"] == "topic"]
+    assert client.post(f"/api/trash/{it['id']}/restore").status_code == 200
+    assert not store.meta_path(s["id"]).exists()
+    assert [i["kind"] for i in _items(client)] == ["session"]     # still there to restore again, not hidden
+
+
+def test_a_link_standing_in_the_place_of_a_deleted_file_does_not_stop_its_restore(client, topic, mx, tmp_path):
+    from maxxing import workspace
+    d = mx["ws"] / topic
+    (d / "a.txt").write_text("x")
+    workspace.move_to_trash(d / "a.txt")
+    elsewhere = tmp_path / "elsewhere.txt"
+    elsewhere.write_text("outside")
+    os.symlink(elsewhere, d / "a.txt")
+    (item,) = _items(client)
+    assert client.post(f"/api/trash/{item['id']}/restore").status_code == 200
+    assert elsewhere.read_text() == "outside" and (d / "a (restored).txt").read_text() == "x"
