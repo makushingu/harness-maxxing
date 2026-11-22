@@ -8,12 +8,12 @@ import * as React from 'react'
 import { create } from 'zustand'
 import { useLocation, useNavigationType } from 'react-router'
 import { Download, Menu } from 'lucide-react'
-import { useHealth, useWorkspace } from '@/lib/queries'
+import { useHealth } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 import { useT, withGroups } from '@/i18n'
 import { openPalette } from '@/commands/registry'
 import { CountBadge, CountDot } from '@/components/ui'
-import { useBadgeOn } from './nav'
+import { useSessionBadge } from './nav'
 import { Drawer, DrawerContent, DrawerTitle } from '@/components/ui/drawer'
 import { isStandalone, installApp, useInstallMode } from '@/pwa'
 import { useTour } from '@/tour/store'
@@ -42,20 +42,10 @@ const openTouchMenu = () => useTouchNav.getState().setPanel(levelHere())
  *  waits or the server needs attention. */
 function MenuButton({ className }: { className?: string }) {
   const t = useT()
-  const { data } = useWorkspace()
   const pending = usePendingUpdate()
   const { data: h } = useHealth()
   const tone = healthTone(h)
-  const on = useBadgeOn('/sessions')
-  let unread = 0
-  let running = 0
-  let errors = 0
-  for (const p of on ? data?.projects || [] : [])
-    for (const tp of p.topics) {
-      unread += tp.unread
-      running += tp.running
-      errors += tp.errors || 0
-    }
+  const { unread, running, errors } = useSessionBadge()
   const alert = pending || tone === 'error' || tone === 'warn'
   return (
     <button type="button" className={cn(topButton, '-ml-1', className)} aria-label={t('shell.openApp')} onClick={openTouchMenu} data-tour="touch-sessions" data-testid="touch-menu-button">

@@ -1,7 +1,7 @@
 import { useT, type TKey } from '@/i18n'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Kbd, MOD } from '@/components/ui'
 import { useNav } from './nav'
-import { useShortcutsDialog } from './shortcuts-store'
+import { useShortcutsDialog } from './dialog-stores'
 
 
 /** Extra shortcuts registered by pages (shown in the dialog under the page's group). */

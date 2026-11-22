@@ -3,12 +3,12 @@ import { NavLink, useLocation, useNavigate } from 'react-router'
 import { Blocks, ChevronRight, PanelLeftClose, PanelLeftOpen, Search } from 'lucide-react'
 import { SIDEBAR_W, useUI } from '@/stores/ui'
 import { useIsTablet } from '@/stores/media'
-import { useAgentsAttention, useFeed, useOrderPins, useSaveSettings, useTeam, useWorkspace } from '@/lib/queries'
+import { useAgentsAttention, useFeed, useOrderPins, useSaveSettings, useTeam } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
 import { openPalette } from '@/commands/registry'
 import { Button, CountBadge, CountDot, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, KeepTooltipShape, Kbd, MOD, NamedIcon, Tooltip } from '@/components/ui'
-import { iconBtn, navRow, navTourId, useBadgeOn, useNavEntries, type NavItem, type PinnedPage } from './nav'
+import { iconBtn, navRow, navTourId, useBadgeOn, useNavEntries, useSessionBadge, type NavItem, type PinnedPage } from './nav'
 import { armEntryPeek, entryPeek, SecondBar, useClosedList } from './PageList'
 import { Logo } from './Logo'
 import { ResizeEdge } from './ResizeEdge'
@@ -20,22 +20,6 @@ import { useDragOrder } from './dragOrder'
 import { searchNow } from './TouchNav'
 import { useShowSessions } from '@/features/notify/showSessions'
 import { usePrefetchLink } from '@/pages/pageData'
-
-/** Unread/running counters for the Sessions nav item (from the workspace tree). */
-function useSessionBadge() {
-  const { data } = useWorkspace()
-  const on = useBadgeOn('/sessions')
-  let unread = 0
-  let running = 0
-  let errors = 0
-  for (const p of on ? data?.projects || [] : [])
-    for (const tp of p.topics) {
-      unread += tp.unread
-      running += tp.running
-      errors += tp.errors || 0
-    }
-  return { unread, running, errors }
-}
 
 /** Team entry: its unread count (a chat goes into a bubble from the Team page: "Open in a bubble"). */
 function TeamNavExtra({ collapsed }: { collapsed: boolean }) {

@@ -122,14 +122,17 @@ export type PathBases = { topicDir: string | null; wsRoot: string | null }
 
 const reEscape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
+/** The bases without their trailing slash, with the prefix each one is shown as. */
+const basesOf = ({ topicDir, wsRoot }: PathBases) =>
+  [
+    [topicDir?.replace(/\/+$/, ''), ''],
+    [wsRoot?.replace(/\/+$/, ''), '~/'],
+  ] as const
+
 /** An absolute path relative to the topic folder ("src/app.py", "." for the folder itself), else to the
  *  workspace ("~/projects/acme/…"), else unchanged. */
-export function relPath(p: string, { topicDir, wsRoot }: PathBases): string {
-  for (const [base, pre] of [
-    [topicDir, ''],
-    [wsRoot, '~/'],
-  ] as const) {
-    const b = base?.replace(/\/+$/, '')
+export function relPath(p: string, bases: PathBases): string {
+  for (const [b, pre] of basesOf(bases)) {
     if (!b) continue
     if (p === b) return pre ? '~' : '.'
     if (p.startsWith(b + '/')) return pre + p.slice(b.length + 1)
@@ -138,13 +141,9 @@ export function relPath(p: string, { topicDir, wsRoot }: PathBases): string {
 }
 
 /** Same as relPath for every absolute path inside a one-line text (tool summaries, commands). */
-export function relPaths(text: string, { topicDir, wsRoot }: PathBases): string {
+export function relPaths(text: string, bases: PathBases): string {
   let out = text
-  for (const [base, pre] of [
-    [topicDir, ''],
-    [wsRoot, '~/'],
-  ] as const) {
-    const b = base?.replace(/\/+$/, '')
+  for (const [b, pre] of basesOf(bases)) {
     if (!b || b === '/') continue
     out = out.replace(new RegExp(`${reEscape(b)}(/|(?![\\w.-]))`, 'g'), (_m, slash: string) => (slash ? pre : pre ? '~' : '.'))
   }

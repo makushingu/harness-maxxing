@@ -7,8 +7,7 @@ import { cn } from '@/lib/utils'
 import { startTour } from '@/tour/store'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Tooltip } from '@/components/ui'
 import { iconBtn, navRow } from './nav'
-import { useShortcutsDialog } from './shortcuts-store'
-import { useFeedbackDialog } from './feedback-store'
+import { useFeedbackDialog, useShortcutsDialog } from './dialog-stores'
 
 type HelpAction = { id: string; label: string; icon: LucideIcon; run: () => void }
 

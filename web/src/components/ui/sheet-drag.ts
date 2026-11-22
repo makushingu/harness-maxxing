@@ -7,7 +7,7 @@ import { isCompact } from '@/stores/media'
 //   picks up from where the finger left it); otherwise it springs back.
 // - Fields, sliders and horizontally scrolling rows never start a drag.
 
-const NO_DRAG = 'input, textarea, select, [contenteditable=""], [contenteditable="true"], [data-no-drag], [role="slider"]'
+export const NO_DRAG = 'input, textarea, select, [contenteditable=""], [contenteditable="true"], [data-no-drag], [role="slider"]'
 
 function scrollerAbove(target: Element, root: HTMLElement): HTMLElement | null {
   for (let el: Element | null = target; el && el !== root.parentElement; el = el.parentElement) {

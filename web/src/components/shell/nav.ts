@@ -1,7 +1,7 @@
 // Primary navigation — single source for the sidebar, the mobile tab bar, the palette and shortcuts.
 import { Bot, FolderOpen, GitBranch, LayoutDashboard, ListChecks, Mail, MessagesSquare, Network, Settings, Sparkles, UsersRound, type LucideIcon } from 'lucide-react'
 import type { TKey } from '@/i18n'
-import { useExtensions, useSettings } from '@/lib/queries'
+import { useExtensions, useSettings, useWorkspace } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 
 /** A sidebar row (pages, extensions, Help / Feedback / Settings): one look everywhere; `collapsed` = the folded icon bar. */
@@ -128,4 +128,20 @@ export const BADGE_PAGES = ['/', '/sessions', '/team', '/agents'] as const
 export function useBadgeOn(route: (typeof BADGE_PAGES)[number]) {
   const { data: s } = useSettings()
   return !s?.nav_badges_hidden?.includes(route)
+}
+
+/** Unread/running/error counters of the sessions (from the workspace tree): the Sessions nav item, the ☰ button. */
+export function useSessionBadge() {
+  const { data } = useWorkspace()
+  const on = useBadgeOn('/sessions')
+  let unread = 0
+  let running = 0
+  let errors = 0
+  for (const p of on ? data?.projects || [] : [])
+    for (const tp of p.topics) {
+      unread += tp.unread
+      running += tp.running
+      errors += tp.errors || 0
+    }
+  return { unread, running, errors }
 }

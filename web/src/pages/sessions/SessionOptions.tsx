@@ -113,7 +113,8 @@ export function SessionOptions({
   )
 }
 
-function Toggle({ icon: Icon, label, hint, checked, onChange }: { icon: LucideIcon; label: string; hint: string; checked: boolean; onChange: () => void }) {
+/** A switch row with an icon and a hint (also the Jarvis settings). */
+export function Toggle({ icon: Icon, label, hint, checked, onChange }: { icon: LucideIcon; label: string; hint: string; checked: boolean; onChange: (v: boolean) => void }) {
   const id = React.useId()
   return (
     <label htmlFor={id} className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-muted">
