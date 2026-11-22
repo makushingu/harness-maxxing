@@ -30,6 +30,8 @@ export function createBackStack(win: Win) {
         open.splice(i, 1)
         // Closed from the page (X, swipe, a choice): drop its entry, unless a navigation started from it
         // (going back now would cancel that navigation; the entry is stepped over later instead).
+        // Dev StrictMode only (close then reopen at once): history.back() is async, so the next pushState may land
+        // before it and that entry be lost; production never remounts an overlay this way.
         if (here() === e.id && !busy) {
           ignore++
           win.history.back()
