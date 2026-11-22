@@ -284,3 +284,51 @@ def test_a_voice_call_failure_reads_the_message_the_server_sends(tmp_path):
                 await m.failure(res(422, { detail: { message: 'old shape' } })),
                 await m.failure(new Response('<html>', { status: 502 }))]""")
     assert out == ["audio too long", "old shape", "HTTP 502"]
+
+
+BACK_STACK = WEB / "lib" / "back-stack.ts"
+FAKE_HISTORY = """
+const entries = [{ url: '/a', state: { idx: 0 } }]; let at = 0; const fns = []
+const tick = () => new Promise((r) => setTimeout(r, 0))
+const history = {
+  get state() { return entries[at].state },
+  pushState(state) { entries.splice(at + 1); entries.push({ url: entries[at].url, state }); at++ },
+  back() { setTimeout(() => { if (at > 0) { at--; fns.forEach((f) => f()) } }, 0) },
+}
+const nav = (url) => { entries.splice(at + 1); entries.push({ url, state: { idx: at + 1 } }); at++ }
+const win = { history, addEventListener: (_, f) => fns.push(f) }
+const s = m.createBackStack(win); const closed = []
+const where = () => entries[at].url + (entries[at].state.mxBack ? '*' : '')
+"""
+
+
+def test_back_closes_the_overlay_on_top_instead_of_leaving_the_page(tmp_path):
+    out = _run_ts(tmp_path, BACK_STACK, FAKE_HISTORY + """
+        const drawer = s.push(() => { closed.push('drawer'); drawer() })
+        const dialog = s.push(() => { closed.push('dialog'); dialog() })
+        history.back(); await tick()
+        const one = [where(), [...closed]]
+        history.back(); await tick()
+        return [one, [where(), closed]]""")
+    assert out == [["/a*", ["dialog"]], ["/a", ["dialog", "drawer"]]]
+
+
+def test_an_overlay_closed_from_the_page_takes_its_history_entry_with_it(tmp_path):
+    out = _run_ts(tmp_path, BACK_STACK, FAKE_HISTORY + """
+        const dialog = s.push(() => closed.push('back'))
+        dialog(); await tick()
+        return [where(), at, closed]""")
+    assert out == ["/a", 0, []]
+
+
+def test_choosing_a_page_in_the_drawer_navigates_and_one_back_returns_to_the_page_left(tmp_path):
+    out = _run_ts(tmp_path, BACK_STACK, FAKE_HISTORY + """
+        const r = []
+        // the page was already loaded: the router pushes it before the drawer closes
+        let drawer = s.push(() => closed.push('drawer')); nav('/b'); drawer(); await tick(); r.push(where())
+        history.back(); await tick(); await tick(); r.push(where())
+        // the page still loads: the drawer closes while the navigation is in flight
+        drawer = s.push(() => closed.push('drawer')); drawer(true); nav('/c'); await tick(); r.push(where())
+        history.back(); await tick(); await tick(); r.push(where())
+        return [r, closed]""")
+    assert out == [["/b", "/a", "/c", "/a"], []]
