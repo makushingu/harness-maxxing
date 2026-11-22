@@ -24,6 +24,8 @@ Added:
   opens in the viewer with a click, before you send it.
 
 Fixed:
+- **On a phone, Settings -> Memory lists whole file paths.** Cut to one line, every row read
+  "projects/…/topi…" and you could not tell which memory file was too long: the path now wraps on a narrow screen.
 - **The "Harness has finished" notification now works on Android Chrome** when the app is open in the background (it
   was silently dropped: only the banner inside the app showed).
 
