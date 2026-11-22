@@ -169,11 +169,6 @@ def _state(name: str, info: dict[str, str]) -> dict[str, Any] | None:
             "since": since, "state": info.get("ActiveState", "")}
 
 
-def service_state(name: str) -> dict[str, Any] | None:
-    """{name, label, active, enabled, since, state} or None when the unit is not installed."""
-    return _state(name, _systemctl_show(name))
-
-
 def services(force: bool = False) -> list[dict]:
     """Managed services, one systemctl call for all of them, cached SERVICES_CACHE_S seconds
     (invalidate_services() after a start / stop / restart)."""

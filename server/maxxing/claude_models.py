@@ -80,10 +80,6 @@ def latest() -> list[str]:
     return list(FALLBACK)
 
 
-def latest_of(fam: str) -> str:
-    return next((m for m in latest() if family(m) == fam), next(m for m in FALLBACK if family(m) == fam))
-
-
 def _headers() -> dict[str, str] | None:
     """Anthropic headers for the server's Claude credentials, None when there are none usable."""
     h = {"anthropic-version": "2023-06-01"}

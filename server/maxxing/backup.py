@@ -34,7 +34,6 @@ import re
 import shutil
 import subprocess
 import tarfile
-import tempfile
 import time
 from datetime import datetime
 from pathlib import Path
@@ -752,14 +751,6 @@ def status() -> dict:
             "private": st.get("private") if configured else None,
             "schedule": s.get("schedule"), "include": list(s.get("include") or []), "always": list(ALWAYS),
             "last": last}
-
-
-def last_success_age_h() -> float | None:
-    """Hours since the last successful backup (health check); None if never."""
-    for e in history(HISTORY_MAX):
-        if e.get("ok"):
-            return (time.time() - float(e.get("at") or 0)) / 3600
-    return None
 
 
 # =============================================================================================

@@ -113,14 +113,6 @@ def clear_setup_token() -> None:
     config.set_secret("setup_token_at", None)
 
 
-def setup_token_expires_at() -> float | None:
-    try:
-        at = float(config.get_secret("setup_token_at") or 0)
-    except (TypeError, ValueError):
-        return None
-    return at + SETUP_TOKEN_TTL if at and config.get_secret("setup_token") else None
-
-
 def check_setup_token(tok: str) -> bool:
     cur = config.get_secret("setup_token")
     # bytes: a non-ASCII token is a 403, not a 500 (compare_digest refuses non-ASCII str); surrogatepass: a lone

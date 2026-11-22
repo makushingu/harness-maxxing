@@ -16,7 +16,6 @@ from datetime import datetime
 from pathlib import Path
 
 from . import config
-from .sessions import spawn
 
 CHECK_EVERY_S = 6 * 3600
 ENDS_WARN_S = 10 * 86400            # a stored sign-in that ends within this is told (Claude Code warns from 10 days too)

@@ -42,7 +42,7 @@ def test_failure_keeps_the_last_list(mx, monkeypatch):
         raise RuntimeError("HTTP 401")
     monkeypatch.setattr(claude_models, "fetch_ids", boom)
     d = claude_models.refresh(now=T + claude_models.CHECK_EVERY_S)
-    assert d["error"] == "HTTP 401" and claude_models.latest_of("sonnet") == "claude-sonnet-6"
+    assert d["error"] == "HTTP 401" and "claude-sonnet-6" in claude_models.latest()
 
 
 def test_no_credentials_no_call(mx, monkeypatch, tmp_path):

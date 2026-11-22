@@ -667,7 +667,6 @@ def test_hand_edited_history_lines_that_are_not_objects_are_skipped(mx_state):
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text('{"at": 1, "ok": true}\nnull\n5\n[]\nnot json\n', encoding="utf-8")
     assert backup.status()["last"]["ok"] is True
-    assert backup.last_success_age_h() is not None
     assert backup.history() == [{"at": 1, "ok": True}]
 
 

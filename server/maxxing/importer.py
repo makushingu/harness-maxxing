@@ -23,7 +23,6 @@ import datetime as dt
 import lzma
 import re
 import secrets as _secrets
-import shutil
 import stat
 import threading
 import time

@@ -362,7 +362,7 @@ Agent groups: the owner talks to 2-6 agents of one project in one conversation (
 
 ## maxxing.backup  (owner: connectivity)
 - `run() -> dict`, `restore(ref=None) -> dict`, `restore_from(repo, token, ref=None)`, `status()`,
-  `history(limit)`, `last_success_age_h() -> float | None` (health check).
+  `history(limit)`.
 - Schedules itself through maxxing.crons (`list_jobs/create_job/update_job/delete_job`, job name
   "Memory backup", shell command `<maxxing> backup run`).
 - Restore on a server in use: the ids of the extensions whose code files (`.py .js .mjs .html .htm`) it will write
