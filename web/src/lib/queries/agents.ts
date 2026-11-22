@@ -22,7 +22,7 @@ export const agentKeys = {
 
 /** "projects/acme/topics/blog/agents/writer" -> "/api/agents/acme/blog/writer" */
 export function agentUrl(path: string, sub = ''): string {
-  const m = /^projects\/([^/]+)\/topics\/([^/]+)\/agents\/([^/]+)$/.exec(path)
+  const m = AGENT_PATH_RE.exec(path)
   if (!m) throw new Error(`Not an agent path: ${path}`)
   return `/api/agents/${seg(m[1])}/${seg(m[2])}/${seg(m[3])}${sub}`
 }
@@ -40,15 +40,8 @@ export function agentRunRoute(path: string, sid: string): string {
 }
 
 export function useAgents(enabled = true) {
-  return useQuery({
-    queryKey: agentKeys.list,
-    queryFn: () =>
-      api.get<AgentsPayload>('/api/agents').then((r) => {
-        pruneAgentDrafts('agent', r.agents.map((x) => x.path))
-        return r
-      }),
-    enabled,
-  })
+  const queryFn = () => api.get<AgentsPayload>('/api/agents').then((r) => (pruneAgentDrafts('agent', r.agents.map((x) => x.path)), r))
+  return useQuery({ queryKey: agentKeys.list, queryFn, enabled })
 }
 /** The gallery of ready-made agents (texts in `lang`; `keys_present` = its suggested keys found in the vault). */
 export function useAgentTemplates(lang: string, enabled = true) {
@@ -76,11 +69,8 @@ export function fetchAgentThreadBefore(path: string, before: number, limit = 100
   return api.get<{ messages: AgentMessage[] }>(agentUrl(path, '/thread'), { limit, before })
 }
 export function useAgentThread(path: string | null, limit = 200) {
-  return useQuery({
-    queryKey: agentKeys.thread(path || ''),
-    queryFn: () => api.get<{ messages: AgentMessage[] }>(agentUrl(path!, '/thread'), { limit }),
-    enabled: !!path,
-  })
+  const queryFn = () => api.get<{ messages: AgentMessage[] }>(agentUrl(path!, '/thread'), { limit })
+  return useQuery({ queryKey: agentKeys.thread(path || ''), queryFn, enabled: !!path })
 }
 
 const inv = [agentKeys.all, qk.workspace] as const
@@ -133,10 +123,7 @@ export function usePatchAgent({ errorToast = true }: { errorToast?: boolean } = 
   })
 }
 export function useDeleteAgent() {
-  return useMut((path: string) => api.del<Ok>(agentUrl(path)), {
-    onSuccess: (_r, path) => forgetDraft(agentDraftKey('agent', path)),
-    invalidate: inv,
-  })
+  return useMut((path: string) => api.del<Ok>(agentUrl(path)), { onSuccess: (_r, path) => forgetDraft(agentDraftKey('agent', path)), invalidate: inv })
 }
 export function useRunAgent() {
   return useMut(
@@ -146,21 +133,15 @@ export function useRunAgent() {
   )
 }
 export function useAgentSeen() {
-  return useMut(({ path }: { path: string }) => api.post<{ ok: boolean }>(agentUrl(path, '/seen'), {}), {
-    invalidate: [agentKeys.all],
-    errorToast: false,
-  })
+  return useMut(({ path }: { path: string }) => api.post<{ ok: boolean }>(agentUrl(path, '/seen'), {}), { invalidate: [agentKeys.all], errorToast: false })
 }
 /** The owner's next message starts a new conversation. */
 export function useNewAgentChat() {
-  return useMut(({ path }: { path: string }) => api.post<{ ok: boolean }>(agentUrl(path, '/chat/new'), {}), {
-    invalidate: [agentKeys.all],
-  })
+  return useMut(({ path }: { path: string }) => api.post<{ ok: boolean }>(agentUrl(path, '/chat/new'), {}), { invalidate: [agentKeys.all] })
 }
 export function useTestAgentTrigger() {
-  return useMut(({ path, tid }: { path: string; tid: string }) => api.post<{ event: unknown }>(agentUrl(path, `/triggers/${tid}/test`), {}), {
-    invalidate: [agentKeys.all, qk.feed.all],
-  })
+  const go = ({ path, tid }: { path: string; tid: string }) => api.post<{ event: unknown }>(agentUrl(path, `/triggers/${tid}/test`), {})
+  return useMut(go, { invalidate: [agentKeys.all, qk.feed.all] })
 }
 export function useAddAgentWebhook() {
   return useMut(
@@ -177,9 +158,8 @@ export function useAddAgentCron() {
 }
 /** "Continue in Sessions": a normal session of the topic with the run's history and Claude thread (409 while it runs). */
 export function useContinueRun() {
-  return useMut(({ path, sid }: { path: string; sid: string }) => api.post<{ session: Session }>(agentUrl(path, `/runs/${seg(sid)}/continue`), {}), {
-    invalidate: [qk.sessions.all, qk.workspace],
-  })
+  const go = ({ path, sid }: { path: string; sid: string }) => api.post<{ session: Session }>(agentUrl(path, `/runs/${seg(sid)}/continue`), {})
+  return useMut(go, { invalidate: [qk.sessions.all, qk.workspace] })
 }
 /** Create an agent from a Claude Code agent file (.claude/agents/<name>.md). */
 export function useImportAgent() {

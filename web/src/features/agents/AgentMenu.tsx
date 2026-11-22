@@ -8,17 +8,11 @@ import { useT } from '@/i18n'
 import { agentRoute, usePatchAgent } from '@/lib/queries'
 import type { Agent } from '@/lib/types'
 import { useLongPress } from '@/lib/long-press'
-import { Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, Textarea, toast } from '@/components/ui'
 import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import { AppearanceDialog } from './Appearance'
+  Button, DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
+  Textarea, toast,
+} from '@/components/ui'
+import { AppearanceDialog, FormDialog } from './Appearance'
 import { useDeleteAgentAsk, useRunNow } from './parts'
 
 /** Spread `props` on the agent's element (it must be `relative`: the menu opens where it was clicked) and render `menu` inside it. */
@@ -43,10 +37,7 @@ export function useAgentMenu(a: Agent) {
   }
   const press = useLongPress(() => el.current && openAt(el.current, last.current.x, last.current.y))
   const props = {
-    onContextMenu: (e: React.MouseEvent<HTMLElement>) => {
-      e.preventDefault()
-      openAt(e.currentTarget, e.clientX, e.clientY)
-    },
+    onContextMenu: (e: React.MouseEvent<HTMLElement>) => (e.preventDefault(), openAt(e.currentTarget, e.clientX, e.clientY)),
     ...press,
     onTouchStart: (e: React.TouchEvent<HTMLElement>) => {
       el.current = e.currentTarget
@@ -99,35 +90,13 @@ export function useAgentMenu(a: Agent) {
   // React events of the dialogs (portals) still bubble to the agent's element: a click there must not open the agent,
   // a long press must not open this menu again, a focus or a move must not show the desk's tooltip
   const dialogs = asked && (
-    <span
-      className="contents"
-      onClick={stop}
-      onKeyDown={stop}
-      onContextMenu={stop}
-      onTouchStart={stop}
-      onTouchMove={stop}
-      onTouchEnd={stop}
-      onDragStart={stop}
-      onPointerDown={stop}
-      onPointerMove={stop}
-      onFocus={stop}
-      onBlur={stop}
-    >
+    <span className="contents" onClick={stop} onKeyDown={stop} onContextMenu={stop} onTouchStart={stop} onTouchMove={stop} onTouchEnd={stop}
+      onDragStart={stop} onPointerDown={stop} onPointerMove={stop} onFocus={stop} onBlur={stop}>
       <RoleDialog agent={a} open={dialog === 'role'} onOpenChange={(o) => setDialog(o ? 'role' : null)} />
       <AppearanceDialog agent={a} open={dialog === 'look'} onOpenChange={(o) => setDialog(o ? 'look' : null)} />
     </span>
   )
-  return {
-    props,
-    items,
-    dialogs,
-    menu: (
-      <>
-        {menu}
-        {dialogs}
-      </>
-    ),
-  }
+  return { props, items, dialogs, menu: <>{menu}{dialogs}</> }
 }
 
 /** The agent's menu behind a "..." button: its page and the conversation panel next to the Office (right click on a
@@ -160,32 +129,12 @@ function RoleDialog({ agent: a, open, onOpenChange }: { agent: Agent; open: bool
   React.useEffect(() => {
     if (open) setV(a.description)
   }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
+  const save = () => patch.mutate({ path: a.path, description: v }, { onSuccess: () => (toast.success(t('agents.role.saved')), onOpenChange(false)) })
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="md:max-w-xl" data-testid="agent-role-dialog">
-        <DialogHeader>
-          <DialogTitle>{t('agents.menu.roleTitle', { name: a.display_name })}</DialogTitle>
-          <DialogDescription>{t('agents.menu.roleDesc')}</DialogDescription>
-        </DialogHeader>
-        <form
-          className="grid gap-4"
-          onSubmit={(e) => {
-            e.preventDefault()
-            patch.mutate({ path: a.path, description: v }, { onSuccess: () => (toast.success(t('agents.role.saved')), onOpenChange(false)) })
-          }}
-        >
-          <Textarea autoFocus minRows={5} maxRows={20} value={v} onChange={(e) => setV(e.target.value)} placeholder={t('agents.create.rolePlaceholder')} data-testid="agent-role-dialog-edit" />
-          <DialogFooter>
-            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
-              {t('common.cancel')}
-            </Button>
-            <Button type="submit" loading={patch.isPending} data-testid="agent-role-dialog-save">
-              {t('common.save')}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+    <FormDialog open={open} onOpenChange={onOpenChange} title={t('agents.menu.roleTitle', { name: a.display_name })} description={t('agents.menu.roleDesc')}
+      className="md:max-w-xl" formClassName="gap-4" testid="agent-role-dialog" saving={patch.isPending} onSave={save}>
+      <Textarea autoFocus minRows={5} maxRows={20} value={v} onChange={(e) => setV(e.target.value)} placeholder={t('agents.create.rolePlaceholder')} data-testid="agent-role-dialog-edit" />
+    </FormDialog>
   )
 }
 

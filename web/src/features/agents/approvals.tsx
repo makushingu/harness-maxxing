@@ -1,7 +1,6 @@
 // Approvals on the Agents page: an agent with `approvals` (or started by outside text) waits for the user before a tool
-// call. The request is answered where it shows: in the agent's thread (the card of the request, then what was decided
-// in its place), and in the bubble over the agent's desk in the Office (Classic and Space). Extension views of the Office
-// only show the "!" (they never decide). Same cards as in a session (pages/sessions/Approvals.tsx), same route.
+// call, answered in its thread (the request's card, then what was decided) or in the bubble over its desk in the Office
+// (extension views only show the "!"). Same cards and route as in a session (pages/sessions/Approvals.tsx).
 import * as React from 'react'
 import { Link } from 'react-router'
 import { Check, Clock, Globe, Hand, PlayCircle, ShieldCheck, X } from 'lucide-react'
@@ -52,6 +51,7 @@ const OUTCOME: Record<string, { icon: typeof Check; tone: string; key: TKey }> =
   deny: { icon: X, tone: 'text-destructive', key: 'agents.approval.denied' },
   timeout: { icon: Clock, tone: 'text-muted-foreground', key: 'agents.approval.timeout' },
   expired: { icon: Clock, tone: 'text-muted-foreground', key: 'agents.approval.expired' },
+  closed: { icon: Clock, tone: 'text-muted-foreground', key: 'agents.approval.closed' },
 }
 
 /** The body of a request in the thread: the card with Allow / Deny while it waits, then one line with the outcome. */
@@ -59,8 +59,7 @@ export function ThreadApprovalBody({ m, live, decided }: { m: AgentMessage; live
   const t = useT()
   if (live) return <ApprovalCard approval={live} className="shadow-none" />
   const st = decided?.status || ''
-  const o = OUTCOME[st] || { icon: Clock, tone: 'text-muted-foreground', key: 'agents.approval.closed' as const }
-  const Icon = o.icon
+  const { icon: Icon, ...o } = OUTCOME[st] || OUTCOME.closed
   const why = st === 'deny' && decided?.text.match(/\(([^)]*)\)\s*$/)?.[1]
   return (
     <div className="grid min-w-0 gap-1 text-sm" data-testid="agent-approval-done" data-status={st || 'closed'}>
@@ -80,8 +79,7 @@ export function ThreadApprovalBody({ m, live, decided }: { m: AgentMessage; live
 export function ApprovalLine({ m, decided }: { m: AgentMessage; decided?: AgentMessage }) {
   const t = useT()
   const st = decided?.status || ''
-  const o = OUTCOME[st] || { icon: Clock, tone: 'text-muted-foreground', key: 'agents.approval.closed' as const }
-  const Icon = o.icon
+  const { icon: Icon, ...o } = OUTCOME[st] || OUTCOME.closed
   return (
     <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground sm:ml-10" data-testid="agent-approval-line" data-status={st || 'closed'}>
       <ShieldCheck className="size-3.5 shrink-0" />
@@ -106,6 +104,7 @@ export function WaitingBubble({ agent: a, className, style, children }: { agent:
   const asks = useAgentBrowserAsks(a.path)
   const sid = pending[0]?.session || asks[0]?.session || a.running_sessions?.[0]?.id
   const waits = pending.length + asks.length
+  const onlyAsks = asks.length > 0 && !pending.length
   const stop = (e: React.SyntheticEvent) => e.stopPropagation()
   // No focus in the message box on open (no phone keyboard over the request); the desk's tooltip closes on the tap
   // (pointerdown reaches it). Answered (here, on Telegram or in the run): nothing left to show, the window closes.
@@ -123,7 +122,7 @@ export function WaitingBubble({ agent: a, className, style, children }: { agent:
         // open the desk underneath.
         className={cn("relative cursor-pointer focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none pointer-coarse:before:absolute pointer-coarse:before:-inset-3 pointer-coarse:before:content-['']", className)}
         style={style}
-        onClick={(e) => (stop(e), e.currentTarget.blur(), asks.length && !pending.length ? setWin(true) : setOpen(true))}
+        onClick={(e) => (stop(e), e.currentTarget.blur(), onlyAsks ? setWin(true) : setOpen(true))}
         onKeyDown={stop}
         draggable={false}
         aria-label={t('agents.approval.open', { name: a.display_name })}
@@ -140,12 +139,10 @@ export function WaitingBubble({ agent: a, className, style, children }: { agent:
               <AgentAvatarIcon avatar={a.avatar} size={40} />
               <div className="grid min-w-0 gap-0.5">
                 <DialogTitle className="flex items-center gap-1.5">
-                  {asks.length && !pending.length ? <Hand className="size-4 shrink-0 text-warning" /> : <ShieldCheck className="size-4 shrink-0 text-warning" />}
-                  <span className="truncate">{asks.length && !pending.length ? t('browser.agentAsks', { name: a.display_name }) : t('agents.conv.waiting', { name: a.display_name })}</span>
+                  {onlyAsks ? <Hand className="size-4 shrink-0 text-warning" /> : <ShieldCheck className="size-4 shrink-0 text-warning" />}
+                  <span className="truncate">{onlyAsks ? t('browser.agentAsks', { name: a.display_name }) : t('agents.conv.waiting', { name: a.display_name })}</span>
                 </DialogTitle>
-                <DialogDescription className="truncate">
-                  {a.project} / {a.topic}
-                </DialogDescription>
+                <DialogDescription className="truncate">{a.project} / {a.topic}</DialogDescription>
               </div>
             </DialogHeader>
             {pending.length > 0 && (

@@ -28,15 +28,8 @@ export const groupRoute = (g: Pick<AgentGroup, 'project' | 'name'>) => `/agents/
 export const newGroupRoute = (project?: string) => `/agents/groups/new${project ? `?project=${encodeURIComponent(project)}` : ''}`
 
 export function useAgentGroups(enabled = true) {
-  return useQuery({
-    queryKey: groupKeys.list,
-    queryFn: () =>
-      api.get<{ groups: AgentGroup[] }>('/api/agent-groups').then((r) => {
-        pruneAgentDrafts('group', r.groups.map((x) => x.path))
-        return r.groups
-      }),
-    enabled,
-  })
+  const queryFn = () => api.get<{ groups: AgentGroup[] }>('/api/agent-groups').then((r) => (pruneAgentDrafts('group', r.groups.map((x) => x.path)), r.groups))
+  return useQuery({ queryKey: groupKeys.list, queryFn, enabled })
 }
 export function useAgentGroup(path: string | null) {
   return useQuery({ queryKey: groupKeys.one(path || ''), queryFn: () => api.get<AgentGroup>(groupUrl(path!)), enabled: !!path })
@@ -95,25 +88,19 @@ export function useDeleteGroup() {
 /** The owner's message: shown at once (the server's copy), the members' turns follow on the bus. */
 export function useGroupSay() {
   const qc = useQueryClient()
-  return useMut(
-    ({ path, text, attachments }: { path: string; text: string; attachments?: string[] }) =>
-      api.post<{ message: AgentGroupMessage; queued: string[] }>(groupUrl(path, '/messages'), { text, attachments: attachments?.length ? attachments : undefined }),
-    {
-      onSuccess: (r, { path }) => {
-        qc.setQueryData(groupKeys.messages(path), (old: AgentGroupMessage[] | undefined) => (old && !old.some((m) => m.id === r.message.id) ? [...old, r.message] : old))
-      },
-      invalidate: [groupKeys.list, ['agent-groups', 'one']],
-    },
-  )
+  const say = ({ path, text, attachments }: { path: string; text: string; attachments?: string[] }) =>
+    api.post<{ message: AgentGroupMessage; queued: string[] }>(groupUrl(path, '/messages'), { text, attachments: attachments?.length ? attachments : undefined })
+  return useMut(say, {
+    onSuccess: (r, { path }) =>
+      qc.setQueryData(groupKeys.messages(path), (old: AgentGroupMessage[] | undefined) => (old && !old.some((m) => m.id === r.message.id) ? [...old, r.message] : old)),
+    invalidate: [groupKeys.list, ['agent-groups', 'one']],
+  })
 }
+const useGroupPost = (sub: string) => useMut(({ path }: { path: string }) => api.post<Ok>(groupUrl(path, sub), {}), { invalidate: [groupKeys.all] })
 /** Stop: the queue is emptied and the turn in progress stopped. */
-export function useGroupStop() {
-  return useMut(({ path }: { path: string }) => api.post<Ok>(groupUrl(path, '/stop'), {}), { invalidate: [groupKeys.all] })
-}
+export const useGroupStop = () => useGroupPost('/stop')
 /** New topic: the members start fresh sessions (the conversation stays on screen). */
-export function useGroupReset() {
-  return useMut(({ path }: { path: string }) => api.post<Ok>(groupUrl(path, '/reset'), {}), { invalidate: [groupKeys.all] })
-}
+export const useGroupReset = () => useGroupPost('/reset')
 export function useGroupSeen() {
   return useMut(({ path }: { path: string }) => api.post<Ok>(groupUrl(path, '/seen'), {}), {
     invalidate: [groupKeys.list],
@@ -142,21 +129,17 @@ export function useMarkAllSeen() {
 /** Pause a member in the group (it does not speak until named again) or let it speak again. Instant. */
 export function useGroupPause() {
   const put = usePutGroup()
-  return useMut(
-    ({ path, member, paused }: { path: string; member: string; paused: boolean }) => {
-      const m = /^projects\/([^/]+)\/topics\/([^/]+)\/agents\/([^/]+)$/.exec(member)
-      if (!m) throw new Error(`Not an agent path: ${member}`)
-      return api.post<AgentGroup>(groupUrl(path, `/members/${seg(m[1])}/${seg(m[2])}/${seg(m[3])}/pause`), { paused })
+  // the member's part of its URL: /api/agents/<p>/<t>/<name> without /api/agents (throws on a path that is no agent)
+  const pause = ({ path, member, paused }: { path: string; member: string; paused: boolean }) =>
+    api.post<AgentGroup>(groupUrl(path, `/members${agentUrl(member).slice('/api/agents'.length)}/pause`), { paused })
+  return useMut(pause, {
+    onSuccess: put,
+    optimistic: ({ path, member, paused }) => {
+      const patch = (g: AgentGroup) => (g.path === path ? { ...g, members: g.members.map((x) => (x.path === member ? { ...x, paused } : x)) } : g)
+      return [
+        { key: groupKeys.one(path), update: patch },
+        { key: groupKeys.list, update: (d: AgentGroup[]) => d.map(patch) },
+      ]
     },
-    {
-      onSuccess: put,
-      optimistic: ({ path, member, paused }) => {
-        const patch = (g: AgentGroup) => (g.path === path ? { ...g, members: g.members.map((x) => (x.path === member ? { ...x, paused } : x)) } : g)
-        return [
-          { key: groupKeys.one(path), update: patch },
-          { key: groupKeys.list, update: (d: AgentGroup[]) => d.map(patch) },
-        ]
-      },
-    },
-  )
+  })
 }

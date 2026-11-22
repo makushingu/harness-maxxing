@@ -12,25 +12,12 @@ export { AVATAR_OPTIONS, AVATAR_PARTS, DEFAULT_AVATAR, HAIR, INK, OUTFIT, SKIN, 
 /** `sleep` = eyes closed and greyed (agent off). */
 export type AvatarMood = 'idle' | 'sleep'
 
-type Props = {
-  avatar?: Partial<AgentAvatar> | null
-  size?: number
-  className?: string
-  title?: string
-  /** false = the character alone, no background tile (sitting at its desk) */
-  tile?: boolean
-  mood?: AvatarMood
-  /** blinks now and then (off under prefers-reduced-motion) */
-  animate?: boolean
-}
+/** `tile` false = the character alone (sitting at its desk); `animate` = blinks now and then (off under reduced motion). */
+type Props = { avatar?: Partial<AgentAvatar> | null; size?: number; className?: string; title?: string; tile?: boolean; mood?: AvatarMood; animate?: boolean }
 
 // The runs come from pixelsOf's cache (same array for the same face), so a redraw of the page skips the rects.
 const Rects = React.memo(({ runs }: { runs: Run[] }) => (
-  <>
-    {runs.map((r) => (
-      <rect key={`${r.x}.${r.y}`} x={r.x} y={r.y} width={r.w} height={1} fill={r.fill} />
-    ))}
-  </>
+  <>{runs.map((r) => <rect key={`${r.x}.${r.y}`} x={r.x} y={r.y} width={r.w} height={1} fill={r.fill} />)}</>
 ))
 
 /** The tile: a rounded square (corners cut by one pixel). */
@@ -56,14 +43,8 @@ function AvatarIcon({ avatar, size = 32, className, title, tile = true, mood = '
       {title && <title>{title}</title>}
       {tile && <path d={TILE} fill={px.tile} fillOpacity={0.22} />}
       <Rects runs={px.body} />
-      <g className="mx-px-eyes">
-        <Rects runs={px.eyes} />
-      </g>
-      {blink && (
-        <g className="mx-px-blink">
-          <Rects runs={px.blink} />
-        </g>
-      )}
+      <g className="mx-px-eyes"><Rects runs={px.eyes} /></g>
+      {blink && <g className="mx-px-blink"><Rects runs={px.blink} /></g>}
     </svg>
   )
 }

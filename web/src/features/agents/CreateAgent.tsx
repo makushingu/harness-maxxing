@@ -1,8 +1,7 @@
 // Create an agent, in a side sheet (bottom sheet on touch screens): where (project, then topic) and a name, then
-// "Create and talk": the agent is made empty (no role, free like a session) and its conversation opens - it asks what
-// it should do, writes its role and schedules and asks about its freedoms itself (agents.MANAGER_NEW). The same form
-// shows on the empty Agents page (NewAgentForm). "Import a Claude Code agent file": a .claude/agents/<name>.md file
-// (picked or pasted) becomes an agent of a topic.
+// "Create and talk": the agent is made empty and its conversation opens, where it asks what to do and writes its role
+// itself (agents.MANAGER_NEW). Same form on the empty Agents page (NewAgentForm). "Import a Claude Code agent file":
+// a .claude/agents/<name>.md file (picked or pasted) becomes an agent of a topic.
 import * as React from 'react'
 import { useNavigate } from 'react-router'
 import { ArrowLeft, ArrowRight, Dices, FileUp, MessageSquare } from 'lucide-react'
@@ -30,10 +29,7 @@ export function CreateAgent({ open, onOpenChange, topicPath, start }: { open: bo
       setImporting(!!start?.importing)
     }
   }, [open, topicPath, start])
-  const openAgent = (a: Agent) => {
-    onOpenChange(false)
-    navigate(agentRoute(a))
-  }
+  const openAgent = (a: Agent) => (onOpenChange(false), navigate(agentRoute(a)))
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="md:w-[520px]" data-testid="agent-create">
@@ -85,28 +81,15 @@ export function NewAgentForm({ topicPath, onImport, onDone }: { topicPath?: stri
     setError('')
     create.mutate(
       { topic_path: where, name: slug, display_name: display.trim(), description: '', avatar },
-      {
-        onSuccess: (a) => onDone(a),
-        onError: (e) => setError(isApiError(e) && e.code === 'exists' ? t('agents.create.exists') : errorMessage(e)),
-      },
+      { onSuccess: (a) => onDone(a), onError: (e) => setError(isApiError(e) && e.code === 'exists' ? t('agents.create.exists') : errorMessage(e)) },
     )
   }
   return (
-    <form
-      className="grid gap-5"
-      onSubmit={(e) => {
-        e.preventDefault()
-        if (ok) go()
-      }}
-      data-testid="agent-quick"
-    >
+    <form className="grid gap-5" onSubmit={(e) => (e.preventDefault(), ok && go())} data-testid="agent-quick">
       <div className="flex items-end gap-3">
         <AgentAvatarIcon avatar={avatar} size={48} animate />
-        <FormField
-          label={t('agents.create.name')}
-          className="min-w-0 flex-1"
-          error={display.trim() && !SLUG_RE.test(slug) ? t('agents.create.nameLatin') : undefined}
-        >
+        <FormField label={t('agents.create.name')} className="min-w-0 flex-1"
+          error={display.trim() && !SLUG_RE.test(slug) ? t('agents.create.nameLatin') : undefined}>
           <Input value={display} onChange={(e) => setDisplay(e.target.value)} maxLength={60} placeholder={t('agents.create.namePlaceholder')} autoFocus data-testid="agent-name" />
         </FormField>
         <Button type="button" variant="outline" size="icon" onClick={() => setAvatar(randomAvatar(project ? colorOf(project) : undefined))} aria-label={t('agents.avatar.random')} title={t('agents.avatar.random')}>
@@ -144,21 +127,15 @@ export function NewAgentForm({ topicPath, onImport, onDone }: { topicPath?: stri
   )
 }
 
-/** The topics an agent can live in (the system project aside), as select options. */
-function useTopicOptions() {
-  const { data: ws } = useWorkspace()
-  return React.useMemo(
-    () => (ws?.projects || []).filter((p) => p.name !== 'system').flatMap((p) => p.topics.map((x) => ({ value: `projects/${p.name}/topics/${x.name}`, label: `${p.name} / ${x.name}` }))),
-    [ws],
-  )
-}
-
 /** A Claude Code agent file (.claude/agents/<name>.md: front matter + prompt), picked or pasted, becomes an agent of a
  *  topic (POST /api/agents/import). Its fields with no equivalent (mcpServers, memory...) are listed after. */
 function ImportAgentFile({ topicPath, onBack, onOpen }: { topicPath?: string; onBack: () => void; onOpen: (a: Agent) => void }) {
   const t = useT()
   const mask = useMask()
-  const topics = useTopicOptions()
+  const { data: ws } = useWorkspace()
+  // the topics an agent can live in (the system project aside)
+  const topics = (ws?.projects || []).filter((p) => p.name !== 'system')
+    .flatMap((p) => p.topics.map((x) => ({ value: `projects/${p.name}/topics/${x.name}`, label: `${p.name} / ${x.name}` })))
   const imp = useImportAgent()
   const [where, setWhere] = React.useState(topicPath || '')
   const [text, setText] = React.useState('')
@@ -187,12 +164,8 @@ function ImportAgentFile({ topicPath, onBack, onOpen }: { topicPath?: string; on
   if (done)
     return (
       <div className="grid gap-4" data-testid="agent-import-done">
-        {done.allowed_tools?.length ? (
-          <Callout tone="warning">{t('agents.import.allowed', { tools: done.allowed_tools.join(', ') })}</Callout>
-        ) : null}
-        {done.ignored?.length ? (
-          <Callout tone="info">{t('agents.import.ignored', { fields: done.ignored.join(', ') })}</Callout>
-        ) : null}
+        {!!done.allowed_tools?.length && <Callout tone="warning">{t('agents.import.allowed', { tools: done.allowed_tools.join(', ') })}</Callout>}
+        {!!done.ignored?.length && <Callout tone="info">{t('agents.import.ignored', { fields: done.ignored.join(', ') })}</Callout>}
         <div>
           <Button onClick={() => onOpen(done)}>
             {t('agents.create.openAgent')} <ArrowRight />

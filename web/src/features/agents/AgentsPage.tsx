@@ -1,14 +1,9 @@
-// The overview of the Agents page, the Office (/agents with no agent selected, the right pane of AgentsLayout on a
-// computer; /agents/office on a phone). Its views, picked in the menu at the top right (ViewMenu) and kept per
-// browser: Classic (below), Space (a pixel-art office on a space station,
-// OfficeFuture.tsx), then the views extensions bring (OfficeCustom.tsx) and "Create my custom view" (a new session of
-// general/inbox that builds one with the skill maxxing-extension). Classic:
-// one section per project (dot in the project colour, name, count, "..." menu, like the lanes of Tasks; order, colours
-// and drag and drop of projects and agents: layout.tsx), each agent a card with
-// its character sitting behind a small desk, its name and one status line in words. A small bubble above the head
-// only when something matters (working, new results, waiting for an OK, failed). The whole card opens the agent;
-// Run and the on/off switch show on hover or focus (always on touch screens).
-// The agent's own page is /agents/<project>/<topic>/<name>; on a phone /agents is the list (AgentsList).
+// The overview of the Agents page, the Office (/agents with no agent selected, right pane of AgentsLayout on a computer;
+// /agents/office on a phone). Views, picked at the top right (ViewMenu) and kept per browser: Classic (below), Space
+// (OfficeFuture.tsx), the views extensions bring (OfficeCustom.tsx) and "Create my custom view" (a general/inbox session
+// building one with the skill maxxing-extension). Classic: one section per project (layout.tsx: order, colours, drag and
+// drop), each agent a card with its character at a desk, its name and status, a bubble above the head only when
+// something matters; the card opens the agent, Run and the switch show on hover or focus (always on touch screens).
 import * as React from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import { ChevronDown, LayoutGrid, Play, Plus, Rocket, UsersRound, WandSparkles } from 'lucide-react'
@@ -18,26 +13,8 @@ import type { Agent } from '@/lib/types'
 import { errorMessage } from '@/lib/api'
 import { cn, store } from '@/lib/utils'
 import {
-  Button,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-  EmptyState,
-  NamedIcon,
-  Sheet,
-  SheetContent,
-  SheetTitle,
-  Sensitive,
-  Skeleton,
-  StatusDot,
-  Switch,
-  Tooltip,
-  useMask,
+  Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator,
+  DropdownMenuTrigger, EmptyState, NamedIcon, Sheet, SheetContent, SheetTitle, Sensitive, Skeleton, StatusDot, Switch, Tooltip, useMask,
 } from '@/components/ui'
 import { Page } from '@/components/shell/Page'
 import { AgentAvatarIcon, DEFAULT_AVATAR, OUTFIT } from './Avatar'
@@ -71,18 +48,14 @@ function useOfficeView(): [OfficeView, (v: OfficeView) => void] {
     if (x === 'game') return 'future'
     return x === 'future' || /^x:[a-z0-9][a-z0-9-]{0,47}$/.test(x) ? (x as OfficeView) : 'classic'
   })
-  const set = React.useCallback((x: OfficeView) => {
-    store.set(VIEW_KEY, x)
-    setV(x)
-  }, [])
-  return [v, set]
+  return [v, React.useCallback((x: OfficeView) => (store.set(VIEW_KEY, x), setV(x)), [])]
 }
 
 /** The Office views extensions bring (manifest "agents_view"), the ones that work now. */
 function useCustomViews() {
   const { data, isLoading } = useExtensions()
   const views = React.useMemo(
-    () => (data || []).filter((e) => e.enabled && !e.error && e.agents_view).map((e) => ({ id: e.id, name: e.agents_view!.name, icon: e.agents_view!.icon })),
+    () => (data || []).flatMap((e) => (e.enabled && !e.error && e.agents_view ? [{ id: e.id, name: e.agents_view.name, icon: e.agents_view.icon }] : [])),
     [data],
   )
   return { views, loading: isLoading }
@@ -390,13 +363,7 @@ function AtDesk({ agent, status }: { agent?: Agent; status?: Status }) {
 function Bubble({ agent: a, status: s }: { agent: Agent; status: Status }) {
   const box = 'absolute -top-1 -right-3 flex h-5 min-w-5 items-center justify-center gap-0.5 rounded-full border bg-popover px-1.5 text-[11px] leading-none font-semibold shadow-xs'
   if (s.id === 'running')
-    return (
-      <span className={cn(box, 'mx-px-dots')}>
-        <i className="size-1 rounded-full bg-muted-foreground" />
-        <i className="size-1 rounded-full bg-muted-foreground" />
-        <i className="size-1 rounded-full bg-muted-foreground" />
-      </span>
-    )
+    return <span className={cn(box, 'mx-px-dots')}>{[0, 1, 2].map((i) => <i key={i} className="size-1 rounded-full bg-muted-foreground" />)}</span>
   if (s.id === 'waiting')
     return (
       // A quest marker: a big yellow "!" with a dark outline that hops, no bubble around it.

@@ -1,11 +1,8 @@
-// Preview card of an agent (Settings -> Features -> Agents -> Preview on hover, off by default), shown beside a page's list (the sessions tree, the Agents list) when the pointer rests on an agent of the tree
-// (pages/sessions/index.tsx), or when it is focused from the keyboard: the agent in its Office, the room of its
-// project as the Agents page draws it in the Space view, only while the Office is in Space (any other view: no room) (OfficeFuture.tsx: same art, its console under the selection
-// cursor, the other agents of the project around, the free desk), then in words what it does now: the working rows of
-// its running session (the session card's own block, pages/sessions/PreviewWorking.tsx), else its last run and its
-// next scheduled start. Same frame as the session card (components/shell/SessionPreview.tsx: PreviewShell).
-// Lazy-loaded with the "agents" texts (the rail's chunk only knows the import): fetched the first time the pointer
-// enters a rail that lists agents. Read-only: the office is `inert`, a click on the row still opens the agent.
+// Preview card of an agent (Settings -> Features -> Agents -> Preview on hover, off by default), beside a page's list
+// (the sessions tree, the Agents list) when the pointer rests on an agent or it is focused from the keyboard: its room
+// as the Space view draws it (only while the Office is in Space; OfficeFuture.tsx), then what it does now: its running
+// session's working rows (pages/sessions/PreviewWorking.tsx), else its last run and next start. Same frame as the session
+// card (PreviewShell). Lazy-loaded with the "agents" texts (AgentHover.tsx). Read-only: the room is `inert`.
 import * as React from 'react'
 import { Clock } from 'lucide-react'
 import { useAgents, useCrons, useSessionSeeded } from '@/lib/queries'
@@ -33,18 +30,8 @@ const CARD_W_PLAIN = 300
  *  former Gamified view). Read when the card opens: a change on the Agents page shows on the next hover. */
 const inSpace = () => ['future', 'game'].includes(store.get('mx-agents-office-view') || '')
 
-export default function AgentPreviewCard({
-  agent: a,
-  anchor,
-  rail,
-  onPointerEnter,
-  onPointerLeave,
-}: {
-  agent: Agent
-  anchor: HTMLElement
-  rail: HTMLElement
-  onPointerEnter: () => void
-  onPointerLeave: () => void
+export default function AgentPreviewCard({ agent: a, anchor, rail, onPointerEnter, onPointerLeave }: {
+  agent: Agent; anchor: HTMLElement; rail: HTMLElement; onPointerEnter: () => void; onPointerLeave: () => void
 }) {
   const t = useT()
   const lang = useLang()
@@ -79,11 +66,7 @@ export default function AgentPreviewCard({
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm leading-5 font-semibold">
             <Sensitive length={10}>{a.display_name}</Sensitive>
-            {a.silent && (
-              <span className="ml-1 text-xs" title={t('agents.silentBadge')} aria-label={t('agents.silentBadge')}>
-                🔕
-              </span>
-            )}
+            {a.silent && <span className="ml-1 text-xs" title={t('agents.silentBadge')} aria-label={t('agents.silentBadge')}>🔕</span>}
           </p>
           <p className="truncate text-xs leading-4 text-muted-foreground">
             <Sensitive length={10}>{`${a.project} / ${a.topic}`}</Sensitive>
