@@ -3,6 +3,7 @@
 import * as React from 'react'
 import * as DialogPrimitive from '@radix-ui/react-dialog'
 import { cn, mergeRefs } from '@/lib/utils'
+import { BackCloses } from './back-closes'
 
 export const Drawer = DialogPrimitive.Root
 
@@ -109,6 +110,7 @@ export function DrawerContent({ side, className, children, ref, ...props }: Reac
         {...props}
       >
         <DialogPrimitive.Close ref={close} hidden tabIndex={-1} aria-hidden />
+        <BackCloses close={() => close.current?.click()} />
         {children}
       </DialogPrimitive.Content>
     </DialogPrimitive.Portal>

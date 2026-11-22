@@ -12,6 +12,7 @@ import { Root, AuthLayoutFallback } from '@/pages/Root'
 import { prefetchPageData } from '@/pages/pageData'
 import { withGroups } from '@/i18n'
 import type { Group } from '@/i18n/groups'
+import { watchBack } from '@/components/ui/back-closes'
 
 type PageModule = { default: React.ComponentType }
 const page = (load: () => Promise<PageModule>, groups: Group[] = []) => async () => ({ Component: (await withGroups(groups, load)()).default })
@@ -86,5 +87,5 @@ function CronsMoved() {
 
 export function createAppRouter(qc: QueryClient) {
   client = qc
-  return createBrowserRouter(routes)
+  return watchBack(createBrowserRouter(routes))
 }

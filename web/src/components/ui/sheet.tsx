@@ -4,6 +4,7 @@ import { X } from 'lucide-react'
 import { cn, mergeRefs } from '@/lib/utils'
 import { useT } from '@/i18n'
 import { sheetIsBottom, useSheetDrag } from './sheet-drag'
+import { BackCloses } from './back-closes'
 
 export const Sheet = DialogPrimitive.Root
 export const SheetTrigger = DialogPrimitive.Trigger
@@ -40,6 +41,7 @@ export function SheetContent({ side = 'right', className, children, hideClose, r
           <div className="h-1 w-10 rounded-full bg-muted-foreground/30" />
         </div>
         <DialogPrimitive.Close ref={close} hidden tabIndex={-1} aria-hidden />
+        <BackCloses close={() => close.current?.click()} />
         {children}
         {!hideClose && (
           <DialogPrimitive.Close className="absolute top-3 right-3 rounded-md p-1.5 text-muted-foreground transition hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none max-md:hidden">

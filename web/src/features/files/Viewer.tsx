@@ -34,6 +34,7 @@ import { ChangesPane } from '@/features/code/ChangesPane'
 import { isChangesPath } from '@/features/code/api'
 import { PrPane } from '@/features/code/PrPane'
 import { isPrPath } from '@/features/code/prApi'
+import { BackCloses } from '@/components/ui/back-closes'
 
 export default function FileViewerHost() {
   const t = useT()
@@ -75,6 +76,7 @@ export default function FileViewerHost() {
               : 'inset-y-0 right-0 w-[min(860px,94vw)] border-l shadow-pop data-[state=open]:animate-sheet-right',
           )}
         >
+          <BackCloses close={close} />
           <DialogPrimitive.Title className="sr-only">{path ? (isChangesPath(path) ? t('code.title') : isPrPath(path) ? t('pr.title') : isDiagram(path) ? t('diagram.title') : basename(path)) : t('viewer.title')}</DialogPrimitive.Title>
           {path &&
             (isPrPath(path) ? (

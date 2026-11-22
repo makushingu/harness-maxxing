@@ -18,6 +18,7 @@ import { useShortcutsDialog } from './shortcuts-store'
 import { SETTINGS_SECTIONS } from '@/pages/settings/sections'
 import { startTour, TUTORIAL_PATHS, tutorialHref } from '@/tour/store'
 import { installApp, useInstallMode } from '@/pwa'
+import { BackCloses } from '@/components/ui/back-closes'
 
 function useDebounced<T>(v: T, ms: number) {
   const [d, setD] = React.useState(v)
@@ -342,6 +343,7 @@ export function CommandPalette() {
             'md:inset-x-auto md:top-[12vh] md:left-1/2 md:h-auto md:max-h-[min(560px,76vh)] md:w-[640px] md:-translate-x-1/2 md:rounded-xl md:pt-0 md:data-[state=open]:animate-in',
           )}
         >
+          <BackCloses close={() => setOpen(false)} />
           <DialogPrimitive.Title className="sr-only">{t('palette.title')}</DialogPrimitive.Title>
           <Cmdk label={t('palette.title')} className="flex min-h-0 flex-1 flex-col" loop filter={paletteFilter}>
             <div className="flex items-center gap-2 border-b px-4">
