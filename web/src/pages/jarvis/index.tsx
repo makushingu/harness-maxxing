@@ -17,9 +17,19 @@ import { PageHeader } from '@/components/shell/Page'
 import { useTelegram } from '@/lib/queries/telegram'
 import { SessionColumn } from '@/pages/sessions/Column'
 import type { Col } from '@/pages/sessions/store'
+import { PreviewProvider } from '@/pages/sessions/FilePreview'
 import { sessionsUrl } from '@/pages/sessions/util'
 
+/** File links of its conversation open the file viewer, as in a session (the provider the Sessions page has). */
 export default function JarvisPage() {
+  return (
+    <PreviewProvider>
+      <JarvisView />
+    </PreviewProvider>
+  )
+}
+
+function JarvisView() {
   const t = useT()
   const { data: st, isLoading } = useJarvis()
   const open = useOpenJarvis()
