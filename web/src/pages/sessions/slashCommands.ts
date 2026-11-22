@@ -6,7 +6,7 @@ import { EFFORTS, type Effort } from '@/lib/types'
 import type { SlashCommand } from './SlashMenu'
 import { modelLabel } from './util'
 
-export type SlashActions = {
+type SlashActions = {
   model: string
   onModel: (model: string) => void
   effort: Effort | ''

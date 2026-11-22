@@ -56,7 +56,7 @@ export function useMailMessage(acc: string | null, folder: string, uid: number |
   })
 }
 
-export type MailAccountIn = {
+type MailAccountIn = {
   address: string
   password: string
   label?: string

@@ -11,7 +11,6 @@ type State = { error: Error | null; key: unknown }
 
 // A chunk of a previous build is gone (the server was updated while the page stayed open): not an error - reload
 // by itself, else a calm "new version" line (no red triangle).
-export { isChunkError } from '@/lib/updateReload'
 
 export class ErrorBoundary extends React.Component<Props, State> {
   state: State = { error: null, key: this.props.resetKey }

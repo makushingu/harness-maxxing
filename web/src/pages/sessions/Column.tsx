@@ -130,7 +130,7 @@ function MobileTabs() {
 }
 
 /* ---------------------------------------------------------------- shell */
-export function ColumnShell({ col, index, count, variant, place, children }: { col: Col; index: number; count: number; variant: ColumnVariant; place?: Place; children: React.ReactNode }) {
+function ColumnShell({ col, index, count, variant, place, children }: { col: Col; index: number; count: number; variant: ColumnVariant; place?: Place; children: React.ReactNode }) {
   const t = useT()
   const focused = useSessionsUI((s) => s.focused === col.key)
   const focus = useSessionsUI((s) => s.focus)
@@ -1221,7 +1221,7 @@ function MoveSessionPicker({ session, rootLabel, locked }: { session: Session; r
 }
 
 /** One part of the session's place (project or topic) as a badge; hovering it explains what it is. */
-export function WhereBadge({ kind, name, description, dir, hint, children }: { kind: 'project' | 'topic' | 'agent'; name: string; description?: string; dir?: string | null; hint: string; children?: React.ReactNode }) {
+function WhereBadge({ kind, name, description, dir, hint, children }: { kind: 'project' | 'topic' | 'agent'; name: string; description?: string; dir?: string | null; hint: string; children?: React.ReactNode }) {
   const t = useT()
   return (
     <TooltipRoot delayDuration={350}>

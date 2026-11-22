@@ -6,8 +6,6 @@ import { useT } from '@/i18n'
 import { sheetIsBottom, useSheetDrag } from './sheet-drag'
 
 export const Sheet = DialogPrimitive.Root
-export const SheetTrigger = DialogPrimitive.Trigger
-export const SheetClose = DialogPrimitive.Close
 
 type Side = 'right' | 'left' | 'bottom'
 

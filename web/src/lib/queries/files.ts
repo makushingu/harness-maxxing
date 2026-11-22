@@ -1,11 +1,11 @@
 import * as React from 'react'
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { api, ApiError, isApiError, networkError, withQuery } from '../api'
-import type { FileContent, FileDoc, FileList, FileWriteBody, FileWriteResult, Ok, UploadResult } from '../types'
+import type { FileContent, FileDoc, FileList, FileWriteBody, FileWriteResult, UploadResult } from '../types'
 import { qk } from './keys'
 import { useMut } from './util'
 
-export const fileListQuery = (path: string) => ({
+const fileListQuery = (path: string) => ({
   queryKey: qk.files.list(path),
   queryFn: async () => {
     const list = await api.get<FileList>('/api/files/list', { path })
@@ -138,7 +138,7 @@ function missingPoll(path: string): number | false {
   return age < 30_000 ? 2000 : age < 120_000 ? 5000 : age < 900_000 ? 15_000 : false
 }
 /** mtimes a folder listing already gives: a preview opened from it starts at once, with no round trip. */
-export function seedFileStamps(entries: { path: string; type: string; mtime: number }[]) {
+function seedFileStamps(entries: { path: string; type: string; mtime: number }[]) {
   const now = Date.now()
   for (const e of entries)
     if (e.type === 'file') {
@@ -211,20 +211,6 @@ export function prefetchImage(url: string) {
 const inv = [qk.files.all] as const
 export function useWriteFile() {
   return useMut((b: FileWriteBody) => api.put<FileWriteResult>('/api/files/write', b), { invalidate: inv, errorToast: false })
-}
-export function useMkdir() {
-  return useMut((path: string) => api.post<Ok>('/api/files/mkdir', { path }), { invalidate: inv })
-}
-export function useMoveFile() {
-  return useMut((b: { from: string; to: string }) => api.post<Ok>('/api/files/move', b), { invalidate: inv })
-}
-export function useDeleteFile() {
-  return useMut((path: string) => api.post<Ok>('/api/files/delete', { path }), { invalidate: inv })
-}
-export function useUploadFiles() {
-  return useMut(({ dir, files }: { dir: string; files: File[] }) => api.upload<UploadResult>('/api/files/upload', files, { dir }), {
-    invalidate: inv,
-  })
 }
 
 /**

@@ -8,9 +8,9 @@ type T = TFn
 type Input = Record<string, unknown>
 
 /** What a call does, for the grouping of read-only calls ("Explored 4 files · 2 searches"). */
-export type ToolKind = 'read' | 'search' | 'list' | 'look' | 'other'
+type ToolKind = 'read' | 'search' | 'list' | 'look' | 'other'
 
-export type ToolLabel = {
+type ToolLabel = {
   /** The sentence shown in front ("Runs the tests"). */
   title: string
   /** What it runs, shown after it in monospace (command, path, pattern…); '' = nothing more. */
@@ -30,7 +30,7 @@ const one = (s: string, max = 160) => {
 const DANGER =
   /(^|[;&|(]\s*|\s)(rm\s+-[a-z]*[rf]|rm\s|rmdir\s|shred\s|mkfs|dd\s+if=|truncate\s)|git\s+(reset\s+--hard|clean\s+-[a-z]*f|push\s+[^|;&]*(--force|-f\b)|branch\s+-D|checkout\s+--\s|restore\s)|\b(drop|truncate)\s+(table|database|schema)\b|\bdelete\s+from\b|>\s*\/dev\/sd/i
 
-export function isDangerous(command: string): boolean {
+function isDangerous(command: string): boolean {
   return DANGER.test(command)
 }
 
@@ -79,7 +79,7 @@ const firstArg = (args: string[]) => {
 }
 
 /** A Bash line without a sentence -> [i18n key, its values, kind], or null (the raw command is shown). */
-export function bashAction(command: string): [string, Record<string, string>, ToolKind] | null {
+function bashAction(command: string): [string, Record<string, string>, ToolKind] | null {
   const w = mainCommand(command)
   if (!w.length) return null
   const cmd = base(w[0])

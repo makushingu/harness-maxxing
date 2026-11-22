@@ -18,7 +18,7 @@ const page = (load: () => Promise<PageModule>, groups: Group[] = []) => async ()
 
 let client: QueryClient | null = null
 
-export const routes: RouteObject[] = [
+const routes: RouteObject[] = [
   {
     Component: Root,
     errorElement: <RouteError />,

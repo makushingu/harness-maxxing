@@ -94,7 +94,7 @@ export function Page({
   )
 }
 
-export function PageBody({ width = 'default', className, children }: { width?: keyof typeof widths; className?: string; children: React.ReactNode }) {
+function PageBody({ width = 'default', className, children }: { width?: keyof typeof widths; className?: string; children: React.ReactNode }) {
   return (
     <div className="min-h-0 flex-1">
       <div className={cn('mx-auto w-full px-4 py-5 md:px-6 md:py-6', widths[width], className)}>{children}</div>

@@ -75,8 +75,6 @@ export const armEntryPeek = (entry: string, e: React.MouseEvent) => {
   armed = e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey ? { entry, el: e.currentTarget, at: Date.now() } : null
 }
 
-/** The id of the list of the page open (null: the page has none). */
-export const usePageListId = () => useLists((s) => s.list)
 export const pageListId = () => useLists.getState().list
 
 /** Touch layout: the body of the left drawer, where the page's list goes while it is open. */

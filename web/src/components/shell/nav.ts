@@ -48,7 +48,7 @@ export type NavItem = {
   group: NavGroup
 }
 
-export type NavGroup = 'main' | 'end'
+type NavGroup = 'main' | 'end'
 
 /** `data-tour` id of a nav item (guided tour targets): nav-dashboard, nav-sessions… */
 export const navTourId = (n: NavItem) => `nav-${n.to === '/' ? 'dashboard' : n.to.slice(1)}`
@@ -76,7 +76,7 @@ export type PinnedPage = { to: string; id: string; name: string; icon: string }
 /** The pages in the user's order (settings `sidebar_order`, routes): the saved routes first; a page it does not
  *  mention (switched on later, new in an update) right after the page it follows in NAV. Settings is not part of it.
  *  Extension pages are not here: they sit in the Extensions folder, in their pin order. */
-export function orderPages(items: NavItem[], order: string[] | undefined): NavItem[] {
+function orderPages(items: NavItem[], order: string[] | undefined): NavItem[] {
   const pages = items.filter((n) => n.group === 'main')
   const known = new Map(pages.map((p) => [p.to, p]))
   const out = [...new Set(order || [])].map((to) => known.get(to)).filter((p): p is NavItem => !!p)
@@ -94,7 +94,7 @@ export function orderNav(items: NavItem[], order: string[] | undefined): NavItem
 }
 
 /** The page extensions pinned to the sidebar, in their pin order. */
-export function usePinnedPages(): PinnedPage[] {
+function usePinnedPages(): PinnedPage[] {
   const { data } = useExtensions()
   return (data || [])
     .filter((e) => e.type === 'page' && e.enabled && !e.error && e.pinned)

@@ -4,7 +4,6 @@
 //   unknown names fall back to a puzzle piece. Add names here when needed.
 // - <Avatar label="Acme"/>: initials avatar with a stable hue per label.
 import * as React from 'react'
-import * as AvatarPrimitive from '@radix-ui/react-avatar'
 import {
   Activity, AlarmClock, Archive, BarChart3, Bell, Bot, Brain, Briefcase, Calendar, CalendarClock, CalendarDays, ChartLine, ChartPie,
   CheckCircle2, CircleDollarSign, Clock, Cloud, Code2, Coins, Cpu, Database, DollarSign, Download, Euro, Eye, File,
@@ -19,7 +18,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-export const ICONS: Record<string, LucideIcon> = {
+const ICONS: Record<string, LucideIcon> = {
   activity: Activity, 'alarm-clock': AlarmClock, archive: Archive, 'bar-chart': BarChart3, 'bar-chart-3': BarChart3,
   bell: Bell, bot: Bot, brain: Brain, briefcase: Briefcase, calendar: Calendar, 'calendar-clock': CalendarClock, 'calendar-days': CalendarDays,
   'chart-line': ChartLine, 'chart-pie': ChartPie, 'check-circle': CheckCircle2, 'circle-dollar-sign': CircleDollarSign,
@@ -48,30 +47,4 @@ export function NamedIcon({ name, className, ...props }: { name?: string | null;
   const key = name?.toLowerCase()
   const Cmp = (key && Object.hasOwn(ICONS, key) && ICONS[key]) || Puzzle // "constructor" is not an icon
   return <Cmp className={cn('size-4', className)} aria-hidden {...(props as object)} />
-}
-
-function hue(s: string) {
-  let h = 0
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 360
-  return h
-}
-
-export function initials(label: string) {
-  const parts = label.replace(/[-_]+/g, ' ').trim().split(/\s+/)
-  return ((parts[0]?.[0] || '') + (parts[1]?.[0] || parts[0]?.[1] || '')).toUpperCase() || '?'
-}
-
-export function Avatar({ label, src, className }: { label: string; src?: string; className?: string }) {
-  const h = hue(label)
-  return (
-    <AvatarPrimitive.Root className={cn('relative inline-flex size-8 shrink-0 overflow-hidden rounded-full select-none', className)}>
-      {src && <AvatarPrimitive.Image src={src} alt="" className="size-full object-cover" />}
-      <AvatarPrimitive.Fallback
-        className="flex size-full items-center justify-center text-[11px] font-semibold"
-        style={{ background: `oklch(0.55 0.12 ${h} / 0.22)`, color: `oklch(0.75 0.12 ${h})` }}
-      >
-        {initials(label)}
-      </AvatarPrimitive.Fallback>
-    </AvatarPrimitive.Root>
-  )
 }

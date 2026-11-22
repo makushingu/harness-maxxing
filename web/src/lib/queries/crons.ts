@@ -40,9 +40,6 @@ export function useCronOncePreview(onceAt: string) {
   })
 }
 const inv = [qk.crons.all] as const
-export function useCreateCron() {
-  return useMut((b: CronInput) => api.post<Cron>('/api/crons', b), { invalidate: inv, errorToast: false })
-}
 export function usePatchCron() {
   return useMut(({ id, ...b }: CronInput & { id: string }) => api.patch<Cron>(`/api/crons/${seg(id)}`, b), { invalidate: inv })
 }

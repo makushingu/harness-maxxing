@@ -15,7 +15,7 @@ import { useMood } from './mood'
 import { openMyBrowser } from '@/features/browser/open'
 
 /** Issues not marked as seen: the ones the dot and the count are about. */
-export function openIssues(h: Health): Health['issues'] {
+function openIssues(h: Health): Health['issues'] {
   return h.issues.filter((i) => !i.seen)
 }
 
@@ -116,7 +116,7 @@ function Metric({ label, value, pct }: { label: string; value: string; pct: numb
 
 /** The status line: one short sentence about the server (`mood.ts`: a problem, the quota that will not last until its
  *  reset, a busy CPU, things left unread... or that all is well), its dot, and where it leads. */
-export function useStatusLine() {
+function useStatusLine() {
   const m = useMood()
   const tone = m.level === 'note' ? 'warn' : m.level
   return { tone, health: m.text, alert: m.level === 'error' || m.level === 'warn' ? m.level : null, issues: !!m.issues, to: m.to, figures: !!(m.vars || m.when) } as const

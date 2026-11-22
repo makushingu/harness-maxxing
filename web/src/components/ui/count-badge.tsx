@@ -48,7 +48,7 @@ function useBadgeMotion(count: number) {
 
 /** Round counter (unread answers, running turns). Pulses when Settings -> Notifications -> "Pulsing badge" is on.
  *  Shows "99+" above 99 unless `exact` (lists with room for the real number, e.g. mail folders). */
-export type BadgeTone = 'unread' | 'running' | 'error'
+type BadgeTone = 'unread' | 'running' | 'error'
 const BADGE: Record<BadgeTone, string> = {
   unread: 'bg-success/15 text-success ring-1 ring-success/40 ring-inset',
   running: 'bg-primary/15 text-primary',

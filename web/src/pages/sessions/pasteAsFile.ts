@@ -2,7 +2,7 @@
 // logs, tokens and dumps, and any very long paste. Prose (a prompt, even a long one) and short snippets stay text.
 // Ctrl+Shift+V (⌘⇧V) always pastes as text; the toast shown after the switch puts the text back too.
 
-export type PastedFile = { ext: string; type: string }
+type PastedFile = { ext: string; type: string }
 
 const MIN_STRUCTURED = 400 // valid JSON / XML / CSV from this size
 const MIN_DATA = 2000 // other non-prose text from this size

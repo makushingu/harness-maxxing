@@ -13,7 +13,6 @@ const ROW_MIN = 120
 
 /** Sessions a strip column of that kind holds. */
 export const slotSize = (s: Slot) => (s === 'pair' ? 2 : s === 'trio' ? 3 : 1)
-export const zones = (slots: Slot[]) => slots.reduce((n, s) => n + slotSize(s), 0)
 export const layoutId = (slots: Slot[]) => slots.join('-')
 
 const L = (...slots: Slot[]) => slots
@@ -37,7 +36,7 @@ export function layoutsFor(n: number): Slot[][] {
 }
 
 /** Strip columns a layout needs. */
-export const columnsOf = (slots: Slot[]) => slots.length
+const columnsOf = (slots: Slot[]) => slots.length
 
 /** Columns a layout needs side by side on screen: a `half` one only needs its half and one column beside it (the
  *  rest scrolls past it). */

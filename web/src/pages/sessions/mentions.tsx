@@ -10,7 +10,7 @@ import { agentRoute, useTopicSkills } from '@/lib/queries'
 import { findCommand, findNames, withChips, type ChipData } from '@/features/chips/Chip'
 import type { MentionTarget, SentMention } from '@/lib/types'
 
-export type MentionRow = MenuRow & { target?: MentionTarget; /** The "+ N more" row of this group. */ expand?: string }
+type MentionRow = MenuRow & { target?: MentionTarget; /** The "+ N more" row of this group. */ expand?: string }
 
 const KINDS = ['session', 'agent', 'team'] as const
 

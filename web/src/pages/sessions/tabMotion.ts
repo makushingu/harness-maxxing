@@ -4,9 +4,9 @@
 import * as React from 'react'
 import { EASE_OUT, reducedMotion } from '@/lib/presence'
 
-export const TAB_MS = 200
+const TAB_MS = 200
 /** Going from Tabs to Zones or back (useModeMotion). */
-export const MODE_MS = 340
+const MODE_MS = 340
 const MODE_STEP = 35
 
 export function useTabSwitchMotion(on: boolean, shown: string | undefined, order: string[], el: (key: string) => HTMLElement | null) {

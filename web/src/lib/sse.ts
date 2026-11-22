@@ -12,7 +12,7 @@ import { checkForUpdate } from '@/pwa'
 export type SSEStatus = 'connecting' | 'open' | 'reconnecting' | 'closed'
 type Handlers = Record<string, (data: any, ev: MessageEvent) => void>
 
-export type UseEventSourceOptions = {
+type UseEventSourceOptions = {
   enabled?: boolean
   /** Called after a reconnection (not the first open) with how long the stream was down: refetch what may have
    *  been missed. */
@@ -157,7 +157,7 @@ export function useGlobalBus(enabled: boolean): SSEStatus {
           const keys = batch.flatMap(busKeysOf)
           const turn = batch.includes('sessions') && batch.includes('workspace')
           if (turn) keys.push(...BUS_TURN_KEYS)
-          invalidate(keys, (k) => busSkips(k, turn))
+          invalidate(keys, busSkips)
         }, 250)
       },
     },

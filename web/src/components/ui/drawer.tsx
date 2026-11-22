@@ -116,4 +116,3 @@ export function DrawerContent({ side, className, children, ref, ...props }: Reac
 }
 
 export const DrawerTitle = DialogPrimitive.Title
-export const DrawerClose = DialogPrimitive.Close

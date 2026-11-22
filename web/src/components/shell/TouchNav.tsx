@@ -36,7 +36,7 @@ const hasList = (path: string) => LISTS.some((p) => path === p || path.startsWit
 
 /** The level the ☰ opens: the list of the page open when it has one, else the menu. */
 const levelHere = (): Panel => (onSessions(location.pathname) ? 'sessions' : pageListId() ? 'list' : 'app')
-export const openTouchMenu = () => useTouchNav.getState().setPanel(levelHere())
+const openTouchMenu = () => useTouchNav.getState().setPanel(levelHere())
 
 /** ☰ - the drawer. The counter: sessions with an unread answer (a dot when one is running); else a dot when an update
  *  waits or the server needs attention. */

@@ -35,7 +35,7 @@ export function errorMessage(e: unknown): string {
 
 type Query = Record<string, string | number | boolean | null | undefined>
 
-export type RequestOptions = {
+type RequestOptions = {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   body?: unknown
   query?: Query

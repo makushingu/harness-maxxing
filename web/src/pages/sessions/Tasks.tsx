@@ -12,7 +12,7 @@ import { fmtElapsed, fmtTokens } from './util'
 const OPEN_EVENT = 'mx-open-task'
 
 /** Opens (and scrolls to) the tool line that started a task, when it is in the loaded thread. */
-export function openTaskLine(toolUseId: string) {
+function openTaskLine(toolUseId: string) {
   window.dispatchEvent(new CustomEvent(OPEN_EVENT, { detail: toolUseId }))
 }
 
