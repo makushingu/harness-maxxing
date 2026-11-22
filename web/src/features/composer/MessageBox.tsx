@@ -117,6 +117,7 @@ export function MessageBox(p: MessageBoxProps) {
   // New files go at the end of the strip: keep them in view.
   const attBox = React.useRef<HTMLDivElement>(null)
   const n = p.atts?.length || 0
+  const donePaths = React.useMemo(() => (p.atts || []).flatMap((a) => (a.path && !a.error ? [a.path] : [])), [p.atts])
   const attCount = React.useRef(n)
   React.useEffect(() => {
     if (n > attCount.current) attBox.current?.scrollTo({ top: attBox.current.scrollHeight, behavior: 'smooth' })
@@ -160,7 +161,7 @@ export function MessageBox(p: MessageBoxProps) {
                 // Many files: a small scrolling strip (two rows) instead of a box that eats the conversation.
                 <div ref={attBox} data-testid={p.attsTestId || 'composer-attachments'} className="flex max-h-[6.75rem] flex-wrap gap-1.5 overflow-y-auto overscroll-contain px-2.5 pt-2.5 [scrollbar-width:thin]">
                   {p.atts!.map((a) => (
-                    <AttachmentChip key={a.lid} att={a} onRemove={() => p.onRemoveAtt?.(a.lid)} />
+                    <AttachmentChip key={a.lid} att={a} list={donePaths} onRemove={() => p.onRemoveAtt?.(a.lid)} />
                   ))}
                 </div>
               )}

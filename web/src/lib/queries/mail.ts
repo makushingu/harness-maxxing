@@ -113,6 +113,10 @@ export function useMailDeleteFolder(acc: string) {
 export const mailAttachmentUrl = (acc: string, folder: string, uid: number, index: number, inline = false) =>
   `/api/mail/${acc}/attachment?folder=${encodeURIComponent(folder)}&uid=${uid}&index=${index}${inline ? '&inline=1' : ''}`
 
+/** Copies of attachments of a message where the file viewer reads them: `{index: absolute path}`. */
+export const viewMailAttachments = (acc: string, folder: string, uid: number, indexes: number[]) =>
+  api.post<{ paths: Record<string, string> }>(`/api/mail/${acc}/attachments/view`, { folder, uid, indexes })
+
 export const fetchMailCompose = (acc: string, mode: MailComposeMode, folder: string, uid: number) =>
   api.get<MailCompose>(`/api/mail/${acc}/compose`, { mode, folder, uid })
 

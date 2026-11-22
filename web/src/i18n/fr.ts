@@ -3966,6 +3966,7 @@ export const fr: Record<keyof typeof en, string> = {
   'mail.msg.showImages': 'Afficher les images',
   'mail.msg.moreParts': '{count} autres parties non listées',
   'mail.msg.moreParts#one': '{count} autre partie non listée',
+  'mail.msg.attachmentGone': 'Pièce jointe introuvable (le message a peut-être été déplacé)',
   'mail.act.archive': 'Archiver',
   'mail.act.trash': 'Mettre à la corbeille',
   'mail.act.deleteForever': 'Supprimer définitivement',

@@ -1161,6 +1161,18 @@ def attachment(acc: dict, folder: str, uid: int, index: int) -> tuple[str, str, 
     return part_at(_parse(raw), index)
 
 
+def attachments_of(acc: dict, folder: str, uid: int, indexes: list[int]) -> list[tuple[int, str, str, bytes]]:
+    """(index, name, type, bytes) of several attachments of one message, fetched once; a missing index is skipped."""
+    with session(acc) as m:
+        _select(m, folder, readonly=True)
+        raw, _ = _fetch_raw(m, uid)
+    msg, out = _parse(raw), []
+    for i in dict.fromkeys(indexes):
+        with contextlib.suppress(MailError):
+            out.append((i, *part_at(msg, i)))
+    return out
+
+
 def part_at(msg: Any, index: int) -> tuple[str, str, bytes]:
     """(name, type, bytes) of the attachment number `index` (as listed by `_render`); a forwarded mail comes as
     its .eml."""

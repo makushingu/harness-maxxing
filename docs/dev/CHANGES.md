@@ -7,6 +7,12 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Mail attachments in the file viewer: `POST /api/mail/{id}/attachments/view` (`imap.attachments_of`, one fetch)
+  copies them to `<workspace>/mail/attachments/<id>/<folder hash>-<uid>/<index>/<name>` (rewritten at each view, dirs
+  older than a day pruned; `409 outside` when the workspace is not under the files root: `MessageView` then opens /
+  downloads as before for the rest of the page's life). Composer chips (`AttachmentChip`, all `MessageBox`es) open
+  the uploaded file in the viewer (`list` = the uploaded files of the message). Test:
+  `test_mail_connection.py::test_attachments_open_in_the_file_viewer`.
 - Jarvis (`jarvis.py`, `api/jarvis.py`, `cmd_jarvis.py`, page `web/src/pages/jarvis`): config `jarvis_feature` (off) and
   `jarvis` (DEFAULTS: model, root, ask_first, internals, daily, brief, dream). Its folder is the reserved project
   `projects/jarvis` (marker `"system": "jarvis"` in its `.maxxing.json`; an owner's project of that name is never taken,

@@ -3,20 +3,25 @@
 // a click on "Show images".
 import * as React from 'react'
 import {
-  Archive, ArrowLeft, Download, Flag, FolderInput, Forward, ImageOff, Inbox, MailOpen, MoreHorizontal, Paperclip, Pencil, Reply, ReplyAll, ShieldAlert, Trash2,
+  Archive, ArrowLeft, Loader2, Flag, FolderInput, Forward, ImageOff, Inbox, MailOpen, MoreHorizontal, Paperclip, Pencil, Reply, ReplyAll, ShieldAlert, Trash2,
 } from 'lucide-react'
 import {
   Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, EmptyState, Sensitive, Skeleton, Tooltip, useMask,
   usePresentation,
 } from '@/components/ui'
-import { errorMessage } from '@/lib/api'
+import { errorMessage, isApiError } from '@/lib/api'
+import { toast } from '@/components/ui/toast'
+import { openFileViewer } from '@/features/files/viewerStore'
 import { fmtBytes, fmtDate } from '@/lib/format'
 import type { MailAction, MailComposeMode, MailFolder } from '@/lib/types'
-import { mailAttachmentUrl, useMailMessage } from '@/lib/queries'
+import { mailAttachmentUrl, useMailMessage, viewMailAttachments } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 import { useLang, useT } from '@/i18n'
 import { SeenByLine, Verified } from './agents'
 import { avatarTone, clean, folderIcon, folderLabel, initials, whoFull } from './shared'
+
+/** The workspace is outside the files root (the viewer cannot read the copies): attachments open as before. */
+let noViewer = false
 
 function srcdoc(html: string, images: boolean): string {
   const csp = `default-src 'none'; style-src 'unsafe-inline'; font-src data:; img-src data:${images ? ' https: http:' : ''}; media-src data:`
@@ -52,6 +57,34 @@ export function MessageView({ acc, folder, uid, folders, currentRole, onBack, on
   const presenting = usePresentation()
   const mask = useMask()
   React.useEffect(() => setImages(false), [uid, folder, acc])
+  const [opening, setOpening] = React.useState<number | null>(null)
+  React.useEffect(() => setOpening(null), [uid, folder, acc])
+  /** All the attachments of the mail copied where the viewer reads them (one IMAP fetch), opened at `index`, ← / →
+   *  between them. Workspace outside the files root: the browser opens or downloads it as before. */
+  const openAttachment = (index: number, el: HTMLAnchorElement) => {
+    if (!m || opening !== null) return
+    const order = m.attachments.map((x) => x.index)
+    setOpening(index)
+    viewMailAttachments(acc, folder, uid, order)
+      .then(({ paths }) => {
+        const list = order.map((i) => paths[String(i)]).filter((p): p is string => !!p)
+        const path = paths[String(index)]
+        if (!path) throw new Error(t('mail.msg.attachmentGone'))
+        openFileViewer(path, list)
+      })
+      .catch((e) => {
+        if (isApiError(e, 'outside')) {
+          noViewer = true
+          const a = document.createElement('a')
+          for (const k of ['href', 'target', 'rel', 'download']) {
+            const v = el.getAttribute(k)
+            if (v !== null) a.setAttribute(k, v)
+          }
+          a.click()
+        } else toast.error(errorMessage(e))
+      })
+      .finally(() => setOpening(null))
+  }
 
   if (isLoading) {
     return (
@@ -216,14 +249,22 @@ export function MessageView({ acc, folder, uid, folders, currentRole, onBack, on
                     target={viewable ? '_blank' : undefined}
                     rel="noopener noreferrer"
                     download={viewable ? undefined : clean(a.filename) || 'attachment'}
+                    onClick={(e) => {
+                      // a plain click opens the file viewer (every kind it reads, like a file of a conversation);
+                      // ctrl / middle click keeps the browser's own open or download
+                      if (noViewer || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return
+                      e.preventDefault()
+                      openAttachment(a.index, e.currentTarget)
+                    }}
+                    aria-busy={opening === a.index || undefined}
+                    data-testid="mail-attachment"
                     className="flex max-w-64 items-center gap-2 rounded-lg border bg-card px-2.5 py-1.5 text-xs hover:bg-muted pointer-coarse:min-h-10"
                   >
-                    <Paperclip className="size-3.5 shrink-0 text-muted-foreground" />
+                    {opening === a.index ? <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" /> : <Paperclip className="size-3.5 shrink-0 text-muted-foreground" />}
                     <span className="min-w-0 truncate" title={presenting ? undefined : clean(a.filename)}>
                       <Sensitive length={8}><bdi>{clean(a.filename)}</bdi></Sensitive>
                     </span>
                     <span className="shrink-0 text-muted-foreground">{fmtBytes(a.size)}</span>
-                    {!viewable && <Download className="size-3.5 shrink-0 text-muted-foreground" />}
                   </a>
                 )
               })}

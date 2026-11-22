@@ -3984,6 +3984,7 @@ export const en = {
   'mail.msg.showImages': 'Show images',
   'mail.msg.moreParts': '{count} more parts not listed',
   'mail.msg.moreParts#one': '{count} more part not listed',
+  'mail.msg.attachmentGone': 'Attachment not found (the message may have been moved)',
   'mail.act.archive': 'Archive',
   'mail.act.trash': 'Move to trash',
   'mail.act.deleteForever': 'Delete for good',

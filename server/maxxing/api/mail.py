@@ -8,11 +8,15 @@ import concurrent.futures
 import contextlib
 import contextvars
 import functools
+import hashlib
 import json
 import logging
+import os
 import re
+import shutil
 import threading
 import time
+from pathlib import Path
 from typing import Literal, Optional
 from urllib.parse import quote
 
@@ -20,7 +24,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
-from .. import mail
+from .. import config, mail
 from ..mail import imap, outbox, poll, send, store
 from ..mail.imap import MailError
 from ..security import require_auth
@@ -268,6 +272,74 @@ async def get_attachment(acc_id: str, uid: int, index: int, folder: str = "INBOX
         # PDF cannot run script with the UI session; HTML, SVG and the rest never come here as their own type
         headers["Content-Security-Policy"] = "sandbox"
     return Response(data, media_type=ctype if safe_inline else "application/octet-stream", headers=headers)
+
+
+MAX_PARTS_VIEW = 100
+
+
+class ViewIn(BaseModel):
+    folder: str = "INBOX"
+    uid: int
+    indexes: list[int] = Field(min_length=1, max_length=MAX_PARTS_VIEW)
+
+
+VIEW_TTL = 24 * 3600     # copies made for the viewer are removed a day later (at the next view)
+_CTRL = re.compile(r"[\x00-\x1f\x7f]")
+
+
+def _view_root() -> Path:
+    return config.workspace() / "mail" / "attachments"
+
+
+def _view_name(name: str) -> str:
+    name = _CTRL.sub("", Path(str(name or "").replace("\\", "/")).name).strip().lstrip(".")
+    if len(name.encode("utf-8", "replace")) > 200:              # a file name holds 255 bytes (CJK: 3 each)
+        stem, dot, ext = name.rpartition(".")
+        ext = dot + ext if stem and len(ext) <= 15 else ""
+        name = name[:len(name) - len(ext)].encode("utf-8", "replace")[:200 - len(ext.encode())].decode("utf-8", "ignore") + ext
+    return name or "attachment"
+
+
+def _save_for_view(acc_id: str, folder: str, uid: int, parts: list[tuple[int, str, str, bytes]]) -> dict[int, str]:
+    """Copies of the attachments under <workspace>/mail/attachments/<account>/<folder>-<uid>/<index>/<name> (inside
+    the files root: the file viewer opens them like any file; `attachments` is out of the memory backup). Rewritten at
+    every view (an IMAP uid can be given again to another message), older copies pruned."""
+    root = _view_root()
+    now = time.time()
+    if root.is_dir():
+        for d in root.glob("*/*"):
+            with contextlib.suppress(OSError):
+                if d.is_dir() and not d.is_symlink() and now - d.stat().st_mtime > VIEW_TTL:
+                    shutil.rmtree(d, ignore_errors=True)
+    tag = hashlib.sha1(folder.encode("utf-8", "replace")).hexdigest()[:10]
+    base = root / re.sub(r"[^A-Za-z0-9_-]", "_", acc_id)[:64] / f"{tag}-{int(uid)}"
+    out: dict[int, str] = {}
+    for idx, name, _ctype, data in parts:
+        d = base / str(int(idx))
+        if d.is_dir():
+            shutil.rmtree(d, ignore_errors=True)
+        d.mkdir(parents=True, exist_ok=True)
+        f = d / _view_name(name)
+        f.write_bytes(data)
+        out[idx] = str(f)
+    with contextlib.suppress(OSError):
+        os.utime(base)
+    return out
+
+
+@router.post("/{acc_id}/attachments/view")
+async def view_attachments(acc_id: str, body: ViewIn):
+    """Copy attachments of a message where the file viewer reads them: `{paths: {index: path}}`. 409 `outside` when
+    the workspace is not inside the files root (the viewer could not open them: the UI downloads instead)."""
+    try:
+        config.workspace().resolve().relative_to(config.files_root().resolve())
+    except ValueError:
+        raise HTTPException(409, detail={"error": "outside", "message": "the workspace is outside the files root"}) from None
+    parts = await _run(imap.attachments_of, _acc(acc_id), body.folder, body.uid, body.indexes)
+    if not parts:
+        raise HTTPException(404, detail={"error": "not_found", "message": "attachment not found"})
+    paths = await asyncio.to_thread(_save_for_view, acc_id, body.folder, body.uid, parts)
+    return {"paths": {str(k): v for k, v in paths.items()}}
 
 
 @router.post("/{acc_id}/actions")

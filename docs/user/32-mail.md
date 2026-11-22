@@ -46,6 +46,10 @@ message side by side (from 760 px wide). Drag the right edge of the message list
 - Create, rename or delete your own folders from the **...** menus.
 - An HTML message is shown in a sealed frame: no script runs and **remote images are blocked** (they tell the
   sender you opened it) until you click **Show images**.
+- **Click an attachment** to open it in the file viewer, like a file of a conversation: pictures, videos, PDF,
+  Word / Excel / PowerPoint, Markdown, CSV, code, archives... with ← / → to go through the attachments of the mail
+  and **Download** in its bar. Ctrl+click (or middle click) downloads it as before. The viewer reads a copy kept a
+  day in `<workspace>/mail/attachments/` (never in the memory backup).
 - A mail forwarded as an attachment shows as a `.eml` attachment (named after its subject). The images of a very
   big mail are shown up to 8 MB; the others are listed as attachments.
 

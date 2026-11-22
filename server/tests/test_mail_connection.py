@@ -296,3 +296,38 @@ def test_an_8bit_attachment_type_downloads_instead_of_a_500(client, acc, srv):
     r = client.get(f"/api/mail/{acc['id']}/attachment", params={"uid": uid, "index": 2, "inline": 1})
     assert r.status_code == 200 and r.headers["content-type"] == "application/octet-stream"
     assert r.headers["content-disposition"].startswith("attachment")
+
+
+def test_attachments_open_in_the_file_viewer(client, acc, srv, mx):
+    """A click on an attachment copies the mail's attachments where the viewer reads them (inside the files root),
+    names made safe, every view rewritten, copies older than a day pruned."""
+    import os
+    from pathlib import Path
+
+    from maxxing import config
+    uid = srv.add("INBOX", b"From: a@b.co\r\nTo: me@example.com\r\nSubject: x\r\nContent-Type: multipart/mixed; boundary=B"
+                  b"\r\n\r\n--B\r\nContent-Type: text/plain\r\n\r\nhi\r\n"
+                  b"--B\r\nContent-Type: text/csv; name=\"../../evil.csv\"\r\nContent-Disposition: attachment; filename=\"../../evil.csv\"\r\n\r\na,b\r\n1,2\r\n"
+                  b"--B\r\nContent-Type: application/octet-stream\r\nContent-Disposition: attachment; filename=\".env\"\r\n\r\nX=1\r\n"
+                  b"--B--\r\n")
+    m = client.get(f"/api/mail/{acc['id']}/message", params={"uid": uid}).json()
+    idx = [a["index"] for a in m["attachments"]]
+    assert len(idx) == 2
+    outside = client.post(f"/api/mail/{acc['id']}/attachments/view", json={"uid": uid, "indexes": idx})
+    assert outside.status_code == 409 and outside.json()["error"] == "outside"     # the UI downloads instead
+    config.save_config({**config.load_config(), "files_root": str(mx["tmp"])})
+    old = config.workspace() / "mail" / "attachments" / "zz" / "old-1"
+    old.mkdir(parents=True)
+    os.utime(old, (1, 1))
+    r = client.post(f"/api/mail/{acc['id']}/attachments/view", json={"uid": uid, "indexes": idx})
+    assert r.status_code == 200, r.text
+    paths = r.json()["paths"]
+    root = (config.workspace() / "mail" / "attachments").resolve()
+    files = [Path(paths[str(i)]) for i in idx]
+    assert all(f.resolve().is_relative_to(root) for f in files)
+    assert [f.name for f in files] == ["evil.csv", "env"]
+    assert files[0].read_bytes().replace(b"\r\n", b"\n").strip() == b"a,b\n1,2"
+    assert not old.exists()
+    assert client.get("/api/files/raw", params={"path": str(files[0])}).status_code == 200
+    gone = client.post(f"/api/mail/{acc['id']}/attachments/view", json={"uid": uid, "indexes": [99]})
+    assert gone.status_code == 404

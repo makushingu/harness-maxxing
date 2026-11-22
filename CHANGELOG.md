@@ -18,6 +18,10 @@ Added:
   turn on *Notify on this device* and every finished turn of yours rings there ("Harness has finished", the session and
   the start of the answer); a tap opens the session. No Telegram needed, nothing of the conversation goes through
   Google or Apple, and it adds no dependency.
+- **Preview e-mail attachments and the files of a message being written.** A click on an attachment of a mail opens
+  it in the file viewer, as in a conversation (documents, sheets, slides, PDF, pictures, videos, code...), ← / →
+  between the attachments; Ctrl+click still downloads it. A file you just attached in a session, Team or an agent
+  opens in the viewer with a click, before you send it.
 
 Fixed:
 - **The "Harness has finished" notification now works on Android Chrome** when the app is open in the background (it
