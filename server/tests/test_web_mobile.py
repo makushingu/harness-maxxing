@@ -397,3 +397,11 @@ def test_the_open_url_link_of_the_infra_type_view_is_big_enough_to_tap():
     src = (WEB / "features" / "infra" / "TypeView.tsx").read_text()
     link = re.search(r'target="_blank".{0,200}?className="([^"]*)"', src, re.S)
     assert link and "pointer-coarse:size-10" in link[1].split()
+
+
+def test_the_memory_files_list_shows_whole_paths_on_a_phone():
+    # every path starts with projects/<name>/topics/: cut to one line at 360 px, all the rows read the same and the
+    # title holding the full path is not reachable on a touch screen
+    src = (WEB / "pages" / "settings" / "sections" / "Memory.tsx").read_text()
+    cell = re.search(r'<td className="([^"]*)" title=\{mask\(f\.path', src)
+    assert cell and {"max-md:whitespace-normal", "max-md:[overflow-wrap:anywhere]"} <= set(cell[1].split())
