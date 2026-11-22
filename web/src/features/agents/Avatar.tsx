@@ -7,10 +7,10 @@ import { cn } from '@/lib/utils'
 import type { AgentAvatar } from '@/lib/types'
 import { AVATAR_PARTS, GRID, normalize, pixelsOf, type Run } from './pixels'
 
-export { AVATAR_OPTIONS, AVATAR_PARTS, DEFAULT_AVATAR, HAIR, INK, OUTFIT, SKIN, projectColor, randomAvatar, type AvatarPart } from './pixels'
+export { AVATAR_OPTIONS, AVATAR_PARTS, DEFAULT_AVATAR, HAIR, OUTFIT, SKIN, projectColor, randomAvatar, type AvatarPart } from './pixels'
 
 /** `sleep` = eyes closed and greyed (agent off). */
-export type AvatarMood = 'idle' | 'sleep'
+type AvatarMood = 'idle' | 'sleep'
 
 /** `tile` false = the character alone (sitting at its desk); `animate` = blinks now and then (off under reduced motion). */
 type Props = { avatar?: Partial<AgentAvatar> | null; size?: number; className?: string; title?: string; tile?: boolean; mood?: AvatarMood; animate?: boolean }

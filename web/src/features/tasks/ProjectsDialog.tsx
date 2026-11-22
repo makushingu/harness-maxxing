@@ -150,7 +150,7 @@ function ProjectRow({ project, open }: { project: TaskProject; open: number }) {
   )
 }
 
-export function ColorPicker({ value, onChange }: { value: string; onChange: (c: string) => void }) {
+function ColorPicker({ value, onChange }: { value: string; onChange: (c: string) => void }) {
   const t = useT()
   const [open, setOpen] = React.useState(false)
   return (

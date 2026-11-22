@@ -40,7 +40,7 @@ export type ComposeInit = {
   restored?: { showCc: boolean; kept: MailAttachment[]; files: File[] }
 }
 
-export const MAX_RECIPIENTS = 20
+const MAX_RECIPIENTS = 20
 const MAX_TOTAL = 25 * 1024 * 1024
 
 export const signatureBlock = (a: MailAccount | undefined) => (a?.signature?.trim() ? `\n\n-- \n${a.signature.trim()}` : '')

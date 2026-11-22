@@ -9,7 +9,7 @@ import { Input, Label, Select, Skeleton } from '@/components/ui'
 import { cap } from './parts'
 import { PRESET_KINDS, fromPreset, hhmm, toPreset, weekdayNames, type Preset, type PresetKind } from './schedule'
 
-export function useDebounced<T>(v: T, ms = 300) {
+function useDebounced<T>(v: T, ms = 300) {
   const [d, setD] = React.useState(v)
   React.useEffect(() => {
     const id = setTimeout(() => setD(v), ms)
@@ -168,7 +168,7 @@ export function SchedulePicker({ value, onChange, error }: { value: string; onCh
 }
 
 /** Human text + next runs. Height is reserved so the dialog does not jump while typing. */
-export function SchedulePreview({ schedule }: { schedule: string }) {
+function SchedulePreview({ schedule }: { schedule: string }) {
   const t = useT()
   const lang = useLang()
   const { data: settings } = useSettings()

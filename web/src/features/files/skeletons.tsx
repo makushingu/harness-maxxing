@@ -135,7 +135,7 @@ function CardSkeleton() {
 
 /** While the file's version is asked (a moment): the black box of a video, the card of an audio file - not lines of
  *  text that turn into a picture. */
-export function MediaSkeleton({ kind }: { kind: 'video' | 'audio' }) {
+function MediaSkeleton({ kind }: { kind: 'video' | 'audio' }) {
   return (
     <div className="mx-file-wait flex min-h-40 flex-1 items-center justify-center p-4 [container-type:size] md:p-6" aria-hidden data-testid="media-skeleton">
       {kind === 'video' ? (

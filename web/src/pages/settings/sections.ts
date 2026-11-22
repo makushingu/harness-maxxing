@@ -12,7 +12,7 @@ export type SettingsSectionId =
   | 'templates' | 'import' | 'backup' | 'trash'
   | 'system' | 'updates' | 'about'
 
-export type SettingsGroupId = 'general' | 'claude' | 'automate' | 'extensions' | 'workspace' | 'server'
+type SettingsGroupId = 'general' | 'claude' | 'automate' | 'extensions' | 'workspace' | 'server'
 
 export const SETTINGS_GROUPS: { id: SettingsGroupId; label: TKey }[] = [
   { id: 'general', label: 'settings.group.general' },

@@ -27,7 +27,7 @@ type State = {
   clear: (sid: string) => void
 }
 
-export const useDocComments = create<State>()(
+const useDocComments = create<State>()(
   persist(
     (set) => ({
       sid: null,

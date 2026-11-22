@@ -9,7 +9,7 @@ import type { Profile } from '@/lib/types'
 export const PROFILE_COLORS = PROJECT_COLORS
 
 /** Initials of a pseudo ("Léa Martin" -> "LM", "feu" -> "F"). */
-export function initials(name: string): string {
+function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean)
   if (!parts.length) return '?'
   const first = [...parts[0]][0] || ''
@@ -45,12 +45,3 @@ export function Avatar({ profile, agent, size = 'md', className }: { profile: Pa
   )
 }
 
-/** Avatar + pseudo on one line. */
-export function PersonChip({ profile, agent, label, size = 'sm', className }: { profile: Partial<Profile> | null | undefined; agent?: boolean; label?: string; size?: 'sm' | 'md'; className?: string }) {
-  return (
-    <span className={cn('inline-flex min-w-0 items-center gap-1.5', className)}>
-      <Avatar profile={profile} agent={agent} size={size} />
-      <span className="truncate font-medium">{label ?? profile?.name}</span>
-    </span>
-  )
-}

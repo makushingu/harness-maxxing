@@ -70,9 +70,9 @@ export function CloseButton({ onClick, label, disabled }: { onClick: () => void;
   )
 }
 
-export type SendProps = { onClick: () => void; disabled?: boolean; busy?: boolean; label: string; icon?: React.ReactNode; testId?: string }
+type SendProps = { onClick: () => void; disabled?: boolean; busy?: boolean; label: string; icon?: React.ReactNode; testId?: string }
 
-export type MessageBoxProps = {
+type MessageBoxProps = {
   /** Tucked cards, top to bottom (TuckedCard). */
   above?: React.ReactNode
   /** A floating menu over the box ("/", "@"): positioned by itself (absolute, bottom-full). */

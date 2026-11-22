@@ -5,9 +5,9 @@ import { useT } from '@/i18n'
 import { cn } from '@/lib/utils'
 import type { DiffLine } from './api'
 
-export type Hunk = { head: string; o: number; n: number; lines: DiffLine[] }
-export type Row = { kind: 'head'; text: string } | { kind: 'line'; l: DiffLine }
-export type Sel = { a: number; b: number }
+type Hunk = { head: string; o: number; n: number; lines: DiffLine[] }
+type Row = { kind: 'head'; text: string } | { kind: 'line'; l: DiffLine }
+type Sel = { a: number; b: number }
 
 export function diffRows(hunks: Hunk[]): Row[] {
   const out: Row[] = []

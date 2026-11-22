@@ -13,7 +13,6 @@ import { fmtCost, sessionsUrl } from '@/pages/sessions/util'
 
 const FEED_LEVELS: FeedLevel[] = ['info', 'success', 'warning', 'error']
 const WEBHOOK_KINDS: AgentWebhookKind[] = ['generic', 'stripe', 'shopify', 'github']
-export const DEFAULT_LIMITS: AgentLimits = { usd_per_day: 2, runs_per_hour: 6, timeout_s: 1800, debounce_s: 60 }
 
 /** When something happened, to fill "Ran {when}": "just now" under a minute (Intl alone says a bare "now", which
  *  reads oddly after a verb), otherwise the relative date ("5 min ago"). For past moments only. */

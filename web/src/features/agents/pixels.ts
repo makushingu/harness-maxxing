@@ -27,7 +27,7 @@ export const DEFAULT_AVATAR: AgentAvatar = { color: 'blue', skin: 'light', hair:
 export const OUTFIT: Record<string, string> = ACCENT_HEX.dark
 export const SKIN: Record<string, string> = { light: '#ffdcc2', tan: '#e8ad7e', brown: '#b0744a', dark: '#7a4b2e' }
 export const HAIR: Record<string, string> = { black: '#3a3444', brown: '#7c4a29', blond: '#ecc457', red: '#cc5a32', white: '#e6e6ee' }
-export const INK = '#1d1924'
+const INK = '#1d1924'
 
 type Layer = { y: number; rows: string[] }
 const L = (y: number, ...rows: string[]): Layer => ({ y, rows })
@@ -126,7 +126,7 @@ function palette(a: AgentAvatar): Record<string, string> {
 }
 
 export type Run = { x: number; y: number; w: number; fill: string }
-export type Pixels = { body: Run[]; eyes: Run[]; blink: Run[]; tile: string }
+type Pixels = { body: Run[]; eyes: Run[]; blink: Run[]; tile: string }
 
 function runs(grid: (string | null)[], pal: Record<string, string>): Run[] {
   const out: Run[] = []
@@ -191,7 +191,7 @@ export function avatarSvg(a: AgentAvatar, sleep = false): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${GRID} ${GRID}" shape-rendering="crispEdges">${rects}</svg>`
 }
 
-export const pick = (part: AvatarPart, v: string | undefined): string =>
+const pick = (part: AvatarPart, v: string | undefined): string =>
   (AVATAR_OPTIONS[part] as readonly string[]).includes(v || '') ? v! : DEFAULT_AVATAR[part]
 
 /** Every part checked (an unknown value falls back to the default). */

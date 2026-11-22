@@ -20,7 +20,7 @@ const SHARE_WAIT_MS = 2500
 /** Longest read of a file for the share sheet (it then waits for a tap on Save). */
 const SHARE_READ_MS = 120_000
 
-export type DownloadOpts = { version?: number | null; size?: number | null }
+type DownloadOpts = { version?: number | null; size?: number | null }
 
 /** The installed app on iOS: a link that leaves the app (`target=_blank`, Safari) has no session cookie. */
 export const inIosApp = () => isIOS() && isStandalone()
@@ -141,7 +141,7 @@ export function downloadProps(path: string, opts: DownloadOpts = {}) {
 
 /** A folder as a zip, made by the server while it downloads. Asked first (`check`): a link download the server
  * refuses (413, too large) fails without a reason, this throws the ApiError instead. */
-export async function downloadZip(path: string): Promise<void> {
+async function downloadZip(path: string): Promise<void> {
   await api.get(fileZipUrl(path, true))
   save(fileZipUrl(path), `${basename(path) || 'files'}.zip`)
 }
@@ -160,7 +160,7 @@ export function useDownloadZip() {
 
 /** Several files and folders in one zip. The server checks them first (POST: paths, caps, a 413 with its reason)
  * and answers a short-lived link of this session, which the browser downloads like any file. */
-export async function downloadZipMany(paths: string[]): Promise<void> {
+async function downloadZipMany(paths: string[]): Promise<void> {
   const r = await api.post<{ token: string; name: string }>('/api/files/zip', { paths })
   save(withQuery('/api/files/zip', { token: r.token }), r.name)
 }

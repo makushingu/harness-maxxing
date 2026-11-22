@@ -22,7 +22,7 @@ async function registration(): Promise<ServiceWorkerRegistration | undefined> {
 }
 
 /** Same id as the server's (`webpush.device_id`): the first 16 hex digits of the SHA-256 of the endpoint. */
-export async function deviceId(endpoint: string): Promise<string> {
+async function deviceId(endpoint: string): Promise<string> {
   const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(endpoint))
   return Array.from(new Uint8Array(h)).map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 16)
 }

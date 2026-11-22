@@ -27,7 +27,7 @@ const DETAIL: Record<string, TKey> = {
 }
 
 /** "read 14:02", "filed in Invoices 14:03", "draft ready 9 oct." */
-export function seenText(t: TFn, lang: string, e: MailSeenBy): string {
+function seenText(t: TFn, lang: string, e: MailSeenBy): string {
   const key = WHAT[e.what]
   const when = shortDate(e.at, lang)
   if (e.what === 'filed' && e.detail) return `${t('mail.seen.filedIn', { folder: e.detail })} ${when}`
