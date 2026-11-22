@@ -2772,12 +2772,11 @@ def retry_limits(now: float | None = None) -> int:
                     continue
                 mid = _secrets.token_hex(6)
                 service.send_message(sid, LIMIT_RETRY_TEXT, source="agent", ref=f"agent-run:{mid}")
+                with _edit_state(path) as st:           # marked first: a failure below never sends it twice (paid)
+                    st["limit_retry"] = {**e, "fired": True}
+                _limit_waiting.discard(path)
                 _hold_left(path, load(path), sid)
                 _snapshot(path, sid)
-                st = _read_state(path)
-                st["limit_retry"] = {**e, "fired": True}
-                _write_state(path, st)
-                _limit_waiting.discard(path)
                 post(path, "run", "Started again after the usage limit.", id=mid, trigger=LIMIT_RETRY_TRIGGER,
                      source="usage limit", session=sid, attempt=int(e.get("attempt") or 1) + 1)
                 n += 1
