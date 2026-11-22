@@ -11,18 +11,10 @@ from pydantic import BaseModel, Field
 
 from .. import agent_rooms, agents
 from ..security import require_auth
+from .agents import _errors, _on
 
 log = logging.getLogger("maxxing.api.agent_groups")
 router = APIRouter(prefix="/api/agent-groups", tags=["agents"], dependencies=[Depends(require_auth)])
-
-
-def _on() -> None:
-    if not agents.feature_on():
-        raise HTTPException(404, detail={"error": "feature_off", "message": "Agents are off (Settings -> Features)"})
-
-
-def _bad(e: agents.AgentError) -> HTTPException:
-    return HTTPException(e.status, detail={"error": e.code, "message": e.message})
 
 
 def _path(project: str, name: str) -> str:
@@ -65,17 +57,9 @@ class GroupIn(BaseModel):
 
 
 def _fields(body: GroupIn) -> dict:
-    f: dict = {}
+    f = body.model_dump(exclude_none=True, exclude={"project", "name", "display_name"})
     if body.display_name is not None:
         f["name"] = body.display_name
-    for k in ("emoji", "goal", "lead", "shared_files", "trust_members"):
-        v = getattr(body, k)
-        if v is not None:
-            f[k] = v
-    if body.members is not None:
-        f["members"] = [m.model_dump() for m in body.members]
-    if body.limits is not None:
-        f["limits"] = body.limits.model_dump()
     return f
 
 
@@ -97,19 +81,15 @@ def list_groups():
 @router.post("")
 def create_group(body: GroupIn):
     _on()
-    try:
+    with _errors():
         return agent_rooms.create(body.project or "", body.name or "", _fields(body))
-    except agents.AgentError as e:
-        raise _bad(e) from None
 
 
 @router.get("/{project}/{name}")
 def get_group(project: str, name: str):
     _on()
-    try:
+    with _errors():
         return agent_rooms.get(_path(project, name))
-    except agents.AgentError as e:
-        raise _bad(e) from None
 
 
 @router.get("/{project}/{name}/media-roots")
@@ -122,19 +102,15 @@ def group_media_roots(project: str, name: str):
 @router.patch("/{project}/{name}")
 def update_group(project: str, name: str, body: GroupIn):
     _on()
-    try:
+    with _errors():
         return agent_rooms.update(_get(project, name), _fields(body))
-    except agents.AgentError as e:
-        raise _bad(e) from None
 
 
 @router.delete("/{project}/{name}")
 def delete_group(project: str, name: str, keep_files: bool = Query(False)):
     _on()
-    try:
+    with _errors():
         agent_rooms.delete(_get(project, name), keep_files=keep_files)
-    except agents.AgentError as e:
-        raise _bad(e) from None
     return {"ok": True}
 
 
@@ -148,10 +124,8 @@ def group_messages(project: str, name: str, limit: int = Query(200, ge=1, le=100
 @router.post("/{project}/{name}/messages")
 def group_say(project: str, name: str, body: SayIn):
     _on()
-    try:
+    with _errors():
         return agent_rooms.say(_get(project, name), body.text, body.attachments)
-    except agents.AgentError as e:
-        raise _bad(e) from None
 
 
 @router.post("/{project}/{name}/uploads")
@@ -192,10 +166,8 @@ def group_seen(project: str, name: str):
 @router.post("/{project}/{name}/members/{mp}/{mt}/{ma}/pause")
 def group_pause(project: str, name: str, mp: str, mt: str, ma: str, body: PauseIn):
     _on()
-    try:
+    with _errors():
         return agent_rooms.set_paused(_get(project, name), agents.agent_path(mp, mt, ma), body.paused)
-    except agents.AgentError as e:
-        raise _bad(e) from None
 
 
 async def startup() -> None:

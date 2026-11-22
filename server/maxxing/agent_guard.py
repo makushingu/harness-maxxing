@@ -19,6 +19,7 @@ AppArmor profile allowing them (`APPARMOR_PROFILE`), or every sandboxed command 
 """
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
@@ -198,18 +199,16 @@ def ensure_profile() -> None:
     agent page points at `maxxing agents sandbox-setup`)."""
     if os.environ.get("MAXXING_SANDBOX_CHECK") == "0" or sys.platform != "linux" or os.geteuid() != 0:
         return
-    try:
+    with contextlib.suppress(Exception):            # no apparmor_parser, read-only /etc...
         if load_profile():
             available(fresh=True)
-    except Exception:                               # noqa: BLE001 - no apparmor_parser, read-only /etc...
-        pass
 
 
 # ---- settings of a sandboxed turn ------------------------------------------------------------------
 def secret_paths() -> list[str]:
     """What a sandboxed agent never reads: the server state (vault, config), SSH keys, Claude and other CLI logins,
     the Claude transcripts of every session."""
-    home = Path(os.environ.get("HOME") or pwd.getpwuid(os.getuid()).pw_dir)
+    home = _home()
     paths = [config.STATE, home / ".ssh", home / ".claude" / ".credentials.json", home / ".claude.json",
              config.claude_dir() / ".credentials.json", home / ".git-credentials", home / ".netrc",
              home / ".config" / "gh", home / ".aws", home / ".docker" / "config.json", home / ".config" / "rclone"]
@@ -220,12 +219,7 @@ def secret_paths() -> list[str]:
     ws = config.workspace()
     paths += [ws / "infra.json", ws / "team"]       # where every site / server is; the Team chats and their files
     paths += [Path(p) for p in SYSTEM_SECRETS if os.path.lexists(p)]
-    out: list[str] = []
-    for p in paths:
-        s = str(p)
-        if s not in out:
-            out.append(s)
-    return out
+    return list(dict.fromkeys(map(str, paths)))
 
 
 # logins and histories in the home folder (the sandbox hides the whole home anyway: these also hold for Read/Edit)
@@ -530,13 +524,7 @@ def settings(path: str, a: dict, approvals: bool = False, chat: bool = False) ->
                                          "allowWrite": write,
                                          "denyWrite": locked},
                           "network": {"allowedDomains": list(a.get("domains") or [])}}
-        deny = []
-        for p in secrets:
-            g = p + "/**" if not Path(p).is_file() and not p.endswith((".json", ".jsonl")) and "*" not in p \
-                and not Path(p).name.startswith(".env") else p
-            deny += [f"Read(/{g})", f"Edit(/{g})"]
-        for p in locked:                                # its settings and role: the owner's, never the agent's
-            deny.append(f"Edit(/{p + '/**' if p.endswith(('/.claude', '/attachments')) else p})")
+        deny = _deny_secrets(secrets) + [_deny_edit(p) for p in locked]   # its settings and role: the owner's
         deny += [r for r in topic_edit_denied(path) if r not in deny]
         # an excluded command still needs a permission to run outside the sandbox (else it runs inside, where the
         # server state is hidden): `maxxing` is allowed, check_cli limits what it does; with approvals it is asked
@@ -558,20 +546,28 @@ def settings(path: str, a: dict, approvals: bool = False, chat: bool = False) ->
     return out
 
 
+def _deny_secrets(paths: list[str]) -> list[str]:
+    """Read and Edit deny rules of secret / private paths (a folder: all it holds)."""
+    out: list[str] = []
+    for p in paths:
+        g = p + "/**" if not Path(p).is_file() and not p.endswith((".json", ".jsonl")) and "*" not in p \
+            and not Path(p).name.startswith(".env") else p
+        out += [f"Read(/{g})", f"Edit(/{g})"]
+    return out
+
+
+def _deny_edit(p: str) -> str:
+    return f"Edit(/{p + '/**' if p.endswith(('/.claude', '/attachments')) else p})"
+
+
 def chat_settings(path: str, a: dict) -> dict:
     """The `--settings` of the owner's conversation with a sandboxed agent: no sandbox, no approvals (the owner is
     talking), but the files tools still keep off its secrets and its settings (a safety change goes through
     `maxxing agents set`, which asks the owner); its role (CLAUDE.md) is its own to write; its rules hook stays."""
     out = settings(path, {**a, "sandbox": False}, chat=True)
     folder = config.workspace() / path
-    deny: list[str] = []
-    for p in secret_paths() + private_paths(path):
-        g = p + "/**" if not Path(p).is_file() and not p.endswith((".json", ".jsonl")) and "*" not in p \
-            and not Path(p).name.startswith(".env") else p
-        deny += [f"Read(/{g})", f"Edit(/{g})"]
-    for p in locked_paths(path):
-        if p != str(folder / "CLAUDE.md"):
-            deny.append(f"Edit(/{p + '/**' if p.endswith(('/.claude', '/attachments')) else p})")
+    deny = _deny_secrets(secret_paths() + private_paths(path))
+    deny += [_deny_edit(p) for p in locked_paths(path) if p != str(folder / "CLAUDE.md")]
     out["permissions"] = {"deny": deny}
     return out
 
@@ -605,10 +601,7 @@ def add_dirs(path: str, a: dict) -> list[str]:
     dirs = writable_dirs(path, a)
     if "." in (a.get("writable") or []):            # the whole topic: Write/Edit keep to it (topic_edit_denied)
         dirs = [str(topic.resolve())] + [d for d in dirs if not Path(d).is_relative_to(topic.resolve())]
-    out: list[str] = []
-    for d in dirs:
-        out += ["--add-dir", d]
-    return out
+    return [x for d in dirs for x in ("--add-dir", d)]
 
 
 def merge(base: dict, extra: dict) -> dict:
@@ -715,13 +708,12 @@ def _sandboxed(p: str) -> bool:
 
 def sandboxed_session(sid8: str) -> str | None:
     """The agent path of session <sid8...> when it runs in a sandboxed agent folder, else None."""
+    from . import agents
     from .sessions import store
     for sid in store.list_ids():
         if sid.startswith(sid8):
             meta = store.read(sid) or {}
-            p = meta.get("path") or ""
-            from . import agents
-            if _sandboxed(p) and not agents.manager_turn(meta):
+            if _sandboxed(p := meta.get("path") or "") and not agents.manager_turn(meta):
                 return p
     return None
 
@@ -762,11 +754,10 @@ def in_the_sandbox() -> bool:
     if not os.environ.get("MAXXING_AGENT"):
         return False
     try:
-        if not UNIT_RE.search(Path("/proc/self/cgroup").read_text()):
-            return False
+        cg = Path("/proc/self/cgroup").read_text()
     except OSError:
         return False
-    return not (config.STATE / "config.json").exists()
+    return bool(UNIT_RE.search(cg)) and not (config.STATE / "config.json").exists()
 
 
 BROWSER_OWNER_ONLY = {"set", "profile", "forget", "setup", "settings", "enable", "disable"}

@@ -168,6 +168,11 @@ def _configure(p) -> None:
     s.add_argument("--json", action="store_true")
 
 
+def _fail(msg: str, code: int = 2) -> int:
+    print(msg, file=sys.stderr)
+    return code
+
+
 def resolve(ref: str) -> str:
     """Agent path of `ref` (full path, p/t/a or a unique a). ValueError when unknown or ambiguous."""
     from . import agents
@@ -197,14 +202,10 @@ def _turn() -> dict:
 def _print_fire(path: str, r: dict, as_json: bool) -> int:
     from . import agents
     if as_json:
-        out = {"started": r.get("started", False), "agent": path}
-        if r.get("session"):
-            out["session"] = r["session"].get("id")
-        if r.get("reason"):
-            out["reason"] = r["reason"]
-        if r.get("waiting"):
-            out["waiting"] = True
-        print(json.dumps(out))
+        print(json.dumps({"started": r.get("started", False), "agent": path,
+                          **({"session": r["session"].get("id")} if r.get("session") else {}),
+                          **({"reason": r["reason"]} if r.get("reason") else {}),
+                          **({"waiting": True} if r.get("waiting") else {})}))
     elif r.get("waiting"):
         print(f"waiting {path}: starts when its run in progress ends")
     elif r.get("started"):
@@ -216,9 +217,8 @@ def _print_fire(path: str, r: dict, as_json: bool) -> int:
 
 
 def _list(a) -> int:
-    from . import agents
+    from . import agent_guard, agents
     rows = agents.list_agents(with_status=True)
-    from . import agent_guard
     if agent_guard.sandboxed_turn():                # a sandboxed agent sees who it can hand work to, nothing more
         rows = [{"path": x["path"], "display_name": x["display_name"]} for x in rows]
         if a.json:
@@ -277,15 +277,13 @@ def _create(a) -> int:
     where = a.where.strip("/")
     parts = list(agents.parse(where) or ()) if where.startswith("projects/") else where.split("/")
     if len(parts) != 3:
-        print("Give <project>/<topic>/<agent>, e.g. acme/blog/editor", file=sys.stderr)
-        return 2
+        return _fail("Give <project>/<topic>/<agent>, e.g. acme/blog/editor")
     project, topic, name = parts
     if a.role_file:
         try:
             role = open(a.role_file, encoding="utf-8").read().strip()
         except (OSError, ValueError) as e:                  # ValueError: not UTF-8 text
-            print(f"Cannot read {a.role_file}: {e}", file=sys.stderr)
-            return 2
+            return _fail(f"Cannot read {a.role_file}: {e}")
     else:
         role = (a.role or "").strip()
     tpl = None
@@ -293,13 +291,10 @@ def _create(a) -> int:
         from . import agent_templates, vault
         tpl = agent_templates.get(a.template, _lang(a))
         if tpl is None:
-            print(f"No template {a.template!r}: see `maxxing agents templates`", file=sys.stderr)
-            return 2
+            return _fail(f"No template {a.template!r}: see `maxxing agents templates`")
     elif not role:
-        print("Give its role: --role TEXT, --role-file FILE or --template ID", file=sys.stderr)
-        return 2
+        return _fail("Give its role: --role TEXT, --role-file FILE or --template ID")
     limits = {k: v for k, v in (("usd_per_day", a.usd_per_day), ("runs_per_hour", a.runs_per_hour)) if v is not None}
-    keys = [k.strip() for k in a.keys.split(",") if k.strip()]
     fields = {"avatar": {**{k: random.choice(list(v)) for k, v in agents.AVATAR.items()},
                          "color": agents.project_color(project)}, "permission_mode": "",
               **(agent_templates.fields(tpl, [x["name"] for x in vault.list_secrets()]) if tpl else {})}
@@ -309,8 +304,7 @@ def _create(a) -> int:
         try:
             acc_id = mail.get_account(a.mail)["id"]
         except MailError as e:
-            print(e.message, file=sys.stderr)
-            return 2
+            return _fail(e.message)
         tm = (tpl or {}).get("mail") or {}
         fields["mail"] = [{"account": acc_id, "rights": tm.get("rights") or ["read", "draft"],
                            "approve_send": tm.get("approve_send") or "always", "senders": tm.get("senders") or [],
@@ -319,29 +313,20 @@ def _create(a) -> int:
             # a role-only agent: the mailbox comes with the tool to use it (a template lists its own tools)
             fields["allowed_tools"] = ["Bash(maxxing mail:*)"]
     elif tpl and tpl.get("mail"):
-        print("This template is made for a mailbox: add --mail MAILBOX (`maxxing mail accounts`)", file=sys.stderr)
-        return 2
+        return _fail("This template is made for a mailbox: add --mail MAILBOX (`maxxing mail accounts`)")
     fields.update({"name": a.name or fields.get("name") or name, "model": a.model, "telegram": a.telegram,
                    "enabled": not a.off, "trust_outside": a.trust_outside,
                    "approvals": a.approvals or bool(fields.get("approvals")),
                    "limits": {**(fields.get("limits") or {}), **limits}})
-    if role:
-        fields["description"] = role
-    if a.permission:
-        fields["permission_mode"] = a.permission
-    if keys:
-        fields["keys"] = keys
-    for k in ("domains", "writable"):
-        v = [x.strip() for x in getattr(a, k).split(",") if x.strip()]
-        if v:
-            fields[k] = v
+    fields.update({k: v for k, v in (("description", role), ("permission_mode", a.permission),
+                                     ("keys", _levels(a.keys)), ("domains", _levels(a.domains)),
+                                     ("writable", _levels(a.writable))) if v})
     if a.sandbox or a.no_sandbox:
         fields["sandbox"] = bool(a.sandbox)
     try:
         r = agents.create(f"projects/{project}/topics/{topic}", name, fields)
     except agents.AgentError as e:
-        print(e.message, file=sys.stderr)
-        return 2
+        return _fail(e.message)
     extra: dict = {}
     if tpl and tpl.get("cron"):
         try:
@@ -387,13 +372,11 @@ def _create(a) -> int:
 def _sandbox_setup() -> int:
     from . import agent_guard
     if os.geteuid() != 0:
-        print("Run it as root.", file=sys.stderr)
-        return 2
+        return _fail("Run it as root.")
     try:
         done = agent_guard.setup()
     except Exception as e:  # noqa: BLE001 - apt or apparmor_parser failed: say it
-        print(f"sandbox setup failed: {e}", file=sys.stderr)
-        return 1
+        return _fail(f"sandbox setup failed: {e}", 1)
     st = agent_guard.available(fresh=True)
     print("\n".join(done) or "nothing to do")
     print("sandbox: ready" if st["ok"] else f"sandbox: still missing {', '.join(st['missing'])}")
@@ -405,17 +388,14 @@ def _import(a) -> int:
     t = a.topic.strip("/")
     topic = t if t.startswith("projects/") else ("projects/{}/topics/{}".format(*t.split("/")) if t.count("/") == 1 else "")
     if not topic:
-        print("Give --topic <project>/<topic>", file=sys.stderr)
-        return 2
+        return _fail("Give --topic <project>/<topic>")
     try:
         text = open(a.file, encoding="utf-8").read()
         r = agent_format.import_md(topic, text, a.name or None)
     except (OSError, ValueError) as e:
-        print(str(e), file=sys.stderr)
-        return 2
+        return _fail(str(e))
     except agents.AgentError as e:
-        print(e.message, file=sys.stderr)
-        return 2
+        return _fail(e.message)
     print(f"created {r['path']}")
     if r["ignored"]:
         print("not imported (no equivalent in Harness): " + ", ".join(r["ignored"]), file=sys.stderr)
@@ -429,6 +409,11 @@ def _group_path(ref: str) -> str:
     if not path or not agent_rooms.exists(path):
         raise ValueError(f"Group not found: {ref!r} (see `maxxing agents group list`)")
     return path
+
+
+def _members(refs: list[str]) -> list[dict]:
+    """--member <agent> or <agent>=<role>."""
+    return [{"path": resolve(m.partition("=")[0]), "role": m.partition("=")[2].strip()} for m in refs]
 
 
 def _group(a) -> int:
@@ -447,13 +432,9 @@ def _group(a) -> int:
             return 0
         if a.group_cmd == "create":
             if a.group.count("/") != 1:
-                print("Give <project>/<group>", file=sys.stderr)
-                return 2
+                return _fail("Give <project>/<group>")
             project, name = a.group.split("/")
-            members = []
-            for m in a.member:
-                ref, _, role = m.partition("=")
-                members.append({"path": resolve(ref), "role": role.strip()})
+            members = _members(a.member)
             lead = resolve(a.lead) if a.lead else ""
             g = agent_rooms.create(project, name, {"name": a.name, "emoji": a.emoji, "goal": a.goal, "lead": lead,
                                                     "members": members, "shared_files": not a.no_shared_files,
@@ -466,19 +447,12 @@ def _group(a) -> int:
                              indent=2, ensure_ascii=False))
             return 0
         if a.group_cmd == "update":
-            f: dict = {}
-            for k in ("name", "emoji", "goal"):
-                if getattr(a, k) is not None:
-                    f[k] = getattr(a, k)
+            f: dict = {k: getattr(a, k) for k in ("name", "emoji", "goal") if getattr(a, k) is not None}
             if a.member:
-                f["members"] = [{"path": resolve(m.partition("=")[0]), "role": m.partition("=")[2].strip()}
-                                for m in a.member]
+                f["members"] = _members(a.member)
             if a.lead is not None:
                 f["lead"] = resolve(a.lead) if a.lead else ""
-            if a.shared_files:
-                f["shared_files"] = a.shared_files == "on"
-            if a.trust_members:
-                f["trust_members"] = a.trust_members == "on"
+            f.update({k: getattr(a, k) == "on" for k in ("shared_files", "trust_members") if getattr(a, k)})
             g = agent_rooms.update(path, f)
             print(json.dumps({"group": g["path"]}) if a.json else f"group updated: {g['path']} - members "
                   + " ".join("@" + m["handle"] for m in g["members"]))
@@ -490,11 +464,9 @@ def _group(a) -> int:
                               if r["queued"] else "nobody answers (all named members are paused)"))
             return 0
     except ValueError as e:
-        print(str(e), file=sys.stderr)
-        return 2
+        return _fail(str(e))
     except agents.AgentError as e:
-        print(e.message, file=sys.stderr)
-        return 2
+        return _fail(e.message)
     return 2
 
 
@@ -522,10 +494,9 @@ def _values(a) -> dict:
         k = k.strip()
         if "." in k:
             top, sub = k.split(".", 1)
-            out.setdefault(top, {})
-            if not isinstance(out[top], dict):
+            if not isinstance(obj := out.setdefault(top, {}), dict):
                 raise ValueError(f"{top}: an object")
-            out[top][sub] = val
+            obj[sub] = val
         else:
             out[k] = val
     if not out:
@@ -538,8 +509,7 @@ def _set(path: str, a) -> int:
     try:
         fields = _values(a)
     except ValueError as e:
-        print(str(e), file=sys.stderr)
-        return 2
+        return _fail(str(e))
     turn = _turn()
     if turn.get("manager") and turn["path"] == path:
         r = agents.request_change(path, fields, session=turn["session"])
@@ -559,8 +529,7 @@ def _set(path: str, a) -> int:
     if r.get("sandbox_auto"):
         print(agents.SANDBOX_AUTO_NOTE)
     if r.get("error"):
-        print(r["error"], file=sys.stderr)
-        return 1
+        return _fail(r["error"], 1)
     return 0 if r["applied"] or r["asked"] else 2
 
 
@@ -586,8 +555,7 @@ def _cron_job(path: str, a) -> int:
     from . import bus, crons
     job = crons.get_job(a.job)
     if not job or job.get("topic_path") != path:
-        print(f"{a.job}: not a cron job of this agent (see `maxxing agents show`)", file=sys.stderr)
-        return 2
+        return _fail(f"{a.job}: not a cron job of this agent (see `maxxing agents show`)")
     if a.remove:
         crons.delete_job(a.job)
         bus.invalidate("crons", "agents")
@@ -597,50 +565,35 @@ def _cron_job(path: str, a) -> int:
     if a.enabled is not None:
         fields["enabled"] = a.enabled
     if not fields:
-        print("Nothing to change: --schedule, --prompt, --name, --on / --off or --remove", file=sys.stderr)
-        return 2
+        return _fail("Nothing to change: --schedule, --prompt, --name, --on / --off or --remove")
     try:
         crons.update_job(a.job, fields)
     except crons.CronError as e:
-        print(str(e), file=sys.stderr)
-        return 2
+        return _fail(str(e))
     bus.invalidate("crons", "agents")
     print(f"schedule changed: {a.job} ({', '.join(sorted(fields))}; times in {_zone()})")
     return 0
 
 
 def _handler(a) -> int:
-    from . import agents
-    if a.agents_cmd == "list":
-        return _list(a)
-    if a.agents_cmd == "create":
-        return _create(a)
-    if a.agents_cmd == "templates":
-        return _templates(a)
-    if a.agents_cmd == "sandbox-setup":
-        return _sandbox_setup()
-    if a.agents_cmd == "import":
-        return _import(a)
-    if a.agents_cmd == "group":
-        return _group(a)
+    from . import agent_guard, agents
+    whole = {"list": _list, "create": _create, "templates": _templates, "import": _import, "group": _group,
+             "sandbox-setup": lambda _: _sandbox_setup()}
+    if a.agents_cmd in whole:
+        return whole[a.agents_cmd](a)
     try:
         path = resolve(a.agent)
     except ValueError as e:
-        print(str(e), file=sys.stderr)
-        return 2
-    from . import agent_guard
+        return _fail(str(e))
     turn = _turn()
     if turn.get("manager") and turn["path"] and turn["path"] != path and a.agents_cmd in agent_guard.AGENT_OWNER_ONLY:
-        print("Refused: the conversation with an agent changes that agent only.", file=sys.stderr)
-        return 2
+        return _fail("Refused: the conversation with an agent changes that agent only.")
     if a.agents_cmd in ("on", "off", "silent", "loud"):
-        change = ({"enabled": a.agents_cmd == "on"} if a.agents_cmd in ("on", "off")
-                  else {"silent": a.agents_cmd == "silent"})
         try:
-            agents.update(path, change)
+            agents.update(path, {"enabled": a.agents_cmd == "on"} if a.agents_cmd in ("on", "off")
+                          else {"silent": a.agents_cmd == "silent"})
         except agents.AgentError as e:                  # a broken agent.json: a plain error, not a traceback
-            print(e.message, file=sys.stderr)
-            return 2
+            return _fail(e.message)
         print(f"{path}: {a.agents_cmd}")
         return 0
     if a.agents_cmd == "export":
@@ -651,19 +604,16 @@ def _handler(a) -> int:
                 with open(a.output, "w", encoding="utf-8") as f:
                     f.write(md)
             except OSError as e:
-                print(f"Cannot write {a.output}: {e}", file=sys.stderr)
-                return 2
+                return _fail(f"Cannot write {a.output}: {e}")
             print(f"written {a.output}")
         else:
             sys.stdout.write(md)
         return 0
     if a.agents_cmd == "show":
-        from . import agent_guard
         own = agent_guard.sandboxed_turn()
         if own and own != path:
-            print("Refused: in a sandboxed agent turn, `maxxing agents show` shows this agent only "
-                  "(`maxxing agents list` gives the others' paths and names).", file=sys.stderr)
-            return 2
+            return _fail("Refused: in a sandboxed agent turn, `maxxing agents show` shows this agent only "
+                         "(`maxxing agents list` gives the others' paths and names).")
         d = agents.get(path)
         try:
             role = (agents.folder(path) / "CLAUDE.md").read_text(encoding="utf-8", errors="replace")
@@ -685,8 +635,7 @@ def _handler(a) -> int:
             return _cron_job(path, a)
         if a.agents_cmd == "cron":
             if not a.schedule:
-                print("--schedule is needed to add a schedule (or --job ID to change one)", file=sys.stderr)
-                return 2
+                return _fail("--schedule is needed to add a schedule (or --job ID to change one)")
             job = agents.add_cron(path, a.schedule, a.prompt, a.name, enabled=a.enabled is not False)
             print(json.dumps({"cron": job.get("id")}) if a.json else f"schedule added: {job.get('id')} ({a.schedule}, {_zone()})")
             return 0
@@ -717,18 +666,15 @@ def _handler(a) -> int:
             try:
                 other = resolve(a.other)
             except ValueError as e:
-                print(str(e), file=sys.stderr)
-                return 2
+                return _fail(str(e))
             agents.add_trigger(path, {"kind": "agent", "agent": other, "on": a.chain_on, "match": a.match,
                                       "prompt": a.prompt})
             print(json.dumps({"agent": path, "after": other}) if a.json
                   else f"{path} now starts after each automatic run of {other} ({a.chain_on})")
             return 0
     except agents.AgentError as e:
-        print(e.message, file=sys.stderr)
-        return 2
+        return _fail(e.message)
     text = " ".join(a.text).strip()
-    turn = _turn()
     sender = turn["path"]
     if a.agents_cmd == "run" and not sender:
         r = agents.fire(path, trigger="manual", source="command line",
@@ -743,21 +689,24 @@ def _handler(a) -> int:
     # send (or run from an agent's turn): from one agent's turn to another agent - the text is the sender's output,
     # framed as data, one hop more
     if sender == path:
-        print("An agent cannot send work to itself.", file=sys.stderr)
-        return 2
+        return _fail("An agent cannot send work to itself.")
     if not text and a.agents_cmd == "send":
-        print("Nothing to send.", file=sys.stderr)
-        return 2
+        return _fail("Nothing to send.")
     if agents.is_agent_path(sender):
-        try:
-            label = agents.load(sender)["name"] or agents.parse(sender)[2]
-        except Exception:  # noqa: BLE001
-            label = agents.parse(sender)[2]
-        trigger, source = f"agent:{sender}", f"agent {label}"
+        trigger, source = f"agent:{sender}", f"agent {_name(sender, agents.parse(sender)[2])}"
     else:
         trigger, source = "agent:session", "session"
     r = agents.fire(path, trigger=trigger, text=text, source=source, depth=turn["depth"] + 1)
     return _print_fire(path, r, a.json)
+
+
+def _name(path: str, default: str) -> str:
+    """The agent's display name, else its folder name (`default` when it cannot be read)."""
+    from . import agents
+    try:
+        return agents.load(path)["name"] or agents.parse(path)[2]
+    except Exception:  # noqa: BLE001
+        return default
 
 
 cli.register("agents", "agents: create, add triggers, list, run, send work from one agent to another, switch on / off",
