@@ -186,12 +186,19 @@ def test_layout_and_extensions(client, org, fakes):
     assert "counter" not in _by_id(client)
 
 
-def test_day_timeline(client, org, fakes):
+def test_day_timeline(client, org, fakes, monkeypatch):
+    import datetime as dt
     from maxxing import widgets
     hourly = crons.create_job({"name": "Hourly", "command": "true", "schedule": "0 * * * *"})
     crons.create_job({"name": "Every minute", "command": "true", "schedule": "* * * * *"})
     crons.create_job({"name": "Off", "command": "true", "schedule": "0 3 * * *", "enabled": False})
     crons.run_job(hourly["id"])
+    # read the day at 00:05 of today: after ~21:36 fewer than MAX_PLANNED minutes are left and the
+    # "Every minute" lane is no longer dense, so the test failed every evening
+    zone = widgets._zone()
+    today = dt.datetime.now(zone).date()
+    early = dt.datetime(today.year, today.month, today.day, 0, 5, tzinfo=zone).timestamp()
+    monkeypatch.setattr(widgets, "time", types.SimpleNamespace(time=lambda: early))
     card = widgets.day()
     stats = {s["label"]: s["value"] for s in card["blocks"][0]["items"]}
     assert stats["Runs today"] == 1 and stats["Failed today"] == 0

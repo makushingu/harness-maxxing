@@ -10,6 +10,8 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 - Dashboard: `widgets._clock()` / `_reset()` format with `_zone()` (config `timezone`) like `day()` and the cron
   cards, and compare with today's date in that zone; they used `datetime.fromtimestamp(at)` (server local time).
   Test: `test_dashboard.py::test_usage_times_in_the_workspace_time_zone`.
+- Tests: `test_dashboard.py::test_day_timeline` freezes `widgets.time` at 00:05 of today; it failed every evening
+  (after ~21:36 fewer than `MAX_PLANNED` one-minute runs are left, the lane is not dense).
 
 ## 2.0.0-alpha.161 - 2026-11-21
 
