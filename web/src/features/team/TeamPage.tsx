@@ -6,21 +6,21 @@
 // page's header (its name, presence, Summarize, ⋯, then New chat).
 import * as React from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
-import { MessageCircleMore, PictureInPicture2, RefreshCw, SquarePen } from 'lucide-react'
+import { MessageCircleMore, MessagesSquare, PictureInPicture2, SquarePen } from 'lucide-react'
 import { useTeam } from '@/lib/queries'
 import { useT } from '@/i18n'
 import { Button, EmptyState, Tooltip } from '@/components/ui'
 import { PageHeader, useDocumentTitle } from '@/components/shell/Page'
 import { openPageList, TouchListButton } from '@/components/shell/TouchNav'
-import { MessagesSquare } from 'lucide-react'
 import { PageList } from '@/components/shell/PageList'
 import { useCompact } from '@/stores/media'
 import { useUI } from '@/stores/ui'
 import { useTeamUI } from './store'
-import { ChatView } from './Chat'
+import { ChatView, LoadError } from './Chat'
 import { TeamSide } from './Side'
 import { NewChatDialog } from './Dialogs'
 import { AddFriendDialog } from './Friends'
+import { unreadOf } from './people'
 
 export default function TeamPage() {
   const t = useT()
@@ -34,7 +34,7 @@ export default function TeamPage() {
     const step = compact && !!id && !params.get('chat')
     setParams(id ? { chat: id } : {}, { replace: !step })
   }
-  const unread = team?.chats.reduce((n, c) => n + (c.muted ? 0 : c.unread), 0) || 0
+  const unread = unreadOf(team)
   const [query, setQuery] = React.useState('')
   const [newOpen, setNewOpen] = React.useState(false)
   const [addOpen, setAddOpen] = React.useState(false)
@@ -49,8 +49,7 @@ export default function TeamPage() {
   const navigate = useNavigate()
   const toBubble = (id: string) => {
     useTeamUI.getState().openChat(id)
-    if ((window.history.state?.idx ?? 0) > 0) navigate(-1)
-    else navigate('/')
+    return (window.history.state?.idx ?? 0) > 0 ? navigate(-1) : navigate('/')
   }
   const chatActions = (id: string) => (
     <>
@@ -69,17 +68,7 @@ export default function TeamPage() {
       {(!chatId || (isError && !team)) && <PageHeader title={t('team.title')} description={unread ? t('team.unread', { count: unread }) : t('team.desc')} actions={newChat} />}
       {isError && !team ? (
         <div className="flex min-h-0 flex-1 items-center justify-center p-6">
-          <EmptyState
-            tone="error"
-            icon={MessageCircleMore}
-            title={t('team.loadError')}
-            action={
-              <Button variant="outline" size="sm" className="gap-1.5" disabled={isFetching} onClick={() => refetch()}>
-                <RefreshCw className="size-3.5" />
-                {t('common.retry')}
-              </Button>
-            }
-          />
+          <LoadError title={t('team.loadError')} busy={isFetching} onRetry={() => refetch()} />
         </div>
       ) : (
         <div className="flex min-h-0 flex-1">

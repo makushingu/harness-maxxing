@@ -1,7 +1,7 @@
 // Team dialogs: send a message to a session, create a poll, start a chat.
 import * as React from 'react'
 import { useNavigate } from 'react-router'
-import { Check, MessageSquarePlus, MessagesSquare, Plus, Trash2, UserPlus, X } from 'lucide-react'
+import { MessageSquarePlus, MessagesSquare, Plus, Trash2, UserPlus, X } from 'lucide-react'
 import { useSessions, useTeamCreateChat, useTeamForward, useTeamGroup, useTeamPoll, useTopics, type TeamChat, type TeamMessage, type TeamState } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
@@ -9,7 +9,37 @@ import { Button, Checkbox, Dialog, DialogContent, DialogDescription, DialogFoote
 import { Combobox } from '@/components/ui/combobox'
 import { Avatar } from '@/features/profile/Avatar'
 import { EmojiPicker } from '@/features/profile/EmojiPicker'
-import { friendsOf, PersonAvatar, personOf, usePresence } from './people'
+import { friendsOf, PersonAvatar, personOf, Tick, usePresence } from './people'
+
+/** A Team dialog: its title and description, then its body. */
+export function TeamDialog({ open, onOpenChange, title, desc, className, children }: {
+  open: boolean; onOpenChange: (o: boolean) => void; title: string; desc: string; className?: string; children: React.ReactNode
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className={className}>
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{desc}</DialogDescription>
+        </DialogHeader>
+        {children}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+/** Cancel, then the dialog's button. */
+function Footer({ onCancel, ...ok }: React.ComponentProps<typeof Button> & { onCancel: () => void }) {
+  const t = useT()
+  return (
+    <DialogFooter>
+      <Button variant="outline" onClick={onCancel}>
+        {t('common.cancel')}
+      </Button>
+      <Button {...ok} />
+    </DialogFooter>
+  )
+}
 
 /* ------------------------------------------------------------------------------------------------ to a session */
 export function ForwardDialog({
@@ -57,65 +87,54 @@ export function ForwardDialog({
     )
   }
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="md:max-w-xl">
-        <DialogHeader>
-          <DialogTitle>{t('team.fwd.title')}</DialogTitle>
-          <DialogDescription>{t('team.fwd.desc')}</DialogDescription>
-        </DialogHeader>
-        <Segmented
-          value={mode}
-          onChange={setMode}
-          options={[
-            { value: 'existing', label: t('team.fwd.existing'), icon: <MessagesSquare className="size-3.5" /> },
-            { value: 'new', label: t('team.fwd.new'), icon: <MessageSquarePlus className="size-3.5" /> },
-          ]}
-        />
-        {mode === 'existing' ? (
+    <TeamDialog open={open} onOpenChange={onOpenChange} title={t('team.fwd.title')} desc={t('team.fwd.desc')} className="md:max-w-xl">
+      <Segmented
+        value={mode}
+        onChange={setMode}
+        options={[
+          { value: 'existing', label: t('team.fwd.existing'), icon: <MessagesSquare className="size-3.5" /> },
+          { value: 'new', label: t('team.fwd.new'), icon: <MessageSquarePlus className="size-3.5" /> },
+        ]}
+      />
+      {mode === 'existing' ? (
+        <div className="flex flex-col gap-1.5">
+          <Label>{t('team.fwd.session')}</Label>
+          <Combobox
+            value={session}
+            onChange={setSession}
+            options={() => recent.map((s) => ({ value: s.id, label: s.title || s.id, hint: s.path }))}
+            labelOf={(v) => recent.find((s) => s.id === v)?.title || ''}
+            placeholder={t('team.fwd.pickSession')}
+            searchPlaceholder={t('team.fwd.searchSession')}
+          />
+        </div>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2">
           <div className="flex flex-col gap-1.5">
-            <Label>{t('team.fwd.session')}</Label>
+            <Label>{t('team.fwd.topic')}</Label>
             <Combobox
-              value={session}
-              onChange={setSession}
-              options={() => recent.map((s) => ({ value: s.id, label: s.title || s.id, hint: s.path }))}
-              labelOf={(v) => recent.find((s) => s.id === v)?.title || ''}
-              placeholder={t('team.fwd.pickSession')}
-              searchPlaceholder={t('team.fwd.searchSession')}
+              value={path}
+              onChange={setPath}
+              options={() => topics.map((x) => ({ value: x.path, label: x.path }))}
+              placeholder={t('team.fwd.pickTopic')}
+              searchPlaceholder={t('team.fwd.searchTopic')}
             />
           </div>
-        ) : (
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="flex flex-col gap-1.5">
-              <Label>{t('team.fwd.topic')}</Label>
-              <Combobox
-                value={path}
-                onChange={setPath}
-                options={() => topics.map((x) => ({ value: x.path, label: x.path }))}
-                placeholder={t('team.fwd.pickTopic')}
-                searchPlaceholder={t('team.fwd.searchTopic')}
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="fwd-title">{t('team.fwd.sessionTitle')}</Label>
-              <Input id="fwd-title" value={title} onChange={(e) => setTitle(e.target.value)} />
-            </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="fwd-title">{t('team.fwd.sessionTitle')}</Label>
+            <Input id="fwd-title" value={title} onChange={(e) => setTitle(e.target.value)} />
           </div>
-        )}
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="fwd-text">{t('team.fwd.text')}</Label>
-          <Textarea id="fwd-text" value={text} onChange={(e) => setText(e.target.value)} minRows={5} maxRows={14} className="font-mono text-[12.5px]" />
-          <p className="text-[12px] text-muted-foreground">{t('team.fwd.hint')}</p>
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            {t('common.cancel')}
-          </Button>
-          <Button onClick={submit} disabled={!ok} loading={fwd.isPending}>
-            {mode === 'existing' ? t('team.fwd.send') : t('team.fwd.create')}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      )}
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="fwd-text">{t('team.fwd.text')}</Label>
+        <Textarea id="fwd-text" value={text} onChange={(e) => setText(e.target.value)} minRows={5} maxRows={14} className="font-mono text-[12.5px]" />
+        <p className="text-[12px] text-muted-foreground">{t('team.fwd.hint')}</p>
+      </div>
+      <Footer onCancel={() => onOpenChange(false)} onClick={submit} disabled={!ok} loading={fwd.isPending}>
+        {mode === 'existing' ? t('team.fwd.send') : t('team.fwd.create')}
+      </Footer>
+    </TeamDialog>
   )
 }
 
@@ -137,55 +156,44 @@ export function PollDialog({ open, onOpenChange, chatId }: { open: boolean; onOp
   const ok = question.trim() && filled.length >= 2
   const submit = () => ok && create.mutate({ cid: chatId, question: question.trim(), options: filled, multi }, { onSuccess: () => onOpenChange(false) })
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{t('team.poll.new')}</DialogTitle>
-          <DialogDescription>{t('team.poll.desc')}</DialogDescription>
-        </DialogHeader>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="poll-q">{t('team.poll.question')}</Label>
-          <Input id="poll-q" value={question} onChange={(e) => setQuestion(e.target.value)} placeholder={t('team.poll.questionPh')} autoFocus />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label>{t('team.poll.options')}</Label>
-          {options.map((o, i) => (
-            <div key={i} className="flex items-center gap-2">
-              <span className={cn('size-4 shrink-0 border border-muted-foreground/40', multi ? 'rounded-[4px]' : 'rounded-full')} />
-              <Input
-                value={o}
-                onChange={(e) => setOptions(options.map((x, j) => (j === i ? e.target.value : x)))}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    if (i === options.length - 1 && options.length < 12) setOptions([...options, ''])
-                  }
-                }}
-                placeholder={t('team.poll.optionPh', { n: i + 1 })}
-              />
-              <Button size="icon-sm" variant="ghost" onClick={() => setOptions(options.filter((_, j) => j !== i))} disabled={options.length <= 2} aria-label={t('common.delete')}>
-                <Trash2 className="size-3.5" />
-              </Button>
-            </div>
-          ))}
-          <Button variant="ghost" size="sm" className="self-start" onClick={() => setOptions([...options, ''])} disabled={options.length >= 12}>
-            <Plus /> {t('team.poll.add')}
-          </Button>
-        </div>
-        <label className="flex cursor-pointer items-center gap-2.5 text-[13.5px] pointer-coarse:min-h-10">
-          <Checkbox checked={multi} onCheckedChange={(v) => setMulti(!!v)} />
-          {t('team.poll.allowMulti')}
-        </label>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            {t('common.cancel')}
-          </Button>
-          <Button onClick={submit} disabled={!ok} loading={create.isPending}>
-            {t('team.poll.create')}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <TeamDialog open={open} onOpenChange={onOpenChange} title={t('team.poll.new')} desc={t('team.poll.desc')}>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="poll-q">{t('team.poll.question')}</Label>
+        <Input id="poll-q" value={question} onChange={(e) => setQuestion(e.target.value)} placeholder={t('team.poll.questionPh')} autoFocus />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Label>{t('team.poll.options')}</Label>
+        {options.map((o, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <span className={cn('size-4 shrink-0 border border-muted-foreground/40', multi ? 'rounded-[4px]' : 'rounded-full')} />
+            <Input
+              value={o}
+              onChange={(e) => setOptions(options.map((x, j) => (j === i ? e.target.value : x)))}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  if (i === options.length - 1 && options.length < 12) setOptions([...options, ''])
+                }
+              }}
+              placeholder={t('team.poll.optionPh', { n: i + 1 })}
+            />
+            <Button size="icon-sm" variant="ghost" onClick={() => setOptions(options.filter((_, j) => j !== i))} disabled={options.length <= 2} aria-label={t('common.delete')}>
+              <Trash2 className="size-3.5" />
+            </Button>
+          </div>
+        ))}
+        <Button variant="ghost" size="sm" className="self-start" onClick={() => setOptions([...options, ''])} disabled={options.length >= 12}>
+          <Plus /> {t('team.poll.add')}
+        </Button>
+      </div>
+      <label className="flex cursor-pointer items-center gap-2.5 text-[13.5px] pointer-coarse:min-h-10">
+        <Checkbox checked={multi} onCheckedChange={(v) => setMulti(!!v)} />
+        {t('team.poll.allowMulti')}
+      </label>
+      <Footer onCancel={() => onOpenChange(false)} onClick={submit} disabled={!ok} loading={create.isPending}>
+        {t('team.poll.create')}
+      </Footer>
+    </TeamDialog>
   )
 }
 
@@ -235,94 +243,81 @@ export function NewChatDialog({
     onAddFriend()
   }
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="gap-3">
-        <DialogHeader>
-          <DialogTitle>{t('team.new')}</DialogTitle>
-          <DialogDescription>{t('team.newDesc')}</DialogDescription>
-        </DialogHeader>
-        {!all.length ? (
-          <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed px-4 py-8 text-center">
-            <UserPlus className="size-6 text-muted-foreground" />
-            <p className="text-[13px] text-muted-foreground">{t('team.friends.noneDesc')}</p>
-            <Button onClick={addFriend}>
-              <UserPlus /> {t('team.friends.add')}
-            </Button>
-          </div>
-        ) : (
-          <>
-            {members.length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
-                {members.map((id) => {
-                  const p = personOf(team, id)
-                  return (
-                    <button
-                      key={id}
-                      type="button"
-                      onClick={() => toggle(id)}
-                      className="inline-flex items-center gap-1.5 rounded-full border bg-muted py-0.5 pr-1.5 pl-0.5 text-[12.5px] font-medium hover:bg-accent"
-                    >
-                      <Avatar profile={p} size="sm" />
-                      {p.name}
-                      <X className="size-3 text-muted-foreground" />
-                    </button>
-                  )
-                })}
-              </div>
-            )}
-            {all.length > 6 && <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('team.friends.search')} className="h-8 text-[13px]" autoFocus />}
-            <div className="-mx-1 flex max-h-[min(50vh,360px)] flex-col gap-0.5 overflow-y-auto px-1">
-              {shown.map(([id, p]) => {
-                const on = members.includes(id)
+    <TeamDialog open={open} onOpenChange={onOpenChange} title={t('team.new')} desc={t('team.newDesc')} className="gap-3">
+      {!all.length ? (
+        <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed px-4 py-8 text-center">
+          <UserPlus className="size-6 text-muted-foreground" />
+          <p className="text-[13px] text-muted-foreground">{t('team.friends.noneDesc')}</p>
+          <Button onClick={addFriend}>
+            <UserPlus /> {t('team.friends.add')}
+          </Button>
+        </div>
+      ) : (
+        <>
+          {members.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {members.map((id) => {
+                const p = personOf(team, id)
                 return (
                   <button
                     key={id}
                     type="button"
                     onClick={() => toggle(id)}
-                    className={cn('flex items-center gap-3 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-muted', on && 'bg-primary/[0.06] hover:bg-primary/10')}
+                    className="inline-flex items-center gap-1.5 rounded-full border bg-muted py-0.5 pr-1.5 pl-0.5 text-[12.5px] font-medium hover:bg-accent"
                   >
-                    <PersonAvatar person={p} status />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[14px] font-medium">{p.name}</span>
-                      <span className="block truncate text-[12px] text-muted-foreground">{presence(p)}</span>
-                    </span>
-                    <span
-                      className={cn(
-                        'inline-flex size-5 shrink-0 items-center justify-center rounded-full border transition-colors',
-                        on ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/40',
-                      )}
-                    >
-                      {on && <Check className="size-3" strokeWidth={3} />}
-                    </span>
+                    <Avatar profile={p} size="sm" />
+                    {p.name}
+                    <X className="size-3 text-muted-foreground" />
                   </button>
                 )
               })}
-              {!shown.length && <p className="py-4 text-center text-[13px] text-muted-foreground">{t('team.friends.noMatch')}</p>}
             </div>
-            {group && (
-              <div className="flex gap-2 animate-in fade-in-0 slide-in-from-top-1">
-                <EmojiPicker value={emoji} onChange={setEmoji} label="Emoji" />
-                <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('team.groupNameOptional')} />
-              </div>
-            )}
-          </>
-        )}
-        <DialogFooter className="items-center sm:justify-between">
-          <button type="button" onClick={addFriend} className="flex items-center gap-1.5 text-[12.5px] font-medium text-primary hover:underline max-sm:order-last pointer-coarse:min-h-10 pointer-coarse:px-2">
-            <UserPlus className="size-3.5" /> {t('team.friends.add')}
-          </button>
-          {all.length > 0 && (
-            <Button onClick={submit} disabled={!members.length} loading={create.isPending}>
-              {!members.length
-                ? t('team.pickPeople')
-                : group
-                  ? t('team.createGroup', { count: members.length + 1 })
-                  : t('team.writeTo', { name: personOf(team, members[0]).name })}
-            </Button>
           )}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          {all.length > 6 && <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('team.friends.search')} className="h-8 text-[13px]" autoFocus />}
+          <div className="-mx-1 flex max-h-[min(50vh,360px)] flex-col gap-0.5 overflow-y-auto px-1">
+            {shown.map(([id, p]) => {
+              const on = members.includes(id)
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => toggle(id)}
+                  className={cn('flex items-center gap-3 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-muted', on && 'bg-primary/[0.06] hover:bg-primary/10')}
+                >
+                  <PersonAvatar person={p} status />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[14px] font-medium">{p.name}</span>
+                    <span className="block truncate text-[12px] text-muted-foreground">{presence(p)}</span>
+                  </span>
+                  <Tick on={on} className="size-5 shrink-0 transition-colors" />
+                </button>
+              )
+            })}
+            {!shown.length && <p className="py-4 text-center text-[13px] text-muted-foreground">{t('team.friends.noMatch')}</p>}
+          </div>
+          {group && (
+            <div className="flex gap-2 animate-in fade-in-0 slide-in-from-top-1">
+              <EmojiPicker value={emoji} onChange={setEmoji} label="Emoji" />
+              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('team.groupNameOptional')} />
+            </div>
+          )}
+        </>
+      )}
+      <DialogFooter className="items-center sm:justify-between">
+        <button type="button" onClick={addFriend} className="flex items-center gap-1.5 text-[12.5px] font-medium text-primary hover:underline max-sm:order-last pointer-coarse:min-h-10 pointer-coarse:px-2">
+          <UserPlus className="size-3.5" /> {t('team.friends.add')}
+        </button>
+        {all.length > 0 && (
+          <Button onClick={submit} disabled={!members.length} loading={create.isPending}>
+            {!members.length
+              ? t('team.pickPeople')
+              : group
+                ? t('team.createGroup', { count: members.length + 1 })
+                : t('team.writeTo', { name: personOf(team, members[0]).name })}
+          </Button>
+        )}
+      </DialogFooter>
+    </TeamDialog>
   )
 }
 
@@ -354,62 +349,49 @@ export function GroupDialog({ open, onOpenChange, team, chat }: { open: boolean;
       { onSuccess: () => onOpenChange(false) },
     )
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="gap-3">
-        <DialogHeader>
-          <DialogTitle>{t('team.group.manage')}</DialogTitle>
-          <DialogDescription>{t('team.group.manageDesc')}</DialogDescription>
-        </DialogHeader>
-        <div className="flex gap-2">
-          <EmojiPicker value={emoji} onChange={setEmoji} label="Emoji" />
-          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('team.groupNameOptional')} />
-        </div>
-        <div className="flex max-h-[min(50vh,380px)] flex-col gap-0.5 overflow-y-auto">
-          <div className="px-1 pb-1 text-[11.5px] font-semibold tracking-wide text-muted-foreground uppercase">{t('team.members', { count: kept + 1 })}</div>
-          {chat.members.map((id) => {
-            const p = personOf(team, id)
-            const out = remove.includes(id)
-            return (
-              <div key={id} className={cn('flex items-center gap-3 rounded-lg px-2 py-1.5', out && 'opacity-50')}>
-                <PersonAvatar person={p} status />
-                <span className="min-w-0 flex-1">
-                  <span className={cn('block truncate text-[14px] font-medium', out && 'line-through')}>{p.name}</span>
-                  <span className="block truncate text-[12px] text-muted-foreground">{presence(p)}</span>
-                </span>
-                <Button size="sm" variant="ghost" onClick={() => toggle(remove, setRemove, id)} disabled={!out && kept <= 1}>
-                  {out ? t('team.group.keep') : t('team.group.remove')}
-                </Button>
-              </div>
-            )
-          })}
-          {others.length > 0 && <div className="px-1 pt-2 pb-1 text-[11.5px] font-semibold tracking-wide text-muted-foreground uppercase">{t('team.group.addFriends')}</div>}
-          {others.map(([id, p]) => {
-            const on = add.includes(id)
-            return (
-              <button
-                key={id}
-                type="button"
-                onClick={() => toggle(add, setAdd, id)}
-                className={cn('flex items-center gap-3 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-muted', on && 'bg-primary/[0.06]')}
-              >
-                <PersonAvatar person={p} status />
-                <span className="min-w-0 flex-1 truncate text-[14px] font-medium">{p.name}</span>
-                <span className={cn('inline-flex size-5 items-center justify-center rounded-full border', on ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/40')}>
-                  {on && <Check className="size-3" strokeWidth={3} />}
-                </span>
-              </button>
-            )
-          })}
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            {t('common.cancel')}
-          </Button>
-          <Button onClick={submit} disabled={!changed} loading={save.isPending}>
-            {t('common.save')}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <TeamDialog open={open} onOpenChange={onOpenChange} title={t('team.group.manage')} desc={t('team.group.manageDesc')} className="gap-3">
+      <div className="flex gap-2">
+        <EmojiPicker value={emoji} onChange={setEmoji} label="Emoji" />
+        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('team.groupNameOptional')} />
+      </div>
+      <div className="flex max-h-[min(50vh,380px)] flex-col gap-0.5 overflow-y-auto">
+        <div className="px-1 pb-1 text-[11.5px] font-semibold tracking-wide text-muted-foreground uppercase">{t('team.members', { count: kept + 1 })}</div>
+        {chat.members.map((id) => {
+          const p = personOf(team, id)
+          const out = remove.includes(id)
+          return (
+            <div key={id} className={cn('flex items-center gap-3 rounded-lg px-2 py-1.5', out && 'opacity-50')}>
+              <PersonAvatar person={p} status />
+              <span className="min-w-0 flex-1">
+                <span className={cn('block truncate text-[14px] font-medium', out && 'line-through')}>{p.name}</span>
+                <span className="block truncate text-[12px] text-muted-foreground">{presence(p)}</span>
+              </span>
+              <Button size="sm" variant="ghost" onClick={() => toggle(remove, setRemove, id)} disabled={!out && kept <= 1}>
+                {out ? t('team.group.keep') : t('team.group.remove')}
+              </Button>
+            </div>
+          )
+        })}
+        {others.length > 0 && <div className="px-1 pt-2 pb-1 text-[11.5px] font-semibold tracking-wide text-muted-foreground uppercase">{t('team.group.addFriends')}</div>}
+        {others.map(([id, p]) => {
+          const on = add.includes(id)
+          return (
+            <button
+              key={id}
+              type="button"
+              onClick={() => toggle(add, setAdd, id)}
+              className={cn('flex items-center gap-3 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-muted', on && 'bg-primary/[0.06]')}
+            >
+              <PersonAvatar person={p} status />
+              <span className="min-w-0 flex-1 truncate text-[14px] font-medium">{p.name}</span>
+              <Tick on={on} className="size-5" />
+            </button>
+          )
+        })}
+      </div>
+      <Footer onCancel={() => onOpenChange(false)} onClick={submit} disabled={!changed} loading={save.isPending}>
+        {t('common.save')}
+      </Footer>
+    </TeamDialog>
   )
 }

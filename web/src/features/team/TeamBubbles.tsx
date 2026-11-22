@@ -9,7 +9,7 @@ import { useTeam, type TeamChat, type TeamState } from '@/lib/queries'
 import { useT } from '@/i18n'
 import { cn } from '@/lib/utils'
 import { Button, CountBadge, Spinner, Tooltip, toast } from '@/components/ui'
-import { ChatAvatar, chatTitle } from './people'
+import { ChatAvatar, chatTitle, unreadOf } from './people'
 import { useTeamUI } from './store'
 
 // The cards' code (thread, composer, list) loads the first time one opens: the bubbles alone stay light.
@@ -104,9 +104,15 @@ function ListCard({ team }: { team: TeamState | undefined }) {
   )
 }
 
-/** the small × at the top left of a bubble, shown on hover */
-const CLOSE_DOT =
-  'absolute -top-1.5 -left-1.5 inline-flex size-5 items-center justify-center rounded-full border bg-popover text-muted-foreground opacity-0 shadow-sm transition-opacity group-hover/head:opacity-100 hover:text-foreground focus-visible:opacity-100'
+/** The small × at the top left of a bubble, shown on hover. */
+function CloseDot({ label, onClick }: { label: string; onClick: () => void }) {
+  const cls = 'absolute -top-1.5 -left-1.5 inline-flex size-5 items-center justify-center rounded-full border bg-popover text-muted-foreground opacity-0 shadow-sm'
+  return (
+    <button type="button" onClick={onClick} aria-label={label} title={label} className={cn(cls, 'transition-opacity group-hover/head:opacity-100 hover:text-foreground focus-visible:opacity-100')}>
+      <X className="size-3" />
+    </button>
+  )
+}
 
 function Head({ team, chat }: { team: TeamState | undefined; chat: TeamChat }) {
   const t = useT()
@@ -121,15 +127,7 @@ function Head({ team, chat }: { team: TeamState | undefined; chat: TeamChat }) {
           <Badge n={chat.muted ? 0 : chat.unread} />
         </button>
       </Tooltip>
-      <button
-        type="button"
-        onClick={() => close(chat.id)}
-        aria-label={t('team.closeChat')}
-        title={t('team.closeChat')}
-        className={CLOSE_DOT}
-      >
-        <X className="size-3" />
-      </button>
+      <CloseDot label={t('team.closeChat')} onClick={() => close(chat.id)} />
     </div>
   )
 }
@@ -172,7 +170,7 @@ export function TeamBubbles() {
   const cut = Math.max(0, open.length - room)
   const shown = open.slice(cut)
   const waiting = [...new Set([...open.slice(0, cut).reverse(), ...heads])].filter((id) => byId.has(id) && !shown.includes(id))
-  const unread = team?.chats.reduce((n, c) => n + (c.muted ? 0 : c.unread), 0) || 0
+  const unread = unreadOf(team)
   return (
     <>
       <div className="pointer-events-none fixed bottom-4 z-40 flex flex-row-reverse items-end gap-3 [&>*]:pointer-events-auto" style={{ right: COLUMN_W }} data-testid="team-windows">
@@ -198,13 +196,13 @@ export function TeamBubbles() {
               <Badge n={unread} />
             </button>
           </Tooltip>
-          <button type="button" onClick={() => {
+          <CloseDot
+            label={t('team.hideBubbles')}
+            onClick={() => {
               setHidden(true)
               toast.action(t('team.bubblesHidden'), t('team.bubblesHiddenDesc'), { label: t('team.bubblesUndo'), onClick: () => setHidden(false) })
             }}
-            aria-label={t('team.hideBubbles')} title={t('team.hideBubbles')} className={CLOSE_DOT}>
-            <X className="size-3" />
-          </button>
+          />
         </div>
         {waiting.map((id) => (
           <Head key={id} team={team} chat={byId.get(id)!} />

@@ -10,8 +10,8 @@ import {
   useTeamTyping, useTeamUpload, useTeamVote,
   type TeamChat, type TeamFile, type TeamMessage, type TeamState,
 } from '@/lib/queries'
-import { cn } from '@/lib/utils'
-import { fmtDate } from '@/lib/format'
+import { cn, store as ls } from '@/lib/utils'
+import { fmtBytes, fmtDate } from '@/lib/format'
 import { useLang, useT } from '@/i18n'
 import {
   Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, EmptyState, Input, Popover, PopoverContent, PopoverTrigger, Skeleton, Spinner,
@@ -23,33 +23,26 @@ import type { Att } from '@/features/composer/AttachmentChip'
 import { VoiceButton } from '@/features/voice/VoiceButton'
 import { DRAFT_EVENT } from '@/lib/drafts'
 import { insertAtCaret } from '@/features/composer/text'
-import { fmtBytes } from '@/lib/format'
 import { Markdown } from '@/components/ui/markdown'
 import { confirm } from '@/components/ui/alert-dialog'
 import { Avatar } from '@/features/profile/Avatar'
 import { projectColor } from '@/features/tasks/model'
 import { ForwardDialog, GroupDialog, NewChatDialog, PollDialog } from './Dialogs'
 import { AddFriendDialog, useOpenDm } from './Friends'
-import { ChatAvatar, chatTitle, friendsOf, PersonAvatar, personOf, TypingDots, usePresence, useTypingLabel } from './people'
+import { ChatAvatar, chatTitle, friendsOf, nameOf, PersonAvatar, personOf, Tick, TypingDots, usePresence, useTypingLabel } from './people'
 
 /** fmtDate with only the given parts (its default date/time styles cannot be mixed with them). */
 const fmt = (at: number, lang: string, opts: Intl.DateTimeFormatOptions) => fmtDate(at, lang, undefined, { dateStyle: undefined, timeStyle: undefined, ...opts })
-function clock(at: number, lang: string) {
-  return fmt(at, lang, { hour: '2-digit', minute: '2-digit' })
-}
+const day = (at: number) => new Date(at * 1000).toDateString()
+const clock = (at: number, lang: string) => fmt(at, lang, { hour: '2-digit', minute: '2-digit' })
 function when(at: number, lang: string) {
-  const d = new Date(at * 1000)
-  const now = new Date()
-  if (d.toDateString() === now.toDateString()) return clock(at, lang)
-  const days = (now.getTime() - d.getTime()) / 86400_000
-  return fmt(at, lang, days < 6 ? { weekday: 'short' } : { day: 'numeric', month: 'short' })
+  if (day(at) === day(Date.now() / 1000)) return clock(at, lang)
+  return fmt(at, lang, Date.now() / 1000 - at < 6 * 86400 ? { weekday: 'short' } : { day: 'numeric', month: 'short' })
 }
 function dayLabel(at: number, lang: string, t: ReturnType<typeof useT>) {
-  const d = new Date(at * 1000)
-  const now = new Date()
-  if (d.toDateString() === now.toDateString()) return t('team.today')
-  const y = new Date(now.getTime() - 86400_000)
-  if (d.toDateString() === y.toDateString()) return t('team.yesterday')
+  const now = Date.now() / 1000
+  if (day(at) === day(now)) return t('team.today')
+  if (day(at) === day(now - 86400)) return t('team.yesterday')
   return fmt(at, lang, { weekday: 'long', day: 'numeric', month: 'long' })
 }
 
@@ -57,11 +50,7 @@ function dayLabel(at: number, lang: string, t: ReturnType<typeof useT>) {
 export function ChatList({
   team, active, onOpen, onFriends, compact, query,
 }: {
-  team: TeamState | undefined
-  active: string | null
-  onOpen: (id: string) => void
-  onFriends: () => void
-  compact?: boolean
+  team: TeamState | undefined; active: string | null; onOpen: (id: string) => void; onFriends: () => void; compact?: boolean
   /** the Team page: the search is the 🔍 of the list's head and New chat the page's button (no field, no friends row) */
   query?: string
 }) {
@@ -234,6 +223,7 @@ export function ChatView({ team, chatId, onBack, compact, headerExtra, leading }
   const title = chat ? chatTitle(team, chat) : ''
   const pickable = React.useMemo(() => msgs.filter((m) => m.kind !== 'summary' && m.kind !== 'info' && !m.deleted), [msgs])
   const byId = React.useMemo(() => new Map(msgs.map((m) => [m.id, m])), [msgs])
+  const writing = team?.typing?.[chatId] || []
 
   // Seen: everything shown is read (once per new message).
   const lastAt = msgs.length ? msgs[msgs.length - 1].at : 0
@@ -245,7 +235,7 @@ export function ChatView({ team, chatId, onBack, compact, headerExtra, leading }
   React.useLayoutEffect(() => {
     const el = scroller.current
     if (el && !sel) el.scrollTop = el.scrollHeight
-  }, [chatId, msgs.length, summarize.isPending, isLoading, (team?.typing?.[chatId] || []).length])
+  }, [chatId, msgs.length, summarize.isPending, isLoading, writing.length])
 
   const choose = (p: Preset) => {
     const now = Date.now() / 1000
@@ -253,10 +243,6 @@ export function ChatView({ team, chatId, onBack, compact, headerExtra, leading }
     const from = p === 'hour' ? now - 3600 : p === 'two' ? now - 7200 : p === 'day' ? now - 86400 : p === 'last' ? lastSummary : 0
     setPreset(p)
     setSel(new Set(pickable.filter((m) => m.at > from).map((m) => m.id)))
-  }
-  const startSummary = () => {
-    const lastSummary = msgs.some((m) => m.kind === 'summary')
-    choose(lastSummary ? 'last' : 'all')
   }
   const toggle = (id: string, range: boolean) => {
     if (!sel) return
@@ -281,10 +267,10 @@ export function ChatView({ team, chatId, onBack, compact, headerExtra, leading }
   }
 
   const sendLabel = (m: TeamMessage) => {
-    const who = m.author === me ? t('team.you') : personOf(team, m.author).name
+    const who = nameOf(team, m.author, t('team.you'))
     if (m.kind === 'summary') return t('team.fwd.fromSummary', { chat: title }) + '\n\n' + m.text + '\n\n'
     if (m.kind === 'poll' && m.poll) {
-      const lines = m.poll.options.map((o) => `- ${o.label} : ${o.votes.map((v) => (v === me ? t('team.you') : personOf(team, v).name)).join(', ') || '0'}`)
+      const lines = m.poll.options.map((o) => `- ${o.label} : ${o.votes.map((v) => nameOf(team, v, t('team.you'))).join(', ') || '0'}`)
       return t('team.fwd.fromPoll', { chat: title, name: who }) + `\n\n**${m.poll.question}**\n${lines.join('\n')}\n\n`
     }
     const quoted = m.text ? '\n\n' + m.text.split('\n').map((l) => `> ${l}`).join('\n') : ''
@@ -292,22 +278,8 @@ export function ChatView({ team, chatId, onBack, compact, headerExtra, leading }
     return t('team.fwd.fromMessage', { chat: title, name: who }) + quoted + files + '\n\n'
   }
 
-  const retry = failed ? (
-    <EmptyState
-      compact
-      tone="error"
-      icon={MessageCircleMore}
-      title={t('team.chatLoadError')}
-      action={
-        <Button variant="outline" size="sm" className="gap-1.5" disabled={isFetching} onClick={() => refetch()}>
-          <RefreshCw className="size-3.5" />
-          {t('common.retry')}
-        </Button>
-      }
-    />
-  ) : null
+  const retry = failed ? <LoadError compact title={t('team.chatLoadError')} busy={isFetching} onRetry={() => refetch()} /> : null
   if (!chat) return <div className="flex flex-1 items-center justify-center">{isLoading ? <Spinner /> : retry}</div>
-  const writing = team?.typing?.[chatId] || []
   // "Seen" under the user's last message: who read up to it
   const lastMine = [...msgs].reverse().find((m) => m.kind !== 'info')
   const seenBy = lastMine && lastMine.author === me && !lastMine.deleted && !lastMine.sending ? chat.members.filter((p) => (chat.seen?.[p] || 0) >= lastMine.at) : []
@@ -346,7 +318,7 @@ export function ChatView({ team, chatId, onBack, compact, headerExtra, leading }
         <ChatHeader team={team} chat={chat} title={title} compact={compact} writing={writing} />
         <ChatMenu team={team} chat={chat} />
         <Tooltip content={t('team.summarizeHint')}>
-          <Button size="sm" variant={sel ? 'secondary' : 'outline'} className="gap-1.5" aria-label={t('team.summarize')} disabled={summarize.isPending || pickable.length < 2} onClick={() => (sel ? setSel(null) : startSummary())}>
+          <Button size="sm" variant={sel ? 'secondary' : 'outline'} className="gap-1.5" aria-label={t('team.summarize')} disabled={summarize.isPending || pickable.length < 2} onClick={() => (sel ? setSel(null) : choose(msgs.some((m) => m.kind === 'summary') ? 'last' : 'all'))}>
             {summarize.isPending ? <Spinner className="size-3.5" /> : <Sparkles className="size-3.5 text-primary" />}
             {!compact && <span className="max-md:hidden">{t('team.summarize')}</span>}
           </Button>
@@ -361,22 +333,14 @@ export function ChatView({ team, chatId, onBack, compact, headerExtra, leading }
           {msgs.map((m, i) => {
             const prev = msgs[i - 1]
             const next = msgs[i + 1]
-            const newDay = !prev || new Date(prev.at * 1000).toDateString() !== new Date(m.at * 1000).toDateString()
+            const newDay = !prev || day(prev.at) !== day(m.at)
             const card = m.kind !== 'text'
             const joinPrev = !newDay && !card && prev && prev.kind === 'text' && prev.author === m.author && m.at - prev.at < 300
-            const joinNext =
-              !card && next && next.kind === 'text' && next.author === m.author && next.at - m.at < 300 && new Date(next.at * 1000).toDateString() === new Date(m.at * 1000).toDateString()
-            if (m.kind === 'info')
-              return (
-                <React.Fragment key={m.id}>
-                  {newDay && <DaySeparator at={m.at} />}
-                  <InfoLine team={team} m={m} />
-                </React.Fragment>
-              )
+            const joinNext = !card && next && next.kind === 'text' && next.author === m.author && next.at - m.at < 300 && day(next.at) === day(m.at)
             return (
               <React.Fragment key={m.id}>
                 {newDay && <DaySeparator at={m.at} />}
-                <MessageRow
+                {m.kind === 'info' ? <InfoLine team={team} m={m} /> : <MessageRow
                   team={team}
                   chat={chat}
                   m={m}
@@ -393,7 +357,7 @@ export function ChatView({ team, chatId, onBack, compact, headerExtra, leading }
                   onReply={chat.left ? undefined : () => setReplyTo(m)}
                   onEdit={() => setEditing(m)}
                   onDelete={() => remove(m)}
-                />
+                />}
                 {m === lastMine && seenBy.length > 0 && <SeenLine team={team} chat={chat} ids={seenBy} />}
               </React.Fragment>
             )
@@ -421,7 +385,7 @@ export function ChatView({ team, chatId, onBack, compact, headerExtra, leading }
           compact={compact}
           onPoll={() => setPollOpen(true)}
           replyTo={replyTo}
-          replyName={replyTo ? (replyTo.author === me ? t('team.you') : personOf(team, replyTo.author).name) : ''}
+          replyName={replyTo ? nameOf(team, replyTo.author, t('team.you')) : ''}
           onCancelReply={() => setReplyTo(null)}
           editing={editing}
           onCancelEdit={() => setEditing(null)}
@@ -444,6 +408,18 @@ export function ChatView({ team, chatId, onBack, compact, headerExtra, leading }
       />
     </div>
   )
+}
+
+/** A chat or the chats that could not be read, and Retry (the Team page too). */
+export function LoadError({ compact, title, busy, onRetry }: { compact?: boolean; title: string; busy: boolean; onRetry: () => void }) {
+  const t = useT()
+  const action = (
+    <Button variant="outline" size="sm" className="gap-1.5" disabled={busy} onClick={onRetry}>
+      <RefreshCw className="size-3.5" />
+      {t('common.retry')}
+    </Button>
+  )
+  return <EmptyState compact={compact} tone="error" icon={MessageCircleMore} title={title} action={action} />
 }
 
 /** Who the chat is with: the person's name and presence (never their server address), or a group's members. */
@@ -553,8 +529,7 @@ function ChatMenuItems({ team, chat, onManage }: { team: TeamState | undefined; 
 /** "Léa joined", "Tom left the group": a quiet line in the thread. */
 function InfoLine({ team, m }: { team: TeamState | undefined; m: TeamMessage }) {
   const t = useT()
-  const name = m.author === team?.me ? t('team.you') : personOf(team, m.author).name
-  return <div className="my-2 text-center text-[12px] text-muted-foreground">{t(`team.info.${m.info || 'joined'}`, { name })}</div>
+  return <div className="my-2 text-center text-[12px] text-muted-foreground">{t(`team.info.${m.info || 'joined'}`, { name: nameOf(team, m.author, t('team.you')) })}</div>
 }
 
 /** "Seen" (a private chat) or "Seen by Léa, Tom" (a group) under the user's last message. */
@@ -602,22 +577,10 @@ function DaySeparator({ at }: { at: number }) {
 /** Choosing the messages of a summary: quick ranges, then a click per message (Shift: a whole range). */
 function SelectBar({
   count, preset, compact, onPreset, onNone, onCancel, onRun,
-}: {
-  count: number
-  preset: Preset | null
-  compact?: boolean
-  onPreset: (p: Preset) => void
-  onNone: () => void
-  onCancel: () => void
-  onRun: () => void
-}) {
+}: { count: number; preset: Preset | null; compact?: boolean; onPreset: (p: Preset) => void; onNone: () => void; onCancel: () => void; onRun: () => void }) {
   const t = useT()
   const presets: [Preset, string][] = [
-    ['hour', t('team.sum.hour')],
-    ['two', t('team.sum.two')],
-    ['day', t('team.sum.day')],
-    ['last', t('team.sum.sinceLast')],
-    ['all', t('team.sum.all')],
+    ['hour', t('team.sum.hour')], ['two', t('team.sum.two')], ['day', t('team.sum.day')], ['last', t('team.sum.sinceLast')], ['all', t('team.sum.all')],
   ]
   return (
     <div className={cn('shrink-0 border-t bg-background', compact ? 'p-2' : 'px-4 py-3 md:px-8')}>
@@ -656,30 +619,17 @@ function SelectBar({
 }
 
 /* ------------------------------------------------------------------------------------------------ one message */
+/** What can be done to a message (Reply: not in a group the user left). */
+type Acts = { onReply?: () => void; onEdit: () => void; onDelete: () => void }
 function MessageRow({
   team, chat, m, mine, showName, showAvatar, tight, compact, selecting, selected, onSelect, onForward, quoted, onReply, onEdit, onDelete,
-}: {
-  team: TeamState | undefined
-  chat: TeamChat
-  m: TeamMessage
-  mine: boolean
-  showName: boolean
-  showAvatar: boolean
-  tight: boolean
-  compact?: boolean
-  selecting: boolean
-  selected: boolean
-  onSelect: (range: boolean) => void
-  onForward: (m: TeamMessage) => void
-  quoted?: TeamMessage
-  onReply?: () => void
-  onEdit: () => void
-  onDelete: () => void
+}: Acts & {
+  team: TeamState | undefined; chat: TeamChat; m: TeamMessage; mine: boolean; showName: boolean; showAvatar: boolean; tight: boolean; compact?: boolean
+  selecting: boolean; selected: boolean; onSelect: (range: boolean) => void; onForward: (m: TeamMessage) => void; quoted?: TeamMessage
 }) {
   const t = useT()
   const lang = useLang()
   const author = personOf(team, m.author)
-  const quotedName = quoted ? (quoted.author === (team?.me || 'me') ? t('team.you') : personOf(team, quoted.author).name) : ''
   const card = m.kind !== 'text'
   const right = mine && !card
   // Right click = the message's menu (mouse only: a tap shows its tools on touch screens, a long press selects text).
@@ -699,19 +649,11 @@ function MessageRow({
     >
       {selecting && (
         <span className="flex w-5 shrink-0 items-center self-center">
-          <span
-            className={cn(
-              'inline-flex size-[18px] items-center justify-center rounded-full border transition-colors',
-              selected ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/40 bg-background',
-            )}
-          >
-            {selected && <Check className="size-3" strokeWidth={3} />}
-          </span>
+          <Tick on={selected} className="size-[18px] bg-background transition-colors" />
         </span>
       )}
       <div className={cn('flex min-w-0 flex-1 gap-2', right && 'flex-row-reverse')}>
-        {!right && <span className="w-7 shrink-0 self-end">{(showAvatar || card) && <Avatar profile={author} size="md" />}</span>}
-        {right && <span className="w-7 shrink-0 self-end">{showAvatar && <Avatar profile={author} size="md" />}</span>}
+        <span className="w-7 shrink-0 self-end">{(showAvatar || card) && <Avatar profile={author} size="md" />}</span>
         <div className={cn('flex min-w-0 flex-col', card ? 'flex-1' : 'max-w-[85%]', right && 'items-end')}>
           {(showName || card) && (
             <span className="mb-1 flex min-w-0 max-w-full items-baseline gap-2 px-1 text-[12px]">
@@ -733,7 +675,7 @@ function MessageRow({
               >
                 <span className="w-[3px] shrink-0 rounded-full bg-primary/60" />
                 <span className="min-w-0">
-                  <span className="block font-medium">{quoted ? quotedName : t('team.msg.unknown')}</span>
+                  <span className="block font-medium">{quoted ? nameOf(team, quoted.author, t('team.you')) : t('team.msg.unknown')}</span>
                   <span className="line-clamp-2 text-muted-foreground [overflow-wrap:anywhere]">
                     {!quoted ? '' : quoted.deleted ? t('team.msg.deleted') : quoted.kind === 'poll' ? `📊 ${quoted.poll?.question}` : quoted.text || `📎 ${quoted.files?.map((f) => f.name).join(', ')}`}
                   </span>
@@ -863,18 +805,7 @@ function Files({ files: all, right }: { files: (TeamFile & { pending?: boolean; 
 
 function MessageTools({
   team, chat, m, mine, own, compact, onForward, onReply, onEdit, onDelete,
-}: {
-  team: TeamState | undefined
-  chat: TeamChat
-  m: TeamMessage
-  mine: boolean
-  own: boolean
-  compact?: boolean
-  onForward: () => void
-  onReply?: () => void
-  onEdit: () => void
-  onDelete: () => void
-}) {
+}: Acts & { team: TeamState | undefined; chat: TeamChat; m: TeamMessage; mine: boolean; own: boolean; compact?: boolean; onForward: () => void }) {
   const t = useT()
   const react = useTeamReact()
   const [open, setOpen] = React.useState(false)
@@ -940,15 +871,7 @@ function MessageTools({
 /** A message's menu: its "..." (copy, edit, delete) and, on a right click, Reply and Forward first. */
 function MessageMenuItems({
   chat, m, own, onEdit, onDelete, onReply, onForward,
-}: {
-  chat: TeamChat
-  m: TeamMessage
-  own: boolean
-  onEdit: () => void
-  onDelete: () => void
-  onReply?: () => void
-  onForward?: () => void
-}) {
+}: Acts & { chat: TeamChat; m: TeamMessage; own: boolean; onForward?: () => void }) {
   const t = useT()
   const copy = () => {
     void navigator.clipboard?.writeText(m.text).then(() => toast.success(t('team.copied')))
@@ -1060,15 +983,7 @@ function PollCard({ team, chat, m }: { team: TeamState | undefined; chat: TeamCh
                 className={cn('absolute inset-y-0 left-0 transition-[width] duration-500', mineVote ? 'bg-primary/15' : 'bg-muted', o.votes.length === max && voters > 0 && !mineVote && 'bg-muted-foreground/15')}
                 style={{ width: `${pct}%` }}
               />
-              <span
-                className={cn(
-                  'relative inline-flex size-4 shrink-0 items-center justify-center border',
-                  poll.multi ? 'rounded-[4px]' : 'rounded-full',
-                  mineVote ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/40',
-                )}
-              >
-                {mineVote && <Check className="size-2.5" strokeWidth={3} />}
-              </span>
+              <Tick on={mineVote} size="size-2.5" className={cn('relative size-4 shrink-0', poll.multi && 'rounded-[4px]')} />
               <span className="relative min-w-0 flex-1 truncate text-[13.5px] font-medium">{o.label}</span>
               <span className="relative flex -space-x-1.5">
                 {o.votes.slice(0, 4).map((v) => (
@@ -1094,36 +1009,14 @@ type Pending = { key: string; name: string; file?: TeamFile; failed?: boolean }
 /* The text being written in a chat is kept in localStorage (`mx-draft:team:<chat>`, cleared at sign-out with the
  * session drafts): another page, another chat or a reload unmounts the box, the text is there when it comes back. */
 const teamDraftKey = (chatId: string) => `mx-draft:team:${chatId}`
-function loadTeamDraft(chatId: string): string {
-  try {
-    return localStorage.getItem(teamDraftKey(chatId)) || ''
-  } catch {
-    return ''
-  }
-}
-function saveTeamDraft(chatId: string, text: string) {
-  try {
-    if (text) localStorage.setItem(teamDraftKey(chatId), text)
-    else localStorage.removeItem(teamDraftKey(chatId))
-  } catch {
-    /* quota / private mode */
-  }
-}
+const loadTeamDraft = (chatId: string) => ls.get(teamDraftKey(chatId)) || ''
+const saveTeamDraft = (chatId: string, text: string) => (text ? ls.set(teamDraftKey(chatId), text) : ls.remove(teamDraftKey(chatId)))
 
 function Composer({
   chatId, title, compact, onPoll, replyTo, replyName, onCancelReply, editing, onCancelEdit, onEditLast, ref,
 }: {
-  chatId: string
-  title: string
-  compact?: boolean
-  onPoll: () => void
-  replyTo: TeamMessage | null
-  replyName: string
-  onCancelReply: () => void
-  editing: TeamMessage | null
-  onCancelEdit: () => void
-  onEditLast: () => void
-  ref?: React.Ref<{ add: (files: File[]) => void }>
+  chatId: string; title: string; compact?: boolean; onPoll: () => void; replyTo: TeamMessage | null; replyName: string; onCancelReply: () => void
+  editing: TeamMessage | null; onCancelEdit: () => void; onEditLast: () => void; ref?: React.Ref<{ add: (files: File[]) => void }>
 }) {
   const t = useT()
   const send = useTeamSend()
@@ -1174,18 +1067,17 @@ function Composer({
     setText(draft.current)
     onCancelEdit()
   }
-  const add = React.useCallback(
-    (files: File[]) => {
-      const batch = files.map((f, i) => ({ key: `${Date.now()}-${i}-${f.name}`, name: f.name }))
-      setPending((p) => [...p, ...batch])
-      upload.mutate(files, {
-        onSuccess: (r) => setPending((p) => p.map((x) => { const i = batch.findIndex((b) => b.key === x.key); return i >= 0 ? { ...x, file: r.files[i] } : x })),
-        onError: () => setPending((p) => p.map((x) => (batch.some((b) => b.key === x.key) ? { ...x, failed: true } : x))),
-      })
-    },
-    [upload],
-  )
-  React.useImperativeHandle(ref, () => ({ add }), [add])
+  const add = (files: File[]) => {
+    const batch = files.map((f, i) => ({ key: `${Date.now()}-${i}-${f.name}`, name: f.name }))
+    setPending((p) => [...p, ...batch])
+    // mutateAsync: mutate's own callbacks only run for the last call, a second drop during an upload left the first stuck
+    upload.mutateAsync(files).then(
+      (r) => setPending((p) => p.map((x) => { const i = batch.findIndex((b) => b.key === x.key); return i >= 0 ? { ...x, file: r.files[i] } : x })),
+      () => setPending((p) => p.map((x) => (batch.some((b) => b.key === x.key) ? { ...x, failed: true } : x))),
+    )
+  }
+  // the drop zone is the whole chat (ChatView): its files come here
+  React.useImperativeHandle(ref, () => ({ add }))
   const uploading = pending.some((p) => !p.file && !p.failed)
   const ready = pending.filter((p) => p.file)
   const submit = (heard?: string) => {
@@ -1194,9 +1086,7 @@ function Composer({
     if (editing) {
       if (!v && !editing.files?.length) return
       edit.mutate({ cid: chatId, mid: editing.id, text: v })
-      setText(draft.current)
-      onCancelEdit()
-      return
+      return stopEditing()
     }
     if ((!v && !ready.length) || uploading) return
     const files = ready.map((p) => p.file!)
