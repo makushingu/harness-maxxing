@@ -5,6 +5,18 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## 2.0.0-alpha.162 - 2026-11-22
+
+- iOS standalone download (`features/files/download.ts` `shareOrOpen`): the file is read up to 120 s
+  (`SHARE_READ_MS`, 50 MB cap unchanged, "Preparing" toast after 0.6 s); read within `SHARE_WAIT_MS` -> `navigator.share`
+  at once, later (or `NotAllowedError`) -> `toast.action` "File ready" / Save (30 s) whose tap opens the sheet.
+  `location.assign` (opens in the app, no way back) only above 50 MB, without file sharing, or on a read error.
+  New keys `files.preparing|ready|save`.
+- Toaster (`components/ui/toast.tsx`): `bottom-center` on mobile (was `top-center`), `offset` and `mobileOffset`
+  (sonner uses the latter under 600 px) = `calc(var(--safe-bottom-ui) + 8px)`. Wrapped in a `contents` div that stops
+  `pointerdown` (Radix DismissableLayer listens on the document: a tap on a toast closed the viewer), and
+  `[data-sonner-toast]:not([data-visible=false]) { pointer-events: auto }` (a modal sets none on the body).
+
 ## 2.0.0-alpha.161 - 2026-11-21
 
 - Thread: `web/src/pages/sessions/toolLabel.ts`. `toolLabel(name, input, t, rel)` -> `{title, detail, kind, danger}`:
