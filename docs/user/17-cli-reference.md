@@ -308,11 +308,27 @@ See [Harness Browser](33-browser.md).
 | Command | Purpose |
 |---|---|
 | `maxxing memory [--json]` | every memory.md with its line count and the line limit (Settings -> Memory) |
-| `maxxing sessions send SESSION MESSAGE... [--file PATH] [--json]` | write to a session as if typed in it (SESSION: its id, its first 8 characters or its title - case and accents ignored, a unique beginning is enough; `--file` repeatable). Run by Claude from a session, the message says which session sent it; 3 sends in a row between sessions or agents at most. Refused in a sandboxed agent |
-| `maxxing sessions new TOPIC [MESSAGE...] [--title T] [--model M] [--effort E] [--file PATH] [--json]` | start a session in a topic (TOPIC: `<project>/<topic>` or `projects/<project>/topics/<topic>`) with a first message; no `--title`: made from the message. Run by Claude from a session or an agent, the message says which session started it, with the same limit of 3 sends in a row. An agent is started with `maxxing agents run` instead. Refused in a sandboxed agent |
+| `maxxing sessions send SESSION MESSAGE... [--file PATH] [--report-to me\|SESSION] [--json]` | write to a session as if typed in it (SESSION: its id, its first 8 characters or its title - case and accents ignored, a unique beginning is enough; `--file` repeatable). Run by Claude from a session, the message says which session sent it; 3 sends in a row between sessions or agents at most; `--report-to` sends the answers of its next turns back to that session (`me` = the session running the command). Refused in a sandboxed agent |
+| `maxxing sessions new TOPIC [MESSAGE...] [--title T] [--model M] [--effort E] [--file PATH] [--report-to me\|SESSION] [--json]` | start a session in a topic (TOPIC: `<project>/<topic>` or `projects/<project>/topics/<topic>`) with a first message; no `--title`: made from the message. Run by Claude from a session or an agent, the message says which session started it, with the same limit of 3 sends in a row. An agent is started with `maxxing agents run` instead. Refused in a sandboxed agent |
 | `maxxing sessions list [--json]` | the sessions that are not archived: id, state, topic, title |
 | `maxxing sessions compact-logs [--dry-run]` | clip the tool outputs of existing session logs and drop the bulky Claude start-up lists and progress lines (frees disk space; `--dry-run` only reports what would be saved) |
 | `maxxing sessions token-report [--days N] [--json]` | where the tokens of your sessions go, read from Claude Code's transcripts: context size per call, cache rewritten after an idle hour or a model switch, the tools whose outputs fill the context, and what automatic compaction at 400k / 300k / 250k / 200k would have saved on the same calls |
+| `maxxing topics list [--json]` | every project and topic with its description |
+| `maxxing topics new PROJECT/TOPIC [--description TEXT] [--project-description TEXT]` | create a topic, and its project when it is new (lowercase letters, digits, `-`); the description is the first paragraph of its CLAUDE.md |
+
+## Jarvis
+
+| Command | Purpose |
+|---|---|
+| `maxxing jarvis status [--json]` | on or off, its conversation, its settings and its open work |
+| `maxxing jarvis say MESSAGE...` | a message into its conversation |
+| `maxxing jarvis new` | its next message starts a new conversation |
+| `maxxing jarvis work [--all] [--json]` / `jarvis work close N` | the work board (`--all`: closed entries too) / an entry is done (N: its number `#12` or its session id) |
+| `maxxing jarvis digest [--since H] [--mark]` | what changed since the last night pass (`--since`: the last H hours; `--mark`: the night pass is done, the next digest starts now) |
+| `maxxing jarvis brief` / `jarvis dream` | the morning brief now / the night pass now (a separate session) |
+| `maxxing jarvis set KEY VALUE` | a setting: `model`, `dream_model`, `root`, `ask_first`, `internals`, `daily`, `brief`, `dream`, `compact_tokens`, `telegram` |
+
+See [Jarvis](36-jarvis.md).
 
 ## Backup
 
