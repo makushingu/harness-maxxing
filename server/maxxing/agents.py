@@ -1686,11 +1686,6 @@ def _changed_since(path: str, snap: dict | None) -> list[str]:
     return [n for n in WATCHED_FILES if n in files and files[n] != now.get(n)]   # a file an older snapshot never saw
 
 
-def _changed_during(path: str, sid: str) -> list[str]:
-    """The watched files a run changed (the owner's own changes meanwhile, from the page or the CLI, excepted)."""
-    return _changed_since(path, _pop_snapshot(path, sid))
-
-
 def _put_back(path: str, snap: dict) -> bool:
     """agent.json as it was when the run started: a run never gives itself a budget, a key or a right (its other
     files are the owner's to check). False: the snapshot did not keep it."""

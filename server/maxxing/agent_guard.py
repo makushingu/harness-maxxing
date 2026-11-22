@@ -706,18 +706,6 @@ def _sandboxed(p: str) -> bool:
     return agents.exists(p) and agents.load(p)["sandbox"]
 
 
-def sandboxed_session(sid8: str) -> str | None:
-    """The agent path of session <sid8...> when it runs in a sandboxed agent folder, else None."""
-    from . import agents
-    from .sessions import store
-    for sid in store.list_ids():
-        if sid.startswith(sid8):
-            meta = store.read(sid) or {}
-            if _sandboxed(p := meta.get("path") or "") and not agents.manager_turn(meta):
-                return p
-    return None
-
-
 # changing an agent (any agent) is the owner's: refused in every agent turn, sandboxed or not
 AGENT_OWNER_ONLY = {"create", "cron", "webhook", "watch", "after", "on", "off", "silent", "loud", "set", "import", "sandbox-setup", "group"}
 # ...but the owner's conversation with an agent (its manager) runs these on that agent itself
