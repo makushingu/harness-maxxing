@@ -44,10 +44,10 @@ export function playChime() {
   }
 }
 
-export function showSystemNotification(title: string, body: string, onClick?: () => void, tag?: string) {
+export function showSystemNotification(title: string, body: string, onClick?: () => void, tag?: string, url?: string) {
   if (!notificationsSupported() || Notification.permission !== 'granted') return false
+  const icon = appIconSrc(useUI.getState().accent)
   try {
-    const icon = appIconSrc(useUI.getState().accent)
     const n = new Notification(title, { body, tag, icon, badge: icon })
     n.onclick = () => {
       window.focus()
@@ -56,7 +56,10 @@ export function showSystemNotification(title: string, body: string, onClick?: ()
     }
     return true
   } catch {
-    return false // e.g. Android Chrome requires a service worker notification: the toast covers it
+    // Android Chrome only allows notifications made by the service worker (its click opens `url`, see sw.js).
+    if (!navigator.serviceWorker?.controller) return false // no worker: the caller shows a toast instead
+    void navigator.serviceWorker.ready.then((reg) => reg.showNotification(title, { body, tag, icon, badge: icon, data: { url: url || '/' } })).catch(() => {})
+    return true
   }
 }
 
@@ -87,7 +90,7 @@ export function useDoneNotifier() {
       const title = s.state === 'error' ? t('notify.failedTitle') : t('notify.doneTitle')
       const body = `${s.title}${s.last_text ? ` - ${s.last_text.slice(0, 120)}` : ''}`
       if (away) {
-        if (!showSystemNotification(title, body, open, `mx-session-${s.id}`)) toast.action(title, s.title, { label: t('notify.open'), onClick: open })
+        if (!showSystemNotification(title, body, open, `mx-session-${s.id}`, `/sessions?path=${encodeURIComponent(s.path)}&session=${s.id}`)) toast.action(title, s.title, { label: t('notify.open'), onClick: open })
         rang = true
       } else if (!onScreen(s.id)) {
         toast.action(title, s.title, { label: t('notify.open'), onClick: open })

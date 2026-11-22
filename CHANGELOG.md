@@ -5,6 +5,16 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 
 ## Unreleased
 
+Added:
+- **Notifications on your phone, even with the app closed.** Settings -> Notifications -> *Mobile notifications*:
+  turn on *Notify on this device* and every finished turn of yours rings there ("Harness has finished", the session and
+  the start of the answer); a tap opens the session. No Telegram needed, nothing of the conversation goes through
+  Google or Apple, and it adds no dependency.
+
+Fixed:
+- **The "Harness has finished" notification now works on Android Chrome** when the app is open in the background (it
+  was silently dropped: only the banner inside the app showed).
+
 Fixed:
 - **Usage reset times are on your clock.** The Claude usage card of the dashboard showed when the 5-hour and
   7-day windows reset (and the next reading) in the server's time, often UTC, instead of the time zone set in

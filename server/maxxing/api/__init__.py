@@ -47,4 +47,5 @@ ROUTERS = [
     "mail",
     "browser",
     "devices",
+    "push",
 ]

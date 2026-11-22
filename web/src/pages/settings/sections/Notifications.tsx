@@ -8,6 +8,7 @@ import { Callout, SettingRow } from '@/features/common'
 import { notificationsSupported, playChime, showSystemNotification } from '@/features/notify/useDoneNotifier'
 import { SettingsCard, SectionStack } from './ui'
 import { FeedSettingsCards } from '@/features/feed/FeedSettings'
+import { PushSettings } from '@/features/notify/PushSettings'
 
 export function usePermission(): [NotificationPermission | 'unsupported', () => Promise<NotificationPermission | 'unsupported'>] {
   const [perm, setPerm] = React.useState<NotificationPermission | 'unsupported'>(() => (notificationsSupported() ? Notification.permission : 'unsupported'))
@@ -91,6 +92,7 @@ export function NotificationsSection() {
           </Callout>
         )}
       </SettingsCard>
+      <PushSettings />
       <FeedSettingsCards />
     </SectionStack>
   )

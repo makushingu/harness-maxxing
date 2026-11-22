@@ -7,6 +7,13 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Web Push (#167): `maxxing/webpush.py` (VAPID/ES256 on P-256 in pure Python, RFC 6979 nonce, empty pushes, devices + key
+  pair in `webpush.json` 0600, in-memory queue, allowed push hosts, no redirect followed) and `api/push.py` (`/api/push/*`,
+  API.md#push; `startup()` registers a turn-end callback with the Telegram bell's rule, for every session). `web/sw/sw.js`:
+  `push` (POST `/api/push/pending`, one notification per session, tag `mx-session-<id>` = the in-page one, so no
+  double; a visible focused window skips it except on iOS where every push must show one) and `notificationclick`.
+  `features/notify/{push.ts,PushSettings.tsx}`. `showSystemNotification` falls back to `registration.showNotification`
+  when `new Notification()` throws (Android). Tests: `test_webpush.py`.
 - Dashboard: `widgets._clock()` / `_reset()` format with `_zone()` (config `timezone`) like `day()` and the cron
   cards, and compare with today's date in that zone; they used `datetime.fromtimestamp(at)` (server local time).
   Test: `test_dashboard.py::test_usage_times_in_the_workspace_time_zone`.

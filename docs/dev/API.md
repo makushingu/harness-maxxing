@@ -1027,6 +1027,19 @@ Built-in card links are SPA routes: `/sessions/<id>`, `/sessions`, `/tasks?task=
 | GET | `/api/memory` | – | `{max_lines, max_bytes (the weight that goes with the line limit: 1 KB for 10 lines, 0 = no limit), files:[{path (workspace-relative), level:"global"\|"project"\|"topic"\|"agent", lines, bytes, over:bool (above the limit, in lines or in weight), heavy:bool (in weight)}]}` |
 | POST | `/api/memory/compact` | – | `{session: Session}` — a session at the workspace root runs the memory-compaction skill now with the limit (lines and weight) |
 
+## Push (Web Push, Settings -> Notifications -> Mobile notifications)
+
+Web Push (VAPID) with no dependency: ES256 on P-256 in pure Python (`webpush.py`, checked against the RFC 6979 vector) and **empty** pushes - nothing of the conversation goes through the browser vendor's push service. The service worker is woken, then asks `POST /api/push/pending` (same origin, the app's cookie + `X-Maxxing: 1`) what to show. State: `webpush.json` in the state dir (mode 0600: VAPID key pair + devices); the queue of what a device has not fetched yet is in memory (20 items, 24 h). Endpoints are only accepted for the browsers' push services (https, `fcm.googleapis.com`, `*.push.services.mozilla.com`, `web.push.apple.com`, `*.notify.windows.com`), so the server never calls another address. A turn rings every device when a person's session ends (same rule as the Telegram bell: not a job, an agent, a Telegram or a system turn; failed turns too); `404` / `410` from the push service remove the device.
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | `/api/push/key` | – | `{key}`: the application server key (uncompressed P-256 point, base64url) to subscribe with |
+| GET | `/api/push/devices` | – | `[{id, label, at}]` (`id` = first 16 hex digits of the SHA-256 of the endpoint) |
+| POST | `/api/push/devices` | `{endpoint, label?}` | `{id, label}` (registers or refreshes) · `400 bad_endpoint` (not a known push service, or 20 devices) |
+| DELETE | `/api/push/devices/{id}` | – | `{ok: true}` · `404` |
+| POST | `/api/push/test` | – | `{sent}`: devices woken with a test notification |
+| POST | `/api/push/pending` | `{device}` | `{items: [{title, body, url, tag}]}`: what the woken device shows, then forgets (`[]` for an unknown device) |
+
 ## Stats
 
 | Method | Path | Body | Response |
