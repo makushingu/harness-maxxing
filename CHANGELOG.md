@@ -10,6 +10,11 @@ Fixed:
   7-day windows reset (and the next reading) in the server's time, often UTC, instead of the time zone set in
   Settings.
 
+Changed:
+- **Scrolling up a long session no longer freezes the page.** Show earlier (and the automatic loading when you reach
+  the top) now adds the older messages a few at a time instead of all at once: the page stays responsive, mostly
+  felt on a phone.
+
 ## 2.0.0-alpha.161 - 2026-11-21
 
 Changed:
