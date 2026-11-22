@@ -229,6 +229,21 @@ def test_remove_lists_and_refuses_essentials(st, capsys):
     assert cli.main(["deps", "remove", "uv"]) == 1 and "needed" in capsys.readouterr().err
 
 
+def test_drop_other_libc_keeps_only_this_hosts_native_builds(tmp_path):
+    nm = tmp_path / "node_modules"
+    pkgs = {"@rspack/binding-linux-x64-gnu": ["glibc"], "@rspack/binding-linux-x64-musl": ["musl"],
+            "@rspack/core": None, "compositor-musl": ["musl"], "any-libc": []}
+    for name, libc in pkgs.items():
+        (nm / name).mkdir(parents=True)
+        (nm / name / "package.json").write_text(json.dumps({"name": name, **({"libc": libc} if libc is not None else {})}))
+    (nm / "broken").mkdir()
+    (nm / "broken/package.json").write_text("{")
+    assert deps.drop_other_libc(nm, "musl") == [] and deps.drop_other_libc(nm, "") == []
+    assert deps.drop_other_libc(nm, "glibc") == ["@rspack/binding-linux-x64-musl", "compositor-musl"]
+    left = {p.parent.relative_to(nm).as_posix() for p in nm.glob("**/package.json")}
+    assert left == {"@rspack/binding-linux-x64-gnu", "@rspack/core", "any-libc", "broken"}
+
+
 def test_clean_drops_old_versions_orphans_caches_and_big_logs(st, monkeypatch):
     home = deps.root_home()
     (home / ".cache/uv/x").mkdir(parents=True)
