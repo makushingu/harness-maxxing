@@ -23,6 +23,10 @@ New:
 - **Send before the files are up.** Press send while attachments are still uploading: the message goes by itself as
   soon as the last file is up (press again to cancel; a failed file stops it and says why).
 
+Changed:
+- **The video tools take about 90 MB less disk.** Remotion was installed with a second copy of its native parts,
+  built for another kind of Linux and never used on yours: it is now left out (≈ 413 MB -> 325 MB).
+
 Fixed:
 - **`@Jarvis` in a message reaches Jarvis, once.** The `@` menu of a session showed each of Jarvis's daily
   conversations as a session; it now has a single **@Jarvis** line at the top, with its own icon, which always writes
