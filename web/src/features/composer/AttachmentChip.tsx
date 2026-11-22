@@ -15,7 +15,7 @@ export function AttachmentChip({ att, onRemove, list }: { att: Att; onRemove: ()
   const t = useT()
   const done = !!att.path
   return (
-    <div className={cn('group relative flex h-12 max-w-52 items-center gap-2 overflow-hidden rounded-lg border bg-background pr-7 pl-1 pointer-coarse:pr-10', att.error && 'border-destructive/50')}>
+    <div className={cn('group relative flex h-12 max-w-52 items-center gap-2 overflow-hidden rounded-lg border bg-background pr-7 pl-1 pointer-coarse:pr-10', att.error && 'border-destructive/50', done && !att.error && 'hover:bg-fill-1')}>
       {done && !att.error && (
         // the whole chip under the remove button: opens the uploaded file in the viewer
         <button
@@ -23,7 +23,7 @@ export function AttachmentChip({ att, onRemove, list }: { att: Att; onRemove: ()
           onClick={() => openFileViewer(att.path!, list)}
           aria-label={att.name}
           data-testid="attachment-open"
-          className="absolute inset-0 rounded-lg hover:bg-accent/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          className="absolute inset-0 rounded-lg focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
         />
       )}
       {att.preview && isImage(att.name) ? (
