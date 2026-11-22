@@ -14,7 +14,7 @@ import { fileRawUrl, fileThumbUrl } from '@/lib/queries/files'
 import { ItemContext, useFileLink, type ItemCtx } from '@/pages/sessions/Items'
 import { linkifyMarkdown, scopeOf } from '@/pages/sessions/util'
 
-const Markdown = React.lazy(() => import('@/components/ui/markdown').then((m) => ({ default: m.Markdown })))
+export const Markdown = React.lazy(() => import('@/components/ui/markdown').then((m) => ({ default: m.Markdown })))
 
 /** Whose answers: an agent (its folder and `writable` folders) or a group (its folder and its members'). */
 type AnswerOwner = { agent: string } | { group: string }
