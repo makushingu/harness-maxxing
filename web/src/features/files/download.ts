@@ -2,21 +2,23 @@
 // streams to disk and shows its progress, whatever the size (a file read into a Blob first made the click wait for
 // the whole transfer with nothing on screen: a minute for a 20 MB image, and a 200 MB PDF froze the tab).
 // iPhone / iPad home-screen app: an `<a download>` often does nothing there, and a link that leaves the app opens
-// Safari, which has no session (401). So a file that arrives within a moment (the tap is still fresh, as the
-// system asks) goes to the share sheet ("Save to Files", AirDrop...), else it opens inside the app at once, where
-// the system offers to save or share it.
+// Safari, which has no session (401). So the file goes to the share sheet ("Save to Files", AirDrop...): at once
+// when it arrives within a moment (the tap is still fresh, as the system asks), else from a Save button.
 import type * as React from 'react'
 import { toast } from '@/components/ui'
 import { api, errorMessage, isApiError, withQuery } from '@/lib/api'
-import { useT } from '@/i18n'
+import { translate, useT, type TKey } from '@/i18n'
+import { useUI } from '@/stores/ui'
 import { fileRawUrl, fileZipUrl, knownFileStamp } from '@/lib/queries/files'
 import type { FileEntry } from '@/lib/types'
 import { isIOS, isStandalone } from '@/pwa'
 import { basename } from './kinds'
 
 const SHARE_MAX = 50 * 1024 * 1024
-/** iOS share sheet: the file must be read within this, else it opens in the app (no long silent wait). */
+/** iOS share sheet: a file read within this opens the sheet at once (the tap is still fresh), else a Save button. */
 const SHARE_WAIT_MS = 2500
+/** Longest read of a file for the share sheet (it then waits for a tap on Save). */
+const SHARE_READ_MS = 120_000
 
 export type DownloadOpts = { version?: number | null; size?: number | null }
 
@@ -75,23 +77,41 @@ async function readUpTo(url: string, max: number, ctrl: AbortController): Promis
   return new Blob(parts as BlobPart[], { type: res.headers.get('content-type') ?? '' })
 }
 
-/** iOS app: the share sheet when the file is small enough and sharing files is possible, else open it in the app. */
+/** iOS app: the file is read, then the share sheet ("Save to Files"...). When the read outlasted the tap (the system
+ * refuses the sheet then), a "Ready" notice with a Save button gives a fresh tap. Opening the file inside the app
+ * is the last resort only (too large for the sheet, or no file sharing): it has no way to save or go back. */
 async function shareOrOpen(path: string, version: number | null | undefined, size: number | null | undefined) {
   const url = fileRawUrl(path, false, version)
   const share = navigator as Navigator & { canShare?: (d: ShareData) => boolean }
+  const tr = (k: TKey) => translate(useUI.getState().language, k)
   if (share.share && share.canShare && (size == null || size <= SHARE_MAX)) {
+    const started = Date.now()
+    let notice: string | number | undefined
+    const wait = window.setTimeout(() => (notice = toast.info(tr('files.preparing'), basename(path))), 600)
+    let file: File | null = null
     try {
-      const blob = await fetchUpTo(url, SHARE_MAX, SHARE_WAIT_MS)
-      if (blob) {
-        const file = new File([blob], basename(path), { type: blob.type || 'application/octet-stream' })
-        if (share.canShare({ files: [file] })) {
-          await share.share({ files: [file] })
+      const blob = await fetchUpTo(url, SHARE_MAX, SHARE_READ_MS)
+      if (blob) file = new File([blob], basename(path), { type: blob.type || 'application/octet-stream' })
+    } catch {
+      /* network: opened below */
+    } finally {
+      window.clearTimeout(wait)
+      if (notice !== undefined) toast.dismiss(notice)
+    }
+    if (file && share.canShare({ files: [file] })) {
+      const data = { files: [file] }
+      const sheet = () => share.share(data).catch(() => undefined) // closed by the user, or refused: nothing to do
+      if (Date.now() - started < SHARE_WAIT_MS) {
+        try {
+          await share.share(data)
           return
+        } catch (e) {
+          if (e instanceof DOMException && e.name === 'AbortError') return // the user closed the share sheet
+          /* NotAllowedError: the tap is too old, the notice below gives a new one */
         }
       }
-    } catch (e) {
-      if (e instanceof DOMException && e.name === 'AbortError') return // the user closed the share sheet
-      /* not allowed (the tap is too old after a long fetch), network: open it instead */
+      toast.action(tr('files.ready'), basename(path), { label: tr('files.save'), onClick: () => void sheet() }, 30_000)
+      return
     }
   }
   window.location.assign(url)
