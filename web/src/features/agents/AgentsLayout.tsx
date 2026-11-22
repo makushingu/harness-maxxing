@@ -1,19 +1,8 @@
-// The Agents page (/agents/*, Settings -> Features -> agents_page), laid out like a messaging app: the list of
-// agents on the left (AgentsList), the selected agent on the right.
-//   /agents                                  -> the overview on the right: the Office (agents at their desks, by
-//                                               project; Classic or Space view, chosen at the top right)
-//   /agents/office                           -> the same Office (the way to it on a phone, where /agents is the list)
-//   /agents/<project>/<topic>/<name>         -> the agent: its conversation + its profile (AgentPage)
-//   /agents/<project>/<topic>/<name>/runs/<sid> -> one run, the full session in place (RunView)
-//   /agents/groups/<project>/<name>          -> an agent group: the owner talks to several agents (GroupPage)
-//   /agents/groups/new?project=<p>           -> the form of a new group (GroupForm)
-//   ?new=1 opens the creation sheet, ?topic=<project>/<topic> narrows the list.
-// "New agent" opens the creation sheet (CreateAgent.tsx): where and a name, then the empty agent's conversation.
-// The left column, top to bottom: title, search, New agent, the Office entry, the state filter, the agents by project.
-// Touch layout: /agents is the list (like the contacts of a chat app: search, state filter, unread counts - easier to
-// scan on a phone than the cards) with the Office entry; the Office, an agent or a run opens full screen with a back
-// button.
-// Agents and their runs never show in Sessions (sessions = where the user works, agents = automatic work).
+// The Agents page (/agents/*, Settings -> Features -> agents_page), laid out like a messaging app: the list on the left
+// (AgentsList), on the right: /agents and /agents/office the Office (AgentsPage.tsx), /agents/<project>/<topic>/<name>
+// the agent (AgentPage), .../runs/<sid> one run (RunView), /agents/groups/<project>/<name> a group (GroupPage),
+// /agents/groups/new?project=<p> a new group (GroupForm). ?new=1 opens the creation sheet (CreateAgent.tsx), ?topic=
+// narrows the list. Touch: /agents is the list, the rest opens full screen. Agents and their runs never show in Sessions.
 import * as React from 'react'
 import { Route, Routes, useParams, useSearchParams } from 'react-router'
 import { useT } from '@/i18n'
@@ -37,27 +26,10 @@ export default function AgentsLayout() {
   const touch = useCompact()
   const [params, setParams] = useSearchParams()
   const creating = params.get('new') === '1'
-  const setCreating = React.useCallback(
-    (v: boolean) =>
-      setParams(
-        (p) => {
-          if (v) p.set('new', '1')
-          else p.delete('new')
-          return p
-        },
-        { replace: true },
-      ),
-    [setParams],
-  )
+  const setCreating = React.useCallback((v: boolean) => setParams((p) => (v ? p.set('new', '1') : p.delete('new'), p), { replace: true }), [setParams])
   // "New agent" and the empty page (its manual / template / import choices, with the picked topic) open the sheet.
   const [start, setStart] = React.useState<CreateStart | null>(null)
-  const openWith = React.useCallback(
-    (s: CreateStart) => {
-      setStart(s)
-      setCreating(true)
-    },
-    [setCreating],
-  )
+  const openWith = React.useCallback((s: CreateStart) => (setStart(s), setCreating(true)), [setCreating])
   const topic = params.get('topic') || ''
   const topicPath = topic ? `projects/${topic.replace('/', '/topics/')}` : undefined
   // "New agent": the sheet asks where (the listed topic if the list is narrowed to one) and a name.
@@ -79,8 +51,6 @@ export default function AgentsLayout() {
       </Routes>
     </PreviewProvider>
   )
-  const create = <CreateAgent open={creating} onOpenChange={setCreating} start={start} topicPath={topicPath} />
-
   // The list in the second-level sidebar (components/shell/PageList.tsx; touch: the left drawer), the agent or the
   // Office in the page.
   return (
@@ -95,7 +65,7 @@ export default function AgentsLayout() {
         )}
       </PageList>
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto">{detail}</div>
-      {create}
+      <CreateAgent open={creating} onOpenChange={setCreating} start={start} topicPath={topicPath} />
     </div>
   )
 }

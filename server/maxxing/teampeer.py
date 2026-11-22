@@ -21,6 +21,7 @@ Outgoing requests go only to https addresses with public IPs (`team_insecure` / 
 from __future__ import annotations
 
 import base64
+import contextlib
 import hashlib
 import hmac
 import ipaddress
@@ -79,7 +80,7 @@ def _ip_kind(host: str) -> str:
     """public | tailscale | private for an IP or a host name (resolved)."""
     if host.endswith(".ts.net"):
         return "tailscale"
-    if host in ("localhost",) or host.endswith(".local") or host.endswith(".internal"):
+    if host == "localhost" or host.endswith((".local", ".internal")):
         return "private"
     try:
         ips = [ipaddress.ip_address(host)]
@@ -101,8 +102,7 @@ def _ip_kind(host: str) -> str:
 
 
 def _same(given: str, expected: str) -> bool:
-    """Constant-time check of a proof or signature sent by another server (text that is not ASCII is simply wrong:
-    hmac.compare_digest would raise TypeError on it)."""
+    """Constant-time check of a proof or signature (non-ASCII text is just wrong: compare_digest would raise on it)."""
     return hmac.compare_digest(given.encode("utf-8", "surrogatepass"), expected.encode())
 
 
@@ -132,15 +132,9 @@ def readiness() -> dict:
         return {"ok": False, "address": raw, "reason": "no_address"}
     if insecure():
         return {"ok": True, "address": addr, "reason": ""}
-    host = urlsplit(addr).hostname or ""
-    kind = _ip_kind(host)
-    if kind == "tailscale":
-        return {"ok": False, "address": addr, "reason": "tailscale"}
-    if kind == "private":
-        return {"ok": False, "address": addr, "reason": "local"}
-    if not addr.startswith("https://"):
-        return {"ok": False, "address": addr, "reason": "not_https"}
-    return {"ok": True, "address": addr, "reason": ""}
+    reason = {"tailscale": "tailscale", "private": "local"}.get(_ip_kind(urlsplit(addr).hostname or ""))
+    reason = reason or ("" if addr.startswith("https://") else "not_https")
+    return {"ok": not reason, "address": addr, "reason": reason}
 
 
 OWN_TTL = 60.0                                             # own_address() resolves the public URL at most this often
@@ -193,8 +187,7 @@ _public_client: httpx.Client | None = None
 
 
 def _http():
-    """What calls other servers: the plain httpx functions in insecure mode, else a client that only connects to the
-    public IP it checked."""
+    """What calls other servers: plain httpx in insecure mode, else a client that only connects to the IP it checked."""
     global _public_client
     if insecure():
         return httpx
@@ -218,8 +211,7 @@ def _path() -> Path:
 
 def _load() -> dict:
     doc = config.read_json(_path(), None)
-    if not isinstance(doc, dict):
-        doc = {}
+    doc = doc if isinstance(doc, dict) else {}
     doc.setdefault("peers", {})       # address -> {key, status, name, emoji, color, fingerprint, last_seen, group_keys}
     doc.setdefault("invites", [])     # [{code, expires}]
     doc.setdefault("files", {})       # file id -> {path, chat, name, size, mime}
@@ -230,18 +222,21 @@ def _load() -> dict:
 _peeked: tuple[tuple | None, dict] | None = None
 
 
+def _sig(path: Path) -> tuple | None:
+    """What tells a file changed (peers.json here, team.json in team)."""
+    try:
+        st = path.stat()
+    except OSError:
+        return None
+    return (st.st_ino, st.st_mtime_ns, st.st_size)
+
+
 def _peek() -> dict:
     """peers.json for reading only (never change what it returns): parsed again only when the file changed."""
     global _peeked
-    try:
-        st = _path().stat()
-        sig = (st.st_ino, st.st_mtime_ns, st.st_size)
-    except OSError:
-        sig = None
     cached = _peeked
-    if sig is None or cached is None or cached[0] != sig:
-        cached = (sig, _load())
-        _peeked = cached
+    if (sig := _sig(_path())) is None or cached is None or cached[0] != sig:
+        cached = _peeked = (sig, _load())
     return cached[1]
 
 
@@ -328,8 +323,7 @@ def _clean_profile(p: dict) -> dict:
 
 
 def photo_url(address: str, p: dict) -> str:
-    """Where the UI shows a contact's photo ("" = none): our server fetches it once per version, see
-    profile_photo.cached()."""
+    """Where the UI shows a contact's photo ("" = none), fetched once per version (profile_photo.cached())."""
     v = str(p.get("photo") or "")
     return f"/api/team/people/{pid(address)}/photo?v={v}" if profile_photo.VERSION.fullmatch(v) else ""
 
@@ -357,11 +351,7 @@ def join(invitation: str) -> dict:
     addr = _check_target(addr_raw)
     if addr == me:
         raise PeerError(400, "self", "This is your own invitation")
-    try:
-        key0 = _unb64(code)
-    except ValueError:
-        raise PeerError(400, "bad_invitation", "Damaged invitation") from None
-    if len(key0) != 32:
+    if (key0 := _key_ok(code)) is None:
         raise PeerError(400, "bad_invitation", "Damaged invitation")
     nonce_b = _b64(secrets.token_bytes(16))
     body = {"from": me, "to": addr, "nonce": nonce_b, "proof": _mac(key0, "hello", me, addr, nonce_b), "profile": _profile()}
@@ -508,10 +498,8 @@ def forget(address: str) -> None:
         p = _drop_link(doc, address)
         _save(doc)
     if p and p.get("status") == "accepted":
-        try:
+        with contextlib.suppress(PeerError):
             _deliver_now(address, {"type": "bye"}, key=_unb64(p["key"]))
-        except PeerError:
-            pass
 
 
 def _drop_link(doc: dict, address: str) -> dict | None:
@@ -607,10 +595,7 @@ def touch(address: str) -> None:
             return
         doc = _load()
         p = doc["peers"].get(address)
-        if not p:
-            return
-        last = float(p.get("last_seen") or 0)
-        if now - last < SEEN_WRITE_S:
+        if not p or now - (last := float(p.get("last_seen") or 0)) < SEEN_WRITE_S:
             return
         p["last_seen"] = now
         config.write_json(_path(), doc, mode=0o600)
@@ -655,17 +640,11 @@ def receive(frm: str, event: dict, scope: str = "") -> dict:
             p.update(_clean_profile(event.get("profile")))
             _save(doc)
             return {"ok": True}
-        if kind == "presence":                 # "my Harness is open": nothing but last_seen (contacts only)
-            if p.get("status") != "accepted":
-                raise PeerError(403, "forbidden", "Not a contact")
-            presence = True
-        else:
-            presence = False
-    if presence:
-        touch(frm)
-        return {"ok": True}
+        if kind == "presence" and p.get("status") != "accepted":   # "my Harness is open": last_seen (contacts only)
+            raise PeerError(403, "forbidden", "Not a contact")
     touch(frm)
-    team.apply_remote(frm, p.get("status") == "accepted" and not scope, event)
+    if kind != "presence":
+        team.apply_remote(frm, p.get("status") == "accepted" and not scope, event)
     return {"ok": True}
 
 
@@ -673,10 +652,10 @@ GROUP_PEERS_MAX = 500                                      # people known only t
 
 
 def add_group_peers(chat: str, members: list[tuple[str, str | None, dict]]) -> None:
-    """Members of a group we are in: we may talk with each about that chat only - (address, key, profile), one
-    write (no key: a member we already know, only its photo may be filled). A contact (or a pending request) keeps its own link key: a key handed by the group's creator would let
-    the creator speak as it. A key that is not 32 bytes is skipped; a known person's name is not changed (one
-    group's creator cannot rename them for the others)."""
+    """Members of a group we are in, [(address, key, profile)], one write: we may talk with each about that chat only.
+    A contact (or a pending request) keeps its own link key: a key handed by the group's creator would let the creator
+    speak as it. A key that is not 32 bytes is skipped; a known person's name is not changed (one group's creator
+    cannot rename them for the others; only a missing photo is filled)."""
     with _lock:
         doc = _load()
         known = sum(1 for p in doc["peers"].values() if p.get("status") == "group")
@@ -704,19 +683,22 @@ def add_group_peers(chat: str, members: list[tuple[str, str | None, dict]]) -> N
             _save(doc)
 
 
+def _drop_key(doc: dict, address: str, chat: str) -> bool:
+    """The key of an address for a group goes; a peer with no group left is forgotten. -> something changed."""
+    p = doc["peers"].get(address)
+    if not p or chat not in (p.get("group_keys") or {}):
+        return False
+    p["group_keys"].pop(chat)
+    if p.get("status") == "group" and not p["group_keys"]:
+        doc["peers"].pop(address)
+    return True
+
+
 def drop_chat_keys(chat: str) -> None:
-    """We are out of a group: every key for it goes (group-only people with no group left are forgotten)."""
+    """We are out of a group: every key for it goes."""
     with _lock:
         doc = _load()
-        changed = False
-        for a in list(doc["peers"]):
-            p = doc["peers"][a]
-            if chat in (p.get("group_keys") or {}):
-                p["group_keys"].pop(chat)
-                changed = True
-                if p.get("status") == "group" and not p["group_keys"]:
-                    doc["peers"].pop(a)
-        if changed:
+        if sum(_drop_key(doc, a, chat) for a in list(doc["peers"])):
             _save(doc)
 
 
@@ -826,7 +808,7 @@ def share_profile() -> None:
     replaces one still waiting)."""
     profile = _profile()
     now = time.time()
-    with _lock:                                # one write of team.json, even for hundreds of group members
+    with _lock:                                # one write of peers.json, even for hundreds of group members
         doc = _load()
         addrs = [a for a, p in doc["peers"].items() if p.get("status") == "accepted"]
         members = [(a, next(iter(p["group_keys"]))) for a, p in doc["peers"].items()
@@ -848,16 +830,11 @@ def has_link(address: str, chat: str) -> bool:
 
 
 def drop_group_key(address: str, chat: str) -> None:
-    """A member left a group (or was removed): its key for that group goes; a peer with no group left is forgotten."""
+    """A member left a group (or was removed)."""
     with _lock:
         doc = _load()
-        p = doc["peers"].get(address)
-        if not p or chat not in (p.get("group_keys") or {}):
-            return
-        p["group_keys"].pop(chat)
-        if p.get("status") == "group" and not p["group_keys"]:
-            doc["peers"].pop(address)
-        _save(doc)
+        if _drop_key(doc, address, chat):
+            _save(doc)
 
 
 def unshare_file(fid: str) -> None:
@@ -979,8 +956,7 @@ def announces_photo(person: str, version: str) -> bool:
 
 
 def fetch_photo(person: str, version: str) -> bytes | None:
-    """The photo of a person (id) from its server: signed GET with its contact key, else one of its group keys.
-    None on any failure."""
+    """A person's photo from its server: signed GET with its contact key, else a group key. None on any failure."""
     hit = _photo_peer(person, version)
     if not hit:
         return None

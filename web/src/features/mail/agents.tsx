@@ -14,20 +14,10 @@ import { useLang, useT, type TFn, type TKey } from '@/i18n'
 import { shortDate } from './shared'
 
 const WHAT: Record<string, TKey> = {
-  seen: 'mail.seen.w.seen',
-  read: 'mail.seen.w.read',
-  draft: 'mail.seen.w.draft',
-  filed: 'mail.seen.w.filed',
-  archived: 'mail.seen.w.archived',
-  'moved to the trash': 'mail.seen.w.trash',
-  'marked as junk': 'mail.seen.w.junk',
-  'moved to the inbox': 'mail.seen.w.inbox',
-  'marked read': 'mail.seen.w.markedRead',
-  'marked unread': 'mail.seen.w.markedUnread',
-  starred: 'mail.seen.w.starred',
-  unstarred: 'mail.seen.w.unstarred',
-  replied: 'mail.seen.w.replied',
-  sent: 'mail.seen.w.sent',
+  seen: 'mail.seen.w.seen', read: 'mail.seen.w.read', draft: 'mail.seen.w.draft', filed: 'mail.seen.w.filed', archived: 'mail.seen.w.archived',
+  'moved to the trash': 'mail.seen.w.trash', 'marked as junk': 'mail.seen.w.junk', 'moved to the inbox': 'mail.seen.w.inbox',
+  'marked read': 'mail.seen.w.markedRead', 'marked unread': 'mail.seen.w.markedUnread', starred: 'mail.seen.w.starred',
+  unstarred: 'mail.seen.w.unstarred', replied: 'mail.seen.w.replied', sent: 'mail.seen.w.sent',
 }
 // the details the server writes in English; anything else (a folder name) is shown as it is
 const DETAIL: Record<string, TKey> = {
@@ -51,7 +41,7 @@ export function seenText(t: TFn, lang: string, e: MailSeenBy): string {
 }
 
 /** The agents that did something with a message, each once (its last action), in order of their first one. */
-function byAgent(list: MailSeenBy[]): { agent: string; name: string; avatar: MailSeenBy['avatar']; events: MailSeenBy[] }[] {
+function byAgent(list: MailSeenBy[]) {
   const out = new Map<string, { agent: string; name: string; avatar: MailSeenBy['avatar']; events: MailSeenBy[] }>()
   for (const e of list) {
     const g = out.get(e.agent) || { agent: e.agent, name: e.name, avatar: e.avatar, events: [] }
@@ -69,10 +59,7 @@ export function SeenByAvatars({ list, className }: { list?: MailSeenBy[]; classN
   const groups = byAgent(list)
   const tip = (
     <div className="grid gap-0.5">
-      {groups.map((g) => {
-        const last = g.events[g.events.length - 1]
-        return <span key={g.agent}>{t('mail.seen.by', { name: g.name, what: seenText(t, lang, last) })}</span>
-      })}
+      {groups.map((g) => <span key={g.agent}>{t('mail.seen.by', { name: g.name, what: seenText(t, lang, g.events[g.events.length - 1]) })}</span>)}
     </div>
   )
   return (
@@ -107,9 +94,7 @@ export function SeenByLine({ list }: { list?: MailSeenBy[] }) {
             ) : (
               <span className="shrink-0 font-medium text-foreground">{name}</span>
             )}
-            <span className="min-w-0 truncate">
-              {g.events.map((e) => ` · ${seenText(t, lang, e)}`).join('')}
-            </span>
+            <span className="min-w-0 truncate">{g.events.map((e) => ` · ${seenText(t, lang, e)}`).join('')}</span>
           </div>
         )
       })}
@@ -153,9 +138,7 @@ export function OutboxBanner({ acc, onEdit }: { acc: string; onEdit: (draft: { f
       </button>
       {open && (
         <ul className="grid max-h-[50vh] grid-cols-[minmax(0,1fr)] gap-2 overflow-y-auto px-3 pb-3">
-          {items.map((x) => (
-            <OutboxItem key={x.id} item={x} onEdit={onEdit} />
-          ))}
+          {items.map((x) => <OutboxItem key={x.id} item={x} onEdit={onEdit} />)}
         </ul>
       )}
     </div>
@@ -200,12 +183,8 @@ function OutboxItem({ item: x, onEdit }: { item: MailOutboxItem; onEdit: (draft:
           </p>
         )}
         {long && !all && (
-          <button
-            type="button"
-            className="justify-self-start text-xs text-primary hover:underline pointer-coarse:-mx-2 pointer-coarse:inline-flex pointer-coarse:min-h-10 pointer-coarse:items-center pointer-coarse:px-2"
-            onClick={() => setAll(true)}
-            data-testid="mail-outbox-all"
-          >
+          <button type="button" onClick={() => setAll(true)} data-testid="mail-outbox-all"
+            className="justify-self-start text-xs text-primary hover:underline pointer-coarse:-mx-2 pointer-coarse:inline-flex pointer-coarse:min-h-10 pointer-coarse:items-center pointer-coarse:px-2">
             {t('mail.outbox.showAll')}
           </button>
         )}

@@ -1,19 +1,18 @@
 // Building blocks shared by the Agents page, the creation sheet and an agent's page.
 import * as React from 'react'
 import { Link, useLocation, useNavigate } from 'react-router'
-import { Bot, Clock, MessagesSquare, Rss, Send, Settings2, Webhook } from 'lucide-react'
+import { Bot, MessagesSquare, Settings2 } from 'lucide-react'
 import { useT, type TFn, type TKey } from '@/i18n'
 import { agentRoute, useClaudeStatus, useContinueRun, useDeleteAgent, useFeedSettings, usePatchHook, useRunAgent, useSecrets, useSettings } from '@/lib/queries'
-import type { Agent, AgentLimits, AgentWebhookResult, AgentTrigger, AgentTriggerInput, AgentWebhookKind, Cron, FeedLevel, PermissionMode } from '@/lib/types'
-import { cn } from '@/lib/utils'
-import { Badge, Button, Checkbox, confirm, CopyButton, toast, EmptyState, FormField, Input, Select, Sensitive, Textarea, Tooltip, useMask, type DotTone } from '@/components/ui'
+import type { Agent, AgentLimits, AgentWebhookResult, AgentTrigger, AgentTriggerInput, AgentWebhookKind, FeedLevel, PermissionMode } from '@/lib/types'
+import { Button, Checkbox, confirm, CopyButton, toast, EmptyState, FormField, Input, Select, Sensitive, Textarea, Tooltip, useMask, type DotTone } from '@/components/ui'
 import { Callout } from '@/features/common'
 import { Page } from '@/components/shell/Page'
 import { fmtRelative } from '@/lib/format'
 import { fmtCost, sessionsUrl } from '@/pages/sessions/util'
 
-export const FEED_LEVELS: FeedLevel[] = ['info', 'success', 'warning', 'error']
-export const WEBHOOK_KINDS: AgentWebhookKind[] = ['generic', 'stripe', 'shopify', 'github']
+const FEED_LEVELS: FeedLevel[] = ['info', 'success', 'warning', 'error']
+const WEBHOOK_KINDS: AgentWebhookKind[] = ['generic', 'stripe', 'shopify', 'github']
 export const DEFAULT_LIMITS: AgentLimits = { usd_per_day: 2, runs_per_hour: 6, timeout_s: 1800, debounce_s: 60 }
 
 /** When something happened, to fill "Ran {when}": "just now" under a minute (Intl alone says a bare "now", which
@@ -94,8 +93,6 @@ export function PermissionSelect({ value, onChange, id }: { value: '' | Permissi
   )
 }
 
-/** "acme / blog" of an agent. */
-export const whereOf = (a: Pick<Agent, 'project' | 'topic'>) => `${a.project} / ${a.topic}`
 /** First line of the role. */
 export const firstLine = (s: string) => (s || '').split('\n').map((x) => x.replace(/^#+\s*/, '').trim()).find(Boolean) || ''
 
@@ -103,35 +100,6 @@ export const firstLine = (s: string) => (s || '').split('\n').map((x) => x.repla
 export function costLine(t: TFn, a: Agent): string {
   const spent = fmtCost(a.cost_today || 0)
   return a.limits.usd_per_day > 0 ? t('agents.costBudget', { spent, budget: fmtCost(a.limits.usd_per_day) }) : t('agents.costToday', { spent })
-}
-
-/** The triggers of an agent as chips: its crons, its feed triggers (webhooks included), Telegram. */
-export function TriggerChips({ agent, crons, className }: { agent: Agent; crons?: Cron[]; className?: string }) {
-  const t = useT()
-  const mask = useMask()
-  const feed = agent.triggers.filter((x) => x.enabled !== false)
-  const chip = 'gap-1 font-normal'
-  return (
-    <div className={cn('flex flex-wrap gap-1', className)}>
-      {(crons || []).filter((c) => c.enabled).map((c) => (
-        <Badge key={c.id} variant="secondary" className={chip} title={c.human}>
-          <Clock className="size-3" /> <span className="max-w-40 truncate">{mask(c.human || c.schedule, 6)}</span>
-        </Badge>
-      ))}
-      {feed.map((x) => (
-        <Badge key={x.id} variant="secondary" className={chip}>
-          {x.hook_id ? <Webhook className="size-3" /> : <Rss className="size-3" />}
-          <span className="max-w-40 truncate">{x.source ? mask(x.source, 6) : t('agents.trigger.anySource')}</span>
-        </Badge>
-      ))}
-      {agent.telegram && (
-        <Badge variant="secondary" className={chip}>
-          <Send className="size-3" /> Telegram
-        </Badge>
-      )}
-      {!crons?.length && !feed.length && !agent.telegram && <span className="text-xs text-muted-foreground">{t('agents.trigger.manualOnly')}</span>}
-    </div>
-  )
 }
 
 /** A number field that keeps what is typed ("0.", "0,5", empty) and only hands over a valid number; the text is
@@ -166,8 +134,7 @@ function NumberInput({ value, onValue, ...rest }: { value: number; onValue: (n: 
   )
 }
 
-/** Daily budget, runs per hour, time limit, grouping window. */
-/** The limits of an agent; part: only its daily budget (`budget`), or all but it (`rest`). */
+/** Daily budget, runs per hour, time limit, grouping window; part: only the budget (`budget`), or all but it (`rest`). */
 export function LimitsFields({ value, onChange, part }: { value: AgentLimits; onChange: (l: AgentLimits) => void; part?: 'budget' | 'rest' }) {
   const t = useT()
   const num = (k: Exclude<keyof AgentLimits, 'chat_idle_h'>, scale = 1) => ({

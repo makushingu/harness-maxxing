@@ -30,8 +30,24 @@ def _bad(e: agents.AgentError) -> HTTPException:
     return HTTPException(e.status, detail={"error": e.code, "message": e.message})
 
 
+@contextlib.contextmanager
+def _errors():
+    """An AgentError -> its HTTP error."""
+    try:
+        yield
+    except agents.AgentError as e:
+        raise _bad(e) from None
+
+
 def _path(project: str, topic: str, name: str) -> str:
     return agents.agent_path(project, topic, name)
+
+
+def _existing(project: str, topic: str, name: str) -> str:
+    path = agents.agent_path(project, topic, name)
+    if not agents.exists(path):
+        raise HTTPException(404, detail={"error": "not_found", "message": "Agent not found"})
+    return path
 
 
 class Avatar(BaseModel):
@@ -186,10 +202,8 @@ def get_layout():
 @router.put("/layout")
 def put_layout(body: Any = Body(...)):
     _on()
-    try:
+    with _errors():
         return agents.save_layout(body)
-    except agents.AgentError as e:
-        raise _bad(e) from None
 
 
 @router.post("/import")
@@ -217,52 +231,38 @@ def create_agent(body: AgentIn):
         if tpl is None:
             raise HTTPException(400, detail={"error": "bad_template", "message": f"No template {body.template!r}"})
         fields = {**agent_templates.fields(tpl, [x["name"] for x in vault.list_secrets()]), **fields}
-    try:
+    with _errors():
         return agents.create(body.topic_path, body.name, fields)
-    except agents.AgentError as e:
-        raise _bad(e) from None
 
 
 @router.get("/{project}/{topic}/{name}")
 def get_agent(project: str, topic: str, name: str):
     _on()
-    try:
+    with _errors():
         a = agents.get(_path(project, topic, name))
-    except agents.AgentError as e:
-        raise _bad(e) from None
     return {**a, "crons": agents.cron_jobs(a["path"])}
 
 
 @router.get("/{project}/{topic}/{name}/media-roots")
 def agent_media_roots(project: str, topic: str, name: str):
     """The folders whose files the agent's answers may show on its page (agent_guard.media_roots)."""
-    _on()
-    try:
-        path = _path(project, topic, name)
-    except agents.AgentError as e:
-        raise _bad(e) from None
-    if not agents.exists(path):
-        raise HTTPException(404, detail={"error": "not_found", "message": "Agent not found"})
     from .. import agent_guard
-    return {"roots": agent_guard.media_roots(path)}
+    _on()
+    return {"roots": agent_guard.media_roots(_existing(project, topic, name))}
 
 
 @router.patch("/{project}/{topic}/{name}")
 def update_agent(project: str, topic: str, name: str, body: AgentIn):
     _on()
-    try:
+    with _errors():
         return agents.update(_path(project, topic, name), _fields(body))
-    except agents.AgentError as e:
-        raise _bad(e) from None
 
 
 @router.delete("/{project}/{topic}/{name}")
 def delete_agent(project: str, topic: str, name: str):
     _on()
-    try:
+    with _errors():
         agents.delete(_path(project, topic, name))
-    except agents.AgentError as e:
-        raise _bad(e) from None
     return {"ok": True}
 
 
@@ -272,10 +272,8 @@ def export_agent(project: str, topic: str, name: str):
     from fastapi.responses import PlainTextResponse
     from .. import agent_format
     _on()
-    path = _path(project, topic, name)
-    if not agents.exists(path):
-        raise HTTPException(404, detail={"error": "not_found", "message": "Agent not found"})
-    return PlainTextResponse(agent_format.export_md(path), media_type="text/markdown; charset=utf-8",
+    return PlainTextResponse(agent_format.export_md(_existing(project, topic, name)),
+                             media_type="text/markdown; charset=utf-8",
                              headers={"Content-Disposition": f'attachment; filename="{name}.md"'})
 
 
@@ -283,34 +281,25 @@ def export_agent(project: str, topic: str, name: str):
 def continue_run(project: str, topic: str, name: str, sid: str):
     """Continue in Sessions: a copy of this run as a normal session of the topic (same history and Claude thread)."""
     _on()
-    try:
+    with _errors():
         return {"session": agents.continue_in_sessions(_path(project, topic, name), sid)}
-    except agents.AgentError as e:
-        raise _bad(e) from None
 
 
 @router.get("/{project}/{topic}/{name}/thread")
 def agent_thread(project: str, topic: str, name: str, limit: int = Query(100, ge=1, le=500),
                  before: Optional[float] = None):
     _on()
-    path = _path(project, topic, name)
-    if not agents.exists(path):
-        raise HTTPException(404, detail={"error": "not_found", "message": "Agent not found"})
-    return {"messages": agents.thread(path, limit, before)}
+    return {"messages": agents.thread(_existing(project, topic, name), limit, before)}
 
 
 @router.post("/{project}/{topic}/{name}/run")
 def run_agent(project: str, topic: str, name: str, body: RunIn):
     _on()
-    path = _path(project, topic, name)
-    if not agents.exists(path):
-        raise HTTPException(404, detail={"error": "not_found", "message": "Agent not found"})
+    path = _existing(project, topic, name)
     text = (body.text or "").strip()
-    try:
+    with _errors():
         files = agents.checked_attachments(agents.folder(path), body.attachments)
         voice = agents.checked_attachments(agents.folder(path), [body.voice])[0] if body.voice else None
-    except agents.AgentError as e:
-        raise HTTPException(e.status, detail={"error": e.code, "message": e.message}) from None
     if files and not text and not voice:
         text = "See the attached files."
     if len(text) > agents.TASK_MAX:
@@ -331,50 +320,38 @@ def run_agent(project: str, topic: str, name: str, body: RunIn):
 def agent_new_chat(project: str, topic: str, name: str):
     """The next message of the owner starts a new conversation."""
     _on()
-    path = _path(project, topic, name)
-    if not agents.exists(path):
-        raise HTTPException(404, detail={"error": "not_found", "message": "Agent not found"})
-    return {"ok": agents.new_chat(path)}
+    return {"ok": agents.new_chat(_existing(project, topic, name))}
 
 
 @router.post("/{project}/{topic}/{name}/seen")
 def agent_seen(project: str, topic: str, name: str):
     _on()
-    path = _path(project, topic, name)
-    if not agents.exists(path):
-        raise HTTPException(404, detail={"error": "not_found", "message": "Agent not found"})
-    agents.mark_seen(path)
+    agents.mark_seen(_existing(project, topic, name))
     return {"ok": True}
 
 
 @router.post("/{project}/{topic}/{name}/triggers/{tid}/test")
 def test_trigger(project: str, topic: str, name: str, tid: str):
     _on()
-    try:
+    with _errors():
         return agents.test_trigger(_path(project, topic, name), tid)
-    except agents.AgentError as e:
-        raise _bad(e) from None
 
 
 @router.post("/{project}/{topic}/{name}/webhook")
 def add_webhook(project: str, topic: str, name: str, body: WebhookIn):
     _on()
-    try:
+    with _errors():
         return agents.add_webhook(_path(project, topic, name), body.kind, body.prompt or "", body.levels or [],
                                   body.match or "")
-    except agents.AgentError as e:
-        raise _bad(e) from None
 
 
 @router.post("/{project}/{topic}/{name}/crons")
 def add_cron(project: str, topic: str, name: str, body: CronIn):
     """A cron trigger = a Claude cron job in the agent folder (shown on the Crons page too)."""
     _on()
-    try:
+    with _errors():
         return agents.add_cron(_path(project, topic, name), body.schedule or "", body.prompt or "", body.name or "",
                                body.enabled is not False)
-    except agents.AgentError as e:
-        raise _bad(e) from None
 
 
 # ---- background work (server) ----------------------------------------------------------------------

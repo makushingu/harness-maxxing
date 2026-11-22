@@ -77,6 +77,20 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   task on a 4 MB log 223 -> 144 ms (945 -> 639 ms at 4x CPU slowdown); on 120 loaded rows 268 -> 117 ms
   (876 -> 400 ms at 4x). Same final rows, reading position kept.
 
+## 2.0.0-alpha.163 - 2026-11-22
+
+- Agents / Team refactor, no behaviour change: shared helpers (`agents._edit_state`, api `_errors` / `_existing`,
+  `cmd_agents._fail` + dispatch table, `agent_rooms._need` / `_at` / `_rewrite`, `agent_guard._deny_secrets` /
+  `_deny_edit`, `teampeer._sig` / `_drop_key`); web: `features/agents/chat.tsx` (shared by AgentPage and
+  GroupPage), `FormDialog` (Appearance.tsx), Team `TeamDialog` / `Footer` / `Tick` / `nameOf` / `unreadOf`
+  (people.tsx), dead `describe_change`, `context`, `_post_shared`, `TriggerChips`, `whereOf` removed.
+- `agents.retry_limits`: `retried` saved right after the send (a failing snapshot / budget step resent the paid
+  retry each pass). Test: `test_limit_retry.py::test_agent_limit_retry_is_sent_once_when_what_follows_the_send_fails`.
+- `team.summarize`: input capped by `team.SUMMARY_CHARS` (100,000, oldest dropped; `count` / `from` match what was
+  sent), one at a time per chat (`409 busy`). Tests: `test_team.py::test_the_text_sent_for_a_summary_is_capped`,
+  `test_one_summary_of_a_chat_at_a_time`.
+- Team composer: uploads use `mutateAsync().then` (React Query only ran the callbacks of the last `mutate()`).
+
 ## 2.0.0-alpha.162 - 2026-11-22
 
 - iOS standalone download (`features/files/download.ts` `shareOrOpen`): the file is read up to 120 s

@@ -51,19 +51,11 @@ def cost_of(usage: dict, model: str) -> float:
     return sum(int(usage.get(k) or 0) * p[i] for i, k in enumerate(USAGE_KEYS)) / 1e6
 
 
-def _injected(raw: str) -> bool:
+def _field(raw: str, key: str):
     try:
-        return json.loads(raw).get("injected") is True
+        return json.loads(raw).get(key)
     except (ValueError, RecursionError, AttributeError):
-        return False
-
-
-def _at(raw: str) -> float:
-    try:
-        v = json.loads(raw).get("at")
-        return float(v) if isinstance(v, (int, float)) else 0.0
-    except (ValueError, RecursionError, AttributeError):
-        return 0.0
+        return None
 
 
 def last_turn(lines, at: float | None = None) -> tuple[dict | None, dict, float]:
@@ -75,12 +67,13 @@ def last_turn(lines, at: float | None = None) -> tuple[dict | None, dict, float]
     done, result, n, mine = None, False, 0, False
     for raw in lines:
         if '"mx_user"' in raw[:40]:
-            if '"injected"' in raw and _injected(raw):
+            if '"injected"' in raw and _field(raw, "injected") is True:
                 continue                                # added to the running turn (Add to plan): the same turn goes on
             if mine:
                 break                                   # the next message's turn: the one at `at` is over
             msgs, done, result = {}, None, False
-            mine = bool(at) and abs(_at(raw) - float(at)) < 1e-3
+            v = _field(raw, "at") if at else None
+            mine = bool(at) and abs((float(v) if isinstance(v, (int, float)) else 0.0) - float(at)) < 1e-3
             continue
         if '"type": "result"' not in raw and '"type": "assistant"' not in raw and '"mx_done"' not in raw[:40]:
             continue
@@ -101,13 +94,8 @@ def last_turn(lines, at: float | None = None) -> tuple[dict | None, dict, float]
                 msgs[str(msg.get("id") or f"_{n}")] = (u, str(msg.get("model") or ""))   # one message, many lines
     if done is None or result or done.get("stopped"):
         return None, {}, 0.0                            # a stop or a steer by the owner: not a lost turn
-    usage = {k: 0 for k in USAGE_KEYS}
-    usd = 0.0
-    for u, model in msgs.values():
-        for k in USAGE_KEYS:
-            usage[k] += int(u.get(k) or 0)
-        usd += cost_of(u, model)
-    return done, usage, round(usd, 6)
+    usage = {k: sum(int(u.get(k) or 0) for u, _ in msgs.values()) for k in USAGE_KEYS}
+    return done, usage, round(sum((cost_of(u, model) for u, model in msgs.values()), 0.0), 6)
 
 
 SAVED_CODES = (143,)    # Claude Code's own exit after a SIGTERM: it saved the turn's cost in its thread first

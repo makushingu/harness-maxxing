@@ -65,22 +65,11 @@ export function AgentMail({ agent: a }: { agent: AgentDetail }) {
           ) : (
             !!free.length && (
               <div className="flex gap-2">
-                <Select
-                  className="h-8 min-w-0 flex-1"
-                  value={pick || undefined}
-                  onValueChange={setPick}
-                  placeholder={t('agents.mail.pick')}
-                  aria-label={t('agents.mail.pick')}
-                  options={free.map((x) => ({ value: x.id, label: x.label ? `${x.label} (${x.address})` : x.address }))}
-                />
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={!pick}
-                  loading={patch.isPending}
-                  onClick={() => (save([...grants, { account: pick, rights: ['read', 'draft'], senders: [], approve_send: 'always', trigger: null }]), setPick(''))}
-                  data-testid="agent-mail-add"
-                >
+                <Select className="h-8 min-w-0 flex-1" value={pick || undefined} onValueChange={setPick}
+                  placeholder={t('agents.mail.pick')} aria-label={t('agents.mail.pick')}
+                  options={free.map((x) => ({ value: x.id, label: x.label ? `${x.label} (${x.address})` : x.address }))} />
+                <Button size="sm" variant="outline" disabled={!pick} loading={patch.isPending} data-testid="agent-mail-add"
+                  onClick={() => (save([...grants, { account: pick, rights: ['read', 'draft'], senders: [], approve_send: 'always', trigger: null }]), setPick(''))}>
                   <Plus /> {t('agents.mail.add')}
                 </Button>
               </div>
@@ -150,14 +139,8 @@ function GrantCard({ grant: g, account, onChange, onRemove }: { grant: MailGrant
           <span className="text-sm font-medium">{t('agents.mail.senders')}</span>
           <span className="text-xs text-muted-foreground">{t('agents.mail.sendersDesc')}</span>
         </div>
-        <ListEditor
-          value={g.senders}
-          onChange={(l, saved) => (onChange({ senders: l }), saved?.())}
-          placeholder="*@stripe.com, client@example.com"
-          empty={t('agents.mail.sendersAll')}
-          error={null}
-          testid="agent-mail-senders"
-        />
+        <ListEditor value={g.senders} onChange={(l, saved) => (onChange({ senders: l }), saved?.())} placeholder="*@stripe.com, client@example.com"
+          empty={t('agents.mail.sendersAll')} error={null} testid="agent-mail-senders" />
         {g.senders.length > 0 && account?.sender_check && !['auto', 'owner'].includes(account.sender_check.state) && (
           <p className="text-xs text-warning">{t('agents.mail.sendersUnchecked', { address: account.address })}</p>
         )}

@@ -7,8 +7,6 @@ import { withGroups } from '@/i18n'
 import { cn } from '@/lib/utils'
 import { useUI } from '@/stores/ui'
 
-// ---- the agent preview card ---------------------------------------------------------------------------------------
-
 const loadAgentPreview = withGroups(['agents'], () => import('@/features/agents/AgentPreview'))
 let agentPreview: ReturnType<typeof loadAgentPreview> | undefined
 /** The card's chunk (the Office art) and the "agents" texts, fetched once: the first time the pointer enters a rail
@@ -72,9 +70,7 @@ export function AgentHover({ className, children }: { className?: string; childr
     <div
       ref={box}
       className={cn('flex min-h-0 flex-col', className)}
-      onPointerEnter={(e) => {
-        if (e.pointerType === 'mouse' && on && data?.agents.length && canHover()) preloadAgentPreview().catch(() => {})
-      }}
+      onPointerEnter={(e) => void (e.pointerType === 'mouse' && on && data?.agents.length && canHover() && preloadAgentPreview().catch(() => {}))}
       // Pointer events of the card (a portal, React child of this div) bubble here too: only links inside count.
       onPointerOver={(e) => {
         if (e.pointerType !== 'mouse' || !inBox(e.target)) return

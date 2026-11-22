@@ -29,20 +29,9 @@ function officeData(groups: ProjectGroup[], colorOf: (p: string) => string, emoj
     const s = statusOf(a, t, lang)
     const last = a.last_run
     return {
-      path: a.path,
-      project: a.project,
-      topic: a.topic,
-      name: a.name,
-      display_name: a.display_name,
-      description: a.description,
-      enabled: a.enabled,
-      model: a.model,
-      status: s.id,
-      status_text: s.text,
-      running: a.running_now || 0,
-      waiting: a.waiting || 0,
-      unread: a.thread_unread || 0,
-      cost_today: a.cost_today || 0,
+      path: a.path, project: a.project, topic: a.topic, name: a.name, display_name: a.display_name, description: a.description,
+      enabled: a.enabled, model: a.model, status: s.id, status_text: s.text,
+      running: a.running_now || 0, waiting: a.waiting || 0, unread: a.thread_unread || 0, cost_today: a.cost_today || 0,
       last_run: last ? { at: last.at, kind: last.kind, ok: last.ok ?? null, text: (last.text || '').slice(0, 300) } : null,
       avatar: normalize(a.avatar),
       avatar_svg: avatarSvg(normalize(a.avatar), !a.enabled),
@@ -53,12 +42,7 @@ function officeData(groups: ProjectGroup[], colorOf: (p: string) => string, emoj
   return {
     lang,
     new_agent_route: '/agents?new=1',
-    projects: groups.map(({ project: p, agents }) => ({
-      name: p,
-      emoji: emojis.get(p) || '',
-      color: OUTFIT[colorOf(p)],
-      agents: agents.map(agent),
-    })),
+    projects: groups.map(({ project: p, agents }) => ({ name: p, emoji: emojis.get(p) || '', color: OUTFIT[colorOf(p)], agents: agents.map(agent) })),
   }
 }
 

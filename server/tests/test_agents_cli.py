@@ -274,3 +274,18 @@ def test_list_reads_the_scheduled_jobs_once(client, topic, capsys, monkeypatch):
     out = capsys.readouterr().out
     assert f"{A}  Writer  cron:1" in out and f"{B}  Editor  cron:1" in out
     assert len(calls) == 1                                   # one read of the jobs for every agent, not one per agent
+
+
+def test_a_run_from_jarvis_goes_on_its_board_under_the_agent_s_name(client, topic, monkeypatch):
+    """`_jarvis_board` once used a module it never imported: every run went on the board as `agent <path>`."""
+    from maxxing import agent_guard, cmd_agents, jarvis
+    _two_agents(client)
+    got: list[tuple] = []
+    monkeypatch.setattr(agent_guard, "turn_meta", lambda: {"path": jarvis.PATH})
+    monkeypatch.setattr(jarvis, "feature_on", lambda: True)
+    monkeypatch.setattr(jarvis, "register", lambda sid, path, title, _brief, hops=1:
+                        got.append((sid, path, title, hops)))
+    cmd_agents._jarvis_board(A, {"session": {"id": "s1"}}, "write", 2)
+    cmd_agents._jarvis_board(B, {"waiting": True}, "edit", 1)
+    cmd_agents._jarvis_board(B, {"started": False}, "nothing", 1)
+    assert got == [("s1", A, "agent Writer", 2), ("", B, "agent Editor", 1)]

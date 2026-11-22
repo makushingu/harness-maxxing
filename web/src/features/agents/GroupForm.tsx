@@ -8,8 +8,8 @@
 //   - with Claude: a new session of a topic of the project (else general/inbox) with the request started.
 // Edit (the group's "…" -> Edit, a sheet) = the same form with every field shown; project and folder fixed.
 import * as React from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router'
-import { ArrowLeft, ChevronRight, FolderOpen, ShieldCheck, Sparkles } from 'lucide-react'
+import { useNavigate, useSearchParams } from 'react-router'
+import { ChevronRight, FolderOpen, ShieldCheck, Sparkles } from 'lucide-react'
 import { useT, type TFn, type TKey } from '@/i18n'
 import { isApiError } from '@/lib/api'
 import { groupRoute, useAgentGroups, useAgents, useCreateGroup, usePatchGroup, useWorkspace } from '@/lib/queries'
@@ -18,10 +18,10 @@ import { SLUG_RE, cn, slugify } from '@/lib/utils'
 import { Button, Checkbox, FormField, Input, Select, Sensitive, Switch, Textarea, toast, useMask } from '@/components/ui'
 import { Callout } from '@/features/common'
 import { PageHeader } from '@/components/shell/Page'
-import { useCompact } from '@/stores/media'
 import { AgentAvatarIcon } from './Avatar'
 import { draftUrl } from './EditWithClaude'
 import { AgentsOff, useAgentsOn } from './parts'
+import { useBack } from './chat'
 
 const MIN_MEMBERS = 2
 const MAX_MEMBERS = 6
@@ -88,18 +88,8 @@ const fresh = (project = '', members: string[] = []): Form => ({
   limits: { ...DEFAULT_LIMITS }, roles: [],
 })
 const fromGroup = (g: AgentGroup): Form => ({
-  project: g.project,
-  display: g.display_name,
-  slug: g.name,
-  slugEdited: true,
-  emoji: g.emoji,
-  goal: g.goal,
-  members: g.members.map((m) => ({ path: m.path, role: m.role })),
-  lead: g.lead,
-  shared: g.shared_files,
-  trust: g.trust_members,
-  limits: { ...DEFAULT_LIMITS, ...g.limits },
-  roles: [],
+  project: g.project, display: g.display_name, slug: g.name, slugEdited: true, emoji: g.emoji, goal: g.goal, members: g.members.map((m) => ({ path: m.path, role: m.role })),
+  lead: g.lead, shared: g.shared_files, trust: g.trust_members, limits: { ...DEFAULT_LIMITS, ...g.limits }, roles: [],
 })
 
 /** "Writer & Reviewer", "Writer, Reviewer & Publisher" (60 characters at most). */
@@ -132,25 +122,14 @@ function createPrompt(t: TFn, project: string, agents: Agent[]): string {
 export function NewGroupPage() {
   const t = useT()
   const on = useAgentsOn()
-  const touch = useCompact()
+  const back = useBack()
   const navigate = useNavigate()
   const [params] = useSearchParams()
   if (on === false) return <AgentsOff />
   const withAgent = params.get('with') || ''
   return (
     <div className="flex h-full min-h-0 flex-col" data-testid="group-create">
-      <PageHeader
-        leading={
-          touch ? (
-            <Button asChild variant="ghost" size="icon-sm" aria-label={t('agents.back')} className="-ml-1">
-              <Link to="/agents">
-                <ArrowLeft />
-              </Link>
-            </Button>
-          ) : undefined
-        }
-        title={t('groups.create.title')}
-      />
+      <PageHeader leading={back} title={t('groups.create.title')} />
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto grid max-w-2xl content-start gap-5 px-4 py-5 md:px-8">
           <p className="text-sm text-muted-foreground">{t('groups.create.explain')}</p>
@@ -207,13 +186,10 @@ export function GroupForm({
   const slug = f.slugEdited ? f.slug : freeSlug(slugify(display).slice(0, 48), taken)
   const canSave = !!f.project && !!display && SLUG_RE.test(slug) && count >= MIN_MEMBERS && count <= MAX_MEMBERS
 
+  const drop = (path: string) => setF((x) => ({ ...x, members: x.members.filter((m) => m.path !== path), lead: x.lead === path ? '' : x.lead }))
+  // The first agent picked sets the project when none was chosen.
   const toggle = (a: Agent, on: boolean) =>
-    setF((x) => {
-      if (!on) return { ...x, members: x.members.filter((m) => m.path !== a.path), lead: x.lead === a.path ? '' : x.lead }
-      const members = [...x.members, { path: a.path, role: x.roles[x.members.length] || '' }]
-      // The first agent picked sets the project when none was chosen.
-      return { ...x, project: x.project || a.project, members }
-    })
+    on ? setF((x) => ({ ...x, project: x.project || a.project, members: [...x.members, { path: a.path, role: x.roles[x.members.length] || '' }] })) : drop(a.path)
   const setRole = (path: string, role: string) => set('members', f.members.map((m) => (m.path === path ? { ...m, role } : m)))
   const starter = (s: (typeof STARTERS)[number]) => {
     const roles = Array.from({ length: s.roles }, (_, i) => t(`groups.starter.${s.id}.role${i + 1}` as TKey))
@@ -316,13 +292,7 @@ export function GroupForm({
               <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
                 <Sensitive length={8}>{m.display_name}</Sensitive>
               </span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => setF((x) => ({ ...x, members: x.members.filter((y) => y.path !== m.path), lead: x.lead === m.path ? '' : x.lead }))}
-                data-testid="group-gone-remove"
-              >
+              <Button type="button" variant="ghost" size="sm" onClick={() => drop(m.path)} data-testid="group-gone-remove">
                 {t('groups.field.goneRemove')}
               </Button>
             </div>

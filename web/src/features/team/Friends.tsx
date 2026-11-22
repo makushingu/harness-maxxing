@@ -10,12 +10,13 @@ import {
 import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
 import {
-  Button, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
+  Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
   DropdownMenuSeparator, DropdownMenuTrigger, EmptyState, Input, Skeleton, toast, WithContextMenu,
 } from '@/components/ui'
 import { confirm } from '@/components/ui/alert-dialog'
 import { Callout } from '@/features/common'
 import { Avatar } from '@/features/profile/Avatar'
+import { TeamDialog } from './Dialogs'
 import { friendsOf, PersonAvatar, usePresence } from './people'
 
 /** Open the direct chat with a person (created the first time, the same one after). */
@@ -40,9 +41,10 @@ export function FriendsView({ team, onOpenChat, compact, query }: { team: TeamSt
   const requests = cx?.contacts.filter((x) => x.status === 'request') || []
   const waiting = cx?.contacts.filter((x) => x.status === 'waiting') || []
   const byId = new Map((cx?.contacts || []).map((x) => [x.id, x]))
-  const friends = friendsOf(team).filter(([, p]) => !q || p.name.toLowerCase().includes(q.toLowerCase()))
+  const all = friendsOf(team)
+  const friends = all.filter(([, p]) => !q || p.name.toLowerCase().includes(q.toLowerCase()))
   const online = friends.filter(([, p]) => p.status === 'online').length
-  const nobody = team && cx && !friendsOf(team).length && !requests.length && !waiting.length
+  const nobody = team && cx && !all.length && !requests.length && !waiting.length
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -82,7 +84,7 @@ export function FriendsView({ team, onOpenChat, compact, query }: { team: TeamSt
                 ))}
               </Section>
             )}
-            {friendsOf(team).length > 0 && (
+            {all.length > 0 && (
               <Section title={t('team.friends.title')} hint={online ? t('team.online', { count: online }) : undefined}>
                 {friends.map(([id, p]) => (
                   <WithContextMenu key={id} className="w-64" items={byId.get(id) && <FriendMenuItems contact={byId.get(id)!} name={p.name} />}>
@@ -216,6 +218,22 @@ function Request({ x }: { x: TeamContact }) {
 }
 
 /* ------------------------------------------------------------------------------------------------ add a friend */
+/** One of the two ways to connect: invite, or join with an invitation. */
+function Way({ icon: Icon, title, desc, children }: { icon: typeof Link2; title: string; desc: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-2 rounded-xl border p-3.5">
+      <div className="flex items-center gap-2 text-[14px] font-semibold">
+        <span className="inline-flex size-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <Icon className="size-4" />
+        </span>
+        {title}
+      </div>
+      <p className="text-[12.5px] text-muted-foreground">{desc}</p>
+      {children}
+    </div>
+  )
+}
+
 export function AddFriendDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const t = useT()
   const { data: c } = useTeamConnections(open)
@@ -242,64 +260,44 @@ export function AddFriendDialog({ open, onOpenChange }: { open: boolean; onOpenC
     })
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="md:max-w-xl">
-        <DialogHeader>
-          <DialogTitle>{t('team.friends.add')}</DialogTitle>
-          <DialogDescription>{t('team.cx.desc')}</DialogDescription>
-        </DialogHeader>
-        {!c ? (
-          <Skeleton className="h-40" />
-        ) : !c.ok ? (
-          <Callout tone="error" title={t('team.cx.notReady')}>
-            {t(`team.cx.reason.${c.reason || 'no_address'}`)} {t('team.cx.needDomain')}
-          </Callout>
-        ) : (
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="flex flex-col gap-2 rounded-xl border p-3.5">
-              <div className="flex items-center gap-2 text-[14px] font-semibold">
-                <span className="inline-flex size-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                  <Link2 className="size-4" />
-                </span>
-                {t('team.cx.invite')}
-              </div>
-              <p className="text-[12.5px] text-muted-foreground">{t('team.cx.inviteDesc')}</p>
-              {code ? (
-                <div className="mt-auto flex flex-col gap-1.5">
-                  <Button size="sm" onClick={() => copy(code)}>
-                    <Copy /> {t('team.friends.copyInvite')}
-                  </Button>
-                  <Input readOnly value={code} className="h-7 font-mono text-[11px]" onFocus={(e) => e.target.select()} />
-                  <p className="text-[11.5px] text-muted-foreground">{t('team.cx.inviteOnce')}</p>
-                </div>
-              ) : (
-                <Button size="sm" className="mt-auto" loading={invite.isPending} onClick={() => invite.mutate(undefined, { onSuccess: (r) => setCode(r.invitation) })}>
-                  <Link2 /> {t('team.cx.create')}
-                </Button>
-              )}
-            </div>
-            <div className="flex flex-col gap-2 rounded-xl border p-3.5">
-              <div className="flex items-center gap-2 text-[14px] font-semibold">
-                <span className="inline-flex size-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                  <LogIn className="size-4" />
-                </span>
-                {t('team.cx.join')}
-              </div>
-              <p className="text-[12.5px] text-muted-foreground">{t('team.cx.joinDesc')}</p>
-              <Input value={paste} onChange={(e) => setPaste(e.target.value)} placeholder="https://ui.example.com#…" className="h-8 font-mono text-[11.5px]" />
-              {joinError && <p className="text-[12px] text-destructive">{joinError}</p>}
-              <Button size="sm" variant="outline" className="mt-auto" disabled={!paste.includes('#')} loading={join.isPending} onClick={doJoin}>
-                {t('team.cx.joinBtn')}
-              </Button>
-            </div>
-          </div>
-        )}
-        <Callout tone="warning" icon={ShieldAlert} title={t('team.cx.trustTitle')}>
-          {t('team.cx.trust')}
+    <TeamDialog open={open} onOpenChange={onOpenChange} title={t('team.friends.add')} desc={t('team.cx.desc')} className="md:max-w-xl">
+      {!c ? (
+        <Skeleton className="h-40" />
+      ) : !c.ok ? (
+        <Callout tone="error" title={t('team.cx.notReady')}>
+          {t(`team.cx.reason.${c.reason || 'no_address'}`)} {t('team.cx.needDomain')}
         </Callout>
-        {c?.ok && <p className="text-[11.5px] text-muted-foreground">{t('team.cx.needDomain')}</p>}
-      </DialogContent>
-    </Dialog>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Way icon={Link2} title={t('team.cx.invite')} desc={t('team.cx.inviteDesc')}>
+            {code ? (
+              <div className="mt-auto flex flex-col gap-1.5">
+                <Button size="sm" onClick={() => copy(code)}>
+                  <Copy /> {t('team.friends.copyInvite')}
+                </Button>
+                <Input readOnly value={code} className="h-7 font-mono text-[11px]" onFocus={(e) => e.target.select()} />
+                <p className="text-[11.5px] text-muted-foreground">{t('team.cx.inviteOnce')}</p>
+              </div>
+            ) : (
+              <Button size="sm" className="mt-auto" loading={invite.isPending} onClick={() => invite.mutate(undefined, { onSuccess: (r) => setCode(r.invitation) })}>
+                <Link2 /> {t('team.cx.create')}
+              </Button>
+            )}
+          </Way>
+          <Way icon={LogIn} title={t('team.cx.join')} desc={t('team.cx.joinDesc')}>
+            <Input value={paste} onChange={(e) => setPaste(e.target.value)} placeholder="https://ui.example.com#…" className="h-8 font-mono text-[11.5px]" />
+            {joinError && <p className="text-[12px] text-destructive">{joinError}</p>}
+            <Button size="sm" variant="outline" className="mt-auto" disabled={!paste.includes('#')} loading={join.isPending} onClick={doJoin}>
+              {t('team.cx.joinBtn')}
+            </Button>
+          </Way>
+        </div>
+      )}
+      <Callout tone="warning" icon={ShieldAlert} title={t('team.cx.trustTitle')}>
+        {t('team.cx.trust')}
+      </Callout>
+      {c?.ok && <p className="text-[11.5px] text-muted-foreground">{t('team.cx.needDomain')}</p>}
+    </TeamDialog>
   )
 }
 

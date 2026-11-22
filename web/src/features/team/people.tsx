@@ -1,4 +1,5 @@
 // Team people: faces, names and presence, shared by the chats, the friends and the dialogs.
+import { Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { fmtRelative } from '@/lib/format'
 import { useLang, useT } from '@/i18n'
@@ -9,6 +10,21 @@ const STATUS_DOT: Record<TeamPerson['status'], string> = { online: 'bg-emerald-5
 
 export function personOf(team: TeamState | undefined, id: string): TeamPerson {
   return team?.people[id] || { name: id, color: 'zinc', emoji: '', server: '', status: 'offline' }
+}
+
+/** A person's full name, or `you` for the user. */
+export const nameOf = (team: TeamState | undefined, id: string, you: string) => (id === (team?.me || 'me') ? you : personOf(team, id).name)
+
+/** Unread messages of the chats that are not muted. */
+export const unreadOf = (team: TeamState | undefined) => team?.chats.reduce((n, c) => n + (c.muted ? 0 : c.unread), 0) || 0
+
+/** A round check mark (a picked message, person or poll answer). */
+export function Tick({ on, className, size = 'size-3' }: { on: boolean; className?: string; size?: string }) {
+  return (
+    <span className={cn('inline-flex items-center justify-center rounded-full border', className, on ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/40')}>
+      {on && <Check className={size} strokeWidth={3} />}
+    </span>
+  )
 }
 
 export function chatTitle(team: TeamState | undefined, chat: TeamChat): string {

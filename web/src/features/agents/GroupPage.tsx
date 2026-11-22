@@ -11,24 +11,22 @@
 import * as React from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router'
 import {
-  ArrowLeft, AtSign, Bot, FolderOpen, MoreHorizontal, Pause, Pencil, Play, PlayCircle, RotateCcw, ShieldCheck, Square, Trash2, UsersRound, WandSparkles,
+  AtSign, Bot, FolderOpen, MoreHorizontal, Pause, Pencil, Play, PlayCircle, RotateCcw, ShieldCheck, Square, Trash2, UsersRound, WandSparkles,
 } from 'lucide-react'
-import { useLang, useT, type TFn } from '@/i18n'
+import { useT, type TFn } from '@/i18n'
 import { errorMessage } from '@/lib/api'
 import {
-  agentRoute, agentRunRoute, useAgentGroup, useAgents, useDeleteGroup, useGroupMessages, useGroupPause, useGroupReset, useGroupSay, useGroupSeen, useGroupStop,
-  usePendingApprovals, useWorkspace,
+  agentRoute, agentRunRoute, groupUrl, useAgentGroup, useAgents, useDeleteGroup, useGroupMessages, useGroupPause, useGroupReset, useGroupSay, useGroupSeen,
+  useGroupStop, usePendingApprovals, useWorkspace,
 } from '@/lib/queries'
 import type { AgentGroup, AgentGroupMember, AgentGroupMessage, Approval } from '@/lib/types'
-import { fmtDate, fmtRelative } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useCompact } from '@/stores/media'
 import {
   Badge, Button, Checkbox, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DropdownMenu, DropdownMenuContent, DropdownMenuItem,
-  DropdownMenuSeparator, DropdownMenuTrigger, EmptyState, Sensitive, Sheet, SheetBody, SheetContent, SheetDescription, SheetHeader, SheetTitle, Skeleton, StatusDot,
-  Tooltip, confirm,
+  DropdownMenuSeparator, DropdownMenuTrigger, EmptyState, Sensitive, Skeleton, StatusDot, Tooltip, confirm,
 } from '@/components/ui'
-import { Page, PageHeader } from '@/components/shell/Page'
+import { PageHeader } from '@/components/shell/Page'
 import { ApprovalCard } from '@/pages/sessions/Approvals'
 import { absTopicDir, filesUrl, fmtCost } from '@/pages/sessions/util'
 import { AgentAvatarIcon } from './Avatar'
@@ -43,62 +41,26 @@ import { QuotePill } from '@/pages/sessions/Quote'
 import { agentDraftKey } from '@/lib/drafts'
 import { VoiceButton } from '@/features/voice/VoiceButton'
 import { MessageBox } from '@/features/composer/MessageBox'
-import { AttachmentStrip, MessageMedia, useMessageMenu } from '@/pages/sessions/Items'
-import { AnswerContext, AnswerText } from './answer'
-import { groupUrl } from '@/lib/queries'
-
-
-/** An answer longer than this is folded (the first lines and "Read all"), as on an agent's page. */
-const FOLD_CHARS = 700
+import { AttachmentStrip, useMessageMenu } from '@/pages/sessions/Items'
+import { AnswerContext } from './answer'
+import { FoldedAnswer, PageFallback, RunLink, SideSheet, When, useBack, useBoxInput, useFold, useLatest, useMarkSeen } from './chat'
 
 const slugOf = (path: string) => path.split('/').pop() || ''
 
 export default function GroupPage() {
   const t = useT()
   const on = useAgentsOn()
-  const touch = useCompact()
   const { project = '', name = '' } = useParams()
   const path = `projects/${project}/groups/${name}`
   const { data: g, isLoading, error, refetch } = useAgentGroup(on === false ? null : path)
   const [editing, setEditing] = React.useState(false)
+  const stop = useGroupStop()
   const composer = React.useRef<ComposerApi>(null)
-  const back = touch ? (
-    <Button asChild variant="ghost" size="icon-sm" aria-label={t('agents.back')} className="-ml-1">
-      <Link to="/agents">
-        <ArrowLeft />
-      </Link>
-    </Button>
-  ) : null
+  const back = useBack()
 
   if (on === false) return <AgentsOff />
-  if (isLoading || on === undefined)
-    return (
-      <Page title={name} leading={back} width="wide">
-        <Skeleton className="h-10 rounded-xl" />
-        <Skeleton className="mt-4 h-80 rounded-xl" />
-      </Page>
-    )
-  if (error || !g)
-    return (
-      <Page title={name} leading={back}>
-        <EmptyState
-          icon={UsersRound}
-          tone="error"
-          title={t('groups.notFound')}
-          description={errorMessage(error)}
-          action={
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => refetch()}>
-                {t('common.retry')}
-              </Button>
-              <Button asChild size="sm">
-                <Link to="/agents">{t('agents.backToList')}</Link>
-              </Button>
-            </div>
-          }
-        />
-      </Page>
-    )
+  if (isLoading || on === undefined || error || !g)
+    return <PageFallback name={name} back={back} loading={isLoading || on === undefined} head="h-10" icon={UsersRound} title={t('groups.notFound')} error={error} retry={refetch} />
 
   return (
     <div className="flex h-full min-h-0 flex-col" data-testid="group-page">
@@ -128,33 +90,21 @@ export default function GroupPage() {
         }
         actions={
           <>
-            {g.busy && <StopButton group={g} />}
+            {g.busy && (
+              <Button variant="outline" size="sm" onClick={() => stop.mutate({ path: g.path })} loading={stop.isPending} data-testid="group-stop">
+                <Square /> <span className="max-sm:sr-only">{t('groups.stop')}</span>
+              </Button>
+            )}
             <GroupMenu group={g} onEdit={() => setEditing(true)} />
           </>
         }
       />
       <MemberBar group={g} onMention={(slug) => composer.current?.mention(slug)} />
       <Conversation group={g} composer={composer} />
-      <Sheet open={editing} onOpenChange={setEditing}>
-        <SheetContent className="md:w-[560px]" data-testid="group-edit">
-          <SheetHeader>
-            <SheetTitle>{t('groups.edit.title')}</SheetTitle>
-            <SheetDescription>{t('groups.edit.desc')}</SheetDescription>
-          </SheetHeader>
-          <SheetBody className="grid content-start gap-5">{editing && <GroupForm group={g} onDone={() => setEditing(false)} onCancel={() => setEditing(false)} />}</SheetBody>
-        </SheetContent>
-      </Sheet>
+      <SideSheet open={editing} onOpenChange={setEditing} title={t('groups.edit.title')} description={t('groups.edit.desc')} className="md:w-[560px]" bodyClassName="grid content-start gap-5" testid="group-edit">
+        {editing && <GroupForm group={g} onDone={() => setEditing(false)} onCancel={() => setEditing(false)} />}
+      </SideSheet>
     </div>
-  )
-}
-
-function StopButton({ group: g }: { group: AgentGroup }) {
-  const t = useT()
-  const stop = useGroupStop()
-  return (
-    <Button variant="outline" size="sm" onClick={() => stop.mutate({ path: g.path })} loading={stop.isPending} data-testid="group-stop">
-      <Square /> <span className="max-sm:sr-only">{t('groups.stop')}</span>
-    </Button>
   )
 }
 
@@ -321,7 +271,6 @@ function MemberBar({ group: g, onMention }: { group: AgentGroup; onMention: (slu
 function Conversation({ group: g, composer }: { group: AgentGroup; composer: React.RefObject<ComposerApi | null> }) {
   const t = useT()
   const { data, isLoading, error } = useGroupMessages(g.path)
-  const seen = useGroupSeen()
   const box = React.useRef<HTMLDivElement>(null)
   const msgs = React.useMemo(() => data || [], [data])
   // The members as the messages draw them: a new list only when one of them looks different, not each time who
@@ -340,11 +289,7 @@ function Conversation({ group: g, composer }: { group: AgentGroup; composer: Rea
     const el = box.current
     if (el && stick.current) el.scrollTop = el.scrollHeight
   }, [last, g.speaking])
-  // Reading the page = the group is read (again when an answer comes in while it is open).
-  const seenMutate = seen.mutate
-  React.useEffect(() => {
-    if (g.unread > 0) seenMutate({ path: g.path })
-  }, [g.unread, g.path, seenMutate])
+  useMarkSeen(useGroupSeen().mutate, g.unread, g.path)
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -469,21 +414,12 @@ const GroupMessage = React.memo(function GroupMessage({
   m, member, names, chips,
 }: { m: AgentGroupMessage; member?: AgentGroupMember; names: MentionMap; chips: ReturnType<typeof mentionComponents> }) {
   const t = useT()
-  const lang = useLang()
-  const [open, setOpen] = React.useState(false)
+  const { folded, toggle } = useFold(m.text)
   // Right click (long press): copy what was said, mine or a member's.
   const { onContextMenu, touch, menu } = useMessageMenu({ text: m.text, copy: true })
-  const when = (
-    <time className="text-[11px] text-muted-foreground tabular-nums" dateTime={new Date(m.at * 1000).toISOString()} title={fmtDate(m.at, lang)}>
-      {fmtRelative(m.at, lang)}
-    </time>
-  )
+  const when = <When at={m.at} />
   const who = member?.display_name || slugOf(m.author)
-  const run = m.session && m.author && m.author !== 'me' && (
-    <Link to={agentRunRoute(m.author, m.session)} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary hover:underline pointer-coarse:min-h-10" data-testid="group-open-run">
-      <PlayCircle className="size-3" /> {t('agents.thread.openRun')}
-    </Link>
-  )
+  const run = m.session && m.author && m.author !== 'me' && <RunLink path={m.author} sid={m.session} testid="group-open-run" />
   if (m.kind === 'note' || m.kind === 'stop')
     return (
       <div className={cn('flex items-center justify-center gap-2 py-1 text-center text-xs text-muted-foreground', m.limit && 'text-warning')} data-kind={m.kind}>
@@ -494,25 +430,18 @@ const GroupMessage = React.memo(function GroupMessage({
         <span className="h-px w-6 shrink-0 bg-border" aria-hidden />
       </div>
     )
-  if (m.kind === 'pass')
+  if (m.kind === 'pass' || m.kind === 'skip') {
+    const pass = m.kind === 'pass'
     return (
-      <div className="flex min-w-0 items-center justify-center gap-1.5 text-center text-xs text-muted-foreground" data-kind="pass">
+      <div className={cn('flex min-w-0 items-center justify-center gap-1.5 text-center text-xs', pass ? 'text-muted-foreground' : 'text-warning')} data-kind={m.kind}>
         {member && <AgentAvatarIcon avatar={member.avatar} size={16} />}
         <span className="min-w-0 wrap-anywhere">
-          {t('groups.pass', { name: who })} · {when}
+          {pass ? t('groups.pass', { name: who }) : <>{t('groups.skip', { name: who })} <span className="text-muted-foreground">{skipText(t, m)}</span></>} · {when}
         </span>
-        {run}
+        {pass && run}
       </div>
     )
-  if (m.kind === 'skip')
-    return (
-      <div className="flex min-w-0 items-center justify-center gap-1.5 text-center text-xs text-warning" data-kind="skip">
-        {member && <AgentAvatarIcon avatar={member.avatar} size={16} />}
-        <span className="min-w-0 wrap-anywhere">
-          {t('groups.skip', { name: who })} <span className="text-muted-foreground">{skipText(t, m)}</span> · {when}
-        </span>
-      </div>
-    )
+  }
   if (m.author === 'me')
     return (
       <div className="ml-auto grid w-fit min-w-0 max-w-[85%] gap-1 max-sm:max-w-full" data-kind="mine">
@@ -528,7 +457,6 @@ const GroupMessage = React.memo(function GroupMessage({
         <span className="flex justify-end text-[11px] text-muted-foreground">{when}</span>
       </div>
     )
-  const long = (m.text || '').length > FOLD_CHARS
   return (
     <div className="flex items-start gap-2" data-kind="answer" data-author={slugOf(m.author)}>
       <AgentAvatarIcon avatar={member?.avatar} size={32} />
@@ -547,22 +475,10 @@ const GroupMessage = React.memo(function GroupMessage({
           {m.cost != null && m.cost > 0 && <span className="text-muted-foreground tabular-nums">· {fmtCost(m.cost)}</span>}
         </div>
         <div className="grid min-w-0">
-          <div className={cn('relative min-w-0 text-sm', long && !open && 'max-h-64 overflow-hidden')} data-quote>
-            <Sensitive block>
-              <AnswerText text={m.text} components={chips} />
-            </Sensitive>
-            {long && !open && <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-card" aria-hidden />}
-          </div>
-          <Sensitive block>
-            <MessageMedia text={m.text} />
-          </Sensitive>
+          <FoldedAnswer text={m.text} folded={folded} components={chips} />
         </div>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 empty:hidden">
-          {long && (
-            <button type="button" className="text-xs text-primary hover:underline pointer-coarse:min-h-10" onClick={() => setOpen((o) => !o)}>
-              {open ? t('agents.conv.readLess') : t('agents.conv.readMore')}
-            </button>
-          )}
+          {toggle}
           {run}
         </div>
       </div>
@@ -604,21 +520,7 @@ function Composer({ group: g, ref, first }: { group: AgentGroup; ref?: React.Ref
   const [caret, setCaret] = React.useState(0)
   const [hi, setHi] = React.useState(0)
   const [closed, setClosed] = React.useState(false)
-  const input = React.useRef<HTMLTextAreaElement>(null)
-  // the element too (state): the chips' backdrop follows it from its first render (a restored "@name" draft)
-  const [inputEl, setInputEl] = React.useState<HTMLTextAreaElement | null>(null)
-  const setInput = React.useCallback((el: HTMLTextAreaElement | null) => {
-    input.current = el
-    setInputEl(el)
-  }, [])
-  // The caret goes to `placeAt` as soon as the new text is in the box (before the next key is typed).
-  const placeAt = React.useRef<number | null>(null)
-  const putText = (pasted: string, start: number, end: number) =>
-    setText((cur) => {
-      const from = Math.min(start, cur.length)
-      placeAt.current = from + pasted.length
-      return cur.slice(0, from) + pasted + cur.slice(Math.min(end, cur.length))
-    })
+  const { input, inputEl, setInput, placeAt, putText } = useBoxInput(text, setText)
   const files = useAttachments(g.path, groupUrl(g.path, '/uploads'), { draftKey: key, putText })
   const location = useLocation()
   const focus = !!(location.state as { focus?: boolean } | null)?.focus
@@ -661,26 +563,14 @@ function Composer({ group: g, ref, first }: { group: AgentGroup; ref?: React.Ref
     setClosed(false)
     placeAt.current = pos
   }
-  React.useLayoutEffect(() => {
-    const el = input.current
-    if (placeAt.current == null || !el) return
-    el.focus()
-    el.setSelectionRange(placeAt.current, placeAt.current)
-    placeAt.current = null
-  }, [text])
   // Dictation: put at the caret for review, or sent at once (voice setting "send automatically") when it can be.
-  // The voice button hands the text over with the handler of the render where recording stopped: it goes through
-  // `voice`, the handler of the last render, so what was typed or attached meanwhile is neither lost nor sent stale.
-  const onVoice = (heard: string, autoSend: boolean) => {
+  const onTranscript = useLatest((heard: string, autoSend: boolean) => {
     if (autoSend && !busy) return submit(heard)
     const next = insertAtCaret(input.current, text, heard)
     setText(next.text)
     setCaret(next.caret)
     placeAt.current = next.caret
-  }
-  const voice = React.useRef(onVoice)
-  voice.current = onVoice
-  const onTranscript = React.useCallback((heard: string, autoSend: boolean) => voice.current(heard, autoSend), [])
+  })
   React.useImperativeHandle(ref, () => ({
     mention: (slug: string) => insert(slug),
     // a selection quoted from the conversation: a Markdown quote at the end of the text, the message goes after it
@@ -695,8 +585,7 @@ function Composer({ group: g, ref, first }: { group: AgentGroup; ref?: React.Ref
 
   const canSend = (!!text.trim() || files.paths.length > 0) && !files.uploading
   const submit = (heard?: string) => {
-    const typed = text.trim()
-    const v = heard ? [typed, heard].filter(Boolean).join('\n\n') : typed
+    const v = [text.trim(), heard].filter(Boolean).join('\n\n')
     if ((!v && !files.paths.length) || busy) return
     const kept = files.atts
     files.dismissNotices()
@@ -762,11 +651,7 @@ function Composer({ group: g, ref, first }: { group: AgentGroup; ref?: React.Ref
           </div>
         )
       }
-      closed={
-        !ready ? (
-          <span data-testid="group-not-ready">{t('groups.notReady')}</span>
-        ) : null
-      }
+      closed={!ready ? <span data-testid="group-not-ready">{t('groups.notReady')}</span> : null}
       top={
         to.length > 0 ? (
           <div className="flex flex-wrap items-center gap-1 px-3.5 pt-2.5 text-xs text-muted-foreground" data-testid="group-to">

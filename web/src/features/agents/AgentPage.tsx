@@ -14,24 +14,24 @@ import { AgentBrowserCard } from '@/features/browser/AgentBrowserCard'
 import { AgentDevicesCard } from '@/features/devices/AgentDevicesCard'
 import { Link, useParams, useSearchParams } from 'react-router'
 import {
-  AlertCircle, AlertTriangle, ArrowLeft, Bot, Brain, Check, CheckCircle2, ChevronRight, Clock, ExternalLink, Info, KeyRound, Layers, Loader2, Lock, Mail, Maximize2, MessageSquare, MessageSquarePlus, Pencil, PlayCircle, Reply, Send, Settings2, ShieldCheck, Square, SquareTerminal, StickyNote, UsersRound, X, XCircle, Zap,
+  AlertCircle, AlertTriangle, Bot, Brain, Check, CheckCircle2, ChevronRight, Clock, ExternalLink, Info, KeyRound, Layers, Loader2, Lock, Mail, Maximize2, MessageSquare, MessageSquarePlus, Pencil, PlayCircle, Reply, Send, Settings2, ShieldCheck, Square, SquareTerminal, StickyNote, UsersRound, X, XCircle, Zap,
   PencilLine, Globe, Hand,
 } from 'lucide-react'
 import { useLang, useT, type TFn } from '@/i18n'
 import { errorMessage } from '@/lib/api'
 import {
-  agentRoute, agentRunRoute, useAgent, useAgentSandbox, useAgentSeen, useAgentTemplates, useAgentThread, fetchAgentThreadBefore, useCrons, useFileContent, useNewAgentChat, usePatchAgent, useRunAgent, useStopSession, useWorkspace, useWriteFile,
+  agentRoute, useAgent, useAgentSandbox, useAgentSeen, useAgentTemplates, useAgentThread, fetchAgentThreadBefore, useCrons, useFileContent, useNewAgentChat, usePatchAgent, useRunAgent, useStopSession, useWorkspace, useWriteFile,
   uploadAttachment, useCompactSession, usePatchSession, useSession,
 } from '@/lib/queries'
 import type { AgentDetail, AgentMessage, Approval, Cron, Effort } from '@/lib/types'
-import { fmtDate, fmtDuration, fmtRelative } from '@/lib/format'
+import { fmtDuration } from '@/lib/format'
 import { cn } from '@/lib/utils'
-import { useCompact, useMediaQuery } from '@/stores/media'
+import { useMediaQuery } from '@/stores/media'
 import {
-  Badge, Button, EmptyState, Sensitive, Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle, Skeleton, StatusDot, Switch, Textarea, Tooltip, toast,
+  Badge, Button, EmptyState, Sensitive, Skeleton, StatusDot, Switch, Textarea, Tooltip, toast,
 } from '@/components/ui'
 import { CompactGauge, ModelPicker } from '@/pages/sessions/Widgets'
-import { Page, PageHeader } from '@/components/shell/Page'
+import { PageHeader } from '@/components/shell/Page'
 import { absTopicDir, filesUrl, fmtCost, modelLabel, relPaths, toolIcon, type PathBases } from '@/pages/sessions/util'
 import { AgentMenuButton } from './AgentMenu'
 import { AgentAvatarIcon } from './Avatar'
@@ -47,21 +47,20 @@ import { agentDraftKey } from '@/lib/drafts'
 import { VoiceButton } from '@/features/voice/VoiceButton'
 import { VoiceCall } from '@/features/voice/VoiceCall'
 import { MessageBox, StopButton, TuckedCard, TuckedHead } from '@/features/composer/MessageBox'
-import { AttachmentStrip, MessageMedia, useMessageMenu, VoiceNote } from '@/pages/sessions/Items'
+import { AttachmentStrip, useMessageMenu, VoiceNote } from '@/pages/sessions/Items'
 import { useSlashCommands } from '@/pages/sessions/slashCommands'
 import { useSlashMenu } from '@/pages/sessions/useSlashMenu'
 import { ChipText } from '@/pages/sessions/mentions'
 import { ChipBackdrop, findCommand } from '@/features/chips/Chip'
 import type { SlashCommand } from '@/pages/sessions/SlashMenu'
 import { AnswerContext, AnswerText } from './answer'
+import { FoldedAnswer, PageFallback, RunLink, SideSheet, When, useBack, useBoxInput, useFold, useLatest, useMarkSeen } from './chat'
 import { useSessionLog } from '@/pages/sessions/log'
 
 const Markdown = React.lazy(() => import('@/components/ui/markdown').then((m) => ({ default: m.Markdown })))
 /** The memory is the agent's own writing: no picture of this site loads without a click (Markdown localImage). */
 const clickToLoad = () => null
 
-/** A result longer than this is folded (the first lines and "Read all"). */
-const FOLD_CHARS = 700
 /** Who wrote a run: typed by the owner (the agent page, Telegram): not a script's `maxxing agents run` (trigger manual too). */
 const byOwner = (m: AgentMessage) => !!m.owner || m.source === 'manual' || m.source === 'telegram'
 
@@ -74,6 +73,7 @@ export default function AgentPage({ at }: { at?: { project: string; topic: strin
   const { project = '', topic = '', name = '' } = at || params
   const path = `projects/${project}/topics/${topic}/agents/${name}`
   const { data: a, isLoading, error, refetch } = useAgent(on === false ? null : path)
+  const patch = usePatchAgent()
   // The profile can sit on the right of the conversation when there is room next to the list of agents: shown by
   // default from 1600 px, folded below (the conversation would be narrower than a phone); "Profile" folds / unfolds
   // it, remembered in this browser. Narrower: a sheet.
@@ -81,7 +81,6 @@ export default function AgentPage({ at }: { at?: { project: string; topic: strin
   const roomy = useMediaQuery('(min-width: 1600px)')
   const [docked, setDocked] = useDockedProfile()
   const wide = dockable && (docked ?? roomy)
-  const touch = useCompact()
   const [profile, setProfile] = React.useState(false)
   const openProfile = () => (dockable ? setDocked(!wide) : setProfile(true))
   // ?settings=<section> (a link from the E-mail page): the profile opens, then its settings on that section
@@ -94,44 +93,11 @@ export default function AgentPage({ at }: { at?: { project: string; topic: strin
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wantSettings])
-  // On a phone the agent is full screen: back to the list (on a computer the list stays on the left).
-  const back = touch ? (
-    <Button asChild variant="ghost" size="icon-sm" aria-label={t('agents.back')} className="-ml-1">
-      <Link to="/agents">
-        <ArrowLeft />
-      </Link>
-    </Button>
-  ) : null
+  const back = useBack()
 
   if (on === false) return <AgentsOff />
-  if (isLoading || on === undefined)
-    return (
-      <Page title={name} leading={back} width="wide">
-        <Skeleton className="h-16 rounded-xl" />
-        <Skeleton className="mt-4 h-80 rounded-xl" />
-      </Page>
-    )
-  if (error || !a)
-    return (
-      <Page title={name} leading={back}>
-        <EmptyState
-          icon={Bot}
-          tone="error"
-          title={t('agents.notFound')}
-          description={errorMessage(error)}
-          action={
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => refetch()}>
-                {t('common.retry')}
-              </Button>
-              <Button asChild size="sm">
-                <Link to="/agents">{t('agents.backToList')}</Link>
-              </Button>
-            </div>
-          }
-        />
-      </Page>
-    )
+  if (isLoading || on === undefined || error || !a)
+    return <PageFallback name={name} back={back} loading={isLoading || on === undefined} head="h-16" icon={Bot} title={t('agents.notFound')} error={error} retry={refetch} />
 
   const running = (a.running_now || 0) > 0
   return (
@@ -170,7 +136,12 @@ export default function AgentPage({ at }: { at?: { project: string; topic: strin
           <>
             <Tooltip content={a.enabled ? t('agents.switchOff') : t('agents.switchOn')}>
               <span className="flex items-center">
-                <EnabledSwitch agent={a} />
+                <Switch
+                  checked={a.enabled}
+                  onCheckedChange={(v) => patch.mutate({ path: a.path, enabled: v })}
+                  aria-label={a.enabled ? t('agents.switchOff') : t('agents.switchOn')}
+                  data-testid="agent-enabled"
+                />
               </span>
             </Tooltip>
             <Button variant={wide ? 'secondary' : 'outline'} size="sm" onClick={openProfile} aria-pressed={dockable ? wide : undefined} data-testid="agent-profile-open">
@@ -190,16 +161,9 @@ export default function AgentPage({ at }: { at?: { project: string; topic: strin
         )}
       </div>
       {!dockable && (
-        <Sheet open={profile} onOpenChange={setProfile}>
-          <SheetContent side="right" data-testid="agent-profile">
-            <SheetHeader>
-              <SheetTitle>{t('agents.panel.open')}</SheetTitle>
-            </SheetHeader>
-            <SheetBody className="p-0">
-              <Profile agent={a} />
-            </SheetBody>
-          </SheetContent>
-        </Sheet>
+        <SideSheet open={profile} onOpenChange={setProfile} title={t('agents.panel.open')} bodyClassName="p-0" testid="agent-profile">
+          <Profile agent={a} />
+        </SideSheet>
       )}
     </div>
   )
@@ -256,15 +220,14 @@ const DOCK_KEY = 'mx-agent-profile'
 
 /** The user's choice for the profile column on a computer: shown, folded, or null (the default for the width). */
 function useDockedProfile(): [boolean | null, (v: boolean) => void] {
-  const read = () => {
+  const [docked, setState] = React.useState<boolean | null>(() => {
     try {
       const v = localStorage.getItem(DOCK_KEY)
       return v === 'shown' ? true : v === 'folded' ? false : null
     } catch {
       return null
     }
-  }
-  const [docked, setState] = React.useState<boolean | null>(read)
+  })
   const set = React.useCallback((v: boolean) => {
     setState(v)
     try {
@@ -276,21 +239,8 @@ function useDockedProfile(): [boolean | null, (v: boolean) => void] {
   return [docked, set]
 }
 
-function EnabledSwitch({ agent: a }: { agent: AgentDetail }) {
-  const t = useT()
-  const patch = usePatchAgent()
-  return (
-    <Switch
-      checked={a.enabled}
-      onCheckedChange={(v) => patch.mutate({ path: a.path, enabled: v })}
-      aria-label={a.enabled ? t('agents.switchOff') : t('agents.switchOn')}
-      data-testid="agent-enabled"
-    />
-  )
-}
-
 /* ---------------------------------------------------------------- The conversation */
-export function triggerLabel(t: TFn, m: Pick<AgentMessage, 'trigger' | 'source'>, crons: Cron[] = []): string {
+function triggerLabel(t: TFn, m: Pick<AgentMessage, 'trigger' | 'source'>, crons: Cron[] = []): string {
   const tr = m.trigger || ''
   if (tr === 'limit-retry') return t('agents.from.limitRetry')
   if (tr === 'manual' && m.source === 'command line') return t('agents.from.command')
@@ -335,13 +285,7 @@ function ownSessions(a: AgentDetail, msgs: AgentMessage[]): Set<string> {
  *  and what its automations did (what started each, its steps folded, its result), a day line between days. */
 function AgentCenter({ agent: a }: { agent: AgentDetail }) {
   const [replyTo, setReplyTo] = React.useState<AgentMessage | null>(null)
-  // Reading the page = its results are read (again when a new one comes in while it is open).
-  const seen = useAgentSeen()
-  const unread = a.thread_unread || 0
-  const seenMutate = seen.mutate
-  React.useEffect(() => {
-    if (unread > 0) seenMutate({ path: a.path })
-  }, [unread, a.path, seenMutate])
+  useMarkSeen(useAgentSeen().mutate, a.thread_unread || 0, a.path)
   const composer = React.useRef<AgentComposerApi>(null)
   const flow = React.useRef<FlowApi>(null)
   return (
@@ -435,12 +379,7 @@ function Flow({ agent: a, onReply, onSuggest, ref }: { agent: AgentDetail; onRep
   React.useLayoutEffect(follow, [last, running.length, follow])
   // A message sent from the box below is always shown, even when the user had scrolled up to read (a long answer
   // read from its start, on a phone): back to the bottom at the send, and the message is followed when it comes.
-  React.useImperativeHandle(ref, () => ({
-    toBottom: () => {
-      stick.current = true
-      follow()
-    },
-  }), [follow])
+  React.useImperativeHandle(ref, () => ({ toBottom: () => ((stick.current = true), follow()) }), [follow])
   // What grows after a render (answers' markdown, images, the approval card once its query answers, a live turn)
   // stays followed while at the bottom: opening an agent shows its newest message.
   const inner = React.useRef<HTMLDivElement>(null)
@@ -600,14 +539,7 @@ function Suggestions({ onPick }: { onPick: (text: string) => void }) {
           {t('agents.new.blankChip')}
         </button>
         {shown.map((tp) => (
-          <button
-            key={tp.id}
-            type="button"
-            onClick={() => onPick(tp.brief || t('agents.new.blank'))}
-            className={chip}
-            title={tp.summary}
-            data-testid={`agent-suggest-${tp.id}`}
-          >
+          <button key={tp.id} type="button" onClick={() => onPick(tp.brief || t('agents.new.blank'))} className={chip} title={tp.summary} data-testid={`agent-suggest-${tp.id}`}>
             <AgentAvatarIcon avatar={tp.avatar} size={22} />
             {tp.name}
           </button>
@@ -623,15 +555,6 @@ function Suggestions({ onPick }: { onPick: (text: string) => void }) {
 }
 
 const firstLine = (s: string) => (s || '').replace(/^[#>*\s-]+/, '').split('\n')[0].slice(0, 90)
-
-function When({ at }: { at: number }) {
-  const lang = useLang()
-  return (
-    <time className="text-[11px] text-muted-foreground tabular-nums" dateTime={new Date(at * 1000).toISOString()} title={fmtDate(at, lang)}>
-      {fmtRelative(at, lang)}
-    </time>
-  )
-}
 
 /** What the owner wrote (the page, Telegram): on the right, as in a session. */
 function OwnerMessage({ m, agentPath, answers }: { m: AgentMessage; agentPath: string; answers?: AgentMessage }) {
@@ -749,9 +672,7 @@ function StepList({ steps, total, className }: { steps: Step[]; total: number; c
   return (
     <div className={cn('grid min-w-0 gap-1', className)}>
       {total > steps.length && <p className="px-1 text-[11px] text-muted-foreground">{t('agents.flow.earlier', { n: total - steps.length })}</p>}
-      {steps.map((s, i) => (
-        <StepRow key={i} s={s} />
-      ))}
+      {steps.map((s, i) => <StepRow key={i} s={s} />)}
     </div>
   )
 }
@@ -782,10 +703,7 @@ function ResultLine({ model, ms, cost }: { model?: string; ms?: number; cost?: n
     <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground tabular-nums" data-testid="result-line">
       <Check className="size-3 text-success" />
       {parts.map((p, i) => (
-        <React.Fragment key={i}>
-          {i > 0 && <span aria-hidden>·</span>}
-          <span>{p}</span>
-        </React.Fragment>
+        <React.Fragment key={i}>{i > 0 && <span aria-hidden>·</span>}<span>{p}</span></React.Fragment>
       ))}
     </div>
   )
@@ -813,10 +731,9 @@ function AgentBubble({ agent: a, head, children, className, testid }: { agent: A
  *  an automation (its steps folded, Reply goes on with it). */
 function AgentTurn({ m, agent: a, chat, onReply }: { m: AgentMessage; agent: AgentDetail; chat: boolean; onReply: (m: AgentMessage) => void }) {
   const t = useT()
-  const [open, setOpen] = React.useState(false)
   const { onContextMenu, touch, menu } = useMessageMenu({ text: m.text, copy: true })
   const failed = m.ok === false
-  const long = !chat && (m.text || '').length > FOLD_CHARS     // a run's report folds, an answer never does
+  const { folded, toggle } = useFold(m.text, !chat) // a run's report folds, an answer never does
   const steps: Step[] = (m.tools || []).map((s) => ({ name: s.name, summary: s.summary, state: s.error ? 'error' : 'ok' }))
   const total = Math.max(m.tools_total || 0, steps.length)
   return (
@@ -846,17 +763,7 @@ function AgentTurn({ m, agent: a, chat, onReply }: { m: AgentMessage; agent: Age
       <div className="grid min-w-0" onContextMenu={onContextMenu} {...touch}>
         {menu}
         {m.text ? (
-          <>
-            <div className={cn('relative min-w-0 text-sm', long && !open && 'max-h-64 overflow-hidden')} data-quote>
-              <Sensitive block>
-                <AnswerText text={m.text} />
-              </Sensitive>
-              {long && !open && <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-card" aria-hidden />}
-            </div>
-            <Sensitive block>
-              <MessageMedia text={m.text} />
-            </Sensitive>
-          </>
+          <FoldedAnswer text={m.text} folded={folded} />
         ) : (
           <span className="text-sm text-muted-foreground italic">{t('agents.thread.noText')}</span>
         )}
@@ -864,21 +771,13 @@ function AgentTurn({ m, agent: a, chat, onReply }: { m: AgentMessage; agent: Age
       </div>
       {chat && <ResultLine model={m.model} ms={m.duration_ms} cost={m.cost} />}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        {long && (
-          <button type="button" className="text-xs text-primary hover:underline pointer-coarse:min-h-10" onClick={() => setOpen((o) => !o)}>
-            {open ? t('agents.conv.readLess') : t('agents.conv.readMore')}
-          </button>
-        )}
+        {toggle}
         {!chat && m.session && (
           <button type="button" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary pointer-coarse:min-h-10" onClick={() => onReply(m)} data-testid="agent-reply">
             <Reply className="size-3" /> {t('agents.conv.reply')}
           </button>
         )}
-        {!chat && m.session && (
-          <Link to={agentRunRoute(a.path, m.session)} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary hover:underline pointer-coarse:min-h-10" data-testid="agent-open-run">
-            <PlayCircle className="size-3" /> {t('agents.thread.openRun')}
-          </Link>
-        )}
+        {!chat && m.session && <RunLink path={a.path} sid={m.session} testid="agent-open-run" />}
         {!chat && m.session && <ContinueButton agent={a} sid={m.session} variant="link" />}
       </div>
     </AgentBubble>
@@ -892,8 +791,7 @@ function LiveTurn({ agent: a, sid, chat, onWrite }: { agent: AgentDetail; sid: s
   const stop = useStopSession()
   const waiting = (a.waiting || 0) > 0
   // its browser waits for the owner (ask_human: a captcha, a sign-in...): said first, with the browser's window
-  const browserAskOf = useAgentBrowserAsks(a.path).find((x) => x.session === sid)
-  const browserAsk = !!browserAskOf
+  const browserAsk = useAgentBrowserAsks(a.path).find((x) => x.session === sid)
   const [win, setWin] = React.useState(false)
   const { steps, text } = React.useMemo(() => {
     let from = 0
@@ -951,13 +849,9 @@ function LiveTurn({ agent: a, sid, chat, onWrite }: { agent: AgentDetail; sid: s
             <Globe className="size-3" /> {t('browser.openWindow')}
           </button>
         )}
-        {!chat && (
-          <Link to={agentRunRoute(a.path, sid)} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary hover:underline pointer-coarse:min-h-10" data-testid="agent-follow">
-            <PlayCircle className="size-3" /> {t('agents.thread.openRun')}
-          </Link>
-        )}
+        {!chat && <RunLink path={a.path} sid={sid} testid="agent-follow" />}
       </div>
-      {browserAsk && <BrowserWindow context={a.path} profile={browserAskOf?.profile} session={sid} who={a.display_name} open={win} onOpenChange={setWin} start />}
+      {browserAsk && <BrowserWindow context={a.path} profile={browserAsk.profile} session={sid} who={a.display_name} open={win} onOpenChange={setWin} start />}
     </AgentBubble>
   )
 }
@@ -1008,11 +902,7 @@ function ThreadMessage({
       }
     >
       <ThreadApprovalBody m={m} live={live} decided={decided} />
-      {m.session && !chat && (
-        <Link to={agentRunRoute(a.path, m.session)} className="inline-flex w-fit items-center gap-1 text-xs text-muted-foreground hover:text-primary hover:underline pointer-coarse:min-h-10" data-testid="agent-open-run">
-          <PlayCircle className="size-3" /> {t('agents.thread.openRun')}
-        </Link>
-      )}
+      {m.session && !chat && <RunLink path={a.path} sid={m.session} testid="agent-open-run" className="w-fit" />}
     </AgentBubble>
   )
 }
@@ -1040,10 +930,7 @@ function Composer({ agent: a, replyTo, onCancelReply, onSend, ref }: { agent: Ag
   const onEffort = (e: Effort | '') => (chat ? patchSession.mutate({ id: chat.id, effort: e }) : setEffort(e))
   const chatRunning = !!chat && (chat.state === 'running' || !!chat.queue)
   const commands = useSlashCommands(a.path, {
-    model,
-    onModel,
-    effort,
-    onEffort,
+    model, onModel, effort, onEffort,
     onCompact: chat
       ? () => {
           if (chatRunning) toast.info(t('slash.busy'))
@@ -1056,34 +943,12 @@ function Composer({ agent: a, replyTo, onCancelReply, onSend, ref }: { agent: Ag
   })
   const key = agentDraftKey('agent', a.path)
   const { text, setText } = useDraftText(key)
-  const input = React.useRef<HTMLTextAreaElement>(null)
-  // the element too (state): the chips' backdrop follows it from its first render (a restored "/name" draft)
-  const [inputEl, setInputEl] = React.useState<HTMLTextAreaElement | null>(null)
-  const setInput = React.useCallback((el: HTMLTextAreaElement | null) => {
-    input.current = el
-    setInputEl(el)
-  }, [])
-  // The caret goes to `placeAt` as soon as the new text is in the box (before the next key is typed).
-  const placeAt = React.useRef<number | null>(null)
-  const putText = (pasted: string, start: number, end: number) =>
-    setText((cur) => {
-      const from = Math.min(start, cur.length)
-      placeAt.current = from + pasted.length
-      return cur.slice(0, from) + pasted + cur.slice(Math.min(end, cur.length))
-    })
-  React.useLayoutEffect(() => {
-    const el = input.current
-    if (placeAt.current == null || !el) return
-    el.focus()
-    el.setSelectionRange(placeAt.current, placeAt.current)
-    placeAt.current = null
-  }, [text])
+  const { input, inputEl, setInput, putText } = useBoxInput(text, setText)
   const files = useAttachments(a.path, undefined, { draftKey: key, putText })
   const slash = useSlashMenu({ text, setText, commands: a.enabled ? commands : undefined, input })
   React.useEffect(() => {
     if (replyTo) input.current?.focus()
   }, [replyTo])
-  /** Caret after `next` once it is in the box. */
   const caretTo = (pos: number) =>
     requestAnimationFrame(() => {
       input.current?.focus({ preventScroll: true })
@@ -1117,14 +982,11 @@ function Composer({ agent: a, replyTo, onCancelReply, onSend, ref }: { agent: Ag
   const alive = React.useRef(true)
   React.useEffect(() => {
     alive.current = true
-    return () => {
-      alive.current = false
-    }
+    return () => void (alive.current = false)
   }, [])
   const submit = (heard?: string) => {
     if (!heard && !files.paths.length && slash.runTyped()) return
-    const typed = text.trim()
-    const v = heard ? [typed, heard].filter(Boolean).join('\n\n') : typed
+    const v = [text.trim(), heard].filter(Boolean).join('\n\n')
     if ((!v && !files.paths.length) || busy) return
     const kept = files.atts
     files.dismissNotices()
@@ -1147,17 +1009,12 @@ function Composer({ agent: a, replyTo, onCancelReply, onSend, ref }: { agent: Ag
     )
   }
   // Dictation: put at the caret for review, or sent at once (voice setting "send automatically") when it can be.
-  // The voice button hands the text over with the handler of the render where recording stopped: it goes through
-  // `voice`, the handler of the last render, so what was typed or attached meanwhile is neither lost nor sent stale.
-  const onVoice = (heard: string, autoSend: boolean) => {
+  const onTranscript = useLatest((heard: string, autoSend: boolean) => {
     if (autoSend && !busy) return submit(heard)
     const next = insertAtCaret(input.current, text, heard)
     setText(next.text)
     caretTo(next.caret)
-  }
-  const voice = React.useRef(onVoice)
-  voice.current = onVoice
-  const onTranscript = React.useCallback((heard: string, autoSend: boolean) => voice.current(heard, autoSend), [])
+  })
   // Voice message sent directly (voice setting on by default), as in a session: the recording goes at once, its
   // session transcribes it and its words fill the message. Not sendable now, or refused: it comes back attached.
   const onVoiceMessage = (file: File) => {
@@ -1247,12 +1104,7 @@ function Composer({ agent: a, replyTo, onCancelReply, onSend, ref }: { agent: Ag
               stream
               running={chat?.state === 'running'}
               queueCount={chat?.queue || 0}
-              onSend={(said, _atts, call) =>
-                run.mutateAsync({ path: a.path, text: said, call, ...nextPick() }).then(
-                  (r) => !!r.started,
-                  () => false,
-                )
-              }
+              onSend={(said, _atts, call) => run.mutateAsync({ path: a.path, text: said, call, ...nextPick() }).then((r) => !!r.started, () => false)}
               onStop={chat ? () => stopChat.mutate(chat.id) : undefined}
             />
           )}
@@ -1392,26 +1244,25 @@ function Profile({ agent: a }: { agent: AgentDetail }) {
           <UsersRound className="size-3.5 shrink-0" /> {t('groups.withAgent')}
         </Link>
       </div>
-      <Sheet open={!!advanced} onOpenChange={setAdvanced}>
-        <SheetContent side="right" className="md:w-[520px]">
-          <SheetHeader>
-            <SheetTitle>{t('agents.panel.advanced')}</SheetTitle>
-          </SheetHeader>
-          <SheetBody>
-            <AgentSettings agent={a} section={typeof advanced === 'string' ? advanced : undefined} />
-          </SheetBody>
-        </SheetContent>
-      </Sheet>
-      <Sheet open={memory} onOpenChange={setMemory}>
-        <SheetContent side="right">
-          <SheetHeader>
-            <SheetTitle>{t('agents.panel.memory')}</SheetTitle>
-          </SheetHeader>
-          <SheetBody>
-            <MemoryEditor agent={a} />
-          </SheetBody>
-        </SheetContent>
-      </Sheet>
+      <SideSheet open={!!advanced} onOpenChange={setAdvanced} title={t('agents.panel.advanced')} className="md:w-[520px]">
+        <AgentSettings agent={a} section={typeof advanced === 'string' ? advanced : undefined} />
+      </SideSheet>
+      <SideSheet open={memory} onOpenChange={setMemory} title={t('agents.panel.memory')}>
+        <MemoryEditor agent={a} />
+      </SideSheet>
+    </div>
+  )
+}
+
+/** A problem of the agent, its `code` in backticks. */
+function Alert({ title, text, testid, children }: { title: string; text: string; testid: string; children?: React.ReactNode }) {
+  return (
+    <div role="alert" className="grid gap-1 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs" data-testid={testid}>
+      <span className="flex items-center gap-1.5 font-medium text-destructive">
+        <AlertTriangle className="size-3.5 shrink-0" /> {title}
+      </span>
+      <span>{text.split('`').map((x, i) => (i % 2 ? <code key={i} className="rounded bg-muted px-1 font-mono text-[11px]">{x}</code> : x))}</span>
+      {children}
     </div>
   )
 }
@@ -1420,18 +1271,7 @@ function Profile({ agent: a }: { agent: AgentDetail }) {
 function BrokenBanner({ agent: a }: { agent: AgentDetail }) {
   const t = useT()
   if (!a.broken) return null
-  return (
-    <div role="alert" className="grid gap-1 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs" data-testid="agent-broken">
-      <span className="flex items-center gap-1.5 font-medium text-destructive">
-        <AlertTriangle className="size-3.5 shrink-0" /> {t('agents.broken.title')}
-      </span>
-      <span>
-        {t('agents.broken.desc', { file: `${a.path}/agent.json` })
-          .split('`')
-          .map((x, i) => (i % 2 ? <code key={i} className="rounded bg-muted px-1 font-mono text-[11px]">{x}</code> : x))}
-      </span>
-    </div>
-  )
+  return <Alert title={t('agents.broken.title')} text={t('agents.broken.desc', { file: `${a.path}/agent.json` })} testid="agent-broken" />
 }
 
 /** Sandbox on but this server cannot run it (bwrap, socat, the AppArmor profile...): its runs stop - say so. */
@@ -1440,17 +1280,9 @@ function SandboxBanner({ agent: a }: { agent: AgentDetail }) {
   const { data } = useAgentSandbox(a.sandbox)
   if (!a.sandbox || !data || data.ok) return null
   return (
-    <div role="alert" className="grid gap-1 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs" data-testid="agent-sandbox-missing">
-      <span className="flex items-center gap-1.5 font-medium text-destructive">
-        <AlertTriangle className="size-3.5 shrink-0" /> {t('agents.sandbox.missingTitle')}
-      </span>
-      <span>
-        {t('agents.sandbox.missingDesc')
-          .split('`')
-          .map((x, i) => (i % 2 ? <code key={i} className="rounded bg-muted px-1 font-mono text-[11px]">{x}</code> : x))}
-      </span>
+    <Alert title={t('agents.sandbox.missingTitle')} text={t('agents.sandbox.missingDesc')} testid="agent-sandbox-missing">
       {data.missing.length > 0 && <span className="text-muted-foreground">{t('agents.sandbox.missingList', { list: data.missing.join(', ') })}</span>}
-    </div>
+    </Alert>
   )
 }
 
@@ -1510,19 +1342,12 @@ function MemoryPreview({ agent: a }: { agent: AgentDetail }) {
   const t = useT()
   const { data, isLoading } = useMemoryFile(a)
   if (isLoading) return <Skeleton className="h-12 rounded-lg" />
-  const lines = (data?.content || '')
-    .split('\n')
-    .map((l) => l.trim())
-    .filter((l) => l && !l.startsWith('#'))
+  const lines = (data?.content || '').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'))
   if (!lines.length) return <p className="text-xs text-muted-foreground">{t('agents.panel.memoryEmpty')}</p>
   return (
     <div className="rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">
       <Sensitive block>
-        {lines.slice(0, 4).map((l, i) => (
-          <p key={i} className="truncate">
-            {l}
-          </p>
-        ))}
+        {lines.slice(0, 4).map((l, i) => <p key={i} className="truncate">{l}</p>)}
       </Sensitive>
     </div>
   )
@@ -1556,12 +1381,7 @@ function MemoryEditor({ agent: a }: { agent: AgentDetail }) {
           <Textarea minRows={10} maxRows={40} value={edit} onChange={(e) => setEdit(e.target.value)} className="font-mono text-[13px]" />
           {write.error && <p className="text-sm text-destructive">{errorMessage(write.error)}</p>}
           <div className="flex gap-2">
-            <Button
-              loading={write.isPending}
-              onClick={() =>
-                write.mutate({ path: file, content: edit, expected_mtime: data?.mtime }, { onSuccess: () => (setEdit(null), toast.success(t('agents.memory.saved')), refetch()) })
-              }
-            >
+            <Button loading={write.isPending} onClick={() => write.mutate({ path: file, content: edit, expected_mtime: data?.mtime }, { onSuccess: () => (setEdit(null), toast.success(t('agents.memory.saved')), refetch()) })}>
               {t('common.save')}
             </Button>
             <Button variant="ghost" onClick={() => setEdit(null)}>
@@ -1573,9 +1393,7 @@ function MemoryEditor({ agent: a }: { agent: AgentDetail }) {
         <div className="rounded-xl border bg-card p-4">
           <Sensitive block>
             <React.Suspense fallback={<pre className="text-sm whitespace-pre-wrap">{content}</pre>}>
-              <Markdown className="text-sm" localImage={clickToLoad}>
-                {content}
-              </Markdown>
+              <Markdown className="text-sm" localImage={clickToLoad}>{content}</Markdown>
             </React.Suspense>
           </Sensitive>
         </div>

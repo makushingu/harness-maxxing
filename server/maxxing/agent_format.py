@@ -52,15 +52,10 @@ def export_md(path: str) -> str:
     a = agents.load(path)
     name = agents.parse(path)[2]
     role = _role(path)
-    head = {"name": name, "description": _one_line(role) or a["name"] or name}
-    if a["allowed_tools"]:
-        head["tools"] = ", ".join(a["allowed_tools"])
-    if a["disallowed_tools"]:
-        head["disallowedTools"] = ", ".join(a["disallowed_tools"])
-    if a["model"]:
-        head["model"] = a["model"]
-    if a["permission_mode"]:
-        head["permissionMode"] = MODES_OUT[a["permission_mode"]]
+    pm = a["permission_mode"]
+    head = {"name": name, "description": _one_line(role) or a["name"] or name, **{k: v for k, v in (
+        ("tools", ", ".join(a["allowed_tools"])), ("disallowedTools", ", ".join(a["disallowed_tools"])),
+        ("model", a["model"]), ("permissionMode", MODES_OUT[pm] if pm else "")) if v}}
     front = "\n".join(f"{k}: {_yaml_str(str(v))}" for k, v in head.items())
     return f"---\n{front}\n---\n\n{role}\n"
 
@@ -132,10 +127,8 @@ def parse_md(text: str) -> dict:
     body = m.group(2).strip()
     desc = str(head.get("description") or "").strip()
     fields: dict = {"name": name[:60]}
-    if head.get("tools"):
-        fields["allowed_tools"] = tools(head["tools"])
-    if head.get("disallowedTools"):
-        fields["disallowed_tools"] = tools(head["disallowedTools"])
+    fields.update({f: tools(head[k]) for k, f in (("tools", "allowed_tools"), ("disallowedTools", "disallowed_tools"))
+                   if head.get(k)})
     model = str(head.get("model") or "").strip()
     if model and model != "inherit":
         fields["model"] = model
@@ -179,11 +172,7 @@ def subagents(topic_path: str) -> dict:
                              "file) is not followed, only this role and the session that called you. Write there only "
                              "what will change how you work next time (a rule from the user, a trap, a lasting "
                              "fact), as a short dated bullet; never a log of the task: most tasks add nothing."}
-        if a["allowed_tools"]:
-            d["tools"] = a["allowed_tools"]
-        if a["model"]:
-            d["model"] = a["model"]
-        out[n] = d
+        out[n] = {**d, **{k: a[f] for k, f in (("tools", "allowed_tools"), ("model", "model")) if a[f]}}
     return out
 
 

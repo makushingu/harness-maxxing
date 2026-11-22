@@ -1,13 +1,8 @@
-// The left column of the Agents page (like the contact list of a chat app): every agent with its face, its name, its
-// topic, a status dot and its unread count, always grouped by project (order and colour of layout.tsx: drag a project
-// header or an agent to move it, the "..." of a project for Move up / down and its colour). On top: `nav` (OfficeLink),
-// then the state filter (All / waiting for you / to read / running / active / off, with counts; empty states hidden)
-// and the ?topic= chip. No search field (Ctrl K finds agents and groups); New agent / New group sit at the top right
-// of the Office (AgentsPage.tsx), and a "+" for New agent beside the Office link, on every page of Agents.
-// The groups of a project (agent_rooms: the owner talks to several of its agents) come first in its section: the
-// chips To read / Running keep the unread / busy ones, the other chips hide them.
-// Beside the chips, while something of the list (topic and search applied) is unread: Mark all as read.
-// On a phone it is the whole page at /agents (an agent then opens full screen); on a desktop, the page's left column.
+// The left column of the Agents page (like the contact list of a chat app): every agent (face, name, topic, status dot,
+// unread count) grouped by project, its groups first (layout.tsx: order and colour, drag and drop, the "..." menu). On
+// top: `nav` (OfficeLink), the state filter chips (with counts, empty ones hidden), Mark all as read while something
+// listed is unread, and the ?topic= chip. No search field (Ctrl K finds agents and groups). On a phone it is the whole
+// page at /agents (an agent then opens full screen); on a desktop, the page's left column.
 import * as React from 'react'
 import { Link, useLocation, useMatch, useSearchParams } from 'react-router'
 import { Bot, CheckCheck, LayoutGrid, Plus, TriangleAlert, UsersRound, X } from 'lucide-react'
@@ -47,8 +42,6 @@ const STATE_GROUPS: { id: StateFilter; tone: DotTone; label: (t: TFn) => string;
 /** Most recent activity first (its last result or skip), then by name. */
 const byActivity = (a: Agent, b: Agent) => (b.last_run?.at || b.created || 0) - (a.last_run?.at || a.created || 0) || a.display_name.localeCompare(b.display_name)
 
-/** `empty`: shown instead of the short "No agent yet" when there is no agent at all (the touch layout, where the list
- *  is the whole page). `nav`: entries between "New agent" and the filter (the Office). */
 /** The way back to the Office (every agent at its desk), whichever agent or run is open: a nav entry of its own, with
  *  New agent (`onNew`) beside it. */
 export function OfficeLink({ onNew }: { onNew?: () => void }) {
@@ -70,6 +63,7 @@ export function OfficeLink({ onNew }: { onNew?: () => void }) {
   )
 }
 
+/** `empty`: shown instead of the short "No agent yet" when there is no agent at all; `nav`: entries above the filter. */
 export function AgentsList({ empty, nav, query = '', className }: { empty?: React.ReactNode; nav?: React.ReactNode; query?: string; className?: string }) {
   const t = useT()
   const mask = useMask()
@@ -162,16 +156,8 @@ export function AgentsList({ empty, nav, query = '', className }: { empty?: Reac
             className="min-w-0 flex-1"
           />
           {unread.agents.length + unread.groups.length > 0 && (
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="shrink-0"
-              onClick={() => markAll.mutate(unread)}
-              disabled={markAll.isPending}
-              aria-label={t('agents.side.markAllRead')}
-              title={t('agents.side.markAllRead')}
-              data-testid="agents-mark-all-read"
-            >
+            <Button variant="ghost" size="icon-sm" className="shrink-0" onClick={() => markAll.mutate(unread)} disabled={markAll.isPending}
+              aria-label={t('agents.side.markAllRead')} title={t('agents.side.markAllRead')} data-testid="agents-mark-all-read">
               <CheckCheck />
             </Button>
           )}
@@ -269,32 +255,31 @@ function Group({ project, label, index, layout, among, head, children }: { proje
   )
 }
 
-const DOT: Record<AgentState, { tone: 'warn' | 'unread' | 'running' | 'error' | 'idle' | 'ok'; pulse?: boolean }> = {
-  waiting: { tone: 'warn', pulse: true },
-  unread: { tone: 'unread' },
-  running: { tone: 'running', pulse: true },
-  failed: { tone: 'error' },
-  active: { tone: 'ok' },
-  off: { tone: 'idle' },
+const DOT: Record<AgentState, { tone: DotTone; pulse?: boolean }> = {
+  waiting: { tone: 'warn', pulse: true }, unread: { tone: 'unread' }, running: { tone: 'running', pulse: true },
+  failed: { tone: 'error' }, active: { tone: 'ok' }, off: { tone: 'idle' },
+}
+/** A row of the list (a group or an agent), its link keeping the list's ?topic= on the Agents page. */
+const ROW = 'relative flex min-h-12 items-center gap-2.5 rounded-lg px-2 py-1.5 outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring max-md:min-h-14'
+const useRowTo = (pathname: string) => {
+  const location = useLocation()
+  return { pathname, search: location.pathname.startsWith('/agents') ? location.search : '' }
 }
 
 /** A group of the project: its emoji, its name, its members' faces (stacked), "X is writing…" while one speaks. */
 function GroupRow({ group: g }: { group: AgentGroup }) {
   const t = useT()
-  const location = useLocation()
   const to = groupRoute(g)
+  const link = useRowTo(to)
   const active = !!useMatch({ path: to })
   const speaker = g.members.find((m) => m.path === g.speaking)
   const unread = g.unread > 0
   return (
     <Link
       role="listitem"
-      to={{ pathname: to, search: location.pathname.startsWith('/agents') ? location.search : '' }}
+      to={link}
       aria-current={active ? 'page' : undefined}
-      className={cn(
-        'relative flex min-h-12 items-center gap-2.5 rounded-lg px-2 py-1.5 outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring max-md:min-h-14',
-        active && 'bg-accent hover:bg-accent',
-      )}
+      className={cn(ROW, active && 'bg-accent hover:bg-accent')}
       data-testid="groups-row"
       data-path={g.path}
     >
@@ -351,8 +336,8 @@ export function MemberStack({ members, size = 16 }: { members: AgentGroup['membe
 function AgentRow({ agent: a, index, layout }: { agent: Agent; index: number; layout: AgentsLayoutApi }) {
   const t = useT()
   const dnd = useReorder({ kind: 'agent', id: a.path, project: a.project, index }, (path) => layout.moveAgent(path, a))
-  const location = useLocation()
   const to = agentRoute(a)
+  const link = useRowTo(to)
   // The open agent (its conversation or one of its runs) is highlighted.
   const active = !!useMatch({ path: `${to}/*` })
   const state = agentState(a)
@@ -362,15 +347,11 @@ function AgentRow({ agent: a, index, layout }: { agent: Agent; index: number; la
   return (
     <Link
       role="listitem"
-      to={{ pathname: to, search: location.pathname.startsWith('/agents') ? location.search : '' }}
+      to={link}
       aria-current={active ? 'page' : undefined}
       {...dnd.props}
       {...ctx.props}
-      className={cn(
-        'relative flex min-h-12 items-center gap-2.5 rounded-lg px-2 py-1.5 outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring max-md:min-h-14',
-        active && 'bg-accent hover:bg-accent',
-        dnd.dragging && 'opacity-50',
-      )}
+      className={cn(ROW, active && 'bg-accent hover:bg-accent', dnd.dragging && 'opacity-50')}
       data-testid="agents-row"
       data-rail-agent
       data-state={state}
@@ -396,12 +377,8 @@ function AgentRow({ agent: a, index, layout }: { agent: Agent; index: number; la
       </span>
       <span className="flex shrink-0 items-center gap-1 empty:hidden">
         {!!a.alerts && (
-          <span
-            className="inline-flex h-5 items-center gap-0.5 rounded-full bg-destructive/12 px-1.5 text-[11px] font-semibold text-destructive tabular-nums"
-            title={t('agents.list.alerts', { count: a.alerts })}
-            aria-label={t('agents.list.alerts', { count: a.alerts })}
-            data-testid="agents-row-alerts"
-          >
+          <span className="inline-flex h-5 items-center gap-0.5 rounded-full bg-destructive/12 px-1.5 text-[11px] font-semibold text-destructive tabular-nums"
+            title={t('agents.list.alerts', { count: a.alerts })} aria-label={t('agents.list.alerts', { count: a.alerts })} data-testid="agents-row-alerts">
             <TriangleAlert className="size-3" strokeWidth={2.5} />
             {a.alerts}
           </span>

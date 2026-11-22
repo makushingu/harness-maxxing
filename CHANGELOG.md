@@ -37,6 +37,20 @@ Changed:
   the top) now adds the older messages a few at a time instead of all at once: the page stays responsive, mostly
   felt on a phone.
 
+## 2.0.0-alpha.163 - 2026-11-22
+
+Fixed:
+- **An agent stopped by a usage limit could pay for its retry again and again.** If saving its state failed right
+  after the "carry on" message, every pass of the server sent it again; it is now marked sent at once.
+- **Team: Summarize on a very long chat failed** (the whole history went to the model). The text sent is capped at
+  100,000 characters, the oldest messages left out, and one summary of a chat runs at a time (no second paid call
+  from another tab).
+- **Team: files dropped while others were still uploading** left the first ones stuck on "…" and the message could
+  not be sent.
+
+Changed:
+- Agents and Team: lighter code (about 1,100 lines less, same behaviour).
+
 ## 2.0.0-alpha.162 - 2026-11-22
 
 Fixed:

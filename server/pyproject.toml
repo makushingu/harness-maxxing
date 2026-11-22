@@ -1,6 +1,6 @@
 [project]
 name = "claude-maxxing"
-version = "2.0.0a162"
+version = "2.0.0a163"
 description = "Self-hosted control room for Claude Code"
 requires-python = ">=3.11"
 dependencies = [

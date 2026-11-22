@@ -16,36 +16,41 @@ export function AppearanceDialog({ agent: a, open, onOpenChange }: { agent: Agen
   const [name, setName] = React.useState(a.display_name)
   const [avatar, setAvatar] = React.useState<AgentAvatar>(a.avatar)
   React.useEffect(() => {
-    if (open) {
-      setName(a.display_name)
-      setAvatar({ ...a.avatar })
-    }
+    if (open) (setName(a.display_name), setAvatar({ ...a.avatar }))
   }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
   const save = () =>
     patch.mutate({ path: a.path, display_name: name.trim() || a.name, avatar }, { onSuccess: () => (toast.success(t('agents.look.saved')), onOpenChange(false)) })
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="md:max-w-2xl" data-testid="agent-appearance">
+    <FormDialog open={open} onOpenChange={onOpenChange} title={t('agents.look.title')} description={t('agents.look.desc')} className="md:max-w-2xl"
+      formClassName="gap-5" testid="agent-appearance" saving={patch.isPending} onSave={save}>
+      <FormField label={t('agents.create.name')} hint={t('agents.settings.folder', { name: a.name })}>
+        <Input value={name} maxLength={60} onChange={(e) => setName(e.target.value)} data-testid="agent-appearance-name" />
+      </FormField>
+      <AvatarEditor value={avatar} onChange={setAvatar} project={a.project} />
+    </FormDialog>
+  )
+}
+
+/** A small dialog: a form, then Cancel and Save (`<testid>-save`). Also the role's (AgentMenu.tsx). */
+export function FormDialog(p: {
+  open: boolean; onOpenChange: (o: boolean) => void; title: string; description: string; className: string; formClassName: string
+  testid: string; saving: boolean; onSave: () => void; children: React.ReactNode
+}) {
+  const t = useT()
+  return (
+    <Dialog open={p.open} onOpenChange={p.onOpenChange}>
+      <DialogContent className={p.className} data-testid={p.testid}>
         <DialogHeader>
-          <DialogTitle>{t('agents.look.title')}</DialogTitle>
-          <DialogDescription>{t('agents.look.desc')}</DialogDescription>
+          <DialogTitle>{p.title}</DialogTitle>
+          <DialogDescription>{p.description}</DialogDescription>
         </DialogHeader>
-        <form
-          className="grid gap-5"
-          onSubmit={(e) => {
-            e.preventDefault()
-            save()
-          }}
-        >
-          <FormField label={t('agents.create.name')} hint={t('agents.settings.folder', { name: a.name })}>
-            <Input value={name} maxLength={60} onChange={(e) => setName(e.target.value)} data-testid="agent-appearance-name" />
-          </FormField>
-          <AvatarEditor value={avatar} onChange={setAvatar} project={a.project} />
+        <form className={cn('grid', p.formClassName)} onSubmit={(e) => (e.preventDefault(), p.onSave())}>
+          {p.children}
           <DialogFooter>
-            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+            <Button type="button" variant="ghost" onClick={() => p.onOpenChange(false)}>
               {t('common.cancel')}
             </Button>
-            <Button type="submit" loading={patch.isPending} data-testid="agent-appearance-save">
+            <Button type="submit" loading={p.saving} data-testid={`${p.testid}-save`}>
               {t('common.save')}
             </Button>
           </DialogFooter>

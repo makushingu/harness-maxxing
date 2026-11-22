@@ -39,8 +39,7 @@ const SHIRT = L(12, '...cccCs', ...rep(3, '..cccccc'))
 const BLUSH = L(9, '....b...')
 
 // ---- hair: front (over the head) and back (behind the head, over the shoulders) ----
-const HAIR_FRONT: Record<string, Layer | null> = {
-  none: null,
+const HAIR_FRONT: Record<string, Layer> = {
   short: L(2, '.....hhh', '....hhhh', '...hhhhh', '...hhhhh', '...h....'),
   spiky: L(1, '...h..h.', '...hh.hh', '...hhhhh', '...hhhhh', '...hh.hh', '...h....'),
   long: L(2, '.....hhh', '....hhhh', '...hhhhh', '...hhhhh', '...hh...', '...h....', '...h....'),
@@ -75,20 +74,17 @@ const MOUTHS: Record<string, Layer> = {
   surprised: L(9, '.......k', '.......k'),
 }
 /** the eyes closed, for the blink (none for the faces whose eyes are closed already) */
-const BLINK: Record<string, Layer | null> = {
+const BLINK: Record<string, Layer> = {
   smile: L(8, '....kk..'),
   focused: L(6, '....kk..', '........', '....kk..'),
   wink: L(8, '....kk....kk....'),
   surprised: L(8, '....kk..'),
-  happy: null,
-  sleepy: null,
 }
 /** the eyes of a character asleep (an agent that is off) */
 const ASLEEP = L(8, '....kk..')
 
 // ---- accessories ----
-const ACCESSORY: Record<string, Layer | null> = {
-  none: null,
+const ACCESSORY: Record<string, Layer> = {
   glasses: L(6, '...gggg.', '...g..gg', '...gggg.'),
   headphones: L(1, '.....ggg', '....g...', '...g....', '..g.....', '.aa.....', '.aa.....', '.aa.....'),
   cap: L(1, '.....aaa', '....aaaa', '....aaaw', '...aaaaa', '..AAAAAA'),
@@ -100,7 +96,7 @@ const COVER: Record<string, number> = { cap: 6 }
 
 const rowOf = (r: string) => (r.length === GRID ? r : r + [...r].reverse().join(''))
 
-function paint(grid: (string | null)[], layer: Layer | null, from = 0) {
+function paint(grid: (string | null)[], layer: Layer | undefined, from = 0) {
   if (!layer) return
   layer.rows.forEach((raw, dy) => {
     const y = layer.y + dy
@@ -134,20 +130,12 @@ export type Pixels = { body: Run[]; eyes: Run[]; blink: Run[]; tile: string }
 
 function runs(grid: (string | null)[], pal: Record<string, string>): Run[] {
   const out: Run[] = []
-  for (let y = 0; y < GRID; y++) {
-    let x = 0
-    while (x < GRID) {
+  for (let y = 0; y < GRID; y++)
+    for (let x = 0, w = 1; x < GRID; x += w) {
       const c = grid[y * GRID + x]
-      if (!c) {
-        x++
-        continue
-      }
-      let w = 1
-      while (x + w < GRID && grid[y * GRID + x + w] === c) w++
-      out.push({ x, y, w, fill: pal[c] || INK })
-      x += w
+      for (w = 1; x + w < GRID && grid[y * GRID + x + w] === c; ) w++
+      if (c) out.push({ x, y, w, fill: pal[c] || INK })
     }
-  }
   return out
 }
 
@@ -168,27 +156,28 @@ export function pixelsOf(a: AgentAvatar, sleep = false): Pixels {
   if (hit) return hit
   const pal = palette(a)
   if (sleep) for (const k in pal) if (k !== 'o' && k !== 'k') pal[k] = grey(pal[k])
-  const g: (string | null)[] = Array(GRID * GRID).fill(null)
+  const blank = (): (string | null)[] => Array(GRID * GRID).fill(null)
+  const g = blank()
   paint(g, SHIRT)
-  paint(g, HAIR_BACK[a.hair] || null)
+  paint(g, HAIR_BACK[a.hair])
   paint(g, HEAD)
   paint(g, BLUSH)
   paint(g, HAIR_FRONT[a.hair], COVER[a.accessory] ?? 0)
   for (const [x, y] of HAIR_DARK[a.hair] || []) if (g[y * GRID + x] === 'h') g[y * GRID + x] = 'j'
   paint(g, sleep ? MOUTHS.sleepy : MOUTHS[a.face])
   // The face goes in its own layer (the blink hides it), the glasses over it.
-  const eyes: (string | null)[] = Array(GRID * GRID).fill(null)
+  const eyes = blank()
   paint(eyes, sleep ? ASLEEP : EYES[a.face])
   paint(g, ACCESSORY[a.accessory])
-  if (a.accessory === 'glasses') for (let i = 0; i < eyes.length; i++) if (g[i] === 'g') eyes[i] = null
   // Ink outline around the silhouette (4 neighbours), so the character reads on any background.
   const filled = g.slice()
   const at = (x: number, y: number) => x >= 0 && x < GRID && y >= 0 && y < GRID && !!filled[y * GRID + x]
   for (let y = 0; y < GRID; y++)
     for (let x = 0; x < GRID; x++) if (!filled[y * GRID + x] && (at(x + 1, y) || at(x - 1, y) || at(x, y + 1) || at(x, y - 1))) g[y * GRID + x] = 'o'
-  const blink: (string | null)[] = Array(GRID * GRID).fill(null)
+  const blink = blank()
   if (!sleep) paint(blink, BLINK[a.face])
-  if (a.accessory === 'glasses') for (let i = 0; i < blink.length; i++) if (g[i] === 'g') blink[i] = null
+  // the outline only fills empty cells: the glasses' cells are the same as before it
+  if (a.accessory === 'glasses') for (let i = 0; i < g.length; i++) if (g[i] === 'g') eyes[i] = blink[i] = null
   const out = { body: runs(g, pal), eyes: runs(eyes, pal), blink: runs(blink, pal), tile: sleep ? grey(pal.c) : pal.c }
   cache.set(key, out)
   return out

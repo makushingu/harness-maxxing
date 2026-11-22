@@ -17,7 +17,7 @@ import { quotesMarkdown } from '@/pages/sessions/util'
 export { insertAtCaret } from '@/features/composer/text'
 
 /** Files a message (the server's agents.ATTACH_MAX). */
-export const MAX_FILES = 10
+const MAX_FILES = 10
 
 /** What a failed send brings back into the box of draft `key` (text first, then what was typed meanwhile; its
  *  uploaded files after those already there, MAX_FILES at most). The box of that key when one is open, else its stored
@@ -28,16 +28,7 @@ const joinBack = (back: string, cur: string) => [back, cur.trim()].filter(Boolea
 /** `back` after `cur` (the paths not there yet); past MAX_FILES files that can go, the rest stays shown, in error. */
 function mergeAtts(cur: Att[], back: Att[], tooMany: string): Att[] {
   let room = MAX_FILES - cur.filter((c) => !c.error).length
-  const add = back
-    .filter((b) => !b.path || !cur.some((c) => c.path === b.path))
-    .map((b) => {
-      if (b.error) return b
-      if (room > 0) {
-        room--
-        return b
-      }
-      return { ...b, error: tooMany }
-    })
+  const add = back.filter((b) => !b.path || !cur.some((c) => c.path === b.path)).map((b) => (b.error || room-- > 0 ? b : { ...b, error: tooMany }))
   return [...cur, ...add]
 }
 /** The files the server refused (400 `bad_attachment` / `too_many_attachments`) marked in error, so that a send
@@ -54,10 +45,7 @@ function markRefused(atts: Att[], err: unknown): Att[] {
 /** A send of draft `key` failed (`err`: why): its text and files back into the box. Only the files that were sent
  *  (uploaded, not in error) come back, those the server refused shown in error and never stored with the draft. */
 export function bringBackDraft(key: string, text: string, atts: Att[], t: TFn, err?: unknown) {
-  const files = markRefused(
-    atts.filter((a) => a.path && !a.error).map((a) => ({ ...a, lid: Math.random().toString(36).slice(2) })),
-    err,
-  )
+  const files = markRefused(atts.filter((a) => a.path && !a.error).map((a) => ({ ...a, lid: Math.random().toString(36).slice(2) })), err)
   if (text) {
     const open = textBack.get(key)
     if (open) open(text)

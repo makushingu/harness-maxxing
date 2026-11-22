@@ -3,16 +3,18 @@
 import { create } from 'zustand'
 import { store as ls } from '@/lib/utils'
 
-export type TeamTab = 'chats' | 'friends'
+type TeamTab = 'chats' | 'friends'
 /** Chat windows shown side by side at most; opening one more minimizes the oldest. */
-export const MAX_WINDOWS = 3
+const MAX_WINDOWS = 3
 /** Heads kept at most (the oldest go). */
 const MAX_HEADS = 8
 
 const readList = (k: string) => (ls.get(k) || '').split(',').filter(Boolean)
+/** Keeps the windows and heads for the next visit; returns them for `set`. */
 const save = (docked: string[], heads: string[]) => {
   ls.set('mx-team-docked', docked.join(','))
   ls.set('mx-team-heads', heads.join(','))
+  return { docked, heads }
 }
 
 type TeamUI = {
@@ -57,39 +59,26 @@ export const useTeamUI = create<TeamUI>((set, get) => ({
     let docked = [...s.docked.filter((x) => x !== id), id]
     let heads = s.heads.filter((x) => x !== id)
     while (docked.length > MAX_WINDOWS) heads = [docked.shift()!, ...heads]
-    heads = heads.slice(0, MAX_HEADS)
-    save(docked, heads)
     ls.remove('mx-team-hidden')
-    set({ docked, heads, list: false, hidden: false })
+    set({ ...save(docked, heads.slice(0, MAX_HEADS)), list: false, hidden: false })
   },
   minimize: (id) => {
     const s = get()
-    const docked = s.docked.filter((x) => x !== id)
-    const heads = [id, ...s.heads.filter((x) => x !== id)].slice(0, MAX_HEADS)
-    save(docked, heads)
-    set({ docked, heads })
+    set(save(s.docked.filter((x) => x !== id), [id, ...s.heads.filter((x) => x !== id)].slice(0, MAX_HEADS)))
   },
   close: (id) => {
     const s = get()
-    const docked = s.docked.filter((x) => x !== id)
-    const heads = s.heads.filter((x) => x !== id)
-    save(docked, heads)
-    set({ docked, heads })
+    set(save(s.docked.filter((x) => x !== id), s.heads.filter((x) => x !== id)))
   },
   bump: (id) => {
     const s = get()
-    if (s.docked.includes(id)) return
-    const heads = [id, ...s.heads.filter((x) => x !== id)].slice(0, MAX_HEADS)
-    save(s.docked, heads)
-    set({ heads })
+    if (!s.docked.includes(id)) set(save(s.docked, [id, ...s.heads.filter((x) => x !== id)].slice(0, MAX_HEADS)))
   },
   prune: (alive) => {
     const s = get()
     const docked = s.docked.filter((x) => alive.has(x))
     const heads = s.heads.filter((x) => alive.has(x))
-    if (docked.length === s.docked.length && heads.length === s.heads.length) return
-    save(docked, heads)
-    set({ docked, heads })
+    if (docked.length !== s.docked.length || heads.length !== s.heads.length) set(save(docked, heads))
   },
   setTab: (tab) => {
     ls.set('mx-team-tab', tab)

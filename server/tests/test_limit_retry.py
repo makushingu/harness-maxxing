@@ -153,3 +153,23 @@ def test_agent_limit_retry_drops_a_damaged_entry(client, topic):
     agents._limit_waiting.add(A)
     assert agents.retry_limits() == 0
     assert "limit_retry" not in agents._read_state(A) and A not in agents._limit_waiting
+
+
+def test_agent_limit_retry_is_sent_once_when_what_follows_the_send_fails(client, topic, monkeypatch):
+    _agent(client)
+    agents._plan_limit_retry(A, "s_x", False, LIMIT, "", {})
+    st = agents._read_state(A)
+    st["limit_retry"]["at"] = time.time() - 1
+    agents._write_state(A, st)
+    sent = []
+    monkeypatch.setattr("maxxing.sessions.service.session_exists", lambda sid: True)
+    monkeypatch.setattr("maxxing.sessions.service.send_message", lambda sid, text, **kw: sent.append(sid))
+    monkeypatch.setattr(agents, "gate", lambda path, owner=False: None)
+
+    def disk_full(*a, **k):
+        raise OSError("No space left on device")
+    monkeypatch.setattr(agents, "_hold_left", disk_full)
+    agents.retry_limits()
+    agents.retry_limits()                                 # the next pass of the server loop
+    assert sent == ["s_x"]                                # one paid retry, not one per pass
+    assert agents._read_state(A)["limit_retry"]["fired"] is True

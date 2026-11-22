@@ -29,6 +29,7 @@ Run-time state (not in the workspace): <state>/agents/rooms/<p>__<g>.jsonl (the 
 """
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import re
@@ -100,6 +101,11 @@ def exists(path: str) -> bool:
     return bool(parse(path)) and (folder(path) / GROUP_FILE).is_file()
 
 
+def _need(path: str) -> None:
+    if not exists(path):
+        raise GroupError(404, "not_found", f"Group {path!r} not found")
+
+
 def slug(member: str) -> str:
     p = agents.parse(member)
     return p[2] if p else ""
@@ -144,6 +150,10 @@ def _handles(members: list[dict]) -> None:
 def handles(g: dict) -> dict[str, str]:
     """member path -> its @name in the group."""
     return {m["path"]: m.get("handle") or slug(m["path"]) for m in g["members"]}
+
+
+def _at(g: dict, p: str) -> str:
+    return "@" + handles(g).get(p, slug(p))
 
 
 # ---- group.json ----------------------------------------------------------------------------------------
@@ -202,14 +212,12 @@ def clean(data: Any, project: str, strict: bool = False) -> dict:
 
 
 def load(path: str) -> dict:
-    p = parse(path)
-    if not p:
-        raise GroupError(400, "bad_path", f"Not a group path: {path!r}")
+    project = _key(path).split("__")[0]                # a bad path: GroupError 400
     try:
         data = json.loads((folder(path) / GROUP_FILE).read_text())
     except (OSError, ValueError):
         data = {}
-    return clean(data, p[0])
+    return clean(data, project)
 
 
 def _save(path: str, data: dict) -> None:
@@ -277,8 +285,7 @@ def public(path: str) -> dict:
 
 
 def get(path: str) -> dict:
-    if not exists(path):
-        raise GroupError(404, "not_found", f"Group {path!r} not found")
+    _need(path)
     return public(path)
 
 
@@ -326,8 +333,7 @@ def create(project: str, name: str, fields: dict | None = None) -> dict:
 
 
 def update(path: str, fields: dict) -> dict:
-    if not exists(path):
-        raise GroupError(404, "not_found", f"Group {path!r} not found")
+    _need(path)
     with _lock:                                         # read-merge-write: two edits at once must both land
         dropped = _update(path, fields)
     _invalidate(path)
@@ -379,8 +385,7 @@ def _update(path: str, fields: dict) -> list[str]:
 def delete(path: str, keep_files: bool = False) -> None:
     """Delete the group (its folder; `files/` too unless keep_files: then it is moved to the project's trash-like
     folder `groups/.kept-<name>-<time>/`). Its members and their sessions stay."""
-    if not exists(path):
-        raise GroupError(404, "not_found", f"Group {path!r} not found")
+    _need(path)
     stop(path, note=False)
     d = folder(path)
     if keep_files and files_dir(path).is_dir():
@@ -424,8 +429,12 @@ def _trim(f: Path) -> None:
         if size > ROOM_BYTES // 2 or len(keep) >= ROOM_KEEP:
             break
         keep.append(ln)
+    _rewrite(f, reversed(keep))
+
+
+def _rewrite(f: Path, lines) -> None:
     tmp = f.with_suffix(".tmp")
-    tmp.write_text("".join(x + "\n" for x in reversed(keep)))
+    tmp.write_text("".join(x + "\n" for x in lines))
     tmp.replace(f)
 
 
@@ -498,11 +507,7 @@ def mentions(text: str, members: list[dict], but: str = "") -> list[str]:
     out: list[str] = []
     for m in MENTION_RE.finditer(text or ""):
         s = m.group(1).lower()
-        if s in ALL_WORDS:
-            todo = [x["path"] for x in members]
-        else:
-            todo = [by[s]] if s in by else []
-        for p in todo:
+        for p in [x["path"] for x in members] if s in ALL_WORDS else [by[s]] if s in by else []:
             if p != but and p not in out:
                 out.append(p)
     return out
@@ -524,8 +529,7 @@ def attachments_dir(path: str) -> Path:
 def say(path: str, text: str, attachments: list[str] | None = None) -> dict:
     """The owner's message -> {message, queued: [paths]}. Starts the first turn when nobody speaks.
     attachments: files uploaded under <group>/attachments/ (agents.checked_attachments)."""
-    if not exists(path):
-        raise GroupError(404, "not_found", f"Group {path!r} not found")
+    _need(path)
     text = agents._utf8(text or "").strip()
     files = agents.checked_attachments(folder(path), attachments)
     if not text and not files:
@@ -554,9 +558,8 @@ def say(path: str, text: str, attachments: list[str] | None = None) -> dict:
             named = [pick] if pick else []
         named = [p for p in named if p not in paused]
         st["paused"] = paused
-        st["queue"] = [{"path": p, "wave": 1, "reason": "owner", "from": ""} for p in named]   # replaces pending hand-overs
-        st["origin"] = msg["id"]
-        st["replies"] = 0
+        st.update(queue=[{"path": p, "wave": 1, "reason": "owner", "from": ""} for p in named],   # replaces hand-overs
+                  origin=msg["id"], replies=0)
         _write_state(path, st)
     _invalidate(path)
     pump(path)
@@ -588,21 +591,18 @@ def reset(path: str) -> None:
     stop(path, note=False)
     with _lock:
         st = _read_state(path)
-        st["sessions"] = {}
-        st["since"] = {}
+        st.update(sessions={}, since={})
         _write_state(path, st)
     post(path, "note", "New topic: the members start fresh from here", reset=True)
 
 
 def set_paused(path: str, member: str, paused: bool) -> dict:
-    if not exists(path):
-        raise GroupError(404, "not_found", f"Group {path!r} not found")
+    _need(path)
     if member not in [m["path"] for m in load(path)["members"]]:
         raise GroupError(404, "not_member", "Not a member of this group")
     with _lock:
         st = _read_state(path)
-        p = [x for x in st.get("paused") or [] if x != member] + ([member] if paused else [])
-        st["paused"] = p
+        st["paused"] = [x for x in st.get("paused") or [] if x != member] + ([member] if paused else [])
         if paused:
             st["queue"] = [q for q in st.get("queue") or [] if q.get("path") != member]
         _write_state(path, st)
@@ -618,7 +618,9 @@ def _frame(msgs: list[dict], members: dict[str, str]) -> str:
     parts, size = [], 0
     for m in reversed(msgs):
         who = "Owner" if m.get("author") == "me" else "@" + members.get(m.get("author") or "", slug(m.get("author") or "") or "?")
-        line = f"{agents._local(m.get('at') or 0)} {who}: {(m.get('text') or '').strip()}" + _files_note(m)
+        files = _files(m)
+        line = f"{agents._local(m.get('at') or 0)} {who}: {(m.get('text') or '').strip()}" \
+            + (f" [attached files: {', '.join(files)}]" if files else "")
         size += len(line)
         if size > DELTA_MAX and parts:
             parts.append("[... older messages cut]")
@@ -631,11 +633,6 @@ def _frame(msgs: list[dict], members: dict[str, str]) -> str:
 
 def _files(m: dict) -> list[str]:
     return [f for f in m.get("attachments") or [] if isinstance(f, str)]
-
-
-def _files_note(m: dict) -> str:
-    files = _files(m)
-    return f" [attached files: {', '.join(files)}]" if files else ""
 
 
 def _origin_files(path: str, me: str, st: dict) -> list[str]:
@@ -673,7 +670,6 @@ def header(path: str, me: str) -> str:
 
 def _message(path: str, me: str, item: dict, st: dict, fresh: bool) -> str:
     g = load(path)
-    disp = handles(g)
     msgs = room(path, 300)
     since = float((st.get("since") or {}).get(me) or 0)
     floor = next((m.get("at") or 0 for m in reversed(msgs) if m.get("reset")), 0)   # New topic: nothing before it
@@ -687,12 +683,9 @@ def _message(path: str, me: str, item: dict, st: dict, fresh: bool) -> str:
                  and m.get("author") != me and m is not origin]
     if fresh and not since:
         delta = delta[-40:]
-    parts = [header(path, me)] if fresh else []
-    ctx = _frame(delta, disp)
-    if ctx:
-        parts.append(ctx)
+    parts = ([header(path, me)] if fresh else []) + [x for x in [_frame(delta, handles(g))] if x]
     if item.get("reason") == "handover":
-        parts.append(f"@{disp.get(item.get('from') or '', slug(item.get('from') or ''))} handed over to you (see their message above).")
+        parts.append(f"{_at(g, item.get('from') or '')} handed over to you (see their message above).")
     if origin:
         files = _files(origin)
         parts.append("The owner's message to the group:\n" + ((origin.get("text") or "").strip() or "(no text)")
@@ -721,17 +714,14 @@ def pump(path: str) -> None:
                 _write_state(path, st)
                 return
             g = load(path)
-            if int(st.get("replies") or 0) >= g["limits"]["replies"]:
+            lim = g["limits"]
+            hit = "replies" if int(st.get("replies") or 0) >= lim["replies"] else \
+                "per_hour" if _answers_last_hour(path) >= lim["per_hour"] else ""
+            if hit:
                 st["queue"] = []
                 _write_state(path, st)
-                post(path, "note", f"Limit reached: {g['limits']['replies']} answers for one message. Write again "
-                                   "to go on.", limit="replies")
-                return
-            if _answers_last_hour(path) >= g["limits"]["per_hour"]:
-                st["queue"] = []
-                _write_state(path, st)
-                post(path, "note", f"Limit reached: {g['limits']['per_hour']} answers in the last hour.",
-                     limit="per_hour")
+                post(path, "note", f"Limit reached: {lim[hit]} answers " + (
+                    "for one message. Write again to go on." if hit == "replies" else "in the last hour."), limit=hit)
                 return
             item = queue.pop(0)
             st["queue"] = queue
@@ -770,8 +760,8 @@ def _start(path: str, me: str, item: dict, st: dict, g: dict) -> str | None:
         # runs per hour or the server's daily budget
         reason = agents.gate(me, owner=True)
         if reason:
-            post(path, "skip", f"@{handles(g).get(me, slug(me))}: {SKIP_GROUP.get(reason, reason)}", author=me, reason=reason)
-            if reason in ("budget",):
+            post(path, "skip", f"{_at(g, me)}: {SKIP_GROUP.get(reason, reason)}", author=me, reason=reason)
+            if reason == "budget":
                 agents._limit_alert(me, reason)
             return None
         a = agents.load(me)
@@ -803,7 +793,7 @@ def _start(path: str, me: str, item: dict, st: dict, g: dict) -> str | None:
                 sessions[me] = sid
                 st["turns"][sid] = {"outside": outside}
         except Exception as e:  # noqa: BLE001 - SessionError (bad model, busy...)
-            post(path, "skip", f"@{handles(g).get(me, slug(me))}: {e}", author=me, reason="error")
+            post(path, "skip", f"{_at(g, me)}: {e}", author=me, reason="error")
             return None
         st.setdefault("since", {})[me] = time.time()
         agents._hold_left(me, a, sid)
@@ -864,22 +854,16 @@ def on_turn_end(path: str, member: str, sid: str, text: str, ok: bool, cost: flo
             return
         st = _read_state(path)
         cur = st.get("current") or {}
-        if cur.get("session") != sid:                  # a turn the group no longer waits for (stopped, reset)
-            if cur.get("path") == member:
-                st["current"] = None
-                _write_state(path, st)
-            mine = False
-        else:
+        mine = cur.get("session") == sid               # else a turn the group no longer waits for (stopped, reset)
+        if mine or cur.get("path") == member:
             st["current"] = None
-            mine = True
         g = load(path)
         t = (text or "").strip()
         # removed from the group since, or a turn of an older group of that name (deleted, made again): not posted
-        stray = member not in [m["path"] for m in g["members"]] or (not mine and sid not in (st.get("turns") or {}))
-        if stray:
+        if member not in [m["path"] for m in g["members"]] or (not mine and sid not in (st.get("turns") or {})):
             mine = False
         elif not ok:
-            post(path, "skip", f"@{handles(g).get(member, slug(member))}: the turn failed - {t[:300]}", author=member, reason="failed",
+            post(path, "skip", f"{_at(g, member)}: the turn failed - {t[:300]}", author=member, reason="failed",
                  session=sid)
         elif not t or t.strip("*_ .").upper() in PASS_WORDS:
             post(path, "pass", "", author=member, session=sid, cost=cost)
@@ -963,9 +947,7 @@ def _swap_messages(path: str, old: str, new: str) -> None:
                 ln = json.dumps(m, ensure_ascii=False)
         out.append(ln)
     if changed:
-        tmp = f.with_suffix(".tmp")
-        tmp.write_text("".join(x + "\n" for x in out))
-        tmp.replace(f)
+        _rewrite(f, out)
 
 
 ROOM_SAVED = ".room"            # <group folder>/.room.json(l): its state files while the project is in the Trash
@@ -1002,11 +984,8 @@ def restored(old_prefix: str, new_prefix: str) -> None:
             st.update(current=None, queue=[], turns={})
             if old_prefix != new_prefix:
                 f = folder(path) / GROUP_FILE
-                try:
-                    raw = json.loads(f.read_text())
-                    config.write_json(f, _swap(raw, old_prefix, new_prefix))
-                except (OSError, ValueError):
-                    pass
+                with contextlib.suppress(OSError, ValueError):
+                    config.write_json(f, _swap(json.loads(f.read_text()), old_prefix, new_prefix))
                 st = _swap(st, old_prefix, new_prefix)
                 st.update(sessions={}, since={})
                 _swap_messages(path, old_prefix, new_prefix)

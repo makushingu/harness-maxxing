@@ -1,11 +1,7 @@
-// The layout of the Agents page, shared by the list (AgentsList) and both views of the Office (Classic, Space):
-// the order of the projects, the order of the agents inside each project and the colour of each project, picked by
-// hand and kept on the server (GET/PUT /api/agents/layout, the same on every device). What was never moved keeps the
-// default order: projects in the workspace order, agents by topic then name; a project's colour defaults to
-// projectColor() (a stable pick from its name).
-// Reordering: drag and drop (HTML5, computers) of a project header / room or of an agent; an agent only moves inside
-// its own project (it is a folder of one of its topics). ProjectMenu (the "..." of a project) = Move up / down and the
-// colour, the way in from the keyboard and touch screens.
+// The layout of the Agents page, shared by the list (AgentsList) and the Office views: the order of the projects, of the
+// agents inside each project and each project's colour, kept on the server (GET/PUT /api/agents/layout, every device).
+// Never moved: projects in workspace order, agents by topic then name, colour projectColor(). Reordering: HTML5 drag
+// and drop (computers; an agent only inside its project) or ProjectMenu (the "..." of a project: Move up / down, colour).
 import * as React from 'react'
 import { ArrowDown, ArrowUp, Check, MoreHorizontal } from 'lucide-react'
 import { tDyn, useT } from '@/i18n'
@@ -59,13 +55,10 @@ export type AgentsLayoutApi = {
 /** The colour of a project: the one picked on the Agents page, else projectColor(). For the outfit of a new agent. */
 export function useProjectColorOf(): (project: string) => string {
   const { data: lay = EMPTY } = useAgentsLayoutData()
-  return React.useCallback(
-    (p: string) => {
-      const c = own(lay.colors, p)
-      return c && c in OUTFIT ? c : projectColor(p)
-    },
-    [lay],
-  )
+  return React.useCallback((p: string) => {
+    const c = own(lay.colors, p)
+    return c && c in OUTFIT ? c : projectColor(p)
+  }, [lay])
 }
 
 /** THE helper of the Agents page for the order of projects and agents and the project colours. */
@@ -149,10 +142,7 @@ export function useReorder(item: DragItem, onDrop: (draggedId: string) => void) 
       e.dataTransfer.setData(MIME, item.id)
       setDragging(true)
     },
-    onDragEnd: () => {
-      dragged = null
-      setDragging(false)
-    },
+    onDragEnd: () => ((dragged = null), setDragging(false)),
   }
   const target = {
     onDragOver: (e: React.DragEvent) => {
@@ -185,12 +175,8 @@ export function DropBar({ side, vertical = true, className }: { side: DropSide; 
   return (
     <span
       aria-hidden
-      className={cn(
-        'pointer-events-none absolute z-10 rounded-full bg-primary',
-        vertical ? 'inset-x-1 h-0.5' : 'inset-y-1 w-1',
-        vertical ? (side === 'before' ? '-top-px' : '-bottom-px') : side === 'before' ? '-left-2' : '-right-2',
-        className,
-      )}
+      className={cn('pointer-events-none absolute z-10 rounded-full bg-primary', vertical ? 'inset-x-1 h-0.5' : 'inset-y-1 w-1',
+        vertical ? (side === 'before' ? '-top-px' : '-bottom-px') : side === 'before' ? '-left-2' : '-right-2', className)}
       data-testid="agents-drop-bar"
     />
   )
@@ -230,14 +216,7 @@ export function ProjectMenu({ project, layout, among, className }: { project: st
           {AVATAR_OPTIONS.color.map((c) => {
             const name = tDyn(t, `agents.avatar.color.${c}`, c)
             return (
-              <button
-                key={c}
-                type="button"
-                role="radio"
-                aria-checked={c === current}
-                aria-label={name}
-                title={name}
-                onClick={() => layout.setColor(project, c)}
+              <button key={c} type="button" role="radio" aria-checked={c === current} aria-label={name} title={name} onClick={() => layout.setColor(project, c)}
                 className={cn('grid size-7 place-items-center rounded-md outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring max-md:size-9', c === current && 'bg-accent')}
                 data-testid={`agents-project-color-${c}`}
               >

@@ -24,9 +24,7 @@ export function AvatarEditor({ value, onChange, project, className, preview = tr
           </Button>
         </div>
         <div className="grid min-w-0 content-start gap-2.5">
-          {AVATAR_PARTS.map((part) => (
-            <PartRow key={part} part={part} value={value} onChange={onChange} project={project} />
-          ))}
+          {AVATAR_PARTS.map((part) => <PartRow key={part} part={part} value={value} onChange={onChange} project={project} />)}
         </div>
       </div>
     </div>
@@ -48,14 +46,7 @@ function PartRow({ part, value, onChange, project }: { part: AvatarPart; value: 
           const base = tDyn(t, `agents.avatar.${part}.${opt}`, opt)
           const name = opt === mine ? `${base} (${t('agents.avatar.projectColor')})` : base
           return (
-            <button
-              key={opt}
-              type="button"
-              role="radio"
-              aria-checked={selected}
-              aria-label={name}
-              title={name}
-              onClick={() => onChange({ ...value, [part]: opt })}
+            <button key={opt} type="button" role="radio" aria-checked={selected} aria-label={name} title={name} onClick={() => onChange({ ...value, [part]: opt })}
               className={cn(
                 'relative grid place-items-center rounded-md border border-transparent transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
                 swatches ? 'size-8 max-md:size-10' : 'size-10 max-md:size-11',
