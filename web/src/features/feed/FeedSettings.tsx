@@ -123,7 +123,7 @@ function SourceRow({ s, hook, ruleOptions, onRule }: { s: FeedSource; hook?: Fee
   )
   return (
     <div {...ctx.props} className="flex flex-wrap items-center gap-x-3 gap-y-2 py-2.5" data-testid="feed-source" data-source={s.source}>
-      <div className="grid min-w-0 flex-1 gap-0.5">
+      <div className="grid min-w-0 flex-1 basis-40 gap-0.5">
         <span className="flex min-w-0 items-center gap-2 text-sm font-medium">
           {hook && <Webhook className="size-3.5 shrink-0 text-muted-foreground" />}
           <span className="truncate">{s.label}</span>
