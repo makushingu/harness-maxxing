@@ -94,7 +94,7 @@ export function MemorySection() {
                   .sort((a, b) => Number(b.over) - Number(a.over) || b.bytes - a.bytes)
                   .map((f) => (
                     <tr key={f.path}>
-                      <td className="w-full max-w-0 truncate px-2 py-1.5 font-mono text-[12.5px]" title={mask(f.path, 12)}>
+                      <td className="w-full max-w-0 truncate px-2 py-1.5 font-mono text-[12.5px] max-md:whitespace-normal max-md:[overflow-wrap:anywhere]" title={mask(f.path, 12)}>
                         <Sensitive length={12}>{f.path}</Sensitive>
                       </td>
                       <td className={cn('w-px px-2 py-1.5 text-right whitespace-nowrap tabular-nums', !!limit && f.lines > limit && 'font-semibold text-destructive')}>{f.lines}</td>
