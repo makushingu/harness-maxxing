@@ -46,7 +46,6 @@ class GeometryTest {
         assertEquals(3000f, m.y(1500.0), 0.001f)
         assertEquals(1439f, m.x(5000.0), 0.001f) // clamped on screen
         assertEquals(0f, m.y(-5.0), 0.001f)
-        assertEquals(-100f, m.dy(-50.0), 0.001f) // distances are not clamped
         assertArrayEquals(intArrayOf(50, 100, 25, 50), m.box(100, 200, 150, 300))
         assertArrayEquals(intArrayOf(0, 0, 720, 10), m.box(-10, -10, 9999, 20))
     }

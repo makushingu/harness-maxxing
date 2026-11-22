@@ -42,8 +42,7 @@ class LinkAccessibilityService : AccessibilityService() {
     @Volatile private var lastNodes: Map<Int, AccessibilityNodeInfo> = emptyMap()
 
     /** Capture space of the last shot, used when an input or a tree does not give `sw`/`sh`. */
-    @Volatile var lastShot: Geometry.Size? = null
-        private set
+    @Volatile private var lastShot: Geometry.Size? = null
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -85,16 +84,16 @@ class LinkAccessibilityService : AccessibilityService() {
         if (km.isDeviceLocked) throw CmdError(Protocol.Err.LOCKED, "The phone is locked")
     }
 
-    fun realSize(): Geometry.Size = Screen.realSize(this)
+    private fun realSize(): Geometry.Size = Screen.realSize(this)
+
+    /** The capture space of a request: its `sw` x `sh`, else the last shot, else the real screen. */
+    private fun captureSpace(sw: Int?, sh: Int?): Geometry.Size =
+        if (sw != null && sh != null && sw > 0 && sh > 0) Geometry.Size(sw, sh) else lastShot ?: realSize()
 
     private fun mapper(sw: Int?, sh: Int?): Geometry.Mapper {
         val real = realSize()
-        val last = lastShot
-        return when {
-            sw != null && sh != null && sw > 0 && sh > 0 -> Geometry.Mapper(sw, sh, real.w, real.h)
-            last != null -> Geometry.Mapper(last.w, last.h, real.w, real.h)
-            else -> Geometry.Mapper(real.w, real.h, real.w, real.h)
-        }
+        val cap = captureSpace(sw, sh)
+        return Geometry.Mapper(cap.w, cap.h, real.w, real.h)
     }
 
     // ---- shot -----------------------------------------------------------------------------
@@ -179,8 +178,9 @@ class LinkAccessibilityService : AccessibilityService() {
         val a = f.str("a") ?: throw CmdError(Protocol.Err.BAD_REQUEST, "missing a")
         if (a != "key") checkUsable()
         val m = mapper(f.int("sw"), f.int("sh"))
-        fun px(key: String) = m.x(f.num(key) ?: throw CmdError(Protocol.Err.BAD_REQUEST, "missing $key"))
-        fun py(key: String) = m.y(f.num(key) ?: throw CmdError(Protocol.Err.BAD_REQUEST, "missing $key"))
+        fun num(key: String) = f.num(key) ?: throw CmdError(Protocol.Err.BAD_REQUEST, "missing $key")
+        fun px(key: String) = m.x(num(key))
+        fun py(key: String) = m.y(num(key))
         when (a) {
             "click" -> {
                 val x = px("x"); val y = py("y")
@@ -319,11 +319,15 @@ class LinkAccessibilityService : AccessibilityService() {
         if (!n.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)) {
             throw CmdError(Protocol.Err.FAILED, "The field refused the text")
         }
+        select(n, r.cursor, r.cursor)
+    }
+
+    private fun select(n: AccessibilityNodeInfo, start: Int, end: Int): Boolean {
         val sel = Bundle().apply {
-            putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT, r.cursor)
-            putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_END_INT, r.cursor)
+            putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT, start)
+            putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_END_INT, end)
         }
-        n.performAction(AccessibilityNodeInfo.ACTION_SET_SELECTION, sel)
+        return n.performAction(AccessibilityNodeInfo.ACTION_SET_SELECTION, sel)
     }
 
     private fun key(name: String, k: KeyAction) {
@@ -351,11 +355,7 @@ class LinkAccessibilityService : AccessibilityService() {
             KeyAction.SelectAll -> {
                 val n = focusedField()
                 val len = if (n.isShowingHintText) 0 else n.text?.length ?: 0
-                val sel = Bundle().apply {
-                    putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT, 0)
-                    putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_END_INT, len)
-                }
-                if (!n.performAction(AccessibilityNodeInfo.ACTION_SET_SELECTION, sel)) {
+                if (!select(n, 0, len)) {
                     throw CmdError(Protocol.Err.FAILED, "The field refused the selection")
                 }
             }
@@ -378,8 +378,7 @@ class LinkAccessibilityService : AccessibilityService() {
     fun tree(sw: Int?, sh: Int?): JSONObject {
         checkUsable()
         val m = mapper(sw, sh)
-        val cap = if (sw != null && sh != null && sw > 0 && sh > 0) Geometry.Size(sw, sh)
-        else lastShot ?: realSize()
+        val cap = captureSpace(sw, sh)
         val out = JSONArray()
         val keep = HashMap<Int, AccessibilityNodeInfo>()
         var truncated = false

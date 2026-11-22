@@ -52,8 +52,6 @@ object Geometry {
 
         fun x(v: Double): Float = clamp(v * realW / fromW, realW)
         fun y(v: Double): Float = clamp(v * realH / fromH, realH)
-        fun dx(v: Double): Float = (v * realW / fromW).toFloat()
-        fun dy(v: Double): Float = (v * realH / fromH).toFloat()
 
         /** Real rectangle (left, top, right, bottom) -> `[x, y, w, h]` in capture space. */
         fun box(left: Int, top: Int, right: Int, bottom: Int): IntArray {

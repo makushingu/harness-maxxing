@@ -68,7 +68,8 @@ class MainActivity : AppCompatActivity() {
         val name = findViewById<TextInputEditText>(R.id.name_input)
         name.setText(config.name)
         name.setOnEditorActionListener { _, action, _ ->
-            if (action == EditorInfo.IME_ACTION_DONE) { saveName(); false } else false
+            if (action == EditorInfo.IME_ACTION_DONE) saveName()
+            false
         }
         name.setOnFocusChangeListener { _, has -> if (!has) saveName() }
 
