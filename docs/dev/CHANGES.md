@@ -7,6 +7,7 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Back closes overlays on touch screens: `lib/back-stack.ts` (pure, tested in `test_web_logic.py`) keeps a stack of open overlays, each with one `history.pushState` entry of the same URL marked `mxBack` (react-router's `idx`/`key` copied, so its POP is a no-op); `popstate` closes the overlays whose entry was left. Closed from the page: `history.back()` drops the entry, unless a router navigation is in flight (lazy page chosen in the drawer: going back would cancel it); entries left behind that way are stepped over on the next Back. `components/ui/back-closes.tsx`: `<BackCloses close>` is rendered inside `DialogContent`, `SheetContent`, `DrawerContent`, the command palette and the file viewer, only when `(pointer: coarse)` matches (desktop history unchanged); `watchBack(router)` (in `createAppRouter`) reads the in-flight navigation and skips overlays opened by a same-path PUSH (`?task=`, `?chat=`): those already have their own entry. Not covered: popovers, menus, alert dialogs.
 - `FeedSettings` source row: the name column is `flex-1 basis-40` (was `flex-1`, basis 0): the `flex-wrap` row now
   wraps the `w-44` rule select under the name below ~22 rem instead of truncating the name; guarded by
   `test_web_mobile.py::test_a_notification_source_keeps_its_name_readable_on_a_phone`.

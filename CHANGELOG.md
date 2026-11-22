@@ -24,6 +24,9 @@ Added:
   opens in the viewer with a click, before you send it.
 
 Fixed:
+- **On a phone, Back closes the menu or the dialog that is open instead of leaving the page.** The Android
+  Back button or gesture (and the browser's Back) used to go to the previous page and drop what was open: it now
+  closes the side menu, a dialog, a sheet, the search or the file viewer first. Nothing changes on a computer.
 - **On a phone, Settings -> Notifications shows the name of each source.** The rule menu took the room and the
   names were cut to two letters ("Cr…", "Sig…"): it now goes under the name when the screen is narrow.
 - **On a phone, Settings -> Memory lists whole file paths.** Cut to one line, every row read
