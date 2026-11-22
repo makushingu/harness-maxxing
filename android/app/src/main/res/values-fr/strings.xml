@@ -14,7 +14,7 @@
     <string name="resume">Reprendre</string>
 
     <string name="status_not_paired">Non jumelé</string>
-    <string name="status_not_paired_detail">Ouvrez le lien de jumelage affiché par Harness (Réglages → Appareils → Ajouter un appareil → Android), ou saisissez l’adresse du serveur et le code ci-dessous.</string>
+    <string name="status_not_paired_detail">Jumelez-le avec votre serveur Harness pour que Claude puisse l’utiliser quand vous le demandez.</string>
     <string name="status_revoked_detail">Ce téléphone a été retiré de Harness. Jumelez-le à nouveau pour l’utiliser.</string>
     <string name="status_connected">Connecté</string>
     <string name="status_connected_detail">Claude peut utiliser ce téléphone quand vous le lui demandez, dans les limites des droits réglés dans Harness.</string>
@@ -33,7 +33,7 @@
     <string name="app_info_button">Infos sur l’appli</string>
     <string name="notifications_button">Autoriser les notifications</string>
 
-    <string name="pair_help">Jumelez ce téléphone avec votre serveur Harness.</string>
+    <string name="pair_help">Ouvrez le lien de jumelage affiché par Harness (Réglages → Appareils → Ajouter un appareil → Android), ou saisissez l’adresse du serveur et le code.</string>
     <string name="server_hint">Adresse du serveur</string>
     <string name="code_hint">Code</string>
     <string name="pair_button">Jumeler</string>
@@ -49,14 +49,19 @@
     <string name="pair_network">Serveur injoignable (%1$s).</string>
     <string name="pair_server">Le serveur a refusé le jumelage (%1$s).</string>
 
-    <string name="server_label">Serveur : %1$s</string>
+    <string name="server_label">%1$s</string>
     <string name="name_hint">Nom de ce téléphone dans Harness</string>
     <string name="name_saved">Nom enregistré</string>
-    <string name="forget_button">Oublier ce serveur</string>
+    <string name="forget_button">Oublier le serveur</string>
     <string name="forget_title">Oublier ce serveur ?</string>
     <string name="forget_text">Le téléphone se déconnecte tout de suite et oublie sa clé. Pour le retirer aussi de la liste dans Harness, utilisez Retirer dans Réglages → Appareils.</string>
     <string name="forget_confirm">Oublier</string>
 
     <string name="about_title">Ce que Claude peut faire ici</string>
     <string name="about_text">Seulement ce que vous demandez dans une session Harness, et seulement ce que propose cette appli : faire une capture d’écran, toucher, appuyer longuement, glisser et faire défiler, écrire dans le champ de texte qui a le focus, appuyer sur Retour / Accueil / Récents / Entrée, lire la liste des éléments de l’écran, lister vos applis et en ouvrir une.\n\nElle ne peut pas lire vos fichiers, lancer des commandes, installer quoi que ce soit ni voir les écrans que les applis protègent (banque, mots de passe). Elle ne fait rien quand le téléphone est verrouillé. Pause dans la notification refuse tout jusqu’à la reprise.</string>
+
+    <string name="terminal_line">v%1$s · Claude peut utiliser ce téléphone tant qu’il est relié</string>
+    <string name="accessibility_title">Activer l’accessibilité</string>
+    <string name="pair_title">Jumeler ce téléphone</string>
+    <string name="server_title">Serveur relié</string>
 </resources>
