@@ -13,15 +13,13 @@ import { cn } from '@/lib/utils'
 import {
   Button, confirm, CopyButton, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DropdownMenu, DropdownMenuContent,
   DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, FormField, Input, Select, Sensitive, Switch, Textarea, toast,
-  useContextMenu,
-  WithContextMenu,
+  useContextMenu, WithContextMenu,
 } from '@/components/ui'
 import { Callout } from '@/features/common'
 import { CronEditor, type EditorSeed } from '@/features/crons/CronEditor'
 import { SchedulePicker } from '@/features/crons/SchedulePicker'
 import { FeedTriggerFields, WebhookKindSelect, WebhookMade, agoText, triggerSummary, useSandboxAutoNote } from './parts'
 
-/** A dashed "add" row of the panel. */
 /** "When it works": the agent's triggers as sentences (schedules, webhooks with their address and what came in,
  * feed filters, Telegram), each switchable, then one row that adds one (a menu). */
 export function AgentTriggers({ agent: a, onMailSettings }: { agent: AgentDetail; onMailSettings?: () => void }) {
@@ -45,16 +43,14 @@ export function AgentTriggers({ agent: a, onMailSettings }: { agent: AgentDetail
 
   const boxedNote = useSandboxAutoNote()
   const saveTriggers = (list: AgentTriggerInput[], onSuccess?: () => void) =>
-    patch.mutate({ path: a.path, triggers: list.map(({ ...x }) => ({ ...x, kind: x.kind || 'feed' })) }, {
-      onSuccess: (r) => {
-        boxedNote(r)
-        onSuccess?.()
-      },
-    })
+    patch.mutate({ path: a.path, triggers: list.map((x) => ({ ...x, kind: x.kind || 'feed' })) }, { onSuccess: (r) => (boxedNote(r), onSuccess?.()) })
   const toInput = (x: AgentTrigger): AgentTriggerInput =>
     x.kind === 'agent'
       ? { id: x.id, kind: 'agent', enabled: x.enabled, agent: x.agent, on: x.on, match: x.match, prompt: x.prompt }
       : { id: x.id, kind: 'feed', enabled: x.enabled, source: x.source, levels: x.levels, match: x.match, prompt: x.prompt, hook_id: x.hook_id }
+  // a trigger edited (or added) in a dialog, saved with the others; the dialog closes once saved
+  const upsert = (v: AgentTriggerInput, done: () => void) =>
+    saveTriggers(v.id ? a.triggers.map((y) => (y.id === v.id ? v : toInput(y))) : [...a.triggers.map(toInput), v], done)
   const hooks = new Map((a.webhooks || []).map((h) => [h.id, h]))
 
   return (
@@ -225,25 +221,8 @@ export function AgentTriggers({ agent: a, onMailSettings }: { agent: AgentDetail
 
       <CronEditor seed={cronSeed} onOpenChange={(o) => !o && setCronSeed(null)} onSaved={() => (setCronSeed(null), refresh())} />
       <AddCronDialog open={addCron} onOpenChange={setAddCron} agent={a} />
-      <FeedTriggerDialog
-        value={feedEdit}
-        onClose={() => setFeedEdit(null)}
-        pending={patch.isPending}
-        onSave={(v) => {
-          const list = v.id ? a.triggers.map((y) => (y.id === v.id ? v : toInput(y))) : [...a.triggers.map(toInput), v]
-          saveTriggers(list, () => setFeedEdit(null))
-        }}
-      />
-      <ChainTriggerDialog
-        value={chainEdit}
-        self={a.path}
-        onClose={() => setChainEdit(null)}
-        pending={patch.isPending}
-        onSave={(v) => {
-          const list = v.id ? a.triggers.map((y) => (y.id === v.id ? v : toInput(y))) : [...a.triggers.map(toInput), v]
-          saveTriggers(list, () => setChainEdit(null))
-        }}
-      />
+      <FeedTriggerDialog value={feedEdit} onClose={() => setFeedEdit(null)} pending={patch.isPending} onSave={(v) => upsert(v, () => setFeedEdit(null))} />
+      <ChainTriggerDialog value={chainEdit} self={a.path} onClose={() => setChainEdit(null)} pending={patch.isPending} onSave={(v) => upsert(v, () => setChainEdit(null))} />
       <WebhookDialog open={hook} onOpenChange={setHook} agent={a} />
     </div>
   )
@@ -307,6 +286,37 @@ function CronRow({ job: j, onEdit, onChanged }: { job: Cron; onEdit: () => void;
   )
 }
 
+/** A dialog of the panel: its title and words, its fields, then Cancel and `save` (or `footer` in their place). */
+function FormDialog({ open, onClose, title, description, children, footer, save }: {
+  open: boolean; onClose: () => void; title: string; description: string; children: React.ReactNode; footer?: React.ReactNode
+  save?: { onClick: () => void; pending: boolean; disabled?: boolean; label?: string; testid: string }
+}) {
+  const t = useT()
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
+        </DialogHeader>
+        {children}
+        <DialogFooter>
+          {footer ?? (
+            <>
+              <Button variant="ghost" onClick={onClose}>
+                {t('common.cancel')}
+              </Button>
+              <Button loading={save?.pending} disabled={save?.disabled} onClick={save?.onClick} data-testid={save?.testid}>
+                {save?.label ?? t('common.save')}
+              </Button>
+            </>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 function AddCronDialog({ open, onOpenChange, agent: a }: { open: boolean; onOpenChange: (o: boolean) => void; agent: AgentDetail }) {
   const t = useT()
   const add = useAddAgentCron()
@@ -321,112 +331,90 @@ function AddCronDialog({ open, onOpenChange, agent: a }: { open: boolean; onOpen
       add.reset()
     }
   }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
+  const save = () => add.mutate({ path: a.path, name: name.trim() || undefined, schedule, prompt: prompt.trim() || t('agents.create.cronDefaultPrompt') }, { onSuccess: () => onOpenChange(false) })
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>{t('agents.trigger.addCron')}</DialogTitle>
-          <DialogDescription>{t('agents.trigger.cronDesc')}</DialogDescription>
-        </DialogHeader>
-        <div className="grid gap-3">
-          <FormField label={t('agents.trigger.cronName')}>
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('agents.trigger.cronNamePlaceholder', { name: a.display_name })} />
-          </FormField>
-          <SchedulePicker value={schedule} onChange={setSchedule} error={add.error ? add.error.message : undefined} />
-          <FormField label={t('agents.trigger.prompt')} hint={t('agents.trigger.cronPromptHint')}>
-            <Textarea minRows={2} maxRows={8} value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder={t('agents.create.cronDefaultPrompt')} />
-          </FormField>
-        </div>
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
-            {t('common.cancel')}
-          </Button>
-          <Button
-            loading={add.isPending}
-            onClick={() => add.mutate({ path: a.path, name: name.trim() || undefined, schedule, prompt: prompt.trim() || t('agents.create.cronDefaultPrompt') }, { onSuccess: () => onOpenChange(false) })}
-            data-testid="agent-cron-save"
-          >
-            {t('common.add')}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <FormDialog
+      open={open}
+      onClose={() => onOpenChange(false)}
+      title={t('agents.trigger.addCron')}
+      description={t('agents.trigger.cronDesc')}
+      save={{ onClick: save, pending: add.isPending, label: t('common.add'), testid: 'agent-cron-save' }}
+    >
+      <div className="grid gap-3">
+        <FormField label={t('agents.trigger.cronName')}>
+          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('agents.trigger.cronNamePlaceholder', { name: a.display_name })} />
+        </FormField>
+        <SchedulePicker value={schedule} onChange={setSchedule} error={add.error ? add.error.message : undefined} />
+        <FormField label={t('agents.trigger.prompt')} hint={t('agents.trigger.cronPromptHint')}>
+          <Textarea minRows={2} maxRows={8} value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder={t('agents.create.cronDefaultPrompt')} />
+        </FormField>
+      </div>
+    </FormDialog>
   )
 }
 
-function FeedTriggerDialog({ value, onClose, onSave, pending }: { value: AgentTriggerInput | null; onClose: () => void; onSave: (v: AgentTriggerInput) => void; pending: boolean }) {
-  const t = useT()
+type TriggerDialogProps = { value: AgentTriggerInput | null; onClose: () => void; onSave: (v: AgentTriggerInput) => void; pending: boolean }
+
+/** The trigger being edited in a dialog, from `value` each time it opens. */
+function useTriggerDraft(value: AgentTriggerInput | null) {
   const [v, setV] = React.useState<AgentTriggerInput>({})
   React.useEffect(() => {
     if (value) setV(value)
   }, [value])
+  return [v, setV] as const
+}
+
+function FeedTriggerDialog({ value, onClose, onSave, pending }: TriggerDialogProps) {
+  const t = useT()
+  const [v, setV] = useTriggerDraft(value)
   return (
-    <Dialog open={!!value} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>{value?.id ? t('agents.trigger.editFeed') : t('agents.trigger.addFeed')}</DialogTitle>
-          <DialogDescription>{t('agents.trigger.feedDesc')}</DialogDescription>
-        </DialogHeader>
-        <FeedTriggerFields value={v} onChange={setV} sourceLocked={!!v.hook_id} />
-        <DialogFooter>
-          <Button variant="ghost" onClick={onClose}>
-            {t('common.cancel')}
-          </Button>
-          <Button loading={pending} onClick={() => onSave(v)} data-testid="agent-feed-save">
-            {t('common.save')}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <FormDialog
+      open={!!value}
+      onClose={onClose}
+      title={value?.id ? t('agents.trigger.editFeed') : t('agents.trigger.addFeed')}
+      description={t('agents.trigger.feedDesc')}
+      save={{ onClick: () => onSave(v), pending, testid: 'agent-feed-save' }}
+    >
+      <FeedTriggerFields value={v} onChange={setV} sourceLocked={!!v.hook_id} />
+    </FormDialog>
   )
 }
 
 /** "After another agent": its automatic runs that end (well, badly, either), with words of its result, start this one. */
-function ChainTriggerDialog({ value, self, onClose, onSave, pending }: { value: AgentTriggerInput | null; self: string; onClose: () => void; onSave: (v: AgentTriggerInput) => void; pending: boolean }) {
+function ChainTriggerDialog({ value, self, onClose, onSave, pending }: TriggerDialogProps & { self: string }) {
   const t = useT()
   const { data } = useAgents(!!value)
-  const [v, setV] = React.useState<AgentTriggerInput>({})
-  React.useEffect(() => {
-    if (value) setV(value)
-  }, [value])
+  const [v, setV] = useTriggerDraft(value)
   const others = (data?.agents || []).filter((x) => x.path !== self)
   const opts = others.map((x) => ({ value: x.path, label: `${x.display_name} · ${x.path.split('/')[3]}` }))
   if (v.agent && !others.some((x) => x.path === v.agent)) opts.push({ value: v.agent, label: v.agent.split('/').pop() || v.agent })
   return (
-    <Dialog open={!!value} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>{value?.id ? t('agents.trigger.editAfter') : t('agents.trigger.addAfter')}</DialogTitle>
-          <DialogDescription>{t('agents.trigger.afterDesc')}</DialogDescription>
-        </DialogHeader>
-        <div className="grid gap-3">
-          <FormField label={t('agents.trigger.afterAgent')}>
-            {opts.length ? (
-              <Select value={v.agent || ''} onValueChange={(x) => setV({ ...v, agent: x })} options={opts} placeholder={t('agents.trigger.afterPick')} />
-            ) : (
-              <p className="text-sm text-muted-foreground">{t('agents.trigger.afterNoOther')}</p>
-            )}
-          </FormField>
-          <FormField label={t('agents.trigger.afterOn')}>
-            <Select value={v.on || 'ok'} onValueChange={(x) => setV({ ...v, on: x as AgentChainOn })} options={(['ok', 'error', 'any'] as const).map((k) => ({ value: k, label: t(`agents.trigger.afterOn.${k}` as 'agents.trigger.afterOn.ok') }))} />
-          </FormField>
-          <FormField label={t('agents.trigger.match')} hint={t('agents.trigger.afterMatchHint')}>
-            <Input value={v.match || ''} onChange={(e) => setV({ ...v, match: e.target.value })} placeholder={t('agents.trigger.matchPlaceholder')} />
-          </FormField>
-          <FormField label={t('agents.trigger.prompt')} hint={t('agents.trigger.afterPromptHint')}>
-            <Textarea minRows={2} maxRows={8} value={v.prompt || ''} onChange={(e) => setV({ ...v, prompt: e.target.value })} placeholder={t('agents.trigger.promptPlaceholder')} />
-          </FormField>
-        </div>
-        <DialogFooter>
-          <Button variant="ghost" onClick={onClose}>
-            {t('common.cancel')}
-          </Button>
-          <Button loading={pending} disabled={!v.agent} onClick={() => onSave(v)} data-testid="agent-after-save">
-            {t('common.save')}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <FormDialog
+      open={!!value}
+      onClose={onClose}
+      title={value?.id ? t('agents.trigger.editAfter') : t('agents.trigger.addAfter')}
+      description={t('agents.trigger.afterDesc')}
+      save={{ onClick: () => onSave(v), pending, disabled: !v.agent, testid: 'agent-after-save' }}
+    >
+      <div className="grid gap-3">
+        <FormField label={t('agents.trigger.afterAgent')}>
+          {opts.length ? (
+            <Select value={v.agent || ''} onValueChange={(x) => setV({ ...v, agent: x })} options={opts} placeholder={t('agents.trigger.afterPick')} />
+          ) : (
+            <p className="text-sm text-muted-foreground">{t('agents.trigger.afterNoOther')}</p>
+          )}
+        </FormField>
+        <FormField label={t('agents.trigger.afterOn')}>
+          <Select value={v.on || 'ok'} onValueChange={(x) => setV({ ...v, on: x as AgentChainOn })} options={(['ok', 'error', 'any'] as const).map((k) => ({ value: k, label: t(`agents.trigger.afterOn.${k}` as 'agents.trigger.afterOn.ok') }))} />
+        </FormField>
+        <FormField label={t('agents.trigger.match')} hint={t('agents.trigger.afterMatchHint')}>
+          <Input value={v.match || ''} onChange={(e) => setV({ ...v, match: e.target.value })} placeholder={t('agents.trigger.matchPlaceholder')} />
+        </FormField>
+        <FormField label={t('agents.trigger.prompt')} hint={t('agents.trigger.afterPromptHint')}>
+          <Textarea minRows={2} maxRows={8} value={v.prompt || ''} onChange={(e) => setV({ ...v, prompt: e.target.value })} placeholder={t('agents.trigger.promptPlaceholder')} />
+        </FormField>
+      </div>
+    </FormDialog>
   )
 }
 
@@ -445,41 +433,29 @@ function WebhookDialog({ open, onOpenChange, agent: a }: { open: boolean; onOpen
       add.reset()
     }
   }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
+  const save = () => add.mutate({ path: a.path, kind, prompt: prompt.trim() }, { onSuccess: (r) => (boxedNote(r.agent), setMade(r.hook)) })
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>{made ? t('agents.hook.madeTitle') : t('agents.trigger.addWebhook')}</DialogTitle>
-          <DialogDescription>{made ? t('agents.hook.madeDesc') : t('agents.trigger.webhookDesc')}</DialogDescription>
-        </DialogHeader>
-        {made ? (
-          <WebhookMade hook={made} />
-        ) : (
-          <div className="grid gap-3">
-            <FormField label={t('agents.hook.kind')}>
-              <WebhookKindSelect value={kind} onChange={setKind} />
-            </FormField>
-            <FormField label={t('agents.trigger.prompt')} hint={t('agents.trigger.promptHint')}>
-              <Textarea minRows={2} maxRows={8} value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder={t('agents.trigger.promptPlaceholder')} />
-            </FormField>
-            {add.error && <Callout tone="error">{add.error.message}</Callout>}
-          </div>
-        )}
-        <DialogFooter>
-          {made ? (
-            <Button onClick={() => onOpenChange(false)}>{t('agents.done')}</Button>
-          ) : (
-            <>
-              <Button variant="ghost" onClick={() => onOpenChange(false)}>
-                {t('common.cancel')}
-              </Button>
-              <Button loading={add.isPending} onClick={() => add.mutate({ path: a.path, kind, prompt: prompt.trim() }, { onSuccess: (r) => (boxedNote(r.agent), setMade(r.hook)) })} data-testid="agent-hook-save">
-                {t('agents.hook.create')}
-              </Button>
-            </>
-          )}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <FormDialog
+      open={open}
+      onClose={() => onOpenChange(false)}
+      title={made ? t('agents.hook.madeTitle') : t('agents.trigger.addWebhook')}
+      description={made ? t('agents.hook.madeDesc') : t('agents.trigger.webhookDesc')}
+      footer={made && <Button onClick={() => onOpenChange(false)}>{t('agents.done')}</Button>}
+      save={{ onClick: save, pending: add.isPending, label: t('agents.hook.create'), testid: 'agent-hook-save' }}
+    >
+      {made ? (
+        <WebhookMade hook={made} />
+      ) : (
+        <div className="grid gap-3">
+          <FormField label={t('agents.hook.kind')}>
+            <WebhookKindSelect value={kind} onChange={setKind} />
+          </FormField>
+          <FormField label={t('agents.trigger.prompt')} hint={t('agents.trigger.promptHint')}>
+            <Textarea minRows={2} maxRows={8} value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder={t('agents.trigger.promptPlaceholder')} />
+          </FormField>
+          {add.error && <Callout tone="error">{add.error.message}</Callout>}
+        </div>
+      )}
+    </FormDialog>
   )
 }

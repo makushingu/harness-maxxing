@@ -24,11 +24,7 @@ import { AppearanceDialog } from './Appearance'
 import { KeyChecks, LimitsFields, ModelSelect, PermissionSelect, useDeleteAgentAsk } from './parts'
 
 const toolsText = (l: string[]) => l.join('\n')
-const toolsList = (s: string) =>
-  s
-    .split(/[\n,]+/)
-    .map((x) => x.trim())
-    .filter(Boolean)
+const toolsList = (s: string) => s.split(/[\n,]+/).map((x) => x.trim()).filter(Boolean)
 
 type Draft = { model: string; chatModel: string; permission: '' | PermissionMode; allowed: string; disallowed: string; limits: AgentLimits; rules: AgentRule[] }
 const draftOf = (a: AgentDetail): Draft => ({
@@ -100,6 +96,16 @@ function SectionNav({ titles, ids }: { titles: Record<SectionId, string>; ids: S
         </button>
       ))}
     </nav>
+  )
+}
+
+/** A setting's name and one line of words (`wide`: 13 px, else 12). */
+function Label({ title, desc, wide }: { title: string; desc: string; wide?: boolean }) {
+  return (
+    <div className="grid gap-0.5">
+      <span className="text-sm font-medium">{title}</span>
+      <span className={cn(wide ? 'text-[13px]' : 'text-xs', 'text-muted-foreground')}>{desc}</span>
+    </div>
   )
 }
 
@@ -220,7 +226,11 @@ export function AgentSettings({ agent: a, section }: { agent: AgentDetail; secti
             <SettingRow label={t('agents.settings.approvals')} description={t('agents.settings.approvalsDesc')} htmlFor="ag-approvals">
               <Switch id="ag-approvals" checked={a.approvals} onCheckedChange={(v) => patch.mutate({ path: a.path, approvals: v })} data-testid="agent-approvals" />
             </SettingRow>
-            <AgentKeys agent={a} />
+            {/* the Keys vault entries its runs get as environment variables: none until checked here */}
+            <div className="grid gap-2 py-3" data-testid="agent-keys">
+              <Label title={t('agents.settings.keys')} desc={t('agents.settings.keysDesc')} />
+              <KeyChecks value={a.keys} onChange={(keys) => patch.mutate({ path: a.path, keys })} />
+            </div>
           </div>
         </Section>
 
@@ -282,18 +292,12 @@ export function AgentSettings({ agent: a, section }: { agent: AgentDetail; secti
                 </Details>
               </div>
               <div className="grid gap-3">
-                <div className="grid gap-0.5">
-                  <span className="text-sm font-medium">{t('agents.rules.title')}</span>
-                  <span className="text-[13px] text-muted-foreground">{t('agents.rules.desc')}</span>
-                </div>
+                <Label title={t('agents.rules.title')} desc={t('agents.rules.desc')} wide />
                 <RulesEditor value={d.rules} onChange={(r) => set('rules', r)} error={ruleError} />
               </div>
               <h4 className="-mb-3 text-xs font-medium tracking-wide text-muted-foreground uppercase">{t('agents.settings.grp.limits')}</h4>
               <div className="grid gap-3">
-                <div className="grid gap-0.5">
-                  <span className="text-sm font-medium">{t('agents.settings.sec.limits')}</span>
-                  <span className="text-[13px] text-muted-foreground">{t('agents.limits.desc')}</span>
-                </div>
+                <Label title={t('agents.settings.sec.limits')} desc={t('agents.limits.desc')} wide />
                 <LimitsFields value={d.limits} onChange={(l) => set('limits', l)} part="rest" />
               </div>
               <div className="divide-y">
@@ -337,21 +341,6 @@ export function AgentSettings({ agent: a, section }: { agent: AgentDetail; secti
         </SettingsCard>
       </div>
     </>
-  )
-}
-
-/** The Keys vault entries the agent's runs get as environment variables: none until checked here. */
-function AgentKeys({ agent: a }: { agent: AgentDetail }) {
-  const t = useT()
-  const patch = usePatchAgent()
-  return (
-    <div className="grid gap-2 py-3" data-testid="agent-keys">
-      <div className="grid gap-0.5">
-        <span className="text-sm font-medium">{t('agents.settings.keys')}</span>
-        <span className="text-xs text-muted-foreground">{t('agents.settings.keysDesc')}</span>
-      </div>
-      <KeyChecks value={a.keys} onChange={(keys) => patch.mutate({ path: a.path, keys })} />
-    </div>
   )
 }
 
@@ -410,10 +399,7 @@ function SandboxFields({ agent: a }: { agent: AgentDetail }) {
             </div>
           </Details>
           <div className="grid gap-2">
-            <div className="grid gap-0.5">
-              <span className="text-sm font-medium">{t('agents.sandbox.domains')}</span>
-              <span className="text-xs text-muted-foreground">{t('agents.sandbox.domainsDesc')}</span>
-            </div>
+            <Label title={t('agents.sandbox.domains')} desc={t('agents.sandbox.domainsDesc')} />
             <ListEditor
               value={a.domains || []}
               onChange={(l, saved) => save('domains', l, saved)}
@@ -424,10 +410,7 @@ function SandboxFields({ agent: a }: { agent: AgentDetail }) {
             />
           </div>
           <div className="grid gap-2">
-            <div className="grid gap-0.5">
-              <span className="text-sm font-medium">{t('agents.sandbox.writable')}</span>
-              <span className="text-xs text-muted-foreground">{t('agents.sandbox.writableDesc')}</span>
-            </div>
+            <Label title={t('agents.sandbox.writable')} desc={t('agents.sandbox.writableDesc')} />
             <ListEditor
               value={a.writable || []}
               onChange={(l, saved) => save('writable', l, saved)}
@@ -480,12 +463,7 @@ export function ListEditor({ value, onChange, placeholder, empty, error, testid 
         <Input
           value={v}
           onChange={(e) => setV(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault()
-              add()
-            }
-          }}
+          onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), add())}
           placeholder={placeholder}
           aria-invalid={!!error || undefined}
           className="h-8 font-mono text-[13px]"
