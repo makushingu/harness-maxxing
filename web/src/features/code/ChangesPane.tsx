@@ -13,7 +13,7 @@ import { errorMessage } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
 import { useFileViewer } from '@/features/files/viewerStore'
-import { DiffRows, diffRows, selected, useLineSelection } from './DiffRows'
+import { DiffRows, STATUS_TONE, diffRows, selected, useLineSelection } from './DiffRows'
 import { prPath } from './prApi'
 import {
   changesPath, codeApi, parseChangesPath, quoteInSession, useChanges, useFileDiff, useRepoStatus, type ChangedFile, type ChangesRef, type ChangesScope, type RepoChanges, type Undo,
@@ -200,7 +200,6 @@ function UndoBarView() {
   )
 }
 
-const STATUS_TONE: Record<string, string> = { A: 'text-success', D: 'text-destructive', R: 'text-primary', C: 'text-primary' }
 
 function RepoBlock({ sid, scope, repo, onOpen }: { sid: string; scope: ChangesScope; repo: RepoChanges; onOpen: (f: ChangedFile) => void }) {
   const t = useT()

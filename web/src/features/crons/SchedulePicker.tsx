@@ -9,7 +9,7 @@ import { Input, Label, Select, Skeleton } from '@/components/ui'
 import { cap } from './parts'
 import { PRESET_KINDS, fromPreset, hhmm, toPreset, weekdayNames, type Preset, type PresetKind } from './schedule'
 
-function useDebounced<T>(v: T, ms = 300) {
+export function useDebounced<T>(v: T, ms = 300) {
   const [d, setD] = React.useState(v)
   React.useEffect(() => {
     const id = setTimeout(() => setD(v), ms)
