@@ -88,6 +88,11 @@ def osv_scan(timeout: float = 30) -> dict:
     for where, eco, lock in lockfiles():
         pkgs = python_packages(lock) if eco == "PyPI" else npm_packages(lock)
         queries += [(where, eco, n, v) for n, v in pkgs]
+    return {"checked": len(queries), "vulnerable": osv_query(queries, timeout)}
+
+
+def osv_query(queries: list[tuple[str, str, str, str]], timeout: float = 30) -> list[dict]:
+    """(where, ecosystem, name, version) -> [{"where", "ecosystem", "name", "version", "ids"}] of the vulnerable ones."""
     found = []
     for i in range(0, len(queries), 500):
         chunk = queries[i:i + 500]
@@ -97,7 +102,7 @@ def osv_scan(timeout: float = 30) -> dict:
             if r.get("vulns"):
                 found.append({"where": where, "ecosystem": eco, "name": name, "version": version,
                               "ids": [x.get("id") for x in r["vulns"]][:5]})
-    return {"checked": len(queries), "vulnerable": found}
+    return found
 
 
 # ---- Claude Code ---------------------------------------------------------------------------
@@ -105,21 +110,21 @@ def _vtuple(v: str) -> tuple[int, ...]:
     return tuple(int(x) for x in re.findall(r"\d{1,9}", v)[:3])
 
 
-def claude_latest(timeout: float = 6) -> str | None:
+def _npm_field(url: str, key: str, timeout: float) -> str | None:
     try:
-        v = _get_json(CLAUDE_LATEST, timeout).get("version")
+        v = _get_json(url, timeout).get(key)
         return v if isinstance(v, str) else None
     except Exception:  # noqa: BLE001 - offline: no opinion
         return None
+
+
+def claude_latest(timeout: float = 6) -> str | None:
+    return _npm_field(CLAUDE_LATEST, "version", timeout)
 
 
 def claude_stable(timeout: float = 6) -> str | None:
     """The npm `stable` dist-tag of Claude Code (a release already out for some days), or None offline."""
-    try:
-        v = _get_json(CLAUDE_TAGS, timeout).get("stable")
-        return v if isinstance(v, str) else None
-    except Exception:  # noqa: BLE001 - offline: no opinion
-        return None
+    return _npm_field(CLAUDE_TAGS, "stable", timeout)
 
 
 def claude_behind(installed: str, latest: str | None) -> int:

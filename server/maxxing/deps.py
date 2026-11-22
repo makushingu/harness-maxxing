@@ -192,14 +192,12 @@ def _load_sha_cache() -> dict:
 
 def _save_sha_cache(cache: dict) -> None:
     p = _sha_cache_path()
-    try:
+    with contextlib.suppress(OSError):                  # a read-only state: hashes are just recomputed next time
         p.parent.mkdir(parents=True, exist_ok=True)
         tmp = p.with_name(p.name + ".tmp")
         tmp.write_text(json.dumps(cache, sort_keys=True))
         os.chmod(tmp, 0o600)
         os.replace(tmp, p)
-    except OSError:
-        pass                                            # a read-only state: hashes are just recomputed next time
 
 
 # ---- helpers ---------------------------------------------------------------------------------------------------
@@ -286,6 +284,11 @@ def _version_from(text: str) -> str | None:
     return m.group(1) if m else None
 
 
+def _cli_version(cmd: list[str], timeout: float = 20) -> str | None:
+    code, txt = _run(cmd, timeout=timeout)
+    return _version_from(txt) if code == 0 else None
+
+
 def _venv_python() -> Path:
     return config.CODE / "server" / ".venv" / "bin" / "python"
 
@@ -296,10 +299,8 @@ def uv_env() -> dict[str, str]:
 
 
 def uv_bin() -> str | None:
-    for p in (LINK_DIR / "uv",):
-        if p.exists():
-            return str(p)
-    return shutil.which("uv")
+    p = LINK_DIR / "uv"
+    return str(p) if p.exists() else shutil.which("uv")
 
 
 def node_dir() -> Path:
@@ -321,6 +322,9 @@ def _node_env() -> dict[str, str]:
     return {"PATH": f"{n.parent}:{os.environ.get('PATH', '/usr/bin:/bin')}"} if n else {}
 
 
+_NODE_FLOOR = re.compile(r"\s*>=\s*v?(\d+)(?:\.(\d+))?(?:\.(\d+))?\s*")
+
+
 def node_required() -> tuple[int, ...]:
     """The strictest `>=x.y.z` the lockfiles ask of Node.js (web build and Remotion) - F15."""
     best: tuple[int, ...] = (0, 0, 0)
@@ -333,14 +337,9 @@ def node_required() -> tuple[int, ...]:
             eng = (v.get("engines") or {}).get("node") if isinstance(v, dict) and isinstance(v.get("engines"), dict) else None
             if not isinstance(eng, str):
                 continue
-            for alt in eng.split("||"):
-                m = re.match(r"\s*>=\s*v?(\d+)(?:\.(\d+))?(?:\.(\d+))?\s*$", alt)
-                if not m:
-                    break                       # a range with another form: not a plain floor
-            else:
-                floors = [tuple(int(x or 0) for x in re.match(r"\s*>=\s*v?(\d+)(?:\.(\d+))?(?:\.(\d+))?", a).groups())
-                          for a in eng.split("||")]
-                best = max(best, min(floors))
+            ms = [_NODE_FLOOR.fullmatch(alt) for alt in eng.split("||")]
+            if all(ms):                         # a range with another form: not a plain floor
+                best = max(best, min(tuple(int(x or 0) for x in m.groups()) for m in ms))
     return best
 
 
@@ -373,12 +372,10 @@ def playwright_revisions(py: Path | None = None) -> dict[str, str]:
     root = py.parent.parent
     for mod in ("playwright", "patchright"):
         for f in root.glob(f"lib/python*/site-packages/{mod}/driver/package/browsers.json"):
-            try:
+            with contextlib.suppress(OSError, ValueError):
                 for b in json.loads(f.read_text()).get("browsers", []):
                     if b.get("name") == "chromium":
                         out[mod] = str(b.get("revision"))
-            except (OSError, ValueError):
-                pass
     return out
 
 
@@ -402,9 +399,7 @@ def installed(name: str) -> dict:
     if name == "uv":
         b = uv_bin()
         if b:
-            code, txt = _run([b, "--version"], timeout=20)
-            out.update(version=_version_from(txt) if code == 0 else None, where=b,
-                       managed=Path(b).parent == LINK_DIR)
+            out.update(version=_cli_version([b, "--version"]), where=b, managed=Path(b).parent == LINK_DIR)
     elif name == "python":
         py = _venv_python()
         if py.exists():
@@ -422,19 +417,16 @@ def installed(name: str) -> dict:
         else:
             n = node_bin()
             if n:
-                code, txt = _run([str(n), "--version"], timeout=20)
-                out.update(version=_version_from(txt) if code == 0 else None, where=str(n), managed=False,
+                out.update(version=_cli_version([str(n), "--version"]), where=str(n), managed=False,
                            detail="not in the managed folder yet (`maxxing deps update node`)")
     elif name == "claude":
         b = next((str(p) for p in (expand(c["path"]), LINK_DIR / "claude") if p.exists()), None) or shutil.which("claude")
         if b:
-            code, txt = _run([b, "--version"], timeout=30)
-            out.update(version=_version_from(txt) if code == 0 else None, where=b)
+            out.update(version=_cli_version([b, "--version"], 30), where=b)
     elif name == "caddy":
         b = shutil.which("caddy")
         if b:
-            code, txt = _run([b, "version"], timeout=20)
-            out.update(version=_version_from(txt) if code == 0 else None, where=b)
+            out.update(version=_cli_version([b, "version"]), where=b)
     elif name == "scrapling":
         py = scrapling_python()
         if py:
@@ -472,8 +464,7 @@ def installed(name: str) -> dict:
 def expected(name: str) -> str | None:
     c = get(name)
     if name == "chromium":
-        revs = sorted(set(playwright_revisions().values()))
-        return ", ".join(revs) or None
+        return ", ".join(sorted(set(playwright_revisions().values()))) or None
     if name == "whisper":
         return "pinned revisions"
     return c.get("version")
@@ -515,9 +506,7 @@ def status() -> list[dict]:
         elif c.get("update") == "self":
             state = "ok"                                # Claude Code updates itself: any version is fine
         elif name == "chromium" and want:
-            revs = set(want.split(", "))
-            ok = all((browsers_dir() / f"chromium-{r}").is_dir() for r in revs)
-            state = "ok" if ok else "outdated"
+            state = "ok" if all((browsers_dir() / f"chromium-{r}").is_dir() for r in set(want.split(", "))) else "outdated"
         elif not _same(name, have, want) or not inst["managed"]:
             state = "outdated"
         else:
@@ -548,22 +537,17 @@ def foreign_owned(root: Path, owner: str = "root", limit: int = 20) -> list[str]
                                 (stat.S_ISDIR(st.st_mode) and st.st_mode & stat.S_ISVTX)):
             bad.append(str(p))
         if stat.S_ISDIR(st.st_mode):
-            try:
+            with contextlib.suppress(OSError):
                 todo.extend(p.iterdir())
-            except OSError:
-                pass
     return bad
 
 
 def legacy_node_prefixes() -> list[Path]:
     """Where older installers extracted Node.js: /usr/local (install-manifest "node /usr/local") or <state>/tools/node."""
     out = [config.STATE / "tools" / "node"]
-    try:
-        for ln in (config.STATE / "install-manifest").read_text().splitlines():
-            if ln.startswith("node "):
-                out.append(Path(ln[5:].strip()))
-    except OSError:
-        pass
+    with contextlib.suppress(OSError):
+        out += [Path(ln[5:].strip()) for ln in (config.STATE / "install-manifest").read_text().splitlines()
+                if ln.startswith("node ")]
     return [p for p in dict.fromkeys(out) if (p / "bin" / "node").exists()]
 
 
@@ -576,7 +560,7 @@ def owned_paths(name: str) -> list[Path]:
         paths = [LINK_DIR / f for f in c.get("files", [])]
     elif name == "claude":
         paths = [expand(c["path"]), root_home() / ".local" / "share" / "claude"]
-    elif name in ("caddy",):
+    elif name == "caddy":
         paths = [Path(c["keyring"]), Path(c["apt_list"])]
     else:
         paths = [expand(c["path"])]
@@ -625,10 +609,8 @@ def verify(names: list[str] | None = None, versions: dict[str, str | None] | Non
                 problems.append("installed from another lockfile (`maxxing deps update remotion`)")
             elif not mf.exists():
                 problems.append("node_modules incomplete")
-        if problems:
-            out.append({"name": name, "level": "fail", "text": "; ".join(problems)})
-        else:
-            out.append({"name": name, "level": "ok", "text": f"{version} verified"})
+        out.append({"name": name, "level": "fail", "text": "; ".join(problems)} if problems
+                   else {"name": name, "level": "ok", "text": f"{version} verified"})
     if json.dumps(shas, sort_keys=True) != before:
         _save_sha_cache(shas)
     return out
@@ -833,10 +815,14 @@ def _up_node(c: dict, explicit: bool = False) -> tuple[str, str]:
     write_record("node", {"version": c["version"], "files": {str(final / "bin" / "node"): file_sha(final / "bin" / "node")}})
     _node_links(c, final)
     _drop_legacy_node()
-    for old in base.iterdir():                        # the previous version once the new one runs
-        if old.name not in (c["version"], "current") and old.is_dir() and not old.is_symlink():
-            shutil.rmtree(old, ignore_errors=True)
+    _drop_other_versions(base, c["version"])          # the previous version once the new one runs
     return ("updated" if before else "installed"), f"{before or '-'} -> {c['version']}"
+
+
+def _drop_other_versions(base: Path, keep: str) -> None:
+    for old in base.iterdir():
+        if old.name not in (keep, "current") and old.is_dir() and not old.is_symlink():
+            shutil.rmtree(old, ignore_errors=True)
 
 
 def _node_links(c: dict, final: Path) -> None:
@@ -863,13 +849,11 @@ def _drop_legacy_node() -> None:
         if pre == config.STATE / "tools" / "node":
             shutil.rmtree(pre, ignore_errors=True)
     mf = config.STATE / "install-manifest"
-    try:
+    with contextlib.suppress(OSError):
         lines = mf.read_text().splitlines()
         keep = [ln for ln in lines if not ln.startswith("node ")]
         if keep != lines:
             mf.write_text("".join(ln + "\n" for ln in keep))
-    except OSError:
-        pass
 
 
 def _up_claude(c: dict, explicit: bool = False) -> tuple[str, str]:
@@ -932,11 +916,7 @@ def _up_scrapling(c: dict, explicit: bool = False) -> tuple[str, str]:
             kept = " (kept the previous one)" if cur.exists() else ""     # `current` pointed at `final`: removed above
             raise DepError(f"Scrapling install failed{kept}: " + out.strip()[-300:])
         _symlink(final, cur)
-        for old in base.iterdir():
-            if old.name not in (final.name, "current") and old.is_dir() and not old.is_symlink():
-                shutil.rmtree(old, ignore_errors=True)
-        legacy = config.STATE / "tools" / "uv" / "scrapling"
-        shutil.rmtree(legacy, ignore_errors=True)
+        _drop_other_versions(base, final.name)
         for d in (config.STATE / "tools" / "uv", config.STATE / "tools" / "bin"):
             shutil.rmtree(d, ignore_errors=True)
         write_record("scrapling", {"version": c["version"], "lock": lock_hash(c)})
@@ -1142,12 +1122,7 @@ def _in_use(roots: list[Path]) -> set[Path]:
         for link in ("cwd", "exe"):
             with contextlib.suppress(OSError):
                 seen.add(os.readlink(d / link))
-    out = set()
-    for r in roots:
-        pre = str(r).rstrip("/") + "/"
-        if any(s == str(r) or s.startswith(pre) for s in seen):
-            out.add(r)
-    return out
+    return {r for r in roots if any(s == str(r) or s.startswith(str(r).rstrip("/") + "/") for s in seen)}
 
 
 def clean(dry: bool = False, caches: bool = False, leftovers: bool = True) -> list[dict]:
@@ -1255,9 +1230,7 @@ def check(timeout: float = 30) -> dict:
     installed versions of the components. Raises on network errors."""
     from . import depcheck
     r = depcheck.osv_scan(timeout)
-    queries: list[tuple[str, str, str, str]] = []
-    for name, eco, pkgs in (("scrapling", "PyPI", requirement_pins(lock_path(get("scrapling")))),):
-        queries += [(name, eco, n, v) for n, v in pkgs]
+    queries = [("scrapling", "PyPI", n, v) for n, v in requirement_pins(lock_path(get("scrapling")))]
     for name, c in load().items():
         osv = c.get("osv")
         if not osv:
@@ -1265,16 +1238,7 @@ def check(timeout: float = 30) -> dict:
         v = installed(name)["version"]
         if v and re.match(r"^\d", v.lstrip("v")):
             queries.append((name, osv["ecosystem"], osv["name"], v.lstrip("v")))
-    found = list(r["vulnerable"])
-    for i in range(0, len(queries), 500):
-        chunk = queries[i:i + 500]
-        res = depcheck._post_json(depcheck.OSV_BATCH, {"queries": [
-            {"package": {"ecosystem": e, "name": n}, "version": v} for _, e, n, v in chunk]}, timeout)
-        for (where, eco, name, version), q in zip(chunk, res.get("results") or []):
-            if q.get("vulns"):
-                found.append({"where": where, "ecosystem": eco, "name": name, "version": version,
-                              "ids": [x.get("id") for x in q["vulns"]][:5]})
-    return {"checked": r["checked"] + len(queries), "vulnerable": found}
+    return {"checked": r["checked"] + len(queries), "vulnerable": r["vulnerable"] + depcheck.osv_query(queries, timeout)}
 
 
 def notify_vulnerable(result: dict) -> bool:
@@ -1294,11 +1258,9 @@ def notify_vulnerable(result: dict) -> bool:
         ev = None
     if ev is None:
         return False                                   # already reported (same advisories)
-    try:
+    with contextlib.suppress(Exception):               # Telegram is optional
         from .telegram import gateway
         gateway.system_alert(f"Known vulnerability in {len(lines)} dependency(ies) of Harness Maxxing:\n" + "\n".join(lines[:10]))
-    except Exception:  # noqa: BLE001 - Telegram is optional
-        pass
     return True
 
 

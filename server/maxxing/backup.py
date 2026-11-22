@@ -108,6 +108,7 @@ RESTORABLE_CONFIG = ("timezone", "language", "default_model", "permission_mode",
                      "usage_widget", "tasks_page", "git_page", "infra_page", "team_page", "agents_page", "mail_page", "browser_feature", "devices_feature", "maxxing_mode", "sidebar_order", "nav_badges_hidden",
                      "daily_budget_usd")
 # Settings a restore on a server already in use leaves as they are: they decide what Claude may do and spend.
+TELEGRAM_KEYS = ("notify_crons", "notify_system", "login_alerts", "reply_mode", "reply_mode_chosen")
 HELD_CONFIG = ("permission_mode", "daily_budget_usd")
 
 
@@ -303,19 +304,9 @@ def forget() -> None:
 # =============================================================================================
 # Scheduling (managed cron job)
 # =============================================================================================
-def _crons():
-    try:
-        from . import crons
-        return crons
-    except ImportError:
-        return None
-
-
 def ensure_schedule() -> dict:
     """Create/update the "Memory backup" shell cron job running `maxxing backup run`."""
-    crons = _crons()
-    if crons is None:
-        return {"error": "The crons module is not available: the backup is not scheduled."}
+    from . import crons
     s = _settings()
     fields = {"name": CRON_NAME, "schedule": s.get("schedule") or "40 4 * * *", "kind": "shell",
               "command": f"{crons.maxxing_bin()} backup run", "notify": "failure", "timeout_s": 1800,
@@ -339,9 +330,7 @@ def _find_job(crons) -> dict | None:
 
 
 def remove_schedule() -> None:
-    crons = _crons()
-    if crons is None:
-        return
+    from . import crons
     try:
         job = _find_job(crons)
         if job:
@@ -360,12 +349,11 @@ def clean_schedule(schedule: Any) -> str:
     """A backup schedule from the UI or a restored config.json: a valid cron expression."""
     if not isinstance(schedule, str) or not schedule.strip():
         raise BackupError("Invalid schedule", "invalid_schedule")
-    crons = _crons()
-    if crons is not None:
-        try:
-            schedule = crons.validate(schedule)
-        except ValueError as e:
-            raise BackupError(str(e), "invalid_schedule") from None
+    from . import crons
+    try:
+        schedule = crons.validate(schedule)
+    except ValueError as e:
+        raise BackupError(str(e), "invalid_schedule") from None
     return schedule.strip()
 
 
@@ -422,14 +410,8 @@ def glob_re(pattern: str) -> re.Pattern[str]:
         elif pattern.startswith("**", i):
             out += ".*"
             i += 2
-        elif pattern[i] == "*":
-            out += "[^/]*"
-            i += 1
-        elif pattern[i] == "?":
-            out += "[^/]"
-            i += 1
         else:
-            out += re.escape(pattern[i])
+            out += {"*": "[^/]*", "?": "[^/]"}.get(pattern[i]) or re.escape(pattern[i])
             i += 1
     return re.compile(r"\A" + out + r"\Z", re.S)
 
@@ -471,9 +453,7 @@ def collect(root: Path | None = None, include: list[str] | None = None) -> dict[
         for fn in sorted(filenames):
             p = base / fn
             rel = p.relative_to(root).as_posix()
-            if p.is_symlink() or not p.is_file() or denied(rel):
-                continue
-            if not any(r.match(rel) for r in pats):
+            if p.is_symlink() or not p.is_file() or denied(rel) or not any(r.match(rel) for r in pats):
                 continue
             try:
                 if p.stat().st_size > MAX_FILE:
@@ -509,16 +489,15 @@ def sanitized_config() -> dict:
     cfg = config.load_config()
     out = {k: cfg.get(k) for k in RESTORABLE_CONFIG if k in cfg}
     tg = cfg.get("telegram") or {}
-    out["telegram"] = {k: tg.get(k) for k in ("notify_crons", "notify_system", "login_alerts", "reply_mode", "reply_mode_chosen")}
+    out["telegram"] = {k: tg.get(k) for k in TELEGRAM_KEYS}
     b = cfg.get("backup") or {}
     out["backup"] = {"schedule": b.get("schedule"), "include": b.get("include")}
     return out
 
 
 def _cron_jobs_file() -> Path:
-    crons = _crons()
-    return crons.jobs_path() if crons is not None and hasattr(crons, "jobs_path") \
-        else config.STATE / "crons" / "jobs.json"
+    from . import crons
+    return crons.jobs_path()
 
 
 def snapshot() -> dict[str, bytes]:
@@ -563,8 +542,7 @@ def _auth_env(tok: str | None) -> dict[str, str]:
 
 def _scrub(text: str, tok: str | None) -> str:
     if tok:
-        text = text.replace(tok, "<token>")
-        text = text.replace(base64.b64encode(f"x-access-token:{tok}".encode()).decode(), "<token>")
+        text = text.replace(tok, "<token>").replace(base64.b64encode(f"x-access-token:{tok}".encode()).decode(), "<token>")
     return text
 
 
@@ -599,10 +577,8 @@ def _drop_stale_locks(gd: Path) -> None:
     except OSError:
         return
     for f in locks:
-        try:
+        with contextlib.suppress(OSError):
             f.unlink(missing_ok=True)
-        except OSError:
-            pass
 
 
 def prepare(repo: str, tok: str) -> tuple[Path, str | None]:
@@ -621,8 +597,7 @@ def prepare(repo: str, tok: str) -> tuple[Path, str | None]:
     else:
         git("remote", "add", "origin", url, cwd=wc)
     git("fetch", "-q", "--prune", "origin", cwd=wc, tok=tok)
-    r = git("rev-parse", "--verify", "-q", "refs/remotes/origin/main", cwd=wc, check=False)
-    remote = _out(r) if r.returncode == 0 else None
+    remote = _head(wc, "refs/remotes/origin/main")
     if remote:
         git("symbolic-ref", "HEAD", "refs/heads/main", cwd=wc)
         git("reset", "-q", "--mixed", remote, cwd=wc)
@@ -643,8 +618,8 @@ def _materialize(wc: Path, files: dict[str, bytes]) -> None:
         dest.write_bytes(data)
 
 
-def _head(wc: Path) -> str | None:
-    r = git("rev-parse", "--verify", "-q", "HEAD", cwd=wc, check=False)
+def _head(wc: Path, ref: str = "HEAD") -> str | None:
+    r = git("rev-parse", "--verify", "-q", ref, cwd=wc, check=False)
     return _out(r) if r.returncode == 0 else None
 
 
@@ -695,6 +670,13 @@ def _stamp() -> str:
     return now.strftime("%Y-%m-%d %H:%M")
 
 
+def _repo_and_token() -> tuple[str, str]:
+    repo, tok = _settings().get("repo"), _token()
+    if not repo or not tok:
+        raise BackupError("The backup is not configured (repository + token).", "not_configured")
+    return repo, tok
+
+
 def run() -> dict:
     """Back up now -> {ok, commit, files, changed, error?, code?, leaks?}. Never raises."""
     started = time.time()
@@ -702,9 +684,7 @@ def run() -> dict:
                              "error": None}
     try:
         with _flock():
-            repo, tok = _settings().get("repo"), _token()
-            if not repo or not tok:
-                raise BackupError("The backup is not configured (repository + token).", "not_configured")
+            repo, tok = _repo_and_token()
             check_private(repo, tok)
             files = snapshot()
             leaks = scan(files)
@@ -742,10 +722,7 @@ def status() -> dict:
     """GET /api/backup payload."""
     s = _settings()
     st = load_state()
-    h = history(1)
-    last = None
-    if h:
-        last = {k: h[0].get(k) for k in ("at", "ok", "commit", "files", "error")}
+    last = next(({k: h.get(k) for k in ("at", "ok", "commit", "files", "error")} for h in history(1)), None)
     configured = bool(s.get("repo") and _token())
     return {"configured": configured, "repo": s.get("repo") or "",
             "private": st.get("private") if configured else None,
@@ -806,9 +783,7 @@ def restore(ref: str | None = None, hold: bool | None = None) -> dict:
         if ref and not REF_RE.match(ref):
             raise BackupError("Invalid revision.", "bad_ref")
         with _flock():
-            repo, tok = _settings().get("repo"), _token()
-            if not repo or not tok:
-                raise BackupError("The backup is not configured (repository + token).", "not_configured")
+            repo, tok = _repo_and_token()
             wc, remote = prepare(repo, tok)
             rev = ref or remote
             if not rev:
@@ -862,15 +837,11 @@ def _apply(files: dict[str, bytes], hold: bool | None = None) -> dict:
         except OSError as e:                       # a folder where the file goes, a read-only disk...: the rest goes on
             log.warning("restore: %s skipped: %s", rel_trash, e)
             skipped.append(rel_trash)
-            try:
+            with contextlib.suppress(OSError):
                 tmp.unlink(missing_ok=True)
-            except OSError:
-                pass
             if moved is not None and not dest.exists():  # the file in place stays in place, not in the trash
-                try:
+                with contextlib.suppress(OSError):
                     shutil.move(str(moved), str(dest))
-                except OSError:
-                    pass
             return False
         return True
 
@@ -925,9 +896,8 @@ def _apply(files: dict[str, bytes], hold: bool | None = None) -> dict:
                 jobs, held["crons"], held_job_ids = _hold_new_jobs(jobs)
             if put(_cron_jobs_file(), jobs, "state/crons/jobs.json"):
                 crons_restored = True
-                crons = _crons()
-                if crons is not None and hasattr(crons, "sync_crontab"):
-                    crons.sync_crontab()
+                from . import crons
+                crons.sync_crontab()
         except Exception as e:
             log.warning("restore: cron jobs not restored: %s", e)
     mcp_added = 0
@@ -943,10 +913,7 @@ def _apply(files: dict[str, bytes], hold: bool | None = None) -> dict:
             have = {(x["name"], x["where"]["rel"]) for x in mcp.servers() if x["scope"] in ("user", "local")}
             local = [it for it in local if (it.get("name"), it.get("where")) not in have]
             if local:
-                t = trash / "mcp-held.json"
-                t.parent.mkdir(parents=True, exist_ok=True)
-                t.write_text(json.dumps(local, indent=2, ensure_ascii=False) + "\n")
-                os.chmod(t, 0o600)
+                _write_private(trash / "mcp-held.json", local)
                 held["mcp"] = [str(it.get("name")) for it in local]
         except Exception as e:                                     # noqa: BLE001
             log.warning("restore: MCP servers not restored: %s", e)
@@ -960,7 +927,7 @@ def _apply(files: dict[str, bytes], hold: bool | None = None) -> dict:
                     changes.pop(k, None)
             if isinstance(saved.get("telegram"), dict):
                 changes["telegram"] = {k: v for k, v in saved["telegram"].items()
-                                       if k in ("notify_crons", "notify_system", "login_alerts", "reply_mode", "reply_mode_chosen") and v is not None}
+                                       if k in TELEGRAM_KEYS and v is not None}
             if isinstance(saved.get("backup"), dict):
                 with config._lock:                                       # noqa: SLF001
                     cfg = config.load_config()
@@ -985,10 +952,7 @@ def _apply(files: dict[str, bytes], hold: bool | None = None) -> dict:
     held["extensions"] = ext_held
     held["hooks"] = hooks_held
     if hooks_kept:                                   # kept aside, to put back by hand once checked
-        t = trash / "hooks-held.json"
-        t.parent.mkdir(parents=True, exist_ok=True)
-        t.write_text(json.dumps(hooks_kept, indent=2, ensure_ascii=False) + "\n")
-        os.chmod(t, 0o600)
+        _write_private(trash / "hooks-held.json", hooks_kept)
     # not run by the restore, but worth a look before use: skills (instructions + scripts), product patches
     held["review"] = [r for r in restored if "/.claude/skills/" in "/" + r or r.startswith("customizations/")][:50] \
         if hold else []
@@ -1026,6 +990,12 @@ def _apply(files: dict[str, bytes], hold: bool | None = None) -> dict:
     return {"ok": True, "files": len(restored), "restored": restored[:200], "unchanged": unchanged,
             "skipped": skipped[:200],
             "crons": crons_restored, "mcp": mcp_added, "held": held, "trash": str(trash) if trash.exists() else None}
+
+
+def _write_private(t: Path, data: object) -> None:
+    t.parent.mkdir(parents=True, exist_ok=True)
+    t.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+    os.chmod(t, 0o600)
 
 
 def _differs(dest: Path, data: bytes) -> bool:
@@ -1124,9 +1094,9 @@ def _strip_hooks(rel: str, data: bytes) -> tuple[bytes, object]:
     try:
         d = json.loads(data)
     except ValueError:
-        return b"{}\n", data.decode(errors="replace")               # unreadable: not restored, kept aside
+        d = None
     if not isinstance(d, dict):
-        return b"{}\n", data.decode(errors="replace")
+        return b"{}\n", data.decode(errors="replace")               # unreadable: not restored, kept aside
     held = {k: d.pop(k) for k in HELD_SETTINGS if k in d}
     if held:
         return (json.dumps(d, indent=2) + "\n").encode(), {"settings": held}
@@ -1189,13 +1159,13 @@ def release_held() -> dict:
     servers and the files outside the backup list (`maxxing backup release`, the installer after the user's yes).
     -> {ok, crons, extensions, hooks, mcp, files}."""
     path, m = held_manifest()
-    if not m or m.get("released"):
-        return {"ok": True, "nothing": True, "crons": [], "extensions": [], "hooks": [], "mcp": 0, "files": []}
     out: dict[str, Any] = {"ok": True, "crons": [], "extensions": [], "hooks": [], "mcp": 0, "files": []}
-    crons = _crons()
+    if not m or m.get("released"):
+        return {**out, "nothing": True}
+    from . import crons
     for cid in m.get("cron_ids") or []:
         try:
-            if crons is not None and crons.update_job(cid, {"enabled": True}):
+            if crons.update_job(cid, {"enabled": True}):
                 out["crons"].append(cid)
         except Exception as e:                                     # noqa: BLE001
             log.warning("release: job %s not enabled: %s", cid, e)
