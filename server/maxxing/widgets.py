@@ -351,18 +351,20 @@ def telegram(force: bool = False) -> dict:
 
 def _clock(at: float) -> str:
     import datetime as _dt
-    return _dt.datetime.fromtimestamp(at).strftime("%H:%M")
+    return _dt.datetime.fromtimestamp(at, _zone()).strftime("%H:%M")     # the workspace clock, not the server's
 
 
 def _reset(at: object) -> str:
     """A reset time: Unix seconds (seen in a turn) or the ISO string of the usage endpoint."""
     if isinstance(at, (int, float)):
         import datetime as _dt
+        zone = _zone()
         try:
-            d = _dt.datetime.fromtimestamp(at)
+            d = _dt.datetime.fromtimestamp(at, zone)
         except (OverflowError, OSError, ValueError):     # 1e300 / -1e15: out of the datetime range
             return ""
-        return d.strftime("%H:%M") if d.date() == _dt.date.today() else d.strftime("%d/%m %H:%M")
+        today = _dt.datetime.now(zone).date()
+        return d.strftime("%H:%M") if d.date() == today else d.strftime("%d/%m %H:%M")
     return str(at)
 
 

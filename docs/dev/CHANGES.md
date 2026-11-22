@@ -5,6 +5,12 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## Unreleased
+
+- Dashboard: `widgets._clock()` / `_reset()` format with `_zone()` (config `timezone`) like `day()` and the cron
+  cards, and compare with today's date in that zone; they used `datetime.fromtimestamp(at)` (server local time).
+  Test: `test_dashboard.py::test_usage_times_in_the_workspace_time_zone`.
+
 ## 2.0.0-alpha.161 - 2026-11-21
 
 - Thread: `web/src/pages/sessions/toolLabel.ts`. `toolLabel(name, input, t, rel)` -> `{title, detail, kind, danger}`:
