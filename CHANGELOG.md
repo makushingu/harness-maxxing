@@ -33,6 +33,16 @@ Changed:
   the top) now adds the older messages a few at a time instead of all at once: the page stays responsive, mostly
   felt on a phone.
 
+## 2.0.0-alpha.162 - 2026-11-22
+
+Fixed:
+- **Downloads in the iPhone / iPad app.** A file that took more than a moment to arrive opened inside the app,
+  with no way to save it or go back. It now goes to the share sheet (Save to Files, AirDrop...): at once when it
+  is quick, else from a **Save** button on a "File ready" notice.
+- **Notices at the bottom on a phone.** They appeared at the top, over the buttons of the page; they now show at
+  the bottom, within thumb reach. A tap on a notice no longer goes through to the file preview behind it, nor
+  closes it.
+
 ## 2.0.0-alpha.161 - 2026-11-21
 
 Changed:
