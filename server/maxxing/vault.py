@@ -77,6 +77,19 @@ def _is_text(v: str) -> bool:
     return True
 
 
+def set_note_expose(cur: dict[str, Any], note: str | None, expose: bool | None) -> None:
+    """The fields a text key and a secret file share (omitted ones keep their value), and the update time."""
+    if note is not None:
+        if not _is_text(note):
+            raise VaultError("note must be valid text", "invalid_note")
+        cur["note"] = note.strip()[:200]
+    if expose is not None:
+        cur["expose"] = bool(expose)
+    cur.setdefault("note", "")
+    cur.setdefault("expose", False)
+    cur["updated"] = time.time()
+
+
 def put(name: str, value: str | None = None, note: str | None = None, expose: bool | None = None,
         create: bool = False) -> None:
     """Create or update. A new secret needs a value; omitted fields keep their current value.
@@ -98,15 +111,7 @@ def put(name: str, value: str | None = None, note: str | None = None, expose: bo
             cur["value"] = value
         if not cur.get("value"):
             raise VaultError("a new secret needs a value", "value_required")
-        if note is not None:
-            if not _is_text(note):
-                raise VaultError("note must be valid text", "invalid_note")
-            cur["note"] = note.strip()[:200]
-        if expose is not None:
-            cur["expose"] = bool(expose)
-        cur.setdefault("note", "")
-        cur.setdefault("expose", False)
-        cur["updated"] = time.time()
+        set_note_expose(cur, note, expose)
         vault[name] = cur
         config.set_secret("vault", vault)
 

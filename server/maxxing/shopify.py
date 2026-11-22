@@ -35,7 +35,7 @@ QUERY = """query($q: String!, $after: String) {
   }
 }"""
 
-_T = {"fr": {"Shopify": "Shopify", "Revenue today": "CA du jour", "Orders today": "Commandes du jour",
+_T = {"fr": {"Revenue today": "CA du jour", "Orders today": "Commandes du jour",
              "To ship": "À expédier", "Last 7 days": "7 derniers jours", "Revenue": "Chiffre d'affaires",
              "Latest orders": "Dernières commandes", "No order yet": "Aucune commande pour l'instant",
              "Connect your store": "Connecter votre boutique", "unfulfilled": "à expédier",
@@ -202,12 +202,10 @@ def card(force: bool = False) -> dict:
     try:
         data = fetch(store, token, today - dt.timedelta(days=DAYS - 1))
     except RuntimeError as e:
-        c = {"title": t("Shopify"), "link": "/settings/keys", "status": "error",
-             "blocks": [{"type": "markdown", "text": f"{store}: {e}"}]}
-        with _lock:
-            _cache.update(at=time.time(), key=key, card=c, ttl=ERROR_CACHE_S)
-        return c
-    c = build_card(data, today, tz)
+        c, ttl = {"title": t("Shopify"), "link": "/settings/keys", "status": "error",
+                  "blocks": [{"type": "markdown", "text": f"{store}: {e}"}]}, ERROR_CACHE_S
+    else:
+        c, ttl = build_card(data, today, tz), CACHE_S
     with _lock:
-        _cache.update(at=time.time(), key=key, card=c, ttl=CACHE_S)
+        _cache.update(at=time.time(), key=key, card=c, ttl=ttl)
     return c

@@ -17,6 +17,7 @@ import importlib
 import logging
 import mimetypes
 import re
+from collections.abc import Mapping
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -169,7 +170,7 @@ def create_app() -> FastAPI:
     return app
 
 
-def _accepts(request_headers: dict[str, str], coding: str) -> bool:
+def _accepts(request_headers: Mapping[str, str], coding: str) -> bool:
     for part in request_headers.get("accept-encoding", "").split(","):
         name, _, params = part.strip().partition(";")
         if name.strip().lower() == coding:
@@ -241,48 +242,24 @@ _PWA_TYPES = {
 }
 
 
-def _accepts_br(request: Request) -> bool:
-    for part in request.headers.get("accept-encoding", "").split(","):
-        name, _, params = part.strip().partition(";")
-        if name.strip().lower() == "br":
-            q = params.strip()
-            return not (q.startswith("q=") and q[2:].strip() in ("0", "0.0", "0.00", "0.000"))
-    return False
+_gz_cache: dict[tuple, bytes] = {}
 
 
-_index_gz_cache: dict = {}
-
-
-def _index_gz(index: Path) -> bytes | None:
-    """index.html gzipped, recomputed when it changes."""
-    try:
-        st = index.stat()
-    except OSError:
-        return None
-    key = (str(index), st.st_mtime_ns, st.st_size)
-    if _index_gz_cache.get("key") != key:
-        _index_gz_cache.update(key=key, body=gzip.compress(index.read_bytes(), 6))
-    return _index_gz_cache["body"]
-
-
-_json_gz_cache: dict[tuple, bytes] = {}
-
-
-def _json_gz(f: Path) -> tuple[bytes, str] | None:
-    """A big static JSON file (the emoji data, ~765 kB a language) gzipped once per version -> (body, etag)."""
+def _gzipped(f: Path) -> tuple[bytes, str] | None:
+    """A static file (index.html, the emoji data: ~765 kB a language) gzipped once per version -> (body, etag)."""
     try:
         st = f.stat()
     except OSError:
         return None
     key = (str(f), st.st_mtime_ns, st.st_size)
-    body = _json_gz_cache.get(key)
+    body = _gz_cache.get(key)
     if body is None:
         body = gzip.compress(f.read_bytes(), 6)
-        for k in [k for k in _json_gz_cache if k[0] == key[0]]:   # the older version of that file
-            _json_gz_cache.pop(k, None)
-        if len(_json_gz_cache) >= 16:
-            _json_gz_cache.clear()
-        _json_gz_cache[key] = body
+        for k in [k for k in _gz_cache if k[0] == key[0]]:   # the older version of that file
+            _gz_cache.pop(k, None)
+        if len(_gz_cache) >= 16:
+            _gz_cache.clear()
+        _gz_cache[key] = body
     return body, '"%s-gz"' % hashlib.md5(f"{st.st_mtime_ns}-{st.st_size}".encode()).hexdigest()
 
 
@@ -316,7 +293,7 @@ def _mount_spa(app: FastAPI) -> None:
                 br = f.with_name(f.name + ".br")
                 if f.suffix in (".js", ".css") and br.is_file():
                     vary = {"Cache-Control": cache, "Vary": "Accept-Encoding"}
-                    if _accepts_br(request):
+                    if _accepts(request.headers, "br"):
                         return FileResponse(br, media_type=mimetypes.guess_type(f.name)[0],
                                             headers={**vary, "Content-Encoding": "br"})
                     return FileResponse(f, headers=vary)
@@ -328,10 +305,10 @@ def _mount_spa(app: FastAPI) -> None:
                 cache = "public, max-age=3600"
                 vary = {"Cache-Control": cache, "Vary": "Accept-Encoding"}
                 br = f.with_name(f.name + ".br")
-                if _accepts_br(request) and br.is_file():
+                if _accepts(request.headers, "br") and br.is_file():
                     return FileResponse(br, media_type="application/json", headers={**vary, "Content-Encoding": "br"})
-                if "x-forwarded-for" not in request.headers and _accepts(dict(request.headers), "gzip"):
-                    got = await asyncio.to_thread(_json_gz, f)
+                if "x-forwarded-for" not in request.headers and _accepts(request.headers, "gzip"):
+                    got = await asyncio.to_thread(_gzipped, f)
                     if got is not None:
                         if request.headers.get("if-none-match") == got[1]:   # revalidation: nothing to resend
                             return Response(status_code=304, headers={**vary, "ETag": got[1]})
@@ -351,9 +328,9 @@ def _mount_spa(app: FastAPI) -> None:
         headers = {"Cache-Control": "no-store", "Content-Security-Policy": _app_csp(index)}
         # No proxy in front (Tailscale / local access): the app page is sent gzipped (14 kB -> ~5 kB); behind
         # Caddy, its `encode` does it.
-        if "x-forwarded-for" not in request.headers and _accepts(dict(request.headers), "gzip"):
-            body = await asyncio.to_thread(_index_gz, index)
-            if body is not None:
-                return Response(body, media_type="text/html", headers={**headers, "Content-Encoding": "gzip",
+        if "x-forwarded-for" not in request.headers and _accepts(request.headers, "gzip"):
+            got = await asyncio.to_thread(_gzipped, index)
+            if got is not None:
+                return Response(got[0], media_type="text/html", headers={**headers, "Content-Encoding": "gzip",
                                                                        "Vary": "Accept-Encoding"})
         return FileResponse(index, headers=headers)
