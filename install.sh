@@ -1733,13 +1733,7 @@ APACHE
       elif [ "$HAS_DOCKER" = 1 ]; then
         warn "Docker has no docker0 bridge here: for a proxy in a container, see maxxing proxy on (generic block saved)"
       fi
-      cat > "$f" <<OTHER
-# Harness Maxxing behind your own reverse proxy ($WEB_BUSY on ports 80/443):
-#   https://$DOMAIN  ->  http://127.0.0.1:$PORT
-# keep responses unbuffered (live updates use server-sent events), allow uploads up to 500 MB
-# and long requests (1 h).
-OTHER
-    ;;
+      ;& # then the generic block below
     *) cat > "$f" <<OTHER
 # Harness Maxxing behind your own reverse proxy ($WEB_BUSY on ports 80/443):
 #   https://$DOMAIN  ->  http://127.0.0.1:$PORT

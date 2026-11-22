@@ -21,6 +21,7 @@ import os
 import re
 import sys
 import tomllib
+from collections import Counter
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -72,12 +73,14 @@ def license_from_text(text: str) -> str:
     return ""
 
 
+def texts_license(texts: list[tuple[str, str]]) -> str:
+    """The license recognized in the first license text that names one."""
+    return next(filter(None, (license_from_text(t) for _, t in texts)), "")
+
+
 def classifier_license(lines: list[str]) -> str:
-    out = []
-    for c in lines:
-        if c.startswith("License :: OSI Approved :: "):
-            out.append(norm_license(c.rsplit("::", 1)[1].strip()))
-    return " OR ".join(sorted(set(x for x in out if x)))
+    out = {norm_license(c.rsplit("::", 1)[1].strip()) for c in lines if c.startswith("License :: OSI Approved :: ")}
+    return " OR ".join(sorted(out - {""}))
 
 
 def read_text(p: Path) -> str:
@@ -145,10 +148,7 @@ def python_packages() -> list[dict]:
         for e in dep.get("extra", []):
             todo += [(d, group) for d in p.get("optional-dependencies", {}).get(e, [])]
     site = sorted((ROOT / "server" / ".venv" / "lib").glob("python*/site-packages"))
-    out = []
-    for name in sorted(groups):
-        out.append(_python_info(name, pkgs[name]["version"], groups[name], site[0] if site else None))
-    return out
+    return [_python_info(name, pkgs[name]["version"], groups[name], site[0] if site else None) for name in sorted(groups)]
 
 
 def _dist_info(site: Path | None, name: str, version: str) -> Path | None:
@@ -184,7 +184,7 @@ def _python_info(name: str, version: str, group: str, site: Path | None) -> dict
             rel = row.split(",", 1)[0]
             if rel.count("/") <= 1 and not rel.startswith(d.name) and LICENSE_FILE.match(rel.rsplit("/", 1)[-1]):
                 info["texts"].append((rel, read_text(d.parent / rel)))
-    info["license"] = lic or next((license_from_text(t) for _, t in info["texts"] if license_from_text(t)), "")
+    info["license"] = lic or texts_license(info["texts"])
     return info
 
 
@@ -232,7 +232,7 @@ def js_packages() -> list[dict]:
             lic = json.loads(read_text(d / "package.json") or "{}").get("license") or ""
         if isinstance(lic, dict):
             lic = lic.get("type", "")
-        lic = norm_license(str(lic)) or next((license_from_text(t) for _, t in texts if license_from_text(t)), "")
+        lic = norm_license(str(lic)) or texts_license(texts)
         key = (name, e.get("version", ""))
         if key in by_id:
             continue
@@ -259,7 +259,7 @@ def go_packages() -> list[dict]:
         esc = re.sub(r"[A-Z]", lambda m: "!" + m.group(0).lower(), name)
         d = cache / f"{esc}@{version}" if cache else None
         texts = [(f.name, read_text(f)) for f in license_files(d)] if d else []
-        lic = next((license_from_text(t) for _, t in texts if license_from_text(t)), "") or GO_KNOWN.get(name, "")
+        lic = texts_license(texts) or GO_KNOWN.get(name, "")
         out.append({"eco": "Go", "name": name, "version": version, "group": "compiled into Harness Link (desktop)", "license": lic,
                     "texts": texts, "url": f"https://pkg.go.dev/{name}@{version}?tab=licenses"})
     return out
@@ -287,9 +287,7 @@ COPYLEFT = re.compile(r"\b(A?GPL|LGPL)", re.I)
 
 
 def render(items: list[dict]) -> str:
-    counts: dict[str, int] = {}
-    for it in items:
-        counts[it["license"] or "UNKNOWN"] = counts.get(it["license"] or "UNKNOWN", 0) + 1
+    counts = Counter(it["license"] or "UNKNOWN" for it in items)
     lines = [
         "# Third-party notices",
         "",
@@ -319,9 +317,8 @@ def render(items: list[dict]) -> str:
         lines += ["", f"## {eco} ({len(group)})", "", "| Package | Version | License | Use |", "|---|---|---|---|"]
         for it in group:
             lines.append(f"| [{it['name']}]({it['url']}) | {it['version']} | {it['license'] or 'UNKNOWN'} | {it['group']} |")
-            if it["texts"]:
-                for fname, t in it["texts"]:
-                    texts.setdefault(t, []).append(f"{it['name']} {it['version']} ({fname})")
+            for fname, t in it["texts"]:
+                texts.setdefault(t, []).append(f"{it['name']} {it['version']} ({fname})")
     lines += ["", "## License texts", "",
               "Each text below applies to the packages listed above it (identical texts are shown once).", ""]
     for t, users in sorted(texts.items(), key=lambda kv: kv[1][0].lower()):
