@@ -131,8 +131,7 @@ def _probe() -> bool:
         cmd = ["systemd-run", "--wait", "--quiet", "--collect", "--description", "Harness Maxxing sandbox check",
                *spawn.hardening_properties(), "--", *cmd]
     try:
-        r = subprocess.run(cmd, capture_output=True, timeout=20)
-        return r.returncode == 0
+        return subprocess.run(cmd, capture_output=True, timeout=20).returncode == 0
     except (OSError, subprocess.SubprocessError):
         return False
 
@@ -449,7 +448,7 @@ def writable_dirs(path: str, a: dict) -> list[str]:
             if base not in q.parents:
                 log.warning("writable %s of agent %s leads outside its topic (%s): dropped", k, path, q)
                 continue
-            if q == agents_dir or agents_dir in q.parents or q in agents_dir.parents or q == t:
+            if _overlaps(q, agents_dir) or q == t:
                 continue
             if t in q.parents and q.relative_to(t).parts[0] in TOPIC_LOCKED:   # `notes -> memory.md`: still locked
                 continue
@@ -541,8 +540,7 @@ def settings(path: str, a: dict, approvals: bool = False, chat: bool = False) ->
             deny += topic_edit_denied(path)
         out["permissions"] = {"deny": deny, "allow": topic_read(path) + ([] if approvals else list(FREE_CLI))}
     if a.get("rules"):
-        cmd = hook_command(path)
-        out["hooks"] = {"PreToolUse": [{"matcher": "*", "hooks": [{"type": "command", "command": cmd}]}]}
+        out["hooks"] = {"PreToolUse": [{"matcher": "*", "hooks": [{"type": "command", "command": hook_command(path)}]}]}
     return out
 
 
@@ -582,8 +580,7 @@ def topic_read(path: str) -> list[str]:
     """`permissions.allow`: the files tools read the agent's topic without asking (its work is there; the deny rules
     of the secrets and private paths still win). Else a turn that is not in bypass is refused each file outside its
     own folder, and one started by outside text asks for every one of them."""
-    topic = (config.workspace() / path).parent.parent
-    return [f"Read(/{topic}/**)"]
+    return [f"Read(/{(config.workspace() / path).parent.parent}/**)"]
 
 
 def hook_command(path: str) -> str:
@@ -622,9 +619,7 @@ def check_rules(rules: list[dict], tool: str, tool_input: object) -> str | None:
     """The reason a tool call breaks one of the rules, else None."""
     text = json.dumps(tool_input, ensure_ascii=False).lower() if tool_input is not None else ""
     for r in rules:
-        if r.get("tool") not in ("*", tool):
-            continue
-        if str(r.get("match") or "").lower() in text:
+        if r.get("tool") in ("*", tool) and str(r.get("match") or "").lower() in text:
             return r.get("reason") or f"Refused by a rule of this agent: {r['tool']} with {r['match']!r}"
     return None
 
@@ -640,8 +635,7 @@ def hook(path: str) -> int:
         rules = agents.load(path)["rules"] if agents.exists(path) else []
     except Exception:                                   # never block a turn because the hook broke
         return 0
-    why = check_rules(rules, str(ev.get("tool_name") or ""), ev.get("tool_input"))
-    if why:
+    if why := check_rules(rules, str(ev.get("tool_name") or ""), ev.get("tool_input")):
         print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",
                                                  "permissionDecisionReason": why}}))
     return 0
@@ -651,14 +645,17 @@ def hook(path: str) -> int:
 UNIT_RE = re.compile(r"/maxxing-([0-9a-f]{8})(?:-\d+)?\.service(?:/|$)")
 
 
-def turn_meta() -> dict | None:
-    """The session of the turn this process belongs to (its systemd unit maxxing-<sid8>), else None."""
+def _unit() -> re.Match | None:
+    """This process's systemd unit maxxing-<sid8> (a turn's), else None."""
     try:
-        cg = Path("/proc/self/cgroup").read_text()
+        return UNIT_RE.search(Path("/proc/self/cgroup").read_text())
     except OSError:
         return None
-    m = UNIT_RE.search(cg)
-    if not m:
+
+
+def turn_meta() -> dict | None:
+    """The session of the turn this process belongs to (its systemd unit maxxing-<sid8>), else None."""
+    if not (m := _unit()):
         return None
     from .sessions import store
     for sid in store.list_ids():
@@ -723,7 +720,6 @@ def _manages(turn: dict, words: list[str], argv: list[str]) -> bool:
     if not (turn.get("manager") and len(words) > 2 and words[0] == "agents" and words[1] in AGENT_MANAGER):
         return False
     import argparse
-    import contextlib
     import io
     from . import cmd_agents
     p = argparse.ArgumentParser(prog="maxxing agents", add_help=False)
@@ -739,17 +735,22 @@ def _manages(turn: dict, words: list[str], argv: list[str]) -> bool:
 def in_the_sandbox() -> bool:
     """This `maxxing` runs inside an agent turn's sandbox: a command line with a pipe, `;`, `&&`... is sandboxed as a
     whole (only a plain `maxxing …` is excluded), and there the server state is hidden: what it writes would vanish."""
-    if not os.environ.get("MAXXING_AGENT"):
-        return False
-    try:
-        cg = Path("/proc/self/cgroup").read_text()
-    except OSError:
-        return False
-    return bool(UNIT_RE.search(cg)) and not (config.STATE / "config.json").exists()
+    return bool(os.environ.get("MAXXING_AGENT") and _unit()) and not (config.STATE / "config.json").exists()
 
 
 BROWSER_OWNER_ONLY = {"set", "profile", "forget", "setup", "settings", "enable", "disable"}
 DEVICES_OWNER_ONLY = {"add", "confirm", "remove", "rename", "access", "mode", "screen", "enable", "disable"}
+OWNER_SUBS = {      # command -> (sub-commands of the owner only in any agent turn, why)
+    "agents": (AGENT_OWNER_ONLY, "an agent never changes agents (its own triggers, settings or role included). Say "
+                                 "what should change in your answer; the owner applies it from the agent page or a "
+                                 "session."),
+    "browser": (BROWSER_OWNER_ONLY, "its browser settings belong to the owner. Say what should change in your answer "
+                                    "(the owner's conversation asks for its browser with `maxxing agents set <itself> "
+                                    "browser.enabled=true`: a request the owner allows)."),
+    "devices": (DEVICES_OWNER_ONLY, "the person's devices belong to the owner. Say what should change in your answer "
+                                    "(the owner's conversation asks for a device with `maxxing agents set <itself> "
+                                    "devices='[\"<id>\"]'`: a request the owner allows)."),
+}
 
 
 def check_cli(argv: list[str]) -> str | None:
@@ -767,19 +768,10 @@ def check_cli(argv: list[str]) -> str | None:
                 "environment the run was started with.")
     if _manages(turn, words, argv):
         return None
-    if turn["path"] and words[0] == "agents" and len(words) > 1 and words[1] in AGENT_OWNER_ONLY:
-        return (f"`maxxing agents {words[1]}` is not allowed in an agent turn: an agent never changes agents (its own "
-                "triggers, settings or role included). Say what should change in your answer; the owner applies it "
-                "from the agent page or a session.")
-    if turn["path"] and words[0] == "browser" and len(words) > 1 and words[1] in BROWSER_OWNER_ONLY:
-        return (f"`maxxing browser {words[1]}` is not allowed in an agent turn: its browser settings belong to the "
-                "owner. Say what should change in your answer (the owner's conversation asks for its browser "
-                "with `maxxing agents set <itself> browser.enabled=true`: a request the owner allows).")
-    if turn["path"] and words[0] == "devices" and len(words) > 1 and words[1] in DEVICES_OWNER_ONLY:
-        return (f"`maxxing devices {words[1]}` is not allowed in an agent turn: the person's devices belong to the "
-                "owner. Say what should change in your answer (the owner's conversation asks for a device with "
-                "`maxxing agents set <itself> devices='[\"<id>\"]'`: a request the owner allows).")
     cmd, sub = words[0], (words[1] if len(words) > 1 else "")
+    subs, why = OWNER_SUBS.get(cmd, ((), ""))
+    if turn["path"] and sub in subs:
+        return f"`maxxing {cmd} {sub}` is not allowed in an agent turn: {why}"
     if turn["path"] and not turn.get("manager") and sub in OWNER_ONLY.get(cmd, ()):
         return (f"`maxxing {cmd} {sub}` is not allowed in an agent run: it would start work with the owner's rights, "
                 "outside this agent's budget and guards. Hand it to another agent (`maxxing agents send`) or say "
@@ -788,7 +780,7 @@ def check_cli(argv: list[str]) -> str | None:
     if not path:
         return None
     allowed = CLI_ALLOWED.get(cmd, set())
-    if allowed is None or sub in (allowed or set()):
+    if allowed is None or sub in allowed:
         return None
     ok = ", ".join(f"maxxing {c} {'|'.join(sorted(s))}" if s else f"maxxing {c}" for c, s in CLI_ALLOWED.items())
     return (f"`maxxing {cmd}{' ' + sub if sub else ''}` is not allowed in a sandboxed agent turn. Allowed: {ok}. "

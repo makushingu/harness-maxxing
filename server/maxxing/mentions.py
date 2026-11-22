@@ -40,10 +40,8 @@ def candidates(exclude: str = "") -> list[dict]:
     rows += [{"kind": "session", "ref": s["id"], "label": s["title"], "hint": _topic(s["path"]), "state": s["state"]}
              for s in sess[:SESSIONS]]
     if agents.feature_on():
-        for a in agents.list_agents(counts=False):
-            if not a.get("broken"):
-                rows.append({"kind": "agent", "ref": a["path"], "label": a["display_name"], "hint": _topic(a["path"]),
-                             "avatar": a.get("avatar") or None})
+        rows += [{"kind": "agent", "ref": a["path"], "label": a["display_name"], "hint": _topic(a["path"]),
+                  "avatar": a.get("avatar") or None} for a in agents.list_agents(counts=False) if not a.get("broken")]
     if config.load_config().get("team_page"):
         from . import team
         for r in team.recipients():

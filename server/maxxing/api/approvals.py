@@ -30,10 +30,6 @@ class DecisionIn(BaseModel):
     always: bool = False          # allow + add the request's rule to its topic (approvals.always_rule)
 
 
-def _err(e: approvals.ApprovalError) -> HTTPException:
-    return HTTPException(e.status, detail={"error": e.code, "message": e.message})
-
-
 @router.get("")
 async def list_pending(session: Optional[str] = Query(default=None, max_length=64)) -> dict:
     return {"approvals": await asyncio.to_thread(approvals.pending, session or None)}
@@ -45,7 +41,7 @@ async def decide(rid: str, body: DecisionIn) -> dict:
         return await asyncio.to_thread(approvals.decide, rid, body.decision, body.message or "", "web",
                                        body.always)
     except approvals.ApprovalError as e:
-        raise _err(e) from None
+        raise HTTPException(e.status, detail={"error": e.code, "message": e.message}) from None
 
 
 # ---- watcher --------------------------------------------------------------------------------------
