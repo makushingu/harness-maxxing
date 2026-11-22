@@ -275,8 +275,6 @@ async def _loop() -> None:
     while True:
         try:
             await asyncio.to_thread(tick)
-        except asyncio.CancelledError:
-            raise
         except Exception:
             log.exception("Claude Code update pass failed")
         await asyncio.sleep(POLL_S)
@@ -290,9 +288,7 @@ def runs_here() -> bool:
     the same machine (a dev server, a test copy of the state: another MAXXING_STATE) never does, unless
     MAXXING_CLAUDE_UPDATE=1; MAXXING_CLAUDE_UPDATE=0 turns it off everywhere."""
     flag = os.environ.get("MAXXING_CLAUDE_UPDATE", "")
-    if flag in ("0", "1"):
-        return flag == "1"
-    return installed_server()
+    return flag == "1" if flag in ("0", "1") else installed_server()
 
 
 def installed_server() -> bool:

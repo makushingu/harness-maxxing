@@ -145,8 +145,7 @@ def refresh(now: float | None = None, force: bool = False) -> dict:
             return d
         old = latest()
         try:
-            ids = fetch_ids()
-            new = newest(ids)
+            new = newest(ids := fetch_ids())
             if not new:
                 raise RuntimeError("no Claude model listed")
         except RuntimeError as e:
@@ -173,8 +172,6 @@ async def _loop() -> None:
     while True:
         try:
             await asyncio.to_thread(refresh)
-        except asyncio.CancelledError:
-            raise
         except Exception:
             log.exception("Claude models check failed")
         await asyncio.sleep(RETRY_S)
@@ -186,9 +183,7 @@ def start() -> None:
     from . import claude_update
     flag = os.environ.get("MAXXING_CLAUDE_MODELS", "")
     here = flag == "1" if flag in ("0", "1") else claude_update.installed_server()
-    if not here:
-        return
-    if _task is None or _task.done():
+    if here and (_task is None or _task.done()):
         _task = asyncio.get_running_loop().create_task(_loop())
 
 

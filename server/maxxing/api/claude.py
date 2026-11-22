@@ -55,10 +55,6 @@ def claude_version() -> str | None:
     return v
 
 
-def auth_method() -> tuple[str | None, str]:
-    return claude_auth.auth_method()
-
-
 def auth_status() -> dict:
     """{ok, method, detail, checked_at, error} - see maxxing/claude_auth.py (real-call based)."""
     return claude_auth.status()
@@ -122,9 +118,8 @@ def check_now() -> dict | None:
     """One background verification if due (no real call in the last 6 h, none attempted here
     in the last 6 h); returns the test result or None when nothing was done."""
     global _last_attempt
-    if time.time() - _last_attempt < claude_auth.CHECK_EVERY_S or not claude_auth.needs_check():
-        return None
-    if not _resolved_bin():
+    if (time.time() - _last_attempt < claude_auth.CHECK_EVERY_S or not claude_auth.needs_check()
+            or not _resolved_bin()):
         return None
     _last_attempt = time.time()
     return run_test(source="check", timeout_s=CHECK_TIMEOUT_S)
@@ -245,22 +240,10 @@ async def settings(body: SettingsIn):
             raise HTTPException(400, detail={"error": "invalid",
                                              "message": "permission_mode: bypass, acceptEdits, default or ask"})
         changes["permission_mode"] = body.permission_mode
-    if body.auto_compact_tokens is not None:
-        changes["auto_compact_tokens"] = body.auto_compact_tokens
-    if body.idle_compact_tokens is not None:
-        changes["idle_compact_tokens"] = body.idle_compact_tokens
-    if body.idle_compact_after_s is not None:
-        changes["idle_compact_after_s"] = body.idle_compact_after_s
-    if body.smart_resume_tokens is not None:
-        changes["smart_resume_tokens"] = body.smart_resume_tokens
-    if body.protect_secrets is not None:
-        changes["protect_secrets"] = body.protect_secrets
-    if body.short_titles is not None:
-        changes["short_titles"] = body.short_titles
-    if body.short_titles_model is not None:
-        changes["short_titles_model"] = body.short_titles_model
-    if body.claude_auto_update is not None:
-        changes["claude_auto_update"] = body.claude_auto_update
+    for key in ("auto_compact_tokens", "idle_compact_tokens", "idle_compact_after_s", "smart_resume_tokens",
+                "protect_secrets", "short_titles", "short_titles_model", "claude_auto_update"):
+        if getattr(body, key) is not None:
+            changes[key] = getattr(body, key)
     if changes:
         config.update_config(**changes)
     return {"ok": True}

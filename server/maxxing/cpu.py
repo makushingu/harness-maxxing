@@ -188,10 +188,7 @@ def _usage_usec(p: Path) -> int | None:
 
 
 def level_of(slice_name: str) -> str:
-    for level, name in SLICES.items():
-        if slice_name == name:
-            return level
-    return "other"
+    return next((level for level, name in SLICES.items() if name == slice_name), "other")
 
 
 _SID8 = re.compile(r"^maxxing-([0-9a-f]{8})(?:-\d+)?\.service$")
