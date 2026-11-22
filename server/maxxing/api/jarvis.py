@@ -11,13 +11,15 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from .. import jarvis
+from .. import bus, jarvis
 from ..security import require_auth
 
 log = logging.getLogger("maxxing.jarvis")
 router = APIRouter(prefix="/api/jarvis", tags=["jarvis"], dependencies=[Depends(require_auth)])
 TICK_S = 30.0
+WATCH_S = 2.0                          # how often work.json is checked for changes made by another process
 _task: asyncio.Task | None = None
+_watch: asyncio.Task | None = None
 
 
 async def _call(fn, *a, **kw):
@@ -100,8 +102,28 @@ async def _loop() -> None:
             log.exception("jarvis loop")
 
 
+def _work_sig() -> tuple | None:
+    try:
+        st = jarvis._work_file().stat()
+    except OSError:
+        return None
+    return (st.st_mtime_ns, st.st_size)
+
+
+async def _watch_work(interval: float = WATCH_S) -> None:
+    """The board is also written by other processes (`maxxing sessions new|send`, `maxxing agents run` started from
+    its conversation), whose `bus.invalidate` reaches no browser: a change of work.json is announced from here."""
+    last = _work_sig()
+    while True:
+        await asyncio.sleep(interval)
+        cur = _work_sig()
+        if cur != last:
+            last = cur
+            bus.invalidate("jarvis")
+
+
 async def startup() -> None:
-    global _task
+    global _task, _watch
     from ..sessions import service
     service.on_turn_end(_turn_end)
     if jarvis.feature_on():             # a new version: its role and skills are brought up to date at once
@@ -110,12 +132,14 @@ async def startup() -> None:
         except Exception:  # noqa: BLE001
             log.exception("jarvis: folder update")
     _task = asyncio.get_running_loop().create_task(_loop())
+    _watch = asyncio.get_running_loop().create_task(_watch_work())
 
 
 async def shutdown() -> None:
-    global _task
-    if _task is not None:
-        _task.cancel()
-        with contextlib.suppress(asyncio.CancelledError, Exception):
-            await _task
-        _task = None
+    global _task, _watch
+    for t in (_task, _watch):
+        if t is not None:
+            t.cancel()
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await t
+    _task = _watch = None

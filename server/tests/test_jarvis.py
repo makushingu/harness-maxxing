@@ -301,3 +301,23 @@ def test_its_files_say_where_harness_s_help_is(client, mx):
     assert "{{" not in text and "maxxing --help" in text and "/docs/user/" in text
     skill = (mx["ws"] / jarvis.PATH / ".claude/skills/jarvis/SKILL.md").read_text()
     assert "## 4. Create projects, topics and agents" in skill and "{{" not in skill
+
+
+def test_work_board_written_by_another_process_is_announced(tmp_path, monkeypatch):
+    """`maxxing sessions new` from its conversation writes work.json in another process: the server announces it."""
+    import asyncio
+    from maxxing import bus, jarvis
+    from maxxing.api import jarvis as api_jarvis
+    f = tmp_path / "work.json"
+    monkeypatch.setattr(jarvis, "_work_file", lambda: f)
+    seen: list = []
+    monkeypatch.setattr(bus, "invalidate", lambda *t: seen.append(t))
+
+    async def run():
+        task = asyncio.create_task(api_jarvis._watch_work(0.02))
+        await asyncio.sleep(0.05)
+        f.write_text("[]")
+        await asyncio.sleep(0.1)
+        task.cancel()
+    asyncio.run(run())
+    assert ("jarvis",) in seen
