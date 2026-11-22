@@ -97,6 +97,14 @@ func copyExe(src, dst string) error {
 	return nil
 }
 
+// removeFile deletes p; a file already gone is not an error.
+func removeFile(p string) error {
+	if err := os.Remove(p); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	return nil
+}
+
 // removeLegacyAutostart deletes the login entry older versions registered (LaunchAgent, HKCU Run,
 // ~/.config/autostart) and, on Windows, the old HarnessLink.exe copy.
 func removeLegacyAutostart() error {
@@ -118,7 +126,7 @@ func removeInstalled() error {
 	if self, e := selfPath(); e == nil && samePath(self, target) && runtime.GOOS == "windows" {
 		return err // a running .exe cannot be deleted; RemoveAll of the dir reports it
 	}
-	if e := os.Remove(target); e != nil && !errors.Is(e, os.ErrNotExist) && err == nil {
+	if e := removeFile(target); e != nil && err == nil {
 		err = e
 	}
 	return err

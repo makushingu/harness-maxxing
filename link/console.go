@@ -83,9 +83,6 @@ func kindStyle(k lineKind) (symbol, color string) {
 	return "·", cGray
 }
 
-// say prints one neutral line with the local time in front.
-func (c *console) say(f string, a ...any) { c.emit(lInfo, fmt.Sprintf(f, a...)) }
-
 // emit prints one line of the given kind.
 func (c *console) emit(k lineKind, msg string) {
 	if c.file != nil {
@@ -121,19 +118,12 @@ func (c *console) emit(k lineKind, msg string) {
 
 func (c *console) line(ts string, k lineKind, msg string, n int) string {
 	sym, col := kindStyle(k)
+	tc := textColor(k, col)
+	lines := strings.Split(msg, "\n")
 	var b strings.Builder
-	for i, l := range strings.Split(msg, "\n") {
-		if i > 0 {
-			b.WriteString("\n             ")
-			b.WriteString(c.paint(textColor(k, col), l))
-			continue
-		}
-		b.WriteString("  ")
-		b.WriteString(c.paint(cDim, ts))
-		b.WriteString("  ")
-		b.WriteString(c.paint(col, sym))
-		b.WriteString(" ")
-		b.WriteString(c.paint(textColor(k, col), l))
+	b.WriteString("  " + c.paint(cDim, ts) + "  " + c.paint(col, sym) + " " + c.paint(tc, lines[0]))
+	for _, l := range lines[1:] {
+		b.WriteString("\n             " + c.paint(tc, l))
 	}
 	if n > 1 {
 		b.WriteString(c.paint(cDim, fmt.Sprintf("  ×%d", n)))

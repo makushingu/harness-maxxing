@@ -42,7 +42,6 @@ type x11Backend struct {
 	randrOK bool
 	want    int     // the screen chosen in Harness (-1: the primary one)
 	cur     display // the screen used, in root-window pixels
-	connErr string
 	info    backendInfo
 	infoAt  time.Time
 	scratch map[xproto.Keycode]xproto.Keysym // spare keycodes remapped to type characters missing from the layout
@@ -179,10 +178,10 @@ func (b *x11Backend) Capture() (image.Image, error) {
 		return nil, &opError{"no_display", err.Error()}
 	}
 	w, h := inf.Screen.W, inf.Screen.H
-	bpp := 0
+	bpp, pad := 0, 32 // pad: scanline pad of the format
 	for _, f := range b.setup.PixmapFormats {
 		if f.Depth == b.depth {
-			bpp = int(f.BitsPerPixel)
+			bpp, pad = int(f.BitsPerPixel), int(f.ScanlinePad)
 		}
 	}
 	if b.visual == nil || (bpp != 32 && bpp != 24 && bpp != 16) {
@@ -190,12 +189,6 @@ func (b *x11Backend) Capture() (image.Image, error) {
 	}
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
 	bypp := bpp / 8
-	pad := 32 // scanline pad of the format
-	for _, f := range b.setup.PixmapFormats {
-		if f.Depth == b.depth {
-			pad = int(f.ScanlinePad)
-		}
-	}
 	stride := ((w*bpp + pad - 1) / pad) * pad / 8
 	band := max(1, (4<<20)/max(stride, 1))
 	msb := b.setup.ImageByteOrder == xproto.ImageOrderMSBFirst
@@ -311,23 +304,16 @@ func (b *x11Backend) Scroll(dx, dy int) error {
 		}
 		return nil
 	}
-	var err error
-	switch {
-	case dy > 0:
-		err = click(5, dy)
-	case dy < 0:
-		err = click(4, -dy)
+	axis := func(n int, neg, pos byte) error {
+		if n < 0 {
+			return click(neg, -n)
+		}
+		return click(pos, n)
 	}
-	if err != nil {
+	if err := axis(dy, 4, 5); err != nil { // buttons 4/5 = up/down, 6/7 = left/right
 		return err
 	}
-	switch {
-	case dx > 0:
-		err = click(7, dx)
-	case dx < 0:
-		err = click(6, -dx)
-	}
-	return err
+	return axis(dx, 6, 7)
 }
 
 // ---- keyboard ----

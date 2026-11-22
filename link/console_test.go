@@ -34,8 +34,8 @@ func TestConsoleSay(t *testing.T) {
 	var out bytes.Buffer
 	var file []string
 	c := newConsole(&out, func(f string, a ...any) { file = append(file, f) })
-	c.say("Connected to %s", "https://ui.example.com")
-	c.say("one\ntwo")
+	c.emit(lInfo, "Connected to https://ui.example.com")
+	c.emit(lInfo, "one\ntwo")
 	lines := strings.Split(strings.TrimRight(out.String(), "\n"), "\n")
 	if len(lines) != 3 || !strings.HasSuffix(lines[0], "  Connected to https://ui.example.com") ||
 		len(lines[0]) < 10 || lines[0][2] != ':' || !strings.HasPrefix(lines[2], "          two") {
