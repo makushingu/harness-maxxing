@@ -7,6 +7,12 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- `deps.drop_other_libc(node_modules)`, called by `_up_remotion` after `npm ci`: npm 10 does not store `libc` in
+  package-lock.json, so `npm ci` installed both `@rspack/binding-linux-x64-{gnu,musl}` and
+  `@remotion/compositor-linux-x64-{gnu,musl}`. On a glibc host (`platform.libc_ver()`) the top-level and scoped
+  packages whose `package.json` `libc` excludes glibc are removed (musl or unknown host: nothing removed).
+  -88 MB on <state>/tools/remotion (413 -> 325 MB); a render checked after the removal. Applied at the next
+  Remotion install or update (a pin or lock change), not to an existing install.
 - `FeedSettings` source row: the name column is `flex-1 basis-40` (was `flex-1`, basis 0): the `flex-wrap` row now
   wraps the `w-44` rule select under the name below ~22 rem instead of truncating the name; guarded by
   `test_web_mobile.py::test_a_notification_source_keeps_its_name_readable_on_a_phone`.

@@ -40,6 +40,8 @@ Changed:
 - **Scrolling up a long session no longer freezes the page.** Show earlier (and the automatic loading when you reach
   the top) now adds the older messages a few at a time instead of all at once: the page stays responsive, mostly
   felt on a phone.
+- **The video tools take about 90 MB less disk.** Remotion was installed with a second copy of its native parts,
+  built for another kind of Linux and never used on yours: it is now left out (≈ 413 MB -> 325 MB).
 
 ## 2.0.0-alpha.163 - 2026-11-22
 
