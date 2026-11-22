@@ -397,3 +397,14 @@ def test_the_open_url_link_of_the_infra_type_view_is_big_enough_to_tap():
     src = (WEB / "features" / "infra" / "TypeView.tsx").read_text()
     link = re.search(r'target="_blank".{0,200}?className="([^"]*)"', src, re.S)
     assert link and "pointer-coarse:size-10" in link[1].split()
+
+
+def test_a_notification_source_keeps_its_name_readable_on_a_phone():
+    # at 360 px the 11 rem rule select left ~35 px to the name ("Cr…", "Sig…"): the name column needs a basis so
+    # the row wraps the select under it instead of cutting the name
+    src = (WEB / "features" / "feed" / "FeedSettings.tsx").read_text()
+    start = src.index('data-testid="feed-source"')
+    row = src[start:src.index("\nfunction ", start)]  # SourceRow only
+    col = re.search(r'<div className="([^"]*)">', row)
+    assert col and {"flex-1", "basis-40"} <= set(col[1].split())
+    assert 'className="w-44"' in row  # wider than what is left next to a 10 rem name column on a phone
