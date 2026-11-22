@@ -24,6 +24,8 @@ Added:
   opens in the viewer with a click, before you send it.
 
 Fixed:
+- **On a phone, Settings -> Notifications shows the name of each source.** The rule menu took the room and the
+  names were cut to two letters ("Cr…", "Sig…"): it now goes under the name when the screen is narrow.
 - **The "Harness has finished" notification now works on Android Chrome** when the app is open in the background (it
   was silently dropped: only the banner inside the app showed).
 
