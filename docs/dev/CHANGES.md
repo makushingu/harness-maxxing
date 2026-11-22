@@ -10,6 +10,9 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 - `FeedSettings` source row: the name column is `flex-1 basis-40` (was `flex-1`, basis 0): the `flex-wrap` row now
   wraps the `w-44` rule select under the name below ~22 rem instead of truncating the name; guarded by
   `test_web_mobile.py::test_a_notification_source_keeps_its_name_readable_on_a_phone`.
+- Settings -> Memory, memory files table: the path cell adds `max-md:whitespace-normal max-md:[overflow-wrap:anywhere]`
+  to `truncate` (the `title` is unreachable on touch); guarded by
+  `test_web_mobile.py::test_the_memory_files_list_shows_whole_paths_on_a_phone`.
 - Mail attachments in the file viewer: `POST /api/mail/{id}/attachments/view` (`imap.attachments_of`, one fetch)
   copies them to `<workspace>/mail/attachments/<id>/<folder hash>-<uid>/<index>/<name>` (rewritten at each view, dirs
   older than a day pruned; `409 outside` when the workspace is not under the files root: `MessageView` then opens /

@@ -26,6 +26,8 @@ Added:
 Fixed:
 - **On a phone, Settings -> Notifications shows the name of each source.** The rule menu took the room and the
   names were cut to two letters ("Cr…", "Sig…"): it now goes under the name when the screen is narrow.
+- **On a phone, Settings -> Memory lists whole file paths.** Cut to one line, every row read
+  "projects/…/topi…" and you could not tell which memory file was too long: the path now wraps on a narrow screen.
 - **The "Harness has finished" notification now works on Android Chrome** when the app is open in the background (it
   was silently dropped: only the banner inside the app showed).
 

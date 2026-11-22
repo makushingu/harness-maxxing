@@ -408,3 +408,11 @@ def test_a_notification_source_keeps_its_name_readable_on_a_phone():
     col = re.search(r'<div className="([^"]*)">', row)
     assert col and {"flex-1", "basis-40"} <= set(col[1].split())
     assert 'className="w-44"' in row  # wider than what is left next to a 10 rem name column on a phone
+
+
+def test_the_memory_files_list_shows_whole_paths_on_a_phone():
+    # every path starts with projects/<name>/topics/: cut to one line at 360 px, all the rows read the same and the
+    # title holding the full path is not reachable on a touch screen
+    src = (WEB / "pages" / "settings" / "sections" / "Memory.tsx").read_text()
+    cell = re.search(r'<td className="([^"]*)" title=\{mask\(f\.path', src)
+    assert cell and {"max-md:whitespace-normal", "max-md:[overflow-wrap:anywhere]"} <= set(cell[1].split())
