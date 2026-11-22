@@ -20,11 +20,7 @@ router = APIRouter(prefix="/api/team", tags=["team"], dependencies=[Depends(requ
 async def _call(fn: Callable[..., Any], *args: Any, **kw: Any) -> Any:
     try:
         return await asyncio.to_thread(fn, *args, **kw)
-    except team.TeamError as e:
-        raise HTTPException(e.status, detail={"error": e.code, "message": e.message}) from None
-    except SessionError as e:
-        raise HTTPException(e.status, detail={"error": e.code, "message": e.message}) from None
-    except teampeer.PeerError as e:
+    except (team.TeamError, SessionError, teampeer.PeerError) as e:
         raise HTTPException(e.status, detail={"error": e.code, "message": e.message}) from None
 
 

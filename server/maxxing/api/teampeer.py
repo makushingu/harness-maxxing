@@ -2,10 +2,9 @@
 with the link key of a contact (or of a group). Nothing answers while Team is off."""
 from __future__ import annotations
 
-import logging
-
 import asyncio
 import json
+import logging
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
@@ -31,9 +30,7 @@ def _ip(request: Request) -> str:
 async def _call(fn, *args):
     try:
         return await asyncio.to_thread(fn, *args)
-    except teampeer.PeerError as e:
-        raise HTTPException(e.status, detail={"error": e.code, "message": e.message}) from None
-    except team.TeamError as e:
+    except (teampeer.PeerError, team.TeamError) as e:
         raise HTTPException(e.status, detail={"error": e.code, "message": e.message}) from None
 
 
