@@ -1,4 +1,8 @@
+<<<<<<<< HEAD:web/dist/assets/secret-input-BURXOLgN.js
 import{r as e}from"./rolldown-runtime-XKyaHtl9.js";import{i as t,t as n}from"./vendor-react-BNCMh3YF.js";import{An as r,Hr as i,Vr as a}from"./index-CJGvMobq.js";import{n as o}from"./utils-BtPbbl_M.js";import{s}from"./i18n-DLAt6JWC.js";import{t as c}from"./textarea-B2f6qPL4.js";var l=e(t(),1),u=n();function d({className:e,autoComplete:t=`off`,onValueChange:n,...d}){let f=s(),[p,m]=l.useState(!1),h=!!n&&typeof d.value==`string`&&d.value.includes(`
+========
+import{r as e}from"./rolldown-runtime-XKyaHtl9.js";import{i as t,t as n}from"./vendor-react-BNCMh3YF.js";import{An as r,Hr as i,Vr as a}from"./index-DkgI2dwu.js";import{n as o}from"./utils-BtPbbl_M.js";import{s}from"./i18n-Vufdfye1.js";import{t as c}from"./textarea-CzF5TU6A.js";var l=e(t(),1),u=n();function d({className:e,autoComplete:t=`off`,onValueChange:n,...d}){let f=s(),[p,m]=l.useState(!1),h=!!n&&typeof d.value==`string`&&d.value.includes(`
+>>>>>>>> origin/beta:web/dist/assets/secret-input-rAaonZE3.js
 `),g=l.useRef(null),_=l.useRef(null),v=l.useRef(!1);l.useLayoutEffect(()=>{if(!v.current)return;v.current=!1;let e=h?g.current:_.current;e?.focus(),e&&(e.selectionStart=e.selectionEnd=e.value.length)},[h]);let y=e=>{let t=e.clipboardData.getData(`text`).replace(/\r\n?/g,`
 `);if(!n||!t.includes(`
 `))return;e.preventDefault();let r=e.currentTarget;v.current=!0,n(r.value.slice(0,r.selectionStart??r.value.length)+t+r.value.slice(r.selectionEnd??r.value.length))};return(0,u.jsxs)(`div`,{className:o(`relative`,e),children:[h?(0,u.jsx)(c,{ref:g,value:d.value,onChange:e=>{e.target.value.includes(`

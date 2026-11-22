@@ -186,12 +186,19 @@ def test_layout_and_extensions(client, org, fakes):
     assert "counter" not in _by_id(client)
 
 
-def test_day_timeline(client, org, fakes):
+def test_day_timeline(client, org, fakes, monkeypatch):
+    import datetime as dt
     from maxxing import widgets
     hourly = crons.create_job({"name": "Hourly", "command": "true", "schedule": "0 * * * *"})
     crons.create_job({"name": "Every minute", "command": "true", "schedule": "* * * * *"})
     crons.create_job({"name": "Off", "command": "true", "schedule": "0 3 * * *", "enabled": False})
     crons.run_job(hourly["id"])
+    # read the day at 00:05 of today: after ~21:36 fewer than MAX_PLANNED minutes are left and the
+    # "Every minute" lane is no longer dense, so the test failed every evening
+    zone = widgets._zone()
+    today = dt.datetime.now(zone).date()
+    early = dt.datetime(today.year, today.month, today.day, 0, 5, tzinfo=zone).timestamp()
+    monkeypatch.setattr(widgets, "time", types.SimpleNamespace(time=lambda: early))
     card = widgets.day()
     stats = {s["label"]: s["value"] for s in card["blocks"][0]["items"]}
     assert stats["Runs today"] == 1 and stats["Failed today"] == 0
@@ -394,3 +401,18 @@ def test_a_lone_surrogate_widget_id_is_dropped_from_the_layout(client, org, fake
     assert r.status_code == 200, r.text
     assert client.get("/api/dashboard").status_code == 200
     assert config.load_config()["dashboard"] == {"order": ["x"], "hidden": []}
+
+
+def test_usage_times_in_the_workspace_time_zone(client, org, monkeypatch):
+    # the server clock is often UTC: reset and retry times are shown on the workspace clock (Settings timezone)
+    import datetime as dt
+    from zoneinfo import ZoneInfo
+    from maxxing import widgets
+    config.update_config(timezone="Asia/Kathmandu")                  # UTC+5:45: no server runs on it
+    at = time.time() + 600
+    local = dt.datetime.fromtimestamp(at, ZoneInfo("Asia/Kathmandu"))
+    assert widgets._clock(at) == local.strftime("%H:%M")
+    today = dt.datetime.now(ZoneInfo("Asia/Kathmandu")).date()
+    assert widgets._reset(at) == local.strftime("%H:%M" if local.date() == today else "%d/%m %H:%M")
+    later = at + 3 * 86400
+    assert widgets._reset(later) == dt.datetime.fromtimestamp(later, ZoneInfo("Asia/Kathmandu")).strftime("%d/%m %H:%M")

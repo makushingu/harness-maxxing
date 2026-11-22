@@ -13,6 +13,26 @@ New:
   night pass tidies its memory so it always knows where everything is. Full rights, "Ask me first" and its own compaction threshold
   are in its settings. [Show me](#show:jarvis)
 
+Added:
+- **Notifications on your phone, even with the app closed.** Settings -> Notifications -> *Mobile notifications*:
+  turn on *Notify on this device* and every finished turn of yours rings there ("Harness has finished", the session and
+  the start of the answer); a tap opens the session. No Telegram needed, nothing of the conversation goes through
+  Google or Apple, and it adds no dependency.
+
+Fixed:
+- **The "Harness has finished" notification now works on Android Chrome** when the app is open in the background (it
+  was silently dropped: only the banner inside the app showed).
+
+Fixed:
+- **Usage reset times are on your clock.** The Claude usage card of the dashboard showed when the 5-hour and
+  7-day windows reset (and the next reading) in the server's time, often UTC, instead of the time zone set in
+  Settings.
+
+Changed:
+- **Scrolling up a long session no longer freezes the page.** Show earlier (and the automatic loading when you reach
+  the top) now adds the older messages a few at a time instead of all at once: the page stays responsive, mostly
+  felt on a phone.
+
 ## 2.0.0-alpha.161 - 2026-11-21
 
 Changed:

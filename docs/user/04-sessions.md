@@ -417,6 +417,12 @@ The **…** of a session (or a right-click on its header, a long press on a phon
   it works in this browser. Unread answers show a green round counter in the sidebar, on the ☰ button and
   the tree, red when one of those sessions ended in error; it can pulse until you read them (*Pulsing badge*).
   Settings -> Features -> **Badges** -> Sessions hides the counter of the sidebar and of the ☰ button.
+- **On your phone, even with the app closed**: Settings -> **Notifications** -> **Mobile notifications** -> turn on
+  *Notify on this device* (the browser asks for permission once). Every turn of yours that ends then rings on that
+  device - "Harness has finished", the session title and the start of the answer - and a tap opens the session; the one
+  you are looking at stays quiet. **Send a test** checks it; the list below shows the registered devices and removes
+  them. It needs the app served over HTTPS (as for installing it); on iPhone and iPad add it to the Home Screen first.
+  Nothing goes through Google or Apple but an empty "wake up" - the text comes from your own server.
   Click a counter - running or finished, in the sidebar or on a project / topic of the tree -
   and the session tree shows only those sessions, unfolded (the matching counter above the list lights up; a click on a
   project or topic still folds it, until the filter changes). **Open all** opens them next to the columns already

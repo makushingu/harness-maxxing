@@ -25,7 +25,8 @@ import { toolLabel } from './toolLabel'
 const PAGE = 120
 /** A freshly opened thread first renders only its last rows (they fill the screen), then grows to PAGE rows by
  *  STEP-row slices above them, out of sight (same anchoring as "show earlier"): the thread shows up sooner and the
- *  final page is the same. */
+ *  final page is the same. "Show earlier" (a PAGE of loaded rows, or a page fetched from the server) grows the same
+ *  way: never a hundred rows or more in one render. */
 const FIRST = 30
 const STEP = 30
 const PIN_PX = 48
@@ -96,14 +97,25 @@ export const Thread = React.forwardRef<ThreadHandle, {
   if (headKey !== lastHead.current) {
     if (lastHead.current !== undefined && headKey !== undefined && ready && prevHeight.current == null && scroller.current)
       prevHeight.current = scroller.current.scrollHeight
+    // A page fetched from the server: its rows are revealed by STEP-row slices too (one long render otherwise).
+    const added = ready && start !== null && lastHead.current !== undefined ? items.findIndex((it) => it.key === lastHead.current) : -1
     lastHead.current = headKey
+    // growTo holds indices from before the server page was prepended (they are now `added` rows lower):
+    // min(..., start) falls back to `start`, so the whole added page is revealed by slices, never less.
+    if (start !== null && added > STEP) {
+      growTo.current = Math.min(growTo.current ?? start, start)
+      setStart(start + added - STEP)
+    }
   }
   const loadEarlier = React.useCallback(() => {
     const el = scroller.current
     if (!el) return
     if (from > 0) {
+      // The first STEP rows now, the rest of the page at idle moments (the progressive render below).
+      const target = Math.min(growTo.current ?? from, Math.max(0, from - PAGE))
+      growTo.current = target
       prevHeight.current = el.scrollHeight
-      setStart(Math.max(0, from - PAGE))
+      setStart(Math.max(target, from - STEP))
     } else if (moreOnServer && !log.loadingEarlier) onLoadEarlier!()
   }, [from, moreOnServer, log.loadingEarlier, onLoadEarlier])
   React.useLayoutEffect(() => {

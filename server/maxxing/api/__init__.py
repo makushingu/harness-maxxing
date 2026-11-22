@@ -48,4 +48,5 @@ ROUTERS = [
     "browser",
     "devices",
     "jarvis",
+    "push",
 ]

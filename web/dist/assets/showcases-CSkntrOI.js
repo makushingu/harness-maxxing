@@ -1,4 +1,8 @@
+<<<<<<<< HEAD:web/dist/assets/showcases-CSkntrOI.js
 import{i as e}from"./diagram-uEDK5YaC.js";import{n as t}from"./steps-DAp3Xkrs.js";import{y as n}from"./index-CJGvMobq.js";var r=`flowchart LR
+========
+import{i as e}from"./diagram-COfzqGqJ.js";import{n as t}from"./steps-DHfX-O1i.js";import{y as n}from"./index-DkgI2dwu.js";var r=`flowchart LR
+>>>>>>>> origin/beta:web/dist/assets/showcases-yCMFuYKc.js
   A[Question] --> B{Claude}
   B -->|reads| C[Files]
   B -->|runs| D[Tools]
