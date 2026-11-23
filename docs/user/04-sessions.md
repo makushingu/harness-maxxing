@@ -49,10 +49,10 @@ stopped.
   the room to the tabs. Switch to **Zones**: the same sessions are side by side, and your columns are exactly as
   you left them. On a phone, the **Tabs** button (window icon) in the session's header turns the tabs on or off;
   they show under the top bar, and a sideways swipe on the session shows the previous or next one.
-- **The same sessions on every device**: the sessions open on your computer are the tabs of your phone (Tabs
-  on, as it is on a new phone), and the other way round. Open one on either, it appears on the other; close it anywhere, it closes
-  everywhere. Each device keeps its own layout (Tabs or Zones, widths, stacks, the session in front), and a new
-  session not sent yet stays on the device where you type it. The first time, the phone takes the sessions of the
+- **The same sessions on every device**: the sessions open on your computer are the ones of your phone, and the
+  other way round, in Tabs and in Zones. Open one on either, it appears on the other; close it anywhere, it closes
+  everywhere. The mode (Tabs or Zones) and the session in front follow the last device you used; each device keeps
+  its own widths and stacks, and a new session not sent yet stays on the device where you type it. The first time, the phone takes the sessions of the
   computer and keeps only the one on its screen.
 - **Fold the sidebar** with the button at its top, next to the logo (`Ctrl+\`): only its icons stay. A new browser
   starts with it unfolded.

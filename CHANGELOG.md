@@ -41,6 +41,16 @@ Fixed:
   conversations as a session; it now has a single **@Jarvis** line at the top, with its own icon, which always writes
   into its conversation of the moment.
 
+## 2.0.0-alpha.166 - 2026-11-23
+
+Fixed:
+- **The open sessions follow from the computer to the phone in Zones mode too.** Since the phone takes the mode of the
+  computer, a computer in Zones stopped sharing its sessions with the phone: they now follow in both modes, in both
+  directions.
+- **A session opened from a link stays in front.** On the phone, the computer no longer brings back its own session
+  in front; on the computer, reloading the page or opening a link no longer jumps back to the session that was in
+  front before (or to the last column to load).
+
 ## 2.0.0-alpha.165 - 2026-11-23
 
 New:
