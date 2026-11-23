@@ -342,6 +342,8 @@ export const fr: Record<keyof typeof en, string> = {
   'sessions.composer.send': 'Envoyer (Entrée)',
   'sessions.composer.queue': 'Mettre en file après le tour en cours',
   'sessions.composer.uploading': 'Envoi des pièces jointes…',
+  'sessions.composer.sendWhenUploaded': 'Envoi des pièces jointes… le message part juste après',
+  'sessions.composer.cancelSendWhenUploaded': 'Ne plus envoyer automatiquement',
   'sessions.composer.loading': 'Chargement de la session…',
   'sessions.composer.noAuth': 'Claude n’est pas connecté — voir Réglages › Claude',
   'sessions.composer.authExpired': 'La connexion à Claude a expiré — reconnectez-vous dans Réglages › Claude',

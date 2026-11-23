@@ -114,6 +114,7 @@ export const Composer = React.forwardRef<ComposerHandle, {
       saveAtts(prevKey.current, [])
       outboxMove(prevKey.current, draftKey)
       moveUploads(prevKey.current, draftKey)
+      if (armedDrafts.delete(prevKey.current)) armedDrafts.add(draftKey)
       prevKey.current = draftKey
     }
   }, [draftKey])
@@ -325,7 +326,15 @@ export const Composer = React.forwardRef<ComposerHandle, {
   const ready = atts.filter((a) => a.path)
   const empty = !text.trim() && ready.length === 0 && quotes.length === 0
   const blocked = disabledReason || uploading || !!failedUpload
-  const reason = disabledReason || (uploading ? t('sessions.composer.uploading') : failedUpload ? t('sessions.uploadFailed', { name: failedUpload.name }) : null)
+  // Send pressed while files are still uploading: the message leaves by itself once they are all up (kept while
+  // the composer is away, e.g. another session opened in between: see armedDrafts).
+  const [armed, setArmedState] = React.useState(() => armedDrafts.has(draftKey))
+  const setArmed = (on: boolean) => {
+    if (on) armedDrafts.add(draftKey)
+    else armedDrafts.delete(draftKey)
+    setArmedState(on)
+  }
+  const reason = disabledReason || (uploading ? t(armed ? 'sessions.composer.sendWhenUploaded' : 'sessions.composer.uploading') : failedUpload ? t('sessions.uploadFailed', { name: failedUpload.name }) : null)
 
   // Sends are chained (never dropped, never reordered) — typing the next message while the previous
   // one is still in flight is fine.
@@ -339,6 +348,10 @@ export const Composer = React.forwardRef<ComposerHandle, {
         setText('')
         act.cmd.run!(act.arg)
       }
+      return
+    }
+    if (uploading && !voiceText && !disabledReason && !failedUpload) {
+      setArmed(!armed) // pressed again: not sent automatically any more
       return
     }
     const typed = text.trim()
@@ -392,6 +405,13 @@ export const Composer = React.forwardRef<ComposerHandle, {
     })
     ta.current?.focus({ preventScroll: true })
   }
+
+  // The last file is up: the message pressed "send" earlier leaves now (not if a file failed: it says why).
+  React.useEffect(() => {
+    if (!armed || uploading) return
+    setArmed(false)
+    if (!failedUpload && !disabledReason) send()
+  }, [armed, uploading]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Voice message sent directly: queued like the other sends (order kept); refused = the recording comes back attached.
   const onVoiceMessage = (file: File) => {
@@ -760,13 +780,16 @@ export const Composer = React.forwardRef<ComposerHandle, {
       toolbar={toolbar}
       actions={running && onStop ? <StopButton onClick={onStop} busy={stopping} label={t('sessions.stop')} /> : null}
       voice={<VoiceButton draftKey={draftKey} onTranscript={onVoice} onVoiceMessage={props.onSendVoice ? onVoiceMessage : undefined} />}
-      send={{ onClick: () => send(), disabled: !!blocked || empty, busy: sending, label: running ? t('sessions.composer.queue') : t('sessions.composer.send') }}
+      send={{ onClick: () => send(), disabled: !!disabledReason || !!failedUpload || (empty && !uploading), busy: sending || armed, label: armed ? t('sessions.composer.cancelSendWhenUploaded') : running ? t('sessions.composer.queue') : t('sessions.composer.send') }}
       reason={reason}
       dimmed={!!disabledReason}
       boxProps={{ 'data-tour': 'composer', 'data-kbd-box': '' }}
     />
   )
 })
+
+/** Drafts whose message leaves as soon as their files are uploaded (module level: survives the composer unmounting). */
+const armedDrafts = new Set<string>()
 
 /** Focus with the cursor after the text (a draft pre-filled by a link ends where the user goes on typing). */
 function focusAtEnd(el: HTMLTextAreaElement | null) {

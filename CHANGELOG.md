@@ -20,6 +20,8 @@ New:
   answer, Team messages, sound, badge, mobile notifications), **Feed** (the notifications feed: its sources, what goes
   to Telegram, server problems) and **Telegram**. **Automate** keeps Crons, Webhooks and Events; **Voice** moves to
   General. Old links to Settings -> Notifications open Alerts.
+- **Send before the files are up.** Press send while attachments are still uploading: the message goes by itself as
+  soon as the last file is up (press again to cancel; a failed file stops it and says why).
 
 Fixed:
 - **`@Jarvis` in a message reaches Jarvis, once.** The `@` menu of a session showed each of Jarvis's daily

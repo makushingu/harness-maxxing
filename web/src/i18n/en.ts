@@ -344,6 +344,8 @@ export const en = {
   'sessions.composer.send': 'Send (Enter)',
   'sessions.composer.queue': 'Queue after the current turn',
   'sessions.composer.uploading': 'Uploading attachments…',
+  'sessions.composer.sendWhenUploaded': 'Uploading attachments… the message goes right after',
+  'sessions.composer.cancelSendWhenUploaded': 'Do not send automatically',
   'sessions.composer.loading': 'Loading the session…',
   'sessions.composer.noAuth': 'Claude is not connected — see Settings › Claude',
   'sessions.composer.authExpired': 'Claude sign-in expired — sign in again in Settings › Claude',
