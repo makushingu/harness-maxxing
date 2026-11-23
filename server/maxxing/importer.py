@@ -202,6 +202,11 @@ def _entries(zf: zipfile.ZipFile) -> tuple[list[tuple[zipfile.ZipInfo, PurePosix
         k += 1
     if k:
         ok = [(i, PurePosixPath(*p.parts[k:])) for i, p in ok]
+    from . import backup
+    for s in skipped:
+        # a skipped file is listed in the report and the API answer: its name must not carry a secret
+        if any(rx.search(s["file"].encode("utf-8", "replace")) for _, rx in backup.LEAKS):
+            s["file"] = "(name hidden: it holds a secret)"
     return ok, skipped
 
 
@@ -434,7 +439,7 @@ def _defang_imports(text: str) -> str:
 
 def _strip_skill_hooks(text: str) -> str:
     """Remove the `hooks:` field of the front matter of a SKILL.md: a hook runs a command by itself."""
-    lines = text.split("\n")
+    lines = text.removeprefix("\ufeff").split("\n")
     if not lines or lines[0].strip() != "---":
         return text
     try:
@@ -443,7 +448,7 @@ def _strip_skill_hooks(text: str) -> str:
         return text
     out, skipping = [lines[0]], False
     for ln in lines[1:end]:
-        if re.match(r"hooks\s*:", ln):
+        if re.match(r"""\s*["']?hooks["']?\s*:""", ln):
             skipping = True
             continue
         if skipping and (not ln.strip() or ln[:1] in (" ", "\t", "-")):

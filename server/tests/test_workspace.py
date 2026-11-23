@@ -67,6 +67,16 @@ def test_rename_remaps_sessions_and_telegram(client, topic, mx):
     assert wait_idle(client, s["id"])["state"] == "idle"
 
 
+def test_a_topic_rename_reads_the_session_store_twice_not_three_times(client, topic, monkeypatch):
+    from maxxing.sessions import service
+    calls = []
+    real = service.list_sessions
+    monkeypatch.setattr(service, "list_sessions", lambda *a, **k: calls.append(1) or real(*a, **k))
+    r = client.patch("/api/workspace/projects/acme/topics/blog", json={"name": "news"})
+    assert r.status_code == 200, r.text
+    assert len(calls) == 2                      # one to check and move, one for the counters of the answer
+
+
 def test_rename_keeps_the_scheduled_jobs_of_the_topic(client, topic, mx):
     from maxxing import crons
     j = crons.create_job({"name": "Digest", "kind": "claude", "topic_path": topic, "prompt": "hi"})

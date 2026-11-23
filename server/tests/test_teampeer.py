@@ -446,6 +446,17 @@ def test_a_remote_date_before_1970_is_clamped(client, monkeypatch):
     assert team.messages(dm)["messages"][0]["at"] == 0
 
 
+def test_a_remote_conversation_keeps_only_its_newest_messages(client, monkeypatch):
+    key = _setup(monkeypatch)
+    monkeypatch.setattr(team, "MAX_CHAT_MESSAGES", 3)
+    dm = team.dm_id("http://127.0.0.1:8801", LEA)
+    for i in range(5):
+        ev = _msg(dm, mid=f"m_0000000{i}")
+        ev["message"]["at"] = time.time() - 10 + i
+        assert _post(client, key, ev).status_code == 200
+    assert [m["id"] for m in team.messages(dm)["messages"]] == ["m_00000002", "m_00000003", "m_00000004"]
+
+
 def test_normalize_keeps_the_brackets_of_an_ipv6_literal():
     assert teampeer.normalize("https://[2001:DB8::1]:8443/x") == "https://[2001:db8::1]:8443"
     assert teampeer.normalize("http://[::1]") == "http://[::1]"

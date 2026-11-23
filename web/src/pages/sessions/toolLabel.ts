@@ -28,7 +28,7 @@ const one = (s: string, max = 160) => {
 
 /** Commands that delete or rewrite for good, whatever the sentence in front says. */
 const DANGER =
-  /(^|[;&|(]\s*|\s)(rm\s+-[a-z]*[rf]|rm\s|rmdir\s|shred\s|mkfs|dd\s+if=|truncate\s)|git\s+(reset\s+--hard|clean\s+-[a-z]*f|push\s+[^|;&]*(--force|-f\b)|branch\s+-D|checkout\s+--\s|restore\s)|\b(drop|truncate)\s+(table|database|schema)\b|\bdelete\s+from\b|>\s*\/dev\/sd/i
+  /(^|[;&|(]\s*|\s)(rm\s+-[a-z]*[rf]|rm\s|rmdir\s|shred\s|mkfs|dd\s+if=|truncate\s)|git\s+(reset\s+--hard|clean\s+-[a-z]*f|push\s+[^|;&]{0,200}(--force|-f\b)|branch\s+-D|checkout\s+--\s|restore\s)|\b(drop|truncate)\s+(table|database|schema)\b|\bdelete\s+from\b|>\s*\/dev\/sd/i
 
 function isDangerous(command: string): boolean {
   return DANGER.test(command)

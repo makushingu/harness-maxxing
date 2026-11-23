@@ -412,6 +412,10 @@ def _file_stat(fp: str, base: str) -> os.stat_result | None:
             real = os.path.realpath(fp)
             if not _within(real, root):
                 return None
+            # a link named notes.md must not bring in a file the walk would not index under its own name (.env)
+            target = os.path.basename(real)
+            if target.startswith(".") or not _text_file(target):
+                return None
             # the folders the walk skips stay skipped through a link
             if any(d in SKIP_DIRS or d.startswith(".") for d in Path(os.path.relpath(real, root)).parts[:-1]):
                 return None
