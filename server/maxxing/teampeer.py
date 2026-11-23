@@ -247,6 +247,7 @@ def _known(p: dict) -> bool:
 
 def _save(doc: dict) -> None:
     global _peeked
+    config.keep_damaged(_path())                        # a file that did not parse was read as empty: keep it first
     config.write_json(_path(), doc, mode=0o600)
     _peeked = None
     bus.invalidate("team")
@@ -598,6 +599,7 @@ def touch(address: str) -> None:
         if not p or now - (last := float(p.get("last_seen") or 0)) < SEEN_WRITE_S:
             return
         p["last_seen"] = now
+        config.keep_damaged(_path())
         config.write_json(_path(), doc, mode=0o600)
         _peeked = None
     if now - last >= ONLINE_S:

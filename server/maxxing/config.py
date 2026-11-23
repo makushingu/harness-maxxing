@@ -329,6 +329,14 @@ def _keep_damaged(path: Path) -> None:
     log.error("%s was damaged: kept as %s before saving", path, dest)
 
 
+def keep_damaged(path: Path) -> None:
+    """`_keep_damaged` for the other stores (peers.json, devices.json): call it before writing over their file."""
+    try:
+        _keep_damaged(Path(path))
+    except OSError:
+        log.exception("could not keep a copy of the damaged %s", path)
+
+
 def _merge(base: dict, over: dict) -> dict:
     out = copy.deepcopy(base)
     for k, v in (over if isinstance(over, dict) else {}).items():
