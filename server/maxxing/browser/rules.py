@@ -9,6 +9,7 @@ Three layers, each one enough on its own for what it covers:
 """
 from __future__ import annotations
 
+import contextlib
 import ipaddress
 import json
 import re
@@ -83,10 +84,8 @@ def local_host(host: str) -> bool:
 
 
 def parse_ip(h: str) -> ipaddress._BaseAddress | None:
-    try:
+    with contextlib.suppress(ValueError):
         return ipaddress.ip_address(h)
-    except ValueError:
-        pass
     if re.fullmatch(r"[0-9a-fx.]+", h) and any(c.isdigit() for c in h):
         try:
             return ipaddress.ip_address(socket.inet_aton(h))   # short / decimal / hex IPv4 forms

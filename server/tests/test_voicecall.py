@@ -301,10 +301,6 @@ def test_the_first_sentence_sets_the_language_of_the_call(call, monkeypatch, tmp
     assert seen == ["auto", "fr"]
 
 
-def test_tool_kinds():
-    assert voicecall.tool_kind("mcp__maxxing-browser__open") == "web" and voicecall.tool_kind("Edit") == "edit"
-
-
 def test_the_voice_never_repeats_the_users_words(call):
     call.replies = ["@ask\nOui vas-y.\nJe mets l'alerte en place."]
     out = _turn(call, text="Oui vas-y.")

@@ -22,7 +22,6 @@ import contextlib
 import json
 import logging
 import os
-import secrets
 import threading
 import time
 from typing import Literal, Optional
@@ -36,12 +35,12 @@ from .. import config, devices, downloads
 from ..devices import asks, dist, store, tools, turns
 from ..devices.hub import DeviceError, Offline, hub
 from ..security import COOKIE, client_key, cookie_valid, loopback, require_auth
+from .browser import LiveTokens
 
 log = logging.getLogger("maxxing.api.devices")
 router = APIRouter(tags=["devices"])
 AUTH = [Depends(require_auth)]
 P = "/api/devices"
-LIVE_TOKEN_S = 30.0
 MAX_INPUT = 8192
 FAIL_WINDOW = 600.0
 FAIL_MAX = 20                         # wrong codes per client in FAIL_WINDOW before 429
@@ -204,23 +203,12 @@ async def answer(rid: str, body: AnswerIn) -> dict:
     return d
 
 
-_live: dict[str, float] = {}
+_live = LiveTokens()
 
 
 @router.post(P + "/live-token", dependencies=AUTH)
 async def live_token() -> dict:
-    now = time.time()
-    for k, at in list(_live.items()):
-        if now - at > LIVE_TOKEN_S:
-            _live.pop(k, None)
-    t = secrets.token_urlsafe(24)
-    _live[t] = now
-    return {"token": t}
-
-
-def _take_token(t: str) -> bool:
-    at = _live.pop(t or "", None)
-    return bool(at and time.time() - at <= LIVE_TOKEN_S)
+    return _live.new()
 
 
 # ---- public: pairing code ----------------------------------------------------------------------------------------------
@@ -341,7 +329,7 @@ async def live(ws: WebSocket, device_id: str):
     """Pictures of the device (binary JPEG, ~3 a second while watched) + its state (text JSON); the person's input
     ({"t":"input", a, x, y, ... in pixels of the picture shown, sw/sh = its size}: the device is theirs while they use
     it), {"t":"take"}, {"t":"release", "done": true|"skip"|false, "note"}. The signed-in cookie AND a live token."""
-    if not _take_token(ws.query_params.get("t", "")) or not cookie_valid(ws.cookies.get(COOKIE)):
+    if not _live.take(ws.query_params.get("t", "")) or not cookie_valid(ws.cookies.get(COOKIE)):
         await ws.close(code=4403)
         return
     dev = await asyncio.to_thread(store.get, device_id)

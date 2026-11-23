@@ -11,6 +11,7 @@ Ubuntu 24.04+ restricts user namespaces: Chromium's own sandbox needs an AppArmo
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import os
@@ -229,7 +230,7 @@ def chrome_args(chrome: Path, width: int = 1280, height: int = 800) -> list[str]
     major = _major.get(str(chrome))
     if major is None:
         major = _major[str(chrome)] = chrome_major(chrome)
-    return ["--headless=new", "--user-data-dir=/mxprofile" if not _direct() else f"--user-data-dir={{profile}}",
+    return ["--headless=new", "--user-data-dir=/mxprofile" if not _direct() else "--user-data-dir={profile}",
             "--disable-gpu", "--disable-extensions", "--disable-background-networking", "--disable-component-update",
             "--disable-sync", "--disable-default-apps", "--no-first-run", "--no-default-browser-check",
             "--disable-features=AutofillServerCommunication,MediaRouter,OptimizationHints,Translate",
@@ -385,24 +386,18 @@ async def unit_active(slug: str) -> bool:
 async def stop(slug: str, proc: asyncio.subprocess.Process | None) -> None:
     if proc is not None:
         if proc.returncode is None:
-            try:
+            with contextlib.suppress(ProcessLookupError, PermissionError):
                 os.killpg(proc.pid, 15)
-            except (ProcessLookupError, PermissionError):
-                pass
             try:
                 await asyncio.wait_for(proc.wait(), 5)
             except asyncio.TimeoutError:
-                try:
+                with contextlib.suppress(ProcessLookupError, PermissionError):
                     os.killpg(proc.pid, 9)
-                except (ProcessLookupError, PermissionError):
-                    pass
         return
     p = await asyncio.create_subprocess_exec("systemctl", "stop", unit_name(slug),
                                              stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
-    try:
+    with contextlib.suppress(asyncio.TimeoutError):
         await asyncio.wait_for(p.wait(), 20)
-    except asyncio.TimeoutError:
-        pass
 
 
 def stop_all_units() -> None:

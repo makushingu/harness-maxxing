@@ -8,8 +8,9 @@ the person has it (the live view), or a protected / locked screen (the device sa
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import time
-from typing import Any, Awaitable, Callable
+from typing import Awaitable, Callable
 
 from . import OS_NAMES, store, visible
 from .asks import ask as ask_person
@@ -266,10 +267,8 @@ async def _answer(did: str, dev: dict, d: dict) -> dict:
     if st == "done":
         out = [_text(f"The person did it and handed {dev['name']} back.{note} Look at the screen again before acting.")]
         if hub().online(did) and not hub().paused(did):
-            try:
+            with contextlib.suppress(Offline, DeviceError, asyncio.TimeoutError):
                 out += await _picture(did, dev, "Now: ")
-            except (Offline, DeviceError, asyncio.TimeoutError):
-                pass
         return {"content": out}
     if st == "skip":
         return {"content": [_text("The person skipped this step: do not try it again in this run; go on without it "

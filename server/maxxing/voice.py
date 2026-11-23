@@ -17,6 +17,7 @@ public functions are blocking - call them from a worker thread (`asyncio.to_thre
 """
 from __future__ import annotations
 
+import contextlib
 import importlib
 import importlib.util
 import logging
@@ -167,10 +168,8 @@ def _dir_bytes(p: Path) -> int:
     total = 0
     for root, _dirs, files in os.walk(p):
         for f in files:
-            try:
+            with contextlib.suppress(OSError):
                 total += os.path.getsize(os.path.join(root, f))
-            except OSError:
-                pass
     return total
 
 

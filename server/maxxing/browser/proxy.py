@@ -14,6 +14,7 @@ page and its state is marked down (the turn's tools wait for it, pool.py); never
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import os
 import socket
@@ -50,18 +51,14 @@ class Proxy:
         self.server = await asyncio.start_unix_server(self._handle, str(self.sock), limit=HEAD_MAX)
         os.chmod(self.sock, 0o660)
         if self.gid is not None:
-            try:
+            with contextlib.suppress(PermissionError):
                 os.chown(self.sock, 0, self.gid)
-            except PermissionError:
-                pass
 
     async def stop(self) -> None:
         if self.server:
             self.server.close()
-            try:
+            with contextlib.suppress(Exception):
                 await asyncio.wait_for(self.server.wait_closed(), 3)
-            except (asyncio.TimeoutError, Exception):  # noqa: BLE001
-                pass
             self.server = None
         self.sock.unlink(missing_ok=True)
 
@@ -194,14 +191,10 @@ async def _answer(w: asyncio.StreamWriter, status: int, text: str) -> None:
     reason = {400: "Bad Request", 403: "Forbidden", 502: "Bad Gateway"}.get(status, "Error")
     w.write(f"HTTP/1.1 {status} {reason}\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: {len(body)}\r\n"
             "Connection: close\r\n\r\n".encode() + body)
-    try:
+    with contextlib.suppress(ConnectionError):
         await w.drain()
-    except ConnectionError:
-        pass
 
 
 def _close(w: asyncio.StreamWriter) -> None:
-    try:
+    with contextlib.suppress(Exception):
         w.close()
-    except Exception:  # noqa: BLE001
-        pass
