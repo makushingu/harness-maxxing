@@ -892,6 +892,37 @@ def _scrapling_wrappers(venv: Path) -> None:
         os.replace(tmp, dest)
 
 
+def link_same_drivers(venv: Path) -> int:
+    """Hard-link the Node.js binaries that Playwright and Patchright each bring when they are the same file.
+
+    Scrapling pulls both packages, and each wheel ships its own copy of the same `driver/node` (~120 MB). Both
+    copies are never written after install (an update builds a new venv), so one inode is enough. Returns the bytes saved."""
+    by_size: dict[tuple, dict[tuple, Path]] = {}
+    for node in sorted(venv.glob("lib/python*/site-packages/*/driver/node")):
+        with contextlib.suppress(OSError):
+            st = node.stat()
+            by_size.setdefault((st.st_dev, st.st_size), {}).setdefault((st.st_dev, st.st_ino), node)
+    saved = 0
+    for (_dev, size), files in by_size.items():
+        if len(files) < 2:                              # one file, or copies already linked: nothing to hash
+            continue
+        keep: dict[str, Path] = {}
+        for node in files.values():
+            try:
+                first = keep.setdefault(file_sha(node), node)
+                if first is node:
+                    continue
+                tmp = node.with_name(node.name + ".link")
+                tmp.unlink(missing_ok=True)
+                os.link(first, tmp)
+                os.replace(tmp, node)
+                saved += size
+            except OSError:
+                with contextlib.suppress(OSError):
+                    node.with_name(node.name + ".link").unlink(missing_ok=True)
+    return saved
+
+
 def _up_scrapling(c: dict, explicit: bool = False) -> tuple[str, str]:
     uv = uv_bin()
     if not uv:
@@ -923,6 +954,7 @@ def _up_scrapling(c: dict, explicit: bool = False) -> tuple[str, str]:
         res = "updated" if before else "installed"
     else:
         res = "ok"
+    link_same_drivers(final)
     _scrapling_wrappers(final)
     return res, f"{before or '-'} -> {c['version']}" if res != "ok" else c["version"]
 
@@ -1090,11 +1122,16 @@ def _size(p: Path) -> int:
             return p.lstat().st_size
         except OSError:
             return 0
-    total = 0
+    total, seen = 0, set()
     for root, _dirs, files in os.walk(p):
         for f in files:
             with contextlib.suppress(OSError):
-                total += os.lstat(os.path.join(root, f)).st_size
+                st = os.lstat(os.path.join(root, f))
+                if st.st_nlink > 1:                     # a hard-linked file takes its room once
+                    if (st.st_dev, st.st_ino) in seen:
+                        continue
+                    seen.add((st.st_dev, st.st_ino))
+                total += st.st_size
     return total
 
 
