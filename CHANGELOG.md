@@ -6,6 +6,8 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 ## Unreleased
 
 New:
+- **Download the Android app without the QR code**: Settings -> Devices -> Add a device -> Android now has a
+  **Download the app (APK)** button under the code.
 - **Jarvis: one assistant who runs Harness for you.** Turn it on in Settings -> Features -> Jarvis: it sits at the
   top of the sidebar. Say what you want; it picks or creates the right project and topic, hands the work to a session
   there, gets the answer back by itself when the session is done and tells you, in the same conversation. Its Work

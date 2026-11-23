@@ -4847,6 +4847,8 @@ export const en = {
   'devices.add.macHelp': "macOS gives Screen Recording and Accessibility to the terminal app, not to Harness Link: turn on Terminal (or iTerm...) in System Settings -> Privacy & Security under both, quit it (cmd+Q), open it again and type harness-link.",
   'devices.add.phone': "Scan this code with the phone's camera. On the page: download the app, install it, then tap \"Open in Harness Link\".",
   'devices.add.phoneHelp': "Harness Link then asks to turn on its accessibility service: that is how it sees the screen and taps for Claude.",
+  'devices.add.apk': "Download the app (APK)",
+  'devices.add.apkHelp': "No camera at hand? The button under the code downloads the app directly: open this page on the phone and tap it, or copy the file to the phone.",
   'devices.add.manual': "Or type these in Harness Link:",
   'devices.add.server': "Server",
   'devices.add.code': "Code",

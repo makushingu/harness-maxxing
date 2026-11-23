@@ -7,6 +7,8 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Devices, Add a device -> Android: an APK button under the QR code (`devices-add-apk`) links to the invite's
+  `downloads.android` (`/api/devices/download/android?code=`, the personalised APK); texts `devices.add.apk` / `.apkHelp`.
 - Mail attachments in the file viewer: `POST /api/mail/{id}/attachments/view` (`imap.attachments_of`, one fetch)
   copies them to `<workspace>/mail/attachments/<id>/<folder hash>-<uid>/<index>/<name>` (rewritten at each view, dirs
   older than a day pruned; `409 outside` when the workspace is not under the files root: `MessageView` then opens /

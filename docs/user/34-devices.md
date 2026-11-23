@@ -27,7 +27,8 @@ It is off until you turn it on: **Settings -> Features -> Devices** (or **Settin
   a permission is missing.
 - **Linux**: paste the command in a terminal. On an X11 desktop Claude can do everything; a Wayland desktop is not supported yet (choose an X11 session at login, for example "Ubuntu on Xorg").
 - **Android**: scan the QR code with the phone's camera, download and install the app from the page, then tap
-  **Open in Harness Link**. You can also type the server and the code in the app yourself. The app then asks you to
+  **Open in Harness Link**. No camera at hand? **Download the app (APK)** under the QR code gets the app directly (tap it
+  from the phone, or copy the file to it), then type the server and the code in the app yourself. The app then asks you to
   turn on its accessibility service: that is how it sees the screen and taps for Claude.
 
 ## Harness Link runs only while you let it (computers)

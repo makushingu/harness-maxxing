@@ -4,7 +4,7 @@
 // of a request's notification); ?add=1 opens "Add a device".
 import * as React from 'react'
 import { useSearchParams } from 'react-router'
-import { EllipsisVertical, Eye, Laptop, MonitorSmartphone, Pencil, Plus, Smartphone, Trash2 } from 'lucide-react'
+import { Download, EllipsisVertical, Eye, Laptop, MonitorSmartphone, Pencil, Plus, Smartphone, Trash2 } from 'lucide-react'
 import { useLang, useT, type TFn, type TKey } from '@/i18n'
 import { useConfirmDevice, useDevices, useNewInvite, useRemoveDevice, useSaveDevice, useSettings, useWorkspace } from '@/lib/queries'
 import type { Device, DeviceAction, DeviceInvite, DeviceOs, DevicesStatus } from '@/lib/types'
@@ -341,10 +341,20 @@ function AddDevice({ open, onOpenChange, st }: { open: boolean; onOpenChange: (v
           </Callout>
         ) : tab === 'android' ? (
           <div className="grid gap-3 sm:grid-cols-[auto_minmax(0,1fr)]" data-testid="devices-add-phone">
-            <QRCode value={inv.link} className="size-44 justify-self-center p-1" label={inv.link} />
+            <div className="grid content-start justify-items-center gap-2">
+              <QRCode value={inv.link} className="size-44 p-1" label={inv.link} />
+              {inv.downloads.android && (
+                <Button asChild variant="outline" size="sm" className="w-full" data-testid="devices-add-apk">
+                  <a href={inv.downloads.android} download="harness-link.apk">
+                    <Download /> {t('devices.add.apk')}
+                  </a>
+                </Button>
+              )}
+            </div>
             <div className="grid content-start gap-2 text-[13px]">
               <p>{t('devices.add.phone')}</p>
               <p className="text-muted-foreground">{t('devices.add.phoneHelp')}</p>
+              <p className="text-muted-foreground">{t('devices.add.apkHelp')}</p>
               <p className="text-muted-foreground">{t('devices.add.manual')}</p>
               <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1">
                 <dt className="text-muted-foreground">{t('devices.add.server')}</dt>
