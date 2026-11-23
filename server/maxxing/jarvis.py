@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import logging
 import shutil
-import threading
 import time
 from datetime import datetime
 from pathlib import Path
@@ -56,7 +55,7 @@ WORK_MAX = 300                # board entries kept (the oldest closed ones go fi
 REPORT_CHARS = 3000           # of a session's answer, in the report Jarvis reads
 CONVERSATIONS_KEPT = 30       # past conversations listed
 
-_lock = threading.RLock()
+_lock = config.ProcessLock("jarvis")   # across processes too: the CLI (sessions new --report-to, agents run) registers work while the server rewrites it
 
 
 class JarvisError(Exception):

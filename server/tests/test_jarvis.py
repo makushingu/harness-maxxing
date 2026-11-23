@@ -3,6 +3,7 @@ board and the reports, the brief and the night pass, the filters of what the own
 from __future__ import annotations
 
 import time
+from pathlib import Path
 from datetime import datetime
 
 import pytest
@@ -321,3 +322,20 @@ def test_work_board_written_by_another_process_is_announced(tmp_path, monkeypatc
         task.cancel()
     asyncio.run(run())
     assert ("jarvis",) in seen
+
+
+def test_work_registered_from_several_processes_gets_unique_ids(client, mx):
+    """The CLI (sessions new --report-to, agents run) registers work in its own process while the server rewrites
+    work.json: a thread lock did not protect it (lost entries, repeated ids)."""
+    import os
+    import subprocess
+    import sys
+    code = ("import sys\nfrom maxxing import jarvis\n"
+            "for i in range(40):\n    jarvis.register(sys.argv[1] + format(i, '02d') * 17, 'p', 't', 'b')\n")
+    env = dict(os.environ, MAXXING_STATE=str(config.STATE), MAXXING_WORKSPACE=str(mx["ws"]))
+    root = str(Path(jarvis.__file__).resolve().parent.parent)
+    procs = [subprocess.Popen([sys.executable, "-c", code, c], cwd=root, env=env) for c in "abc"]
+    assert [p.wait(120) for p in procs] == [0, 0, 0]
+    ids = [i["id"] for i in jarvis._read_work()["items"]]
+    assert len(ids) == 120 and len(set(ids)) == 120
+
