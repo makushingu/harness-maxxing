@@ -603,11 +603,11 @@ def update_project(project: str, name: str | None = None, description: str | Non
         from . import jarvis
         if new == jarvis.PROJECT:
             raise WorkspaceError(409, "reserved", f"{new!r} is kept for Jarvis (Settings -> Features): pick another name")
-    _check_rename(topic_path(project), topic_path(new))
+    sessions = _check_rename(topic_path(project), topic_path(new))
     if emoji is not None:
         set_project_emoji(project, check_emoji(emoji))
     if new != project:
-        _rename(topic_path(project), topic_path(new))
+        _rename(topic_path(project), topic_path(new), sessions)
         try:
             f = root() / "projects" / ORDER_FILE
             data = json.loads(f.read_text())
@@ -628,7 +628,7 @@ def update_topic(project: str, topic: str, name: str | None = None, description:
         raise WorkspaceError(404, "not_found", f"Topic {project}/{topic} not found")
     check_description(description)
     new = check_slug(name) if name and name != topic else topic
-    _check_rename(topic_path(project, topic), topic_path(project, new))
+    sessions = _check_rename(topic_path(project, topic), topic_path(project, new))
     mode = check_permission_mode(permission_mode) if permission_mode is not None else None
     tools = check_allowed_tools(allowed_tools) if allowed_tools is not None else None
     if mode is not None:
@@ -636,7 +636,7 @@ def update_topic(project: str, topic: str, name: str | None = None, description:
     if tools is not None:
         _set_folder_meta(d, "allowed_tools", tools)
     if new != topic:
-        _rename(topic_path(project, topic), topic_path(project, new))
+        _rename(topic_path(project, topic), topic_path(project, new), sessions)
         with _meta_lock:
             meta = _meta(project)
             if isinstance(meta.get("topics"), list):
@@ -648,11 +648,14 @@ def update_topic(project: str, topic: str, name: str | None = None, description:
     return get_topic(project, new)
 
 
-def _check_rename(old: str, new: str) -> None:
-    if new != old:
-        _ensure_idle(old)
-        if os.path.lexists(root() / new):
-            raise WorkspaceError(409, "exists", f"{new} already exists")
+def _check_rename(old: str, new: str) -> list[dict] | None:
+    """Refuse a rename that cannot happen; the sessions under `old` (read once) go on to `_rename`."""
+    if new == old:
+        return None
+    sessions = _ensure_idle(old)
+    if os.path.lexists(root() / new):
+        raise WorkspaceError(409, "exists", f"{new} already exists")
+    return sessions
 
 
 def _changed_or_renamed(kind: str, old: str, new: str) -> None:
@@ -692,9 +695,10 @@ def _ensure_idle(prefix: str) -> list[dict]:
     return sessions
 
 
-def _rename(old: str, new: str) -> None:
+def _rename(old: str, new: str, sessions: list[dict] | None = None) -> None:
     """Move the folder, then remap session paths, Claude transcripts and Telegram mappings."""
-    sessions = _ensure_idle(old)
+    if sessions is None:
+        sessions = _ensure_idle(old)
     src, dst = root() / old, root() / new
     if os.path.lexists(dst):
         raise WorkspaceError(409, "exists", f"{new} already exists")
