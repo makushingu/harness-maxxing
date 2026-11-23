@@ -43,6 +43,8 @@ Fixed:
   Settings.
 
 Changed:
+- **The Scrapling install takes about 120 MB less disk.** Its two browser drivers came with two identical copies
+  of the same Node.js; one copy is now shared by both (applied by the next `maxxing deps update`).
 - **Scrolling up a long session no longer freezes the page.** Show earlier (and the automatic loading when you reach
   the top) now adds the older messages a few at a time instead of all at once: the page stays responsive, mostly
   felt on a phone.

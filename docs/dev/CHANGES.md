@@ -7,6 +7,10 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- `deps.link_same_drivers(venv)`: the `playwright` and `patchright` wheels of the Scrapling venv each ship the same
+  `driver/node` (~121 MB); after install and on every `_up_scrapling` pass, identical ones (same device, size and
+  sha256) are hard-linked (`os.link` to a `.link` temp + `os.replace`). Files with one size are never hashed, so a
+  linked venv costs nothing. `deps._size` counts a hard-linked inode once (cleanup sizes).
 - `sessions/opened.py`: `open_sessions.json` also keeps `tabs` (bool) and `front` (session id), set by `POST /api/sessions/open
   {tabs?, front?}` (a change bumps `rev`, same value = no rev); keys absent until a browser sends them. `openSync.ts`:
   sends the mode / focused session when they change here (debounced with the cols), applies the other device's unless
