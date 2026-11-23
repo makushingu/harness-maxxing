@@ -87,7 +87,13 @@ export default function CronsSection() {
   return (
     <>
       <div className="grid grid-cols-[minmax(0,1fr)] gap-8">
-        <div className="-mt-2 flex justify-end">
+        <div className="-mt-3 flex flex-wrap items-center justify-between gap-3">
+          <p className="min-w-0 flex-1 basis-64 text-sm text-muted-foreground">
+            {t('crons.aiNote')}{' '}
+            <Link to="/agents" className="font-medium text-primary underline-offset-4 hover:underline">
+              {t('crons.useAgent')}
+            </Link>
+          </p>
           <Button onClick={() => setSeed({ mode: 'new' })}>
             <Plus />
             {t('crons.new')}

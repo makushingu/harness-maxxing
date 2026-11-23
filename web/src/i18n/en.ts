@@ -2302,6 +2302,8 @@ export const en = {
   'tasks.projects.deleteTitle': 'Delete this project?',
   'tasks.projects.deleteDesc': 'Its tasks are kept, without a project.',
   'crons.description': 'Scheduled shell commands and Harness prompts',
+  'crons.aiNote': "Runs a command or a prompt at set times. For a lasting role with its own memory, that reads, judges and writes:",
+  'crons.useAgent': "use an agent",
   'crons.new': 'New job',
   'crons.newTitle': 'New scheduled job',
   'crons.editTitle': 'Edit job',

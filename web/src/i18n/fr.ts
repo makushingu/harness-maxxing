@@ -2284,6 +2284,8 @@ export const fr: Record<keyof typeof en, string> = {
   'tasks.projects.deleteTitle': 'Supprimer ce projet ?',
   'tasks.projects.deleteDesc': 'Ses tâches sont conservées, sans projet.',
   'crons.description': 'Commandes shell et prompts Harness planifiés',
+  'crons.aiNote': "Lance une commande ou un prompt à heure fixe. Pour un rôle durable avec sa propre mémoire, qui lit, juge et écrit :",
+  'crons.useAgent': "utilisez un agent",
   'crons.new': 'Nouvelle tâche planifiée',
   'crons.newTitle': 'Nouvelle tâche planifiée',
   'crons.editTitle': 'Modifier la tâche planifiée',
