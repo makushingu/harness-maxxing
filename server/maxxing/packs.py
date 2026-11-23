@@ -22,6 +22,7 @@ import os
 import shutil
 import threading
 from pathlib import Path
+from typing import Any
 
 from . import config
 
@@ -110,12 +111,11 @@ def _copy_missing(src_root: Path, dst_root: Path, rel_prefix: str, variables: di
 
 
 def _free_name(ws: Path, base: str) -> str:
-    if not os.path.lexists(ws / "projects" / base):
-        return base
-    n = 2
-    while os.path.lexists(ws / "projects" / f"{base}-{n}"):
+    name, n = base, 1
+    while os.path.lexists(ws / "projects" / name):
         n += 1
-    return f"{base}-{n}"
+        name = f"{base}-{n}"
+    return name
 
 
 ORDER = ["ecommerce", "affiliate", "creator", "apps", "second-brain", "freelance"]
@@ -147,14 +147,8 @@ def _summary(data: dict, lang: str) -> dict:
 
 def list_packs(lang: str | None = None) -> list[dict]:
     lang = lang or str(config.load_config().get("language") or "en")
-    out = []
-    if _basics_root().is_dir():
-        out.append(_basics_summary(lang))
-    for pid in _ids():
-        data = _read(pid)
-        if data:
-            out.append(_summary(data, lang))
-    return out
+    out = [_basics_summary(lang)] if _basics_root().is_dir() else []
+    return out + [_summary(data, lang) for pid in _ids() if (data := _read(pid))]
 
 
 _install_lock = threading.Lock()

@@ -173,8 +173,7 @@ def _read_cfg() -> Any:
     st = p.stat()
     key = (str(p), st.st_mtime_ns, st.st_size, st.st_ino)
     if _cfg_cache["key"] != key:
-        _cfg_cache.update(key=None, data=json.loads(p.read_text(encoding="utf-8")))
-        _cfg_cache["key"] = key
+        _cfg_cache.update(data=json.loads(p.read_text(encoding="utf-8")), key=key)
     return _cfg_cache["data"]
 
 
@@ -237,15 +236,8 @@ def mentioned(names: list[str], text: str) -> set[str]:
     for n in names:
         for w in set(_words(n)):
             count[w] = count.get(w, 0) + 1
-    out = set()
-    for n in names:
-        whole = _name_re(n)
-        if whole and whole.search(t):
-            out.add(n)
-            continue
-        if any(count.get(w) == 1 and _word_re(w).search(t) for w in _words(n)):
-            out.add(n)
-    return out
+    return {n for n in names if ((whole := _name_re(n)) and whole.search(t))
+            or any(count.get(w) == 1 and _word_re(w).search(t) for w in _words(n))}
 
 
 # compiled once per name / word: re's own cache (512) overflows with a few hundred servers, every turn
@@ -337,13 +329,6 @@ def _hint_items(left: list[Server]) -> str:
     if len(left) > HINT_MAX:
         items.append(f"and {len(left) - HINT_MAX} more")
     return "; ".join(items)
-
-
-def forget_session(sid: str) -> None:
-    try:
-        (_dir() / "sessions" / f"{sid}.json").unlink()
-    except OSError:
-        pass
 
 
 # ---- `maxxing mcp load` ----------------------------------------------------------------------

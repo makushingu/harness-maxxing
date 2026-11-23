@@ -199,8 +199,7 @@ def _init_level(folder: Path, kind: str, name: str, description: str) -> None:
     if not (folder / "CLAUDE.md").exists():
         (folder / "CLAUDE.md").write_text(_render_claude_md(kind, name, description))
     if not (folder / "memory.md").exists():
-        title = "Workspace" if kind == "workspace" else f"{kind.capitalize()} {name}"
-        (folder / "memory.md").write_text(f"# {title} - memory\n\n")
+        (folder / "memory.md").write_text(f"{_heading(kind, name)} - memory\n\n")
 
 
 def ensure_root() -> Path:
@@ -478,12 +477,10 @@ def check_emoji(value: str) -> str:
         v.encode()
     except UnicodeEncodeError:                          # a lone surrogate: valid JSON, not storable
         raise WorkspaceError(400, "bad_emoji", "Use a single emoji") from None
-    if len(v) > 8 or any(c.isspace() or c.isascii() and c.isalnum() for c in v) or all(c.isascii() for c in v):
-        raise WorkspaceError(400, "bad_emoji", "Use a single emoji")
     # no control, format (bidi marks...) or separator characters, except the joiner and variation selector of emoji
-    if any(unicodedata.category(c) in ("Cc", "Cf", "Zs", "Zl", "Zp") and c not in "\u200d\ufe0f" for c in v):
-        raise WorkspaceError(400, "bad_emoji", "Use a single emoji")
-    if not any(unicodedata.category(c) in ("So", "Sk") or "\U0001f1e6" <= c <= "\U0001f1ff" for c in v):
+    if (len(v) > 8 or any(c.isspace() or c.isascii() and c.isalnum() for c in v) or all(c.isascii() for c in v)
+            or any(unicodedata.category(c) in ("Cc", "Cf", "Zs", "Zl", "Zp") and c not in "\u200d\ufe0f" for c in v)
+            or not any(unicodedata.category(c) in ("So", "Sk") or "\U0001f1e6" <= c <= "\U0001f1ff" for c in v)):
         raise WorkspaceError(400, "bad_emoji", "Use a single emoji")
     return v
 
@@ -500,9 +497,13 @@ def _project_obj(name: str, stats: dict, threads: dict) -> dict:
             "emoji": project_emoji(name), "topics": topics, "session_count": count}
 
 
+def _threads() -> dict:
+    return config.load_config().get("telegram", {}).get("threads") or {}
+
+
 def tree() -> dict:
     stats = _session_stats()
-    threads = config.load_config().get("telegram", {}).get("threads") or {}
+    threads = _threads()
     with _one_root():
         from . import jarvis
         projects = [_project_obj(p, stats, threads) for p in project_names() if not jarvis.hides(topic_path(p))]
@@ -525,13 +526,13 @@ def list_topics() -> list[dict]:
 def get_project(name: str) -> dict:
     if not project_dir(check_slug(name)).is_dir():
         raise WorkspaceError(404, "not_found", f"Project {name!r} not found")
-    return _project_obj(name, _session_stats(), config.load_config().get("telegram", {}).get("threads") or {})
+    return _project_obj(name, _session_stats(), _threads())
 
 
 def get_topic(project: str, name: str) -> dict:
     if not (project_dir(check_slug(project)) / "topics" / check_slug(name)).is_dir():
         raise WorkspaceError(404, "not_found", f"Topic {project}/{name} not found")
-    return _topic_obj(project, name, _session_stats(), config.load_config().get("telegram", {}).get("threads") or {})
+    return _topic_obj(project, name, _session_stats(), _threads())
 
 
 # ---- mutations -----------------------------------------------------------------------------
@@ -571,10 +572,7 @@ def update_project(project: str, name: str | None = None, description: str | Non
         raise WorkspaceError(404, "not_found", f"Project {project!r} not found")
     check_description(description)
     new = check_slug(name) if name and name != project else project
-    if new != project:
-        _ensure_idle(topic_path(project))
-    if new != project and os.path.lexists(root() / topic_path(new)):
-        raise WorkspaceError(409, "exists", f"{topic_path(new)} already exists")
+    _check_rename(topic_path(project), topic_path(new))
     if emoji is not None:
         set_project_emoji(project, check_emoji(emoji))
     if new != project:
@@ -588,10 +586,7 @@ def update_project(project: str, name: str | None = None, description: str | Non
         except (OSError, ValueError, AttributeError, RecursionError):
             pass
     _write_claude_md(project_dir(new), "project", new, description)
-    if new != project:
-        _changed("renamed", "project", topic_path(new), topic_path(project))
-    else:
-        _changed("updated", "project", topic_path(new))
+    _changed_or_renamed("project", topic_path(project), topic_path(new))
     return get_project(new)
 
 
@@ -602,10 +597,7 @@ def update_topic(project: str, topic: str, name: str | None = None, description:
         raise WorkspaceError(404, "not_found", f"Topic {project}/{topic} not found")
     check_description(description)
     new = check_slug(name) if name and name != topic else topic
-    if new != topic:
-        _ensure_idle(topic_path(project, topic))
-    if new != topic and os.path.lexists(root() / topic_path(project, new)):
-        raise WorkspaceError(409, "exists", f"{topic_path(project, new)} already exists")
+    _check_rename(topic_path(project, topic), topic_path(project, new))
     mode = check_permission_mode(permission_mode) if permission_mode is not None else None
     tools = check_allowed_tools(allowed_tools) if allowed_tools is not None else None
     if mode is not None:
@@ -621,11 +613,22 @@ def update_topic(project: str, topic: str, name: str | None = None, description:
                 _forget(project_dir(project) / META_FILE)
                 config.write_json(project_dir(project) / META_FILE, meta)
     _write_claude_md(project_dir(project) / "topics" / new, "topic", new, description)
-    if new != topic:
-        _changed("renamed", "topic", topic_path(project, new), topic_path(project, topic))
-    else:
-        _changed("updated", "topic", topic_path(project, new))
+    _changed_or_renamed("topic", topic_path(project, topic), topic_path(project, new))
     return get_topic(project, new)
+
+
+def _check_rename(old: str, new: str) -> None:
+    if new != old:
+        _ensure_idle(old)
+        if os.path.lexists(root() / new):
+            raise WorkspaceError(409, "exists", f"{new} already exists")
+
+
+def _changed_or_renamed(kind: str, old: str, new: str) -> None:
+    if new != old:
+        _changed("renamed", kind, new, old)
+    else:
+        _changed("updated", kind, new)
 
 
 def delete_project(project: str) -> None:
@@ -774,11 +777,10 @@ def _changed(action: str, kind: str, path: str, old_path: str | None = None) -> 
 
 def _wants_arg(cb: Callable[..., Any]) -> bool:
     try:
-        params = [p for p in inspect.signature(cb).parameters.values()
-                  if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD, p.VAR_POSITIONAL)]
+        return any(p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD, p.VAR_POSITIONAL)
+                   for p in inspect.signature(cb).parameters.values())
     except (TypeError, ValueError):
         return True
-    return bool(params)
 
 
 def _schedule(coro: Any) -> None:

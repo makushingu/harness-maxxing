@@ -66,8 +66,6 @@ def _clip(text: str, n: int) -> str:
 
 _lock = threading.Lock()
 _cache: dict[str, tuple[float, Any]] = {}
-
-
 _building: dict[str, threading.Lock] = {}
 
 
@@ -168,13 +166,10 @@ def _walk(root: Path) -> list[Path]:
         if depth >= MAX_DEPTH:
             continue
         try:
-            subs = [e for e in os.scandir(d) if e.is_dir(follow_symlinks=False)]
+            stack.extend((Path(e.path), depth + 1) for e in os.scandir(d) if e.is_dir(follow_symlinks=False)
+                         and not e.name.startswith(".") and e.name not in PRUNE)
         except OSError:
             continue
-        for e in subs:
-            if e.name.startswith(".") or e.name in PRUNE:
-                continue
-            stack.append((Path(e.path), depth + 1))
     return sorted(found)
 
 
@@ -394,7 +389,8 @@ def _log_graph(repo: Path, sel: list[str], limit: int) -> list[dict]:
         parts = ln.split(SEP)
         if len(parts) < 6:
             continue
-        sha, parents, deco, author, ts, subject = parts[0], parts[1], parts[2], parts[3], parts[4], SEP.join(parts[5:])
+        sha, parents, deco, author, ts = parts[:5]
+        subject = SEP.join(parts[5:])
         commits.append({"sha": sha, "parents": parents.split(), "refs": _refs(deco), "author": _clip(author, SUBJECT_MAX),
                         "date": int(ts) if ts.isdecimal() and ts.isascii() else 0, "subject": _clip(subject, SUBJECT_MAX)})
     return _topo(commits)
@@ -488,13 +484,20 @@ def _client() -> httpx.Client:
         return _http
 
 
+def _no_token() -> GitError:
+    return GitError(400, "no_token", "add a GitHub token as GITHUB_TOKEN in Settings -> Keys")
+
+
+def _headers(tok: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {tok}", "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "harness-maxxing"}
+
+
 def _gh(path: str, params: dict | None = None, tok: str | None = None) -> Any:
     if not tok:
-        raise GitError(400, "no_token", "add a GitHub token as GITHUB_TOKEN in Settings -> Keys")
-    headers = {"Authorization": f"Bearer {tok}", "Accept": "application/vnd.github+json",
-               "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "harness-maxxing"}
+        raise _no_token()
     try:
-        r = _client().get(github_api() + path, headers=headers, params=params)
+        r = _client().get(github_api() + path, headers=_headers(tok), params=params)
     except httpx.HTTPError as e:
         raise GitError(502, "github_unreachable", f"GitHub unreachable: {type(e).__name__}") from None
     if r.status_code == 401:
@@ -518,11 +521,7 @@ def _gh(path: str, params: dict | None = None, tok: str | None = None) -> Any:
 
 
 def _perm(p: dict | None) -> str:
-    p = p or {}
-    for k in ("admin", "maintain", "push", "triage", "pull"):
-        if p.get(k):
-            return k
-    return "none"
+    return next((k for k in ("admin", "maintain", "push", "triage", "pull") if (p or {}).get(k)), "none")
 
 
 def _one_token(label: str, tok: str) -> dict:
@@ -619,7 +618,7 @@ def _gh_repo(full: str, path: str, params: dict | None = None) -> Any:
     """GET a repository URL with the first token that has access to it."""
     toks = _repo_tokens(full)
     if not toks:
-        raise GitError(400, "no_token", "add a GitHub token as GITHUB_TOKEN in Settings -> Keys")
+        raise _no_token()
     last: GitError | None = None
     for tok in toks:
         try:
@@ -811,13 +810,11 @@ def _gh_send(full: str, path: str, body: dict, method: str = "POST") -> Any:
     403/404)."""
     toks = _repo_tokens(_full(full))
     if not toks:
-        raise GitError(400, "no_token", "add a GitHub token as GITHUB_TOKEN in Settings -> Keys")
+        raise _no_token()
     last: GitError | None = None
     for tok in toks:
-        headers = {"Authorization": f"Bearer {tok}", "Accept": "application/vnd.github+json",
-                   "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "harness-maxxing"}
         try:
-            r = _client().request(method, github_api() + path, headers=headers, json=body)
+            r = _client().request(method, github_api() + path, headers=_headers(tok), json=body)
         except httpx.HTTPError as e:
             raise GitError(502, "github_unreachable", f"GitHub unreachable: {type(e).__name__}") from None
         if r.status_code in (200, 201):
@@ -844,6 +841,11 @@ def open_pull(full: str, head: str, base: str, title: str, body: str, draft: boo
             "draft": bool(p.get("draft"))}
 
 
+def _check_runs(full: str, sha: str) -> list:
+    runs = _gh_repo(full, f"/repos/{full}/commits/{sha}/check-runs", {"per_page": 100})
+    return runs.get("check_runs") or [] if isinstance(runs, dict) else []
+
+
 def branch_status(full: str, branch: str, sha: str | None) -> dict:
     """The open pull request whose head is `branch` (or None), and the checks of `sha`."""
     full = _full(full)
@@ -857,8 +859,7 @@ def branch_status(full: str, branch: str, sha: str | None) -> dict:
     merged = None if pr else merged_pull(full, branch)
     checks = None
     if sha and SHA_RE.match(sha):
-        runs = _gh_repo(full, f"/repos/{full}/commits/{sha}/check-runs", {"per_page": 100})
-        items = (runs or {}).get("check_runs") or [] if isinstance(runs, dict) else []
+        items = _check_runs(full, sha)
         if items:
             ok = sum(1 for c in items if c.get("conclusion") in ("success", "neutral", "skipped"))
             failed = sum(1 for c in items if c.get("conclusion") in ("failure", "timed_out", "cancelled",
@@ -900,10 +901,8 @@ def _who(u: dict | None) -> dict:
 def _checks(full: str, sha: str | None) -> list[dict]:
     if not sha or not SHA_RE.match(sha):
         return []
-    runs = _gh_repo(full, f"/repos/{full}/commits/{sha}/check-runs", {"per_page": 100})
-    items = (runs or {}).get("check_runs") or [] if isinstance(runs, dict) else []
     out = [{"name": c.get("name") or "", "status": c.get("status"), "conclusion": c.get("conclusion"),
-            "url": c.get("html_url")} for c in items if isinstance(c, dict)]
+            "url": c.get("html_url")} for c in _check_runs(full, sha) if isinstance(c, dict)]
     st = _gh_repo(full, f"/repos/{full}/commits/{sha}/status")
     for c in (st or {}).get("statuses") or [] if isinstance(st, dict) else []:
         state = c.get("state")
@@ -948,12 +947,10 @@ def github_pull(full_name: str, number: int) -> dict:
             continue                                    # the envelope of line comments: they are listed below
         conv.append({"kind": "review", "id": r.get("id"), "author": _who(r.get("user")), "body": r.get("body") or "",
                      "state": r.get("state"), "at": _ts(r.get("submitted_at")), "url": r.get("html_url")})
-    lines = []
-    for c in _gh_repo(full, f"/repos/{full}/pulls/{n}/comments", {"per_page": 100}) or []:
-        lines.append({"id": c.get("id"), "path": c.get("path"), "line": c.get("line") or c.get("original_line"),
-                      "side": c.get("side") or "RIGHT", "author": _who(c.get("user")), "body": c.get("body") or "",
-                      "at": _ts(c.get("created_at")), "reply_to": c.get("in_reply_to_id"),
-                      "outdated": c.get("line") is None})
+    lines = [{"id": c.get("id"), "path": c.get("path"), "line": c.get("line") or c.get("original_line"),
+              "side": c.get("side") or "RIGHT", "author": _who(c.get("user")), "body": c.get("body") or "",
+              "at": _ts(c.get("created_at")), "reply_to": c.get("in_reply_to_id"), "outdated": c.get("line") is None}
+             for c in _gh_repo(full, f"/repos/{full}/pulls/{n}/comments", {"per_page": 100}) or []]
     conv.sort(key=lambda x: x["at"])
     perms = repo.get("permissions") or {}
     methods = [m for m, k in (("squash", "allow_squash_merge"), ("merge", "allow_merge_commit"),

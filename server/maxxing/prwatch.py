@@ -109,10 +109,7 @@ def events(full: str, n: int, st: dict, mine: set[str]) -> list[tuple[str, str]]
                 continue
             u = c.get("user") or {}
             login = str(u.get("login") or "")
-            if _bot(u) or login.lower() in mine:
-                skipped.append(key)
-                continue
-            if (c.get("author_association") or "") not in gitview.OWN_ROLES:
+            if _bot(u) or login.lower() in mine or (c.get("author_association") or "") not in gitview.OWN_ROLES:
                 skipped.append(key)
                 continue
             out.append((key, f"{kind} by @{login}:\n{_quote(c.get('body') or '')}"))
@@ -135,13 +132,8 @@ def message(full: str, n: int, evs: list[tuple[str, str]]) -> str:
 
 def _targets() -> list[dict]:
     from .sessions import store
-    out = []
-    for sid in store.list_ids():
-        m = store.read_cached(sid) or {}
-        wt = worktrees.live(m)
-        if wt and not m.get("archived"):
-            out.append(m)
-    return out
+    return [m for m in (store.read_cached(sid) or {} for sid in store.list_ids())
+            if worktrees.live(m) and not m.get("archived")]
 
 
 def scan(now: float | None = None) -> list[str]:

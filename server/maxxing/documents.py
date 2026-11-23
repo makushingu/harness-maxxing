@@ -303,8 +303,11 @@ class _Out:
         if md:
             self._add("> " + md.replace("\n", "\n> "))
 
-    def rule(self) -> None:
-        self._add("---")
+    def slide(self, n: int, title: str) -> None:
+        """The heading of slide `n`, after a rule from the slide before."""
+        if n > 1:
+            self._add("---")
+        self.heading(2, f"{n}\\. {title}" if title else str(n))
 
     def table(self, rows: list[list[str]]) -> None:
         rows = [r for r in rows if any(c for c in r)]
@@ -332,6 +335,13 @@ def _on(props: ET.Element | None, name: str) -> bool:
     return el is not None and el.get("val", "true") not in ("0", "false", "off", "none")
 
 
+def _alternate(el: ET.Element) -> ET.Element | tuple:
+    """The content of an AlternateContent (the same shape twice): the modern one, else the fallback."""
+    src = el.find("Choice")
+    src = src if src is not None else el.find("Fallback")
+    return src if src is not None else ()
+
+
 def _int(value: str | None, default: int = 0) -> int:
     try:
         return int(value)  # type: ignore[arg-type]
@@ -340,6 +350,15 @@ def _int(value: str | None, default: int = 0) -> int:
 
 
 # ---- Word ----------------------------------------------------------------------------------
+def _listed(ppr: ET.Element | None) -> tuple[str, int] | None:
+    """(numId, level) of the list a paragraph (or a style) belongs to, from its numPr."""
+    num = ppr.find("numPr") if ppr is not None else None
+    if num is None or num.find("numId") is None:
+        return None
+    ilvl = num.find("ilvl")
+    return num.find("numId").get("val", ""), _int(ilvl.get("val")) if ilvl is not None else 0
+
+
 class _Docx:
     def __init__(self, pack: _Pack, out: _Out):
         self.pack, self.out = pack, out
@@ -370,9 +389,8 @@ class _Docx:
             m = re.fullmatch(r"list (?:bullet|number) (\d)", name)
             if m:
                 self.style_level[sid] = int(m[1]) - 1
-            num = ppr.find("numPr") if ppr is not None else None
-            if num is not None and num.find("numId") is not None:
-                self.style_list[sid] = (num.find("numId").get("val", ""), _int(num.find("ilvl").get("val")) if num.find("ilvl") is not None else 0)
+            if (listed := _listed(ppr)) is not None:
+                self.style_list[sid] = listed
             if st.find("basedOn") is not None:
                 based[sid] = st.find("basedOn").get("val", "")
         for sid in based:                                 # a style based on a heading is a heading
@@ -431,11 +449,7 @@ class _Docx:
             level = _int(ppr.find("outlineLvl").get("val"), 8) + 1
         if level is not None and level > 9:
             level = None                                  # outline level 9 = body text
-        num = ppr.find("numPr") if ppr is not None else None
-        if num is not None and num.find("numId") is not None:
-            listed = (num.find("numId").get("val", ""), _int(num.find("ilvl").get("val")) if num.find("ilvl") is not None else 0)
-        else:
-            listed = self.style_list.get(style)
+        listed = _listed(ppr) or self.style_list.get(style)
         inl = _Inline()
         self.runs(el, inl)
         md = inl.md(plain=level is not None)
@@ -482,9 +496,8 @@ class _Docx:
                 inl.add("-", *fmt)
             elif c.tag in ("drawing", "pict", "object"):
                 self.picture(c, inl)
-            elif c.tag == "AlternateContent":             # the same shape twice: the modern one, else the fallback
-                src = c.find("Choice") if c.find("Choice") is not None else c.find("Fallback")
-                for x in src if src is not None else ():
+            elif c.tag == "AlternateContent":
+                for x in _alternate(c):
                     if x.tag in ("drawing", "pict", "object"):
                         self.picture(x, inl)
 
@@ -550,9 +563,7 @@ class _Pptx:
         shapes = list(self.shapes(tree))
         title = next((s for s in shapes if s.tag == "sp" and self.role(s) in ("title", "ctrTitle")), None)
         text = " ".join(x for x in (self.inline(p).md(plain=True).replace("\\\n", " ") for p in title.iter("p")) if x) if title is not None else ""
-        if n > 1:
-            self.out.rule()
-        self.out.heading(2, f"{n}\\. {text}" if text else str(n))
+        self.out.slide(n, text)
         for s in shapes:
             if s is title:
                 continue
@@ -578,9 +589,7 @@ class _Pptx:
             elif el.tag in ("sp", "pic", "graphicFrame"):
                 yield el
             elif el.tag == "AlternateContent":
-                src = el.find("Choice") if el.find("Choice") is not None else el.find("Fallback")
-                if src is not None:
-                    yield from self.shapes(src)
+                yield from self.shapes(_alternate(el))
 
     @staticmethod
     def role(sp: ET.Element) -> str | None:
@@ -740,9 +749,7 @@ class _Odf:
             frames = [f for f in page if f.tag == "frame"]
             title = next((f for f in frames if f.get("class") == "title"), None)
             text = " ".join(x for x in (self.inline(p, _Inline()).md(plain=True).replace("\\\n", " ") for p in title.iter("p")) if x) if title is not None else ""
-            if n > 1:
-                self.out.rule()
-            self.out.heading(2, f"{n}\\. {text}" if text else str(n))
+            self.out.slide(n, text)
             for f in frames:
                 if f is not title:
                     self.blocks(f)
