@@ -25,7 +25,7 @@ import { TemplatesSection } from './sections/Templates'
 import { ImportSection } from './sections/Import'
 import { AppearanceSection } from './sections/Appearance'
 import { SkillsSection } from './sections/Skills'
-import { NotificationsSection } from './sections/Notifications'
+import { AlertsSection, FeedSection } from './sections/Notifications'
 import { UsageSection } from './sections/Usage'
 import { AboutSection } from './sections/About'
 import { MemorySection } from './sections/Memory'
@@ -51,7 +51,8 @@ const COMPONENTS: Record<SettingsSectionId, React.ComponentType> = {
   skills: SkillsSection,
   profile: ProfileSection,
   features: FeaturesSection,
-  notifications: NotificationsSection,
+  alerts: AlertsSection,
+  feed: FeedSection,
   usage: UsageSection,
   about: AboutSection,
   memory: MemorySection,

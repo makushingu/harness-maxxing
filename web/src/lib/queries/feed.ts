@@ -1,10 +1,11 @@
 import { useInfiniteQuery, useQuery, type InfiniteData } from '@tanstack/react-query'
 import { api, withQuery } from '../api'
-import type { FeedEvent, FeedHook, FeedHookKind, FeedList, FeedRule, FeedSettings } from '../types'
+import type { FeedEvent, FeedHook, FeedList, FeedRule, FeedSettings } from '../types'
 import { qk } from './keys'
 import { useMut } from './util'
 
 const inv = [qk.feed.all] as const
+const invHooks = [qk.feed.all, qk.webhooks.all] as const   // feed webhooks are listed on Settings -> Webhooks
 
 export const feedQuery = (source: string | null = null, unread = false, limit = 30) => ({
   queryKey: qk.feed.list(source, unread, limit),
@@ -82,15 +83,12 @@ export function useSaveFeedSettings() {
     invalidate: inv,
   })
 }
-export function useCreateHook() {
-  return useMut((b: { name: string; kind: FeedHookKind; secret?: string }) => api.post<FeedHook>('/api/feed/hooks', b), { invalidate: inv })
-}
 export function usePatchHook() {
-  return useMut(({ id, ...b }: { id: string; secret?: string; regenerate?: boolean }) => api.patch<FeedHook>(`/api/feed/hooks/${encodeURIComponent(id)}`, b), { invalidate: inv })
+  return useMut(({ id, ...b }: { id: string; secret?: string; regenerate?: boolean }) => api.patch<FeedHook>(`/api/feed/hooks/${encodeURIComponent(id)}`, b), { invalidate: invHooks })
 }
 export function useDeleteHook() {
-  return useMut((id: string) => api.del<{ ok: boolean }>(`/api/feed/hooks/${encodeURIComponent(id)}`), { invalidate: inv })
+  return useMut((id: string) => api.del<{ ok: boolean }>(`/api/feed/hooks/${encodeURIComponent(id)}`), { invalidate: invHooks })
 }
 export function useTestHook() {
-  return useMut((id: string) => api.post<{ event: FeedEvent | null }>(`/api/feed/hooks/${encodeURIComponent(id)}/test`), { invalidate: inv })
+  return useMut((id: string) => api.post<{ event: FeedEvent | null }>(`/api/feed/hooks/${encodeURIComponent(id)}/test`), { invalidate: invHooks })
 }

@@ -60,7 +60,7 @@ new invitation: an invitation never replaces an existing contact.
   5 min ago): it shows while their Harness is open in a browser.
 - **New messages** of the chats you are not looking at pop up as messages: who wrote, what they wrote, and a box to
   answer on the spot (tap the message to open its chat); several chats share one popup, and it leaves by itself
-  unless you are writing. With Harness in the background, a system notification instead. Settings -> Notifications
+  unless you are writing. With Harness in the background, a system notification instead. Settings -> Alerts
   -> Team messages turns it off. **Mute** a chat (its menu) to silence it.
 - **Groups**: their creator renames them, adds friends and removes members; anyone can **leave** (final). The
   thread says who joined, was removed or left.

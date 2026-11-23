@@ -411,13 +411,13 @@ The **…** of a session (or a right-click on its header, a long press on a phon
 
 - **Notify me on Telegram** (in the session's **…** window; a small bell next to the topic while it is on): when a turn that did not come from Telegram ends, a short message rings on Telegram - in the
   session's thread, else in the main chat (reply to it to continue the session). See [Telegram](telegram).
-- **In the browser**: Settings -> **Notifications** -> *Notify me when a session finishes* shows a
+- **In the browser**: Settings -> **Alerts** -> *Notify me when a session finishes* shows a
   system notification when the tab is in the background (a small banner with **Open** otherwise),
   with an optional chime. A failed turn is notified too; scheduled jobs are not. **Test** checks that
   it works in this browser. Unread answers show a green round counter in the sidebar, on the ☰ button and
   the tree, red when one of those sessions ended in error; it can pulse until you read them (*Pulsing badge*).
   Settings -> Features -> **Badges** -> Sessions hides the counter of the sidebar and of the ☰ button.
-- **On your phone, even with the app closed**: Settings -> **Notifications** -> **Mobile notifications** -> turn on
+- **On your phone, even with the app closed**: Settings -> **Alerts** -> **Mobile notifications** -> turn on
   *Notify on this device* (the browser asks for permission once). Every turn of yours that ends then rings on that
   device - "Harness has finished", the session title and the start of the answer - and a tap opens the session; the one
   you are looking at stays quiet. **Send a test** checks it; the list below shows the registered devices and removes

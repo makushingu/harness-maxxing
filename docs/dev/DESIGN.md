@@ -297,7 +297,7 @@ onboarding (`mx-tour-pending` in sessionStorage, `tourDone` in the UI store) and
 group of the user menu, the palette and Settings › General. The closing card links to the
 `projects/tutorial/topics/1-first-steps` topic when it exists (else to the docs).
 - Counters: `CountBadge` / `CountDot` (`@/components/ui`) - round, sky for unread, accent for running; they
-  pulse (`.mx-badge-pulse`) only when the user turned on Settings -> Notifications -> "Pulsing badge".
+  pulse (`.mx-badge-pulse`) only when the user turned on Settings -> Alerts -> "Pulsing badge".
 
 ## 11. Motion & performance
 

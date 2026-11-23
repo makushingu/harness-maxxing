@@ -1,4 +1,4 @@
-"""Web Push (Settings -> Notifications -> Mobile notifications): the ES256 signature, the devices, the empty push and
+"""Web Push (Settings -> Alerts -> Mobile notifications): the ES256 signature, the devices, the empty push and
 what the service worker fetches afterwards."""
 from __future__ import annotations
 
@@ -101,7 +101,7 @@ def test_a_push_is_empty_and_the_worker_fetches_what_to_show(client, sent):
     assert len(sent) == 1 and sent[0]["endpoint"] == FCM
     assert sent[0]["headers"]["Authorization"].startswith("vapid t=") and sent[0]["headers"]["Content-Length"] == "0"
     items = client.post("/api/push/pending", json={"device": did}).json()["items"]
-    assert len(items) == 1 and items[0]["title"] and items[0]["url"] == "/settings/notifications"
+    assert len(items) == 1 and items[0]["title"] and items[0]["url"] == "/settings/alerts"
     assert client.post("/api/push/pending", json={"device": did}).json()["items"] == []     # fetched once
     assert client.post("/api/push/pending", json={"device": "nope"}).json()["items"] == []
 

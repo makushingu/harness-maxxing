@@ -1,4 +1,4 @@
-"""Web Push: "Harness has finished" on the phone, even with the installed app closed (Settings -> Notifications ->
+"""Web Push: "Harness has finished" on the phone, even with the installed app closed (Settings -> Alerts ->
 Mobile notifications). See docs/dev/API.md#push and maxxing/webpush.py."""
 from __future__ import annotations
 
@@ -63,7 +63,7 @@ async def remove_device(did: str):
 
 @router.post("/test")
 async def test():
-    n = await asyncio.to_thread(webpush.notify, _text("done"), _text("test"), "/settings/notifications", "mx-push-test")
+    n = await asyncio.to_thread(webpush.notify, _text("done"), _text("test"), "/settings/alerts", "mx-push-test")
     return {"sent": n}
 
 

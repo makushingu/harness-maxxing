@@ -404,7 +404,8 @@ def test_a_notification_source_keeps_its_name_readable_on_a_phone():
     # the row wraps the select under it instead of cutting the name
     src = (WEB / "features" / "feed" / "FeedSettings.tsx").read_text()
     start = src.index('data-testid="feed-source"')
-    row = src[start:src.index("\nfunction ", start)]  # SourceRow only
+    end = src.find("\nfunction ", start)
+    row = src[start:end if end >= 0 else None]  # SourceRow only (the last function of the file)
     col = re.search(r'<div className="([^"]*)">', row)
     assert col and {"flex-1", "basis-40"} <= set(col[1].split())
     assert 'className="w-44"' in row  # wider than what is left next to a 10 rem name column on a phone

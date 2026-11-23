@@ -50,7 +50,7 @@ page (and the *to handle* count of the dashboard panel) shows only the alerts st
 | **Harness Maxxing** | an update is available, an update needs attention (customizations, roll-back), 80 % of the server's daily budget is used, the daily budget is reached (Settings -> Usage) |
 | **Sign-ins** | sign-ins (folded), several wrong passwords |
 | **Agents** | an agent waits for your OK (Allow / Deny), a run failed (repeats folded), its daily budget or its runs per hour are reached, its sandbox cannot run, a trigger lost its webhook (Agents page on only) |
-| **Server health** | each new problem of the health card (disk, services, Claude sign-in, backup, failed sign-ins), with *Seen*; ends as *Fixed*. On for new installs; turn it on in Settings -> Notifications -> **Server problems in the notifications** |
+| **Server health** | each new problem of the health card (disk, services, Claude sign-in, backup, failed sign-ins), with *Seen*; ends as *Fixed*. On for new installs; turn it on in Settings -> Feed -> **Server problems in the notifications** |
 
 Agents never start on the source *Agents* (an agent would start itself again).
 
@@ -58,11 +58,12 @@ Agents never start on the source *Agents* (an agent would start itself again).
 
 These webhooks only post notifications. For a webhook that **does** something (update a site, store your sales,
 relay to n8n, a phone Shortcut) or to forward notifications to Discord, Slack or ntfy, see [Webhooks](webhooks) and
-[Events](events) (Settings -> Automate). The webhooks made here keep working and keep their URL; Settings ->
-Webhooks lists them too, read-only.
+[Events](events) (Settings -> Automate).
 
-Settings -> **Notifications** -> **Add a webhook**, choose the service, give it a name, paste its
-signing secret if you have it, **Create**: copy the URL into the service. The dialog says where.
+Every webhook is on Settings -> Automate -> **Webhooks**, the notification ones too (they say *Posts each event
+to the notifications feed*). To add one, ask Harness: *"connect my Stripe sales to the notifications"*. It
+creates it and gives you the URL to paste into the service; Settings -> Webhooks shows it, with where to paste
+it in the service.
 
 | Service | What you get |
 |---|---|
@@ -76,8 +77,9 @@ signing secret if you have it, **Create**: copy the URL into the service. The di
 - Set the **signing secret** the service gives you. Stripe, Shopify and GitHub sources **refuse every event
   until the secret is set** (a warning appears in the feed); with Stripe you get the secret only after adding
   the URL there, so create the source, add the URL in Stripe, then paste the secret. A *Generic JSON* source
-  works without a secret, but then anyone who learns the URL could send fake events. The source's **…** menu: *Send a test event*, *Set the signing secret*, *New URL* (the old one
-  stops working), *Delete*.
+  works without a secret, but then anyone who learns the URL could send fake events. Open the webhook on Settings -> Webhooks: *Send a test*, and in the **⋯** menu
+  *Set the signing secret*, *New URL* (the old one stops working), *Delete*. On Settings -> Feed, its source
+  says *Comes from a webhook*.
 - A delivery sent twice (services retry) appears once, even when both copies arrive at the same moment. For Shopify
   and GitHub, a signed event replayed by someone who captured it also appears only once (even one that was ignored
   or that you deleted, for 30 days). A signed *Generic JSON* body identical to one received in the last 24 hours is
@@ -110,7 +112,7 @@ down"*, *"connect my Shopify orders"* - it writes the script and the job, or set
 
 ## What goes to Telegram
 
-Settings -> Notifications -> **Sources**, per source:
+Settings -> Feed -> **Sources**, per source:
 
 | Rule | Effect |
 |---|---|

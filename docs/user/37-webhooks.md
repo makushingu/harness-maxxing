@@ -52,8 +52,10 @@ switch to turn it off and on. Open a row to see:
 - the **⋯** menu: **New URL** (the old one stops working at once; paste the new one in the service), **Secret**,
   **Delete** (its calls and data too).
 
-**From agents** at the bottom lists, read-only, the webhooks made by agents and the notification webhooks of
-Settings -> Notifications: they work as before and keep their URL.
+The same list also shows the **notification webhooks** (*Posts each event to the notifications feed*: Stripe,
+Shopify, GitHub, JSON) and the webhooks of **agents** (badge *Agent*, *Starts the agent ...*, **Manage in the
+agent**). Open one: its URL, where to paste it in the service, **Send a test**, **New URL**, **Secret**,
+**Delete** (an agent's webhook is removed from the agent). Their events are in the notifications feed.
 
 ## The URL and the secrets
 

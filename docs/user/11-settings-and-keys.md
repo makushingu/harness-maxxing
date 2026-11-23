@@ -16,6 +16,7 @@ blocks):
 | | **Profile** | your pseudo, a **photo** (kept on this server, shown instead of the color and emoji, also to your Team contacts), color and emoji (picked from a searchable list) for messages, notifications and Team, with a preview; **Stay in touch**: the optional e-mail, news and anonymous counter (see [License](license)) |
 | | **Security** | change the password, two-step sign-in with Telegram (see [Telegram](telegram#two-step-sign-in)), **Privacy**: the presentation mode by default (new browsers start with your data masked), sign out everywhere |
 | | **Features** | every page of the sidebar: the ones always there, the optional ones with their switch, the options of the sessions under Sessions (below) |
+| | **Voice** | how voice messages and dictation are transcribed (on the server, Groq, OpenAI, or off), the microphone and call buttons, the voice mode |
 | **Claude** | **Claude** | authentication (status, token or API key, live test), default model, automatic compaction threshold, compaction when you come back to an idle session, smart resume (a summary written for the message you come back with), short session titles (and whether Claude writes them), automatic Claude Code updates, permission mode |
 | | **Memory** | second brain cleaner: line limit per `memory.md`, **Clean now**, size of every memory file - see [Memory](memory) |
 | | **Skills** | the skills Claude sees on this server: **yours** (in `~/.claude/skills`, the workspace, a project or a topic, with where each one lives) and the ones **shipped with Harness** (refreshed by every update, read-only); **Open**, **Edit with Claude**, **Share with the community**, **New skill** - see [Skills](skills) |
@@ -23,9 +24,11 @@ blocks):
 | | **Keys** | your secrets vault (below) |
 | | **Usage** | **Daily budget**: a ceiling in dollars per day for the whole server (0 = none), counted at the price Claude Code reports for each turn (on a subscription: what the same turns would cost with an API key). A [notification](feed) at 80 %, an alert when it is reached; from then on the scheduled prompt jobs and the agents' triggers wait for the next day (skipped, with the reason), while your own messages, your messages to an agent and **Run now** still run. The card shows what today cost so far. **Start again after the usage limit** (on by default): a scheduled job or an agent run stopped by the usage limit of your Claude plan starts again by itself once the limit resets, plus a delay (60 seconds by default). Then Claude plan usage (5-hour window, week) and the plan name (Pro, Max, Ultra): the same figures as the bars at the bottom of the sidebar, read from the last Claude answer; a verified **Ultra** account has no 5-hour limit, so only the week is shown; **Show plan usage** (on for new installs) shows them here and adds the dashboard widget (experimental: it may also ask Anthropic directly when no answer came for 10 minutes); tokens per project, topic and session, tokens per day, how fast turns start (Claude Code ready / first answer, median of recent turns) |
 | **Automate** | **Crons** | the scheduled jobs: list, run now, history, editor (see [Crons](crons)); old `/crons` links open it |
-| | **Notifications** | a notification (and an optional sound) when a Claude session finishes, pulsing unread badges - saved per browser; then the [notifications feed](feed): its Telegram thread, **Server problems in the notifications**, sources and webhooks |
+| | **Webhooks** | every URL that a service calls on this server (Stripe, Shopify, GitHub, a form, a phone Shortcut, n8n...): what each one does, its last calls, test, replay, new URL, secret; also the webhooks that post to the notifications feed and the ones of agents. Made by asking Harness - see [Webhooks](webhooks) |
+| | **Events** | when something happens in Harness (a notification, an agent run that ends, a cron that fails), do one thing without AI - see [Events](events) |
+| **Notifications** | **Alerts** | what this browser and your phone do: a notification (and an optional sound) when a Claude session finishes, Team messages, pulsing unread badges (saved per browser), **Mobile notifications** (push, even with the app closed) |
+| | **Feed** | the [notifications feed](feed): its Telegram thread, **Server problems in the notifications**, the sources and what each one does in Telegram |
 | | **Telegram** | bot wizard, linking, mode (simple chat, threads, web mirror), notification options, two-step sign-in (also in Security) – see [Telegram](telegram) |
-| | **Voice** | how voice messages and dictation are transcribed (on the server, Groq, OpenAI, or off) |
 | **Extensions** | **Widgets** | the widget extensions of `<workspace>/extensions`: switch on/off, **Rescan**, **Customize the dashboard** (opens the dashboard in edit mode) – see [Dashboard widgets](dashboard-widgets) |
 | | **Pages** | the page extensions and the Overview views of the Agents page: every page pinned or not, switch on/off, **Open page**, **In the sidebar** (pin: the sidebar's Extensions folder), **Rescan** – see [Page extensions](page-extensions) |
 | **Workspace** | **Templates** | add a ready-made project (**starter pack**) for your kind of work; an existing project is never overwritten - see [Starter projects](starter-projects) |
@@ -81,7 +84,7 @@ restarts it). Switch it off and every program gets the same share again.
 processor most (Harness, a session, an agent, heavy work, a job, the browser, Docker…) with their priority and how
 long programs wait for the processor. A high CPU figure alone is not a problem; when programs wait (more than 20 % of
 the time) the meter turns amber and says **waiting**. If the processor stays full for 10 minutes, a health problem
-(also in Notifications) names the program that takes the most; it clears itself.
+(also in Settings -> Feed) names the program that takes the most; it clears itself.
 
 ## Features
 
@@ -108,7 +111,7 @@ the pages: **Badges**, one switch per page with a counter in the sidebar (Home: 
 error; Sessions; Team; Agents), all on by default: turn one off and its page shows no number nor dot (the counts stay on
 the page itself); then **Harness Browser** (see [Harness Browser](browser)) and **Devices**, off by default (Claude uses your own
 computers and phones, see [Devices](devices)). Under **Team**, while Team is on: **Team bubbles** (the chat bubbles at the bottom right of every page,
-saved in this browser). The notification when a session finishes is in **Settings -> Notifications**, the Claude plan usage
+saved in this browser). The notification when a session finishes is in **Settings -> Alerts**, the Claude plan usage
 widget in **Settings -> Usage**, the presentation mode by default in **Settings -> Security**, the Telegram mode in
 **Settings -> Telegram**.
 

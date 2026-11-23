@@ -1328,7 +1328,7 @@ def drop_hooks(ids: list[str]) -> None:
     """Deleted agents: their webhook URLs stop answering (a restored agent gets a new one: `agents webhook`)."""
     from . import feedhooks
     for hid in ids:
-        with suppress(Exception):                       # already removed in Settings -> Notifications
+        with suppress(Exception):                       # already removed in Settings -> Webhooks
             feedhooks.remove(hid)
 
 

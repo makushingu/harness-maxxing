@@ -19,7 +19,7 @@ goes on with that result, its approval requests). The alerts are, in the main ch
 
 - the [notifications you can act on](feed): an agent's request (**Allow** / **Deny**, always sent and loud), a failed
   run, an agent at its budget or its runs per hour, and the server's problems (disk almost full, a service down,
-  Claude signed out, a backup that failed or is old; Settings -> Notifications -> *Server problems in the
+  Claude signed out, a backup that failed or is old; Settings -> Feed -> *Server problems in the
   notifications*), with their buttons; once handled, the message says how it ended. A request too long for one
   message ends with *…(cut, open it to see all)* and keeps only **Refuse** / **Open**: send or allow it from Harness. In
   the agent's thread when it has the Telegram option;

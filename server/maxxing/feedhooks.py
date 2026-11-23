@@ -197,8 +197,8 @@ def deliver(token: str, headers: dict, body: bytes) -> tuple[int, dict]:
         return 429, {"error": "rate_limited"}
     if h["kind"] in SIGNED_KINDS and not s.get("secret"):
         feed.system(f"Webhook {h['name']} refused: no signing secret",
-                    f"Add the {h['kind'].capitalize()} signing secret in Settings -> Notifications "
-                    "(source menu -> Set the signing secret); events are refused until then.",
+                    f"Add the {h['kind'].capitalize()} signing secret in Settings -> Webhooks "
+                    "(open the webhook -> Set the signing secret); events are refused until then.",
                     "warning", "security", group=f"hook-secret-{h['id']}")
         return 401, {"error": "secret_required"}
     if not verify(h["kind"], s.get("secret", ""), headers, body):

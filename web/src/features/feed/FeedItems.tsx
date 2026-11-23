@@ -208,7 +208,7 @@ export function FeedPanel({ className }: { className?: string }) {
           </Button>
         </Tooltip>
         <Tooltip content={t('feed.settings')}>
-          <Button variant="ghost" size="icon-sm" className="size-7" onClick={() => navigate('/settings/notifications')} aria-label={t('feed.settings')}>
+          <Button variant="ghost" size="icon-sm" className="size-7" onClick={() => navigate('/settings/feed')} aria-label={t('feed.settings')}>
             <Settings2 />
           </Button>
         </Tooltip>

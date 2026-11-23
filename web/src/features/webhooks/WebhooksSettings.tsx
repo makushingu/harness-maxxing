@@ -27,16 +27,18 @@ import {
   Zap,
   type LucideIcon,
 } from 'lucide-react'
-import { Section } from '@/components/shell/Page'
 import { useLang, useT, type TKey } from '@/i18n'
 import { cn } from '@/lib/utils'
 import { fmtDate, fmtDuration, fmtRelative } from '@/lib/format'
 import {
   AGENT_PATH_RE,
+  useDeleteHook,
   useDeleteWebhook,
+  usePatchHook,
   useReplayWebhookCall,
   useRotateWebhook,
   useSettings,
+  useTestHook,
   useTestWebhook,
   useToggleWebhook,
   useWebhookCall,
@@ -256,7 +258,7 @@ function HooksPage({ kind }: { kind: Kind }) {
             </div>
           ))}
         </div>
-      ) : hooks.length === 0 ? (
+      ) : hooks.length === 0 && feedHooks.length === 0 ? (
         <div className="rounded-xl border">
           <EmptyState icon={kind === 'in' ? WebhookIcon : Zap} title={t(kind === 'in' ? 'webhooks.empty' : 'webhooks.emptyEvents')} description={t('webhooks.emptyDesc')} />
         </div>
@@ -265,9 +267,11 @@ function HooksPage({ kind }: { kind: Kind }) {
           {hooks.map((h) => (
             <HookRow key={h.id} hook={h} kind={kind} now={now} https={q.data.https} open={open === h.id} onOpen={() => setOpen((o) => (o === h.id ? null : h.id))} />
           ))}
+          {feedHooks.map((h) => (
+            <FeedHookRow key={h.id} hook={h} https={q.data.https} open={open === h.id} onOpen={() => setOpen((o) => (o === h.id ? null : h.id))} />
+          ))}
         </ul>
       )}
-      {feedHooks.length > 0 && <FeedHooks hooks={feedHooks} />}
     </div>
   )
 }
@@ -551,7 +555,11 @@ function CallList({ hook, now }: { hook: Webhook; now: number }) {
                 </span>
                 <span className="min-w-0 flex-1 basis-32 truncate">
                   <Sensitive length={10}>{c.summary || c.event || t(`webhooks.trigger.${c.trigger}` as TKey)}</Sensitive>
-                  {(c.trigger === 'test' || c.trigger === 'replay') && <span className="ml-1.5 text-xs text-muted-foreground">· {t(`webhooks.trigger.${c.trigger}` as TKey)}</span>}
+                  {(c.trigger === 'test' || c.trigger === 'replay') && (
+                    <Badge variant="outline" className="ml-1.5 align-middle font-normal">
+                      {t(`webhooks.trigger.${c.trigger}` as TKey)}
+                    </Badge>
+                  )}
                 </span>
                 <span className="flex shrink-0 items-center gap-2">
                   {c.duration_s != null && <span className="text-xs text-muted-foreground tabular-nums">{fmtDuration(c.duration_s)}</span>}
@@ -838,55 +846,172 @@ function SecretDialog({ hook, onClose }: { hook: Webhook; onClose: () => void })
   )
 }
 
-/* ------------------------------------------------------------------ the notification webhooks (read-only) */
+/* ------------------------------------------------------------------ the notification webhooks */
 
+// Webhooks of the notifications feed (feedhooks: Stripe, Shopify, GitHub, JSON -> one feed event each), made by
+// Harness or by an agent (trigger "webhook"). Same list as the others; an agent's one is managed in the agent.
 const FEED_KIND: Record<string, string> = { stripe: 'Stripe', shopify: 'Shopify', github: 'GitHub', generic: 'JSON' }
+const SIGNED = ['stripe', 'shopify', 'github']
 
-function FeedHooks({ hooks }: { hooks: FeedHookRef[] }) {
+function FeedHookRow({ hook, https, open, onOpen }: { hook: FeedHookRef; https: boolean; open: boolean; onOpen: () => void }) {
   const t = useT()
   const mask = useMask()
+  const page = hook.agent ? agentPage(hook.agent) : null
+  const needsSecret = SIGNED.includes(hook.kind) && !hook.has_secret
+  const agentBadge = hook.agent && (
+    <Badge variant="muted" className="gap-1 font-normal">
+      <Bot className="size-3" />
+      {t('webhooks.byAgent')}
+    </Badge>
+  )
   return (
-    <Section title={t('webhooks.feedTitle')} description={t('webhooks.feedDesc')}>
-      <ul className="divide-y rounded-xl border bg-card" data-testid="feed-hook-list">
-        {hooks.map((h) => {
-          const page = h.agent ? agentPage(h.agent) : null
-          return (
-            <li key={h.id} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-2.5">
-              <span className="flex min-w-0 flex-1 basis-56 items-center gap-2">
-                <Bell className="size-4 shrink-0 text-muted-foreground" />
-                <span className="truncate text-sm font-medium">
-                  <Sensitive length={8}>{h.name}</Sensitive>
-                </span>
-                <Badge variant="muted" className="shrink-0 font-normal">
-                  {FEED_KIND[h.kind] || h.kind}
-                </Badge>
+    <li className={cn('grid', open && 'bg-fill-1')} data-hook-id={hook.id} data-testid="feed-hook">
+      <div className={cn('flex items-start gap-3 px-4 py-3 transition-colors', !open && 'hover:bg-muted')}>
+        <button type="button" onClick={onOpen} aria-expanded={open} className="flex min-w-0 flex-1 items-start gap-3 rounded text-left outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg border bg-muted text-muted-foreground">
+            {hook.agent ? <Bot className="size-4" /> : <Bell className="size-4" />}
+          </span>
+          <span className="grid min-w-0 flex-1 gap-0.5">
+            <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+              <span className="truncate text-sm font-medium">
+                <Sensitive length={8}>{hook.name}</Sensitive>
               </span>
-              <span className="flex min-w-0 items-center gap-2 max-sm:w-full">
-                {h.agent ? (
-                  page ? (
-                    <Link to={page} className="min-w-0 outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                      <Badge variant="outline" className="max-w-full gap-1 font-normal hover:bg-muted">
-                        <Bot className="size-3" />
-                        <span className="truncate">{t('webhooks.agent', { name: mask(agentName(h.agent), 6) })}</span>
-                      </Badge>
-                    </Link>
-                  ) : (
-                    <Badge variant="outline" className="gap-1 font-normal">
-                      <Bot className="size-3" />
-                      {t('webhooks.agent', { name: mask(agentName(h.agent), 6) })}
-                    </Badge>
-                  )
-                ) : (
-                  <Link to="/settings/notifications" className="text-xs font-medium text-primary underline-offset-4 hover:underline pointer-coarse:py-2">
-                    {t('webhooks.manageInNotifications')}
-                  </Link>
-                )}
-                <CopyButton text={h.url} label={t('webhooks.copyUrl')} className="max-sm:ml-auto" />
-              </span>
-            </li>
-          )
-        })}
-      </ul>
-    </Section>
+              <Badge variant="muted" className="shrink-0 font-normal">
+                {FEED_KIND[hook.kind] || hook.kind}
+              </Badge>
+              {agentBadge}
+            </span>
+            <span className="text-[13px] break-words text-muted-foreground">
+              {hook.agent ? t('webhooks.feedSentenceAgent', { name: mask(agentName(hook.agent), 6) }) : t('webhooks.feedSentence')}
+            </span>
+            {needsSecret && <span className="text-xs text-warning">{t('webhooks.needsSecret')}</span>}
+          </span>
+        </button>
+        <ChevronRight aria-hidden className={cn('mt-2 size-4 shrink-0 text-muted-foreground transition-transform max-sm:hidden', open && 'rotate-90')} />
+      </div>
+      {open && <FeedHookDetails hook={hook} https={https} page={page} needsSecret={needsSecret} />}
+    </li>
+  )
+}
+
+function FeedHookDetails({ hook, https, page, needsSecret }: { hook: FeedHookRef; https: boolean; page: string | null; needsSecret: boolean }) {
+  const t = useT()
+  const test = useTestHook()
+  const patch = usePatchHook()
+  const del = useDeleteHook()
+  const [secret, setSecret] = React.useState(false)
+  const newUrl = async () => {
+    if (await confirm({ title: t('webhooks.rotateTitle'), description: t('webhooks.rotateDesc'), confirmText: t('webhooks.rotate'), destructive: true }))
+      patch.mutate({ id: hook.id, regenerate: true }, { onSuccess: () => toast.success(t('webhooks.rotated')) })
+  }
+  const remove = async () => {
+    if (await confirm({ title: t('webhooks.removeTitle', { name: hook.name }), description: t('feed.deleteHookDesc'), confirmText: t('common.delete'), destructive: true })) del.mutate(hook.id)
+  }
+  return (
+    <div className="mx-unfold grid gap-4 px-4 pb-4 sm:pl-15">
+      {needsSecret && (
+        <Callout
+          tone="warning"
+          action={
+            <Button size="sm" variant="outline" onClick={() => setSecret(true)}>
+              <KeyRound />
+              {t('webhooks.setSecret')}
+            </Button>
+          }
+        >
+          {t('feed.noSecretWarn')}
+        </Callout>
+      )}
+      <div className="grid gap-1.5">
+        <div className="flex min-w-0 items-center gap-2 rounded-md border bg-background py-1 pr-1 pl-3 font-mono text-[13px]">
+          <span className="min-w-0 flex-1 truncate select-all">
+            <Sensitive length={24}>{hook.url}</Sensitive>
+          </span>
+          <CopyButton text={hook.url} label={t('webhooks.copyUrl')} />
+        </div>
+        {!https && <p className="text-xs text-warning">{t('webhooks.notHttps')}</p>}
+        <p className="text-xs text-muted-foreground">{t(`feed.where.${hook.kind}` as TKey)}</p>
+      </div>
+      <p className="text-[13px] text-muted-foreground">
+        {t('webhooks.feedCalls')}{' '}
+        <Link to="/feed" className="font-medium text-primary underline-offset-4 hover:underline">
+          {t('webhooks.feedCallsTo')}
+        </Link>
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        {page && (
+          <Button size="sm" variant="secondary" asChild>
+            <Link to={page}>
+              <Bot />
+              {t('webhooks.manageInAgent')}
+            </Link>
+          </Button>
+        )}
+        <Button size="sm" variant="secondary" loading={test.isPending} onClick={() => test.mutate(hook.id, { onSuccess: () => toast.success(t('webhooks.testSent')) })}>
+          <Send />
+          {t('webhooks.test')}
+        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button size="icon-sm" variant="ghost" aria-label={t('common.more')}>
+              <MoreHorizontal />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            <DropdownMenuItem onSelect={newUrl}>
+              <RefreshCw />
+              {t('webhooks.rotate')}
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setSecret(true)}>
+              <KeyRound />
+              {hook.has_secret ? t('webhooks.changeSecret') : t('webhooks.setSecret')}
+            </DropdownMenuItem>
+            {!hook.agent && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem destructive onSelect={remove}>
+                  <Trash2 />
+                  {t('common.delete')}
+                </DropdownMenuItem>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+      {secret && <FeedSecretDialog hook={hook} onClose={() => setSecret(false)} />}
+    </div>
+  )
+}
+
+function FeedSecretDialog({ hook, onClose }: { hook: FeedHookRef; onClose: () => void }) {
+  const t = useT()
+  const patch = usePatchHook()
+  const [v, setV] = React.useState('')
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{t('feed.secretTitle', { name: hook.name })}</DialogTitle>
+          <DialogDescription>{t(`feed.secretHelp.${hook.kind}` as TKey)}</DialogDescription>
+        </DialogHeader>
+        <form
+          className="grid gap-4"
+          onSubmit={(e) => {
+            e.preventDefault()
+            patch.mutate({ id: hook.id, secret: v.trim() }, { onSuccess: onClose })
+          }}
+        >
+          <SecretInput value={v} onChange={(e) => setV(e.target.value)} placeholder={t('webhooks.secretPlaceholder')} autoFocus />
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={onClose}>
+              {t('common.cancel')}
+            </Button>
+            <Button type="submit" disabled={!v.trim()} loading={patch.isPending}>
+              {t('common.save')}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   )
 }

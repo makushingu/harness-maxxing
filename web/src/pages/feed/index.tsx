@@ -68,7 +68,7 @@ export default function FeedPage() {
           <Button variant="outline" size="sm" disabled={!shownUnread} onClick={() => read.mutate(source && !pendingOnly ? { source } : { all: true })}>
             <CheckCheck /> <span className="max-lg:sr-only">{t('feed.markAllRead')}</span>
           </Button>
-          <Button variant="ghost" size="icon-sm" className="max-md:hidden" onClick={() => navigate('/settings/notifications')} aria-label={t('feed.settings')}>
+          <Button variant="ghost" size="icon-sm" className="max-md:hidden" onClick={() => navigate('/settings/feed')} aria-label={t('feed.settings')}>
             <Settings2 />
           </Button>
         </>

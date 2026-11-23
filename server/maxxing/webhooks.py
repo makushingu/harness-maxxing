@@ -1381,7 +1381,7 @@ _SAMPLES: dict[str, tuple[dict, dict]] = {
     "github": ({"ref": "refs/heads/main", "repository": {"full_name": "acme/blog"},
                 "head_commit": {"message": "Test commit"}, "commits": [{"message": "Test commit"}]}, {"X-GitHub-Event": "push"}),
     "generic": ({"title": "Test", "body": "If you can read this, the webhook works."}, {}),
-    "phone": ({"text": "test from the phone"}, {}),
+    "phone": ({"text": "Test sent from the Webhooks page"}, {}),
     "feed": ({"id": 0, "title": "Test notification", "body": "If you can read this, the event works.", "level": "info",
               "source": "test", "url": ""}, {}),
     "agent": ({"agent": "acme/blog/agents/writer", "ok": True, "text": "Test run of the agent."}, {}),

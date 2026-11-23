@@ -21,7 +21,8 @@ export function usePermission(): [NotificationPermission | 'unsupported', () => 
   return [perm, ask]
 }
 
-export function NotificationsSection() {
+/** Settings -> Alerts: what this browser / phone does when something happens (sound, badge, push). */
+export function AlertsSection() {
   const t = useT()
   const notifyDone = useUI((s) => s.notifyDone)
   const notifySound = useUI((s) => s.notifySound)
@@ -93,6 +94,14 @@ export function NotificationsSection() {
         )}
       </SettingsCard>
       <PushSettings />
+    </SectionStack>
+  )
+}
+
+/** Settings -> Feed: the notifications feed's sources, their rule, Telegram and server problems. */
+export function FeedSection() {
+  return (
+    <SectionStack>
       <FeedSettingsCards />
     </SectionStack>
   )
