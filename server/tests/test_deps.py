@@ -229,6 +229,20 @@ def test_remove_lists_and_refuses_essentials(st, capsys):
     assert cli.main(["deps", "remove", "uv"]) == 1 and "needed" in capsys.readouterr().err
 
 
+def test_link_same_drivers_keeps_one_copy_of_the_playwright_node(tmp_path):
+    site = tmp_path / "lib/python3.12/site-packages"
+    for pkg, body in (("playwright", b"node-24"), ("patchright", b"node-24"), ("other", b"node-22")):
+        (site / pkg / "driver").mkdir(parents=True)
+        (site / pkg / "driver/node").write_bytes(body)
+        (site / pkg / "driver/node").chmod(0o755)
+    assert deps.link_same_drivers(tmp_path) == len(b"node-24")
+    a, b, c = (site / p / "driver/node" for p in ("patchright", "playwright", "other"))
+    assert a.stat().st_ino == b.stat().st_ino != c.stat().st_ino           # a different build stays apart
+    assert b.read_bytes() == b"node-24" and os.access(b, os.X_OK) and not list(site.rglob("*.link"))
+    assert deps._size(tmp_path) == len(b"node-24") * 1 + len(b"node-22")  # counted once
+    assert deps.link_same_drivers(tmp_path) == 0                            # already linked: nothing to do
+
+
 def test_clean_drops_old_versions_orphans_caches_and_big_logs(st, monkeypatch):
     home = deps.root_home()
     (home / ".cache/uv/x").mkdir(parents=True)
