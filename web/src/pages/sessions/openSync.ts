@@ -10,7 +10,7 @@
 // Every browser shares its sessions in both modes (a phone in Zones too: it follows the mode of the computer, and a
 // session opened there must still reach the computer).
 import * as React from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { qk } from '@/lib/queries/keys'
 import { normalizeCols, useSessionsUI, type Col } from './store'
@@ -76,6 +76,14 @@ const sync = {
   start: null as string | null,
 }
 
+let cache: QueryClient | null = null
+/** The answer to a change sent here: applied, and kept as the shared list (a Sessions page shown again starts from the
+ *  cached one: an older one would bring back the session in front from before). */
+function sent(s: Shared) {
+  cache?.setQueryData<Shared>(qk.openSessions, (old) => (old && old.rev > s.rev ? old : s))
+  pull(s)
+}
+
 /** Browser -> server: what was opened, closed or (a computer) moved here since `base`. */
 function flush() {
   const body: { open?: string[]; close?: string[]; order?: string[]; tabs?: boolean; front?: string } = {}
@@ -98,7 +106,7 @@ function flush() {
   if (!Object.keys(body).length) return
   api
     .post<Shared>('/api/sessions/open', body)
-    .then(pull)
+    .then(sent)
     .catch(() => {})                      // offline: sent again with the next change, or when the list comes back
 }
 
@@ -108,7 +116,7 @@ function pull(s: Shared) {
   const local = localIds()
   if (s.ids === null) {
     // nothing shared yet: a computer starts the list with its own sessions (and its view)
-    if (!sync.mobile) api.post<Shared>('/api/sessions/open', { open: local, tabs: st.tabs, front: frontId() ?? undefined }).then(pull).catch(() => {})
+    if (!sync.mobile) api.post<Shared>('/api/sessions/open', { open: local, tabs: st.tabs, front: frontId() ?? undefined }).then(sent).catch(() => {})
     return
   }
   if (s.rev < sync.rev) return
@@ -159,6 +167,7 @@ export const useShared = () =>
 
 export function useOpenSync(mobile: boolean) {
   const { data } = useShared()
+  cache = useQueryClient()
   React.useEffect(() => {
     sync.mobile = mobile
     sync.rev = 0
