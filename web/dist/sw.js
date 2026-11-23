@@ -8,8 +8,8 @@
  *   other static files      stale-while-revalidate (icons, fonts, manifest, favicon)
  *   /api/*, /ext/*, non-GET, cross-origin   never touched (straight to the network)
  */
-const VERSION = "373e8178ef3e"
-const PRECACHE = ["/assets/index-DN5dJ1-m.js","/assets/rolldown-runtime-XKyaHtl9.js","/assets/vendor-react-BNCMh3YF.js","/assets/i18n-CQZaTjlN.js","/assets/preload-helper-7y9sWmk5.js","/assets/react-DurwoXPM.js","/assets/middleware-CpWMw2yu.js","/assets/media-DUngkOjj.js","/assets/pwa-Ijo3mTN0.js","/assets/vendor-query-CjPNRXKi.js","/assets/queries-5LHyeo2o.js","/assets/api-CpVDuPcn.js","/assets/vendor-ui-Ww2uvVWZ.js","/assets/upload-CD2Jjr4h.js","/assets/createLucideIcon-BESczn8r.js","/assets/utils-BtPbbl_M.js","/assets/vendor-router-D5oKdmts.js","/assets/spinner-T-f3wq6M.js","/assets/check-CMuzREZG.js","/assets/sheet-drag-CR3TBNHL.js","/assets/bot-BXWWT0HQ.js","/assets/git-branch-BFDLcfSG.js","/assets/x-XOpLhFOU.js","/assets/folder-open-CBeClfta.js","/assets/index-DQ7crYqb.css","/assets/inter-latin-wght-normal-Dx4kXJAl.woff2"]
+const VERSION = "cc1d9623d7c3"
+const PRECACHE = ["/assets/index-vtgf1x3S.js","/assets/rolldown-runtime-XKyaHtl9.js","/assets/vendor-react-BNCMh3YF.js","/assets/i18n-CQZaTjlN.js","/assets/preload-helper-7y9sWmk5.js","/assets/react-DurwoXPM.js","/assets/middleware-CpWMw2yu.js","/assets/media-DUngkOjj.js","/assets/pwa-Ijo3mTN0.js","/assets/vendor-query-kkOOQXZY.js","/assets/queries-Dg--pW2L.js","/assets/api-BFFIpHUw.js","/assets/vendor-ui-DwJrUN99.js","/assets/upload-C3MeSwzR.js","/assets/createLucideIcon-BrI7woTs.js","/assets/utils-CbJjB46A.js","/assets/vendor-router-C6VFWG_N.js","/assets/spinner-XpnlRkeZ.js","/assets/check-CEbXaWsJ.js","/assets/sheet-drag-CR3TBNHL.js","/assets/bot-DnwIIIL3.js","/assets/git-branch-B1B5L3Ao.js","/assets/x-BEKxJziG.js","/assets/folder-open-Dr4SbNQW.js","/assets/index-DQ7crYqb.css","/assets/inter-latin-wght-normal-Dx4kXJAl.woff2"]
 const SHELL = `mx-shell-${VERSION}`
 const ASSETS = `mx-assets-${VERSION}`
 const OFFLINE = '/offline.html'
