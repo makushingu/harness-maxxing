@@ -666,8 +666,13 @@ def _write_cfg(fn) -> None:
             tmp = target.with_name(f"{target.name}.{uuid.uuid4().hex[:12]}.mx-tmp")
             fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
             try:
-                with os.fdopen(fd, "w", encoding="utf-8") as fh:
-                    fh.write(json.dumps(d, indent=2, ensure_ascii=False))
+                text = json.dumps(d, indent=2, ensure_ascii=False)
+                try:
+                    raw = text.encode("utf-8")
+                except UnicodeEncodeError:               # a lone surrogate (json.loads accepts it): escaped instead
+                    raw = json.dumps(d, indent=2).encode("ascii")
+                with os.fdopen(fd, "wb") as fh:
+                    fh.write(raw)
                 os.replace(tmp, target)
             except BaseException:
                 tmp.unlink(missing_ok=True)

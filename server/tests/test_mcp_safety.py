@@ -448,3 +448,12 @@ def test_a_secret_in_command_or_an_unknown_key_is_not_shown_nor_backed_up(env, c
     exported = json.dumps(mcp.export())
     for text in (shown, exported):
         assert tok not in text and "topsecretvalue123456" not in text
+
+
+def test_write_cfg_escapes_a_lone_surrogate_instead_of_failing(env):  # noqa: F811
+    from maxxing import mcp
+    p = env.tmp / "claude" / ".claude.json"
+    p.write_text('{"projects": {}, "note": "\\ud800"}')
+    mcp._write_cfg(lambda d: d.update(x=1) or True)
+    d = json.loads(p.read_text())
+    assert d["x"] == 1 and d["note"] == "\ud800"
