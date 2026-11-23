@@ -149,3 +149,12 @@ def test_the_service_worker_shows_what_the_server_lists():
     assert "addEventListener('push'" in src and "'/api/push/pending'" in src and "'X-Maxxing': '1'" in src
     assert "showNotification" in src and "addEventListener('notificationclick'" in src
     assert "url.origin !== self.location.origin" in src           # a tap only opens this app
+
+
+def test_a_damaged_webpush_file_is_kept_before_a_new_key_replaces_it(mx):
+    webpush.public_key()
+    f = webpush._path()
+    f.write_text("{bad")
+    webpush.add_device(FCM)
+    kept = list(f.parent.glob("webpush.json.damaged-*"))
+    assert kept and kept[0].read_text() == "{bad"

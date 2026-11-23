@@ -15,7 +15,9 @@ import hashlib
 import hmac
 import json
 import logging
+import os
 import secrets
+import shutil
 import threading
 import time
 import urllib.error
@@ -156,7 +158,29 @@ def _load() -> dict:
     return {"private": f"{d:064x}", "devices": {}}
 
 
+def _keep_damaged() -> None:
+    """The file exists but is not a usable state (cut, edited by hand): _load made a new key out of it, so the
+    first save would erase the old key and every subscribed device. Keep a copy first."""
+    f = _path()
+    try:
+        d = json.loads(f.read_text(encoding="utf-8"))
+        if isinstance(d, dict) and isinstance(d.get("private"), str):
+            return
+    except FileNotFoundError:
+        return
+    except (OSError, ValueError):
+        pass
+    dest = f.with_name(f"{f.name}.damaged-{time.strftime('%Y%m%d-%H%M%S')}")
+    try:
+        shutil.copy2(f, dest)
+        os.chmod(dest, 0o600)
+        log.error("%s was damaged: kept as %s before a new key is saved", f, dest)
+    except OSError:
+        log.exception("could not keep a copy of the damaged %s", f)
+
+
 def _save(st: dict) -> None:
+    _keep_damaged()
     config.write_json(_path(), st, mode=0o600)
 
 
