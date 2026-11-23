@@ -842,12 +842,7 @@ def delta_fields(cur: dict, delta: dict) -> dict:
             continue
         if k == "limits":
             for n, v in d.items():
-                now = cur["limits"].get(n)
-                if now == v.get("to"):
-                    continue
-                if now != v.get("from"):
-                    stale.append(f"limits.{n} is {_show(now)}, not {_show(v.get('from'))}")
-                else:
+                if _still_to_apply(f"limits.{n}", cur["limits"].get(n), v, stale):
                     f.setdefault("limits", {})[n] = v.get("to")
         elif k == "mail":
             grants = list(cur.get("mail") or [])
@@ -865,18 +860,22 @@ def delta_fields(cur: dict, delta: dict) -> dict:
         elif "add" in d:
             items = [x for x in cur.get(k) or [] if x not in (d.get("remove") or [])]
             f[k] = items + [x for x in d.get("add") or [] if x not in items]
-        else:
-            now = cur.get(k)
-            if now == d.get("to"):
-                continue
-            if now != d.get("from"):
-                stale.append(f"{k} is {_show(now)}, not {_show(d.get('from'))}")
-            else:
-                f[k] = d.get("to")
+        elif _still_to_apply(k, cur.get(k), d, stale):
+            f[k] = d.get("to")
     if stale:
         raise AgentError(409, "stale_change", "The agent's settings changed since this was asked (" + "; ".join(stale)
                          + "): nothing applied. Ask again if it is still needed.")
     return f
+
+
+def _still_to_apply(name: str, now: Any, d: dict, stale: list[str]) -> bool:
+    """A {from, to} change not applied yet and still over the value its card showed (else why, added to stale)."""
+    if now == d.get("to"):
+        return False
+    if now != d.get("from"):
+        stale.append(f"{name} is {_show(now)}, not {_show(d.get('from'))}")
+        return False
+    return True
 
 
 _MODE_RANK = {"default": 0, "acceptEdits": 1, "bypass": 2}
@@ -1062,8 +1061,7 @@ def continue_in_sessions(path: str, sid: str) -> dict:
                     e["archived"] = False
                 bus.invalidate("sessions", "workspace")
             return service.get_session(other) or service.public(m)
-    a = load(path)
-    name = a["name"] or parse(path)[2]
+    name = load(path)["name"] or parse(path)[2]
     title = src.get("title") or ""                  # runs are titled "<agent> - <date>" (fire)
     title = (title if title.startswith(name) else f"{name}: {title or 'run'}")[:120]
     meta = store.new_meta(topic_of(path), title, model=src.get("model") or "", source="web")
@@ -1471,8 +1469,7 @@ def remap(old_prefix: str, new_prefix: str) -> None:
     except OSError:
         log.exception("agents layout not moved (%s -> %s)", old_prefix, new_prefix)
     d = config.state_dir("agents")
-    old_k, new_k = old_prefix.replace("/topics/", "__").replace("projects/", ""), \
-        new_prefix.replace("/topics/", "__").replace("projects/", "")
+    old_k, new_k = (x.replace("/topics/", "__").replace("projects/", "") for x in (old_prefix, new_prefix))
     for f in d.iterdir():
         if f.name.startswith(old_k + "__"):
             f.rename(d / (new_k + f.name[len(old_k):]))
@@ -1686,11 +1683,6 @@ def _changed_since(path: str, snap: dict | None) -> list[str]:
     return [n for n in WATCHED_FILES if n in files and files[n] != now.get(n)]   # a file an older snapshot never saw
 
 
-def _changed_during(path: str, sid: str) -> list[str]:
-    """The watched files a run changed (the owner's own changes meanwhile, from the page or the CLI, excepted)."""
-    return _changed_since(path, _pop_snapshot(path, sid))
-
-
 def _put_back(path: str, snap: dict) -> bool:
     """agent.json as it was when the run started: a run never gives itself a budget, a key or a right (its other
     files are the owner's to check). False: the snapshot did not keep it."""
@@ -1781,12 +1773,8 @@ def day_cost(path: str, when: float | None = None, metas: list[dict] | None = No
     day = store.day_of(when or time.time())
     if metas is None:
         metas = _agent_metas(since=time.time() - 86400 - 3600 if cold and not when else None).get(path, [])
-    total = 0.0
-    for m in metas:
-        d = (m.get("days") or {}).get(day) if isinstance(m.get("days"), dict) else None
-        if isinstance(d, dict):
-            total += float(d.get("cost") or 0)
-    return round(total, 4)
+    days = [m["days"].get(day) for m in metas if isinstance(m.get("days"), dict)]
+    return round(sum(float(d.get("cost") or 0) for d in days if isinstance(d, dict)), 4)
 
 
 def _runs_last_hour(path: str, msgs: list[dict] | None = None) -> int:
@@ -1825,8 +1813,7 @@ def status(path: str, metas: list[dict] | None = None) -> dict:
 def _open_chat(path: str) -> str | None:
     """The conversation the owner's next message goes on in (None: the next one starts a new session)."""
     try:
-        a = load(path)
-        return _chat_session(path, a)
+        return _chat_session(path, load(path))
     except Exception:  # noqa: BLE001 - a status never fails on it
         return None
 
@@ -2564,7 +2551,7 @@ def check_alerts() -> int:
             ref = _ref(a["path"], f"trigger:{t['id']}")
             if t.get("hook_id") and t["hook_id"] not in hooks and a["enabled"] and t.get("enabled", True):
                 if not feed.find(ref):
-                    feed.post(f"{a['name'] or parse(a['path'])[2]}: a trigger lost its webhook",
+                    feed.post(f"{a['display_name']}: a trigger lost its webhook",
                               f"The webhook behind the trigger on {t.get('source')!r} was deleted: this trigger "
                               "never fires. Remove it or create its webhook again on the agent page.", "warning",
                               ALERT_SOURCE, _page(a["path"]), ref=ref, agent=a["path"], actions=OPEN)
@@ -2590,8 +2577,9 @@ def on_turn_end(session: dict, result: dict | None) -> None:
         return
     from .sessions import service
     ok = bool(result.get("ok")) if isinstance(result, dict) and "ok" in result else session.get("state") != "error"
+    at, died = _which_turn(session)
     try:                                # this turn's own text, never the answer of the turn before (a conversation goes on)
-        text = service.ended_turn_text(session["id"], *_which_turn(session)) or ""
+        text = service.ended_turn_text(session["id"], at, died) or ""
     except Exception:
         text = ""
     if not ok and not text:
@@ -2599,8 +2587,7 @@ def on_turn_end(session: dict, result: dict | None) -> None:
     cost = next((round(float(result[k]), 4) for k in ("mx_turn_cost", "cost_usd", "total_cost_usd")
                  if isinstance(result.get(k), (int, float))), None) if isinstance(result, dict) else None
     if cost is None:                    # no `result`: stopped by its timeout (or crashed) before Claude said the cost
-        try:
-            at, died = _which_turn(session)             # a turn that died unrecorded: its message has no last_turn.at
+        try:                                            # a turn that died unrecorded: its message has no last_turn.at
             est = agent_cost.charge_unbilled(session["id"], None if died else at)
         except Exception:  # noqa: BLE001 - an estimate never stops the end of a turn
             log.exception("agent %s: cost of a turn without result", path)
@@ -2628,7 +2615,7 @@ def on_turn_end(session: dict, result: dict | None) -> None:
         except Exception:  # noqa: BLE001
             log.exception("agent %s: group %s turn provenance", path, group)
     try:                                # its steps, shown under the answer on the agent page
-        steps = service.ended_turn_steps(session["id"], *_which_turn(session))
+        steps = service.ended_turn_steps(session["id"], at, died)
     except Exception:  # noqa: BLE001
         steps = {}
     steps = {k: v for k, v in steps.items() if v}
@@ -2813,15 +2800,11 @@ def _int(v: Any) -> int:
 
 
 def _chain_source(src: str) -> str:
-    try:
-        name = load(src)["name"] if exists(src) else ""
-    except Exception:  # noqa: BLE001
-        name = ""
-    return f"agent {name or parse(src)[2]}"
+    return f"agent {_display(src)}"
 
 
 def _chain_text(src: str, text: str, ok: bool) -> str:
-    head = f"Result of a run of the agent {_chain_source(src)[6:]} ({src})" + ("" if ok else ", which FAILED")
+    head = f"Result of a run of the agent {_display(src)} ({src})" + ("" if ok else ", which FAILED")
     return f"{head}:\n{text}"[:EVENT_MAX]
 
 
@@ -3139,9 +3122,8 @@ def add_cron(path: str, schedule: str = "", prompt: str = "", name: str = "", en
     """A cron trigger = a Claude cron job in the agent folder (shown on the Crons page too) -> the job."""
     from . import bus, crons
     _must_exist(path)
-    a = load(path)
     try:
-        job = crons.create_job({"name": name or f"{a['name'] or parse(path)[2]} - routine", "kind": "claude",
+        job = crons.create_job({"name": name or f"{load(path)['name'] or parse(path)[2]} - routine", "kind": "claude",
                                 "schedule": schedule or "0 8 * * *", "topic_path": path,
                                 "prompt": prompt or "Run your routine.", "notify": "never", "enabled": enabled})
     except crons.CronError as e:

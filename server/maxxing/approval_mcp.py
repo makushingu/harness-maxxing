@@ -38,7 +38,7 @@ POLL_S = 0.5
 DEFAULT_TIMEOUT_S = 1800.0
 STR_MAX = 4000            # characters kept of each string of the tool input (display only)
 INPUT_MAX = 20000         # characters of the whole clipped input
-DECIDED = ("allow", "deny", "timeout", "expired")
+NO_ANSWER = {"behavior": "deny", "message": "No answer in time: the action was not allowed."}
 PROTOCOL = "2025-06-18"
 
 _out_lock = threading.Lock()
@@ -174,7 +174,7 @@ def ask(args: dict, poll_s: float = POLL_S, ctx: dict | None = None) -> dict:
     rid = secrets.token_hex(8)
     now = time.time()
     req = {"id": rid, "session": (ctx or {}).get("session") or os.environ.get("MAXXING_SESSION") or "",
-           "agent_path": (ctx or {}).get("agent_path") if ctx else os.environ.get("MAXXING_AGENT_PATH") or "",
+           "agent_path": ctx.get("agent_path") if ctx else os.environ.get("MAXXING_AGENT_PATH") or "",
            "tool": tool, "input": clip(tool_input),
            "tool_use_id": _shown(str(args.get("tool_use_id") or "")[:200]), "at": now, "expires": now + timeout,
            "status": "pending"}
@@ -195,13 +195,13 @@ def ask(args: dict, poll_s: float = POLL_S, ctx: dict | None = None) -> dict:
                 msg = str(d.get("message") or "").strip()
                 return {"behavior": "deny", "message": ("The user denied this action" + (f": {msg}" if msg else "."))[:2000]}
             if st in ("timeout", "expired") or not d:
-                return {"behavior": "deny", "message": "No answer in time: the action was not allowed."}
+                return dict(NO_ANSWER)
             if time.time() >= now + timeout:
                 with _state_lock(folder):              # the server's lock (approvals.decide): one answer wins
                     cur = read(f) or {}
                     if cur.get("status") == "pending":     # the user did not answer meanwhile
                         write_atomic(f, {**cur, "status": "timeout", "decided_at": time.time()})
-                        return {"behavior": "deny", "message": "No answer in time: the action was not allowed."}
+                        return dict(NO_ANSWER)
                 # answered at the last second: the next poll returns that answer
     finally:
         with _mine_lock:

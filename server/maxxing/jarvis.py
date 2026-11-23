@@ -234,6 +234,12 @@ def _write_rules(tdir: Path) -> None:
         f.write_text(text, encoding="utf-8")
 
 
+def _ensure_on() -> None:
+    if not feature_on():
+        raise JarvisError(409, "off", "Jarvis is off: Settings -> Features -> Jarvis")
+    ensure()
+
+
 def ensure() -> Path:
     """Its project and topic, from templates/jarvis (only the missing files: what it learned stays). A project
     `jarvis` the owner made himself is never taken over (409)."""
@@ -332,17 +338,14 @@ def current_for(sid: str) -> str:
 
 
 def _title(when: float | None = None) -> str:
-    from . import crons
-    return "Jarvis · " + datetime.fromtimestamp(when or time.time(), crons.tz()).strftime("%Y-%m-%d %H:%M")
+    return "Jarvis · " + _local_now(when or time.time()).strftime("%Y-%m-%d %H:%M")
 
 
 def conversation(message: str | None = None, source: str = "web", new: bool = False,
                  attachments: list[str] | None = None, voice_path: str | None = None) -> dict:
     """Its conversation (made when there is none, or `new`) -> the session. `message`: sent into it."""
     from .sessions import service
-    if not feature_on():
-        raise JarvisError(409, "off", "Jarvis is off: Settings -> Features -> Jarvis")
-    ensure()
+    _ensure_on()
     with _lock:
         st = _read_state()
         sid = None if new else (st.get("session") if _alive(st.get("session")) else None)
@@ -393,7 +396,6 @@ def conversations() -> list[dict]:
 # to, result, cost, question, turns}. state: running | replied (its turn ended, the answer was reported) | failed |
 # closed (by Jarvis or the owner). `to`: the session the reports go to (Jarvis's conversation by default: its current
 # one when the report comes, so a new morning conversation still gets yesterday's results).
-STATES = ("running", "replied", "failed", "closed")
 
 
 def _read_work() -> dict:
@@ -443,22 +445,12 @@ def work(state: str | None = None, everyone: bool = False) -> list[dict]:
     return sorted(items, key=lambda i: i.get("updated") or 0, reverse=True)
 
 
-def _find(ref: str | int) -> dict | None:
-    r = str(ref).strip().lstrip("#")
-    for i in _read_work()["items"]:
-        if str(i.get("id")) == r or (len(r) >= 6 and str(i.get("session") or "").startswith(r)):
-            return i
-    return None
-
-
 def close(ref: str | int) -> dict:
+    r = str(ref).strip().lstrip("#")
     with _lock:
         w = _read_work()
-        it = _find(ref)
-        if not it:
-            raise JarvisError(404, "not_found", f"No work {ref}")
         for i in w["items"]:
-            if i.get("id") == it["id"]:
+            if str(i.get("id")) == r or (len(r) >= 6 and str(i.get("session") or "").startswith(r)):
                 i.update(state="closed", updated=time.time())
                 _write_work(w)
                 return i
@@ -569,18 +561,13 @@ def on_turn_end(session: dict, result: dict | None) -> None:
     if brief_item:
         _brief_to_conversation(text if ok else "")
         return
+    if to and not _alive(to):
+        return
     try:
-        if to and _alive(to):
-            service.send_message(to, _report_text(item, text, ok), source="session",
-                                 relay={"from": sid, "title": session.get("title") or "", "path": item["path"],
-                                        "hops": int(item.get("hops") or 1) + 1, "report": item["id"]})
-        elif not to:
-            target = current_session()
-            if target is None:
-                target = conversation()["id"]
-            service.send_message(target, _report_text(item, text, ok), source="session",
-                                 relay={"from": sid, "title": session.get("title") or "", "path": item["path"],
-                                        "hops": int(item.get("hops") or 1) + 1, "report": item["id"]})
+        service.send_message(to or current_session() or conversation()["id"], _report_text(item, text, ok),
+                             source="session", relay={"from": sid, "title": session.get("title") or "",
+                                                      "path": item["path"], "hops": int(item.get("hops") or 1) + 1,
+                                                      "report": item["id"]})
     except Exception:  # noqa: BLE001 - a report never breaks the end of a turn
         log.exception("jarvis: report of work %s", item.get("id"))
 
@@ -618,6 +605,10 @@ def _local_now(now: float):
     return datetime.fromtimestamp(now, crons.tz())
 
 
+def _day(now: float) -> str:
+    return _local_now(now).strftime("%Y-%m-%d")
+
+
 def _due(hhmm: str, last: Any, now: float) -> bool:
     """`hhmm` passed today (local time) and it did not run today; a server down at that time runs it at the next
     pass of the same day, never on another day."""
@@ -640,9 +631,9 @@ def brief(now: float | None = None) -> dict:
     when = _local_now(now).strftime("%A %Y-%m-%d %H:%M")
     with _lock:
         st = _read_state()
-        st["last_brief"] = _local_now(now).strftime("%Y-%m-%d")
+        st["last_brief"] = _day(now)
         _write_state(st)
-    conv = conversation(new=s["daily"]) if s["daily"] else conversation()
+    conv = conversation(new=s["daily"])
     try:
         r = agents.fire(AGENT_PATH, trigger="manual", source="Jarvis", prompt=PREPARE_TEXT.format(when=when),
                         model=s["dream_model"] or None)
@@ -673,13 +664,11 @@ def quiet_since(since: float) -> bool:
 def dream(now: float | None = None, force: bool = True) -> dict | None:
     """The night pass: a run of its backstage agent (skill jarvis-dream). `force` False (the schedule): skipped when
     nothing changed since the last one -> None."""
-    if not feature_on():
-        raise JarvisError(409, "off", "Jarvis is off: Settings -> Features -> Jarvis")
-    ensure()
+    _ensure_on()
     now = now or time.time()
     with _lock:
         st = _read_state()
-        st["last_dream"] = _local_now(now).strftime("%Y-%m-%d")
+        st["last_dream"] = _day(now)
         _write_state(st)
     mark = st.get("dream_mark")
     if not force and isinstance(mark, (int, float)) and quiet_since(float(mark)):
@@ -717,7 +706,7 @@ def tick(now: float | None = None) -> str:
             return "dream" if dream(now, force=False) else "quiet"
         if _due(s["brief"], st.get("last_brief"), now):
             if _opened_after_brief(st, s["brief"], now):
-                st["last_brief"] = _local_now(now).strftime("%Y-%m-%d")    # the owner just started talking today
+                st["last_brief"] = _day(now)    # the owner just started talking today
                 _write_state(st)
                 return ""
             brief(now)
@@ -769,32 +758,28 @@ def digest(since_h: float | None = None, now: float | None = None) -> str:
         out.append(f"- {p}{'*' if own else ''}: {desc[:160]} · topics: {', '.join(tops) or 'none'}")
     glob_mem = [root / "CLAUDE.md", root / "memory.md"]
     changed += [str(f) for f in glob_mem if f.exists() and f.stat().st_mtime > since]
-    out += ["", "Memory files changed (read them):"] + [f"- {f}" for f in changed] + ([] if changed else ["- none"])
+    out += ["", "Memory files changed (read them):"] + ([f"- {f}" for f in changed] or ["- none"])
     out += ["", "## Sessions active since then", ""]
-    rows = [s for s in service.list_sessions(archived=False) if (s.get("updated") or 0) > since]
-    owner_lines = 0
-    for s in rows[:60]:
-        if s.get("path") == PATH:
-            continue
-        last = " ".join((s.get("last_text") or "").split())[:240]
-        out.append(f"- [{s.get('state')}] {s.get('path')} · {s.get('title')} ({s['id'][:8]}, {_fmt(s.get('updated') or 0)})"
-                   + (f"\n  last answer: {last}" if last else ""))
-        owner_lines += 1
-    if not owner_lines:
-        out.append("- none")
+    rows = [s for s in service.list_sessions(archived=False) if (s.get("updated") or 0) > since][:60]
+    lines = []
+    for s in rows:
+        if s.get("path") != PATH:
+            last = " ".join((s.get("last_text") or "").split())[:240]
+            lines.append(f"- [{s.get('state')}] {s.get('path')} · {s.get('title')} ({s['id'][:8]}, "
+                         f"{_fmt(s.get('updated') or 0)})" + (f"\n  last answer: {last}" if last else ""))
+    out += lines or ["- none"]
     out += ["", "## Tasks", ""]
     tasks = config.read_json(root / "tasks.json", {}) or {}
     items = tasks.get("tasks") if isinstance(tasks, dict) else None
     if isinstance(items, list):
-        today = _local_now(now).strftime("%Y-%m-%d")
+        today = _day(now)
         names = {p.get("id"): p.get("name") for p in (tasks.get("projects") or []) if isinstance(p, dict)}
         open_ = [t for t in items if isinstance(t, dict) and t.get("status") not in ("done", "archived")]
         late = [t for t in open_ if str(t.get("due") or "")[:10] and str(t.get("due"))[:10] < today]
         due = [t for t in open_ if str(t.get("due") or "")[:10] == today]
         out.append(f"- open: {len(open_)}, late: {len(late)}, due today: {len(due)}")
-        for t in (late + due)[:15]:
-            out.append(f"  - {str(t.get('due') or '')[:10]} {t.get('title')} ({names.get(t.get('project_id')) or ''}, "
-                       f"{t.get('id')})")
+        out += [f"  - {str(t.get('due') or '')[:10]} {t.get('title')} ({names.get(t.get('project_id')) or ''}, "
+                f"{t.get('id')})" for t in (late + due)[:15]]
         doing = [t for t in open_ if t.get("status") not in ("todo",)]
         if doing:
             out.append(f"- in progress: " + "; ".join(f"{t.get('title')} ({t.get('id')})" for t in doing[:10]))
@@ -804,18 +789,13 @@ def digest(since_h: float | None = None, now: float | None = None) -> str:
     try:
         from . import feed
         evs = [e for e in feed.list_events(limit=60).get("events", []) if (e.get("at") or 0) > since]
-        for e in evs[:30]:
-            out.append(f"- {_fmt(e.get('at') or 0)} [{e.get('level')}] {e.get('source')}: {e.get('title')}")
-        if not evs:
-            out.append("- none")
+        out += [f"- {_fmt(e.get('at') or 0)} [{e.get('level')}] {e.get('source')}: {e.get('title')}"
+                for e in evs[:30]] or ["- none"]
     except Exception:  # noqa: BLE001
         out.append("- (unavailable)")
     out += ["", "## Work board (open)", ""]
-    open_work = work("open")
-    for i in open_work[:30]:
-        out.append(f"- #{i['id']} [{i['state']}{', asks' if i.get('question') else ''}] {i['path']} · {i['title']}")
-    if not open_work:
-        out.append("- none")
+    out += [f"- #{i['id']} [{i['state']}{', asks' if i.get('question') else ''}] {i['path']} · {i['title']}"
+            for i in work("open")[:30]] or ["- none"]
     return "\n".join(out)
 
 

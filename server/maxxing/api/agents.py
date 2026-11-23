@@ -18,12 +18,14 @@ from .. import agents
 from ..security import require_auth
 
 log = logging.getLogger("maxxing.api.agents")
-router = APIRouter(prefix="/api/agents", tags=["agents"], dependencies=[Depends(require_auth)])
 
 
 def _on() -> None:
     if not agents.feature_on():
         raise HTTPException(404, detail={"error": "feature_off", "message": "Agents are off (Settings -> Features)"})
+
+
+router = APIRouter(prefix="/api/agents", tags=["agents"], dependencies=[Depends(require_auth), Depends(_on)])
 
 
 def _bad(e: agents.AgentError) -> HTTPException:
@@ -37,10 +39,6 @@ def _errors():
         yield
     except agents.AgentError as e:
         raise _bad(e) from None
-
-
-def _path(project: str, topic: str, name: str) -> str:
-    return agents.agent_path(project, topic, name)
 
 
 def _existing(project: str, topic: str, name: str) -> str:
@@ -168,7 +166,6 @@ class CronIn(BaseModel):
 
 @router.get("")
 def list_agents():
-    _on()
     return {"agents": agents.list_agents(with_status=True), "avatar": {k: list(v) for k, v in agents.AVATAR.items()}}
 
 
@@ -176,7 +173,6 @@ def list_agents():
 def list_templates(lang: Optional[str] = Query(default=None, max_length=8)):
     """The gallery of ready-made agents, texts in `lang` (default: the UI language)."""
     from .. import agent_templates, config, vault
-    _on()
     have = {x["name"] for x in vault.list_secrets()}
     out = agent_templates.listing(lang or config.load_config().get("language") or "en")
     for t in out:
@@ -188,20 +184,17 @@ def list_templates(lang: Optional[str] = Query(default=None, max_length=8)):
 def sandbox_status():
     """What the sandbox of agents needs on this server: {ok, missing: [bwrap|socat|apparmor|linux]}."""
     from .. import agent_guard
-    _on()
     return agent_guard.available(fresh=True)
 
 
 @router.get("/layout")
 def get_layout():
     """The order of projects and agents and the project colours picked on the Agents page (agents.load_layout)."""
-    _on()
     return agents.load_layout()
 
 
 @router.put("/layout")
 def put_layout(body: Any = Body(...)):
-    _on()
     with _errors():
         return agents.save_layout(body)
 
@@ -210,7 +203,6 @@ def put_layout(body: Any = Body(...)):
 def import_agent(body: ImportIn):
     """Create an agent from a Claude Code agent file (.claude/agents/<name>.md)."""
     from .. import agent_format
-    _on()
     try:
         return agent_format.import_md(body.topic_path, body.markdown, body.name or None)
     except ValueError as e:
@@ -221,7 +213,6 @@ def import_agent(body: ImportIn):
 
 @router.post("")
 def create_agent(body: AgentIn):
-    _on()
     if not body.topic_path or not body.name:
         raise HTTPException(400, detail={"error": "missing", "message": "topic_path and name are required"})
     fields = _fields(body)
@@ -237,9 +228,8 @@ def create_agent(body: AgentIn):
 
 @router.get("/{project}/{topic}/{name}")
 def get_agent(project: str, topic: str, name: str):
-    _on()
     with _errors():
-        a = agents.get(_path(project, topic, name))
+        a = agents.get(agents.agent_path(project, topic, name))
     return {**a, "crons": agents.cron_jobs(a["path"])}
 
 
@@ -247,22 +237,19 @@ def get_agent(project: str, topic: str, name: str):
 def agent_media_roots(project: str, topic: str, name: str):
     """The folders whose files the agent's answers may show on its page (agent_guard.media_roots)."""
     from .. import agent_guard
-    _on()
     return {"roots": agent_guard.media_roots(_existing(project, topic, name))}
 
 
 @router.patch("/{project}/{topic}/{name}")
 def update_agent(project: str, topic: str, name: str, body: AgentIn):
-    _on()
     with _errors():
-        return agents.update(_path(project, topic, name), _fields(body))
+        return agents.update(agents.agent_path(project, topic, name), _fields(body))
 
 
 @router.delete("/{project}/{topic}/{name}")
 def delete_agent(project: str, topic: str, name: str):
-    _on()
     with _errors():
-        agents.delete(_path(project, topic, name))
+        agents.delete(agents.agent_path(project, topic, name))
     return {"ok": True}
 
 
@@ -271,7 +258,6 @@ def export_agent(project: str, topic: str, name: str):
     """The agent as a Claude Code agent file (.claude/agents/<name>.md)."""
     from fastapi.responses import PlainTextResponse
     from .. import agent_format
-    _on()
     return PlainTextResponse(agent_format.export_md(_existing(project, topic, name)),
                              media_type="text/markdown; charset=utf-8",
                              headers={"Content-Disposition": f'attachment; filename="{name}.md"'})
@@ -280,21 +266,18 @@ def export_agent(project: str, topic: str, name: str):
 @router.post("/{project}/{topic}/{name}/runs/{sid}/continue")
 def continue_run(project: str, topic: str, name: str, sid: str):
     """Continue in Sessions: a copy of this run as a normal session of the topic (same history and Claude thread)."""
-    _on()
     with _errors():
-        return {"session": agents.continue_in_sessions(_path(project, topic, name), sid)}
+        return {"session": agents.continue_in_sessions(agents.agent_path(project, topic, name), sid)}
 
 
 @router.get("/{project}/{topic}/{name}/thread")
 def agent_thread(project: str, topic: str, name: str, limit: int = Query(100, ge=1, le=500),
                  before: Optional[float] = None):
-    _on()
     return {"messages": agents.thread(_existing(project, topic, name), limit, before)}
 
 
 @router.post("/{project}/{topic}/{name}/run")
 def run_agent(project: str, topic: str, name: str, body: RunIn):
-    _on()
     path = _existing(project, topic, name)
     text = (body.text or "").strip()
     with _errors():
@@ -319,38 +302,33 @@ def run_agent(project: str, topic: str, name: str, body: RunIn):
 @router.post("/{project}/{topic}/{name}/chat/new")
 def agent_new_chat(project: str, topic: str, name: str):
     """The next message of the owner starts a new conversation."""
-    _on()
     return {"ok": agents.new_chat(_existing(project, topic, name))}
 
 
 @router.post("/{project}/{topic}/{name}/seen")
 def agent_seen(project: str, topic: str, name: str):
-    _on()
     agents.mark_seen(_existing(project, topic, name))
     return {"ok": True}
 
 
 @router.post("/{project}/{topic}/{name}/triggers/{tid}/test")
 def test_trigger(project: str, topic: str, name: str, tid: str):
-    _on()
     with _errors():
-        return agents.test_trigger(_path(project, topic, name), tid)
+        return agents.test_trigger(agents.agent_path(project, topic, name), tid)
 
 
 @router.post("/{project}/{topic}/{name}/webhook")
 def add_webhook(project: str, topic: str, name: str, body: WebhookIn):
-    _on()
     with _errors():
-        return agents.add_webhook(_path(project, topic, name), body.kind, body.prompt or "", body.levels or [],
+        return agents.add_webhook(agents.agent_path(project, topic, name), body.kind, body.prompt or "", body.levels or [],
                                   body.match or "")
 
 
 @router.post("/{project}/{topic}/{name}/crons")
 def add_cron(project: str, topic: str, name: str, body: CronIn):
     """A cron trigger = a Claude cron job in the agent folder (shown on the Crons page too)."""
-    _on()
     with _errors():
-        return agents.add_cron(_path(project, topic, name), body.schedule or "", body.prompt or "", body.name or "",
+        return agents.add_cron(agents.agent_path(project, topic, name), body.schedule or "", body.prompt or "", body.name or "",
                                body.enabled is not False)
 
 

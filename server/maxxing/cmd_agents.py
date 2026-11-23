@@ -707,12 +707,12 @@ def _jarvis_board(path: str, r: dict, text: str, hops: int) -> None:
     """`agents run` from Jarvis's conversation: the run goes on its work board (its answer comes back to Jarvis)."""
     from . import agent_guard, jarvis
     meta = agent_guard.turn_meta()
-    s = r.get("session") if isinstance(r, dict) else None
-    if not (meta and meta.get("path") == jarvis.PATH and jarvis.feature_on()):
+    if not (isinstance(r, dict) and meta and meta.get("path") == jarvis.PATH and jarvis.feature_on()):
         return
+    s = r.get("session")
     if isinstance(s, dict) and s.get("id"):
         sid = s["id"]
-    elif isinstance(r, dict) and r.get("waiting"):
+    elif r.get("waiting"):
         sid = ""                        # it waits for the run in progress: bound to its session when it ends
     else:
         return
