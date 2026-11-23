@@ -282,7 +282,7 @@ call it), only the API and the page are cut.
   `add_webhook()`: a feed hook named `<topic>-<agent>` + a feed trigger on that source (`hook_id`), so signatures,
   replay protection and rate limits are the feed hooks'.
 - **Cron link**: a cron trigger is a normal `kind: claude` job whose `topic_path` is the agent path (made by
-  `POST /api/agents/.../crons`, listed by `cron_jobs(path)`); `crons._run_claude` calls `agents.fire(trigger=
+  `POST /api/agents/.../crons`, listed by `cron_jobs(path)`); `crons._claude_turn` calls `agents.fire(trigger=
   "cron:<id>", prompt=job.prompt)` for such a job, so the guards apply and a refusal is a successful run "skipped: …".
 - **Telegram** (`gateway`): `config.telegram.agent_threads = {path: {tid, name}}`; `notify_agent()` creates the thread
   `🤖 <name> · <p>/<t>` on first use (`_agent_thread_sync`, blocking `call_sync`, run in a daemon thread when called

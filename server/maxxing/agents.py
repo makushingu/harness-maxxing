@@ -13,7 +13,7 @@ trigger's text is data, framed by random markers. Each fire starts a NEW session
 Telegram thread of its own, out of the human session lists by default). Triggers:
 
     manual     the Run button / `maxxing agents run`
-    cron       a Claude cron job whose topic_path is the agent path (crons._run_claude asks gate() first)
+    cron       a Claude cron job whose topic_path is the agent path (crons._claude_turn asks gate() first)
     feed       a new feed event matching {source, levels, match} - a webhook trigger is a feed hook made for the
                agent plus a feed trigger on its source (the hook's signature checks are the feed's)
     telegram   a message in the agent's Telegram thread (option `telegram`)

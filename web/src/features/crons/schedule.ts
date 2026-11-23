@@ -100,7 +100,7 @@ export const UNIT_S: Record<TimeoutUnit, number> = { s: 1, min: 60, h: 3600 }
 /* ------------------------------------------------------------------ one-time jobs */
 /** "YYYY-MM-DDTHH:MM" of a Unix time in the zone `tz` (the server's zone, not the browser's): the value of a
  *  datetime-local field for a one-time job, read by the server in that zone. */
-function inputInZone(ts: number, tz?: string): string {
+export function inputInZone(ts: number, tz?: string): string {
   const fmt = (timeZone: string) =>
     new Intl.DateTimeFormat('en-CA', {
       timeZone,
