@@ -10,6 +10,10 @@ notification, a message in its Telegram thread, or another agent handing it work
 kept like any other, within limits you set (on/off, a daily budget, runs per hour). When **you** write to it, it is a
 chat: your messages go on in one conversation (see [The agent page](#the-agent-page)).
 
+**No judgement needed?** When the work is always the same steps (update a site after a push, keep a sale, forward a
+notification to Discord, restart a service on an alert), a [webhook](webhooks) or an [event](events) does it without
+AI: instant, free, no budget. An agent is for work that needs Claude to read, decide or write.
+
 Agents are **on for a new install** (since 2.0.0a132; an older install keeps what it had): switch them on or off in
 **Settings -> Features -> Agents**. An **Agents** entry appears in the
 sidebar, with the number of results to read. While Agents is off, Telegram still starts agents, but schedules,

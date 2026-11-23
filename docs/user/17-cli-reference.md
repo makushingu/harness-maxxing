@@ -244,6 +244,30 @@ OAuth sign-ins (state "To connect") are done in Settings -> MCP -> **Connect**. 
 `AGENT` = `project/topic/agent` (or `projects/P/topics/T/agents/A`, or the agent's name when it is unique). See
 [Agents](30-agents.md) and [Agent groups](31-agent-groups.md).
 
+## Webhooks and events
+
+Settings -> Automate -> [Webhooks](37-webhooks.md) and [Events](38-events.md): automations without AI (one trigger,
+one action). Harness creates them from a session; the definition is JSON (see the skill `maxxing-webhooks`).
+
+| Command | Purpose |
+|---|---|
+| `maxxing webhooks list [--json]` | every webhook and event: id, on/off, sentence, last call (`[needs its signing secret]` when a Stripe / Shopify / GitHub one has none) |
+| `maxxing webhooks show ID [--json] [--sign-secret]` | one of them, with its URL; `--sign-secret` prints the key that signs its calls (`X-Harness-Signature`) |
+| `maxxing webhooks add [--spec JSON]` | create one from its JSON definition (`--spec`, or JSON on stdin); prints its id and URL |
+| `maxxing webhooks edit ID [--spec JSON]` | change it: the top-level keys given (`name`, `description`, `trigger`, `action`, `queue`, `report`, `enabled`) are replaced |
+| `maxxing webhooks describe ID "SENTENCE"` | the sentence shown on the page |
+| `maxxing webhooks on ID` / `off ID` / `remove ID` | switch on / off, delete (its calls and data too) |
+| `maxxing webhooks url ID` / `rotate ID` | print its URL / give it a new one (the old one stops at once) |
+| `maxxing webhooks secret ID` | set its signing secret or phone key, read on stdin (`printf %s "$S" \| maxxing webhooks secret ID`); empty input removes it |
+| `maxxing webhooks test ID` | run it now on a realistic sample of its service or event (filters skipped), here, and print the result |
+| `maxxing webhooks calls ID [--limit N] [--json]` | its last calls (50 kept): time, status, summary, duration, error |
+| `maxxing webhooks call ID CALL` | one call: what was received (headers without secrets, body up to 64 kB) and the result (JSON) |
+| `maxxing webhooks replay ID CALL` | run a call again with the same request, here |
+| `maxxing webhooks data ID [--last N] [--csv] [--json]` | the rows of a webhook that stores its data (`--csv`: every row, for a spreadsheet) |
+
+`ID` = the id shown by `list` (`w_…`). Exit 1 on an error or a failed test / replay. In an agent's run, only `list`,
+`show`, `url`, `calls`, `call` and `data` work.
+
 ## E-mail
 
 | Command | Purpose |

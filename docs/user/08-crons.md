@@ -7,6 +7,10 @@ section: Using Harness Maxxing
 topic. Each run is recorded (status, duration, output) and can be reported on Telegram. (Crons used to be a
 page of the sidebar; old links to `/crons` open Settings -> Crons.)
 
+Not at set times but **when** something happens: a service that calls your server is a [webhook](webhooks), and
+"when this job fails (or ends), do that" is an [event](events) (post to ntfy, call a URL, run a script). Work that
+needs judgement on a schedule or an event is an [agent](agents).
+
 ## Creating a job
 
 Click **New job** and fill in:

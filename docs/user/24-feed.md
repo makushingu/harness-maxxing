@@ -56,6 +56,11 @@ Agents never start on the source *Agents* (an agent would start itself again).
 
 ## Connect a service (webhooks)
 
+These webhooks only post notifications. For a webhook that **does** something (update a site, store your sales,
+relay to n8n, a phone Shortcut) or to forward notifications to Discord, Slack or ntfy, see [Webhooks](webhooks) and
+[Events](events) (Settings -> Automate). The webhooks made here keep working and keep their URL; Settings ->
+Webhooks lists them too, read-only.
+
 Settings -> **Notifications** -> **Add a webhook**, choose the service, give it a name, paste its
 signing secret if you have it, **Create**: copy the URL into the service. The dialog says where.
 

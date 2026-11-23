@@ -16,6 +16,7 @@ Docs: `docs/user/24-feed.md` (Docs -> Notifications).
 | A service that sends webhooks (Stripe, Shopify, GitHub, or any JSON) **and the server has a domain (HTTPS)** | Settings -> Notifications -> **Add a webhook** (or the API below) and paste its URL into the service, with the signing secret |
 | Anything else (mail box, an API without webhooks, a website, a file, a computation) | a small script + a cron job that runs it and calls `maxxing feed post` only when something matters |
 | Cron jobs, updates, sign-ins | nothing to do: they are in the feed already |
+| A webhook that must **do** something (deploy, store sales, relay to n8n, a phone Shortcut), or forwarding notifications to Discord / Slack / ntfy | Settings -> Automate -> Webhooks / Events: skill `maxxing-webhooks` (its `notify` action also posts here) |
 
 Without a domain (Tailscale only), services cannot reach webhooks: use the script way.
 
@@ -38,6 +39,8 @@ senders or with these words); keep the state needed for dedupe; never post secre
 `maxxing cron` (see the maxxing-cron skill), `notify: never` on the job (the feed is the report).
 
 ## Webhooks through the API (local, with the admin cookie) or the UI
+These notification webhooks keep working and keep their URL; Settings -> Webhooks lists them (read-only). For a new
+one, a `maxxing webhooks add` hook with action `notify` does the same from the CLI (skill `maxxing-webhooks`).
 `POST /api/feed/hooks {name, kind: stripe|shopify|github|generic, secret?}` -> `{url, ...}`.
 Where the user finds things:
 - Stripe: Developers -> Webhooks -> Add endpoint -> URL; events `checkout.session.completed`,

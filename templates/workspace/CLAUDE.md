@@ -94,6 +94,7 @@ UI; the server CLI is `maxxing`:
 | `maxxing update [--check\|--resume\|--rollback]` | check for / install a new version, carrying customizations over (or ask in the topic `system/harness`) |
 | `maxxing custom [status\|save\|drop\|restore]` | customizations of the product code (see below) |
 | `maxxing cron list\|sync\|run <id>` | scheduled jobs |
+| `maxxing webhooks list\|add\|edit\|test\|calls\|replay\|url <id>` | webhooks and events without AI (Settings -> Automate -> Webhooks / Events, skill `maxxing-webhooks`) |
 | `maxxing backup run\|status\|restore` | memory backup to a private GitHub repo |
 | `maxxing telegram status\|test` | Telegram bridge |
 | `maxxing import ZIP [--dry-run]` / `--prompt AGENT` | import another agent's memory: Hermes, OpenClaw, Claude Code... (Settings -> Import does the same) |
@@ -134,7 +135,8 @@ this server - the public product is not theirs to change, and they do not need i
 
 Before building something, check whether Harness Maxxing already does it: a to-do list -> Tasks; a lasting
 role or a bot -> an agent (skill `maxxing-agents`); something at set times -> a cron; "tell me when…" ->
-the Notifications feed (`maxxing-feed`); e-mail -> the E-mail page (`maxxing-mail`); sites, databases,
+the Notifications feed (`maxxing-feed`); something that must happen when a service calls or when something happens in
+Harness, without AI -> Webhooks / Events (`maxxing-webhooks`); e-mail -> the E-mail page (`maxxing-mail`); sites, databases,
 servers -> Infra (`maxxing-infra`); a site with no API, a sign-in or a form to fill in -> the Harness Browser
 (`maxxing-browser`); an app on the user's own computer or phone -> Devices (`maxxing-devices`); repositories -> Git; a chat with other people -> Team; talking out loud
 with a session or an agent -> the voice mode (sound-waves button; Settings -> Voice -> Voice mode); a card on the
@@ -173,6 +175,7 @@ under the answer: diff, Undo a file, commit, push, pull request); a branch and a
 | `maxxing-telegram` | configure or troubleshoot the Telegram bridge |
 | `maxxing-backup` | configure, run or restore the memory backup, move to a new server |
 | `maxxing-cron` | create or change a scheduled job |
+| `maxxing-webhooks` | a URL a service calls (Stripe, GitHub, a phone Shortcut, n8n...) or "when X happens in Harness, do Y", without AI: run a script, call a URL, store the data, notify |
 | `maxxing-tasks` | read or edit the task board (tasks.json) |
 | `maxxing-extension` | build a dashboard widget (Card or HTML/game) or a page extension |
 | `maxxing-infra` | put a site online, create a database or a bucket on this server, add another server, "where is X / is it up" |

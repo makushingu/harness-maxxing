@@ -8,6 +8,7 @@ from __future__ import annotations
 import io
 import json
 import os
+import re
 import subprocess
 import sys
 
@@ -210,8 +211,10 @@ def test_skills_are_rendered_with_the_paths_of_this_install(env):
     assert texts
     for name, text in texts.items():
         text = text.replace(str(config.CODE), "<code>")      # a dev checkout may itself live under /root/maxxing
-        for default in ("/opt/claude-maxxing", "/root/maxxing", "/var/lib/claude-maxxing", "{{"):
+        for default in ("/opt/claude-maxxing", "/root/maxxing", "/var/lib/claude-maxxing"):
             assert default not in text, (name, default)
+        # no placeholder left ({{WORKSPACE}}...); lowercase {{title}} / {{key:NAME}} are maxxing-webhooks templates
+        assert not re.search(r"\{\{[A-Z_]+\}\}", text), name
     assert f'p = "{env["ws"]}/tasks.json"' in texts["maxxing-tasks"]
     assert f"{env['state']}/crons/jobs.json" in texts["maxxing-cron"]
     assert f"bash {config.CODE}/install.sh" in texts["maxxing-setup"]

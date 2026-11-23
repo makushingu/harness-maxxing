@@ -34,6 +34,7 @@ The page only reads the skills: changes go through Claude (or your editor), neve
 | `maxxing-cron` | you want something to happen on a schedule |
 | `maxxing-tasks` | you talk about your tasks or the board |
 | `maxxing-feed` | you say "notify me when…", or want sales, orders, deployments, e-mails or a script's results reported (webhooks, `maxxing feed post`) |
+| `maxxing-webhooks` | you want a URL that a service calls (Stripe, GitHub, a form, n8n, a phone Shortcut) or "when X happens, do Y" without AI: Settings -> Webhooks / Events |
 | `maxxing-mail` | you talk about your inbox, mail to answer or sort, drafts, or want an agent to handle a mailbox |
 | `maxxing-mcp` | you want Claude to use a service through MCP ("connect the Google Ads MCP"), an MCP tool is missing or needs a sign-in |
 | `maxxing-browser` | you want Claude to open a site, sign in or fill in a form for you, it says it has no browser, a page is refused or a connection is down |

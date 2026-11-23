@@ -60,6 +60,10 @@ _Coming soon: dashboard, sessions (desktop and mobile), files, tasks, crons, onb
 - **Jarvis** (optional) - one assistant to talk to who runs Harness: it creates projects and topics, hands work to
   sessions and agents, gets their answers back by itself (work board), gives a morning brief and tidies its memory
   every night (`maxxing jarvis`).
+- **Webhooks and events** - automations without AI, made by asking Harness: URLs that services call (Stripe, Shopify,
+  GitHub, forms, n8n / Make / Zapier, a phone Shortcut with files and an answer back) and "when a notification arrives,
+  an agent or a cron job ends, do that"; run a script, call a URL (Discord, Slack, ntfy), store the data (CSV,
+  widgets) or notify; signed, queued, replayable (`maxxing webhooks`).
 - **Tasks** (optional) - kanban and list on a plain `tasks.json` that Claude can edit too.
 - **Crons** - shell commands or Harness prompts on a schedule, run history, Telegram reports.
 - **Telegram** - built-in gateway: one thread per open session, the same sessions as the web UI, photos
@@ -144,7 +148,8 @@ User documentation is in [`docs/user/`](docs/user) and inside the app (the book 
 [security](docs/user/15-security.md) · [troubleshooting](docs/user/16-troubleshooting.md) ·
 [CLI](docs/user/17-cli-reference.md) · [files](docs/user/06-files.md) ·
 [settings](docs/user/11-settings-and-keys.md) · [customizing](docs/user/20-customizing.md) ·
-[import](docs/user/21-import.md) · [tools](docs/user/22-tools.md) · [license](docs/user/23-license.md) · [notifications](docs/user/24-feed.md) · [starter projects](docs/user/25-starter-projects.md).
+[import](docs/user/21-import.md) · [tools](docs/user/22-tools.md) · [license](docs/user/23-license.md) · [notifications](docs/user/24-feed.md) · [starter projects](docs/user/25-starter-projects.md) ·
+[webhooks](docs/user/37-webhooks.md) · [events](docs/user/38-events.md).
 
 Developers: [`docs/dev/PLAN.md`](docs/dev/PLAN.md) (architecture), [`docs/dev/API.md`](docs/dev/API.md)
 (HTTP contract), [`docs/dev/INTERNALS.md`](docs/dev/INTERNALS.md).

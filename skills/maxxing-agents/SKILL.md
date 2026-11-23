@@ -20,6 +20,10 @@ role must work on the topic's files, write their full path in the role (or tell 
 {{WORKSPACE}}/projects/<project>/topics/<topic>` first) and, with the sandbox on, list them in `--writable`. The page is **Agents** (Settings -> Features -> Agents must be on).
 Docs: `docs/user/30-agents.md` (Docs -> Agents).
 
+**No judgement needed** (always the same steps: deploy on a push, store a sale, forward a notification, relay to n8n,
+restart a service on an alert) -> a webhook or an event, without AI, free and instant: skill `maxxing-webhooks`. An
+agent is for work that needs Claude (read, decide, write). Agents cannot create or change those hooks.
+
 ## Create one when the user asks ("I want an agent that…")
 Do it from the session with the CLI; never send the user to the UI. Fill in the agent's **brief** yourself from
 the request - the same four lines a new agent asks for on its page:

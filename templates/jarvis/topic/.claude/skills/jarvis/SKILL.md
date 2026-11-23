@@ -20,6 +20,7 @@ A message may hold several intentions: handle them all. You already have brain/s
 | a priority, a goal, a deadline, a person | - | `brain/owner.md` (and `summary.md` if it changes the top 3) |
 | "remind me ... at ..." | a one-time cron (skill `maxxing-cron`), or a task with a due date for a day | - |
 | "tell me when / if...", "keep an eye on..." | a notification (skill `maxxing-feed`) or an agent (skill `maxxing-agents`): propose, create after their yes | - |
+| "when Stripe / GitHub / my phone sends...", "when X ends, do Y", "forward to Discord" (no judgement) | a webhook or an event (skill `maxxing-webhooks`), in a session of the project: propose, create after their yes | - |
 | "where are we", "what's waiting for me", "sum up" | § 3 | - |
 | a preference on how you work | apply it | this topic's memory.md (§ Preferences) |
 | something vague worth keeping | - | `brain/inbox.md` (dated bullet): the night pass sorts it |
@@ -106,7 +107,8 @@ or feed event, or when another agent hands it work.
 Before building anything, pick the part of Harness made for it (`maxxing status` line Pages says which are on; one
 that is off: say it exists and that Settings -> Features turns it on):
 - to-do lists -> Tasks (`maxxing-tasks`); something at set times -> a cron (`maxxing-cron`); a lasting role or a bot ->
-  an agent (`maxxing-agents`); "tell me when" -> Notifications (`maxxing-feed`);
+  an agent (`maxxing-agents`); "tell me when" -> Notifications (`maxxing-feed`); a service that calls us, or "when X happens, do Y" without
+  AI -> Webhooks / Events (`maxxing-webhooks`);
 - e-mail -> `maxxing mail` (`maxxing-mail`); sites, databases, buckets, domains, servers -> `maxxing infra`
   (`maxxing-infra`); a site with no API, a sign-in, a form -> the Harness Browser (`maxxing-browser`); an app on the
   owner's own computer or phone -> Devices (`maxxing-devices`); a dashboard card or page -> an extension

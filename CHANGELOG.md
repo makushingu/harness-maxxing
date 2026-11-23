@@ -16,6 +16,15 @@ New:
   itself, so it answers fast while sessions work side by side; it follows a piece of work through several rounds on
   its own, reads reports that arrive together in one turn, and a brief that fails is tried again, then reported.
   Full rights, "Ask me first" and its own compaction threshold are in its settings. [Show me](#show:jarvis)
+- **Webhooks and events: automations without AI.** Two new pages in Settings -> Automate. **Webhooks** gives your
+  server URLs that other services call (Stripe, Shopify, GitHub, Tally, n8n, Zapier, a Shortcut on your phone that
+  sends a photo and gets a link back); **Events** acts when something happens in Harness (a notification arrives, an
+  agent or a cron job finishes or fails). Each one does one thing by itself, at once and for free: run a script (update
+  a site after a push, restart a service when it is down), call a URL (Discord, Slack, ntfy, n8n), keep the data (a
+  table of your sales, CSV, dashboard widgets) or post a notification. Just ask Harness: it writes the script, creates
+  it, tests it and tells you where to paste the URL. The pages show the last calls with what was received, **Replay**,
+  **Send a test**, the URL to copy and an on/off switch. Your notification webhooks keep working with the same URL and
+  are listed there too. With AI, it is still an agent. [Show me](#show:webhooks)
 
 Added:
 - **Notifications on your phone, even with the app closed.** Settings -> Notifications -> *Mobile notifications*:

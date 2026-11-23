@@ -53,7 +53,11 @@ authors to add something an extension can do.
 - Secrets: the user stores them in Settings -> Keys; read them with `ctx["secret"]("NAME")`
   (returns None when missing -> return a Card saying which key to add). Never hard-code a token.
 - Persistent data: `ctx["state_dir"]` (a folder reserved for this extension).
-- `ctx` = `{"id", "workspace", "state_dir", "secret": fn(name), "config": {"timezone", "language", "public_url"}}`.
+- `ctx` = `{"id", "workspace", "state_dir", "secret": fn(name), "config": {"timezone", "language", "public_url"},
+  "webhook_data": fn(id_or_name, after=0, limit=100)}`.
+- Live data from a service (Stripe sales, form answers): a webhook with action `store` (skill `maxxing-webhooks`), read
+  by `ctx["webhook_data"]("Stripe sales", after=0, limit=500)` -> rows `[{id, at, call, data, fields?}]` oldest first
+  (`fields` = the hook's columns; `after` = the last row id already seen; limit 1000; `[]` for an unknown hook).
 - Widget results are cached `ttl` seconds (manifest, default 300); the card's refresh button forces it.
 
 ## Card schema

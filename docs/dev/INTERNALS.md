@@ -228,6 +228,56 @@ Python modules call each other only through these functions. Keep signatures sta
   `agents.fire` (budget, rate), `agents.on_turn_end` (failed, sandbox), `agents.check_alerts` and `health.sync_feed`
   (every 30 s in `api/feed._watch`).
 
+## maxxing.webhooks  (owner: organisation) - Webhooks & events
+Automations without AI (Settings -> Automate -> Webhooks / Events): one trigger (`in` = `/api/hooks/<token>`,
+`event` = feed / agent / cron) + one action (`shell`, `call`, `store`, `notify`). HTTP contract: API.md "Webhooks &
+events"; CLI `cmd_webhooks.py`; public endpoint `api/hooks.py`; management + loop `api/webhooks.py`.
+- **Storage** (`state_dir("webhooks")`): `hooks.json` `{"version": 1, "hooks": [hook]}` (ids `w_` + 8 hex);
+  `calls/<id>.jsonl` (the last `KEEP_CALLS` = 50 records, rewritten whole, queued / running ones never dropped);
+  `calls/<id>/<call>/` (`request.json` with redacted headers, `body`, `payload.json`, `files/`, `stdout`, `response`,
+  `response.type`, `result.json`); `data/<id>.db` (SQLite WAL, `rows(id, at, call, data)`, purged past `keep`);
+  `spool/*.json`; `feed-pos.json`. Secrets in secrets.json `webhooks: {id: {token, secret?, sign?}}`, never in
+  hooks.json nor an API answer. Every write of hooks.json and the call records goes through `_locked()` = a thread
+  RLock + `flock` on `webhooks/.lock` (the CLI writes too).
+- **Incoming** `receive(token, method, headers, query, body, fields, files)`: token lookup (`feedhooks._same`,
+  constant time), enabled (503), method (405), `max_mb` (413; `bodylimit` already caps the stream with
+  `cap_for_token`), rate `RATE` = 120/min per hook (429; counted after the auth when the hook has a secret), auth
+  (`_check_auth`: signed sources need a secret, `feedhooks.verify` for Stripe / Shopify / GitHub / generic
+  `X-Signature`, phone = Bearer / `X-Harness-Key` / `?key=`), replay guard (`feed.claim_delivery("wh:<id>", ...)` with
+  `feedhooks._replay_key`), `parse_payload`, `event_name` + `filter` (fnmatch; no match = record `ignored`, 200), queue
+  room (503 busy) and, for `reply: wait`, a global slot (`SYNC_MAX` = 4). The request is saved, then the record
+  (`queued`), then `dispatcher.submit`. Multipart is parsed in `api/hooks.py` (`max_files=FILES_MAX`).
+- **Dispatcher** (server process only): per hook `queue.parallel` worker threads, a FIFO of waiting call ids,
+  `has_room` (`max_waiting`), `done` events for waiting callers (`wait(cid, WAIT_S)` = 30 s, then `reply_of` -> 504 if
+  not finished). `execute(hid, cid, units)` marks `running`, runs the action, writes the final record, `_report`
+  (feed.system source `webhooks` on failure, grouped `wh-fail-<id>`; Telegram `gateway.notify_cron_report` per
+  `report`). The CLI's `test` / `replay` run inline (`units=False`), outside the dispatcher.
+- **Shell**: `systemd-run --wait --collect --unit maxxing-hook-<id>-<call>` (`crons.unit_properties`: jobs slice,
+  memory limits, timeout) running `python -m maxxing webhooks run <id> <call>` (= `run_shell`), `MAXXING_*` variables
+  carried over; without units (`crons.units_available()` false, tests) inline. `run_shell`: `bash -lc <command>`, stdin =
+  body, env = `crons._job_env` (PATH, Claude auth, exposed vault keys) + `MAXXING_WEBHOOK_*` + `MAXXING_RESPONSE_FILE`,
+  own process group (`crons._kill_group` on timeout), stdout kept up to 1 MB for the reply, last 4 kB of output in the
+  record, `result.json` read back by the server.
+- **Call**: httpx, no redirects, headers rendered with `{{key:NAME}}` (vault, headers only), body raw / json /
+  template (`render(json_mode=True)` when it starts with `{`/`[`), `X-Harness-Signature` (HMAC-SHA256 with the
+  hook's `sign` secret), retries on network errors / 429 / 5xx with waits 2, 4, 8... s (30 s max); the answer saved as
+  `response` (+ `.type`), handed back as is to a waiting caller.
+- **Notify**: `feed.post` with `feedhooks.PARSERS` when there is no title (same text as the feed's own webhooks);
+  source = `feed.clean_source(name)` (`webhooks` when that is a built-in / product source); `hops` = the event's + 1.
+- **Events**: `emit(kind, data)` (from any process: `crons.run_job` final outcome, `agents.on_turn_end` for automatic
+  runs) writes `spool/<ms>-<rand>.json` only when an enabled hook listens to that kind (at most `SPOOL_MAX` files);
+  the server loop (`api/webhooks._loop`, every 2 s) runs `process_spool()` and, every 5 s, `scan_feed()` (position in
+  `feed-pos.json`, starts at the current top: no backlog; 200 events per pass). Loop guard: feed events of source
+  `webhooks` and with `hops >= MAX_HOPS` (3) are skipped, a `notify` hook skips its own source.
+- **Recovery** (`recover()`, at the loop start): `queued` calls are submitted again; a `running` shell call whose unit
+  is still active is followed (`_finish_later`), one with a `result.json` is finished from it, the others fail
+  ("interrupted").
+- **Agents**: `agent_guard` `WEBHOOKS_OWNER_ONLY` (`add edit remove on off rotate secret replay test run describe`)
+  refuses the write sub-commands in an agent's run. Hooks with `owner` (made for an agent) are read-only here.
+- **Extensions**: `ctx["webhook_data"](id_or_name, after=0, limit=100)` -> `data()` rows `{id, at, call, data,
+  fields?}`. The notification webhooks of `feedhooks.py` (and agents' webhook triggers) are untouched: `GET
+  /api/webhooks` lists them as `feed_hooks` (read-only); `api/hooks.py` serves a webhooks token first, then a feed one.
+
 ## maxxing.agents  (owner: organisation)
 An agent = a lasting role inside a topic. Off by default (`agents_page`); the module works anyway (crons and the CLI
 call it), only the API and the page are cut.
@@ -876,7 +926,7 @@ is gone (2.0.0a93): the old code that still runs on those servers does it.
 `cmd_backup.py` (backup run/restore/status), `cmd_telegram.py` (telegram status/test),
 `cmd_sessions.py` (sessions compact-logs), `cmd_memory.py` (memory), `cmd_import.py` (import), `cmd_video.py` (video new/status), `cmd_voice.py` (voice status/set/download/transcribe),
 `cmd_custom.py` (custom status/save/drop/export/restore), `cmd_license.py` (license activate/status/remove/release),
-`cmd_agents.py` (agents list/run/send/on/off: `<agent>` = full path, `p/t/a` or a unique slug; `send` reads the sender
+`cmd_webhooks.py` (webhooks list/show/add/edit/test/calls/replay/data/run...), `cmd_agents.py` (agents list/run/send/on/off: `<agent>` = full path, `p/t/a` or a unique slug; `send` reads the sender
 and hop count from `MAXXING_AGENT` / `MAXXING_AGENT_DEPTH` and frames the text as data; exit 1 = not started).
 Startup speed: `configure(parser)` runs only for the command being run (the first non-option argument),
 and the `cmd_*` modules import their domain module (crons, feed, license, urllib...) inside the handler,

@@ -497,7 +497,7 @@ export type SessionEventsBackPage = {
 export type SessionStreamEvents = { events: SessionEvent[]; next: number }
 
 /* ---------------------------------------------------------------- Global bus */
-export type BusTopic = 'agents' | 'agents_layout' | 'agent-groups' | 'sessions' | 'workspace' | 'tasks' | 'crons' | 'telegram' | 'backup' | 'health' | 'extensions' | 'trash' | 'feed' | 'profile' | 'register' | 'license' | 'infra' | 'mcp' | 'team' | 'team_live' | 'approvals' | 'open_sessions' | 'browser' | 'devices' | 'jarvis'
+export type BusTopic = 'agents' | 'agents_layout' | 'agent-groups' | 'sessions' | 'workspace' | 'tasks' | 'crons' | 'telegram' | 'backup' | 'health' | 'extensions' | 'trash' | 'feed' | 'profile' | 'register' | 'license' | 'infra' | 'mcp' | 'team' | 'team_live' | 'approvals' | 'open_sessions' | 'browser' | 'devices' | 'jarvis' | 'webhooks'
 
 /* ---------------------------------------------------------------- MCP servers (Settings -> MCP) */
 export type McpState = 'connected' | 'needs_auth' | 'failed' | 'pending' | 'unknown'
@@ -550,6 +550,65 @@ export type FeedHookKind = 'stripe' | 'shopify' | 'github' | 'generic'
 export type FeedHook = { id: string; name: string; kind: FeedHookKind; created: number; url: string; has_secret: boolean }
 export type FeedSource = { source: string; label: string; builtin: boolean; rule: FeedRule; own_thread: boolean }
 export type FeedSettings = { telegram: boolean; health: boolean; sources: FeedSource[]; hooks: FeedHook[]; kinds: FeedHookKind[]; rules: FeedRule[] }
+
+/* ---------------------------------------------------------------- Webhooks & events (Settings -> Automate) */
+export type WebhookSource = 'stripe' | 'shopify' | 'github' | 'generic' | 'phone'
+export type WebhookTrigger =
+  | { kind: 'in'; source: WebhookSource; methods: ('GET' | 'POST')[]; max_mb: number; reply: 'now' | 'wait'; filter?: { events?: string[]; branch?: string } }
+  | { kind: 'event'; on: 'feed'; source?: string; levels?: string[]; contains?: string }
+  | { kind: 'event'; on: 'agent' | 'cron'; agent?: string; cron?: string; when: 'any' | 'ok' | 'fail' }
+export type WebhookAction =
+  | { kind: 'shell'; command: string; cwd?: string; timeout_s: number }
+  | { kind: 'call'; url: string; method: string; headers: Record<string, string>; body: string; sign: boolean; retries: number; timeout_s: number }
+  | { kind: 'store'; fields: Record<string, string>; keep: number }
+  | { kind: 'notify'; level?: string; title?: string; body?: string; url?: string }
+export type WebhookCallStatus = 'queued' | 'running' | 'ok' | 'failed' | 'ignored'
+export type WebhookCall = {
+  id: string
+  at: number
+  trigger: 'in' | 'event' | 'test' | 'replay'
+  event: string
+  summary: string
+  status: WebhookCallStatus
+  http?: number
+  exit?: number
+  duration_s?: number
+  output?: string
+  error?: string
+  attempts?: number
+  of?: string
+}
+export type WebhookCallDetail = WebhookCall & {
+  request: { method?: string; content_type?: string; headers?: Record<string, string>; query?: Record<string, unknown>; event?: string; files?: { field: string; name: string; path: string; size: number }[]; size?: number }
+  body?: string
+  body_truncated?: boolean
+}
+export type WebhookDataStats = { rows: number; today: number; days: number[]; last_id: number }
+export type Webhook = {
+  id: string
+  name: string
+  description: string
+  enabled: boolean
+  created: number
+  updated?: number
+  owner: string | null
+  trigger: WebhookTrigger
+  action: WebhookAction
+  queue: { parallel: number; max_waiting: number }
+  report: 'never' | 'fail' | 'always'
+  url: string
+  has_secret: boolean
+  has_sign: boolean
+  needs_secret: boolean
+  last_call: WebhookCall | null
+  calls_24h: number
+  waiting: number
+  data?: WebhookDataStats
+}
+export type FeedHookRef = { id: string; name: string; kind: FeedHookKind; url: string; has_secret: boolean; created: number; agent: string | null }
+export type WebhooksPayload = { hooks: Webhook[]; feed_hooks: FeedHookRef[]; https: boolean }
+export type WebhookRow = { id: number; at: number; call: string; data: unknown; fields?: Record<string, unknown> }
+export type WebhookData = { rows: WebhookRow[]; stats: WebhookDataStats }
 
 /* ---------------------------------------------------------------- Import */
 export type ImportAgent = 'hermes' | 'claude-code' | 'openclaw' | 'other'

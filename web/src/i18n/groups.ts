@@ -21,6 +21,8 @@ export const GROUPS = {
   devices: ['devices'],
   // Jarvis's page (Settings -> Features -> Jarvis)
   jarvis: ['jarvis'],
+  // Settings -> Webhooks and Events (features/webhooks), the link of Settings -> Notifications
+  webhooks: ['webhooks'],
   tasks: ['tasks', 'crons'],
   files: ['files', 'viewer'],
   // the media player: on the first player shown (a conversation shows one only for an audio file or in the viewer)

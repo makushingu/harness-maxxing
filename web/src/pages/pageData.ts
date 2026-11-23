@@ -9,6 +9,7 @@ import {
   claudeStatusQuery,
   cronRunsQuery,
   cronsQuery,
+  webhooksQuery,
   dashboardQuery,
   docQuery,
   docsQuery,
@@ -44,6 +45,8 @@ const SETTINGS: Record<string, () => Q[]> = {
   telegram: () => [telegramQuery()],
   trash: () => [trashQuery()],
   crons: () => [cronsQuery(), cronRunsQuery(null, 8)],
+  webhooks: () => [webhooksQuery()],
+  events: () => [webhooksQuery()],
 }
 
 /** Starts the requests of the page at `pathname` (+ `search`). Unknown pages: nothing. */

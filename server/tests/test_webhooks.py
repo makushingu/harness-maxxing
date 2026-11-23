@@ -217,11 +217,11 @@ def test_call_template_escapes_json_and_reads_vault_keys(client, sink, monkeypat
     vault.put("SINK_TOKEN", "s3cr3t")
     h = client.post("/api/webhooks", json={"name": "tpl", "trigger": {"kind": "in"},
                                            "action": {"kind": "call", "url": sink, "headers": {"Authorization": "Bearer {{key:SINK_TOKEN}}"},
-                                                      "body": '{"content": "{{title}} / {{data.n}}"}'}}).json()
+                                                      "body": '{"content": "{{title}} / {{n}} / {{payload.n}}"}'}}).json()
     rec = _done(h["id"], client.post(f"/api/hooks/{_tok(h)}", json={"title": 'say "hi"\n', "n": 3}).json()["call"])
     assert rec["status"] == "ok" and rec["http"] == 201
     headers, body = _Sink.got[-1]
-    assert json.loads(body) == {"content": 'say "hi"\n / 3'} and headers["Authorization"] == "Bearer s3cr3t"
+    assert json.loads(body) == {"content": 'say "hi"\n / 3 / 3'} and headers["Authorization"] == "Bearer s3cr3t"
     assert "s3cr3t" not in json.dumps(webhooks.call(h["id"], rec["id"]))
 
 
@@ -335,6 +335,25 @@ def test_cli_add_list_and_agent_guard(mx, capsys, monkeypatch):
     monkeypatch.setattr(agent_guard, "in_the_sandbox", lambda: False)
     assert "not allowed" in (agent_guard.check_cli(["webhooks", "add"]) or "")
     assert agent_guard.check_cli(["webhooks", "list"]) is None or "sandboxed" in agent_guard.check_cli(["webhooks", "list"])
+
+
+def test_a_phone_without_a_session_can_send_a_file(client, mx):
+    h = client.post("/api/webhooks", json=_shell("up", 'ls "$MAXXING_WEBHOOK_FILES"', source="phone", reply="wait")).json()
+    from fastapi.testclient import TestClient
+    anon = TestClient(client.app)
+    r = anon.post(f"/api/hooks/{_tok(h)}", files={"f": ("a.jpg", io.BytesIO(b"\xff\xd8\xff"), "image/jpeg")})
+    assert r.status_code == 200 and r.text.strip() == "a.jpg"
+    assert anon.post("/api/sessions", files={"f": ("a.jpg", io.BytesIO(b"x"), "image/jpeg")}).status_code == 401
+
+
+def test_a_call_url_may_come_from_the_vault(client, sink):
+    from maxxing import vault
+    vault.put("DISCORD_URL", sink)
+    h = client.post("/api/webhooks", json={"name": "d", "trigger": {"kind": "event", "on": "feed"},
+                                           "action": {"kind": "call", "url": "{{key:DISCORD_URL}}", "body": '{"content": "{{title}}"}'}}).json()
+    rec = webhooks.test(h["id"], inline=True)
+    assert rec["status"] == "ok" and json.loads(_Sink.got[-1][1]) == {"content": "Test notification"}
+    assert sink not in json.dumps(client.get("/api/webhooks").json())
 
 
 def test_body_cap_follows_the_hook(mx):

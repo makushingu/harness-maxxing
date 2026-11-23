@@ -1,6 +1,7 @@
 // Settings -> Notifications: the feed's sources (built-in + webhooks), their Telegram rule, and webhooks
 // management (add with the right URL and signing secret per service, test, new URL, delete).
 import * as React from 'react'
+import { Link } from 'react-router'
 import { FlaskConical, KeyRound, MoreHorizontal, Plus, RefreshCw, Trash2, Webhook } from 'lucide-react'
 import { useCreateHook, useDeleteHook, useFeedSettings, usePatchHook, useSaveFeedSettings, useSettings, useTestHook } from '@/lib/queries'
 import type { FeedHook, FeedHookKind, FeedRule, FeedSource } from '@/lib/types'
@@ -80,6 +81,12 @@ export function FeedSettingsCards() {
           </div>
         )}
         <p className="mt-3 text-xs text-muted-foreground">{t('feed.cliHint')}</p>
+        <p className="mt-1.5 text-xs text-muted-foreground">
+          {t('webhooks.feedLink')}{' '}
+          <Link to="/settings/webhooks" className="font-medium text-primary underline-offset-4 hover:underline">
+            {t('webhooks.feedLinkTo')}
+          </Link>
+        </p>
       </SettingsCard>
       {adding && <AddHookDialog onClose={() => setAdding(false)} />}
     </div>

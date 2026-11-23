@@ -105,6 +105,8 @@ class UploadGuard:
         headers = {k.decode("latin-1").lower(): v.decode("latin-1") for k, v in scope.get("headers", [])}
         if not headers.get("content-type", "").lower().startswith("multipart/"):
             return await self.app(scope, receive, send)
+        if scope["path"].startswith("/api/hooks/"):     # public webhooks (a phone sending a photo): the token is the
+            return await self.app(scope, receive, send)  # permission, bodylimit.py caps the body (webhooks.py max_mb)
         from . import security
         from starlette.requests import Request
         if not security.is_authenticated(Request(scope)):

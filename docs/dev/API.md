@@ -267,11 +267,12 @@ Hook = {id:"w_xxxxxxxx", name, description, enabled, created, updated, owner:nul
                | {kind:"event", on:"feed", source?, levels?:[level], contains?}
                | {kind:"event", on:"agent"|"cron", agent?|cron?, when:"any"|"ok"|"fail"},
         action:  {kind:"shell", command (one line), cwd?, timeout_s:1-3600 (300)}
-               | {kind:"call", url (fixed), method, headers:{k: v with {{path}} / {{key:NAME}}}, body:"raw"|"json"|template,
+               | {kind:"call", url (fixed, or {{key:NAME}} from the vault), method, headers:{k: v with {{path}} / {{key:NAME}}}, body:"raw"|"json"|template,
                   sign:bool (X-Harness-Signature: sha256=<hmac of the body>), retries:0-5 (2), timeout_s:1-60 (15)}
-               | {kind:"store", fields:{column: "data.path"}, keep:rows (100000)}
+               | {kind:"store", fields:{column: "path.from.the.payload"}, keep:rows (100000)}
                | {kind:"notify", level?, title?, body?, url?}   // templates; empty title: the feed's parser of the source
         queue: {parallel:1-4 (1), max_waiting:0-500 (50)}, report:"never"|"fail"|"always",
+        // templates {{path}}: the payload's keys, then payload / event / query / hook / call; {{key:NAME}} in headers and url
         // read-only:
         url:string ("" for events), has_secret, has_sign, needs_secret, last_call:Call|null, calls_24h, waiting,
         data?:{rows, today, days:[7 counts], last_id}}      // store hooks

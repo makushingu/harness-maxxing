@@ -274,8 +274,10 @@ def _clean_action(a: Any, trigger: dict) -> dict:
                 "timeout_s": _int(a.get("timeout_s"), 1, MAX_TIMEOUT, SHELL_TIMEOUT, "action.timeout_s")}
     if kind == "call":
         url = _text(a.get("url"), 2000, "action.url", required=True)
-        if not re.match(r"^https?://[^\s/?#]+", url) or "{{" in url or re.search(r"\s", url):
-            raise _bad("invalid", "action.url: an http(s) address (fixed: no {{…}})")
+        bare = re.sub(r"\{\{\s*key:[A-Za-z0-9_]+\s*\}\}", "", url)
+        whole_key = re.fullmatch(r"\{\{\s*key:[A-Za-z0-9_]+\s*\}\}", url) is not None
+        if "{{" in bare or re.search(r"\s", url) or not (whole_key or re.match(r"^https?://[^\s/?#{}]+", url)):
+            raise _bad("invalid", "action.url: an http(s) address; only {{key:NAME}} (a vault key) may be in it")
         body = a.get("body")
         default = "raw" if trigger["kind"] == "in" else "json"
         body = default if body in (None, "") else body
@@ -531,7 +533,10 @@ def describe(h: dict) -> str:
     elif t["on"] == "agent":
         when = f"When {'agent ' + t['agent'] if t.get('agent') else 'an agent'} finishes"
     else:
-        when = f"When {'cron ' + t['cron'] if t.get('cron') else 'a cron job'} ends"
+        ends = {"ok": "succeeds", "fail": "fails"}.get(t.get("when") or "any", "ends")
+        when = f"When {'cron ' + t['cron'] if t.get('cron') else 'a cron job'} {ends}"
+    if t["kind"] == "event" and t["on"] == "agent" and t.get("when") in ("ok", "fail"):
+        when = when.replace("finishes", "succeeds" if t["when"] == "ok" else "fails")
     do = {"shell": f"run {a.get('command', '')[:60]}", "call": f"call {re.sub(r'^https?://', '', a.get('url', ''))[:50]}",
           "store": "store the data", "notify": "post a notification"}[a["kind"]]
     return f"{when}, {do}"
@@ -992,10 +997,16 @@ def _context(h: dict, cid: str) -> tuple[dict, dict, bytes]:
     d = call_dir(h["id"], cid)
     req = config.read_json(d / "request.json", {}) or {}
     payload = config.read_json(d / "payload.json", {})
-    ctx: dict = dict(payload) if isinstance(payload, dict) else {}
-    ctx.update({"data": payload, "event": req.get("event", ""), "query": req.get("query") or {},
-                "hook": h["name"], "call": cid})
-    return ctx, req, _read_bytes(d / "body")
+    return _ctx(payload, req.get("event", ""), req.get("query") or {}, h["name"], cid), req, _read_bytes(d / "body")
+
+
+def _ctx(payload: Any, event: str = "", query: dict | None = None, hook: str = "", cid: str = "") -> dict:
+    """What a {{path}} reads: the payload's own keys first ({{data.object.amount}} of a Stripe event), then
+    `payload` (all of it), `event`, `query`, `hook`, `call` when the payload has no key of that name."""
+    ctx: dict = {"payload": payload, "event": event, "query": query or {}, "hook": hook, "call": cid}
+    if isinstance(payload, dict):
+        ctx.update(payload)
+    return ctx
 
 
 # ---- execution -----------------------------------------------------------------------------
@@ -1166,7 +1177,7 @@ def _call(h: dict, cid: str) -> dict:
         if "content-type" not in lower and req.get("content_type"):
             headers["Content-Type"] = req["content_type"]
     elif a["body"] == "json":
-        body = json.dumps(ctx.get("data"), ensure_ascii=False).encode("utf-8")
+        body = json.dumps(ctx.get("payload"), ensure_ascii=False).encode("utf-8")
         if "content-type" not in lower:
             headers["Content-Type"] = "application/json"
     else:
@@ -1180,6 +1191,9 @@ def _call(h: dict, cid: str) -> dict:
         if key:
             headers["X-Harness-Signature"] = "sha256=" + hmac.new(key.encode(), body, hashlib.sha256).hexdigest()
     headers.setdefault("User-Agent", "Harness-Maxxing-Webhooks")
+    url = render(a["url"], {}, keys=True)
+    if not re.match(r"^https?://[^\s/?#]+", url):
+        return {"ok": False, "error": "the URL (or the vault key holding it) is not an http(s) address"}
     d = call_dir(h["id"], cid)
     attempts, last_err, resp = 0, "", None
     for attempt in range(int(a.get("retries") or 0) + 1):
@@ -1188,7 +1202,7 @@ def _call(h: dict, cid: str) -> dict:
             time.sleep(min(30, 2 ** attempt))
         try:
             with httpx.Client(timeout=a.get("timeout_s") or CALL_TIMEOUT, follow_redirects=False) as c:
-                resp = c.request(a["method"], a["url"], headers=headers, content=body)
+                resp = c.request(a["method"], url, headers=headers, content=body)
         except httpx.HTTPError as e:
             last_err, resp = f"{type(e).__name__}: {e}"[:300], None
             continue
@@ -1228,7 +1242,7 @@ def _notify(h: dict, cid: str) -> dict:
     if not title and t["kind"] == "in" and t["source"] in ("stripe", "shopify", "github", "generic"):
         from .feedhooks import PARSERS
         hdr = {"x-shopify-topic": req.get("event", ""), "x-github-event": req.get("event", "")}
-        ev = PARSERS[t["source"]](ctx["data"] if isinstance(ctx.get("data"), dict) else {}, hdr)
+        ev = PARSERS[t["source"]](ctx["payload"] if isinstance(ctx.get("payload"), dict) else {}, hdr)
         if ev:
             title, body = title or ev[0], body or ev[1]
             level, url = level or ev[2], url or ev[3]
@@ -1251,7 +1265,7 @@ def _db(hid: str) -> sqlite3.Connection:
 
 def _store_row(h: dict, cid: str) -> dict:
     ctx, _, _ = _context(h, cid)
-    data = ctx["data"]
+    data = ctx["payload"]
     with contextlib.closing(_db(h["id"])) as c, c:
         cur = c.execute("INSERT INTO rows(at, call, data) VALUES (?,?,?)",
                         (_now(), cid, json.dumps(data, ensure_ascii=False)))
@@ -1270,7 +1284,8 @@ def _row(h: dict, r: tuple) -> dict:
     out = {"id": r[0], "at": r[1], "call": r[2], "data": data}
     fields = h["action"].get("fields") or {}
     if fields:
-        out["fields"] = {k: _lookup({"data": data, **(data if isinstance(data, dict) else {})}, p) for k, p in fields.items()}
+        ctx = _ctx(data)
+        out["fields"] = {k: _lookup(ctx, p) for k, p in fields.items()}
     return out
 
 

@@ -29,6 +29,13 @@ export const qk = {
     runs: (cronId?: string | null, limit?: number) => ['crons', 'runs', cronId ?? null, limit ?? 50] as const,
     preview: (schedule: string) => ['crons', 'preview', schedule] as const,
   },
+  webhooks: {
+    all: ['webhooks'] as const,
+    list: ['webhooks', 'list'] as const,
+    calls: (id: string) => ['webhooks', 'calls', id] as const,
+    call: (id: string, call: string) => ['webhooks', 'call', id, call] as const,
+    data: (id: string) => ['webhooks', 'data', id] as const,
+  },
   telegram: {
     all: ['telegram'] as const,
     status: ['telegram', 'status'] as const,
@@ -116,6 +123,8 @@ export const BUS_KEYS: Record<BusTopic, readonly (readonly unknown[])[]> = {
   devices: [['devices']],
   // Jarvis's conversation changed, its work board moved, its settings
   jarvis: [['jarvis']],
+  // a webhook or an event was added, changed, removed, or one of them was called (Settings -> Webhooks / Events)
+  webhooks: [['webhooks']],
 }
 
 /** Query keys of one bus topic: `agents:<path>` = that agent's thread or unread changed (a message, a feed event
@@ -136,7 +145,7 @@ export function busKeysOf(topic: string): readonly (readonly unknown[])[] {
 /** Data the bus keeps fresh on its own (file watchers + every write path): no refetch when the tab is shown
  *  again (useGlobalBus refreshes them once after a long absence instead). The dashboard is not in it (its
  *  widgets read crons, health, external services...). */
-export const LIVE_KEYS: readonly (readonly unknown[])[] = [qk.sessions.all, qk.openSessions, qk.workspace, qk.tasks, qk.crons.all, qk.trash, qk.extensions, qk.health, qk.telegram.all, qk.backup.all]
+export const LIVE_KEYS: readonly (readonly unknown[])[] = [qk.sessions.all, qk.openSessions, qk.workspace, qk.tasks, qk.crons.all, qk.trash, qk.extensions, qk.health, qk.telegram.all, qk.backup.all, ['webhooks']]
 export const isLiveKey = (key: readonly unknown[]) => LIVE_KEYS.some((p) => p.every((x, i) => key[i] === x))
 
 /** Extra keys when one batch carries both `sessions` and `workspace`: the server pairs them when a session starts

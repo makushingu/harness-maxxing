@@ -5,6 +5,10 @@ description: Create, change, disable or debug Harness Maxxing scheduled jobs (sh
 
 # Scheduled jobs
 
+Not at set times but **when something happens** (a service calls, a notification arrives, an agent run or a cron run
+ends) -> a webhook or an event, without AI: skill `maxxing-webhooks` (e.g. "when the backup job fails, post to ntfy").
+With judgement (AI) on an event -> an agent (skill `maxxing-agents`).
+
 Jobs are managed by Harness Maxxing and stored in `{{STATE_DIR}}/crons/jobs.json`. Each
 enabled job is one line of a **managed block** in root's crontab calling `maxxing cron run <id>`;
 lines outside the block are never touched. Run history: `crons/runs.jsonl` (shown in Settings -> Crons).

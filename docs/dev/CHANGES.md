@@ -7,6 +7,34 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Webhooks & events (`webhooks.py`, new): automations without AI, one trigger (`in`: `/api/hooks/<token>`, sources
+  stripe / shopify / github / generic / phone, GET+POST, multipart files, `filter` events / branch globs, `reply`
+  now|wait; `event`: feed / agent / cron with `when`) + one action (`shell` in a transient unit
+  `maxxing-hook-<id>-<call>` via `maxxing webhooks run`, request as files + `MAXXING_WEBHOOK_*` / `MAXXING_RESPONSE_FILE`,
+  never in the command; `call` httpx with templates, `{{key:NAME}}` vault headers, `X-Harness-Signature`, retries;
+  `store` SQLite `data/<id>.db`; `notify` = `feed.post` with `feedhooks.PARSERS`). Store `<state>/webhooks/`
+  (`hooks.json` under flock, `calls/<id>.jsonl` last 50 + per-call folders, `spool/`, `feed-pos.json`), secrets in
+  secrets.json `webhooks`. Durable queue (record before run, `recover()` at start), per-hook `queue.parallel` /
+  `max_waiting` (503 + Retry-After), 120/min, 4 waiting callers, 30 s wait (504). See INTERNALS.md `maxxing.webhooks`.
+- API: `/api/webhooks` (list + `feed_hooks` read-only + `https`, create, get, PATCH, DELETE, rotate, secret, test,
+  calls, call, replay, data json/csv) in `api/webhooks.py` (also the loop: spool every 2 s, feed scan every 5 s,
+  `MAXXING_WEBHOOKS_LOOP=0` turns it off); `api/hooks.py` serves a webhooks token first (GET/POST, multipart, wait
+  reply), any other token is a feed webhook as before (unchanged URLs, no migration). API.md "Webhooks & events".
+- CLI `cmd_webhooks.py`: `maxxing webhooks list|show|add|edit|describe|on|off|remove|url|rotate|secret|calls|call|test|
+  replay|data|run` (`add`/`edit` JSON by `--spec` or stdin, secret on stdin, `test`/`replay` inline).
+- `agent_guard`: `WEBHOOKS_OWNER_ONLY` (add, edit, remove, on, off, rotate, secret, replay, test, run, describe) in
+  `OWNER_SUBS`: agents may only read hooks.
+- `bodylimit`: `/api/hooks/<token>` capped by the hook's own `max_mb` (`webhooks.cap_for_token`), else
+  `feedhooks.MAX_BODY`.
+- `feed.PRODUCT_SOURCES` gains `webhooks` (the failures of hooks; agents and webhooks cannot post as it); feed events of
+  that source and with `hops >= 3` never start event hooks; `notify` from an event carries `hops + 1`.
+- Emitters: `crons.run_job` (final outcome, not before a retry) and `agents.on_turn_end` (automatic runs only, next to
+  `chain_after`) call `webhooks.emit()`, which writes the spool only when an enabled event hook listens.
+- Extensions: `ctx["webhook_data"](id_or_name, after=0, limit=100)` -> the rows of a store hook.
+- Skill `maxxing-webhooks` (new); `maxxing-feed`, `maxxing-cron`, `maxxing-agents`, `maxxing-extension` point to it;
+  workspace CLAUDE.md template (CLI table, skills table, "Use what Harness already has"), the `help` topic index and
+  the Jarvis skill list it. User docs `37-webhooks.md`, `38-events.md`; `08-crons`, `24-feed`, `30-agents`,
+  `14-skills`, `17-cli-reference`, `01-welcome`, README updated. Tests `tests/test_webhooks.py`.
 - `sessions/opened.py`: `open_sessions.json` also keeps `tabs` (bool) and `front` (session id), set by `POST /api/sessions/open
   {tabs?, front?}` (a change bumps `rev`, same value = no rev); keys absent until a browser sends them. `openSync.ts`:
   sends the mode / focused session when they change here (debounced with the cols), applies the other device's unless

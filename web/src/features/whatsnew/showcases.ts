@@ -42,6 +42,7 @@ const SHOWCASES: Record<string, TourStep[]> = {
   jarvis: [{ id: 'jarvis', targets: [], title: 'show.jarvis.title', body: 'show.jarvis.body', route: (c) => (c.pathname === '/settings/features' ? null : '/settings/features') }],
   devices: [{ id: 'devices', targets: ['devices-feature'], title: 'show.devices.title', body: 'show.devices.body', route: (c) => (c.pathname === '/settings/features' ? null : '/settings/features') }],
   'mobile-header': [{ id: 'mobile-header', targets: [], title: 'show.mobileHeader.title', body: 'show.mobileHeader.body' }],
+  webhooks: [{ id: 'webhooks', targets: ['webhooks-ask'], title: 'show.webhooks.title', body: 'show.webhooks.body', route: (c) => (c.pathname === '/settings/webhooks' ? null : '/settings/webhooks') }],
   'touch-nav': [{ id: 'touch-nav', targets: ['touch-sessions', 'nav'], title: 'show.touchNav.title', body: 'show.touchNav.body', before: (c) => c.mobile && useTouchNav.getState().setPanel(null) }],
 }
 

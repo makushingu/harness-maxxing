@@ -40,6 +40,11 @@ const DevicesSection = React.lazy(withGroups(['devices'], () => import('@/featur
 // The crons section is a whole page (list, history, editor): its own chunk, loaded when it opens.
 const CronsSection = React.lazy(() => import('@/pages/crons'))
 
+// Webhooks and Events: one chunk (and texts) for both, loaded when one of them opens.
+const loadHooks = withGroups(['webhooks'], () => import('@/features/webhooks/WebhooksSettings'))
+const WebhooksSection = React.lazy(() => loadHooks().then((m) => ({ default: m.WebhooksSection })))
+const EventsSection = React.lazy(() => loadHooks().then((m) => ({ default: m.EventsSection })))
+
 const COMPONENTS: Record<SettingsSectionId, React.ComponentType> = {
   general: GeneralSection,
   appearance: AppearanceSection,
@@ -65,6 +70,8 @@ const COMPONENTS: Record<SettingsSectionId, React.ComponentType> = {
   system: SystemSection,
   updates: UpdatesSection,
   crons: CronsSection,
+  webhooks: WebhooksSection,
+  events: EventsSection,
   browser: BrowserSection,
   devices: DevicesSection,
 }
