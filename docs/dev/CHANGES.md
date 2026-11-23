@@ -5,6 +5,12 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## 2.0.0-alpha.164 - 2026-11-23
+
+- `SessionColumn`: `useSessionStream(place?.hidden ? null : sid)`: a hidden tab (tabs view) closes its SSE. Over
+  HTTP/1.1 (local / Tailscale mode, no Caddy h2) one `EventSource` per open tab + `/api/stream` filled the browser's 6
+  connections per host and queued `POST /messages` (#178). Shown again, the stream resumes from `get(id).next`.
+
 ## 2.0.0-alpha.163 - 2026-11-22
 
 - Agents / Team refactor, no behaviour change: shared helpers (`agents._edit_state`, api `_errors` / `_existing`,

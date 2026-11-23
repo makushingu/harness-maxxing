@@ -3,6 +3,13 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.164 - 2026-11-23
+
+Fixed:
+- **With several sessions open, a message no longer stays on "Sending…" (local or Tailscale access, plain HTTP).**
+  Each open tab kept a live connection and the browser allows only six per server: the send waited for a free one and
+  never left. Only the sessions on screen keep one now; a tab you come back to catches up at once.
+
 ## 2.0.0-alpha.163 - 2026-11-22
 
 Fixed:
