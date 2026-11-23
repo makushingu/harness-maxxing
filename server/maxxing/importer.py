@@ -202,6 +202,11 @@ def _entries(zf: zipfile.ZipFile) -> tuple[list[tuple[zipfile.ZipInfo, PurePosix
         k += 1
     if k:
         ok = [(i, PurePosixPath(*p.parts[k:])) for i, p in ok]
+    from . import backup
+    for s in skipped:
+        # a skipped file is listed in the report and the API answer: its name must not carry a secret
+        if any(rx.search(s["file"].encode("utf-8", "replace")) for _, rx in backup.LEAKS):
+            s["file"] = "(name hidden: it holds a secret)"
     return ok, skipped
 
 
