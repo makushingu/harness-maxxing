@@ -25,6 +25,7 @@ import logging
 import os
 import re
 import shutil
+import threading
 import time
 from pathlib import Path
 from typing import Any, Callable, Iterator
@@ -189,9 +190,13 @@ def _write_claude_md(folder: Path, kind: str, name: str, description: str | None
 
 def _put_text(f: Path, text: str) -> None:
     """Write through a temporary file: a crash never leaves CLAUDE.md empty. Surrogate escapes become their bytes."""
-    tmp = f.with_name(f.name + ".tmp")
-    tmp.write_bytes(text.encode("utf-8", errors="surrogateescape"))
-    os.replace(tmp, f)
+    tmp = f.with_name(f"{f.name}.{os.getpid()}-{threading.get_ident()}.tmp")   # its own name: two writers never share one
+    try:
+        tmp.write_bytes(text.encode("utf-8", errors="surrogateescape"))
+        os.replace(tmp, f)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
 
 
 def _init_level(folder: Path, kind: str, name: str, description: str) -> None:
@@ -750,6 +755,10 @@ def move_to_trash(src: Path, label: str | None = None, kind: str | None = None) 
         config.write_json(sidecar, side)
         shutil.move(str(src), str(dest))
     except BaseException:
+        # A file that is still where it was is whole: the copy that stopped half way must not stay in the trash as a
+        # duplicate. A folder may be half removed by now (its copy is then the only complete one): left alone.
+        if os.path.lexists(src) and not src.is_dir() and os.path.lexists(dest):
+            dest.unlink(missing_ok=True)
         sidecar.unlink(missing_ok=True)
         raise
     bus.invalidate("trash")

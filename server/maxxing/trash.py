@@ -264,7 +264,8 @@ def _move_back(p: Path, dest: Path) -> None:
         return
     except OSError:
         pass
-    tmp = dest.with_name(f".{dest.name[:200]}.restoring-{os.getpid()}")
+    short = dest.name.encode(errors="surrogateescape")[:180].decode(errors="ignore")   # bytes, not characters: 255 is a byte limit
+    tmp = dest.with_name(f".{short}.restoring-{os.getpid()}")
     try:
         if p.is_dir() and not p.is_symlink():
             shutil.copytree(p, tmp, symlinks=True)

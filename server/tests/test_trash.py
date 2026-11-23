@@ -4,6 +4,7 @@ from __future__ import annotations
 import errno
 import json
 import os
+import shutil
 import time
 from pathlib import Path
 
@@ -811,3 +812,31 @@ def test_an_old_item_with_a_damaged_sidecar_is_not_purged_at_once(client, topic,
     side.write_text("{not json")
     assert trash.purge_old() == 0
     assert any(trash.trash_dir().glob("*old.txt"))
+
+
+def test_a_restore_across_disks_of_a_multibyte_name_keeps_the_temporary_name_short(client, topic, mx, monkeypatch):
+    """The temporary copy was cut at 200 characters, not bytes: 120 accented letters made "File name too long"."""
+    name = "é" * 120 + ".txt"
+    (mx["ws"] / topic / name).write_text("a")
+    from maxxing import workspace
+    workspace.move_to_trash(mx["ws"] / topic / name)
+    _across_disks(monkeypatch)
+    (item,) = [i for i in client.get("/api/trash").json()["items"] if i["name"] == name]
+    r = client.post(f"/api/trash/{item['id']}/restore")
+    assert r.status_code == 200, r.text
+    assert (mx["ws"] / topic / name).read_text() == "a"
+
+
+def test_a_move_to_the_trash_that_fails_after_the_copy_leaves_no_duplicate(client, topic, mx, monkeypatch):
+    from maxxing import workspace
+    f = mx["ws"] / topic / "dup.txt"
+    f.write_text("a")
+
+    def copy_then_fail(src, dst):
+        shutil.copy2(src, dst)
+        raise OSError(errno.EIO, "cannot remove the source")
+    monkeypatch.setattr(workspace.shutil, "move", copy_then_fail)
+    with pytest.raises(OSError):
+        workspace.move_to_trash(f)
+    assert f.read_text() == "a"
+    assert list(trash.trash_dir().iterdir()) == []

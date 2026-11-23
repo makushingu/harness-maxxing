@@ -664,7 +664,12 @@ def _write_cfg(fn) -> None:
             if not d or not fn(d):
                 return
             # the file holds the Claude account (maybe an API key): the copy is private from its creation
-            _replace(target, json.dumps(d, indent=2, ensure_ascii=False).encode("utf-8"), 0o600)
+            text = json.dumps(d, indent=2, ensure_ascii=False)
+            try:
+                raw = text.encode("utf-8")
+            except UnicodeEncodeError:                   # a lone surrogate (json.loads accepts it): escaped instead
+                raw = json.dumps(d, indent=2).encode("ascii")
+            _replace(target, raw, 0o600)
         finally:
             if lock is not None:
                 try:

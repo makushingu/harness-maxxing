@@ -65,6 +65,7 @@ def load() -> dict:
 
 
 def save(d: dict) -> None:
+    config.keep_damaged(_path())                       # a file that did not parse was read as empty: keep it first
     config.write_json(_path(), d, mode=0o600)
 
 
