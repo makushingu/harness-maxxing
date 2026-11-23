@@ -446,6 +446,17 @@ def test_a_link_into_a_hidden_or_skipped_folder_is_not_indexed(client, mx):
     assert [r["title"] for r in _q(client, "zqxhiddenlink789")] == ["real.md"]
 
 
+def test_a_link_named_like_a_note_to_a_secret_file_is_not_indexed(client, mx):
+    ws = config.workspace()
+    (ws / ".env").write_text("zqxlinkedenv456=1\n")
+    (ws / "tasks.json").write_text('{"zqxlinkedenv456": 1}\n')
+    os.symlink(ws / ".env", ws / "a.md")
+    os.symlink(ws / "tasks.json", ws / "b.md")
+    (ws / "real.md").write_text("zqxlinkedenv456 dans une vraie note\n")
+    search.refresh()
+    assert [r["title"] for r in _q(client, "zqxlinkedenv456")] == ["real.md"]
+
+
 def test_snippets_come_from_the_best_row_of_each_shown_result(mx):
     # snippets are made for the shown rows only, after the ranking: each one must still be its own session's text
     ids = {_session("", f"Run {i}", [("user", f"harbour report number{i} filed"),
