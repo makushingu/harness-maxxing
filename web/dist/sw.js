@@ -11,8 +11,8 @@
  * Web Push ("Harness has finished", server/maxxing/webpush.py): the server sends an EMPTY push; the worker then asks
  * POST /api/push/pending (same origin, the app's cookie) what to show, one notification per session; a tap opens it.
  */
-const VERSION = "ac5ab30b03cd"
-const PRECACHE = ["/assets/index-WMAI0o3i.js","/assets/rolldown-runtime-hePW80VL.js","/assets/vendor-react-BnjD-3TK.js","/assets/react-CnXiOLQk.js","/assets/middleware-CpWMw2yu.js","/assets/i18n-COtF-jHv.js","/assets/vendor-router-C1RDb2Ii.js","/assets/media-DUG3wcwE.js","/assets/pwa-DroVoxjI.js","/assets/vendor-query-_Ef6Mat7.js","/assets/queries-YZ2xV7_B.js","/assets/api-D4ReSSix.js","/assets/vendor-ui-DP9-r1V0.js","/assets/upload-CqVv1aZS.js","/assets/createLucideIcon-DgbSFKXf.js","/assets/bot-ojKijWnz.js","/assets/check-DAvsI0gG.js","/assets/folder-open-C_o83-7w.js","/assets/git-branch-CSelSQ7Q.js","/assets/x-C-fzFPY7.js","/assets/utils-D641Oq3T.js","/assets/spinner-BbgGU2Ib.js","/assets/sheet-drag-Bt71-Yly.js","/assets/index-C_eX_bPp.css","/assets/inter-latin-wght-normal-Dx4kXJAl.woff2"]
+const VERSION = "ce115eb67d55"
+const PRECACHE = ["/assets/index-BJrk663f.js","/assets/rolldown-runtime-hePW80VL.js","/assets/vendor-react-BnjD-3TK.js","/assets/react-CnXiOLQk.js","/assets/middleware-CpWMw2yu.js","/assets/i18n-COtF-jHv.js","/assets/vendor-router-C1RDb2Ii.js","/assets/media-DUG3wcwE.js","/assets/pwa-DroVoxjI.js","/assets/vendor-query-_Ef6Mat7.js","/assets/queries-YZ2xV7_B.js","/assets/api-D4ReSSix.js","/assets/vendor-ui-DP9-r1V0.js","/assets/upload-CLU6eTKa.js","/assets/createLucideIcon-DgbSFKXf.js","/assets/bot-ojKijWnz.js","/assets/check-DAvsI0gG.js","/assets/folder-open-C_o83-7w.js","/assets/git-branch-CSelSQ7Q.js","/assets/x-C-fzFPY7.js","/assets/utils-D641Oq3T.js","/assets/spinner-BbgGU2Ib.js","/assets/sheet-drag-Bt71-Yly.js","/assets/index-C_eX_bPp.css","/assets/inter-latin-wght-normal-Dx4kXJAl.woff2"]
 const SHELL = `mx-shell-${VERSION}`
 const ASSETS = `mx-assets-${VERSION}`
 const OFFLINE = '/offline.html'
