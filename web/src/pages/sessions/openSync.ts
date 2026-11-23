@@ -7,8 +7,8 @@
 // has and `base` has not, it opened: sent. What the server has and `base` has not, another device opened: shown.
 // The same for what was closed. No base yet (first time): a computer adds its sessions to the shared ones (and starts
 // the list when there is none); a phone takes the shared ones and keeps only the session on screen of its own.
-// A phone shares its sessions only in tabs view: without it, it shows one session at a time and has no bar to close
-// the others (it still follows and shares the mode and the session in front).
+// Every browser shares its sessions in both modes (a phone in Zones too: it follows the mode of the computer, and a
+// session opened there must still reach the computer).
 import * as React from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
@@ -66,11 +66,12 @@ const sync = {
   rev: 0,
   /** a computer: its own order, sent when it changes (a column was moved) */
   order: '',
-  /** this browser shares its open sessions (a computer, or a phone in tabs view) */
-  ids: false,
-  /** the mode and the session in front agreed on last (undefined: not yet); a change here is sent, one there shown */
+  /** the mode and the session in front the server had last (undefined: not yet); a change here is sent, one there shown */
   tabs: undefined as boolean | null | undefined,
   front: undefined as string | null | undefined,
+  /** the session in front here after the last answer (undefined: not yet): only a change made here since is sent - a
+   *  session in front on another device that is not open here does not send this one back (it would undo a link) */
+  mine: undefined as string | null | undefined,
   /** the session in front when the page opened: a link that brought another one in front is not undone */
   start: null as string | null,
 }
@@ -93,7 +94,7 @@ function flush() {
   const st = useSessionsUI.getState()
   if (sync.tabs !== undefined && st.tabs !== sync.tabs) body.tabs = st.tabs
   const f = frontId()
-  if (sync.front !== undefined && f && f !== sync.front) body.front = f
+  if (sync.mine !== undefined && f && f !== sync.mine && f !== sync.front) body.front = f
   if (!Object.keys(body).length) return
   api
     .post<Shared>('/api/sessions/open', body)
@@ -117,11 +118,6 @@ function pull(s: Shared) {
   const before = sync.tabs ?? st.tabs
   if (typeof s.tabs === 'boolean' && st.tabs === before && s.tabs !== st.tabs) st.setTabs(s.tabs)
   sync.tabs = typeof s.tabs === 'boolean' ? s.tabs : null   // none shared yet: ours is sent
-  if (!sync.ids) {
-    view(s, front)
-    flush()
-    return
-  }
   const ids = s.ids
   const b = sync.base
   const shown = st.cols.find((c) => c.key === st.focused)
@@ -142,12 +138,13 @@ function pull(s: Shared) {
 /** The session in front on another device comes in front here, unless another one was just brought in front here. */
 function view(s: Shared, here: string | null) {
   const st = useSessionsUI.getState()
-  const before = sync.front === undefined ? sync.start : sync.front
+  const before = sync.mine === undefined ? sync.start : sync.mine
   if (s.front && here === before && s.front !== frontId()) {
     const c = st.cols.find((x) => isSession(x) && x.id === s.front)
     if (c) st.focus(c.key)
   }
   sync.front = s.front ?? null
+  sync.mine = frontId()
 }
 
 /** The shared list and view (one request for every reader). */
@@ -159,15 +156,11 @@ export const useShared = () =>
   })
 
 export function useOpenSync(mobile: boolean) {
-  const tabs = useSessionsUI((s) => s.tabs)
-  const active = !mobile || tabs
   const { data } = useShared()
   React.useEffect(() => {
     sync.mobile = mobile
     sync.rev = 0
-    sync.ids = active
-    sync.base = active ? readBase() : null
-    if (!active) writeBase(null)
+    sync.base = readBase()
     sync.order = localIds().join(' ')
     let timer: ReturnType<typeof setTimeout> | undefined
     const unsub = useSessionsUI.subscribe((s, prev) => {
@@ -179,14 +172,15 @@ export function useOpenSync(mobile: boolean) {
       unsub()
       clearTimeout(timer)
     }
-  }, [active, mobile])
+  }, [mobile])
   React.useEffect(() => {
     // a new page: the mode and the session in front start from what the other devices chose last
     sync.tabs = undefined
     sync.front = undefined
+    sync.mine = undefined
     sync.start = frontId()
   }, [mobile])
   React.useEffect(() => {
     if (data) pull(data)
-  }, [active, mobile, data])
+  }, [mobile, data])
 }
