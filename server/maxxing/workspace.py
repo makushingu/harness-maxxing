@@ -740,6 +740,10 @@ def move_to_trash(src: Path, label: str | None = None, kind: str | None = None) 
         config.write_json(sidecar, side)
         shutil.move(str(src), str(dest))
     except BaseException:
+        # A file that is still where it was is whole: the copy that stopped half way must not stay in the trash as a
+        # duplicate. A folder may be half removed by now (its copy is then the only complete one): left alone.
+        if os.path.lexists(src) and not src.is_dir() and os.path.lexists(dest):
+            dest.unlink(missing_ok=True)
         sidecar.unlink(missing_ok=True)
         raise
     bus.invalidate("trash")

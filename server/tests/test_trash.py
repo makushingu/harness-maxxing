@@ -4,6 +4,7 @@ from __future__ import annotations
 import errno
 import json
 import os
+import shutil
 import time
 from pathlib import Path
 
@@ -824,3 +825,18 @@ def test_a_restore_across_disks_of_a_multibyte_name_keeps_the_temporary_name_sho
     r = client.post(f"/api/trash/{item['id']}/restore")
     assert r.status_code == 200, r.text
     assert (mx["ws"] / topic / name).read_text() == "a"
+
+
+def test_a_move_to_the_trash_that_fails_after_the_copy_leaves_no_duplicate(client, topic, mx, monkeypatch):
+    from maxxing import workspace
+    f = mx["ws"] / topic / "dup.txt"
+    f.write_text("a")
+
+    def copy_then_fail(src, dst):
+        shutil.copy2(src, dst)
+        raise OSError(errno.EIO, "cannot remove the source")
+    monkeypatch.setattr(workspace.shutil, "move", copy_then_fail)
+    with pytest.raises(OSError):
+        workspace.move_to_trash(f)
+    assert f.read_text() == "a"
+    assert list(trash.trash_dir().iterdir()) == []
