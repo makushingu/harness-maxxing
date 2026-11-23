@@ -541,3 +541,26 @@ def test_a_peers_file_that_does_not_parse_is_kept_before_it_is_rewritten(client,
     path.write_text(path.read_text()[:-5])              # cut: no longer JSON
     teampeer.create_invite()
     assert list(path.parent.glob("peers.json.damaged-*"))
+
+
+def test_a_download_keeps_a_received_file_named_like_its_temporary_one(tmp_path, monkeypatch):
+    import httpx
+    from maxxing import teampeer
+
+    class R:
+        status_code = 200
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def iter_bytes(self, n): raise httpx.ReadError("cut")
+
+    class C:
+        def stream(self, *a, **k): return R()
+
+    monkeypatch.setattr(teampeer, "_http", lambda: C())
+    monkeypatch.setattr(teampeer, "_key_to", lambda *a: b"k")
+    monkeypatch.setattr(teampeer, "_sign", lambda *a: {})
+    monkeypatch.setattr(teampeer, "own_address", lambda: "me")
+    monkeypatch.setattr(teampeer, "_check_target", lambda a: "http://x")
+    (tmp_path / "a.part").write_text("kept")
+    assert teampeer.fetch_file("peer", "f1", tmp_path / "a", 100, "chat") is False
+    assert (tmp_path / "a.part").read_text() == "kept"

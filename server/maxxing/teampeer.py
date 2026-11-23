@@ -994,7 +994,7 @@ def fetch_file(address: str, fid: str, dest: Path, max_bytes: int, chat: str, re
     disk, within FETCH_DEADLINE. False on any failure (nothing left behind but `dest` as the caller made it)."""
     from .uploads import free_bytes
     path = f"/api/team-peer/files/{fid}"
-    tmp = dest.with_name(dest.name + ".part")
+    tmp = dest.with_name(f"{dest.name}.{os.urandom(4).hex()}.part")   # its own name: a received file called X.part stays
     end = time.monotonic() + FETCH_DEADLINE
     try:
         headers = _sign(_key_to(address, chat), "GET", path, own_address(), address, b"")
@@ -1002,7 +1002,7 @@ def fetch_file(address: str, fid: str, dest: Path, max_bytes: int, chat: str, re
             if r.status_code != 200:
                 return False
             n = checked = 0
-            with open(tmp, "wb") as out:
+            with open(tmp, "xb") as out:
                 for chunk in r.iter_bytes(1 << 16):
                     n += len(chunk)
                     if (max_bytes and n > max_bytes) or time.monotonic() > end:
