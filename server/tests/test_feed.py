@@ -463,3 +463,9 @@ def test_watch_id_changes_on_a_grouped_event_a_resolve_and_a_delete(mx):
     feed.delete(a["id"])
     seen.append(feed.watch_id())
     assert all(x != y for x, y in zip(seen, seen[1:])), seen
+
+
+def test_clean_url_refuses_whitespace_that_browsers_strip_into_another_site():
+    assert feed._clean_url("/\t/evil.com") == ""
+    assert feed._clean_url("/\n/evil.com") == "" and feed._clean_url("//evil.com") == ""
+    assert feed._clean_url("/sessions?x=1") == "/sessions?x=1" and feed._clean_url("https://a.b/c") == "https://a.b/c"

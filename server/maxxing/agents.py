@@ -1633,17 +1633,39 @@ def _edit_state(path: str) -> Any:
 OWNED_FILES = (AGENT_FILE, "CLAUDE.md")
 # ...and what decides the tools and rights of its next runs (Claude Code reads them from its folder)
 WATCHED_FILES = OWNED_FILES + (".mcp.json", ".claude/settings.json", ".claude/settings.local.json")
+FINGERPRINT_MAX = 1_000_000     # bytes hashed of a watched file
 KEPT_MAX = 100_000              # bytes of agent.json kept in a snapshot (put back when a run changed it)
 
 
 def _fingerprint(path: str) -> dict[str, str]:
     out = {}
     for n in WATCHED_FILES:
-        try:
-            out[n] = hashlib.sha1((folder(path) / n).read_bytes()).hexdigest()
-        except OSError:
-            out[n] = ""
+        out[n] = _hash_regular(folder(path) / n)
     return out
+
+
+def _hash_regular(f: Path) -> str:
+    """sha1 of a regular file of at most FINGERPRINT_MAX bytes; "" for a link, a pipe, a device or a huge file."""
+    try:
+        fd = os.open(f, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except OSError:
+        return ""
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode) or st.st_size > FINGERPRINT_MAX:
+            return ""
+        h, left = hashlib.sha1(), FINGERPRINT_MAX + 1
+        while left > 0:
+            chunk = os.read(fd, min(65536, left))
+            if not chunk:
+                break
+            h.update(chunk)
+            left -= len(chunk)
+        return h.hexdigest() if left > 0 else ""
+    except OSError:
+        return ""
+    finally:
+        os.close(fd)
 
 
 def _snapshot(path: str, sid: str) -> None:

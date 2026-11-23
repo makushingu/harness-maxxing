@@ -1106,3 +1106,22 @@ def test_continue_in_sessions_keeps_the_pending_compaction_summary(client, topic
         e["seed"] = "SUMMARY OF THE EARLIER TURNS"
     copy = client.post(f"/api/agents/acme/blog/writer/runs/{sid}/continue").json()["session"]
     assert store.read(copy["id"])["seed"] == "SUMMARY OF THE EARLIER TURNS"
+
+
+def test_fingerprint_ignores_a_link_to_a_device_or_a_pipe(mx, tmp_path, monkeypatch):
+    import os, time
+    from pathlib import Path
+    from maxxing import agents
+    d = tmp_path / "a"
+    d.mkdir()
+    monkeypatch.setattr(agents, "folder", lambda path: d)
+    (d / ".mcp.json").symlink_to("/dev/zero")
+    os.mkfifo(d / "CLAUDE.md")
+    (d / "agent.json").write_text("{}")
+    t = time.monotonic()
+    fp = agents._fingerprint("x")
+    assert time.monotonic() - t < 2
+    assert fp[".mcp.json"] == "" and fp["CLAUDE.md"] == "" and fp["agent.json"]
+    (d / ".claude").mkdir()
+    (d / ".claude" / "settings.json").write_bytes(b"x" * (agents.FINGERPRINT_MAX + 1))
+    assert agents._fingerprint("x")[".claude/settings.json"] == ""

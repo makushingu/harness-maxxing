@@ -508,3 +508,24 @@ def test_a_container_folder_linked_outside_the_workspace_is_not_indexed(client, 
     os.symlink(outside, ws / "projects" / "p" / "topics")
     search.refresh(True, True)
     assert _q(client, "zqxcontainer654") == []
+
+
+def test_a_session_with_a_bad_date_does_not_stop_the_index(client, mx):
+    ids = [_session("projects/acme/topics/blog", f"Zebra {i}", [("user", "zebra")]) for i in range(3)]
+    f = store.meta_path(ids[1])
+    m = json.loads(f.read_text())
+    m["updated"] = [1]
+    f.write_text(json.dumps(m))
+    search.refresh()
+    found = {x["id"] for x in client.get("/api/search", params={"q": "zebra"}).json()["results"]}
+    assert set(ids) == found
+
+
+def test_a_corrupt_search_db_is_rebuilt(client, mx):
+    sid = _session("projects/acme/topics/blog", "Refonte", [("user", "zebra")])
+    search.refresh()
+    search._db().close()
+    search._con = None
+    search.db_path().write_bytes(os.urandom(5000))
+    search.refresh()
+    assert sid in {x["id"] for x in client.get("/api/search", params={"q": "zebra"}).json()["results"]}
