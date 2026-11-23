@@ -92,13 +92,9 @@ def _peek() -> dict:
     """team.json for reading only (never change what it returns): parsed again only when the file changed."""
     global _peeked
     cached = _peeked
-    if (sig := _sig()) is None or cached is None or cached[0] != sig:
+    if (sig := teampeer._sig(_path())) is None or cached is None or cached[0] != sig:
         cached = _peeked = (sig, _load())
     return cached[1]
-
-
-def _sig() -> tuple | None:
-    return teampeer._sig(_path())
 
 
 _UNSEEN = ("unseen",)
@@ -109,13 +105,13 @@ def _save(doc: dict) -> None:
     global _peeked
     config.write_json(_path(), doc)
     _peeked = None
-    _written[0] = _sig()
+    _written[0] = teampeer._sig(_path())
     bus.invalidate("team")
 
 
 def notice_outside_writes() -> None:
     """team.json written by another process (`maxxing team send`): the open pages refetch (outbox worker, every 5 s)."""
-    sig = _sig()
+    sig = teampeer._sig(_path())
     if sig != _written[0]:
         first = _written[0] is _UNSEEN
         _written[0] = sig
@@ -733,16 +729,14 @@ def _attach(paths: list[str]) -> list[dict]:
     for raw, src in zip(paths or [], srcs):        # every file checked before the first copy
         if not src.is_file():
             raise TeamError(400, "bad_file", f"No such file: {raw}")
+    from .api.sessions import reserve_path
     out: list[dict] = []
     try:
         for src in srcs:
-            dest = files_dir() / _safe_name(src.name)
-            n = 1
-            while dest.exists():
-                dest = dest.with_name(f"{Path(_safe_name(src.name)).stem}-{n}{src.suffix}")
-                n += 1
-            shutil.copyfile(src, dest)
+            dest, fd = reserve_path(files_dir(), _safe_name(src.name))
+            os.close(fd)
             out.append({"path": str(dest)})
+            shutil.copyfile(src, dest)
     except BaseException:                          # a copy failed: the ones already made go away
         for f in out:
             Path(f["path"]).unlink(missing_ok=True)
