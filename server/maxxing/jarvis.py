@@ -625,6 +625,7 @@ def brief(now: float | None = None) -> dict:
     the reading) and it comes into the conversation when ready (on_turn_end -> _brief_to_conversation): Jarvis only
     passes it on. The agent cannot start (off, budget): Jarvis makes the brief itself, as before. -> the conversation."""
     from . import agents
+    _ensure_on()                                  # off: refused BEFORE the day is marked as done
     now = now or time.time()
     s = settings()
     when = _local_now(now).strftime("%A %Y-%m-%d %H:%M")

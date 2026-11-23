@@ -339,3 +339,8 @@ def test_work_registered_from_several_processes_gets_unique_ids(client, mx):
     ids = [i["id"] for i in jarvis._read_work()["items"]]
     assert len(ids) == 120 and len(set(ids)) == 120
 
+
+def test_a_brief_refused_because_jarvis_is_off_does_not_mark_the_day_done(client, mx):
+    with pytest.raises(jarvis.JarvisError):
+        jarvis.brief()
+    assert "last_brief" not in jarvis._read_state()
