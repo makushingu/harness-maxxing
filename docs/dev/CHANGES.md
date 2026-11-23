@@ -5,6 +5,20 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## 2.0.0-alpha.166 - 2026-11-23
+
+- `openSync.ts`: ids shared on a phone in Zones too (`sync.ids` and the `active` dependency removed; base no longer
+  dropped when the phone leaves Tabs). Front: `sync.mine` = the session in front here at the last agreement; `flush`
+  sends `front` only when it changed here since (`f !== sync.mine && f !== sync.front`), so a front of another device
+  that is not open here is no longer answered with ours (it undid a link on the phone). `view` keeps `mine` = `before`
+  while a change made here is still to send. POST answers go through `sent()`: `setQueryData(qk.openSessions)` when
+  newer, so a remounted page no longer applies the older cached GET (it brought the previous front back).
+- `pages/sessions/index.tsx` State -> URL (desktop): reads `useSessionsUI.getState()` instead of the rendered
+  `focusedCol`/`cols`: on a fresh load with `?session=X`, the URL effect's `openSession(X)` of the same pass is no
+  longer overwritten by the persisted front (which then came back through the URL effect).
+- `Composer.tsx`: `autoFocus` focuses only if `focused === colKey` when it runs (the composer mounts after the
+  session data: the last column to load stole the front in Zones).
+
 ## 2.0.0-alpha.165 - 2026-11-23
 
 - Harness Link 0.1.1 (`server/maxxing/link.json`, release `link-v0.1.1`): Android main screen redesigned (`LogoView.kt`
