@@ -21,12 +21,6 @@ def _on() -> None:
         raise HTTPException(404, detail={"error": "not_found", "message": "Not found"})
 
 
-def _ip(request: Request) -> str:
-    """The sender for the rate limits: the connection's address (uvicorn already takes it from the local proxy only),
-    never an X-Forwarded-For header anyone can write."""
-    return security.client_key(request)
-
-
 async def _call(fn, *args):
     try:
         return await asyncio.to_thread(fn, *args)
@@ -34,26 +28,34 @@ async def _call(fn, *args):
         raise HTTPException(e.status, detail={"error": e.code, "message": e.message}) from None
 
 
+async def _verify(request: Request, path: str, body: bytes = b"") -> tuple[str, str]:
+    """Team on, and the request signed by a contact or a group member -> (sender, scope). The sender for the rate
+    limits is the connection's address (uvicorn already takes it from the local proxy only), never an
+    X-Forwarded-For header anyone can write."""
+    _on()
+    return await _call(teampeer.verify, request.method, path, dict(request.headers), body,
+                       security.client_key(request))
+
+
+def _json(raw: bytes) -> object:
+    try:
+        return json.loads(raw)
+    except (ValueError, RecursionError):
+        raise HTTPException(400, detail={"error": "bad_request", "message": "JSON expected"}) from None
+
+
 @router.post("/hello")
 async def hello(request: Request):
     _on()
-    try:
-        body = json.loads(await request.body())
-    except (ValueError, RecursionError):
-        raise HTTPException(400, detail={"error": "bad_request", "message": "JSON expected"}) from None
-    return await _call(teampeer.hello, body if isinstance(body, dict) else {}, _ip(request))
+    body = _json(await request.body())
+    return await _call(teampeer.hello, body if isinstance(body, dict) else {}, security.client_key(request))
 
 
 @router.post("/inbox")
 async def inbox(request: Request):
-    _on()
     raw = await request.body()
-    frm, scope = await _call(teampeer.verify, "POST", "/api/team-peer/inbox", dict(request.headers), raw, _ip(request))
-    try:
-        event = json.loads(raw)
-    except (ValueError, RecursionError):
-        raise HTTPException(400, detail={"error": "bad_request", "message": "JSON expected"}) from None
-    if not isinstance(event, dict):
+    frm, scope = await _verify(request, "/api/team-peer/inbox", raw)
+    if not isinstance(event := _json(raw), dict):
         raise HTTPException(400, detail={"error": "bad_request", "message": "Object expected"})
     try:
         return await _call(teampeer.receive, frm, event, scope)
@@ -64,9 +66,7 @@ async def inbox(request: Request):
 
 @router.get("/files/{fid}")
 async def file(fid: str, request: Request):
-    _on()
-    path = f"/api/team-peer/files/{fid}"
-    frm, scope = await _call(teampeer.verify, "GET", path, dict(request.headers), b"", _ip(request))
+    frm, scope = await _verify(request, f"/api/team-peer/files/{fid}")
     f = await _call(teampeer.file_for, frm, fid, scope)
     return FileResponse(f["path"], media_type="application/octet-stream",
                         headers={"Content-Disposition": downloads.content_disposition(str(f["name"])),
@@ -76,7 +76,6 @@ async def file(fid: str, request: Request):
 @router.get("/photo")
 async def photo(request: Request):
     """Our profile photo, for a contact or a member of a shared group (see teampeer.photo_for)."""
-    _on()
-    frm, scope = await _call(teampeer.verify, "GET", "/api/team-peer/photo", dict(request.headers), b"", _ip(request))
+    frm, scope = await _verify(request, "/api/team-peer/photo")
     path, mime = await _call(teampeer.photo_for, frm, scope)
     return FileResponse(path, media_type=mime, headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "no-store"})

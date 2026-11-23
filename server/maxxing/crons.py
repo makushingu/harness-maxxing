@@ -30,6 +30,7 @@ from __future__ import annotations
 import contextlib
 import datetime as dt
 import fcntl
+import itertools
 import json
 import logging
 import math
@@ -240,20 +241,7 @@ def iter_runs(expr: str | CronExpr, after: float | None = None, zone: ZoneInfo |
 
 
 def next_runs(expr: str, n: int = 5, after: float | None = None, zone: ZoneInfo | None = None) -> list[float]:
-    out: list[float] = []
-    for ts in iter_runs(expr, after, zone):
-        out.append(ts)
-        if len(out) >= n:
-            break
-    return out
-
-
-def next_run(expr: str, after: float | None = None) -> float | None:
-    try:
-        r = next_runs(expr, 1, after)
-    except CronError:
-        return None
-    return r[0] if r else None
+    return list(itertools.islice(iter_runs(expr, after, zone), n))
 
 
 # ---- one-time jobs ---------------------------------------------------------------------------
@@ -585,10 +573,8 @@ def _clean(job: dict) -> dict:
     if j["permission_mode"] not in PERMISSION_MODES:
         raise CronError("permission_mode must be bypass, acceptEdits, default, ask or empty", "invalid_permission_mode")
     if j["kind"] == "shell":
-        if not j["command"].strip():
+        if not j["command"].strip():           # multi-line scripts are fine: run via bash -lc
             raise CronError("a shell job needs a command", "invalid_command")
-        if "\n" in j["command"].strip():
-            pass                                   # multi-line scripts are fine: run via bash -lc
     else:
         if not j["prompt"].strip():
             raise CronError("a Claude job needs a prompt", "invalid_prompt")
@@ -709,9 +695,7 @@ def update_job(cid: str, fields: dict) -> dict | None:
                 again = j["once_at"] and (j["once_at"] != cur.get("once_at") or (j["enabled"] and not cur.get("enabled", True)))
                 if again:
                     _check_once_future(j, time.time())
-                    new.pop("done_at", None)
-                    new.pop("missed", None)
-                if not j["once_at"]:
+                if again or not j["once_at"]:
                     new.pop("done_at", None)
                     new.pop("missed", None)
                 if j["enabled"] != bool(cur.get("enabled", True)):
@@ -794,22 +778,16 @@ def _all_runs() -> list[dict]:
 
 def read_runs(cron_id: str | None = None, limit: int = 50) -> list[dict]:
     """Most recent first (copies: callers may annotate them)."""
-    out: list[dict] = []
-    for r in reversed(_all_runs()):
-        if cron_id and r.get("cron_id") != cron_id:
-            continue
-        out.append(dict(r))
-        if len(out) >= limit:
-            break
-    return out
+    mine = (dict(r) for r in reversed(_all_runs()) if not cron_id or r.get("cron_id") == cron_id)
+    return list(itertools.islice(mine, limit))
 
 
 def last_runs() -> dict[str, dict]:
     """cron_id -> most recent Run."""
     out: dict[str, dict] = {}
-    for r in read_runs(limit=MAX_RUNS):
-        if isinstance(r, dict):
-            out.setdefault(r.get("cron_id", ""), r)
+    for r in itertools.islice(reversed(_all_runs()), MAX_RUNS):
+        if r["cron_id"] not in out:
+            out[r["cron_id"]] = dict(r)
     return out
 
 
@@ -1006,12 +984,17 @@ def _zone(name: str) -> ZoneInfo:
         return ZoneInfo("UTC")
 
 
-def _zones_differ() -> bool:
-    """config.timezone and the system zone are not the same clock (any offset that differs over the next year)."""
+def _offset_gaps() -> list[float]:
+    """config.timezone minus the system zone, in seconds, at monthly steps over the next year."""
     a, b = _zone(config.load_config().get("timezone") or "UTC"), _zone(system_zone_name())
     now = dt.datetime.now(dt.timezone.utc)
-    return any((now + dt.timedelta(days=30 * k)).astimezone(a).utcoffset()
-               != (now + dt.timedelta(days=30 * k)).astimezone(b).utcoffset() for k in range(13))
+    return [(t.astimezone(a).utcoffset() - t.astimezone(b).utcoffset()).total_seconds()
+            for t in (now + dt.timedelta(days=30 * k) for k in range(13))]
+
+
+def _zones_differ() -> bool:
+    """config.timezone and the system zone are not the same clock (any offset that differs over the next year)."""
+    return any(_offset_gaps())
 
 
 def guarded() -> bool:
@@ -1033,13 +1016,7 @@ def fire_zone() -> ZoneInfo:
 
 
 def _whole_hours_apart() -> bool:
-    a, b = _zone(config.load_config().get("timezone") or "UTC"), _zone(system_zone_name())
-    now = dt.datetime.now(dt.timezone.utc)
-    for k in range(13):
-        t = now + dt.timedelta(days=30 * k)
-        if (t.astimezone(a).utcoffset() - t.astimezone(b).utcoffset()).total_seconds() % 3600:
-            return False
-    return True
+    return not any(g % 3600 for g in _offset_gaps())
 
 
 def is_due(expr: str, at: float | None = None) -> bool:
@@ -1082,26 +1059,24 @@ def managed_lines(jobs: list[dict]) -> list[str]:
     for j in jobs:
         if not j.get("enabled", True) or not SAFE_ID.fullmatch(str(j.get("id"))):
             continue
+        run = f"{env}{DETACH_ENV}=1 {exe} cron run {j['id']}"
         if is_once(j):
             fields = _once_fields(j)
             if fields is None:
                 continue
-            if guard:
-                minute = fields.split(" ", 1)[0] if whole else "*"
-                out.append(f"{minute} * * * * {env}{DETACH_ENV}=1 {exe} cron run {j['id']} --if-due >/dev/null 2>&1")
-            else:
-                out.append(f"{fields} {env}{DETACH_ENV}=1 {exe} cron run {j['id']} >/dev/null 2>&1")
-            continue
-        try:
-            sched = validate(j.get("schedule", ""))
-        except CronError:
-            continue
-        c = parse(sched)
-        if guard and not c.reboot:
-            minute = ",".join(map(str, sorted(c.minutes))) if whole and len(c.minutes) < 60 else "*"
-            out.append(f"{minute} * * * * {env}{DETACH_ENV}=1 {exe} cron run {j['id']} --if-due >/dev/null 2>&1")
+            minute = fields.split(" ", 1)[0] if whole else "*"
         else:
-            out.append(f"{sched} {env}{DETACH_ENV}=1 {exe} cron run {j['id']} >/dev/null 2>&1")
+            try:
+                c = parse(j.get("schedule", ""))
+            except CronError:
+                continue
+            fields, minute = c.source, ",".join(map(str, sorted(c.minutes))) if whole and len(c.minutes) < 60 else "*"
+            if c.reboot:
+                minute = None
+        if guard and minute:
+            out.append(f"{minute} * * * * {run} --if-due >/dev/null 2>&1")
+        else:
+            out.append(f"{fields} {run} >/dev/null 2>&1")
     return out
 
 
@@ -1238,24 +1213,17 @@ def _kill_group(proc: subprocess.Popen, grace: float | None = None) -> None:
     id stays reserved while one member lives, so the SIGKILL cannot hit an unrelated process. In a job unit, what
     escaped the group (setsid) is killed by systemd when the run ends."""
     pgid = proc.pid
-    grace = KILL_GRACE_S if grace is None else grace
-    try:
+    with contextlib.suppress(ProcessLookupError):
         os.killpg(pgid, signal.SIGTERM)
-    except ProcessLookupError:
-        pass
-    end = time.monotonic() + grace
+    end = time.monotonic() + (KILL_GRACE_S if grace is None else grace)
     while time.monotonic() < end:
         if proc.poll() is not None and not _group_alive(pgid):
             break
         time.sleep(0.05)
-    try:
+    with contextlib.suppress(ProcessLookupError):
         os.killpg(pgid, signal.SIGKILL)
-    except ProcessLookupError:
-        pass
-    try:
+    with contextlib.suppress(subprocess.TimeoutExpired):
         proc.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        pass
 
 
 def _timeout(job: dict | None) -> int:
@@ -1318,10 +1286,8 @@ def store_mode(sid: str, mode: str) -> None:
     store.update(sid, permission_mode=mode)
 
 
-def _run_claude(job: dict) -> tuple[bool, int, str, str | None]:
-    """Run the prompt as a Claude session turn. -> (ok, code, output_tail, session_id)."""
-    t = _claude_turn(job)
-    return t["ok"], 0 if t["ok"] else 1, t["text"], t["session_id"]
+def _skipped(why: str) -> dict:
+    return {"ok": True, "text": f"skipped: {why}", "session_id": None, "error": "", "timed_out": False, "skipped": True}
 
 
 def _claude_turn(job: dict, auto: bool = False) -> dict:
@@ -1331,8 +1297,7 @@ def _claude_turn(job: dict, auto: bool = False) -> dict:
     from .sessions import service                       # lazy: sessions are owned by core
     from . import agents, budget
     if auto and budget.reached():
-        return {"ok": True, "text": f"skipped: {budget.SKIP_TEXT}", "session_id": None,
-                "error": "", "timed_out": False, "skipped": True}
+        return _skipped(budget.SKIP_TEXT)
     when = dt.datetime.now(tz()).strftime("%Y-%m-%d %H:%M")
     title = f"{job['name']} - {when}"
     timeout = _timeout(job)
@@ -1340,8 +1305,7 @@ def _claude_turn(job: dict, auto: bool = False) -> dict:
     smap_path = _dir() / "sessions.json"
     silent = {"silent_ok": True} if job.get("notify") == "always" else {}   # else the answer stays the full report
     if agents.is_agent_path(job["topic_path"]) and not agents.feature_on():   # Agents switched off: no turn costs
-        return {"ok": True, "text": "skipped: Agents is switched off (Settings -> Features)", "session_id": None,
-                "error": "", "timed_out": False, "skipped": True}
+        return _skipped("Agents is switched off (Settings -> Features)")
     sid = None
     if job.get("reuse_session"):
         prev = (config.read_json(smap_path, {}) or {}).get(job["id"])
@@ -1354,8 +1318,7 @@ def _claude_turn(job: dict, auto: bool = False) -> dict:
         r = agents.fire(job["topic_path"], trigger=f"cron:{job['id']}", prompt=job["prompt"], source="cron",
                         cron_env=env, timeout_s=timeout)
         if not r["started"]:
-            return {"ok": True, "text": f"skipped: {agents.SKIP_TEXT.get(r['reason'], r['reason'])}",
-                    "session_id": None, "error": "", "timed_out": False, "skipped": True}
+            return _skipped(agents.SKIP_TEXT.get(r["reason"], r["reason"]))
         sid = r["session"]["id"]
     if sid is None:
         s = service.create_session(job["topic_path"], message=job["prompt"], title=title,
@@ -1368,38 +1331,21 @@ def _claude_turn(job: dict, auto: bool = False) -> dict:
                 m = config.read_json(smap_path, {}) or {}
                 m[job["id"]] = sid
                 config.write_json(smap_path, m)
-    res = service.wait_turn(sid, timeout + 60) or {}
-    ok = _turn_ok(res)
-    last_result = getattr(service, "last_result", None)
-    if ok and callable(last_result):
-        try:
-            r = last_result(sid)
-            if isinstance(r, dict) and r.get("ok") is False:
-                ok = False
-        except Exception:
-            pass
+    res = service.wait_turn(sid, timeout + 60)                    # the Session
+    ok = res.get("state") == "idle" and not res.get("error")
+    if ok:
+        with contextlib.suppress(Exception):                     # the turn's result event says it failed
+            r = service.last_result(sid)
+            ok = not (isinstance(r, dict) and r.get("ok") is False)
     try:
         text = service.last_assistant_text(sid) or ""
     except Exception:
         text = ""
-    error = str(res.get("error") or "") if isinstance(res, dict) else ""
-    timed_out = (isinstance(res, dict) and res.get("state") == "running") or "Turn stopped (timeout)" in error
+    error = str(res.get("error") or "")
+    timed_out = res.get("state") == "running" or "Turn stopped (timeout)" in error
     if not ok and not text:
         text = error or "the Harness turn failed or timed out"
     return {"ok": ok, "text": text, "session_id": sid, "error": error, "timed_out": timed_out}
-
-
-def _turn_ok(res: dict) -> bool:
-    """wait_turn returns the session (state) and/or the result event (ok) - accept both shapes."""
-    if not isinstance(res, dict):
-        return False
-    if "ok" in res:
-        return bool(res["ok"])
-    if isinstance(res.get("result"), dict) and "ok" in res["result"]:
-        return bool(res["result"]["ok"])
-    if res.get("timeout") or res.get("timed_out"):
-        return False
-    return res.get("state") == "idle" and not res.get("error")
 
 
 _live_locks: dict[str, tuple] = {}                   # cron id -> (open lock file, start) while it runs here
@@ -1427,10 +1373,8 @@ def _mark(lockf, start: float, pgid: int | None = None) -> None:
 def _note_group(cid, pgid: int) -> None:
     live = _live_locks.get(cid) if isinstance(cid, str) else None
     if live:
-        try:
+        with contextlib.suppress(OSError):
             _mark(live[0], live[1], pgid)
-        except OSError:
-            pass
 
 
 def _interrupted(cid: str, job: dict, lockf) -> dict | None:
@@ -1449,10 +1393,8 @@ def _interrupted(cid: str, job: dict, lockf) -> dict | None:
     same = isinstance(mark.get("pgid_start"), str) and _proc_start(pgid) == mark["pgid_start"] \
         if isinstance(pgid, int) and pgid > 1 else False
     if same and _group_alive(pgid):
-        try:
+        with contextlib.suppress(OSError):
             os.killpg(pgid, signal.SIGKILL)
-        except OSError:
-            pass
     at = float(mark["at"])
     return {"id": "r_" + _secrets.token_hex(4), "cron_id": cid, "name": job["name"], "at": at,
             "ok": False, "code": -9, "duration_s": round(max(0.0, time.time() - at), 2),

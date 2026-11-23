@@ -116,10 +116,7 @@ async def get_settings():
 
 @router.put("/settings")
 async def put_settings(body: SettingsIn):
-    if body.rules is not None:
-        rules = {**feed.settings()["rules"], **body.rules}
-    else:
-        rules = None
+    rules = {**feed.settings()["rules"], **body.rules} if body.rules is not None else None
     await _call(feed.save_settings, body.telegram, rules, None, body.health)
     return await _call(_settings_view)
 

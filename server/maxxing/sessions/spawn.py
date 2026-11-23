@@ -75,42 +75,12 @@ def claude_bin() -> str:
     return shutil.which("claude", path=base_env()["PATH"]) or "claude"
 
 
-_RESERVED = {"PATH", "HOME", "USER", "LOGNAME", "SHELL", "PWD", "TERM", "LANG", "LC_ALL", "TZ",   # = vault.RESERVED
-             "HOSTNAME", "TMPDIR", "PYTHONPATH", "LD_PRELOAD", "LD_LIBRARY_PATH",
-             "LD_AUDIT", "BASH_ENV", "ENV", "PROMPT_COMMAND", "NODE_OPTIONS", "NODE_PATH",
-             "PYTHONSTARTUP", "PYTHONHOME", "GIT_SSH_COMMAND", "GIT_EXEC_PATH", "ANTHROPIC_BASE_URL"}
-
-
-def _exposed_vault(secrets: dict) -> dict[str, str]:
-    """Vault entries flagged `expose` (maxxing.vault.exposed_env, or the same filter if absent)."""
-    try:
-        from .. import vault, vault_files
-        return {**vault.exposed_env(), **vault_files.exposed_files_env()}     # a file: its path
-    except ImportError:
-        pass
-    v = secrets.get("vault") if isinstance(secrets.get("vault"), dict) else {}
-    return {k: str(e.get("value") or "") for k, e in v.items()
-            if isinstance(e, dict) and e.get("expose") and ENV_NAME_RE.match(k)
-            and not _reserved(k)}
-
-
-def _reserved(name: str) -> bool:
-    try:
-        from .. import vault
-        return vault.is_reserved(name)
-    except ImportError:
-        return name in _RESERVED or name.startswith("MAXXING_")
-
-
 def _named_vault(names: list[str]) -> dict[str, str]:
     """The vault entries `names` (an agent's keys), exposed or not."""
-    try:
-        from .. import vault
-    except ImportError:
-        return {}
+    from .. import vault
     out = {}
     for n in names:
-        v = vault.get(n) if ENV_NAME_RE.match(n) and not _reserved(n) else None
+        v = vault.get(n) if ENV_NAME_RE.match(n) and not vault.is_reserved(n) else None
         if v is not None and "\0" not in v:
             out[n] = v
     return out
@@ -120,7 +90,11 @@ def auth_env(secrets: dict | None = None, keys: list[str] | None = None) -> dict
     """Claude credentials stored in secrets.json + the user's vault entries flagged `expose`.
     keys: only these vault entries instead (an agent's turn sees the keys of its agent.json, nothing else)."""
     s = secrets if secrets is not None else config.load_secrets()
-    out = _exposed_vault(s) if keys is None else _named_vault(keys)
+    if keys is None:
+        from .. import vault, vault_files
+        out = {**vault.exposed_env(), **vault_files.exposed_files_env()}     # a file: its path
+    else:
+        out = _named_vault(keys)
     if s.get("claude_oauth_token"):
         out["CLAUDE_CODE_OAUTH_TOKEN"] = str(s["claude_oauth_token"])
     if s.get("anthropic_api_key"):
