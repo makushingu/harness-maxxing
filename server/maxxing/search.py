@@ -259,8 +259,9 @@ def _index_sessions(con: sqlite3.Connection) -> None:
             if end:
                 lines = chunk[:end].decode("utf-8", "replace").split("\n")
                 for ev in normalize.normalize_lines(lines):
-                    if ev.get("type") in ("user", "assistant", "voice_text") and (ev.get("text") or "").strip():
-                        con.execute(_ADD, (key, "session", sid, path, "", ev["text"][:MAX_MESSAGE_CHARS], ev.get("at")))
+                    txt = ev.get("text")
+                    if ev.get("type") in ("user", "assistant", "voice_text") and isinstance(txt, str) and txt.strip():
+                        con.execute(_ADD, (key, "session", sid, path, "", txt[:MAX_MESSAGE_CHARS], ev.get("at")))
                 sig["offset"] += end
         new = json.dumps(sig)
         if not row or new != row[0]:                         # unchanged (a log ending in a cut line): no write
@@ -322,7 +323,7 @@ def _index_groups(con: sqlite3.Connection) -> None:
             for line in chunk[:end].decode("utf-8", "replace").split("\n"):
                 try:
                     m = json.loads(line)
-                except ValueError:
+                except (ValueError, RecursionError):         # RecursionError: a line of 100000 "["
                     continue
                 raw = m.get("text") if isinstance(m, dict) and m.get("kind") == "message" else None
                 text = raw.strip() if isinstance(raw, str) else ""
