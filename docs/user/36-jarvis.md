@@ -52,10 +52,24 @@ back from a session it launched, the morning brief, and the night pass. The nigh
 when nothing of yours changed since the last one (scheduled jobs and agents alone do not count); a new conversation each day keeps each turn small. To spend less, clear the
 brief or night pass time in its settings.
 
+## Continued sessions, archived sessions
+- **New work on the same subject continues a session you already have.** Before starting a session, Jarvis looks at
+  the sessions of the topic the work belongs to (active in the last 30 days). One on the same subject, or the work
+  follows up what it did: the work goes there, with its context, and Jarvis tells you which one. Never a session of
+  another topic, never one that is running, one you wrote in during the last 30 minutes (you may be working there) or
+  one whose context is almost full. Unsure: a new session.
+- **Finished work is put away.** When Jarvis marks a piece of work done, the session it started for it goes to the
+  Archives - unless you wrote in it, then it stays where it is. Sessions Jarvis only continued (yours, an agent's) are
+  never archived. Its line on the work board says "archived"; the link still opens it, and it comes back by itself
+  when Jarvis (or you) writes in it again.
+
 ## Settings (gear icon: a window, from the bottom on a phone)
 - **Full rights** (on): Jarvis and the sessions it starts work without permission prompts.
 - **Ask me first** (on): before publishing, paying, deleting or writing to someone, it says what it will do and waits
   for your yes. Off: it acts and tells you after.
+- **Continue existing sessions** (on): new work on the same subject goes to a recent session of the topic.
+- **Archive finished sessions** (on): once work is done, the sessions Jarvis started and you never wrote in go to
+  the Archives.
 - **New conversation each morning**: off = one long conversation (compacted when it gets long).
 - **Summarize its conversation at** (150k by default): past this context, its conversation is summarized and goes
   on from the summary, like any session but sooner, so each turn stays cheap. **As every session** uses the

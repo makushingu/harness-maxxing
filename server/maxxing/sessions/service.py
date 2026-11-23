@@ -329,6 +329,7 @@ def _enqueue(sid: str, item: dict, *, reset_cron: bool = False) -> bool:
         m["updated"] = time.time()
         if reset_cron:                    # a cron session you talk to becomes a normal one
             m["cron"], m["archived"] = False, False
+            m.pop("jarvis_archived", None)    # archived by Jarvis once its work was done: followed up
         busy = m.get("state") == "running" and store.runner_alive(sid, m)
         held = not busy and _handoff_held(m)     # runner._handoff puts the seed first and starts it
         if not busy and not held:                # pid=None: a dead runner's pid is never signalled (it may be reused)
@@ -485,11 +486,14 @@ def send_message(sid: str, text: str, attachments: list[str] | None = None, sour
     if text.strip():
         titles.first_message(sid, text.strip())
     item = _item(text.strip(), files, source, **extra)
+    if source in OWNER_SOURCES and not relay:
+        store.update(sid, owner_at=time.time())         # the owner wrote here (Jarvis: reuse and archiving rules)
     reset = source != "cron"
     queued = _enqueue_voice(sid, item, audio, reset_cron=reset) if audio else _enqueue(sid, item, reset_cron=reset)
     return {"queued": queued, "session": get_session(sid)}
 
 
+OWNER_SOURCES = ("web", "telegram")                  # a message typed by the owner (not a session, agent, cron)
 MAX_HOPS = 3                                           # session -> session -> ... (agents count too)
 
 

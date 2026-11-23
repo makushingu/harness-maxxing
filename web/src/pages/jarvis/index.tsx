@@ -4,7 +4,7 @@
 // Its settings (rights, ask first, daily conversation, brief and night pass times, internals) sit in the gear menu.
 import * as React from 'react'
 import { Link } from 'react-router'
-import { CalendarDays, Check, ExternalLink, Eye, Hand, ListTodo, MessageSquarePlus, Minimize2, Moon, PanelRightClose, Send, Settings2, ShieldCheck, Sparkles, Sun, X, type LucideIcon } from 'lucide-react'
+import { Archive, CalendarDays, Check, ExternalLink, Eye, Hand, ListTodo, MessageSquarePlus, MessagesSquare, Minimize2, Moon, PanelRightClose, Send, Settings2, ShieldCheck, Sparkles, Sun, X, type LucideIcon } from 'lucide-react'
 import { useLang, useT, type TKey } from '@/i18n'
 import { useCloseJarvisWork, useJarvis, useJarvisBrief, useJarvisDream, useJarvisSettings, useNewJarvisConversation, useOpenJarvis } from '@/lib/queries'
 import type { JarvisSettings, JarvisWork } from '@/lib/types'
@@ -214,7 +214,8 @@ function WorkCard({ w }: { w: JarvisWork }) {
             <span className="text-muted-foreground">#{w.id}</span> {w.title || where}
           </p>
           <p className="truncate text-xs text-muted-foreground">
-            {where} · {asks ? t('jarvis.state.asks') : t(STATE_LABEL[w.state])} · {fmtRelative(w.updated, lang)}
+            {where} · {asks ? t('jarvis.state.asks') : t(STATE_LABEL[w.state])}
+            {w.archived && ` · ${t('jarvis.work.archived')}`} · {fmtRelative(w.updated, lang)}
           </p>
         </div>
       </div>
@@ -253,9 +254,11 @@ function JarvisSettingsDialog({ open, onOpenChange, settings, onNew, renewing }:
   const dream = useJarvisDream()
   const { data: tg } = useTelegram()
   const set = (k: keyof JarvisSettings, v: boolean | string | number) => save.mutate({ [k]: v })
-  const toggles: { k: 'root' | 'ask_first' | 'daily' | 'internals'; icon: LucideIcon; label: TKey; hint: TKey }[] = [
+  const toggles: { k: 'root' | 'ask_first' | 'reuse' | 'archive_done' | 'daily' | 'internals'; icon: LucideIcon; label: TKey; hint: TKey }[] = [
     { k: 'root', icon: ShieldCheck, label: 'jarvis.set.root', hint: 'jarvis.set.rootHint' },
     { k: 'ask_first', icon: Hand, label: 'jarvis.set.ask', hint: 'jarvis.set.askHint' },
+    { k: 'reuse', icon: MessagesSquare, label: 'jarvis.set.reuse', hint: 'jarvis.set.reuseHint' },
+    { k: 'archive_done', icon: Archive, label: 'jarvis.set.archive', hint: 'jarvis.set.archiveHint' },
     { k: 'daily', icon: CalendarDays, label: 'jarvis.set.daily', hint: 'jarvis.set.dailyHint' },
     { k: 'internals', icon: Eye, label: 'jarvis.set.internals', hint: 'jarvis.set.internalsHint' },
   ]

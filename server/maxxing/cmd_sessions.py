@@ -8,6 +8,9 @@
                                               write to another session as if typed in it (TO = its id or title);
                                               from a turn, the message says which session sent it
   maxxing sessions list [--json]              the sessions that are not archived (id, state, topic, title)
+  maxxing sessions list --topic P/T [--days N] [--json]
+                                              a topic's recent sessions for Jarvis: about (title, last answer), who
+                                              started it, reusable / why_not (running, owner_active, context_full)
   maxxing sessions new TOPIC [TEXT...] [--title T] [--model M] [--effort E] [--file P] [--report-to S] [--json]
                                               start a session in a topic (TOPIC = <project>/<topic> or its path) with
                                               a first message; from a turn, the message says which session sent it
@@ -45,6 +48,9 @@ def _configure(p) -> None:
                                                    "this turn); from Jarvis's conversation: always Jarvis")
     n.add_argument("--json", action="store_true")
     ls = sub.add_parser("list", help="the sessions that are not archived")
+    ls.add_argument("--topic", default="", help="<project>/<topic>: its recent sessions, with what they are about and "
+                                                "whether new work may continue one (reusable, why_not)")
+    ls.add_argument("--days", type=int, default=0, help="with --topic: active in the last N days (default 30)")
     ls.add_argument("--json", action="store_true")
 
 
@@ -159,6 +165,9 @@ def _new(a) -> int:
                                    source="session" if meta else "cli", auto_title=not a.title and bool(text),
                                    permission_mode="bypass" if root else "")
         _register(meta, report, s, text, hops)
+        if report[0] and not report[1]:                # started for Jarvis's work board: archivable once done
+            from .sessions import store
+            store.update(s["id"], jarvis_made=True)
         if text or files:
             sender = {"id": meta.get("id") or "", "title": meta.get("title") or "",
                       "path": meta.get("path") or ""} if meta else None
@@ -176,6 +185,16 @@ def _new(a) -> int:
 def _list(a) -> int:
     import json
     from .sessions import service
+    if a.topic:
+        from . import jarvis
+        rows = jarvis.topic_sessions(_topic(a.topic), a.days or jarvis.REUSE_DAYS)
+        if a.json:
+            print(json.dumps(rows, indent=2))
+        else:
+            for s in rows:
+                mark = "reusable" if s["reusable"] else s["why_not"]
+                print(f"{s['id'][:8]}  {mark:<12} {s['title']}" + ("  (archived)" if s["archived"] else ""))
+        return 0
     rows = [{k: s[k] for k in ("id", "title", "path", "state", "updated")} for s in service.list_sessions(archived=False)]
     if a.json:
         print(json.dumps(rows, indent=2))

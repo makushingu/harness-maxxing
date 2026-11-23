@@ -9,7 +9,8 @@
                                             what changed since the last night pass (or H hours); --mark: the night
                                             pass is done (the next digest starts here)
   maxxing jarvis brief | dream              the morning brief / the night pass, now
-  maxxing jarvis set KEY VALUE              a setting: model, dream_model, root, ask_first, internals, daily, brief, dream
+  maxxing jarvis set KEY VALUE              a setting: model, dream_model, root, ask_first, internals, daily, brief, dream,
+                                            reuse, archive_done
 """
 from __future__ import annotations
 
@@ -37,7 +38,7 @@ def _configure(p) -> None:
     sub.add_parser("brief", help="the morning brief, now")
     sub.add_parser("dream", help="the night pass, now (a separate session)")
     se = sub.add_parser("set", help="a setting")
-    se.add_argument("key", choices=["model", "dream_model", "root", "ask_first", "internals", "daily", "brief", "dream", "compact_tokens", "telegram", "report_effort"])
+    se.add_argument("key", choices=["model", "dream_model", "root", "ask_first", "internals", "daily", "brief", "dream", "compact_tokens", "telegram", "report_effort", "reuse", "archive_done"])
     se.add_argument("value")
 
 
@@ -84,7 +85,7 @@ def _handler(a) -> int:
                     print("work close ID", file=sys.stderr)
                     return 2
                 i = jarvis.close(a.ref)
-                print(f"closed #{i['id']} {i['title']}")
+                print(f"closed #{i['id']} {i['title']}" + (" - its session is archived" if i.get("archived") else ""))
                 return 0
             items = jarvis.work(None if a.all else "open", everyone=a.all)
             print(json.dumps(items, indent=2) if a.json else "\n".join(map(_row, items)) or "no open work")

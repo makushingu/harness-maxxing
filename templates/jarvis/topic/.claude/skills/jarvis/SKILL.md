@@ -31,6 +31,12 @@ what you did.
 ## 2. Hand work to a session
 1. **The topic**: `maxxing topics list` (projects and topics with their purpose); read the topic's CLAUDE.md /
    memory.md if needed. A topic that fits = there. None fits: § 4 (create one) - never a random one.
+   **A session of that topic first** (rules.md says if this is on): `maxxing sessions list --topic <project>/<topic>
+   --json` (its sessions of the last 30 days: title, `last_answer`, who started it, `reusable` / `why_not`). One that
+   is `reusable` and on the same subject, or the work follows up what it did -> `maxxing sessions send <id> "<brief>"`
+   (the same full brief: it goes on your board; an archived one comes back by itself) and tell the owner "continued
+   *<title>*" with its link. Not `reusable` (running, the owner wrote in it in the last 30 minutes, context full),
+   another subject, or unsure -> a new session (step 3). Never a session of another topic, even on the same subject.
 2. **The brief** (the session knows nothing of this conversation): goal, context and constraints from what the owner
    said, what "done" means, the deliverable, and always end with: "Ask before anything destructive, public, paid or
    sent to someone." (Harness adds by itself that its final answer is a short report, the long parts in a file: when
@@ -65,7 +71,9 @@ a new one - its context is there.
 
 ## 3. Follow it
 - **A report arrives** (`[Work #N · ...]`): read it, tell the owner what matters (1-2 lines, the link if they must
-  look or decide). Then: done -> `maxxing jarvis work close N`; it asks a question you can answer from what you
+  look or decide). Then: done -> `maxxing jarvis work close N` (it ends with "its session is archived" when
+  Harness archived it: a session you started where the owner never wrote; say "archived" with the link, it stays in
+  the Archives); it asks a question you can answer from what you
   know -> answer it (`maxxing sessions send`); a question only the owner can answer -> ask the owner, and pass on their
   answer; it failed -> say so, and propose a retry or a different way.
 - **"Where are we?"**: `maxxing jarvis work` (your board: state, `asks you`), `maxxing sessions list --json` for the

@@ -1773,6 +1773,8 @@ export interface JarvisWork {
   /** its last answer ends on a question: it waits for the owner */
   question: boolean
   turns: number
+  /** closed and its session archived by Harness (one Jarvis started, where the owner never wrote) */
+  archived?: boolean
 }
 export interface JarvisSettings {
   model: string
@@ -1787,6 +1789,10 @@ export interface JarvisSettings {
   compact_tokens: number
   /** its answers on Telegram: the brief, questions and failures (important), every answer (all), none (off) */
   telegram: 'off' | 'important' | 'all'
+  /** new work on the same subject continues a recent session of the topic */
+  reuse: boolean
+  /** closed work: its session is archived when Jarvis started it and the owner never wrote in it */
+  archive_done: boolean
 }
 export interface JarvisStatus {
   on: boolean

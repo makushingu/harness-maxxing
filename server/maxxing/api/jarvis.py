@@ -59,6 +59,8 @@ class SettingsIn(BaseModel):
     dream: Optional[str] = None
     compact_tokens: Optional[int] = None
     telegram: Optional[str] = None
+    reuse: Optional[bool] = None
+    archive_done: Optional[bool] = None
 
 
 @router.put("/settings")

@@ -7,6 +7,19 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Jarvis reuse and archiving: settings `reuse` and `archive_done` (`jarvis.DEFAULTS`, both True; `SettingsIn`,
+  `maxxing jarvis set`), written into its `rules.md` (`RULES` lines Sessions / Finished work) and the skill (§ 2 step
+  1, § 3). Session meta `owner_at` (epoch): set by `service.send_message` for a message of source `web` or `telegram`
+  with no `relay` (`OWNER_SOURCES`), i.e. typed by the owner. `jarvis_made: true`: set by `cmd_sessions._new` when the
+  session reports to Jarvis's board (`_reporting` -> `(True, "")`). `jarvis.close()` archives the session
+  (`archived`, `jarvis_archived: true`, item `archived: true`, printed by `work close`) when `_archivable`: setting on,
+  `jarvis_made`, no `owner_at`, item without `kind` / `to` / `question`, no other open item for that session, idle, not
+  an agent's. `_enqueue` (any non-cron message, which already unarchived) drops `jarvis_archived`.
+  `jarvis.topic_sessions(path, days=30)` -> `maxxing sessions list --topic P/T [--days N] [--json]`: sessions of that
+  exact path updated in the window, not agents', archived ones only when `jarvis_archived`, newest first, 10 max; rows
+  `{id, title, state, updated, archived, started_by_jarvis, owner_wrote, context_tokens, last_answer, reusable,
+  why_not}`, `why_not` = `running` (running or queued) | `owner_active` (`owner_at` < 30 min) | `context_full`
+  (>= 80 % of the path's `auto_compact_tokens`, else of the model window). Tests `test_jarvis_reuse.py`.
 - `deps.drop_other_libc(node_modules)`, called by `_up_remotion` after `npm ci`: npm 10 does not store `libc` in
   package-lock.json, so `npm ci` installed both `@rspack/binding-linux-x64-{gnu,musl}` and
   `@remotion/compositor-linux-x64-{gnu,musl}`. On a glibc host (`platform.libc_ver()`) the top-level and scoped

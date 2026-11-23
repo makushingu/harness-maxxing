@@ -49,8 +49,14 @@ DEFAULTS: dict[str, Any] = {
     "compact_tokens": config.JARVIS_COMPACT,  # its conversation is summarized past this context (0 = as every session)
     "telegram": "important",  # its answers on Telegram: off | important (brief, questions, failures) | all
     "report_effort": "medium",  # its turns that read a session's report ("" = as its other turns): short, same model
+    "reuse": True,            # new work on the same subject goes to a recent session of the topic (topic_sessions)
+    "archive_done": True,     # work it closes: the session is archived when it started it and the owner never wrote
 }
 EFFORTS = ("", "low", "medium", "high", "xhigh", "max")
+REUSE_DAYS = 30               # a session of the topic it may continue: active in the last 30 days
+OWNER_QUIET_S = 30 * 60       # ... and the owner did not write in it in the last 30 minutes (they may be working there)
+REUSE_LIST = 10               # at most this many sessions in `maxxing sessions list --topic`
+CONTEXT_FULL = 0.8            # ... and its context is under 80 % of its compaction threshold
 FOLLOW_UPS = 8                # automatic rounds on one piece of work (report -> follow-up) before it asks the owner
 BRIEF_RETRIES = 3             # a morning brief that failed (Claude signed out, a crash) is tried again this many times
 BRIEF_RETRY_S = 15 * 60
@@ -224,6 +230,8 @@ RULES = """# Jarvis's rules (Settings of Jarvis: written by Harness, do not edit
 - Rights: {rights}
 - Ask first: {ask}
 - Conversations: {daily}
+- Sessions: {reuse}
+- Finished work: {archive}
 """
 
 
@@ -238,7 +246,14 @@ def _write_rules(tdir: Path) -> None:
            "something that cannot come back without saying it first)")
     daily = ("a new one each morning (the brief opens it); what matters lives in brain/" if s["daily"] else
              "one long conversation (compacted when long); what matters lives in brain/")
-    text = RULES.format(rights=rights, ask=ask, daily=daily)
+    reuse = ("before starting a session for new work, look at the recent sessions of the topic you chose (`maxxing "
+             "sessions list --topic <project>/<topic> --json`): one marked `reusable` on the same subject or a "
+             "follow-up of it gets the work (`maxxing sessions send <id>`), never one of another topic" if s["reuse"]
+             else "new work always gets a new session (a follow-up of work on your board still goes to its session)")
+    archive = ("when you close work (`maxxing jarvis work close`), Harness archives its session if you started it and "
+               "the owner never wrote in it; it comes back by itself when you send to it again" if s["archive_done"]
+               else "closing work leaves its session as it is")
+    text = RULES.format(rights=rights, ask=ask, daily=daily, reuse=reuse, archive=archive)
     f = tdir / "rules.md"
     if not f.exists() or f.read_text(encoding="utf-8", errors="replace") != text:
         f.write_text(text, encoding="utf-8")
@@ -456,15 +471,72 @@ def work(state: str | None = None, everyone: bool = False) -> list[dict]:
 
 
 def close(ref: str | int) -> dict:
+    """The work is done: its entry is closed, and its session archived when `_archivable` (setting archive_done)."""
     r = str(ref).strip().lstrip("#")
     with _lock:
         w = _read_work()
         for i in w["items"]:
             if str(i.get("id")) == r or (len(r) >= 6 and str(i.get("session") or "").startswith(r)):
                 i.update(state="closed", updated=time.time())
+                if _archivable(i, w["items"]):
+                    from .sessions import store
+                    store.update(i["session"], archived=True, jarvis_archived=True)
+                    i["archived"] = True
+                    bus.invalidate("sessions")
                 _write_work(w)
                 return i
     raise JarvisError(404, "not_found", f"No work {ref}")
+
+
+def _archivable(item: dict, items: list[dict]) -> bool:
+    """A session Jarvis started for this work (`jarvis_made`), where the owner never wrote (`owner_at`), that does
+    not wait for an answer, is not busy and has no other open work: nothing left to look at there. Never a session
+    it continued (the owner's or an agent's), the morning brief or work reported to another session."""
+    from .sessions import store
+    sid = item.get("session") or ""
+    if not sid or not settings()["archive_done"] or item.get("kind") or item.get("to") or item.get("question"):
+        return False
+    if any(i is not item and i.get("session") == sid and i.get("state") != "closed" for i in items):
+        return False
+    m = store.read(sid) or {}
+    return (bool(m.get("jarvis_made")) and not m.get("owner_at") and not m.get("archived")
+            and m.get("state") != "running" and not m.get("queue") and m.get("source") != "agent")
+
+
+def _compact_limit(m: dict) -> int:
+    """The context a session is summarized at (the server's threshold for its path), else its model's window."""
+    cfg = config.load_config()
+    limit = config.int_setting(config.session_config(cfg, m.get("path")), "auto_compact_tokens")
+    return limit if limit > 0 else int(m.get("context_window") or 0)
+
+
+def topic_sessions(path: str, days: int = REUSE_DAYS, now: float | None = None) -> list[dict]:
+    """`maxxing sessions list --topic`: the recent sessions of one topic, newest first, with what Jarvis needs to
+    decide whether new work continues one of them: what it is about (title, start of its last answer), who started
+    it, and `reusable` / `why_not` (running, owner_active, context_full) - the rules are the server's, Jarvis only
+    judges the subject. Archived ones only when Jarvis archived them (finished work it may follow up)."""
+    from .sessions import service, store
+    now = time.time() if now is None else now
+    since = now - max(1, int(days)) * 86400
+    rows = []
+    for s in service.list_sessions(path=path):
+        m = store.read(s["id"]) or {}
+        if (s.get("updated") or 0) < since or s.get("path") != path or s.get("source") == "agent":
+            continue
+        if s.get("archived") and not m.get("jarvis_archived"):
+            continue
+        owner_at = float(m.get("owner_at") or 0)
+        ctx, limit = int(s.get("context_tokens") or 0), _compact_limit(m)
+        why = ("running" if s.get("state") == "running" or s.get("queue") else
+               "owner_active" if owner_at and now - owner_at < OWNER_QUIET_S else
+               "context_full" if limit and ctx >= CONTEXT_FULL * limit else "")
+        rows.append({"id": s["id"], "title": s.get("title") or "", "state": s.get("state") or "idle",
+                     "updated": s.get("updated"), "archived": bool(s.get("archived")),
+                     "started_by_jarvis": bool(m.get("jarvis_made")), "owner_wrote": bool(owner_at),
+                     "context_tokens": ctx or None, "last_answer": " ".join((s.get("last_text") or "").split())[:300],
+                     "reusable": not why, "why_not": why})
+    rows.sort(key=lambda r: r.get("updated") or 0, reverse=True)
+    return rows[:REUSE_LIST]
 
 
 def rings(session: dict) -> bool | None:
