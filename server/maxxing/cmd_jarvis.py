@@ -37,7 +37,7 @@ def _configure(p) -> None:
     sub.add_parser("brief", help="the morning brief, now")
     sub.add_parser("dream", help="the night pass, now (a separate session)")
     se = sub.add_parser("set", help="a setting")
-    se.add_argument("key", choices=["model", "dream_model", "root", "ask_first", "internals", "daily", "brief", "dream", "compact_tokens", "telegram"])
+    se.add_argument("key", choices=["model", "dream_model", "root", "ask_first", "internals", "daily", "brief", "dream", "compact_tokens", "telegram", "report_effort"])
     se.add_argument("value")
 
 

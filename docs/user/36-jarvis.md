@@ -27,11 +27,20 @@ long goes to a file it names). When one of its turns ends, its answer comes back
 Jarvis's conversation by itself, and Jarvis tells you what matters and decides the next step. If you take over a
 session yourself, its answers are not reported (you read them there).
 
+Jarvis keeps its own turns short: anything longer than a quick lookup (analysing data, a script, writing in a project)
+goes to a session, so it answers you within a minute while the sessions work side by side. It follows a piece of work
+on its own for up to 8 rounds (report, next step, report...); past that it asks you. Reports that arrive while it is
+busy are read together in one turn, at a lighter effort than your messages (same model; `maxxing jarvis set
+report_effort high`, or `""` for the same effort as your messages).
+
 ## Morning brief and night pass
 - **Morning brief** (08:00 by default): what waits for you, the work in progress, today's tasks and 2-3 proposals.
   With **New conversation each morning** (on by default), each day starts a new conversation with the brief.
 - **Night pass** (03:30 by default): Jarvis reads what changed in your projects, sessions, tasks and notifications
   and rewrites its own memory, so the next conversation knows where everything is. It changes nothing else.
+A brief that fails (Claude signed out, a crash) is tried again every 15 minutes, three times; then a notification
+tells you there is no brief today. Switching Jarvis on starts neither the brief nor the night pass at once: the first
+ones come at their next time.
 Both are done by Jarvis's **backstage agent** (on Sonnet): it does the reading, and the brief it prepares comes into
 the conversation, where Jarvis gives it to you. It is hidden like the rest of Jarvis's internals: **Show internals**
 shows it on the Agents page with its runs and their cost. Both times are in Jarvis's settings (gear icon); **Brief
@@ -40,7 +49,7 @@ now** and **Night pass now** run them at once.
 ## What it costs
 Jarvis uses your Claude plan like any session, a bit more: one turn per message you send, one per answer that comes
 back from a session it launched, the morning brief, and the night pass. The night pass runs on Sonnet and is skipped
-when nothing changed since the last one; a new conversation each day keeps each turn small. To spend less, clear the
+when nothing of yours changed since the last one (scheduled jobs and agents alone do not count); a new conversation each day keeps each turn small. To spend less, clear the
 brief or night pass time in its settings.
 
 ## Settings (gear icon: a window, from the bottom on a phone)

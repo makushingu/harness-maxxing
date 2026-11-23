@@ -374,6 +374,7 @@ class Runner:
         item = q.pop(0)
         item.pop("held", None)
         item.pop("inject", None)                       # an inject that missed its turn: a normal message
+        item = _merge_reports(item, q)
         if smart:                                      # a summary written for this message (smart resume)
             idle = (resume.away_text(smart[0]), smart[1] // 1000)
             prompt = resume.summary_prompt(item.get("text") or "")
@@ -494,7 +495,8 @@ class Runner:
         dev = devices_args(self.sid, str(meta.get("path") or ""), agent, web) if not plan else []
         memory = spawn.upper_memory(cwd, cfg.get("workspace") or "")   # the levels above: never loaded otherwise
         allow = [] if agent or mode != "default" else workspace_allowed(meta.get("path") or "")
-        effort = str(meta.get("effort") or "").strip()
+        # a report read by Jarvis may carry its own effort (jarvis.settings report_effort): this turn only
+        effort = str((item.get("relay") or {}).get("effort") or meta.get("effort") or "").strip()
 
         def argv(mcp: mcp_auto.Plan) -> list[str]:
             hint = "\n\n".join(x for x in (mcp.hint, spawn.CRON_SILENT if item.get("silent_ok") else "", copy,
@@ -1190,7 +1192,7 @@ def build_prompt(item: dict) -> str:
         text = STEER_PREFACE + text
     if item.get("preface"):                            # the summary of a compaction (not displayed)
         text = item["preface"] + "\n\n" + text
-    if (item.get("relay") or {}).get("from"):
+    if (item.get("relay") or {}).get("from") and not item["relay"].get("report"):   # a report says who sent it
         text = relay_preface(item["relay"]) + text
     if item.get("mentions"):
         text = text + "\n\n" + mentions_note(item["mentions"])
@@ -1217,6 +1219,23 @@ def _relay_from(item: dict) -> dict:
     """The log line of a message sent by another session's turn: who sent it (shown on the message)."""
     r = item.get("relay") or {}
     return {"from": {"session": r["from"], "title": r.get("title") or ""}} if r.get("from") else {}
+
+
+def _merge_reports(item: dict, q: list) -> dict:
+    """Reports of finished work waiting one after the other (several sessions ended while Jarvis was busy): one turn
+    reads them all instead of one turn each. Only plain reports merge: a message of the owner stays its own turn."""
+    rel = item.get("relay") or {}
+    if not rel.get("report") or item.get("held"):
+        return item
+    texts, refs = [item.get("text") or ""], [rel["report"]]
+    while q and (q[0].get("relay") or {}).get("report") and not q[0].get("held") and not q[0].get("attachments"):
+        nxt = q.pop(0)
+        texts.append(nxt.get("text") or "")
+        refs.append(nxt["relay"]["report"])
+        rel = {**rel, "hops": max(int(rel.get("hops") or 0), int(nxt["relay"].get("hops") or 0))}
+    if len(texts) == 1:
+        return item
+    return {**item, "text": "\n\n".join(texts), "relay": {**rel, "reports": refs}}
 
 
 def relay_preface(r: dict) -> str:

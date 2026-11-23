@@ -12,8 +12,10 @@ New:
   top of the sidebar. Say what you want; it picks or creates the right project and topic, hands the work to a session
   there, gets the answer back by itself when the session is done and tells you, in the same conversation. Its Work
   list shows what waits for you, what is in progress and what was answered; a morning brief opens each day, and a
-  night pass tidies its memory so it always knows where everything is. Full rights, "Ask me first" and its own compaction threshold
-  are in its settings. [Show me](#show:jarvis)
+  night pass tidies its memory so it always knows where everything is. It hands the work over rather than doing it
+  itself, so it answers fast while sessions work side by side; it follows a piece of work through several rounds on
+  its own, reads reports that arrive together in one turn, and a brief that fails is tried again, then reported.
+  Full rights, "Ask me first" and its own compaction threshold are in its settings. [Show me](#show:jarvis)
 
 Added:
 - **Notifications on your phone, even with the app closed.** Settings -> Notifications -> *Mobile notifications*:

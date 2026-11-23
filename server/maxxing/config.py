@@ -431,6 +431,7 @@ def int_setting(cfg: dict, name: str) -> int:
 
 JARVIS_PATH = "projects/jarvis/topics/main"   # Jarvis's own topic (jarvis.PATH)
 JARVIS_COMPACT = 150000                     # its conversation's compaction threshold by default (jarvis.DEFAULTS)
+JARVIS_IDLE_COMPACT = 60000              # Jarvis back after the cache expired: summarized past this
 
 
 def session_config(cfg: dict, path: str | None) -> dict:
@@ -450,7 +451,7 @@ def session_config(cfg: dict, path: str | None) -> dict:
     for k in ("idle_compact_tokens", "smart_resume_tokens"):
         v = int_setting(cfg, k)
         if v > 0:
-            out[k] = min(v, n)
+            out[k] = min(v, n, JARVIS_IDLE_COMPACT)   # reports come back hours later: a cold cache is paid on less
     return out
 
 
