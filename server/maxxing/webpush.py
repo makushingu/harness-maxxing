@@ -143,10 +143,23 @@ def _path():
     return config.state_dir() / FILE
 
 
+def _usable(d) -> bool:
+    """A state with a private key in [1, N-1] (hex) and devices that are all dicts."""
+    if not isinstance(d, dict) or not isinstance(d.get("private"), str):
+        return False
+    try:
+        if not 0 < int(d["private"], 16) < _N:
+            return False
+    except ValueError:
+        return False
+    devices = d.get("devices")
+    return devices is None or (isinstance(devices, dict) and all(isinstance(v, dict) for v in devices.values()))
+
+
 def _load() -> dict:
     try:
         d = json.loads(_path().read_text(encoding="utf-8"))
-        if isinstance(d, dict) and isinstance(d.get("private"), str):
+        if _usable(d):
             d["devices"] = d["devices"] if isinstance(d.get("devices"), dict) else {}
             return d
     except (OSError, ValueError):
@@ -163,8 +176,7 @@ def _keep_damaged() -> None:
     first save would erase the old key and every subscribed device. Keep a copy first."""
     f = _path()
     try:
-        d = json.loads(f.read_text(encoding="utf-8"))
-        if isinstance(d, dict) and isinstance(d.get("private"), str):
+        if _usable(json.loads(f.read_text(encoding="utf-8"))):
             return
     except FileNotFoundError:
         return
