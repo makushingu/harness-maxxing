@@ -60,7 +60,7 @@ export function RelayCard({ from: sent, text }: { from: RelayFrom; text: string 
   return (
     <div
       className={cn(
-        'w-full max-w-[min(36rem,100%)] rounded-xl border bg-muted/40 text-[13px] text-muted-foreground transition-colors',
+        'w-full max-w-[min(36rem,100%)] rounded-xl border bg-fill-1 text-[13px] text-muted-foreground transition-colors',
         worst?.outcome === 'asks' && 'border-warning/50',
         worst?.outcome === 'failed' && 'border-destructive/40',
       )}
