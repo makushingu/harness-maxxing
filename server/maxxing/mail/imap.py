@@ -100,9 +100,8 @@ def mutf7_encode(s: str) -> str:
 
 def _q(name: str) -> str:
     """A folder name as an IMAP quoted string (modified UTF-7)."""
-    if any(ord(c) < 0x20 or ord(c) == 0x7F for c in name):       # NUL, CR/LF...: no folder has them
-        raise MailError("bad_folder", "invalid folder name")
-    if any(0xD800 <= ord(c) <= 0xDFFF for c in name):            # a lone surrogate cannot be encoded
+    # NUL, CR/LF...: no folder has them; a lone surrogate cannot be encoded
+    if any(ord(c) < 0x20 or ord(c) == 0x7F or 0xD800 <= ord(c) <= 0xDFFF for c in name):
         raise MailError("bad_folder", "invalid folder name")
     return '"' + mutf7_encode(name).replace("\\", "\\\\").replace('"', '\\"') + '"'
 
@@ -300,20 +299,16 @@ def _unquote(b: bytes) -> str:
 
 
 def _list_raw(m: imaplib.IMAP4) -> list[dict]:
-    data = _ok(*m.list(), "LIST")
-    out, i = [], 0
-    while i < len(data):
-        item = data[i]
+    out = []
+    for item in _ok(*m.list(), "LIST"):
         if isinstance(item, tuple):                  # name sent as a literal
-            line, name = item[0], item[1]
-            mm = _LIST.match(line.rstrip())
+            mm = _LIST.match(item[0].rstrip())
             if mm:
-                out.append((mm.group("flags"), mm.group("delim"), name))
+                out.append((mm.group("flags"), mm.group("delim"), item[1]))
         elif item:
             mm = _LIST.match(item)
             if mm:
                 out.append((mm.group("flags"), mm.group("delim"), mm.group("name")))
-        i += 1
     folders = []
     for flags, delim, name in out:
         raw = _unquote(name)
@@ -328,15 +323,11 @@ def _list_raw(m: imaplib.IMAP4) -> list[dict]:
 def _role(f: dict) -> str | None:
     if f["raw"].upper() == "INBOX":
         return "inbox"
-    for fl in f["flags"]:
-        if fl in ROLE_FLAGS:
-            return ROLE_FLAGS[fl]
-    leaf = f["name"].split(f["delim"])[-1] if f["delim"] else f["name"]
-    leaf = leaf.strip().lower()
-    for role, names in ROLE_NAMES.items():
-        if leaf in names:
-            return role
-    return None
+    r = next((ROLE_FLAGS[fl] for fl in f["flags"] if fl in ROLE_FLAGS), None)
+    if r:
+        return r
+    leaf = (f["name"].split(f["delim"])[-1] if f["delim"] else f["name"]).strip().lower()
+    return next((role for role, names in ROLE_NAMES.items() if leaf in names), None)
 
 
 def _roles(fs: list[dict]) -> dict[str, dict]:
@@ -382,10 +373,10 @@ def _folder_of_role(m: imaplib.IMAP4, role: str) -> str | None:
     return f["name"] if f else None
 
 
-def _prefix(m: imaplib.IMAP4) -> tuple[str, str]:
+def _prefix(m: imaplib.IMAP4, fs: list[dict] | None = None) -> tuple[str, str]:
     """(personal namespace prefix, delimiter): where new folders go ("INBOX." on servers that keep every folder
-    under INBOX)."""
-    fs = _list_raw(m)
+    under INBOX). `fs`: the folders when the caller listed them already."""
+    fs = _list_raw(m) if fs is None else fs
     delim = next((f["delim"] for f in fs if f["delim"]), "/")
     if "NAMESPACE" in m.capabilities:
         typ, data = m.namespace()
@@ -402,10 +393,11 @@ def _prefix(m: imaplib.IMAP4) -> tuple[str, str]:
 def _resolve(m: imaplib.IMAP4, name: str) -> str:
     """A folder named the way a person says it ("Invoices") -> its name on the server ("INBOX.Invoices" on servers
     that keep every folder under INBOX). Unknown names are returned as they are."""
-    names = [f["name"] for f in _list_raw(m)]
+    fs = _list_raw(m)
+    names = [f["name"] for f in fs]
     if name in names:
         return name
-    prefix, _ = _prefix(m)
+    prefix, _ = _prefix(m, fs)
     if prefix and prefix + name in names:
         return prefix + name
     low = [n for n in names if n.lower() == name.lower() or n.lower() == (prefix + name).lower()]
@@ -507,10 +499,6 @@ def _raw(msg: Any, name: str) -> str | None:
     return None
 
 
-def _cut(raw: str, cap: int) -> str:
-    return raw if len(raw) <= cap else raw[:cap]
-
-
 def _decoded(raw: str) -> str:
     """The encoded-words of a raw value decoded without the header parser (the fallback of a header it rejects)."""
     with contextlib.suppress(Exception):
@@ -534,7 +522,7 @@ def _hdr(msg: Any, name: str, parse: bool = True) -> str:
         return ""
     if not parse:
         return _line(" ".join(raw.split()))
-    raw = _cut(raw, HDR_CAP)
+    raw = raw[:HDR_CAP]
     try:
         return _line(str(_parsed(msg, name, raw)))
     except Exception:  # noqa: BLE001 - a header the parser cannot read
@@ -583,11 +571,7 @@ def _date(msg: Any, internal: bytes | None) -> float | None:
             return d.timestamp()
     except Exception:  # noqa: BLE001
         pass
-    if internal:
-        t = imaplib.Internaldate2tuple(b'INTERNALDATE "' + internal + b'"')
-        if t:
-            return time.mktime(t)
-    return None
+    return _idate(internal)
 
 
 def _flags(raw: bytes | None) -> list[str]:
@@ -615,11 +599,12 @@ def _fetch_summaries(m: imaplib.IMAP4, uids: list[int]) -> list[dict]:
         fm = _FLAGS.search(meta)
         fl = _flags(fm.group(1) if fm else b"")
         idate = _IDATE.search(meta)
+        internal = idate.group(1) if idate else None
         size = _SIZE.search(meta)
         row = {
             "uid": uid, "from": {"name": "", "email": ""}, "to": [], "subject": "",
-            "date": _idate(idate.group(1) if idate else None),
-            "received": _idate(idate.group(1) if idate else None),     # by the server (Date: is the sender's)
+            "date": _idate(internal),
+            "received": _idate(internal),     # by the server (Date: is the sender's)
             "seen": "\\seen" in fl,
             "flagged": "\\flagged" in fl,
             "answered": "\\answered" in fl,
@@ -632,7 +617,7 @@ def _fetch_summaries(m: imaplib.IMAP4, uids: list[int]) -> list[dict]:
                 "from": (_addrs(msg, "from") or [{"name": "", "email": ""}])[0],
                 "to": _addrs(msg, "to"),
                 "subject": _hdr(msg, "subject"),
-                "date": _date(msg, idate.group(1) if idate else None),
+                "date": _date(msg, internal),
                 "attachments": _hdr(msg, "content-type").lower().startswith("multipart/mixed"),
                 "message_id": _hdr(msg, "message-id").strip(),
                 "auth": access.top_result(msg),          # replaced by from_verified (with_trust)
@@ -776,9 +761,8 @@ def messages(acc: dict, folder: str = "INBOX", page: int = 0, size: int = PAGE, 
             kept: list[dict] = []
             grant = {"senders": senders}
             for i in range(0, min(len(uids), SCAN_MAX), 100):
-                for r in with_trust(acc, _fetch_summaries(m, uids[i:i + 100]), t):
-                    if access.sender_ok(grant, r["from"]["email"], r["from_verified"]):
-                        kept.append(r)
+                kept += [r for r in with_trust(acc, _fetch_summaries(m, uids[i:i + 100]), t)
+                         if access.sender_ok(grant, r["from"]["email"], r["from_verified"])]
             total = len(kept)
             rows = kept[page * size:(page + 1) * size]
     return {"folder": folder, "total": total, "exists": exists, "page": page, "size": size, "messages": rows}
@@ -896,10 +880,8 @@ def strip_blocks(h: str, tags: tuple[str, ...] = ("script",)) -> str:
 def _parse(raw: bytes) -> EmailMessage:
     """Never an error: a mail the parser cannot read (MIME nested ~1000 levels deep is a RecursionError inside the
     email package) keeps its headers and shows no body."""
-    try:
+    with contextlib.suppress(Exception):
         return email.message_from_bytes(raw, policy=email.policy.default)  # type: ignore[return-value]
-    except Exception:  # noqa: BLE001
-        pass
     head = raw.split(b"\r\n\r\n", 1)[0] if b"\r\n\r\n" in raw else raw.split(b"\n\n", 1)[0]
     try:
         msg = email.parser.BytesHeaderParser(policy=email.policy.default).parsebytes(head + b"\r\n\r\n")
@@ -950,12 +932,10 @@ def _walk(msg: Any, rest: list[int] | None = None) -> Iterator[tuple[int, Any, b
         i += 1
         if depth >= MAX_DEPTH:
             continue
-        subs = None
-        with contextlib.suppress(Exception):
-            subs = p.get_payload() if p.is_multipart() else None
-        if isinstance(subs, list):
+        subs = _subparts(p)
+        if subs:
             child_inside = inside or (depth > 0 and _is_message(p))
-            stack.extend((c, depth + 1, child_inside) for c in reversed(subs) if hasattr(c, "get_content_type"))
+            stack.extend((c, depth + 1, child_inside) for c in reversed(subs))
     if stack and rest is not None:
         rest.append(_left_out(stack))
 
@@ -963,10 +943,8 @@ def _walk(msg: Any, rest: list[int] | None = None) -> Iterator[tuple[int, Any, b
 def _body_of(msg: Any, kind: str) -> Any:
     """The text/plain or text/html body like `get_body`, which recurses without limit (RecursionError on a mail
     nested 1000 levels deep): None when it fails, then the first such part outside attachments."""
-    try:
+    with contextlib.suppress(Exception):
         return msg.get_body(preferencelist=(kind,))
-    except Exception:  # noqa: BLE001
-        pass
     for _, p, inside in _walk(msg):
         with contextlib.suppress(Exception):
             if not inside and p.get_content_type() == f"text/{kind}" and not p.is_attachment():
@@ -1155,18 +1133,12 @@ def excerpt(acc: dict, folder: str, uid: int, limit: int = EXCERPT_BYTES) -> dic
 
 
 def attachment(acc: dict, folder: str, uid: int, index: int) -> tuple[str, str, bytes]:
-    with session(acc) as m:
-        _select(m, folder, readonly=True)
-        raw, _ = _fetch_raw(m, uid)
-    return part_at(_parse(raw), index)
+    return part_at(_parse(raw_message(acc, folder, uid)), index)
 
 
 def attachments_of(acc: dict, folder: str, uid: int, indexes: list[int]) -> list[tuple[int, str, str, bytes]]:
     """(index, name, type, bytes) of several attachments of one message, fetched once; a missing index is skipped."""
-    with session(acc) as m:
-        _select(m, folder, readonly=True)
-        raw, _ = _fetch_raw(m, uid)
-    msg, out = _parse(raw), []
+    msg, out = _parse(raw_message(acc, folder, uid)), []
     for i in dict.fromkeys(indexes):
         with contextlib.suppress(MailError):
             out.append((i, *part_at(msg, i)))
