@@ -49,10 +49,30 @@ def _num(v) -> bool:
     return v is None or (isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v))
 
 
+_parsed: dict[Path, tuple[tuple, dict | None]] = {}      # file -> (inode, mtime, size), its content: a request holds a screenshot
+
+
+def _read(f: Path) -> dict | None:
+    """A request file, parsed again only when the file changed (images of several 100 KB are parsed at every status poll)."""
+    try:
+        st = f.stat()
+    except OSError:
+        _parsed.pop(f, None)
+        return None
+    key = (st.st_ino, st.st_mtime_ns, st.st_size)
+    hit = _parsed.get(f)
+    if hit is None or hit[0] != key:
+        hit = _parsed[f] = (key, browser_mcp.read(f))
+    return dict(hit[1]) if hit[1] is not None else None
+
+
 def _all() -> list[dict]:
     out = []
-    for f in folder().glob("*.json"):
-        d = browser_mcp.read(f)
+    files = list(folder().glob("*.json"))
+    for gone in [f for f in _parsed if f not in files]:
+        del _parsed[gone]
+    for f in files:
+        d = _read(f)
         if d and ID_RE.match(str(d.get("id") or "")) and _num(d.get("at")) and _num(d.get("decided_at")):
             out.append(d)
     return sorted(out, key=lambda d: d.get("at") or 0)
