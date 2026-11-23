@@ -193,7 +193,9 @@ def _clean_actions(actions: Any) -> str | None:
 def _clean_url(url: str | None) -> str:
     url = (url or "").strip()[:1000]
     # an app path ("/sessions?...") or a web address; "//host" and "/\\host" are other sites dressed as app paths
-    return url if url and (re.match(r"^/(?![/\\])", url) or re.match(r"^https?://", url)) else ""
+    if re.search(r"[\x00-\x20\x7f\\]", url):    # browsers drop tab/CR/LF in a URL: "/<tab>/host" would become "//host"
+        return ""
+    return url if url and (re.match(r"^/(?!/)", url) or re.match(r"^https?://", url)) else ""
 
 
 def post(title: str, body: str = "", level: str = "info", source: str = "custom", url: str = "",
