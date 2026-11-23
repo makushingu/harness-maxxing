@@ -25,6 +25,7 @@ import logging
 import os
 import re
 import shutil
+import threading
 import time
 from pathlib import Path
 from typing import Any, Callable, Iterator
@@ -189,9 +190,13 @@ def _write_claude_md(folder: Path, kind: str, name: str, description: str | None
 
 def _put_text(f: Path, text: str) -> None:
     """Write through a temporary file: a crash never leaves CLAUDE.md empty. Surrogate escapes become their bytes."""
-    tmp = f.with_name(f.name + ".tmp")
-    tmp.write_bytes(text.encode("utf-8", errors="surrogateescape"))
-    os.replace(tmp, f)
+    tmp = f.with_name(f"{f.name}.{os.getpid()}-{threading.get_ident()}.tmp")   # its own name: two writers never share one
+    try:
+        tmp.write_bytes(text.encode("utf-8", errors="surrogateescape"))
+        os.replace(tmp, f)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
 
 
 def _init_level(folder: Path, kind: str, name: str, description: str) -> None:

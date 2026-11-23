@@ -289,3 +289,22 @@ def test_a_huge_description_is_refused(client, mx, topic):
     assert r.status_code == 400 and r.json()["error"] == "bad_description"
     assert not (mx["ws"] / "projects/big").exists()
     assert client.post("/api/workspace/projects", json={"name": "big", "description": "x" * 2000}).status_code == 200
+
+
+def test_parallel_edits_of_a_claude_md_do_not_share_a_temporary_file(client, mx):
+    import threading
+    from maxxing import workspace
+    assert client.post("/api/workspace/projects", json={"name": "par"}).status_code == 200
+    errors: list[BaseException] = []
+
+    def work(n):
+        try:
+            for i in range(40):
+                workspace.update_project("par", description=f"d{n}-{i}")
+        except BaseException as e:      # noqa: BLE001
+            errors.append(e)
+    ts = [threading.Thread(target=work, args=(n,)) for n in range(8)]
+    [t.start() for t in ts]
+    [t.join() for t in ts]
+    assert not errors, errors[:1]
+    assert "@memory.md" in (mx["ws"] / "projects/par/CLAUDE.md").read_text()
