@@ -50,7 +50,7 @@ function colName(i: number): string {
 
 /** The sheets of a workbook: one table at a time with the letters of the columns and the real numbers of the rows,
  *  the other sheets behind the tabs at the bottom. */
-export function SheetsView({ sheets, truncated, className }: { sheets: FileSheet[]; truncated?: boolean; className?: string }) {
+function SheetsView({ sheets, truncated, className }: { sheets: FileSheet[]; truncated?: boolean; className?: string }) {
   const t = useT()
   const lang = useLang()
   const [at, setAt] = React.useState(0)

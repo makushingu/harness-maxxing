@@ -21,7 +21,7 @@ const MAX_AGE = 30 * 86400_000
 const MAX_REPLIES = 200
 
 /** The message being written: a ComposeInit with what the user changed, plus what only the open dialog had. */
-export type LocalCompose = ComposeInit & { at: number; showCc: boolean; kept: MailAttachment[]; files: number }
+type LocalCompose = ComposeInit & { at: number; showCc: boolean; kept: MailAttachment[]; files: number }
 
 /** Another tab holds the message being written right now (its dialog is open). */
 export function composeHeldElsewhere(): boolean {

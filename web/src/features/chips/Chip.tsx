@@ -27,7 +27,7 @@ export type ChipData = {
 export type ChipTone = 'card' | 'primary'
 
 /** The chip's colours (also the composer's backdrop): commands stay grey, names take the accent. */
-export const chipColor = (kind: ChipKind, tone: ChipTone = 'card') =>
+const chipColor = (kind: ChipKind, tone: ChipTone = 'card') =>
   tone === 'primary'
     ? 'bg-primary-foreground/20 text-primary-foreground'
     : kind === 'command'

@@ -8,7 +8,7 @@ import { useSettings } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 import type { Language } from '@/lib/types'
 
-export const DONATION_URL = 'https://harness-maxxing.com/donation'
+const DONATION_URL = 'https://harness-maxxing.com/donation'
 
 /** The donation page in the UI language (the site speaks en, fr, es, de, it, pt; English needs no parameter). */
 export function donationUrl(lang: Language): string {
@@ -16,16 +16,16 @@ export function donationUrl(lang: Language): string {
 }
 
 /** False until the settings are known, then false when the user hid the mentions (never a flash of the link). */
-export function useDonationShown(): boolean {
+function useDonationShown(): boolean {
   const { data } = useSettings()
   return !!data && !data.donation_hidden
 }
 
 /** Tinted classes shared by the donate buttons: the app's accent colour (follows the theme and accent), never the primary action. */
-export const DONATE_TONE = 'border border-primary/30 bg-primary/10 text-primary hover:bg-primary/15'
+const DONATE_TONE = 'border border-primary/30 bg-primary/10 text-primary hover:bg-primary/15'
 
 /** The "Donate" button: a link to the donation page (new tab). Renders nothing when the mentions are hidden. */
-export function DonateButton({ label = 'donation.donate', className }: { label?: TKey; className?: string }) {
+function DonateButton({ label = 'donation.donate', className }: { label?: TKey; className?: string }) {
   const t = useT()
   const lang = useLang()
   if (!useDonationShown()) return null

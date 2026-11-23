@@ -7,7 +7,7 @@ import { useT } from '@/i18n'
 import type { AgentGroupMember } from '@/lib/types'
 import { Chip, withChips, type ChipData, type ChipSpan, type ChipTone } from '@/features/chips/Chip'
 
-export const ALL_WORDS = ['all', 'everyone', 'tous']
+const ALL_WORDS = ['all', 'everyone', 'tous']
 const MENTION_RE = /(?<![\w@./-])@([a-z0-9][a-z0-9-]{0,47})\b/gi
 
 /** handle -> member; `null` = @all. */
@@ -34,7 +34,7 @@ export function namedIn(text: string, map: MentionMap, members: AgentGroupMember
 }
 
 /** A member (null = @all) as a chip: the same one as the sessions' @ and the "/" commands. */
-export function memberChip(member: AgentGroupMember | null, handle: string, allLabel: string): ChipData {
+function memberChip(member: AgentGroupMember | null, handle: string, allLabel: string): ChipData {
   return member
     ? { kind: 'agent', label: member.display_name || handle, raw: `@${handle}`, avatar: member.avatar ?? null }
     : { kind: 'all', label: allLabel, raw: `@${handle}` }
@@ -57,7 +57,7 @@ export function mentionSpans(text: string, map: MentionMap, allLabel: string): C
 }
 
 /** A text with its known @names as chips. */
-export function MentionText({ text, map, tone }: { text: string; map: MentionMap; tone?: ChipTone }) {
+function MentionText({ text, map, tone }: { text: string; map: MentionMap; tone?: ChipTone }) {
   const t = useT()
   return <>{withChips(text, mentionSpans(text, map, t('groups.mention.all')), tone)}</>
 }

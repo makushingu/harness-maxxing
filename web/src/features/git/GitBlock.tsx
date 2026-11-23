@@ -46,7 +46,7 @@ function useSettled<T>(value: T, ms = 500): T {
   return v
 }
 
-export function GitBlock({ code, className }: { code: string; className?: string }) {
+function GitBlock({ code, className }: { code: string; className?: string }) {
   const t = useT()
   const spec = useSettled(parseGitBlock(code))
   const { data, error, isLoading } = useGitGraph(spec?.repo || null, { limit: spec?.limit, branches: spec?.branches })

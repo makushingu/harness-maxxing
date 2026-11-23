@@ -1,102 +1,19 @@
-// <FilePreview path="/abs/path" /> — read-only preview of any file, reusable anywhere (Sessions drawer,
-// dashboards…). Renders image (zoom/fit), video/audio, pdf, markdown / CSV table / HTML page (rendered,
-// toggle to source), office documents (text, slides, sheets), archive contents, font specimen, code/text (CodeMirror read-only), and an info card
-// with a download button for other binaries / files over 2 MB. Fills its parent: give it a height.
-// Presentation mode: the content and the name are masked at source.
-import * as React from 'react'
-import { useNavigate } from 'react-router'
-import { Code2, Download, Eye, FileQuestion, FolderOpen, RefreshCw } from 'lucide-react'
-import { Button, EmptyState, Segmented, Sensitive, Tooltip } from '@/components/ui'
-import { useFileContent } from '@/lib/queries/files'
+// File preview body shared by the file viewer and the Files page. Renders image (zoom/fit), video/audio, pdf,
+// markdown / CSV table / HTML page (rendered, or source), office documents (text, slides, sheets), archive contents,
+// font specimen, code/text (CodeMirror read-only), and an info card with a download button for other binaries / files
+// over 2 MB. Presentation mode: the content is masked at source.
+import { FileQuestion, RefreshCw } from 'lucide-react'
+import { Button, EmptyState, Sensitive } from '@/components/ui'
+import type { useFileContent } from '@/lib/queries/files'
 import { errorMessage, isApiError } from '@/lib/api'
-import { fmtBytes } from '@/lib/format'
-import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
-import { useIsMobile } from '@/stores/media'
-import { basename, iconFor, isRendered, isTextDoc, isTextual, kindOf, type FileKind } from './kinds'
+import { basename, type FileKind } from './kinds'
 import { DocView } from './docs'
 import { ArchiveView, CsvView, FontView, HtmlView } from './rich'
 import { FileInfoCard, ImageView, LazyCodeEditor, MediaView, PdfView } from './viewers'
 import { FileSkeleton } from './skeletons'
-import { MarkdownReader, TextZoomControl, ZoomBox, zoomsText } from './textZoom'
+import { MarkdownReader, ZoomBox } from './textZoom'
 import { useTextZoom } from './readPos'
-import { downloadProps } from './download'
-import { CopyTextButton } from './copyText'
-
-export type FilePreviewProps = {
-  /** Absolute path of the file (inside files_root). */
-  path: string
-  className?: string
-  /** Show the compact title bar (name, size, markdown toggle, download, open in Files). Default true. */
-  header?: boolean
-  /** Show the "Open in Files" button in the title bar. Default true. */
-  openInFiles?: boolean
-}
-
-export function FilePreview({ path, className, header = true, openInFiles = true }: FilePreviewProps) {
-  const t = useT()
-  const navigate = useNavigate()
-  const mobile = useIsMobile()
-  const name = basename(path)
-  const kind = kindOf(name)
-  const [mdMode, setMdMode] = React.useState<'preview' | 'source'>('preview')
-  const content = useFileContent(path, isTextual(kind) && !(kind === 'html' && mdMode === 'preview'))
-  const Icon = iconFor('file', name)
-  return (
-    <div className={cn('flex min-h-0 flex-1 flex-col overflow-hidden bg-background', className)} data-testid="file-preview">
-      {header && (
-        <div className="flex h-11 shrink-0 items-center gap-2 border-b px-3">
-          <Icon className="size-4 shrink-0 text-muted-foreground" />
-          <span className="min-w-0 flex-1 truncate text-sm font-medium" title={undefined}>
-            <Sensitive length={10}>{name}</Sensitive>
-          </span>
-          {content.data && <span className="text-xs text-muted-foreground tabular-nums max-sm:hidden">{fmtBytes(content.data.size)}</span>}
-          {(isTextDoc(name) || (isTextual(kind) && content.data && zoomsText(kind, mdMode === 'preview'))) && <TextZoomControl />}
-          {isRendered(kind) && (kind === 'html' || content.data) && (
-            <Segmented
-              size="sm"
-              value={mdMode}
-              onChange={setMdMode}
-              aria-label={t('files.view')}
-              options={[
-                { value: 'preview', label: <span className="max-sm:sr-only">{t('files.preview')}</span>, icon: <Eye /> },
-                { value: 'source', label: <span className="max-sm:sr-only">{t('files.source')}</span>, icon: <Code2 /> },
-              ]}
-            />
-          )}
-          <CopyTextButton path={path} kind={kind} text={content.data?.content} />
-          <Tooltip content={t('files.download')}>
-            <Button asChild variant="ghost" size="icon-sm">
-              <a {...downloadProps(path, { size: content.data?.size })} aria-label={t('files.download')}>
-                <Download />
-              </a>
-            </Button>
-          </Tooltip>
-          {openInFiles && (
-            <Tooltip content={t('files.openInFiles')}>
-              <Button asChild variant="ghost" size="icon-sm">
-                <a
-                  href={`/files?path=${encodeURIComponent(path)}`}
-                  target={mobile ? undefined : '_blank'}
-                  rel="noopener"
-                  aria-label={t('files.openInFiles')}
-                  onClick={(e) => {
-                    if (!mobile) return
-                    e.preventDefault()
-                    navigate(`/files?path=${encodeURIComponent(path)}`)
-                  }}
-                >
-                  <FolderOpen />
-                </a>
-              </Button>
-            </Tooltip>
-          )}
-        </div>
-      )}
-      <PreviewBody path={path} kind={kind} view={mdMode} content={content} />
-    </div>
-  )
-}
 
 type ContentQuery = ReturnType<typeof useFileContent>
 
@@ -166,4 +83,3 @@ export function ReadError({ path, error, onRetry }: { path: string; error: unkno
   )
 }
 
-export default FilePreview

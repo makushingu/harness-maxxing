@@ -10,7 +10,7 @@ export type Preset = {
   weekday: number // 0 = Sunday
   day: number // day of month
 }
-export const DEFAULT_PRESET: Preset = { kind: 'daily', every: 15, minute: 0, hour: 7, weekday: 1, day: 1 }
+const DEFAULT_PRESET: Preset = { kind: 'daily', every: 15, minute: 0, hour: 7, weekday: 1, day: 1 }
 export const PRESET_KINDS: PresetKind[] = ['minutes', 'hours', 'hourly', 'daily', 'weekdays', 'weekly', 'monthly', 'custom']
 
 const int = (s: string, lo: number, hi: number): number | null => {
@@ -100,7 +100,7 @@ export const UNIT_S: Record<TimeoutUnit, number> = { s: 1, min: 60, h: 3600 }
 /* ------------------------------------------------------------------ one-time jobs */
 /** "YYYY-MM-DDTHH:MM" of a Unix time in the zone `tz` (the server's zone, not the browser's): the value of a
  *  datetime-local field for a one-time job, read by the server in that zone. */
-export function inputInZone(ts: number, tz?: string): string {
+function inputInZone(ts: number, tz?: string): string {
   const fmt = (timeZone: string) =>
     new Intl.DateTimeFormat('en-CA', {
       timeZone,

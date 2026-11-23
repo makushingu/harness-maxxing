@@ -53,11 +53,10 @@ import { useSlashMenu } from '@/pages/sessions/useSlashMenu'
 import { ChipText } from '@/pages/sessions/mentions'
 import { ChipBackdrop, findCommand } from '@/features/chips/Chip'
 import type { SlashCommand } from '@/pages/sessions/SlashMenu'
-import { AnswerContext, AnswerText } from './answer'
+import { AnswerContext, AnswerText, Markdown } from './answer'
 import { FoldedAnswer, PageFallback, RunLink, SideSheet, When, useBack, useBoxInput, useFold, useLatest, useMarkSeen } from './chat'
 import { useSessionLog } from '@/pages/sessions/log'
 
-const Markdown = React.lazy(() => import('@/components/ui/markdown').then((m) => ({ default: m.Markdown })))
 /** The memory is the agent's own writing: no picture of this site loads without a click (Markdown localImage). */
 const clickToLoad = () => null
 

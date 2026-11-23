@@ -120,7 +120,7 @@ const MIME = 'application/x-maxxing-agents'
 const accepts = (target: DragItem) =>
   !!dragged && dragged.kind === target.kind && dragged.id !== target.id && (target.kind === 'project' || dragged.project === target.project)
 
-export type DropSide = 'before' | 'after' | null
+type DropSide = 'before' | 'after' | null
 
 /**
  * A project header / room or an agent that can be dragged and dropped on its siblings. `index` = its place in the

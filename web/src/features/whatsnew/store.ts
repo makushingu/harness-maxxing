@@ -2,7 +2,7 @@
 // (Settings -> System). Kept apart from the dialog so the dialog (Markdown) stays a lazy chunk.
 import { create } from 'zustand'
 
-export const SEEN_KEY = 'mx-seen-version'
+const SEEN_KEY = 'mx-seen-version'
 
 export const useWhatsNew = create<{ open: boolean; since: string | null; show: (since?: string | null) => void; close: () => void }>((set) => ({
   open: false,

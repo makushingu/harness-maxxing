@@ -60,7 +60,7 @@ export function daysBetween(a: string, b: string): number {
   return Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86400_000)
 }
 
-export type DueState = 'overdue' | 'today' | 'week' | 'later' | 'none'
+type DueState = 'overdue' | 'today' | 'week' | 'later' | 'none'
 export function dueState(t: Pick<Task, 'due' | 'status'>, today: string): DueState {
   if (!t.due) return 'none'
   const d = daysBetween(today, t.due)

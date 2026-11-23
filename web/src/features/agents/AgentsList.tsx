@@ -321,7 +321,7 @@ export function GroupFace({ group: g, size = 32 }: { group: Pick<AgentGroup, 'em
 }
 
 /** The faces of the members, overlapping (4 at most, then nothing: the count says the rest). */
-export function MemberStack({ members, size = 16 }: { members: AgentGroup['members']; size?: number }) {
+function MemberStack({ members, size = 16 }: { members: AgentGroup['members']; size?: number }) {
   return (
     <span className="flex shrink-0 -space-x-1" aria-hidden>
       {members.slice(0, 4).map((m) => (

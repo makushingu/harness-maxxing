@@ -5,9 +5,12 @@ import { useT } from '@/i18n'
 import { cn } from '@/lib/utils'
 import type { DiffLine } from './api'
 
-export type Hunk = { head: string; o: number; n: number; lines: DiffLine[] }
-export type Row = { kind: 'head'; text: string } | { kind: 'line'; l: DiffLine }
-export type Sel = { a: number; b: number }
+type Hunk = { head: string; o: number; n: number; lines: DiffLine[] }
+type Row = { kind: 'head'; text: string } | { kind: 'line'; l: DiffLine }
+type Sel = { a: number; b: number }
+
+/** Colour of a file's git status letter (A / D / R / C; anything else = modified). */
+export const STATUS_TONE: Record<string, string> = { A: 'text-success', D: 'text-destructive', R: 'text-primary', C: 'text-primary' }
 
 export function diffRows(hunks: Hunk[]): Row[] {
   const out: Row[] = []

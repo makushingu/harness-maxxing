@@ -35,7 +35,7 @@ export type CallStart =
   | { mode: 'local'; call: string; language: string; silence_ms: number }
   | { mode: 'cloud'; provider: CallProvider; token: string; model: string; url: string }
 
-export const callKey = ['voice', 'call'] as const
+const callKey = ['voice', 'call'] as const
 
 export function useCallStatus(enabled = true) {
   return useQuery({

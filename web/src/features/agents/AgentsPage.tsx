@@ -33,7 +33,7 @@ import { SilentMark, useAgentMenu } from './AgentMenu'
 const GRID = 'grid grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] gap-3'
 
 /** A built-in view, or `x:<extension id>` (a view an extension brings). */
-export type OfficeView = 'classic' | 'future' | `x:${string}`
+type OfficeView = 'classic' | 'future' | `x:${string}`
 const VIEW_KEY = 'mx-agents-office-view'
 const BUILTIN_VIEWS = [
   { id: 'classic', icon: LayoutGrid, label: 'agents.office.classic' },
@@ -70,7 +70,7 @@ function useCustomViewTopic(): string {
 
 /** New group (outline) + New agent (primary): the top right of the Office, and of the list on a phone. A list narrowed to
  *  a topic (?topic=) starts the group in its project. */
-export function NewButtons({ onNew }: { onNew: () => void }) {
+function NewButtons({ onNew }: { onNew: () => void }) {
   const t = useT()
   const [params] = useSearchParams()
   const project = (params.get('topic') || '').split('/')[0] || undefined
@@ -380,7 +380,7 @@ function Bubble({ agent: a, status: s }: { agent: Agent; status: Status }) {
 
 /** No agent yet: one character waiting at its desk, what an agent is in a sentence, then the form of the creation
  *  sheet - where and a name, then its conversation (or a Claude Code agent file). */
-export function AgentsEmpty({ onStart }: { onStart: (s: CreateStart) => void }) {
+function AgentsEmpty({ onStart }: { onStart: (s: CreateStart) => void }) {
   const t = useT()
   const navigate = useNavigate()
   return (
