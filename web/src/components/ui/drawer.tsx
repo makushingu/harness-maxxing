@@ -3,12 +3,12 @@
 import * as React from 'react'
 import * as DialogPrimitive from '@radix-ui/react-dialog'
 import { cn, mergeRefs } from '@/lib/utils'
+import { NO_DRAG } from './sheet-drag'
 
 export const Drawer = DialogPrimitive.Root
 
 type Side = 'left' | 'right'
 
-const NO_DRAG = 'input, textarea, select, [contenteditable=""], [contenteditable="true"], [data-no-drag], [role="slider"]'
 
 function useSwipeClose(side: Side, onDismiss: () => void, overlay: React.RefObject<HTMLElement | null>) {
   const dismiss = React.useRef(onDismiss)
@@ -116,4 +116,3 @@ export function DrawerContent({ side, className, children, ref, ...props }: Reac
 }
 
 export const DrawerTitle = DialogPrimitive.Title
-export const DrawerClose = DialogPrimitive.Close

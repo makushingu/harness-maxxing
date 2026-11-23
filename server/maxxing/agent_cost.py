@@ -98,13 +98,10 @@ def last_turn(lines, at: float | None = None) -> tuple[dict | None, dict, float]
     return done, usage, round(sum((cost_of(u, model) for u, model in msgs.values()), 0.0), 6)
 
 
-SAVED_CODES = (143,)    # Claude Code's own exit after a SIGTERM: it saved the turn's cost in its thread first
-
-
 def saved_by_claude(done: dict) -> bool:
     """The lost turn's cost is in the thread's next reported total: Claude ended by itself on the runner's SIGTERM.
     Not after a SIGKILL (no answer within 5 s, out of memory) or a crash: nothing saved, nothing to take off."""
-    return done.get("code") in SAVED_CODES
+    return done.get("code") == 143                      # Claude Code's own exit after a SIGTERM (cost saved first)
 
 
 def charge_unbilled(sid: str, at: float | None = None) -> float:

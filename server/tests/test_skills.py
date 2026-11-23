@@ -110,3 +110,9 @@ def test_a_hash_inside_a_block_scalar_description_is_kept():
     text = "---\nname: x\ndescription: |\n  Use for C # and F # code\n  also # this\n---\nBody\n"
     assert skills._front(text)["description"] == "Use for C # and F # code also # this"
     assert skills._front("---\nname: x\ndescription: plain # comment\n---\n")["description"] == "plain"
+
+
+def test_front_matter_decodes_the_yaml_quote_escapes():
+    from maxxing import skills
+    assert skills._front("---\ndescription: 'it''s ok'\n---\n") == {"description": "it's ok"}
+    assert skills._front('---\ndescription: "say \\"hi\\" \\\\ now"\n---\n') == {"description": 'say "hi" \\ now'}

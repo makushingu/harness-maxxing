@@ -228,17 +228,16 @@ async def change_password(body: PasswordIn, request: Request, response: Response
 
 def _alert(request: Request, what: str, loud: bool) -> None:
     """Sign-in alert to Telegram (no-op until the gateway is configured)."""
+    ua = request.headers.get("user-agent", "?")[:90]
+    ip = security.client_key(request)           # the peer uvicorn trusts (proxy headers only from 127.0.0.1)
     try:
         from ..telegram import gateway
-        ua = request.headers.get("user-agent", "?")[:90]
-        ip = security.client_key(request)       # the peer uvicorn trusts (proxy headers only from 127.0.0.1)
         gateway.alert(f"Harness Maxxing: {what}\n{ip}\n{ua}", loud=loud)
     except Exception:
         pass
     try:
         from .. import feed
-        ip = security.client_key(request)
-        feed.system(what, f"{ip} · {request.headers.get('user-agent', '?')[:90]}", "warning" if loud else "info",
+        feed.system(what, f"{ip} · {ua}", "warning" if loud else "info",
                     "security", group=None if loud else "signin")      # sign-ins fold into one row
     except Exception:
         pass

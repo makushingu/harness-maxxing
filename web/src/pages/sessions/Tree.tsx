@@ -579,7 +579,7 @@ const DND_SESSION = 'application/x-mx-session'
 let draggedSession: { id: string; path: string } | null = null
 
 /** Move a session to a topic, like the column header does (expand the destination, confirm). */
-export function useMoveSessionTo() {
+function useMoveSessionTo() {
   const t = useT()
   const patch = usePatchSession()
   const setExpanded = useSessionsUI((s) => s.setExpanded)
@@ -766,7 +766,7 @@ const AGENT_DOT: Partial<Record<AgentState, { tone: 'warn' | 'unread' | 'running
  *  Their runs never show in this tree. */
 /** A name cut where it differs from its neighbours' (from the start of that word): two chips "Support FR" and
  *  "Support EN" too narrow for their names read "Sup… FR" / "Sup… EN", not "Supp…" twice. [shared head, the rest]. */
-export function nameParts(name: string, names: string[]): [string, string] {
+function nameParts(name: string, names: string[]): [string, string] {
   let d = 0
   for (const o of names) {
     if (o === name) continue

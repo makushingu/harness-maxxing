@@ -71,7 +71,7 @@ export type EntryActions = {
 /* ------------------------------------------------------------------ drag & drop
  * Entries are draggable (HTML5 DnD, desktop). Drop on a folder row / tile / breadcrumb = move there;
  * files from the computer dropped on a folder = uploaded into it, anywhere else = into this folder. */
-export const MX_PATH_TYPE = 'application/x-maxxing-path'
+const MX_PATH_TYPE = 'application/x-maxxing-path'
 /** Paths being dragged in this window (dataTransfer data cannot be read during dragover): the whole selection
  * when the dragged entry is part of it, like a desktop file manager. `selection`: the listing's, kept up to date. */
 export const fileDrag: { paths: string[]; selection: ReadonlySet<string> } = { paths: [], selection: new Set() }

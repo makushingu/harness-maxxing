@@ -5,7 +5,7 @@ import { useMut } from './util'
 
 // Devices (api/devices.py): the person's computers and phones running Harness Link. The bus topic `devices` refreshes
 // every key below (BUS_KEYS).
-export const deviceKeys = {
+const deviceKeys = {
   all: ['devices'] as const,
   status: ['devices', 'status'] as const,
   session: (sid: string) => ['devices', 'session', sid] as const,

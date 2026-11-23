@@ -35,15 +35,15 @@ def _self_trigger(agent: str, source: str) -> str:
     if not agent:
         return ""
     from . import feed
-    if source in feed.BUILTIN or source in feed.PRODUCT_SOURCES or any(h.get("name") == source for h in feed.settings()["hooks"]):
-        return (f"Refused: {source!r} is a webhook or built-in source, only its own deliveries post there. "
+    reserved = (f"Refused: {source!r} is a webhook or built-in source, only its own deliveries post there. "
                 "Use another --source.")
+    if source in feed.BUILTIN or source in feed.PRODUCT_SOURCES or any(h.get("name") == source for h in feed.settings()["hooks"]):
+        return reserved
     try:
         from . import agents
         if any(t.get("hook_id") and t.get("source") == source             # a deleted webhook's trigger still waits
                for x in agents.list_agents(counts=False) for t in x["triggers"]):
-            return (f"Refused: {source!r} is a webhook or built-in source, only its own deliveries post there. "
-                    "Use another --source.")
+            return reserved
         if not agents.exists(agent):
             return ""
         if any(t["kind"] == "feed" and t.get("source") == source for t in agents.load(agent)["triggers"]):
@@ -95,9 +95,8 @@ def _run(a) -> int:
                 return 0
             for ev in r["events"]:
                 when = time.strftime("%m-%d %H:%M", time.localtime(ev["at"]))
-                mark = " " if ev["read"] else "*"
                 count = f" x{ev['count']}" if ev["count"] > 1 else ""
-                print(f"{mark} {when}  {ev['level']:<7} {ev['source']:<12} {ev['title']}{count}")
+                print(f"{' ' if ev['read'] else '*'} {when}  {ev['level']:<7} {ev['source']:<12} {ev['title']}{count}")
             print(f"{r['unread']} unread")
             return 0
         print(f"{feed.mark_read(everything=True)} unread")

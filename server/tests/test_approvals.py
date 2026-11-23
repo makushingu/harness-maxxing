@@ -593,3 +593,15 @@ def test_a_lone_surrogate_in_a_request_keeps_the_list_working_and_can_only_be_de
     approvals.decide(req["id"], "deny")
     assert _answer(srv)["behavior"] == "deny"
     srv.close()
+
+
+def test_a_request_file_with_a_time_that_is_not_a_number_does_not_break_the_list(client, mx):
+    from maxxing import approvals
+    d = approvals.folder()
+    d.mkdir(parents=True, exist_ok=True)
+    for rid, at in (("a" * 16, "x"), ("b" * 16, 12.5)):
+        (d / f"{rid}.json").write_text(json.dumps({"id": rid, "status": "pending", "at": at, "expires": "soon",
+                                                   "tool": "Bash", "input": {}}))
+    assert len(approvals.pending()) == 2
+    approvals.scan(force=True)
+    assert client.get("/api/approvals").status_code == 200

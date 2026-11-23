@@ -22,14 +22,14 @@ const GRAPH_SHARE = 0.34
 const PAD = 12
 const R = 4.5
 // Readable on dark and light backgrounds; a lane keeps its colour from top to bottom.
-export const LANE_COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#ec4899', '#8b5cf6', '#14b8a6', '#ef4444', '#eab308', '#06b6d4', '#a3a3a3']
+const LANE_COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#ec4899', '#8b5cf6', '#14b8a6', '#ef4444', '#eab308', '#06b6d4', '#a3a3a3']
 const color = (lane: number) => LANE_COLORS[lane % LANE_COLORS.length]
 
 type Edge = { from: number; to: number; lane: number; kind: 'in' | 'out' | 'pass' }
 type Row = { commit: GitCommit; col: number; color: number; edges: Edge[]; merge: boolean; span: number }
 
 /** Lane assignment: `lanes[i]` = the sha lane i is waiting for (the next commit of that line). */
-export function layout(commits: GitCommit[]): { rows: Row[]; width: number } {
+function layout(commits: GitCommit[]): { rows: Row[]; width: number } {
   const lanes: (string | null)[] = []
   const laneColor: number[] = []   // colour index of each lane, given when the lane opens
   let nextColor = 0
@@ -83,7 +83,7 @@ export function layout(commits: GitCommit[]): { rows: Row[]; width: number } {
 
 /** Lines passing by, joined into one vertical run per lane: one path per run instead of one per lane and row
  * (300 open branches were 45 000 paths). `from`/`to` are row indexes, `to` included. */
-export function passRuns(rows: Row[]): { lane: number; color: number; from: number; to: number }[] {
+function passRuns(rows: Row[]): { lane: number; color: number; from: number; to: number }[] {
   const runs: { lane: number; color: number; from: number; to: number }[] = []
   const open = new Map<number, { lane: number; color: number; from: number; to: number }>()
   rows.forEach((row, i) => {
@@ -117,7 +117,7 @@ const BadgeName = ({ name }: { name: string }) => <span className="min-w-0 trunc
 
 /** Where a branch label opens on GitHub: `github` = "owner/name" of the repository (origin for a clone on the server).
  *  A clone's remote branch counts only on origin; a local branch only once origin has it. null = not on GitHub. */
-export function branchUrl(r: GitRef, github: string | null | undefined, onGithub: boolean, remotes: Set<string>): string | null {
+function branchUrl(r: GitRef, github: string | null | undefined, onGithub: boolean, remotes: Set<string>): string | null {
   if (!github || (r.kind !== 'branch' && r.kind !== 'remote')) return null
   let name = r.name
   if (r.kind === 'remote') {
@@ -178,7 +178,7 @@ function RefBadge({ r, lane, menu }: { r: GitRef; lane: number; menu?: BadgeHand
   )
 }
 
-export type GitGraphProps = {
+type GitGraphProps = {
   commits: GitCommit[]
   selected?: string | null
   onSelect?: (sha: string) => void

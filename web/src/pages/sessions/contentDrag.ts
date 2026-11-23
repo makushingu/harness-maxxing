@@ -36,7 +36,7 @@ function cleanText(s: string): string {
 }
 
 /** An absolute path, `.` / `..` / repeated slashes resolved; null when it is not one. */
-export function cleanPath(p: unknown): string | null {
+function cleanPath(p: unknown): string | null {
   // eslint-disable-next-line no-control-regex
   if (typeof p !== 'string' || !p.startsWith('/') || p.length > MAX_PATH || /[\u0000-\u001f\u007f]/.test(p)) return null
   const out: string[] = []
@@ -158,7 +158,7 @@ export function contentDrop(e: React.DragEvent, sid: string | null): Dropped | n
   return parsePayload(e.dataTransfer.getData(CONTENT_MIME))
 }
 
-export function parsePayload(raw: string): Dropped | null {
+function parsePayload(raw: string): Dropped | null {
   let p: unknown
   try {
     p = JSON.parse(raw)

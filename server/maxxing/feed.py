@@ -13,6 +13,7 @@ already have their own Telegram thread (crons, security, system) default to "off
 """
 from __future__ import annotations
 
+import contextlib
 import importlib
 import json
 import logging
@@ -87,10 +88,8 @@ def _conn() -> sqlite3.Connection:
                 raise
         stamp = f"{time.strftime('%Y%m%d-%H%M%S')}-{os.getpid()}-{time.monotonic_ns()}"   # never overwrites an older copy
         for suffix in ("", "-wal", "-shm"):
-            try:
+            with contextlib.suppress(OSError):
                 os.replace(f"{path}{suffix}", f"{path}.damaged-{stamp}{suffix}")
-            except OSError:
-                pass
         log.warning("feed.db was unreadable: moved to feed.db.damaged-%s, starting a new feed", stamp)
         return _open(path, key)
 
@@ -193,7 +192,9 @@ def _clean_actions(actions: Any) -> str | None:
 def _clean_url(url: str | None) -> str:
     url = (url or "").strip()[:1000]
     # an app path ("/sessions?...") or a web address; "//host" and "/\\host" are other sites dressed as app paths
-    return url if url and (re.match(r"^/(?![/\\])", url) or re.match(r"^https?://", url)) else ""
+    if re.search(r"[\x00-\x20\x7f\\]", url):    # browsers drop tab/CR/LF in a URL: "/<tab>/host" would become "//host"
+        return ""
+    return url if url and (re.match(r"^/(?!/)", url) or re.match(r"^https?://", url)) else ""
 
 
 def post(title: str, body: str = "", level: str = "info", source: str = "custom", url: str = "",
@@ -219,7 +220,6 @@ def post(title: str, body: str = "", level: str = "info", source: str = "custom"
     now = time.time()
     with _conn() as c:
         if dedupe:
-            dedupe = str(dedupe)[:200]
             if c.execute("SELECT 1 FROM events WHERE source=? AND dedupe=?", (source, dedupe)).fetchone():
                 return None
         row = None
@@ -512,10 +512,24 @@ def unread_count() -> int:
                          (time.time() - RETENTION_DAYS * 86400,)).fetchone()[0]
 
 
+_SIGNATURE_SQL = ("SELECT MAX(id), SUM(read), SUM(count), COUNT(*), SUM(resolved IS NOT NULL) FROM events")
+
+
+def _signature(r) -> int:
+    """One number that changes when an event is added, read, grouped (count), resolved or deleted - by any process."""
+    n = 0
+    for v in r:
+        n = (n * 1000003 + (v or 0)) % (1 << 52)         # below 2**53: it travels as a JSON number
+    return n
+
+
+def _last(c: sqlite3.Connection) -> int:
+    return _signature(c.execute(_SIGNATURE_SQL).fetchone())
+
+
 def last_id() -> int:
     with _conn() as c:
-        r = c.execute("SELECT MAX(id), SUM(read) FROM events").fetchone()
-    return (r[0] or 0) * 100000 + (r[1] or 0)              # changes on new events and on reads
+        return _last(c)
 
 
 _watch_lock = threading.Lock()
@@ -544,12 +558,11 @@ def watch_id() -> int:
             c = sqlite3.connect(path, timeout=10, check_same_thread=False)    # used under _watch_lock only
             _watch.update(conn=c, ident=ident)
         try:
-            r = c.execute("SELECT MAX(id), SUM(read) FROM events").fetchone()
+            last = _last(c)
         except sqlite3.Error:
             c.close()
             _watch.update(conn=None, ident=None, stamp=None)
             raise
-        last = (r[0] or 0) * 100000 + (r[1] or 0)
         _watch.update(stamp=stamp, last=last)
         return last
 
@@ -558,20 +571,18 @@ def mark_read(ids: list[int] | None = None, source: str | None = None, everythin
     source = _utf8(source)                           # a lone surrogate: SQLite cannot take it (UnicodeEncodeError)
     with _conn() as c:
         # open alerts read now: their Telegram message loses its Seen button (update_alert)
-        alerts = "SELECT id FROM events WHERE read=0 AND ref IS NOT NULL AND resolved IS NULL"
         if everything:
-            out = [r[0] for r in c.execute(alerts)]
+            where, args = "", []
         elif source:
-            out = [r[0] for r in c.execute(alerts + " AND source=?", (source,))]
+            where, args = " AND source=?", [source]
         else:
-            want = [i for i in map(_id, (ids or [])[:500]) if i is not None]
-            out = [r[0] for r in c.execute(alerts + f" AND id IN ({','.join('?' * len(want))})", want)] if want else []
-        if everything:
-            c.execute("UPDATE events SET read=1 WHERE read=0")
-        elif source:
-            c.execute("UPDATE events SET read=1 WHERE read=0 AND source=?", (source,))
-        elif ids:
-            c.executemany("UPDATE events SET read=1 WHERE id=?", [(i,) for i in map(_id, ids[:500]) if i is not None])
+            args = [i for i in map(_id, (ids or [])[:500]) if i is not None]
+            where = f" AND id IN ({','.join('?' * len(args))})"
+        out = []
+        if everything or source or args:
+            out = [r[0] for r in c.execute("SELECT id FROM events WHERE read=0 AND ref IS NOT NULL "
+                                           "AND resolved IS NULL" + where, args)]
+            c.execute("UPDATE events SET read=1 WHERE read=0" + where, args)
     bus.invalidate("feed")
     for i in out:
         ev = get(i)

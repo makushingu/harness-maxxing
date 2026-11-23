@@ -84,7 +84,7 @@ const FONT_CSS: Record<string, () => Promise<unknown>> = {
 const loaded = new Set<string>()
 
 /** Loads the @font-face rules of a stack's first family (once). Until they arrive the fallback of the stack shows. */
-export function loadFont(stack: string) {
+function loadFont(stack: string) {
   const family = /^'([^']+)'/.exec(stack)?.[1]
   if (!family || loaded.has(family) || !FONT_CSS[family]) return
   loaded.add(family)

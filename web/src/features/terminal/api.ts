@@ -3,8 +3,8 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 
-export type TermInfo = { id: string; cwd: string; title: string; started: number; last: number; alive: boolean; clients: number }
-export type TermState = { enabled: boolean; terms: TermInfo[]; max: number }
+type TermInfo = { id: string; cwd: string; title: string; started: number; last: number; alive: boolean; clients: number }
+type TermState = { enabled: boolean; terms: TermInfo[]; max: number }
 
 export const termKey = ['term'] as const
 

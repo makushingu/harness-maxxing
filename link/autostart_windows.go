@@ -34,8 +34,5 @@ func removeLegacyCopy() error {
 	if self, err := selfPath(); err == nil && samePath(self, old) {
 		return nil
 	}
-	if err := os.Remove(old); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
-	return nil
+	return removeFile(old)
 }

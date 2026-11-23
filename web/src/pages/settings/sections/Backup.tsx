@@ -6,16 +6,8 @@ import { useLang, useT } from '@/i18n'
 import { useSettings } from '@/lib/queries'
 import { Badge, Button, EmptyState, FormField, Input, Sensitive, Skeleton, StatusDot, confirm, toast } from '@/components/ui'
 import { BackupSetup, BackupWhy } from '@/features/backup/BackupSetup'
+import { useDebounced } from '@/features/crons/SchedulePicker'
 import { SettingsCard, SectionStack } from './ui'
-
-function useDebounced<T>(v: T, ms = 350) {
-  const [d, setD] = React.useState(v)
-  React.useEffect(() => {
-    const id = setTimeout(() => setD(v), ms)
-    return () => clearTimeout(id)
-  }, [v, ms])
-  return d
-}
 
 function ScheduleAndInclude() {
   const t = useT()
@@ -34,7 +26,7 @@ function ScheduleAndInclude() {
       setSynced(true)
     }
   }, [b, synced])
-  const ds = useDebounced(schedule || '')
+  const ds = useDebounced(schedule || '', 350)
   const preview = useCronPreview(ds)
   if (!b || schedule === null || include === null) return <Skeleton className="h-60" />
   const dirty = schedule !== b.schedule || JSON.stringify(include) !== JSON.stringify(b.include)

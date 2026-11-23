@@ -4,7 +4,7 @@ import type { MailAddress, MailFolder, MailRole } from '@/lib/types'
 import type { TKey } from '@/i18n'
 import { fmtDate } from '@/lib/format'
 
-export const ROLE_ICON: Record<MailRole, LucideIcon> = {
+const ROLE_ICON: Record<MailRole, LucideIcon> = {
   inbox: Inbox,
   drafts: FileText,
   sent: Send,

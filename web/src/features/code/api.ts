@@ -25,12 +25,11 @@ export type RepoChanges = {
   error?: string
 }
 export type ChangesScope = 'turn' | 'session' | 'uncommitted' | 'branch'
-export type Changes = { scope: ChangesScope; n: number | null; repos: RepoChanges[] }
-export type { ChangesEvent } from '@/lib/types'
+type Changes = { scope: ChangesScope; n: number | null; repos: RepoChanges[] }
 
 export type DiffLine = { t: ' ' | '+' | '-'; o: number | null; n: number | null; s: string }
-export type FileDiff = { path: string; hunks: { head: string; o: number; n: number; lines: DiffLine[] }[]; binary: boolean; cut: boolean; lines: number }
-export type RepoStatus = {
+type FileDiff = { path: string; hunks: { head: string; o: number; n: number; lines: DiffLine[] }[]; binary: boolean; cut: boolean; lines: number }
+type RepoStatus = {
   root: string
   name: string
   branch: string | null
@@ -48,7 +47,7 @@ export type RepoStatus = {
 }
 export type Undo = { root: string; undo: string }
 
-export const codeKeys = {
+const codeKeys = {
   changes: (sid: string, scope: ChangesScope, n: number | null) => ['code', 'changes', sid, scope, n] as const,
   diff: (repo: string, a: string, b: string, path: string, full: boolean) => ['code', 'diff', repo, a, b, path, full] as const,
   status: (repo: string) => ['code', 'status', repo] as const,
@@ -90,7 +89,7 @@ export const codeApi = {
 // ---- viewer paths ----------------------------------------------------------------------------------------------
 // `mx-changes:list|<sid>|<scope>|<n>` = the list of a view; `mx-changes:file|<sid>|<scope>|<n>|<root>|<path>` = one
 // file of it (its diff). The fields are URI-encoded, so `|` never appears inside one.
-export const CHANGES_PREFIX = 'mx-changes:'
+const CHANGES_PREFIX = 'mx-changes:'
 export type ChangesRef = { sid: string; scope: ChangesScope; n: number | null; root?: string; path?: string }
 const enc = encodeURIComponent
 

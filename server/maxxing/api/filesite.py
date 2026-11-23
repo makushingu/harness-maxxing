@@ -55,7 +55,6 @@ def _workspace_roots() -> set[Path]:
     try:
         for proj in (ws / "projects").iterdir():
             out |= {proj.resolve(), (proj / "topics").resolve()}
-
     except OSError:
         pass
     return out
@@ -68,7 +67,7 @@ def _single_file(folder: Path) -> bool:
         return True
     if "attachments" in f.parts and config.workspace().resolve() in f.parents:
         return True                                       # a page among a topic's uploads: one file, no neighbours
-    return any(part.startswith(".") for part in f.parts)
+    return _hidden(f)
 
 
 def make_token(folder: Path, ttl: int = SITE_TTL_S, file: str | None = None, session: str | None = None) -> str:

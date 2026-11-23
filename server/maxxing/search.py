@@ -29,8 +29,10 @@ See docs/dev/API.md#search.
 """
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
+import math
 import os
 import re
 import sqlite3
@@ -150,11 +152,26 @@ def _db() -> sqlite3.Connection:
     if _con is None or _con_path != db_path():
         if _con is not None:
             _con.close()
-        _con, _con_path = _connect(), db_path()
-        _migrate(_con)
+        try:
+            _con = _connect()
+            _migrate(_con)
+        except sqlite3.DatabaseError as e:               # not a database / malformed: the index is only a cache
+            log.warning("search index unreadable (%s): rebuilding it", e)
+            if _con is not None:
+                _con.close()
+            for suffix in ("", "-wal", "-shm"):
+                with contextlib.suppress(OSError):
+                    os.unlink(str(db_path()) + suffix)
+            _con = _connect()
+            _migrate(_con)
+        _con_path = db_path()
         _state.update(sessions_at=0.0, full_at=0.0, files_at=0.0)   # another index: nothing is fresh
         _seen.clear()
     return _con
+
+
+_ADD = "INSERT INTO items(src, kind, ref, path, title, body, at) VALUES (?,?,?,?,?,?,?)"
+_SIGN = "INSERT OR REPLACE INTO src(key, sig) VALUES (?, ?)"
 
 
 def _drop(con: sqlite3.Connection, key: str) -> None:
@@ -171,6 +188,13 @@ def _log_ident(p: Path) -> str:
         return f"{os.stat(p).st_ino}:{zlib.crc32(head):x}"
     except OSError:
         return ""
+
+
+def _stamp(v) -> float | None:
+    """A session's updated/created as SQLite can store it: a finite number of sane size, else None."""
+    if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) or abs(v) >= 2 ** 53:
+        return None
+    return v
 
 
 def _clean(v) -> str:
@@ -214,8 +238,8 @@ def _index_sessions(con: sqlite3.Connection) -> None:
         if sig is None:
             sig = {"offset": 0, "ident": ident, "title": title, "path": path}
             # a title row, so a session is found by its name even before any message is indexed
-            con.execute("INSERT INTO items(src, kind, ref, path, title, body, at) VALUES (?,?,?,?,?,?,?)",
-                        (key, "session", sid, path, title, "", m.get("updated") or m.get("created")))
+            con.execute(_ADD,
+                        (key, "session", sid, path, title, "", _stamp(m.get("updated")) or _stamp(m.get("created"))))
         elif sig.get("title") != title or sig.get("path") != path:   # renamed, or moved to another topic
             if sig.get("title") != title:                    # the title row only (messages have no title)
                 con.execute("UPDATE items SET title=? WHERE src=? AND body=''", (title, key))
@@ -236,13 +260,11 @@ def _index_sessions(con: sqlite3.Connection) -> None:
                 lines = chunk[:end].decode("utf-8", "replace").split("\n")
                 for ev in normalize.normalize_lines(lines):
                     if ev.get("type") in ("user", "assistant", "voice_text") and (ev.get("text") or "").strip():
-                        con.execute(
-                            "INSERT INTO items(src, kind, ref, path, title, body, at) VALUES (?,?,?,?,?,?,?)",
-                            (key, "session", sid, path, "", ev["text"][:MAX_MESSAGE_CHARS], ev.get("at")))
+                        con.execute(_ADD, (key, "session", sid, path, "", ev["text"][:MAX_MESSAGE_CHARS], ev.get("at")))
                 sig["offset"] += end
         new = json.dumps(sig)
         if not row or new != row[0]:                         # unchanged (a log ending in a cut line): no write
-            con.execute("INSERT OR REPLACE INTO src(key, sig) VALUES (?, ?)", (key, new))
+            con.execute(_SIGN, (key, new))
         # all read - or only a cut last line left (a runner killed mid-write): skipped until something changes
         if sig["offset"] >= size or read_all:
             _seen[key] = stamp
@@ -290,7 +312,7 @@ def _index_groups(con: sqlite3.Connection) -> None:
             sig = None
         if sig is None:
             sig = {"ino": ino, "offset": 0, "group": list(stamp[1])}
-            con.execute("INSERT INTO items(src, kind, ref, path, title, body, at) VALUES (?,?,?,?,?,?,?)",
+            con.execute(_ADD,
                         (key, "group", path, path, _clean(g.get("name") or parts[1]), "", stamp[0][1] / 1e9))
         if sig["offset"] < size:
             with open(f, "rb") as fh:
@@ -308,11 +330,11 @@ def _index_groups(con: sqlite3.Connection) -> None:
                     continue
                 author = str(m.get("author") or "")
                 who = "Owner" if author == "me" else "@" + hs.get(author, agent_rooms.slug(author))
-                con.execute("INSERT INTO items(src, kind, ref, path, title, body, at) VALUES (?,?,?,?,?,?,?)",
+                con.execute(_ADD,
                             (key, "group", path, path, "", _clean(f"{who}: {text}")[:MAX_MESSAGE_CHARS],
                              m.get("at") if isinstance(m.get("at"), (int, float)) else None))
             sig["offset"] += end
-        con.execute("INSERT OR REPLACE INTO src(key, sig) VALUES (?, ?)", (key, json.dumps(sig)))
+        con.execute(_SIGN, (key, json.dumps(sig)))
         if sig["offset"] >= size:
             _seen[key] = stamp
     for key in known - alive:
@@ -353,7 +375,7 @@ def _index_one(con: sqlite3.Connection, base: str, fp: str, st: os.stat_result, 
         return
     _drop(con, key)
     if b"\0" in raw[:4096]:                                  # binary with a text extension: no rows
-        con.execute("INSERT OR REPLACE INTO src(key, sig) VALUES (?, ?)", (key, sig))
+        con.execute(_SIGN, (key, sig))
         return
     name = os.path.basename(fp)
     kind = "memory" if name.lower() in MEMORY_NAMES else "file"
@@ -362,9 +384,9 @@ def _index_one(con: sqlite3.Connection, base: str, fp: str, st: os.stat_result, 
     if m:                                                    # an agent's role / memory: its name in the title
         name = f"{name} · agent {m.group(3)} ({m.group(1)}/{m.group(2)})"
     # The relative path heads the body: "acme blog" finds projects/acme/topics/blog/notes.md.
-    con.execute("INSERT INTO items(src, kind, ref, path, title, body, at) VALUES (?,?,?,?,?,?,?)",
+    con.execute(_ADD,
                 (key, kind, fp, fp, name, f"{rel}\n{raw.decode('utf-8', 'replace')}", st.st_mtime))
-    con.execute("INSERT OR REPLACE INTO src(key, sig) VALUES (?, ?)", (key, sig))
+    con.execute(_SIGN, (key, sig))
 
 
 def _file_stat(fp: str, base: str) -> os.stat_result | None:
@@ -380,7 +402,7 @@ def _file_stat(fp: str, base: str) -> os.stat_result | None:
         if os.path.islink(fp):
             root = os.path.realpath(base)
             real = os.path.realpath(fp)
-            if os.path.commonpath([real, root]) != root:
+            if not _within(real, root):
                 return None
             # the folders the walk skips stay skipped through a link
             if any(d in SKIP_DIRS or d.startswith(".") for d in Path(os.path.relpath(real, root)).parts[:-1]):
@@ -390,24 +412,25 @@ def _file_stat(fp: str, base: str) -> os.stat_result | None:
     return st
 
 
+def _within(real: str, root: str) -> bool:
+    try:
+        return os.path.commonpath([real, root]) == root
+    except ValueError:
+        return False
+
+
 def _subdirs(d: str, base: str) -> list[str]:
     """Sub-folders of `d`; a linked folder only when it points inside the workspace (as _file_stat does for files)."""
     try:
         out, root = [], os.path.realpath(base)
-        try:
-            if os.path.commonpath([os.path.realpath(d), root]) != root:      # projects/, topics/, agents/ linked outside
-                return []
-        except ValueError:
+        if not _within(os.path.realpath(d), root):                       # projects/, topics/, agents/ linked outside
             return []
         for e in os.scandir(d):
             if not e.is_dir(follow_symlinks=True) or e.name in SKIP_DIRS or e.name.startswith("."):
                 continue
             if e.is_symlink():
                 real = os.path.realpath(e.path)
-                try:
-                    if os.path.commonpath([real, root]) != root:
-                        continue
-                except ValueError:
+                if not _within(real, root):
                     continue
                 # the folders the walk skips stay skipped through a link (as in _file_stat), the target itself included
                 if any(n in SKIP_DIRS or n.startswith(".") for n in Path(os.path.relpath(real, root)).parts):
@@ -451,12 +474,18 @@ def _index_memory(con: sqlite3.Connection, base: str, mem_dirs: list[str], known
         except OSError:
             continue
         for e in entries:
-            st = _file_stat(e.path, base)
-            if st is None or st.st_size > MAX_FILE_BYTES:
-                continue
-            alive.add(f"f:{e.path}")
-            _index_one(con, base, e.path, st, known)
+            _take(con, base, e.path, known, alive)
     return alive
+
+
+def _take(con: sqlite3.Connection, base: str, fp: str, known: dict, alive: set[str]) -> bool:
+    """Index `fp` when it is a file worth reading (see _file_stat) of at most MAX_FILE_BYTES. -> it was."""
+    st = _file_stat(fp, base)
+    if st is None or st.st_size > MAX_FILE_BYTES:
+        return False
+    alive.add(f"f:{fp}")
+    _index_one(con, base, fp, st, known)
+    return True
 
 
 def _walk_bucket(con: sqlite3.Connection, base: str, root: str, skip: set[str], budget: int, known: dict,
@@ -471,23 +500,12 @@ def _walk_bucket(con: sqlite3.Connection, base: str, root: str, skip: set[str], 
         for name in sorted(files):
             if count >= budget:
                 return count, True
-            low = name.lower()
             fp = os.path.join(cur, name)
-            if low in MEMORY_NAMES:
+            if name.lower() in MEMORY_NAMES:
                 if f"f:{fp}" not in alive:
-                    st = _file_stat(fp, base)
-                    if st is not None and st.st_size <= MAX_FILE_BYTES:
-                        alive.add(f"f:{fp}")
-                        _index_one(con, base, fp, st, known)
-                continue
-            if not _text_file(name):
-                continue
-            st = _file_stat(fp, base)
-            if st is None or st.st_size > MAX_FILE_BYTES:
-                continue
-            count += 1
-            alive.add(f"f:{fp}")
-            _index_one(con, base, fp, st, known)
+                    _take(con, base, fp, known, alive)
+            elif _text_file(name) and _take(con, base, fp, known, alive):
+                count += 1
         if scanned >= MAX_SCAN_ENTRIES:
             return count, True
     return count, False
@@ -542,10 +560,9 @@ def _index_tasks(con: sqlite3.Connection) -> None:
         if not isinstance(t, dict) or not t.get("id"):
             continue
         body = "\n".join(filter(None, [t.get("notes") or "", " ".join(t.get("labels") or [])]))
-        con.execute("INSERT INTO items(src, kind, ref, path, title, body, at) VALUES (?,?,?,?,?,?,?)",
-                    ("t:tasks", "task", t["id"], t.get("topic_path") or "", t.get("title") or "", body,
-                     t.get("updated")))
-    con.execute("INSERT OR REPLACE INTO src(key, sig) VALUES ('t:tasks', ?)", (sig,))
+        con.execute(_ADD, ("t:tasks", "task", t["id"], t.get("topic_path") or "", t.get("title") or "", body,
+                           t.get("updated")))
+    con.execute(_SIGN, ("t:tasks", sig))
 
 
 # ---- refresh ---------------------------------------------------------------------------------
@@ -689,6 +706,10 @@ def search(q: str, kinds: list[str] | None = None, limit: int = 30,
         finally:
             _lock.release()
     marks = ",".join("?" * len(wanted))
+    from . import jarvis
+    # Jarvis's rows are left out in SQL: filtered after the LIMIT they would take the places of the visible ones
+    skip = ("AND items.path != ? AND items.path NOT LIKE ? ESCAPE '\\'", (jarvis.PREFIX, jarvis.PREFIX + "/%")) \
+        if jarvis.hides(jarvis.PREFIX) else ("", ())
     while not _rlock.acquire(timeout=0.05):                  # one reader: queries take turns
         if gone():
             return {"results": [], "took_ms": 0, "cancelled": True}
@@ -702,8 +723,8 @@ def search(q: str, kinds: list[str] | None = None, limit: int = 30,
             # (a rowid range is cheap for FTS5; `rowid IN (...)` would run the match once per row)
             floor = con.execute(
                 f"""SELECT MIN(id) FROM (SELECT fts.rowid AS id FROM fts JOIN items ON items.id = fts.rowid
-                    WHERE fts MATCH ? AND items.kind IN ({marks}) ORDER BY fts.rowid DESC LIMIT ?)""",
-                (match, *wanted, RANK_MAX)).fetchone()[0] or 0
+                    WHERE fts MATCH ? AND items.kind IN ({marks}) {skip[0]} ORDER BY fts.rowid DESC LIMIT ?)""",
+                (match, *wanted, *skip[1], RANK_MAX)).fetchone()[0] or 0
             # best row per session / file / task (bare columns of MIN)
             # (MATERIALIZED: bm25 cannot run inside the aggregate itself)
             best = con.execute(
@@ -711,10 +732,10 @@ def search(q: str, kinds: list[str] | None = None, limit: int = 30,
                         SELECT items.kind AS kind, items.ref AS ref, items.path AS path, items.title AS title,
                                items.at AS at, fts.rowid AS id, bm25(fts, 4.0, 1.0) AS score
                         FROM fts JOIN items ON items.id = fts.rowid
-                        WHERE fts MATCH ? AND fts.rowid >= ? AND items.kind IN ({marks}))
+                        WHERE fts MATCH ? AND fts.rowid >= ? AND items.kind IN ({marks}) {skip[0]})
                     SELECT kind, ref, path, title, at, id, MIN(score) AS best FROM hits
                     GROUP BY kind, ref ORDER BY best LIMIT ?""",
-                (match, floor, *wanted, limit)).fetchall()
+                (match, floor, *wanted, *skip[1], limit)).fetchall()
             # snippets of the shown rows only: snippet() tokenizes the whole text again, so running it on every
             # matching row (thousands for a common prefix) cost ten times the ranking itself
             ids = [r[5] for r in best]
@@ -736,7 +757,6 @@ def search(q: str, kinds: list[str] | None = None, limit: int = 30,
             con.set_progress_handler(None, 0)
     finally:
         _rlock.release()
-    from . import jarvis
     out = []
     for kind, ref, path, title, at, snip, score in rows:
         if jarvis.hides(path):

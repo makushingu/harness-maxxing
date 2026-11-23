@@ -6,7 +6,6 @@ import { useMenuSheetDrag } from './sheet-drag'
 
 export const DropdownMenu = DM.Root
 export const DropdownMenuTrigger = DM.Trigger
-export const DropdownMenuGroup = DM.Group
 export const DropdownMenuSub = DM.Sub
 export const DropdownMenuRadioGroup = DM.RadioGroup
 
@@ -62,9 +61,6 @@ export function DropdownMenuLabel({ className, ...props }: React.ComponentProps<
 }
 export function DropdownMenuSeparator({ className, ...props }: React.ComponentProps<typeof DM.Separator>) {
   return <DM.Separator className={cn('-mx-1 my-1 h-px bg-border', className)} {...props} />
-}
-export function DropdownMenuShortcut({ className, ...props }: React.ComponentProps<'span'>) {
-  return <span className={cn('ml-auto text-xs tracking-widest text-muted-foreground', className)} {...props} />
 }
 export function DropdownMenuSubTrigger({ className, children, ...props }: React.ComponentProps<typeof DM.SubTrigger>) {
   return (

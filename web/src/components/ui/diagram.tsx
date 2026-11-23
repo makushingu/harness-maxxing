@@ -44,7 +44,7 @@ export function showDiagram(code: string) {
   openFileViewer(id)
 }
 
-export function useDark() {
+function useDark() {
   const get = () => document.documentElement.classList.contains('dark')
   const [dark, setDark] = React.useState(get)
   React.useEffect(() => {

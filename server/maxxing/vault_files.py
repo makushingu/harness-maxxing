@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from . import config
-from .vault import NAME_RE, VaultError, _is_text, check_name, is_reserved
+from .vault import NAME_RE, VaultError, _is_text, check_name, is_reserved, set_note_expose
 
 DIRNAME = "secret-files"
 MAX_SIZE = 1024 * 1024
@@ -132,17 +132,9 @@ def put(name: str, data: bytes | None = None, filename: str | None = None, note:
         cur: dict[str, Any] = dict(files.get(name) or {})
         if data is None and not cur:
             raise VaultError("a new file needs its content", "file_required")
-        if note is not None:
-            if not _is_text(note):
-                raise VaultError("note must be valid text", "invalid_note")
-            cur["note"] = note.strip()[:200]
-        if expose is not None:
-            cur["expose"] = bool(expose)
+        set_note_expose(cur, note, expose)
         if filename is not None or "filename" not in cur:
             cur["filename"] = clean_filename(filename, cur.get("filename") or name)
-        cur.setdefault("note", "")
-        cur.setdefault("expose", False)
-        cur["updated"] = time.time()
         _sweep(files, s)
         tmp = None
         if data is not None:

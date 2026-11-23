@@ -168,7 +168,7 @@ export function SchedulePicker({ value, onChange, error }: { value: string; onCh
 }
 
 /** Human text + next runs. Height is reserved so the dialog does not jump while typing. */
-export function SchedulePreview({ schedule }: { schedule: string }) {
+function SchedulePreview({ schedule }: { schedule: string }) {
   const t = useT()
   const lang = useLang()
   const { data: settings } = useSettings()

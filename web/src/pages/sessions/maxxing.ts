@@ -126,7 +126,7 @@ function typing() {
 }
 
 /** The session in front glows as it arrives. */
-export function glow(el: Element | null | undefined) {
+function glow(el: Element | null | undefined) {
   if (!el || reducedMotion()) return
   el.animate(
     [
@@ -139,7 +139,7 @@ export function glow(el: Element | null | undefined) {
 }
 
 /** Watches the sessions and brings the finished ones to the front. Mounted once by the Sessions page. */
-export function useMaxxingDriver(sessions: Session[] | undefined, show: (s: Session) => void) {
+function useMaxxingDriver(sessions: Session[] | undefined, show: (s: Session) => void) {
   const on = useMaxxing((s) => s.on)
   const prev = React.useRef<Map<string, { state: Session['state']; plan: boolean }> | null>(null)
   const list = React.useRef(sessions)

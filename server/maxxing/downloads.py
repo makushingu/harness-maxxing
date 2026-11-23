@@ -105,15 +105,20 @@ def zip_plan_many(items: list[tuple[Path, str]], root: Path) -> list[tuple[Path,
             st = src.stat()
         except OSError:
             continue
-        if not stat.S_ISREG(st.st_mode):
-            continue
-        total += st.st_size
-        if total > ZIP_MAX_BYTES:
-            raise ZipTooLarge("size")
-        plan.append((src, base, st))
-        if len(plan) > ZIP_MAX_FILES:
-            raise ZipTooLarge("count")
+        if stat.S_ISREG(st.st_mode):
+            total = _add_file(plan, src, base, st, total)
     return plan
+
+
+def _add_file(plan: list, src: Path, name: str, st: os.stat_result, total: int) -> int:
+    """`src` added to the plan as `name`; the new total size. Raises ZipTooLarge past a cap."""
+    total += st.st_size
+    if total > ZIP_MAX_BYTES:
+        raise ZipTooLarge("size")
+    plan.append((src, name, st))
+    if len(plan) > ZIP_MAX_FILES:
+        raise ZipTooLarge("count")
+    return total
 
 
 def _unique(name: str, taken: set[str]) -> str:
@@ -155,14 +160,8 @@ def _plan_folder(plan: list[tuple[Path, str, os.stat_result | None]], folder: Pa
                 st = src.stat()
             except (OSError, RuntimeError):
                 continue
-            if not stat.S_ISREG(st.st_mode):
-                continue
-            total += st.st_size
-            if total > ZIP_MAX_BYTES:
-                raise ZipTooLarge("size")
-            plan.append((src, prefix + _unique(display_name(f), taken), st))
-            if len(plan) > ZIP_MAX_FILES:
-                raise ZipTooLarge("count")
+            if stat.S_ISREG(st.st_mode):
+                total = _add_file(plan, src, prefix + _unique(display_name(f), taken), st, total)
     return total
 
 

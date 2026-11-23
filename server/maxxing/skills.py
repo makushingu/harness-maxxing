@@ -40,7 +40,7 @@ def _front(text: str) -> dict[str, str]:
         v = re.sub(r"^[|>][-+]?", "", v).strip()                  # its header: | |- |+ > >- >+
         q = re.match(r"""^(['"])(.*?)\1(?:[ \t]+#.*)?$""", v)
         if q and not block:                                       # quoted, maybe followed by a comment
-            v = q.group(2)
+            v = q.group(2).replace("''", "'") if q.group(1) == "'" else re.sub(r'\\(["\\])', r"\1", q.group(2))
         elif not block:
             v = re.split(r"[ \t]#", v, maxsplit=1)[0].strip()      # a trailing ` # comment`
         out[k] = " ".join(v.split())
@@ -82,14 +82,7 @@ def _scan(root: Path, origin: str, skip: set[str] | None = None, **where: str) -
         folders = sorted(p for p in root.iterdir() if _utf8(p) and p.is_dir() and (p / "SKILL.md").is_file())
     except (OSError, ValueError):               # ValueError: a NUL in the path
         return []
-    out = []
-    for p in folders:
-        if skip and p.name in skip:
-            continue
-        s = _read(p, origin, **where)
-        if s:
-            out.append(s)
-    return out
+    return [s for p in folders if not (skip and p.name in skip) and (s := _read(p, origin, **where))]
 
 
 def _server_skills() -> list[dict]:

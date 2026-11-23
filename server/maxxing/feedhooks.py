@@ -18,6 +18,7 @@ Payloads are data: they never run anything.
 from __future__ import annotations
 
 import base64
+import contextlib
 import hashlib
 import hmac
 import json
@@ -126,9 +127,8 @@ def _find(hid: str) -> dict:
 def by_token(token: str) -> tuple[dict, dict] | None:
     for hid, s in _store().items():
         if token and _same(str(s.get("token", "")), token):
-            h = next((h for h in feed.settings()["hooks"] if h["id"] == hid), None)
-            if h:
-                return h, s
+            with contextlib.suppress(FeedError):
+                return _find(hid), s
     return None
 
 
@@ -165,9 +165,9 @@ def verify(kind: str, secret: str, headers: dict, body: bytes) -> bool:
         return True
     h = {k.lower(): v for k, v in headers.items()}
     if kind == "stripe":
-        parts = dict(p.split("=", 1) for p in h.get("stripe-signature", "").split(",") if "=" in p)
-        t = parts.get("t", "")
-        sigs = [v for k, v in (p.split("=", 1) for p in h.get("stripe-signature", "").split(",") if "=" in p) if k == "v1"]
+        pairs = [p.split("=", 1) for p in h.get("stripe-signature", "").split(",") if "=" in p]
+        t = dict(pairs).get("t", "")
+        sigs = [v for k, v in pairs if k == "v1"]
         if not (t.isascii() and t.isdigit() and len(t) <= 12) or abs(time.time() - int(t)) > STRIPE_TOLERANCE_S:   # "²" is a digit; int() of 4300+ digits raises
             return False
         want = hmac.new(secret.encode(), f"{t}.".encode() + body, hashlib.sha256).hexdigest()
@@ -322,12 +322,13 @@ def _shopify(p: dict, h: dict) -> Event | None:
     name = p.get("name") or (f"#{p['order_number']}" if p.get("order_number") else "")
     amt = _money(p.get("total_price"), p.get("currency"), cents=False)
     who = (p.get("customer") or {}).get("email") or p.get("email") or ""
+    order = f"{admin}/orders/{p.get('id', '')}" if admin else ""
     if topic == "orders/create":
-        return f"New order {name}: {amt}".strip(), who, "success", f"{admin}/orders/{p.get('id', '')}" if admin else "", did
+        return f"New order {name}: {amt}".strip(), who, "success", order, did
     if topic == "orders/paid":
-        return f"Order paid {name}: {amt}".strip(), who, "success", f"{admin}/orders/{p.get('id', '')}" if admin else "", did
+        return f"Order paid {name}: {amt}".strip(), who, "success", order, did
     if topic == "orders/cancelled":
-        return f"Order cancelled {name}", who, "warning", f"{admin}/orders/{p.get('id', '')}" if admin else "", did
+        return f"Order cancelled {name}", who, "warning", order, did
     if topic == "refunds/create":
         return f"Refund on order {p.get('order_id', '')}", "", "warning", f"{admin}/orders/{p.get('order_id', '')}" if admin else "", did
     if topic == "inventory_levels/update":

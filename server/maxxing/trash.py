@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Any
 
 from . import bus, config
+from .deps import _size   # bytes an item takes: a link counts for itself, never for what it points to
 
 log = logging.getLogger("maxxing.trash")
 
@@ -47,23 +48,6 @@ class TrashError(Exception):
 
 def trash_dir() -> Path:
     return config.state_dir("trash")
-
-
-def _size(p: Path) -> int:
-    """Bytes the item takes in the trash: a link counts for itself, never for what it points to."""
-    try:
-        if p.is_symlink() or not p.is_dir():
-            return p.lstat().st_size
-    except OSError:
-        return 0
-    n = 0
-    for cur, _dirs, files in os.walk(p):
-        for name in files:
-            try:
-                n += os.lstat(os.path.join(cur, name)).st_size
-            except OSError:
-                pass
-    return n
 
 
 def _sig(p: Path) -> tuple:
@@ -187,12 +171,7 @@ def _deleted_at(p: Path, side: dict) -> float:
 
 def _entries() -> list[Path]:
     t = trash_dir()
-    out = []
-    for p in t.iterdir():
-        if p.name in SKIP or _is_extra(p):
-            continue
-        out.append(p)
-    return out
+    return [p for p in t.iterdir() if p.name not in SKIP and not _is_extra(p)]
 
 
 def list_items(purge: bool = True) -> list[dict[str, Any]]:
@@ -285,7 +264,8 @@ def _move_back(p: Path, dest: Path) -> None:
         return
     except OSError:
         pass
-    tmp = dest.with_name(f".{dest.name[:200]}.restoring-{os.getpid()}")
+    short = dest.name.encode(errors="surrogateescape")[:180].decode(errors="ignore")   # bytes, not characters: 255 is a byte limit
+    tmp = dest.with_name(f".{short}.restoring-{os.getpid()}")
     try:
         if p.is_dir() and not p.is_symlink():
             shutil.copytree(p, tmp, symlinks=True)
@@ -293,15 +273,9 @@ def _move_back(p: Path, dest: Path) -> None:
             shutil.copy2(p, tmp, follow_symlinks=False)
         os.rename(tmp, dest)
     except OSError:                                         # a copy that stopped half way: no partial copy left
-        if tmp.is_dir() and not tmp.is_symlink():
-            shutil.rmtree(tmp, ignore_errors=True)
-        else:
-            tmp.unlink(missing_ok=True)
+        _rm(tmp)
         raise
-    if p.is_dir() and not p.is_symlink():
-        shutil.rmtree(p, ignore_errors=True)
-    else:
-        p.unlink(missing_ok=True)
+    _rm(p)
 
 
 def _free(dest: Path) -> Path:
@@ -377,11 +351,8 @@ def _put_sessions(folder: Path, old_prefix: str | None = None, new_prefix: str |
 
 def _in_trash(folder: Path, kind: str) -> bool:
     """A deleted project / topic that was at `folder` waits in the trash."""
-    for p in _entries():
-        side = _side(p)
-        if side.get("original") == str(folder) and _kind(p, side) == kind:
-            return True
-    return False
+    return any(side.get("original") == str(folder) and _kind(p, side) == kind
+               for p in _entries() for side in (_side(p),))
 
 
 def restore(item_id: str) -> dict[str, Any]:
@@ -485,11 +456,15 @@ def delete(item_id: str) -> None:
     bus.invalidate("trash")
 
 
-def _remove(p: Path) -> None:
+def _rm(p: Path) -> None:
     if p.is_dir() and not p.is_symlink():               # a link to a folder: the link goes, never its target
         shutil.rmtree(p, ignore_errors=True)
     else:
         p.unlink(missing_ok=True)
+
+
+def _remove(p: Path) -> None:
+    _rm(p)
     p.with_name(p.name + ".json").unlink(missing_ok=True)
     shutil.rmtree(p.with_name(p.name + ".sessions"), ignore_errors=True)
     shutil.rmtree(p.with_name(p.name + ".agents"), ignore_errors=True)
@@ -510,10 +485,7 @@ def _drop_orphans(older_than: float) -> None:
                 continue
         except OSError:
             continue
-        if p.is_dir() and not p.is_symlink():
-            shutil.rmtree(p, ignore_errors=True)
-        else:
-            p.unlink(missing_ok=True)
+        _rm(p)
 
 
 def empty() -> int:

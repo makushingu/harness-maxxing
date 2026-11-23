@@ -15,13 +15,14 @@ import { useTabIndicator } from './tabMotion'
 /** Shown first by "Next waiting": a session that finished and was not read, or stopped on an error. */
 const waits = (s: Session | undefined) => !!s && s.state !== 'running' && (s.unread || s.state === 'error')
 
-/** Computer: the one button at the top right of the page that goes from one way of showing the open sessions to the
+/** Computer: the one button at the top right of the page (phone: in every session's header; Tabs shows the chips of
+ *  the open sessions above it, even a single one, Zones hides them) that goes from one way of showing the open sessions to the
  *  other. Tabs = one session on screen, the others as chips; Zones = the sessions next to each other (columns, grid,
  *  layouts). One icon, no text, in the colour of the icons beside it, square blocks as in the logo: it draws the
  *  mode in use with four bars - three tab heads over the
  *  session, or three columns - and the bars move from one picture to the other when the mode changes (globals.css
  *  `.mx-view-glyph`). The tooltip names where a click leads. */
-export function ViewSwitch() {
+export function ViewSwitch({ className }: { className?: string } = {}) {
   const t = useT()
   const tabs = useSessionsUI((s) => s.tabs)
   const label = tabs ? t('tabs.toZones') : t('tabs.toTabs')
@@ -31,7 +32,7 @@ export function ViewSwitch() {
         type="button"
         aria-label={label}
         onClick={() => useSessionsUI.getState().setTabs(!tabs)}
-        className="inline-flex size-8 shrink-0 items-center justify-center rounded-md transition-colors outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring"
+        className={cn('inline-flex size-8 shrink-0 items-center justify-center rounded-md transition-colors outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring', className)}
         data-testid="tabs-toggle"
         data-mode={tabs ? 'tabs' : 'zones'}
       >

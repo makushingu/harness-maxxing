@@ -152,10 +152,6 @@ def _systemctl_show_all(names: list[str]) -> dict[str, dict[str, str]]:
     return out
 
 
-def _systemctl_show(name: str) -> dict[str, str]:
-    return _systemctl_show_all([name]).get(name, {})
-
-
 def _state(name: str, info: dict[str, str]) -> dict[str, Any] | None:
     if not info or info.get("LoadState") in ("not-found", "", None):
         return None
@@ -167,11 +163,6 @@ def _state(name: str, info: dict[str, str]) -> dict[str, Any] | None:
     return {"name": name, "label": LABELS.get(name) or info.get("Description") or name, "active": active,
             "enabled": info.get("UnitFileState") in ("enabled", "enabled-runtime", "static", "alias"),
             "since": since, "state": info.get("ActiveState", "")}
-
-
-def service_state(name: str) -> dict[str, Any] | None:
-    """{name, label, active, enabled, since, state} or None when the unit is not installed."""
-    return _state(name, _systemctl_show(name))
 
 
 def services(force: bool = False) -> list[dict]:
@@ -481,8 +472,7 @@ def usage(force: bool = False) -> dict:
     has no 5-hour window any more (2026-10-31), `five_hour` is then None and the UI says so.
     """
     from . import claude_auth
-    u = _usage_any(force)
-    return {**u, "plan": claude_auth.plan_name()}
+    return {**_usage_any(force), "plan": claude_auth.plan_name()}
 
 
 def _usage_any(force: bool) -> dict:
@@ -500,9 +490,7 @@ def _usage_any(force: bool) -> dict:
     if seen and now - float(seen.get("seen_at") or 0) < TURN_FRESH_S:
         return seen
     data = _endpoint_usage(force, now)
-    if not data.get("available") and seen:
-        return seen
-    return data
+    return seen if seen and not data.get("available") else data
 
 
 def _block_file() -> Path:
@@ -540,9 +528,8 @@ def _endpoint_usage(force: bool, now: float) -> dict:
     if not mine:                                      # a call is already out: share its answer, never a 2nd call
         inflight.wait(USAGE_WAIT_S)
         with _usage_lock:
-            data = dict(_usage["data"]) if _usage["data"] is not None else {
+            return dict(_usage["data"]) if _usage["data"] is not None else {
                 "available": False, "reason": "error", "five_hour": None, "seven_day": None}
-        return data
     try:
         data = _fetch_usage()
         with _usage_lock:
@@ -555,12 +542,11 @@ def _endpoint_usage(force: bool, now: float) -> dict:
                 except OSError:
                     pass
             prev = _usage["data"]
-            if data.get("available") or prev is None or not prev.get("available"):
-                _usage.update(at=time.time(), data=data)
-            else:                                     # keep the last good values, flag them stale
+            if not data.get("available") and prev is not None and prev.get("available"):
+                # keep the last good values, flag them stale
                 data = dict(prev, stale=data.get("reason", "error"),
                             **({"retry_at": data["retry_at"]} if "retry_at" in data else {}))
-                _usage.update(at=time.time(), data=data)
+            _usage.update(at=time.time(), data=data)
     finally:
         with _usage_lock:
             _usage["inflight"] = None

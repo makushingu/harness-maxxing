@@ -139,17 +139,6 @@ def _mime(p: Path) -> str:
     return mimetypes.guess_type(p.name)[0] or ("inode/directory" if p.is_dir() else "application/octet-stream")
 
 
-def _entry(p: Path) -> dict | None:
-    try:
-        st = p.stat()
-    except OSError:
-        return None
-    is_dir = p.is_dir()
-    return {"name": _shown(p.name), "path": _shown(str(p)), "type": "dir" if is_dir else "file",
-            "size": 0 if is_dir else st.st_size, "mtime": st.st_mtime,
-            "mime": "inode/directory" if is_dir else _mime(p)}
-
-
 async def _t(fn: Callable[..., Any], *a: Any) -> Any:
     return await asyncio.to_thread(fn, *a)
 
@@ -162,7 +151,7 @@ def _shown(s: str) -> str:
 
 
 def _scan_entry(d: os.DirEntry) -> dict | None:
-    """_entry from a scandir entry (one stat per entry instead of two; same result, symlinks followed)."""
+    """One listing entry from a scandir entry (one stat per entry; symlinks followed)."""
     try:
         st = d.stat()
     except OSError:
@@ -256,10 +245,21 @@ async def raw(path: str, download: int = 0, v: str = "", within: list[str] = Wit
     return _serve(p, v, bool(download))
 
 
-def _zip_413(e: downloads.ZipTooLarge, what: str) -> HTTPException:
-    much = (f"more than {downloads.ZIP_MAX_FILES:,} files" if e.what == "count"
-            else f"more than {downloads.ZIP_MAX_BYTES >> 30} GB")
-    return _err(413, "too_large", f"{what} {much}: too much for one zip")
+async def _zip_call(what: str, fn: Callable[..., Any], *a: Any) -> Any:
+    """fn(*a) in a thread; a zip too large is a 413 that says `what` holds too much."""
+    try:
+        return await _t(fn, *a)
+    except downloads.ZipTooLarge as e:
+        much = (f"more than {downloads.ZIP_MAX_FILES:,} files" if e.what == "count"
+                else f"more than {downloads.ZIP_MAX_BYTES >> 30} GB")
+        raise _err(413, "too_large", f"{what} {much}: too much for one zip") from None
+    except PermissionError:
+        raise _err(403, "forbidden", "Permission denied") from None
+
+
+def _zip_size(plan: list) -> dict:
+    files = [st for _, _, st in plan if st is not None]
+    return {"count": len(files), "size": sum(st.st_size for st in files)}
 
 
 def _zip_response(plan: list, name: str) -> StreamingResponse:
@@ -277,26 +277,14 @@ async def zip_folder(request: Request, path: str = "", check: int = 0, token: st
         held = _zip_tokens.get(token)
         if not held or held[0] < time.monotonic() or not hmac.compare_digest(held[1], _cookie_tag(request)):
             raise _err(404, "not_found", "This download link expired")
-        try:
-            items, name = await _t(_zip_items, held[2])
-            plan = await _t(downloads.zip_plan_many, items, _root())
-        except downloads.ZipTooLarge as e:
-            raise _zip_413(e, "These files hold") from None
-        except PermissionError:
-            raise _err(403, "forbidden", "Permission denied") from None
+        plan, name = await _zip_call("These files hold", _zip_plan_many, held[2])
         return _zip_response(plan, name)
     p = resolve(path)
     if not await _t(p.is_dir):
         raise _err(404, "not_found", "Not a folder")
-    try:
-        plan = await _t(downloads.zip_plan, p, _root())
-    except downloads.ZipTooLarge as e:
-        raise _zip_413(e, "This folder holds") from None
-    except PermissionError:
-        raise _err(403, "forbidden", "Permission denied") from None
+    plan = await _zip_call("This folder holds", downloads.zip_plan, p, _root())
     if check:
-        files = [st for _, _, st in plan if st is not None]
-        return {"count": len(files), "size": sum(st.st_size for st in files)}
+        return _zip_size(plan)
     return _zip_response(plan, p.name or "files")
 
 
@@ -334,22 +322,15 @@ def _zip_items(paths: list[str]) -> tuple[list[tuple[Path, str]], str]:
     return items, name
 
 
-def _zip_check(paths: list[str]) -> dict:
+def _zip_plan_many(paths: list[str]) -> tuple[list, str]:
     items, name = _zip_items(paths)
-    plan = downloads.zip_plan_many(items, _root())
-    files = [st for _, _, st in plan if st is not None]
-    return {"count": len(files), "size": sum(st.st_size for st in files), "name": name + ".zip"}
+    return downloads.zip_plan_many(items, _root()), name
 
 
 @router.post("/zip")
 async def zip_many(body: ZipIn, request: Request):
     """Several files and folders as one zip: checked here (paths, caps), then downloaded by GET /zip?token=."""
-    try:
-        out = await _t(_zip_check, body.paths)
-    except downloads.ZipTooLarge as e:
-        raise _zip_413(e, "These files hold") from None
-    except PermissionError:
-        raise _err(403, "forbidden", "Permission denied") from None
+    plan, name = await _zip_call("These files hold", _zip_plan_many, body.paths)
     now = time.monotonic()
     for k in [k for k, v in _zip_tokens.items() if v[0] < now]:
         del _zip_tokens[k]
@@ -357,7 +338,7 @@ async def zip_many(body: ZipIn, request: Request):
         del _zip_tokens[next(iter(_zip_tokens))]
     token = secrets.token_urlsafe(24)
     _zip_tokens[token] = (now + ZIP_TOKEN_TTL_S, _cookie_tag(request), list(body.paths))
-    return {**out, "token": token, "expires_in": ZIP_TOKEN_TTL_S}
+    return {**_zip_size(plan), "name": name + ".zip", "token": token, "expires_in": ZIP_TOKEN_TTL_S}
 
 
 PREVIEW_MIN_BYTES = 300 * 1024            # smaller images are shown as they are
@@ -552,6 +533,29 @@ def _remember_failure(key: str, ok: bool | None) -> None:
         _thumb_failed[key] = time.time()
 
 
+def _cached(key: str, size: int, make: Callable[[Path], bool | None]) -> Path | None:
+    """The render cached under `key` in state/thumbs, else made by make(dest) (not tried again for a while after a
+    failure, see _remember_failure); None when it could not be made."""
+    key = hashlib.sha1(key.encode()).hexdigest()
+    dest = config.state_dir("thumbs") / f"{key}.webp"
+    if dest.exists():
+        return dest
+    failed = f"{key}|{size}"
+    ok = None if _failed_recently(failed) else make(dest)
+    if ok:
+        _trim_thumbs()
+        return dest
+    _remember_failure(failed, ok)
+    return None
+
+
+async def _mtime_ns(p: Path) -> int:
+    try:
+        return (await _t(p.stat)).st_mtime_ns
+    except OSError:
+        return 0
+
+
 def _bucket(n: int) -> int:
     return next((b for b in THUMB_WIDTHS if b >= n), THUMB_WIDTHS[-1]) if n else 0
 
@@ -561,31 +565,16 @@ def _thumb(p: Path, w: int, h: int = 0) -> tuple[Path, str]:
         raise _err(404, "not_found", "File not found")
     w, h = _bucket(w), _bucket(h)
     ext = p.suffix.lower()
-    if ext in PDF_EXT:
-        st = p.stat()
-        key = hashlib.sha1(f"{p}|{st.st_mtime_ns}|{w}|pdf".encode()).hexdigest()
-        dest = config.state_dir("thumbs") / f"{key}.webp"
-        if dest.exists():
-            return dest, "image/webp"
-        ok = None if _failed_recently(f"{key}|{st.st_size}") else _pdf_thumb(p, dest, w)
-        if ok:
-            _trim_thumbs()
-            return dest, "image/webp"
-        _remember_failure(f"{key}|{st.st_size}", ok)
-        raise _err(415, "unsupported", "Thumbnail unavailable (pdftoppm missing or failed)")
-    video = ext in VIDEO_EXT
-    if not video and ext not in IMAGE_EXT and not _mime(p).startswith("image/"):
+    pdf, video = ext in PDF_EXT, ext in VIDEO_EXT
+    if not pdf and not video and ext not in IMAGE_EXT and not _mime(p).startswith("image/"):
         raise _err(415, "unsupported", "No thumbnail for this file type")
     st = p.stat()
-    key = hashlib.sha1(f"{p}|{st.st_mtime_ns}|{w}{f'x{h}' if h else ''}".encode()).hexdigest()
-    dest = config.state_dir("thumbs") / f"{key}.webp"
-    if dest.exists():
-        return dest, "image/webp"
-    ok = None if _failed_recently(f"{key}|{st.st_size}") else _ffmpeg_thumb(p, dest, w, video, h)
-    if ok:
-        _trim_thumbs()
-        return dest, "image/webp"
-    _remember_failure(f"{key}|{st.st_size}", ok)
+    f = _cached(f"{p}|{st.st_mtime_ns}|{w}|pdf" if pdf else f"{p}|{st.st_mtime_ns}|{w}{f'x{h}' if h else ''}",
+                st.st_size, lambda dest: _pdf_thumb(p, dest, w) if pdf else _ffmpeg_thumb(p, dest, w, video, h))
+    if f:
+        return f, "image/webp"
+    if pdf:
+        raise _err(415, "unsupported", "Thumbnail unavailable (pdftoppm missing or failed)")
     if video:
         raise _err(415, "unsupported", "Thumbnail unavailable (ffmpeg missing or failed)")
     return p, _mime(p)                        # fallback: the original image
@@ -595,11 +584,7 @@ async def _render(p: Path, w: int, h: int = 0) -> tuple[Path, str]:
     """_thumb in the thumbnail pool (previews too: up to 30 s of ffmpeg each, never in the shared worker threads);
     requests for the same version of a file and width wait for one render instead of running ffmpeg each (a file
     rewritten meanwhile - a video still being written - gets its own render, never the old one's result)."""
-    try:
-        mtime = (await _t(p.stat)).st_mtime_ns
-    except OSError:
-        mtime = 0
-    return await _pooled((str(p), mtime, _bucket(w), _bucket(h)), _thumb, p, w, h)
+    return await _pooled((str(p), await _mtime_ns(p), _bucket(w), _bucket(h)), _thumb, p, w, h)
 
 
 async def _pooled(key: tuple, fn: Callable[..., Any], *a: Any) -> Any:
@@ -820,15 +805,9 @@ async def pdf_info(path: str):
 
 def _pdf_page(p: Path, n: int, w: int) -> Path:
     st = p.stat()
-    key = hashlib.sha1(f"{p}|{st.st_mtime_ns}|{w}|pdf|{n}".encode()).hexdigest()
-    dest = config.state_dir("thumbs") / f"{key}.webp"
-    if dest.exists():
-        return dest
-    ok = None if _failed_recently(f"{key}|{st.st_size}") else _pdf_thumb(p, dest, w, n, True)
-    if ok:
-        _trim_thumbs()
-        return dest
-    _remember_failure(f"{key}|{st.st_size}", ok)
+    f = _cached(f"{p}|{st.st_mtime_ns}|{w}|pdf|{n}", st.st_size, lambda dest: _pdf_thumb(p, dest, w, n, True))
+    if f:
+        return f
     raise _err(415, "unsupported", "This page could not be rendered")
 
 
@@ -839,11 +818,7 @@ async def pdf_page(path: str, n: int = Query(1, ge=1, le=100_000), w: int = Quer
     if not await _t(p.is_file) or p.suffix.lower() not in PDF_EXT:
         raise _err(404, "not_found", "File not found")
     w = next((b for b in PDF_PAGE_WIDTHS if b >= w), PDF_PAGE_WIDTHS[-1])
-    try:
-        mtime = (await _t(p.stat)).st_mtime_ns
-    except OSError:
-        mtime = 0
-    f = await _pooled((str(p), mtime, w, n), _pdf_page, p, n, w)
+    f = await _pooled((str(p), await _mtime_ns(p), w, n), _pdf_page, p, n, w)
     return FileResponse(f, media_type="image/webp", headers=_file_headers("image/webp", _cache(v)))
 
 
@@ -894,11 +869,7 @@ def _doc(p: Path) -> dict:
 async def doc(path: str):
     """A Word / PowerPoint / OpenDocument file as Markdown, a spreadsheet as the rows of its sheets (documents.py)."""
     p = await _t(resolve, path)
-    try:
-        mtime = (await _t(p.stat)).st_mtime_ns
-    except OSError:
-        mtime = 0
-    return await _pooled((str(p), mtime, "doc"), _doc, p)      # up to a few seconds of parsing: not in the shared threads
+    return await _pooled((str(p), await _mtime_ns(p), "doc"), _doc, p)      # up to a few seconds of parsing: not in the shared threads
 
 
 def _doc_media(p: Path, name: str) -> tuple[bytes, str]:
@@ -998,7 +969,6 @@ def _write(p: Path, content: str, expected: float | None) -> dict:
     finally:
         tmp.unlink(missing_ok=True)
     return {"ok": True, "mtime": p.stat().st_mtime}
-
 
 
 @router.put("/write")

@@ -13,7 +13,7 @@ trigger's text is data, framed by random markers. Each fire starts a NEW session
 Telegram thread of its own, out of the human session lists by default). Triggers:
 
     manual     the Run button / `maxxing agents run`
-    cron       a Claude cron job whose topic_path is the agent path (crons._run_claude asks gate() first)
+    cron       a Claude cron job whose topic_path is the agent path (crons._claude_turn asks gate() first)
     feed       a new feed event matching {source, levels, match} - a webhook trigger is a feed hook made for the
                agent plus a feed trigger on its source (the hook's signature checks are the feed's)
     telegram   a message in the agent's Telegram thread (option `telegram`)
@@ -842,12 +842,7 @@ def delta_fields(cur: dict, delta: dict) -> dict:
             continue
         if k == "limits":
             for n, v in d.items():
-                now = cur["limits"].get(n)
-                if now == v.get("to"):
-                    continue
-                if now != v.get("from"):
-                    stale.append(f"limits.{n} is {_show(now)}, not {_show(v.get('from'))}")
-                else:
+                if _still_to_apply(f"limits.{n}", cur["limits"].get(n), v, stale):
                     f.setdefault("limits", {})[n] = v.get("to")
         elif k == "mail":
             grants = list(cur.get("mail") or [])
@@ -865,18 +860,22 @@ def delta_fields(cur: dict, delta: dict) -> dict:
         elif "add" in d:
             items = [x for x in cur.get(k) or [] if x not in (d.get("remove") or [])]
             f[k] = items + [x for x in d.get("add") or [] if x not in items]
-        else:
-            now = cur.get(k)
-            if now == d.get("to"):
-                continue
-            if now != d.get("from"):
-                stale.append(f"{k} is {_show(now)}, not {_show(d.get('from'))}")
-            else:
-                f[k] = d.get("to")
+        elif _still_to_apply(k, cur.get(k), d, stale):
+            f[k] = d.get("to")
     if stale:
         raise AgentError(409, "stale_change", "The agent's settings changed since this was asked (" + "; ".join(stale)
                          + "): nothing applied. Ask again if it is still needed.")
     return f
+
+
+def _still_to_apply(name: str, now: Any, d: dict, stale: list[str]) -> bool:
+    """A {from, to} change not applied yet and still over the value its card showed (else why, added to stale)."""
+    if now == d.get("to"):
+        return False
+    if now != d.get("from"):
+        stale.append(f"{name} is {_show(now)}, not {_show(d.get('from'))}")
+        return False
+    return True
 
 
 _MODE_RANK = {"default": 0, "acceptEdits": 1, "bypass": 2}
@@ -1062,8 +1061,7 @@ def continue_in_sessions(path: str, sid: str) -> dict:
                     e["archived"] = False
                 bus.invalidate("sessions", "workspace")
             return service.get_session(other) or service.public(m)
-    a = load(path)
-    name = a["name"] or parse(path)[2]
+    name = load(path)["name"] or parse(path)[2]
     title = src.get("title") or ""                  # runs are titled "<agent> - <date>" (fire)
     title = (title if title.startswith(name) else f"{name}: {title or 'run'}")[:120]
     meta = store.new_meta(topic_of(path), title, model=src.get("model") or "", source="web")
@@ -1471,8 +1469,7 @@ def remap(old_prefix: str, new_prefix: str) -> None:
     except OSError:
         log.exception("agents layout not moved (%s -> %s)", old_prefix, new_prefix)
     d = config.state_dir("agents")
-    old_k, new_k = old_prefix.replace("/topics/", "__").replace("projects/", ""), \
-        new_prefix.replace("/topics/", "__").replace("projects/", "")
+    old_k, new_k = (x.replace("/topics/", "__").replace("projects/", "") for x in (old_prefix, new_prefix))
     for f in d.iterdir():
         if f.name.startswith(old_k + "__"):
             f.rename(d / (new_k + f.name[len(old_k):]))
@@ -1636,17 +1633,42 @@ def _edit_state(path: str) -> Any:
 OWNED_FILES = (AGENT_FILE, "CLAUDE.md")
 # ...and what decides the tools and rights of its next runs (Claude Code reads them from its folder)
 WATCHED_FILES = OWNED_FILES + (".mcp.json", ".claude/settings.json", ".claude/settings.local.json")
+FINGERPRINT_MAX = 1_000_000     # bytes hashed of a watched file
 KEPT_MAX = 100_000              # bytes of agent.json kept in a snapshot (put back when a run changed it)
 
 
 def _fingerprint(path: str) -> dict[str, str]:
     out = {}
     for n in WATCHED_FILES:
-        try:
-            out[n] = hashlib.sha1((folder(path) / n).read_bytes()).hexdigest()
-        except OSError:
-            out[n] = ""
+        out[n] = _hash_regular(folder(path) / n)
     return out
+
+
+def _hash_regular(f: Path) -> str:
+    """sha1 of a regular file (a link is followed) of at most FINGERPRINT_MAX bytes; "big:<size>" for a larger one
+    (a change of size still counts); "" for a pipe, a device or a missing file."""
+    try:
+        fd = os.open(f, os.O_RDONLY | os.O_NONBLOCK)
+    except OSError:
+        return ""
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode):
+            return ""
+        if st.st_size > FINGERPRINT_MAX:
+            return f"big:{st.st_size}"
+        h, left = hashlib.sha1(), FINGERPRINT_MAX + 1
+        while left > 0:
+            chunk = os.read(fd, min(65536, left))
+            if not chunk:
+                break
+            h.update(chunk)
+            left -= len(chunk)
+        return h.hexdigest() if left > 0 else f"big:{FINGERPRINT_MAX + 1}"
+    except OSError:
+        return ""
+    finally:
+        os.close(fd)
 
 
 def _snapshot(path: str, sid: str) -> None:
@@ -1684,11 +1706,6 @@ def _changed_since(path: str, snap: dict | None) -> list[str]:
     files = (snap or {}).get("files") or {}
     now = _fingerprint(path)
     return [n for n in WATCHED_FILES if n in files and files[n] != now.get(n)]   # a file an older snapshot never saw
-
-
-def _changed_during(path: str, sid: str) -> list[str]:
-    """The watched files a run changed (the owner's own changes meanwhile, from the page or the CLI, excepted)."""
-    return _changed_since(path, _pop_snapshot(path, sid))
 
 
 def _put_back(path: str, snap: dict) -> bool:
@@ -1781,12 +1798,8 @@ def day_cost(path: str, when: float | None = None, metas: list[dict] | None = No
     day = store.day_of(when or time.time())
     if metas is None:
         metas = _agent_metas(since=time.time() - 86400 - 3600 if cold and not when else None).get(path, [])
-    total = 0.0
-    for m in metas:
-        d = (m.get("days") or {}).get(day) if isinstance(m.get("days"), dict) else None
-        if isinstance(d, dict):
-            total += float(d.get("cost") or 0)
-    return round(total, 4)
+    days = [m["days"].get(day) for m in metas if isinstance(m.get("days"), dict)]
+    return round(sum(float(d.get("cost") or 0) for d in days if isinstance(d, dict)), 4)
 
 
 def _runs_last_hour(path: str, msgs: list[dict] | None = None) -> int:
@@ -1825,8 +1838,7 @@ def status(path: str, metas: list[dict] | None = None) -> dict:
 def _open_chat(path: str) -> str | None:
     """The conversation the owner's next message goes on in (None: the next one starts a new session)."""
     try:
-        a = load(path)
-        return _chat_session(path, a)
+        return _chat_session(path, load(path))
     except Exception:  # noqa: BLE001 - a status never fails on it
         return None
 
@@ -2564,7 +2576,7 @@ def check_alerts() -> int:
             ref = _ref(a["path"], f"trigger:{t['id']}")
             if t.get("hook_id") and t["hook_id"] not in hooks and a["enabled"] and t.get("enabled", True):
                 if not feed.find(ref):
-                    feed.post(f"{a['name'] or parse(a['path'])[2]}: a trigger lost its webhook",
+                    feed.post(f"{a['display_name']}: a trigger lost its webhook",
                               f"The webhook behind the trigger on {t.get('source')!r} was deleted: this trigger "
                               "never fires. Remove it or create its webhook again on the agent page.", "warning",
                               ALERT_SOURCE, _page(a["path"]), ref=ref, agent=a["path"], actions=OPEN)
@@ -2590,8 +2602,9 @@ def on_turn_end(session: dict, result: dict | None) -> None:
         return
     from .sessions import service
     ok = bool(result.get("ok")) if isinstance(result, dict) and "ok" in result else session.get("state") != "error"
+    at, died = _which_turn(session)
     try:                                # this turn's own text, never the answer of the turn before (a conversation goes on)
-        text = service.ended_turn_text(session["id"], *_which_turn(session)) or ""
+        text = service.ended_turn_text(session["id"], at, died) or ""
     except Exception:
         text = ""
     if not ok and not text:
@@ -2599,8 +2612,7 @@ def on_turn_end(session: dict, result: dict | None) -> None:
     cost = next((round(float(result[k]), 4) for k in ("mx_turn_cost", "cost_usd", "total_cost_usd")
                  if isinstance(result.get(k), (int, float))), None) if isinstance(result, dict) else None
     if cost is None:                    # no `result`: stopped by its timeout (or crashed) before Claude said the cost
-        try:
-            at, died = _which_turn(session)             # a turn that died unrecorded: its message has no last_turn.at
+        try:                                            # a turn that died unrecorded: its message has no last_turn.at
             est = agent_cost.charge_unbilled(session["id"], None if died else at)
         except Exception:  # noqa: BLE001 - an estimate never stops the end of a turn
             log.exception("agent %s: cost of a turn without result", path)
@@ -2628,7 +2640,7 @@ def on_turn_end(session: dict, result: dict | None) -> None:
         except Exception:  # noqa: BLE001
             log.exception("agent %s: group %s turn provenance", path, group)
     try:                                # its steps, shown under the answer on the agent page
-        steps = service.ended_turn_steps(session["id"], *_which_turn(session))
+        steps = service.ended_turn_steps(session["id"], at, died)
     except Exception:  # noqa: BLE001
         steps = {}
     steps = {k: v for k, v in steps.items() if v}
@@ -2813,15 +2825,11 @@ def _int(v: Any) -> int:
 
 
 def _chain_source(src: str) -> str:
-    try:
-        name = load(src)["name"] if exists(src) else ""
-    except Exception:  # noqa: BLE001
-        name = ""
-    return f"agent {name or parse(src)[2]}"
+    return f"agent {_display(src)}"
 
 
 def _chain_text(src: str, text: str, ok: bool) -> str:
-    head = f"Result of a run of the agent {_chain_source(src)[6:]} ({src})" + ("" if ok else ", which FAILED")
+    head = f"Result of a run of the agent {_display(src)} ({src})" + ("" if ok else ", which FAILED")
     return f"{head}:\n{text}"[:EVENT_MAX]
 
 
@@ -3139,9 +3147,8 @@ def add_cron(path: str, schedule: str = "", prompt: str = "", name: str = "", en
     """A cron trigger = a Claude cron job in the agent folder (shown on the Crons page too) -> the job."""
     from . import bus, crons
     _must_exist(path)
-    a = load(path)
     try:
-        job = crons.create_job({"name": name or f"{a['name'] or parse(path)[2]} - routine", "kind": "claude",
+        job = crons.create_job({"name": name or f"{load(path)['name'] or parse(path)[2]} - routine", "kind": "claude",
                                 "schedule": schedule or "0 8 * * *", "topic_path": path,
                                 "prompt": prompt or "Run your routine.", "notify": "never", "enabled": enabled})
     except crons.CronError as e:

@@ -164,10 +164,8 @@ class Watcher:
         if tab in self.tab_page or wait <= 0:
             return self.tab_page.get(tab)
         ev = self._tab_ev.setdefault(tab, asyncio.Event())
-        try:
+        with contextlib.suppress(asyncio.TimeoutError):
             await asyncio.wait_for(ev.wait(), wait)
-        except asyncio.TimeoutError:
-            pass
         return self.tab_page.get(tab)
 
     async def stop(self) -> None:
@@ -309,10 +307,8 @@ class Watcher:
         if sc.casting and (sc.casting != sc.front or not sc.viewers):
             s = self.sessions.get(sc.casting)
             if s:
-                try:
+                with contextlib.suppress(Exception):
                     await self.cdp.call("Page.stopScreencast", session=s, timeout=5)
-                except Exception:  # noqa: BLE001
-                    pass
             sc.casting = None
         if sc.viewers and sc.front and sc.casting != sc.front:
             q, w, h = sc.want()
@@ -348,10 +344,8 @@ class Watcher:
             if sc.inflight.get(vid, 0) >= INFLIGHT:
                 continue                             # it gets a newer one once it caught up
             sc.inflight[vid] = sc.inflight.get(vid, 0) + 1
-            try:
+            with contextlib.suppress(Exception):
                 await send(sc.frame)
-            except Exception:  # noqa: BLE001
-                pass
         sc.unacked = (str(session), p.get("sessionId"))
         if sc.room():
             await self._ack(sc)
@@ -432,7 +426,7 @@ class Watcher:
                     await self._fit(sc.front, sc.size)
         await self._restart_cast(sc)
 
-    async def resize(self, vid: int, w: object, h: object, dpr: object = None) -> None:
+    async def resize(self, vid: int, w: object, h: object) -> None:
         """A viewer's size (CSS pixels): the page in front of its navigator is laid out for it, like a browser window
         (and its pictures are never larger)."""
         sc = self.screens.get(self.viewer_nav.get(vid, ""))
@@ -492,10 +486,8 @@ class Watcher:
             if sc.casting and self.cdp:
                 s = self.sessions.get(sc.casting)
                 if s:
-                    try:
+                    with contextlib.suppress(Exception):
                         await self.cdp.call("Page.stopScreencast", session=s, timeout=5)
-                    except Exception:  # noqa: BLE001
-                        pass
                 sc.casting = None
             await self._cast(sc)
 

@@ -3,7 +3,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { api, seg } from '@/lib/api'
 
-export type CopyRepo = {
+type CopyRepo = {
   root: string
   name: string
   branch: string | null
@@ -40,7 +40,7 @@ export type CopyStatus = {
   /** Claude watches the copy's PR: a failed check, a conflict or a comment wakes the session up. */
   watch?: boolean
 }
-export type CopyListed = CopyStatus & { sid: string; title: string; path: string; archived: boolean }
+type CopyListed = CopyStatus & { sid: string; title: string; path: string; archived: boolean }
 
 export const copyKeys = {
   repos: (path: string) => ['code', 'copy-repos', path] as const,

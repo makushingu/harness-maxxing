@@ -137,19 +137,13 @@ func (a *agent) serve(r request) map[string]any {
 	default:
 		err = &opError{"unsupported", "unknown request"}
 	}
-	if err != nil {
-		a.logf("%s %s failed: %v", r.T, r.A, err)
-		msg := err.Error()
-		var oe *opError
-		if errors.As(err, &oe) {
-			msg = oe.Message
-		}
-		if d == "" {
-			d = r.T
-		}
-		a.say(lActionFail, d+": "+shortErr(errors.New(msg)))
+	a.logf("%s %s failed: %v", r.T, r.A, err)
+	reply := errReply(r.ID, err)
+	if d == "" {
+		d = r.T
 	}
-	return errReply(r.ID, err)
+	a.say(lActionFail, d+": "+shortErr(errors.New(reply["message"].(string))))
+	return reply
 }
 
 // ---- shot ----
@@ -287,14 +281,17 @@ func doInput(be backend, r request) error {
 		return badRequest("unknown button %q", button)
 	}
 	pause := func(ms int) { time.Sleep(time.Duration(ms) * time.Millisecond) }
+	moveTo := func() error { // the pointer to x, y
+		x, y, err := point(r.X, r.Y)
+		if err == nil {
+			err = be.Move(x, y)
+		}
+		return err
+	}
 
 	switch r.A {
 	case "click":
-		x, y, err := point(r.X, r.Y)
-		if err != nil {
-			return err
-		}
-		if err := be.Move(x, y); err != nil {
+		if err := moveTo(); err != nil {
 			return err
 		}
 		pause(20)
@@ -315,15 +312,11 @@ func doInput(be backend, r request) error {
 			}
 		}
 	case "long_press":
-		x, y, err := point(r.X, r.Y)
-		if err != nil {
-			return err
-		}
 		ms := r.MS
 		if ms <= 0 {
 			ms = longPressMS
 		}
-		if err := be.Move(x, y); err != nil {
+		if err := moveTo(); err != nil {
 			return err
 		}
 		pause(20)
@@ -333,11 +326,7 @@ func doInput(be backend, r request) error {
 		pause(min(ms, maxGestureMS))
 		return be.Button(button, false, 1)
 	case "move":
-		x, y, err := point(r.X, r.Y)
-		if err != nil {
-			return err
-		}
-		return be.Move(x, y)
+		return moveTo()
 	case "drag":
 		x1, y1, err := point(r.X, r.Y)
 		if err != nil {
@@ -374,11 +363,7 @@ func doInput(be backend, r request) error {
 		return moveErr
 	case "scroll":
 		if r.X != nil || r.Y != nil {
-			x, y, err := point(r.X, r.Y)
-			if err != nil {
-				return err
-			}
-			if err := be.Move(x, y); err != nil {
+			if err := moveTo(); err != nil {
 				return err
 			}
 			pause(20)

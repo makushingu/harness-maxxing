@@ -67,15 +67,19 @@ def remove() -> None:
     own_path().unlink(missing_ok=True)
 
 
-def own() -> tuple[Path, str] | None:
-    """(path, mime) of the own photo, or None."""
-    p = own_path()
+def _typed(p: Path) -> tuple[Path, str] | None:
+    """(path, mime) of the image file p, None when it is missing or not an image."""
     try:
         with open(p, "rb") as f:
             mime = sniff(f.read(16))
     except OSError:
         return None
     return (p, mime) if mime else None
+
+
+def own() -> tuple[Path, str] | None:
+    """(path, mime) of the own photo, or None."""
+    return _typed(own_path())
 
 
 def prune(current: dict[str, str]) -> None:
@@ -142,9 +146,4 @@ def cached(pid: str, version: str) -> tuple[Path, str] | None:
         finally:
             with _busy_lock:
                 _busy.discard(key)
-    try:
-        with open(p, "rb") as f:
-            mime = sniff(f.read(16))
-    except OSError:                             # replaced by a newer version meanwhile
-        return None
-    return (p, mime) if mime else None
+    return _typed(p)                            # None when replaced by a newer version meanwhile

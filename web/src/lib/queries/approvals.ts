@@ -4,7 +4,7 @@ import type { Approval } from '../types'
 import { useMut } from './util'
 
 // Approvals: the tool calls an agent with `approvals` waits on. The bus topic `approvals` refreshes them (BUS_KEYS).
-export const approvalKeys = {
+const approvalKeys = {
   all: ['approvals'] as const,
   session: (sid: string) => ['approvals', 'session', sid] as const,
   pending: ['approvals', 'pending'] as const,

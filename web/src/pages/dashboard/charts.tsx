@@ -5,7 +5,7 @@ import * as React from 'react'
 import { cn } from '@/lib/utils'
 import { useLang } from '@/i18n'
 
-export type Series = { name: string; points: [number | string, number][] }
+type Series = { name: string; points: [number | string, number][] }
 
 function useWidth<T extends HTMLElement>() {
   const ref = React.useRef<T>(null)

@@ -2,8 +2,8 @@
 import * as React from 'react'
 import { openMic } from './mic'
 
-export type RecorderState = 'idle' | 'starting' | 'recording'
-export type MicProblem = 'insecure' | 'unsupported' | 'denied' | 'no_device' | 'failed'
+type RecorderState = 'idle' | 'starting' | 'recording'
+type MicProblem = 'insecure' | 'unsupported' | 'denied' | 'no_device' | 'failed'
 
 export class MicError extends Error {
   kind: MicProblem

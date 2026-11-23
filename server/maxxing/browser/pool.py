@@ -104,10 +104,6 @@ class Browser:
         self.level = ""                             # CPU priority given to its unit (unit.set_level)
 
     @property
-    def slug(self) -> str:
-        return self.pid
-
-    @property
     def run(self) -> Path:
         return browser.run_dir() / self.pid
 
@@ -203,8 +199,8 @@ class Pool:
             root = str(b.run / "uploads") + "/"
             if root not in rules.UPLOAD_ROOTS:
                 rules.UPLOAD_ROOTS.append(root)
-        b.proc = await unit.start(b.slug, b.data, b.run, rules.policy(s["downloads"]), downloads)
-        b.ws_path = await unit.ready(b.run, b.proc, b.slug)
+        b.proc = await unit.start(b.pid, b.data, b.run, rules.policy(s["downloads"]), downloads)
+        b.ws_path = await unit.ready(b.run, b.proc, b.pid)
         b.watcher = Watcher(b.run / "cdp.sock", b.ws_path, b.tabs)
         b.watcher.on_state = self._changed
         b.watcher.on_move = lambda tid, url, title: self._moved(b, tid, url, title)
@@ -249,7 +245,7 @@ class Pool:
             with contextlib.suppress(Exception):
                 await b.watcher.stop()
         try:
-            await unit.stop(b.slug, b.proc)
+            await unit.stop(b.pid, b.proc)
         except Exception:  # noqa: BLE001
             log.exception("stopping the browser")
         if b.proxy:
@@ -273,10 +269,8 @@ class Pool:
         return None
 
     def _changed(self) -> None:
-        try:
+        with contextlib.suppress(Exception):
             bus.invalidate("browser")
-        except Exception:  # noqa: BLE001
-            pass
 
     async def _level(self, b: Browser) -> None:
         """CPU priority of its unit: first while someone watches it or Claude acts in it, last while nobody does."""
@@ -287,7 +281,7 @@ class Pool:
         level = "live" if watched or acting else "background"
         if level != b.level:
             b.level = level
-            await asyncio.to_thread(unit.set_level, b.slug, level, b.proc)
+            await asyncio.to_thread(unit.set_level, b.pid, level, b.proc)
 
     # ---- the watcher -----------------------------------------------------------------------------------------
     def watch(self) -> None:
@@ -321,7 +315,7 @@ class Pool:
         p = browser.profile(b.pid, s)
         now = time.time()
         dead = (b.proc is not None and b.proc.returncode is not None) or \
-            (b.proc is None and not await unit.unit_active(b.slug)) or not (b.watcher and b.watcher.cdp) \
+            (b.proc is None and not await unit.unit_active(b.pid)) or not (b.watcher and b.watcher.cdp) \
             or b.watcher.cdp.closed
         if dead:
             return await self.stop(b.pid, "the browser stopped")
@@ -339,7 +333,7 @@ class Pool:
         viewers = bool(b.watcher and b.watcher.watched())
         if not busy_turns and not viewers and not b.control and now - b.last_use > s["idle_min"] * 60:
             return await self.stop(b.pid, "unused")
-        b.mem = await asyncio.to_thread(unit.memory_current, b.slug, b.proc)
+        b.mem = await asyncio.to_thread(unit.memory_current, b.pid, b.proc)
         await self._level(b)
         await self._sleep_tabs(b, s, now)
 
@@ -550,7 +544,7 @@ class Pool:
                                     key=asleep[-1]["key"] if asleep else None)
             t.last_target = tid or t.last_target
         from ..config import local_host, local_port
-        t.child = await cdm.Child.start(f"ws://{local_host()}:{local_port()}/api/browser/cdp/{b.slug}", t.secret)
+        t.child = await cdm.Child.start(f"ws://{local_host()}:{local_port()}/api/browser/cdp/{b.pid}", t.secret)
         if t.child.tools:
             await asyncio.to_thread(cdm.remember_tools, t.child.tools)
         return t

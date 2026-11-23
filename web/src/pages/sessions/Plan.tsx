@@ -11,7 +11,7 @@ import { Button, Tooltip } from '@/components/ui'
 import { usePending } from './store'
 
 /** Validates the plan: plan mode goes off and Claude implements it (the message shows in the thread at once). */
-export function useApprove(sid: string) {
+function useApprove(sid: string) {
   const t = useT()
   const approve = useApprovePlan()
   const run = React.useCallback(() => {

@@ -1,7 +1,7 @@
 // Primary navigation — single source for the sidebar, the mobile tab bar, the palette and shortcuts.
 import { Bot, FolderOpen, GitBranch, LayoutDashboard, ListChecks, Mail, MessagesSquare, Network, Settings, Sparkles, UsersRound, type LucideIcon } from 'lucide-react'
 import type { TKey } from '@/i18n'
-import { useExtensions, useSettings } from '@/lib/queries'
+import { useExtensions, useSettings, useWorkspace } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 
 /** A sidebar row (pages, extensions, Help / Feedback / Settings): one look everywhere; `collapsed` = the folded icon bar. */
@@ -48,7 +48,7 @@ export type NavItem = {
   group: NavGroup
 }
 
-export type NavGroup = 'main' | 'end'
+type NavGroup = 'main' | 'end'
 
 /** `data-tour` id of a nav item (guided tour targets): nav-dashboard, nav-sessions… */
 export const navTourId = (n: NavItem) => `nav-${n.to === '/' ? 'dashboard' : n.to.slice(1)}`
@@ -76,7 +76,7 @@ export type PinnedPage = { to: string; id: string; name: string; icon: string }
 /** The pages in the user's order (settings `sidebar_order`, routes): the saved routes first; a page it does not
  *  mention (switched on later, new in an update) right after the page it follows in NAV. Settings is not part of it.
  *  Extension pages are not here: they sit in the Extensions folder, in their pin order. */
-export function orderPages(items: NavItem[], order: string[] | undefined): NavItem[] {
+function orderPages(items: NavItem[], order: string[] | undefined): NavItem[] {
   const pages = items.filter((n) => n.group === 'main')
   const known = new Map(pages.map((p) => [p.to, p]))
   const out = [...new Set(order || [])].map((to) => known.get(to)).filter((p): p is NavItem => !!p)
@@ -94,7 +94,7 @@ export function orderNav(items: NavItem[], order: string[] | undefined): NavItem
 }
 
 /** The page extensions pinned to the sidebar, in their pin order. */
-export function usePinnedPages(): PinnedPage[] {
+function usePinnedPages(): PinnedPage[] {
   const { data } = useExtensions()
   return (data || [])
     .filter((e) => e.type === 'page' && e.enabled && !e.error && e.pinned)
@@ -128,4 +128,20 @@ export const BADGE_PAGES = ['/', '/sessions', '/team', '/agents'] as const
 export function useBadgeOn(route: (typeof BADGE_PAGES)[number]) {
   const { data: s } = useSettings()
   return !s?.nav_badges_hidden?.includes(route)
+}
+
+/** Unread/running/error counters of the sessions (from the workspace tree): the Sessions nav item, the ☰ button. */
+export function useSessionBadge() {
+  const { data } = useWorkspace()
+  const on = useBadgeOn('/sessions')
+  let unread = 0
+  let running = 0
+  let errors = 0
+  for (const p of on ? data?.projects || [] : [])
+    for (const tp of p.topics) {
+      unread += tp.unread
+      running += tp.running
+      errors += tp.errors || 0
+    }
+  return { unread, running, errors }
 }

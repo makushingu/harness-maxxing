@@ -22,7 +22,7 @@ import { AddExit, DirectPanel, ExitPanel } from './Exits'
 import { openMyBrowser, useMyBrowserOpen } from './open'
 import { exitLine, exitName, exitTone, navName, orderedProfiles, profileName, testWhere } from './profiles'
 
-export const BROWSER_SETTINGS = '/settings/browser'
+const BROWSER_SETTINGS = '/settings/browser'
 
 /** The navigator a session's link means: its agent's for an agent run, else the session's own. */
 function navOfSession(st: BrowserStatus | undefined, session: string): string {

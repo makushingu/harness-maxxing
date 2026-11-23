@@ -42,9 +42,7 @@ def _rev(repo: Path, rev: str) -> str:
 
 
 def _meta(sid: str) -> dict:
-    if not store.is_valid_id(sid):
-        raise HTTPException(404, detail={"error": "not_found", "message": "no such session"})
-    m = store.read(sid)
+    m = store.read(sid) if store.is_valid_id(sid) else None
     if m is None:
         raise HTTPException(404, detail={"error": "not_found", "message": "no such session"})
     return m
@@ -124,7 +122,7 @@ async def status(repo: str):
     def run():
         r = codediff.checked_repo(repo)
         head = codediff.repo_head(r)
-        full = gitview.github_name(head.get("remote") or "") if head.get("remote") else None
+        full = _github(head)
         out = {**head, "dirty": codediff.dirty(r), "github": full, "pr": None, "merged_pr": None,
                "checks": None}
         if full and head.get("branch"):
@@ -197,10 +195,23 @@ class PullIn(BaseModel):
     draft: bool = False
 
 
+def _github(head: dict) -> str | None:
+    return gitview.github_name(head["remote"]) if head.get("remote") else None
+
+
+def _recent(r: Path) -> list[str]:
+    """The subjects of the 10 newest commits of the repository (the style Claude follows)."""
+    return [c["subject"] for c in codediff.commits(r, None, 10, everything=True)] if codediff.head_sha(r) else []
+
+
+def _no_coauthor(text: str) -> list[str]:
+    return [ln for ln in text.splitlines() if not re.match(r"(?i)\s*co-authored-by:", ln)]
+
+
 def _pull(body: PullIn) -> dict:
     r = codediff.checked_repo(body.repo)
     head = codediff.repo_head(r)
-    full = gitview.github_name(head.get("remote") or "") if head.get("remote") else None
+    full = _github(head)
     if not full:
         raise GitError(400, "not_github", "this repository has no GitHub remote named origin")
     if not head.get("branch"):
@@ -260,11 +271,9 @@ def _message(body: MessageIn) -> dict:
     d = codediff.raw_diff(r, a, b)[:MESSAGE_DIFF_CHARS]
     if not d.strip():
         raise GitError(400, "nothing", "nothing to commit")
-    recent = [c["subject"] for c in codediff.commits(r, None, 10, everything=True)] if codediff.head_sha(r) else []
-    prompt = "Recent subjects:\n" + "\n".join(recent) + "\n\nDiff:\n" + d
+    prompt = "Recent subjects:\n" + "\n".join(_recent(r)) + "\n\nDiff:\n" + d
     text = _ask_claude(MESSAGE_PROMPT, prompt, "Claude could not write a message - type one")
-    lines = [ln for ln in text.splitlines() if not re.match(r"(?i)\s*co-authored-by:", ln)]
-    return {"message": "\n".join(lines).strip()}
+    return {"message": "\n".join(_no_coauthor(text)).strip()}
 
 
 @router.post("/api/code/message")
@@ -318,8 +327,7 @@ def _conversation(sid: str, limit: int = CONVERSATION_CHARS) -> str:
                     parts.append("Claude: " + ev["result"].strip()[:4000])
     except OSError:
         return ""
-    out = "\n\n".join(parts)
-    return out[-limit:]
+    return "\n\n".join(parts)[-limit:]
 
 
 class PrTextIn(BaseModel):
@@ -335,13 +343,11 @@ def _pr_draft(body: PrTextIn) -> dict:
     d = codediff.raw_diff(r, f"origin/{base}", _rev(r, "now") if codediff.dirty(r) else "HEAD")
     template = _pr_text(r, []).strip()
     talk = _conversation(body.session) if body.session and store.is_valid_id(body.session) else ""
-    recent = [c["subject"] for c in codediff.commits(r, None, 10, everything=True)] if codediff.head_sha(r) else []
     prompt = (("Conversation:\n" + talk + "\n\n" if talk else "") + "Commits of the branch:\n"
               + "\n".join(f"- {s}" for s in reversed(subjects)) + "\n\nRecent subjects of the repository:\n"
-              + "\n".join(recent) + ("\n\nPull request template:\n" + template if template else "")
+              + "\n".join(_recent(r)) + ("\n\nPull request template:\n" + template if template else "")
               + "\n\nDiff:\n" + d[:MESSAGE_DIFF_CHARS])
-    text = _ask_claude(PR_PROMPT, prompt, "Claude could not write the description - type one")
-    lines = [ln for ln in text.splitlines() if not re.match(r"(?i)\s*co-authored-by:", ln)]
+    lines = _no_coauthor(_ask_claude(PR_PROMPT, prompt, "Claude could not write the description - type one"))
     title = re.sub(r"^(?i:title:)\s*|^#+\s*", "", (lines[0] if lines else "").strip()).strip()[:120]
     return {"title": title, "body": "\n".join(lines[1:]).strip()}
 
@@ -358,19 +364,15 @@ class RevertIn(BaseModel):
 def _revert(sid: str, n: int) -> dict:
     """Every repository turn `n` changed goes back to its photo from before that turn. Files only: commits made
     since stay (the answer lists them). `undo` per repository puts the current state back."""
-    meta = _meta(sid)
-    if store.runner_alive(sid, meta) and meta.get("state") == "running":
-        raise GitError(409, "running", "wait for the end of the turn (or stop it) before going back")
-    entries = [e for e in _turn_entries(sid) if e.get("n") == n]
+    _idle(sid, "before going back")
+    every = _turn_entries(sid)
+    entries = [e for e in every if e.get("n") == n]
     if not entries:
         raise GitError(404, "no_photo", "this message changed no repository")
-    later = [e for e in _turn_entries(sid) if isinstance(e.get("n"), int) and e["n"] > n]
+    later = [e for e in every if isinstance(e.get("n"), int) and e["n"] > n]
     out = []
     roots: dict[str, str] = {}
-    for e in entries:
-        for r in e.get("repos") or []:
-            roots.setdefault(r["root"], r["pre"])
-    for e in later:                                    # a later turn that changed another repository: back too
+    for e in entries + later:                          # a later turn that changed another repository: back too
         for r in e.get("repos") or []:
             roots.setdefault(r["root"], r["pre"])
     for root, pre in roots.items():
@@ -448,10 +450,10 @@ async def copy_status(sid: str):
     return await _call(lambda: worktrees.status(_meta(sid)))
 
 
-def _idle(sid: str) -> dict:
+def _idle(sid: str, when: str = "first") -> dict:
     meta = _meta(sid)
     if store.runner_alive(sid, meta) and meta.get("state") == "running":
-        raise GitError(409, "running", "wait for the end of the turn (or stop it) first")
+        raise GitError(409, "running", f"wait for the end of the turn (or stop it) {when}")
     return meta
 
 
@@ -562,9 +564,8 @@ def _pr_session(body: PrSessionIn) -> dict:
           "fork": bool(head_repo) and head_repo.lower() != full.lower(), "outside": outside, "full": full,
           "url": p.get("html_url")}
     title = f"PR #{p.get('number')} {p.get('title') or ''}".strip()[:120]
-    s = service.create_session(topic, message=(body.message or "").strip() or None, title=title, source="web",
-                               plan_mode=body.review or outside, worktree={"repo": str(clone), "pr": pr})
-    return s
+    return service.create_session(topic, message=(body.message or "").strip() or None, title=title, source="web",
+                                  plan_mode=body.review or outside, worktree={"repo": str(clone), "pr": pr})
 
 
 @router.post("/api/code/pr-session")

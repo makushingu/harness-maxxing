@@ -15,7 +15,7 @@ const METHOD: Record<NonNullable<ClaudeAuthMethod>, TKey> = {
 }
 
 /** Live status line + test button. */
-export function ClaudeStatusCard({ onReplace }: { onReplace?: () => void }) {
+function ClaudeStatusCard({ onReplace }: { onReplace?: () => void }) {
   const t = useT()
   const lang = useLang()
   const { data: s, isLoading } = useClaudeStatus()
@@ -97,7 +97,7 @@ export function ClaudeStatusCard({ onReplace }: { onReplace?: () => void }) {
 }
 
 /** Paste a `claude setup-token` OAuth token or an Anthropic API key, then the server tests it. */
-export function ClaudeAuthForm({ onDone }: { onDone?: () => void }) {
+function ClaudeAuthForm({ onDone }: { onDone?: () => void }) {
   const t = useT()
   const [kind, setKind] = React.useState<'oauth_token' | 'api_key'>('oauth_token')
   const [value, setValue] = React.useState('')

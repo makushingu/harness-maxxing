@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import logging
 import shutil
-import threading
 import time
 from datetime import datetime
 from pathlib import Path
@@ -49,14 +48,19 @@ DEFAULTS: dict[str, Any] = {
     "dream": "03:30",         # local time of the night pass ("" = none)
     "compact_tokens": config.JARVIS_COMPACT,  # its conversation is summarized past this context (0 = as every session)
     "telegram": "important",  # its answers on Telegram: off | important (brief, questions, failures) | all
+    "report_effort": "medium",  # its turns that read a session's report ("" = as its other turns): short, same model
 }
+EFFORTS = ("", "low", "medium", "high", "xhigh", "max")
+FOLLOW_UPS = 8                # automatic rounds on one piece of work (report -> follow-up) before it asks the owner
+BRIEF_RETRIES = 3             # a morning brief that failed (Claude signed out, a crash) is tried again this many times
+BRIEF_RETRY_S = 15 * 60
 TELEGRAM_CHOICES = ("off", "important", "all")
 COMPACT_CHOICES = (0, 100000, 150000, 200000, 300000)
 WORK_MAX = 300                # board entries kept (the oldest closed ones go first)
 REPORT_CHARS = 3000           # of a session's answer, in the report Jarvis reads
 CONVERSATIONS_KEPT = 30       # past conversations listed
 
-_lock = threading.RLock()
+_lock = config.ProcessLock("jarvis")   # across processes too: the CLI (sessions new --report-to, agents run) registers work while the server rewrites it
 
 
 class JarvisError(Exception):
@@ -94,6 +98,8 @@ def settings() -> dict:
             out[k] = _clean_int(v, d)
         elif k == "telegram":
             out[k] = v if v in TELEGRAM_CHOICES else d
+        elif k == "report_effort":
+            out[k] = v if v in EFFORTS else d
         else:
             out[k] = str(v or "").strip()[:80]
     return out
@@ -121,6 +127,10 @@ def save_settings(changes: dict) -> dict:
         elif k == "telegram":
             if v not in TELEGRAM_CHOICES:
                 raise JarvisError(400, "bad_telegram", f"{k}: one of {', '.join(TELEGRAM_CHOICES)}")
+            cur[k] = v
+        elif k == "report_effort":
+            if v not in EFFORTS:
+                raise JarvisError(400, "bad_effort", f"{k}: one of {', '.join(x or '(empty)' for x in EFFORTS)}")
             cur[k] = v
         elif isinstance(DEFAULTS[k], int):
             if _clean_int(v, -1) not in COMPACT_CHOICES:
@@ -234,6 +244,12 @@ def _write_rules(tdir: Path) -> None:
         f.write_text(text, encoding="utf-8")
 
 
+def _ensure_on() -> None:
+    if not feature_on():
+        raise JarvisError(409, "off", "Jarvis is off: Settings -> Features -> Jarvis")
+    ensure()
+
+
 def ensure() -> Path:
     """Its project and topic, from templates/jarvis (only the missing files: what it learned stays). A project
     `jarvis` the owner made himself is never taken over (409)."""
@@ -332,17 +348,14 @@ def current_for(sid: str) -> str:
 
 
 def _title(when: float | None = None) -> str:
-    from . import crons
-    return "Jarvis · " + datetime.fromtimestamp(when or time.time(), crons.tz()).strftime("%Y-%m-%d %H:%M")
+    return "Jarvis · " + _local_now(when or time.time()).strftime("%Y-%m-%d %H:%M")
 
 
 def conversation(message: str | None = None, source: str = "web", new: bool = False,
                  attachments: list[str] | None = None, voice_path: str | None = None) -> dict:
     """Its conversation (made when there is none, or `new`) -> the session. `message`: sent into it."""
     from .sessions import service
-    if not feature_on():
-        raise JarvisError(409, "off", "Jarvis is off: Settings -> Features -> Jarvis")
-    ensure()
+    _ensure_on()
     with _lock:
         st = _read_state()
         sid = None if new else (st.get("session") if _alive(st.get("session")) else None)
@@ -393,7 +406,6 @@ def conversations() -> list[dict]:
 # to, result, cost, question, turns}. state: running | replied (its turn ended, the answer was reported) | failed |
 # closed (by Jarvis or the owner). `to`: the session the reports go to (Jarvis's conversation by default: its current
 # one when the report comes, so a new morning conversation still gets yesterday's results).
-STATES = ("running", "replied", "failed", "closed")
 
 
 def _read_work() -> dict:
@@ -443,22 +455,12 @@ def work(state: str | None = None, everyone: bool = False) -> list[dict]:
     return sorted(items, key=lambda i: i.get("updated") or 0, reverse=True)
 
 
-def _find(ref: str | int) -> dict | None:
-    r = str(ref).strip().lstrip("#")
-    for i in _read_work()["items"]:
-        if str(i.get("id")) == r or (len(r) >= 6 and str(i.get("session") or "").startswith(r)):
-            return i
-    return None
-
-
 def close(ref: str | int) -> dict:
+    r = str(ref).strip().lstrip("#")
     with _lock:
         w = _read_work()
-        it = _find(ref)
-        if not it:
-            raise JarvisError(404, "not_found", f"No work {ref}")
         for i in w["items"]:
-            if i.get("id") == it["id"]:
+            if str(i.get("id")) == r or (len(r) >= 6 and str(i.get("session") or "").startswith(r)):
                 i.update(state="closed", updated=time.time())
                 _write_work(w)
                 return i
@@ -517,11 +519,30 @@ def _report_text(item: dict, text: str, ok: bool) -> str:
             f"\"...\"`, or close it with `maxxing jarvis work close {item['id']}` when it is done.")
 
 
+_tracked: dict = {"sig": None, "ids": frozenset(), "paths": frozenset()}
+
+
+def _on_board(sid: str, path: str) -> bool:
+    """Cheap check before the lock: is this session (or a queued agent run of this path) on the board? The board is
+    read again only when its file changed (every session's turn end of the server comes here)."""
+    f = _work_file()
+    try:
+        st = f.stat()
+        sig = (st.st_ino, st.st_mtime_ns, st.st_size)
+    except OSError:
+        return False
+    if sig != _tracked["sig"]:
+        items = [i for i in _read_work().get("items") or [] if i.get("state") != "closed"]
+        _tracked.update(sig=sig, ids=frozenset(i["session"] for i in items if i.get("session")),
+                        paths=frozenset(i.get("path") or "" for i in items if not i.get("session")))
+    return sid in _tracked["ids"] or path in _tracked["paths"]
+
+
 def on_turn_end(session: dict, result: dict | None) -> None:
     """A turn of a session on the board ended: update its entry, report it into Jarvis's conversation."""
     from .sessions import service
     sid = session.get("id") or ""
-    if not sid or not feature_on():
+    if not sid or not feature_on() or not _on_board(sid, session.get("path") or ""):
         return
     with _lock:
         w = _read_work()
@@ -567,22 +588,58 @@ def on_turn_end(session: dict, result: dict | None) -> None:
         return                              # the owner took over in that session: he read the answer there
     to = item.get("to") or ""
     if brief_item:
-        _brief_to_conversation(text if ok else "")
+        if ok and text.strip():
+            _brief_done()
+            _brief_to_conversation(text)
+        else:
+            _brief_failed(text)
         return
+    if to and not _alive(to):
+        return
+    # A report starts a fresh round for Jarvis (hops 0): it may follow up, and start other work, like after a message
+    # of the owner. What stops a loop is the number of rounds on this one piece of work (FOLLOW_UPS): past it, the
+    # report comes with the hops at the limit, so Jarvis can only ask the owner.
+    from .sessions.service import MAX_HOPS
+    hops = 0 if int(item.get("turns") or 0) <= FOLLOW_UPS else MAX_HOPS
+    relay = {"from": sid, "title": session.get("title") or "", "path": item["path"], "hops": hops,
+             "report": item["id"]}
+    if (eff := settings()["report_effort"]) and not to:
+        relay["effort"] = eff
     try:
-        if to and _alive(to):
-            service.send_message(to, _report_text(item, text, ok), source="session",
-                                 relay={"from": sid, "title": session.get("title") or "", "path": item["path"],
-                                        "hops": int(item.get("hops") or 1) + 1, "report": item["id"]})
-        elif not to:
-            target = current_session()
-            if target is None:
-                target = conversation()["id"]
-            service.send_message(target, _report_text(item, text, ok), source="session",
-                                 relay={"from": sid, "title": session.get("title") or "", "path": item["path"],
-                                        "hops": int(item.get("hops") or 1) + 1, "report": item["id"]})
+        service.send_message(to or current_session() or conversation()["id"], _report_text(item, text, ok),
+                             source="session", relay=relay)
     except Exception:  # noqa: BLE001 - a report never breaks the end of a turn
         log.exception("jarvis: report of work %s", item.get("id"))
+
+
+def _brief_done() -> None:
+    with _lock:
+        st = _read_state()
+        if "brief_retry" in st or "brief_retry_at" in st:
+            st.pop("brief_retry", None)
+            st.pop("brief_retry_at", None)
+            _write_state(st)
+
+
+def _brief_failed(why: str = "") -> None:
+    """The backstage run of the brief failed (Claude signed out, a crash): the day is not done, it is tried again
+    BRIEF_RETRY_S later, BRIEF_RETRIES times; then the owner is told (feed, Telegram) instead of a silent morning."""
+    with _lock:
+        st = _read_state()
+        n = int(st.get("brief_retry") or 0) + 1
+        if n <= BRIEF_RETRIES:
+            st.update(brief_retry=n, brief_retry_at=time.time() + BRIEF_RETRY_S, last_brief="")
+        else:
+            st.pop("brief_retry", None)
+            st.pop("brief_retry_at", None)
+        _write_state(st)
+    if n > BRIEF_RETRIES:
+        try:
+            from . import feed
+            feed.post("Jarvis: no morning brief today", (why or "Its backstage run failed")[:500], level="error",
+                      source="jarvis", dedupe=f"jarvis-brief-{_day(time.time())}")
+        except Exception:  # noqa: BLE001
+            log.exception("jarvis: brief failure notice")
 
 
 def _brief_to_conversation(prepared: str) -> None:
@@ -618,6 +675,10 @@ def _local_now(now: float):
     return datetime.fromtimestamp(now, crons.tz())
 
 
+def _day(now: float) -> str:
+    return _local_now(now).strftime("%Y-%m-%d")
+
+
 def _due(hhmm: str, last: Any, now: float) -> bool:
     """`hhmm` passed today (local time) and it did not run today; a server down at that time runs it at the next
     pass of the same day, never on another day."""
@@ -635,14 +696,15 @@ def brief(now: float | None = None) -> dict:
     the reading) and it comes into the conversation when ready (on_turn_end -> _brief_to_conversation): Jarvis only
     passes it on. The agent cannot start (off, budget): Jarvis makes the brief itself, as before. -> the conversation."""
     from . import agents
+    _ensure_on()                                  # off: refused BEFORE the day is marked as done
     now = now or time.time()
     s = settings()
     when = _local_now(now).strftime("%A %Y-%m-%d %H:%M")
     with _lock:
         st = _read_state()
-        st["last_brief"] = _local_now(now).strftime("%Y-%m-%d")
+        st["last_brief"] = _day(now)
         _write_state(st)
-    conv = conversation(new=s["daily"]) if s["daily"] else conversation()
+    conv = conversation(new=s["daily"])
     try:
         r = agents.fire(AGENT_PATH, trigger="manual", source="Jarvis", prompt=PREPARE_TEXT.format(when=when),
                         model=s["dream_model"] or None)
@@ -653,6 +715,10 @@ def brief(now: float | None = None) -> dict:
     if isinstance(run, dict) and run.get("id") or (isinstance(r, dict) and r.get("waiting")):
         register(run["id"] if isinstance(run, dict) else "", AGENT_PATH, "Morning brief", "", kind="brief")
         return conv
+    reason = r.get("reason") if isinstance(r, dict) else ""
+    if reason in ("budget", "limit", "busy", "rate"):     # a budget says no: Jarvis does not spend around it
+        _brief_failed(str(__import__("maxxing.agents", fromlist=["SKIP_TEXT"]).SKIP_TEXT.get(reason, reason)))
+        return conv
     return conversation(BRIEF_TEXT.format(when=when), source="cron")
 
 
@@ -661,8 +727,9 @@ def quiet_since(since: float) -> bool:
     is then skipped (no Claude turn: a quiet day costs nothing)."""
     from . import workspace
     from .sessions import service
-    if any((x.get("updated") or 0) > since and not is_internal(x.get("path")) for x in service.list_sessions()):
-        return False
+    if any((x.get("updated") or 0) > since and not is_internal(x.get("path")) and not x.get("cron")
+           and (x.get("source") or "web") not in ("agent", "cron") for x in service.list_sessions()):
+        return False                       # a session of the owner moved (jobs and agents alone are not news)
     root = workspace.root()
     files = [root / "tasks.json", root / "memory.md"] + list((root / "projects").glob("*/memory.md")) \
         + list((root / "projects").glob("*/topics/*/memory.md"))
@@ -673,13 +740,11 @@ def quiet_since(since: float) -> bool:
 def dream(now: float | None = None, force: bool = True) -> dict | None:
     """The night pass: a run of its backstage agent (skill jarvis-dream). `force` False (the schedule): skipped when
     nothing changed since the last one -> None."""
-    if not feature_on():
-        raise JarvisError(409, "off", "Jarvis is off: Settings -> Features -> Jarvis")
-    ensure()
+    _ensure_on()
     now = now or time.time()
     with _lock:
         st = _read_state()
-        st["last_dream"] = _local_now(now).strftime("%Y-%m-%d")
+        st["last_dream"] = _day(now)
         _write_state(st)
     mark = st.get("dream_mark")
     if not force and isinstance(mark, (int, float)) and quiet_since(float(mark)):
@@ -712,12 +777,24 @@ def tick(now: float | None = None) -> str:
         return ""
     now = now or time.time()
     s, st = settings(), _read_state()
+    if not st.get("armed"):
+        # just switched on: no night pass at once (there is nothing to sum up yet), no brief before tomorrow when its
+        # time already passed today; Jarvis's first conversation starts when the owner speaks
+        with _lock:
+            st = _read_state()
+            st.setdefault("dream_mark", now)
+            st.setdefault("last_dream", _day(now))
+            if s["brief"] and _local_now(now).strftime("%H:%M") >= s["brief"]:
+                st.setdefault("last_brief", _day(now))
+            st["armed"] = now
+            _write_state(st)
+        return ""
     try:
         if _due(s["dream"], st.get("last_dream"), now):
             return "dream" if dream(now, force=False) else "quiet"
-        if _due(s["brief"], st.get("last_brief"), now):
+        if _due(s["brief"], st.get("last_brief"), now) and now >= float(st.get("brief_retry_at") or 0):
             if _opened_after_brief(st, s["brief"], now):
-                st["last_brief"] = _local_now(now).strftime("%Y-%m-%d")    # the owner just started talking today
+                st["last_brief"] = _day(now)    # the owner just started talking today
                 _write_state(st)
                 return ""
             brief(now)
@@ -769,32 +846,28 @@ def digest(since_h: float | None = None, now: float | None = None) -> str:
         out.append(f"- {p}{'*' if own else ''}: {desc[:160]} · topics: {', '.join(tops) or 'none'}")
     glob_mem = [root / "CLAUDE.md", root / "memory.md"]
     changed += [str(f) for f in glob_mem if f.exists() and f.stat().st_mtime > since]
-    out += ["", "Memory files changed (read them):"] + [f"- {f}" for f in changed] + ([] if changed else ["- none"])
+    out += ["", "Memory files changed (read them):"] + ([f"- {f}" for f in changed] or ["- none"])
     out += ["", "## Sessions active since then", ""]
-    rows = [s for s in service.list_sessions(archived=False) if (s.get("updated") or 0) > since]
-    owner_lines = 0
-    for s in rows[:60]:
-        if s.get("path") == PATH:
-            continue
-        last = " ".join((s.get("last_text") or "").split())[:240]
-        out.append(f"- [{s.get('state')}] {s.get('path')} · {s.get('title')} ({s['id'][:8]}, {_fmt(s.get('updated') or 0)})"
-                   + (f"\n  last answer: {last}" if last else ""))
-        owner_lines += 1
-    if not owner_lines:
-        out.append("- none")
+    rows = [s for s in service.list_sessions(archived=False) if (s.get("updated") or 0) > since][:60]
+    lines = []
+    for s in rows:
+        if s.get("path") != PATH:
+            last = " ".join((s.get("last_text") or "").split())[:240]
+            lines.append(f"- [{s.get('state')}] {s.get('path')} · {s.get('title')} ({s['id'][:8]}, "
+                         f"{_fmt(s.get('updated') or 0)})" + (f"\n  last answer: {last}" if last else ""))
+    out += lines or ["- none"]
     out += ["", "## Tasks", ""]
     tasks = config.read_json(root / "tasks.json", {}) or {}
     items = tasks.get("tasks") if isinstance(tasks, dict) else None
     if isinstance(items, list):
-        today = _local_now(now).strftime("%Y-%m-%d")
+        today = _day(now)
         names = {p.get("id"): p.get("name") for p in (tasks.get("projects") or []) if isinstance(p, dict)}
         open_ = [t for t in items if isinstance(t, dict) and t.get("status") not in ("done", "archived")]
         late = [t for t in open_ if str(t.get("due") or "")[:10] and str(t.get("due"))[:10] < today]
         due = [t for t in open_ if str(t.get("due") or "")[:10] == today]
         out.append(f"- open: {len(open_)}, late: {len(late)}, due today: {len(due)}")
-        for t in (late + due)[:15]:
-            out.append(f"  - {str(t.get('due') or '')[:10]} {t.get('title')} ({names.get(t.get('project_id')) or ''}, "
-                       f"{t.get('id')})")
+        out += [f"  - {str(t.get('due') or '')[:10]} {t.get('title')} ({names.get(t.get('project_id')) or ''}, "
+                f"{t.get('id')})" for t in (late + due)[:15]]
         doing = [t for t in open_ if t.get("status") not in ("todo",)]
         if doing:
             out.append(f"- in progress: " + "; ".join(f"{t.get('title')} ({t.get('id')})" for t in doing[:10]))
@@ -804,18 +877,13 @@ def digest(since_h: float | None = None, now: float | None = None) -> str:
     try:
         from . import feed
         evs = [e for e in feed.list_events(limit=60).get("events", []) if (e.get("at") or 0) > since]
-        for e in evs[:30]:
-            out.append(f"- {_fmt(e.get('at') or 0)} [{e.get('level')}] {e.get('source')}: {e.get('title')}")
-        if not evs:
-            out.append("- none")
+        out += [f"- {_fmt(e.get('at') or 0)} [{e.get('level')}] {e.get('source')}: {e.get('title')}"
+                for e in evs[:30]] or ["- none"]
     except Exception:  # noqa: BLE001
         out.append("- (unavailable)")
     out += ["", "## Work board (open)", ""]
-    open_work = work("open")
-    for i in open_work[:30]:
-        out.append(f"- #{i['id']} [{i['state']}{', asks' if i.get('question') else ''}] {i['path']} · {i['title']}")
-    if not open_work:
-        out.append("- none")
+    out += [f"- #{i['id']} [{i['state']}{', asks' if i.get('question') else ''}] {i['path']} · {i['title']}"
+            for i in work("open")[:30]] or ["- none"]
     return "\n".join(out)
 
 

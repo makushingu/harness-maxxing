@@ -8,6 +8,7 @@ the tab they act on.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 from pathlib import Path
@@ -103,10 +104,8 @@ async def pump(sock: Path, path: str, sites: Callable[[], list[str] | None],
     finally:
         for t in tasks:
             t.cancel()
-        try:
+        with contextlib.suppress(Exception):
             await up.close()
-        except Exception:  # noqa: BLE001
-            pass
 
 
 class Cdp:
@@ -192,10 +191,8 @@ class Cdp:
             await self.ws.send(raw)
 
     async def close(self) -> None:
-        try:
+        with contextlib.suppress(Exception):
             await self.ws.close()
-        except Exception:  # noqa: BLE001
-            pass
         self._task.cancel()
         if self._etask is not None:
             self._etask.cancel()

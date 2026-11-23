@@ -10,7 +10,7 @@ import * as React from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, withQuery } from '@/lib/api'
 
-export type VideoQualityState = 'none' | 'queued' | 'running' | 'ready' | 'error'
+type VideoQualityState = 'none' | 'queued' | 'running' | 'ready' | 'error'
 export interface VideoQuality {
   q: number
   state: VideoQualityState
@@ -77,11 +77,11 @@ export const videoInfoQuery = (path: string) => ({
   retry: false,
 })
 /** 'auto' | 'original' | a height. */
-export type QualityChoice = 'auto' | 'original' | number
+type QualityChoice = 'auto' | 'original' | number
 
 const KEY = 'mx-video-quality'
 
-export function readChoice(): QualityChoice {
+function readChoice(): QualityChoice {
   try {
     const v = localStorage.getItem(KEY)
     if (v === 'original') return 'original'
@@ -99,7 +99,7 @@ function saveChoice(c: QualityChoice) {
   }
 }
 
-export const videoStreamUrl = (path: string, q: number, v?: string, r?: string) => withQuery('/api/files/video/stream', { path, q, v, r })
+const videoStreamUrl = (path: string, q: number, v?: string, r?: string) => withQuery('/api/files/video/stream', { path, q, v, r })
 
 // what a copy usually weighs before it is made (crf 20, capped at 8 / 4 / 1.5 Mbit/s): its real bitrate once ready
 const TYPICAL_BPS: Record<number, number> = { 1080: 5e6, 720: 2.5e6, 480: 1e6 }
@@ -115,7 +115,7 @@ export function rateOf(info: VideoInfo, q: number | null): number {
 /** Auto's pick: the sharpest version within the budget (80 % of the speed, under the stall ceiling `cap`); null = the
  *  original. Nothing known (no speed, no stall): the original when decodable, else the server's suggestion (or the
  *  sharpest copy: an H.264 .avi needs one too). */
-export function autoPick(info: VideoInfo, decodable: boolean, speed: number | null, cap: number): number | null {
+function autoPick(info: VideoInfo, decodable: boolean, speed: number | null, cap: number): number | null {
   const copies = info.qualities.map((q) => q.q)
   const options: (number | null)[] = decodable ? [null, ...copies] : copies
   if (!options.length) return null
@@ -128,7 +128,7 @@ const busy = (q?: VideoQuality) => q?.state === 'queued' || q?.state === 'runnin
 
 /** The height to play for a choice: a chosen height falls back to the closest offered one (a 720p video has no
  *  1080p copy). null = the original. */
-export function targetQuality(info: VideoInfo | undefined, choice: QualityChoice): number | null {
+function targetQuality(info: VideoInfo | undefined, choice: QualityChoice): number | null {
   if (!info || choice === 'original') return null
   if (choice === 'auto') return info.auto
   const offered = info.qualities.map((q) => q.q)

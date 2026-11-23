@@ -22,7 +22,7 @@ const PROVIDER_COLOR: Record<string, string> = Object.assign(Object.create(null)
 // Other servers, in the order of the config.
 const SERVER_COLORS = ['oklch(0.7 0.12 190)', 'oklch(0.7 0.13 330)', 'oklch(0.74 0.13 95)', 'oklch(0.68 0.13 230)']
 
-export function serverNames(v?: InfraView): string[] {
+function serverNames(v?: InfraView): string[] {
   return [...new Set([...(v?.servers || []).map((s) => s.name), ...Object.keys(v?.sources.servers || {})])].filter((n) => n !== 'local')
 }
 

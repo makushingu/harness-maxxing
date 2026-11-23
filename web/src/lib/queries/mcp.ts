@@ -4,7 +4,7 @@ import type { McpAddBody, McpView, Ok } from '../types'
 import { useMut } from './util'
 
 // Settings -> MCP (server/maxxing/mcp.py): the states come from a background `claude mcp list`; the bus topic `mcp` says when.
-export const mcpKeys = { all: ['mcp'] as const }
+const mcpKeys = { all: ['mcp'] as const }
 
 export function useMcp() {
   return useQuery({

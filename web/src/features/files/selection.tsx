@@ -34,7 +34,7 @@ const LONG_PRESS_MS = 450
 const MOVE_PX = 8
 const NONE: ReadonlySet<string> = new Set()
 
-export type MenuAt = { x: number; y: number; entries: FileEntry[] }
+type MenuAt = { x: number; y: number; entries: FileEntry[] }
 
 type Gesture = { timer: number; x: number; y: number; type: string; fired: boolean }
 
@@ -215,7 +215,7 @@ export function useEntrySelection({ entries, onOpen, root }: { entries: FileEntr
 
 /* ------------------------------------------------------------------ actions */
 /** Copy the paths of entries, one per line. */
-export function useCopyPaths() {
+function useCopyPaths() {
   const t = useT()
   return (paths: string[]) => void copyText(paths.join('\n')).then((ok) => ok && toast.success(t('files.sel.pathsCopied', { count: paths.length })))
 }

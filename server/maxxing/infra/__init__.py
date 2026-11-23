@@ -11,6 +11,7 @@ then builds the resources (`build.py`), posts alerts to the notifications feed a
 """
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
@@ -175,10 +176,8 @@ def check_url(url: str) -> dict:
     def trace(event: str, info: dict) -> None:
         # the latest socket (plain, then the TLS one) is the one the watchdog must shut down
         if event.endswith((".connect_tcp.complete", ".start_tls.complete")) and info.get("return_value") is not None:
-            try:
+            with contextlib.suppress(Exception):
                 sock[0] = info["return_value"].get_extra_info("socket")
-            except Exception:
-                pass
             if expired.is_set():
                 _shutdown(sock[0])
 
@@ -225,10 +224,8 @@ def check_url(url: str) -> dict:
 def _shutdown(s) -> None:
     if s is None:
         return
-    try:
+    with contextlib.suppress(OSError):
         s.shutdown(socket.SHUT_RDWR)                  # wakes a blocked recv (close() alone does not)
-    except OSError:
-        pass
 
 
 def cert_expiry(host: str) -> dict:
@@ -482,14 +479,8 @@ def refresh_in_background() -> bool:
 
 
 def _safe_refresh() -> None:
-    try:
+    with contextlib.suppress(Exception):  # kept in _last_error, shown by the page
         refresh()
-    except Exception:  # noqa: BLE001 - kept in _last_error, shown by the page
-        pass
-
-
-def last_error() -> str | None:
-    return _last_error
 
 
 def view() -> dict:

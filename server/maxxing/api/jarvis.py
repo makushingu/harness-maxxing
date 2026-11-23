@@ -26,9 +26,7 @@ async def _call(fn, *a, **kw):
     from ..sessions import service
     try:
         return await asyncio.to_thread(fn, *a, **kw)
-    except jarvis.JarvisError as e:
-        raise HTTPException(e.status, detail={"error": e.code, "message": e.message}) from None
-    except service.SessionError as e:
+    except (jarvis.JarvisError, service.SessionError) as e:
         raise HTTPException(e.status, detail={"error": e.code, "message": e.message}) from None
 
 

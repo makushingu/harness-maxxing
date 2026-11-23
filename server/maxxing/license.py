@@ -152,15 +152,17 @@ def status() -> dict:
     return info
 
 
+def _version_in(src: str) -> str | None:
+    """The __version__ of a maxxing/__init__.py source."""
+    return next((line.split("=", 1)[1].strip().strip("\"'") for line in src.splitlines()
+                 if line.startswith("__version__")), None)
+
+
 def disk_version(code: Path | None = None) -> str:
     try:
-        src = ((code or config.CODE) / "server" / "maxxing" / "__init__.py").read_text()
-        for line in src.splitlines():
-            if line.startswith("__version__"):
-                return line.split("=", 1)[1].strip().strip("\"'")
+        return _version_in(((code or config.CODE) / "server" / "maxxing" / "__init__.py").read_text()) or __version__
     except OSError:
-        pass
-    return __version__
+        return __version__
 
 
 def activate(key: str, version: str | None = None) -> dict:
@@ -173,11 +175,8 @@ def activate(key: str, version: str | None = None) -> dict:
         raise LicenseError("the license server sent no activation token", "bad_answer", r)
     if not isinstance(r.get("license", {}), dict):                      # checked before anything is written
         raise LicenseError("the license server sent an answer this version does not read", "bad_answer")
-    config.set_secret(KEY, key.strip().upper())
-    if enabled():
-        config.set_secret(TOKEN, r["token"])          # still on archives (a pre-a87 install): moves to git soon
-    else:
-        config.set_secret(SEAT, r["token"])
+    # still on archives (a pre-a87 install): TOKEN, it moves to git soon
+    config.set_secrets({KEY: key.strip().upper(), TOKEN if enabled() else SEAT: r["token"]})
     _save_info(r.get("license"), activation_id=_field(r.get("activation_id")), activated_at=time.time(), message="")
     return r
 
@@ -191,8 +190,7 @@ def remove_key() -> dict:
             freed = True
         except LicenseError:
             pass
-    config.set_secret(KEY, None)
-    config.set_secret(SEAT, None)
+    config.set_secrets({KEY: None, SEAT: None})
     with config._lock:                     # replaced, not merged: update_config would keep the old info
         cfg = config.load_config()
         cfg["license"] = {k: v for k, v in (cfg.get("license") or {}).items() if k in ("moved_to_git",)}
@@ -227,13 +225,9 @@ PRE_GIT_REF = "refs/maxxing/pre-git"          # HEAD before the move (to inspect
 
 def _version_at(code: Path, rev: str) -> str | None:
     try:
-        src = _git(code, "show", f"{rev}:server/maxxing/__init__.py")
+        return _version_in(_git(code, "show", f"{rev}:server/maxxing/__init__.py"))
     except LicenseError:
         return None
-    for line in src.splitlines():
-        if line.startswith("__version__"):
-            return line.split("=", 1)[1].strip().strip("\"'")
-    return None
 
 
 _move_lock = threading.Lock()
@@ -308,8 +302,7 @@ def _move_to_git(code: Path | None) -> dict:
         _git(code, "update-ref", "-d", f"refs/remotes/origin/{cur}")
     except (LicenseError, OSError, subprocess.TimeoutExpired) as e:
         return {"ok": False, "error": str(e)[-300:]}
-    config.set_secret(SEAT, config.get_secret(TOKEN))  # the key keeps its seat (freed by `remove_key`)
-    config.set_secret(TOKEN, None)
+    config.set_secrets({SEAT: config.get_secret(TOKEN), TOKEN: None})  # the key keeps its seat (freed by `remove_key`)
     _save_info(moved_to_git=time.time(), move_error="")
     return {"ok": True, "moved": True, "branch": GIT_BRANCH, "commit": target, "version": version}
 

@@ -130,7 +130,7 @@ def test_maxxing_cli_in_a_sandboxed_turn(client, topic, mx, monkeypatch, capsys)
     run = _run("NOTOOL hi")                  # a run: sandboxed (the owner's chat is not)
     wait_idle(client, run["session"]["id"])
     sid = run["session"]["id"]
-    assert agent_guard.sandboxed_session(sid[:8]) == A
+    assert agent_guard._sandboxed(A)
     assert agent_guard.UNIT_RE.search(f"0::/system.slice/maxxing-{sid[:8]}.service").group(1) == sid[:8]
     assert agent_guard.UNIT_RE.search("0::/system.slice/claude-maxxing.service") is None
     assert agent_guard.UNIT_RE.search(f"0::/system.slice/maxxing-{sid[:8]}-4242.service").group(1) == sid[:8]
@@ -144,7 +144,7 @@ def test_maxxing_cli_in_a_sandboxed_turn(client, topic, mx, monkeypatch, capsys)
     assert cli.main(["cron", "list"]) == 2
     assert "not allowed in a sandboxed agent turn" in capsys.readouterr().err
     client.patch("/api/agents/acme/blog/writer", json={"sandbox": False})
-    assert agent_guard.sandboxed_session(sid[:8]) is None
+    assert not agent_guard._sandboxed(A)
 
 
 def test_a_sandboxed_turn_reads_only_its_own_agent_and_feed(client, topic, mx, monkeypatch, capsys):
@@ -314,11 +314,11 @@ def test_an_agent_never_changes_its_own_settings(client, topic, mx, monkeypatch)
     # a run that changes them anyway (no sandbox) is reported in the thread; the owner's own changes are not
     agents._snapshot(A, "sid-1")
     (agents.folder(A) / "CLAUDE.md").write_text("# Agent Writer\n\nI do what I want now.\n")
-    assert agents._changed_during(A, "sid-1") == ["CLAUDE.md"]
+    assert agents._changed_since(A, agents._pop_snapshot(A, "sid-1")) == ["CLAUDE.md"]
     agents._snapshot(A, "sid-2")
     client.patch("/api/agents/acme/blog/writer", json={"limits": {"usd_per_day": 9}})
-    assert agents._changed_during(A, "sid-2") == []
-    assert agents._changed_during(A, "unknown") == []
+    assert agents._changed_since(A, agents._pop_snapshot(A, "sid-2")) == []
+    assert agents._changed_since(A, agents._pop_snapshot(A, "unknown")) == []
     # its own settings are put back as they were (a run never gives itself a budget or a key); what decides the tools
     # of its next runs is reported too
     before = (agents.folder(A) / "agent.json").read_text()

@@ -2,7 +2,7 @@
 // useHotkey(); add them to PAGE_SHORTCUTS docs in DESIGN.md.
 import * as React from 'react'
 
-export function isEditable(el: EventTarget | null): boolean {
+function isEditable(el: EventTarget | null): boolean {
   const e = el as HTMLElement | null
   if (!e) return false
   return e.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(e.tagName) || !!e.closest?.('[role="textbox"], .cm-editor')

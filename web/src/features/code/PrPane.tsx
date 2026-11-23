@@ -22,12 +22,11 @@ import { useLang, useT } from '@/i18n'
 import { placeSession, useSettings } from '@/lib/queries'
 import { useFileViewer } from '@/features/files/viewerStore'
 import { prefillDraft } from '@/pages/sessions/store'
-import { DiffRows, diffRows, selected, useLineSelection } from './DiffRows'
+import { DiffRows, STATUS_TONE, diffRows, selected, useLineSelection } from './DiffRows'
 import { checksState, parsePrPath, prApi, prKeys, prPath, usePull, type DraftComment, type PrFile, type PrRef, type Pull, type ReviewEvent } from './prApi'
 
 type Props = { path: string; index: number; count: number; fullscreen: boolean; canFull: boolean; onFull: () => void; swipe: React.HTMLAttributes<HTMLDivElement> }
 
-const STATUS_TONE: Record<string, string> = { A: 'text-success', D: 'text-destructive', R: 'text-primary', C: 'text-primary' }
 
 // Line comments written in the Files tab wait here (per pull request) until the review is sent.
 const useDrafts = create<{ by: Record<string, DraftComment[]>; add: (k: string, c: DraftComment) => void; drop: (k: string, i: number) => void; clear: (k: string) => void }>((set) => ({

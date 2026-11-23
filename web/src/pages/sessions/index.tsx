@@ -11,7 +11,7 @@ import { useT } from '@/i18n'
 import { cn } from '@/lib/utils'
 import { animateIn, animateOut, EASE_OUT, reducedMotion, usePresence } from '@/lib/presence'
 import { useModeMotion, useTabSwitchMotion } from './tabMotion'
-import { useOpenSync } from './openSync'
+import { useOpenSync, useShared } from './openSync'
 import { useRegisterCommands } from '@/commands/registry'
 import { useHotkey } from '@/commands/shortcuts'
 import { agentRunRoute, isAgentSession, useSessions, useSessionSeeded, useSettings, useWorkspace } from '@/lib/queries'
@@ -168,6 +168,16 @@ function Workspace() {
   }, [mobile, focusedCol, focusedSession?.path, cols]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const mobileOpen = mobile && (!!params.get('session') || params.get('new') === '1') && !!focusedCol
+  // Phone: a session brought in front from another device (openSync) is the one shown: the URL follows it.
+  React.useEffect(() => {
+    if (!mobileOpen) return
+    const st = useSessionsUI.getState()
+    const c = st.cols.find((x) => x.key === st.focused)
+    if (c?.kind === 'session' && params.get('session') && params.get('session') !== c.id) {
+      const p = sessions?.find((x) => x.id === c.id)?.path
+      navigate(`/sessions?${p !== undefined ? `path=${encodeURIComponent(p)}&` : ''}session=${c.id}`, { replace: true })
+    }
+  }, [focused]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Touch layout, no session asked: blank (background) until the redirect below picks one (or the asked one is set up) - no list or header flash.
   // Not when the list failed to load: the header and a retry stay reachable.
@@ -175,8 +185,10 @@ function Workspace() {
   const touchPicking = mobile && !mobileOpen && !(sessionsFailed && !sessions) && (asked || !sessions || sessions.length > 0)
   // Touch layout: /sessions always shows a session, full screen - the one on screen last time, else the most recent.
   // The list lives in the sessions drawer (☰).
+  // A phone with nothing on screen yet waits for the session in front on the other devices (openSync).
+  const { data: shared, isPending: sharedPending } = useShared()
   React.useEffect(() => {
-    if (!mobile || params.get('session') || params.get('new') === '1' || !sessions) return
+    if (!mobile || params.get('session') || params.get('new') === '1' || !sessions || sharedPending) return
     const f = useSessionsUI.getState().cols.find((c) => c.key === useSessionsUI.getState().focused)
     const show = params.get('show')
     const keep = show ? `&show=${show}` : ''
@@ -184,9 +196,12 @@ function Workspace() {
       navigate(`/sessions?path=${encodeURIComponent(f.path)}&new=1${keep}`, { replace: true })
       return
     }
-    const last = (f?.kind === 'session' && sessions.find((s) => s.id === f.id)) || [...sessions].sort((a, b) => b.updated - a.updated)[0]
+    const last =
+      (f?.kind === 'session' && sessions.find((s) => s.id === f.id)) ||
+      (shared?.front && sessions.find((s) => s.id === shared.front)) ||
+      [...sessions].sort((a, b) => b.updated - a.updated)[0]
     if (last) navigate(`/sessions?path=${encodeURIComponent(last.path)}&session=${last.id}${keep}`, { replace: true })
-  }, [mobile, location.search, !!sessions]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [mobile, location.search, !!sessions, sharedPending]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const openSession = React.useCallback(
     (s: Pick<Session, 'id' | 'path'>) => {
@@ -756,7 +771,8 @@ const ColumnFor = React.memo(function ColumnFor({ col, index, count, variant, pl
 /** Touch layout: the session is a full-screen layer, sized to the visual viewport so the composer stays pinned right
  *  above the on-screen keyboard. Its header opens the sessions (☰) and the app menu (⊞). */
 function MobileOverlay({ col, sessions, onPick }: { col: Col; sessions: Session[] | undefined; onPick: (c: Col) => void }) {
-  const several = useSessionsUI((s) => s.cols.length > 1) // one tab only would repeat the title under it
+  const several = useSessionsUI((s) => s.cols.length > 1) // a swipe goes to the next open session
+  const tabs = useSessionsUI((s) => s.tabs) // the switch in the session's header: Tabs shows the chips, Zones hides them
   const ref = React.useRef<HTMLDivElement>(null)
   const body = React.useRef<HTMLDivElement>(null)
   const go = React.useCallback(
@@ -802,7 +818,7 @@ function MobileOverlay({ col, sessions, onPick }: { col: Col; sessions: Session[
   return (
     <div ref={ref} className="fixed inset-0 z-[45] flex flex-col bg-background pr-[var(--safe-right)] pl-[var(--safe-left)]" data-touch-layer data-testid="touch-session">
       <div ref={body} className="flex min-h-0 flex-1 flex-col">
-        <MobileTabsSlot.Provider value={several ? <TabsBar sessions={sessions} onPick={onPick} edge className="-mx-3 border-b-0 bg-transparent px-0 py-1 [&>button]:mr-3" /> : null}>
+        <MobileTabsSlot.Provider value={tabs ? <TabsBar sessions={sessions} onPick={onPick} edge className="-mx-3 border-b-0 bg-transparent px-0 py-1 [&>button]:mr-3" /> : null}>
           <ColumnFor col={col} index={0} count={1} variant="mobile" />
         </MobileTabsSlot.Provider>
       </div>

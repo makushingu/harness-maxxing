@@ -40,13 +40,10 @@ def files() -> list[dict]:
     ws = config.workspace()
     limit = max_lines()
     weight = max_bytes(limit)
-    found: list[tuple[str, Path]] = [("global", ws / "memory.md")]
-    for p in sorted((ws / "projects").glob("*/memory.md")):
-        found.append(("project", p))
-    for p in sorted((ws / "projects").glob("*/topics/*/memory.md")):
-        found.append(("topic", p))
-    for p in sorted((ws / "projects").glob("*/topics/*/agents/*/memory.md")):
-        found.append(("agent", p))
+    found: list[tuple[str, Path]] = [("global", ws / "memory.md")] + [
+        (level, p) for level, pattern in (("project", "*/memory.md"), ("topic", "*/topics/*/memory.md"),
+                                          ("agent", "*/topics/*/agents/*/memory.md"))
+        for p in sorted((ws / "projects").glob(pattern))]
     out = []
     for gone in set(_counted) - {p.relative_to(ws).as_posix() for _, p in found}:
         _counted.pop(gone, None)

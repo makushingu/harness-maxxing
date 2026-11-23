@@ -36,7 +36,7 @@ def _handler(a) -> int:
         if a.dry_run:
             res = importer.inspect(src)
         else:
-            uid, tmp = importer.new_upload()
+            _, tmp = importer.new_upload()
             shutil.copyfile(src, tmp)
             res = importer.apply(tmp)
             res["finish_prompt"] = importer.finish_prompt(res)

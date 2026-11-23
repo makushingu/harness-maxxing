@@ -129,7 +129,7 @@ function userSeed(text: string): Omit<Seed, 'attachments'> {
 
 /* ---------------------------------------------------------------- message menu */
 /** What a message offers on right click (long press on Android). */
-export type MsgActions = {
+type MsgActions = {
   /** Copied as is. */
   text?: string
   /** "New session from this message": a new session of the same topic, its composer filled with the message. */
@@ -595,7 +595,7 @@ export function MessageMedia({ text }: { text: string }) {
   )
 }
 
-export const AssistantMessage = React.memo(function AssistantMessage({ text, onFork }: { text: string; onFork?: (seed: Seed) => void }) {
+const AssistantMessage = React.memo(function AssistantMessage({ text, onFork }: { text: string; onFork?: (seed: Seed) => void }) {
   const { filesRoot } = React.useContext(ItemContext)
   // "New session from this message": the reply goes along as a quote.
   const { onContextMenu, touch, menu } = useMessageMenu({ text, onFork: onFork && (() => onFork({ text: '', quotes: [text.trim()], attachments: [] })) })

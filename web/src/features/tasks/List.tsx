@@ -13,7 +13,7 @@ import { isSelectClick, useTaskSelection } from './selection'
 export type GroupBy = 'due' | 'project' | 'topic'
 
 /** Topic name of a task's topic path ("projects/acme/topics/blog" -> "blog"), '' at project level, null without one. */
-export function topicName(path: string | null): string | null {
+function topicName(path: string | null): string | null {
   if (!path) return null
   const m = /^projects\/[^/]+\/topics\/([^/]+)/.exec(path)
   return m ? m[1] : ''

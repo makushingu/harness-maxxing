@@ -532,3 +532,12 @@ def test_a_slow_hello_address_does_not_hold_the_global_lock(client, monkeypatch)
     finally:
         release.set()
         t.join(5)
+
+
+def test_a_peers_file_that_does_not_parse_is_kept_before_it_is_rewritten(client, monkeypatch):
+    _setup(monkeypatch)
+    teampeer.create_invite()
+    path = teampeer._path()
+    path.write_text(path.read_text()[:-5])              # cut: no longer JSON
+    teampeer.create_invite()
+    assert list(path.parent.glob("peers.json.damaged-*"))

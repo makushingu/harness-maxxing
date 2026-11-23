@@ -970,14 +970,6 @@ A session is one Claude Code conversation attached to a topic. It keeps running 
 
 Turn on **Notify** to receive a short Telegram message when a turn finishes. It is skipped if you looked at the session in the last 3 minutes.
 
-## Search
-
-The search box looks in titles and the last answers:
-
-§§§text
-GET /api/sessions/search?q=caddy
-§§§
-
 See also [Telegram](telegram) and [Crons](crons).
 `) },
   { slug: 'files', title: 'Files', section: 'Features', order: 3, markdown: md(`# Files
@@ -1344,27 +1336,14 @@ R('POST', '/api/sessions/open', ({ body }) => {
     const rank = (x) => (order.includes(x) ? order.indexOf(x) : order.length)
     ids = ids.map((x, i) => [x, i]).sort((a, b) => rank(a[0]) - rank(b[0]) || a[1] - b[1]).map((x) => x[0])
   }
-  if (openShared.ids && ids.join() === openShared.ids.join()) return openShared
-  Object.assign(openShared, { ids, rev: openShared.rev + 1 })
+  const view = {}
+  if (typeof body.tabs === 'boolean') view.tabs = body.tabs
+  if (typeof body.front === 'string' && body.front) view.front = body.front
+  const same = Object.entries(view).every(([k, v]) => openShared[k] === v)
+  if (openShared.ids && ids.join() === openShared.ids.join() && same) return openShared
+  Object.assign(openShared, view, { ids, rev: openShared.rev + 1 })
   bus('open_sessions')
   return openShared
-})
-R('GET', '/api/sessions/search', ({ q }) => {
-  const term = (q.get('q') || '').trim().toLowerCase()
-  if (!term) return []
-  const hits = []
-  for (const s of S.sessions) {
-    const inTitle = s.title.toLowerCase().includes(term)
-    let snippet = null
-    const lt = s.last_text, i = lt.toLowerCase().indexOf(term)
-    if (i !== -1) snippet = (i > 40 ? '…' : '') + lt.slice(Math.max(0, i - 40), i + term.length + 60) + (i + term.length + 60 < lt.length ? '…' : '')
-    else {
-      const e = (S.events[s.id] || []).find((x) => (x.type === 'assistant' || x.type === 'user') && x.text.toLowerCase().includes(term))
-      if (e) { const j = e.text.toLowerCase().indexOf(term); snippet = '…' + e.text.slice(Math.max(0, j - 40), j + term.length + 60).replace(/\n/g, ' ') + '…' }
-    }
-    if (inTitle || snippet) hits.push({ id: s.id, title: s.title, path: s.path, snippet: snippet || lt.slice(0, 100), at: s.updated })
-  }
-  return hits.sort((a, b) => b.at - a.at).slice(0, 50)
 })
 R('GET', '/api/sessions', ({ q }) => {
   const pth = q.get('path')

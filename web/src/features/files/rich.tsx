@@ -19,7 +19,7 @@ import { FileInfoCard } from './viewers'
 
 /* ------------------------------------------------------------------ CSV / TSV */
 /** RFC 4180 parser (quotes, doubled quotes, newlines inside quotes). */
-export function parseCsv(text: string, delim: string): string[][] {
+function parseCsv(text: string, delim: string): string[][] {
   const rows: string[][] = []
   let row: string[] = []
   let cell = ''
@@ -53,7 +53,7 @@ export function parseCsv(text: string, delim: string): string[][] {
 }
 
 /** `,` `;` or tab: the one found most often on the first line (outside quotes is close enough). */
-export function guessDelimiter(text: string, name: string): string {
+function guessDelimiter(text: string, name: string): string {
   if (extOf(name) === 'tsv') return '\t'
   const nl = text.indexOf('\n')
   const first = text.slice(0, nl < 0 ? 2000 : nl)

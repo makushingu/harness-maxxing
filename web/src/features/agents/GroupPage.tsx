@@ -488,7 +488,7 @@ const GroupMessage = React.memo(function GroupMessage({
 
 /* ---------------------------------------------------------------- The box */
 /** What the box gets: a member to @mention, a quoted selection (`from`: the member that wrote it, null = the owner). */
-export type ComposerApi = { mention: (slug: string) => void; quote: (text: string, from: string | null) => void }
+type ComposerApi = { mention: (slug: string) => void; quote: (text: string, from: string | null) => void }
 
 /** Who wrote the quoted message `el`: null for the owner's, else the member's name (its folder name if gone). */
 function quotedFrom(el: Element, members: AgentGroup['members']): string | null {

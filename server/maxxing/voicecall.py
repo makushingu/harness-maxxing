@@ -19,6 +19,7 @@ All public functions are blocking: call them from a worker thread.
 """
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import queue
@@ -472,7 +473,6 @@ def _lang_code(lang: Any) -> str | None:
     return s if re.fullmatch(r"[a-z]{2,3}", s) else None
 
 
-LANG_LABELS = {"fr": "French", "en": "English", "es": "Spanish", "de": "German", "it": "Italian", "pt": "Portuguese"}
 _ECHO = re.compile(r"^\s*(?:\[[^\]]{0,60}\]|(?:language|langue)\s*:\s*\w+)\s*[.:]?\s*", re.I)
 TURN_TIMEOUT_S = 60
 MAX_PENDING = 4            # user sentences kept to hand over with the next one (after a question of the voice)
@@ -530,10 +530,8 @@ class LocalCall:
         return self.proc.poll() is None
 
     def close(self) -> None:
-        try:
+        with contextlib.suppress(OSError):
             self.proc.stdin.close()  # type: ignore[union-attr]
-        except OSError:
-            pass
         try:
             self.proc.wait(timeout=3)
         except subprocess.TimeoutExpired:
@@ -725,24 +723,6 @@ def sort(text: str, current: str, expecting: bool = False, heard: str | None = N
         if heard and heard not in ("fr", "en") and heard != current and len(_words(_norm(text))) >= 4:
             return kind, heard                              # a language the words cannot tell: the engine's word
     return kind, current
-
-
-def tool_kind(name: str) -> str:
-    """The kind of a tool, for "I'm reading files" while the session works."""
-    n = (name or "").lower()
-    if n in ("read", "notebookread", "ls"):
-        return "read"
-    if n in ("edit", "write", "multiedit", "notebookedit"):
-        return "edit"
-    if n == "bash":
-        return "run"
-    if n in ("grep", "glob", "toolsearch"):
-        return "search"
-    if n in ("webfetch", "websearch") or "browser" in n:
-        return "web"
-    if n in ("task", "agent"):
-        return "agent"
-    return "think"
 
 
 def parse_action(line: str) -> dict | None:

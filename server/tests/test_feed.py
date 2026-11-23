@@ -448,3 +448,24 @@ def test_an_action_id_with_a_trailing_newline_is_refused():
 def test_feed_list_with_a_lone_surrogate_source_is_not_a_500(client, mx):
     assert feed.list_events(source="a\ud800")["events"] == []
     assert client.get("/api/feed", params={"source": "a%ED%A0%80"}).status_code == 200
+
+
+def test_watch_id_changes_on_a_grouped_event_a_resolve_and_a_delete(mx):
+    """Another process (a cron) grouping, resolving or deleting events left MAX(id)+SUM(read) unchanged."""
+    a = feed.post("Down", "", "error", "health", group="g", ref="h:1", actions=[{"id": "seen"}])
+    seen = [feed.watch_id()]
+    feed.post("Down", "", "error", "health", group="g", ref="h:1", actions=[{"id": "seen"}])   # grouped: count 2
+    seen.append(feed.watch_id())
+    feed.resolve("h:1")
+    seen.append(feed.watch_id())
+    feed.post("Other", source="custom")
+    seen.append(feed.watch_id())
+    feed.delete(a["id"])
+    seen.append(feed.watch_id())
+    assert all(x != y for x, y in zip(seen, seen[1:])), seen
+
+
+def test_clean_url_refuses_whitespace_that_browsers_strip_into_another_site():
+    assert feed._clean_url("/\t/evil.com") == ""
+    assert feed._clean_url("/\n/evil.com") == "" and feed._clean_url("//evil.com") == ""
+    assert feed._clean_url("/sessions?x=1") == "/sessions?x=1" and feed._clean_url("https://a.b/c") == "https://a.b/c"

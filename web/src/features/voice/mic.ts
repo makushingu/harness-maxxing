@@ -38,7 +38,7 @@ export async function openMic(): Promise<MediaStream> {
   return navigator.mediaDevices.getUserMedia({ audio: AUDIO })
 }
 
-export interface MicDevice {
+interface MicDevice {
   id: string
   label: string
 }

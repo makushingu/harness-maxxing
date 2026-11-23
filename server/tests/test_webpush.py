@@ -149,3 +149,27 @@ def test_the_service_worker_shows_what_the_server_lists():
     assert "addEventListener('push'" in src and "'/api/push/pending'" in src and "'X-Maxxing': '1'" in src
     assert "showNotification" in src and "addEventListener('notificationclick'" in src
     assert "url.origin !== self.location.origin" in src           # a tap only opens this app
+
+
+def test_a_damaged_webpush_file_is_kept_before_a_new_key_replaces_it(mx):
+    webpush.public_key()
+    f = webpush._path()
+    f.write_text("{bad")
+    webpush.add_device(FCM)
+    kept = list(f.parent.glob("webpush.json.damaged-*"))
+    assert kept and kept[0].read_text() == "{bad"
+
+
+@pytest.mark.parametrize("bad", [
+    {"private": "zz", "devices": {}},
+    {"private": "0" * 64, "devices": {}},
+    {"private": "f" * 64, "devices": {}},
+    {"private": "1" * 64, "devices": {"a": 5}},
+])
+def test_an_unusable_key_or_device_list_is_replaced_and_kept(mx, bad):
+    f = webpush._path()
+    f.write_text(json.dumps(bad))
+    assert len(_b64d(webpush.public_key())) == 65 and webpush.devices() == []
+    webpush.add_device(FCM)
+    assert list(f.parent.glob("webpush.json.damaged-*"))
+    assert len(webpush.devices()) == 1

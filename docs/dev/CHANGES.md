@@ -9,6 +9,26 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 - Devices, Add a device -> Android: an APK button under the QR code (`devices-add-apk`) links to the invite's
   `downloads.android` (`/api/devices/download/android?code=`, the personalised APK); texts `devices.add.apk` / `.apkHelp`.
+- `sessions/opened.py`: `open_sessions.json` also keeps `tabs` (bool) and `front` (session id), set by `POST /api/sessions/open
+  {tabs?, front?}` (a change bumps `rev`, same value = no rev); keys absent until a browser sends them. `openSync.ts`:
+  sends the mode / focused session when they change here (debounced with the cols), applies the other device's unless
+  changed here since the last agreement (`sync.tabs` / `sync.front`, `sync.start` = front at mount so a link is not
+  undone); the query runs on a phone in Zones too (ids still shared only in tabs view). Phone: `/sessions` with nothing
+  on screen waits for the shared list and opens its `front`; a front applied while a session is shown updates the URL.
+- Phone: `ViewSwitch` (now `className`-able, `pointer-coarse:size-10`) in the `mobile` session header and the mobile new-session
+  header; `MobileOverlay` gives the chips when `tabs` (was `cols.length > 1` in both modes), swipe still on `several`.
+- Slimming pass (no behaviour change, ~-2 000 lines): dead code removed across server, web and Harness Link (e.g.
+  Telegram health watcher superseded by feed alerts, `crons._run_claude`, `SessionPreviewCard`, `UsageIndicator`,
+  `FilePreview`, unused ui parts and hooks), duplicates merged (`security.secret_key`, `vault.set_note_expose`,
+  shared OSV lookup in `depcheck`/`deps`, one `LiveTokens` class for browser/devices live views, `useDebounced`,
+  `STATUS_TONE`), 80 unused i18n keys and 3 unused Radix packages dropped. `maxxing team send --file` reserves the
+  target name atomically (`reserve_path`); `imap._date` tolerates a malformed server date.
+- `FeedSettings` source row: the name column is `flex-1 basis-40` (was `flex-1`, basis 0): the `flex-wrap` row now
+  wraps the `w-44` rule select under the name below ~22 rem instead of truncating the name; guarded by
+  `test_web_mobile.py::test_a_notification_source_keeps_its_name_readable_on_a_phone`.
+- Settings -> Memory, memory files table: the path cell adds `max-md:whitespace-normal max-md:[overflow-wrap:anywhere]`
+  to `truncate` (the `title` is unreachable on touch); guarded by
+  `test_web_mobile.py::test_the_memory_files_list_shows_whole_paths_on_a_phone`.
 - Mail attachments in the file viewer: `POST /api/mail/{id}/attachments/view` (`imap.attachments_of`, one fetch)
   copies them to `<workspace>/mail/attachments/<id>/<folder hash>-<uid>/<index>/<name>` (rewritten at each view, dirs
   older than a day pruned; `409 outside` when the workspace is not under the files root: `MessageView` then opens /
@@ -78,6 +98,13 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   `start` moves to `start + added - STEP` during the render and grows back to the old `start` the same way. Longest
   task on a 4 MB log 223 -> 144 ms (945 -> 639 ms at 4x CPU slowdown); on 120 loaded rows 268 -> 117 ms
   (876 -> 400 ms at 4x). Same final rows, reading position kept.
+- Dependencies: `npm update` in `web/` and `uv lock --upgrade` in `server/` (minor and patch only). Majors left alone: emojibase-data 18, mermaid 12. `templates/` untouched.
+
+## 2.0.0-alpha.164 - 2026-11-23
+
+- `SessionColumn`: `useSessionStream(place?.hidden ? null : sid)`: a hidden tab (tabs view) closes its SSE. Over
+  HTTP/1.1 (local / Tailscale mode, no Caddy h2) one `EventSource` per open tab + `/api/stream` filled the browser's 6
+  connections per host and queued `POST /messages` (#178). Shown again, the stream resumes from `get(id).next`.
 
 ## 2.0.0-alpha.163 - 2026-11-22
 

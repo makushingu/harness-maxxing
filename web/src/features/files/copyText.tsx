@@ -12,7 +12,7 @@ import { copyText, copyTextLater } from '@/lib/utils'
 import { useT } from '@/i18n'
 import { basename, isSheets, isTextual, type FileKind } from './kinds'
 
-export type CopyChoice = { id: 'source' | 'plain'; label: string; icon: LucideIcon; text: () => string | Promise<string> }
+type CopyChoice = { id: 'source' | 'plain'; label: string; icon: LucideIcon; text: () => string | Promise<string> }
 
 type Props = {
   path: string
@@ -24,7 +24,7 @@ type Props = {
 const plain = () => import('./plainText')
 
 /** What can be copied from this file: nothing (a picture, an archive, a text not read yet), one text, or two. */
-export function useCopyChoices({ path, kind, text }: Props): CopyChoice[] {
+function useCopyChoices({ path, kind, text }: Props): CopyChoice[] {
   const t = useT()
   const qc = useQueryClient()
   const cut = () => toast.info(t('ctext.truncated'))

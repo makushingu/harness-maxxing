@@ -58,10 +58,10 @@ def test_the_tasks_open_as_a_list_on_a_phone():
 
 
 def test_a_session_header_on_a_phone_leaves_room_to_read():
-    # one tab repeated the title under it, the tabs stayed while typing, and held sideways only ~90 px were left to read
+    # the tabs stayed while typing, and held sideways only ~90 px were left to read; the Tabs / Zones switch is in every
+    # session's header: Tabs shows the open sessions (even one), Zones hides them
     src = (WEB / "pages" / "sessions" / "index.tsx").read_text()
-    assert "const several = useSessionsUI((s) => s.cols.length > 1)" in src
-    assert "<MobileTabsSlot.Provider value={several ? <TabsBar" in src  # the phone always shows its open sessions as tabs
+    assert "<MobileTabsSlot.Provider value={tabs ? <TabsBar" in src
     column = (WEB / "pages" / "sessions" / "Column.tsx").read_text()
     assert '<div data-kbd-hide="" data-tabs="">{tabs}</div>' in column
     css = (WEB / "styles" / "globals.css").read_text()
@@ -397,3 +397,22 @@ def test_the_open_url_link_of_the_infra_type_view_is_big_enough_to_tap():
     src = (WEB / "features" / "infra" / "TypeView.tsx").read_text()
     link = re.search(r'target="_blank".{0,200}?className="([^"]*)"', src, re.S)
     assert link and "pointer-coarse:size-10" in link[1].split()
+
+
+def test_a_notification_source_keeps_its_name_readable_on_a_phone():
+    # at 360 px the 11 rem rule select left ~35 px to the name ("Cr…", "Sig…"): the name column needs a basis so
+    # the row wraps the select under it instead of cutting the name
+    src = (WEB / "features" / "feed" / "FeedSettings.tsx").read_text()
+    start = src.index('data-testid="feed-source"')
+    row = src[start:src.index("\nfunction ", start)]  # SourceRow only
+    col = re.search(r'<div className="([^"]*)">', row)
+    assert col and {"flex-1", "basis-40"} <= set(col[1].split())
+    assert 'className="w-44"' in row  # wider than what is left next to a 10 rem name column on a phone
+
+
+def test_the_memory_files_list_shows_whole_paths_on_a_phone():
+    # every path starts with projects/<name>/topics/: cut to one line at 360 px, all the rows read the same and the
+    # title holding the full path is not reachable on a touch screen
+    src = (WEB / "pages" / "settings" / "sections" / "Memory.tsx").read_text()
+    cell = re.search(r'<td className="([^"]*)" title=\{mask\(f\.path', src)
+    assert cell and {"max-md:whitespace-normal", "max-md:[overflow-wrap:anywhere]"} <= set(cell[1].split())

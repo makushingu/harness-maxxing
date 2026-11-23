@@ -74,12 +74,6 @@ def _run(out: dict, jobs: dict[str, Callable[[], Any]]) -> dict:
     return out
 
 
-def _host(url: str | None) -> str | None:
-    if not url:
-        return None
-    return url.split("://")[-1].split("/")[0].lower() or None
-
-
 # ---- Vercel ---------------------------------------------------------------------------------------
 VERCEL_STATE = {"READY": "ok", "ERROR": "failed", "CANCELED": "failed", "BUILDING": "building", "QUEUED": "building",
                 "INITIALIZING": "building", "BLOCKED": "failed"}
@@ -132,13 +126,10 @@ def vercel() -> dict:
         return res
 
     def domains():
-        res = []
-        for team in teams:
-            for d in pages("/v5/domains", "domains", team):
-                res.append({"name": d["name"], "registrar": bool(d.get("boughtAt")),
-                            "expires": int(d["expiresAt"] / 1000) if d.get("expiresAt") else None, "auto_renew": d.get("renew"),
-                            "dns": d.get("serviceType") == "zeit.world", "name_servers": d.get("nameservers") or []})
-        return res
+        return [{"name": d["name"], "registrar": bool(d.get("boughtAt")),
+                 "expires": int(d["expiresAt"] / 1000) if d.get("expiresAt") else None, "auto_renew": d.get("renew"),
+                 "dns": d.get("serviceType") == "zeit.world", "name_servers": d.get("nameservers") or []}
+                for team in teams for d in pages("/v5/domains", "domains", team)]
     try:
         return _run(out, {"sites": sites, "domains": domains})
     finally:

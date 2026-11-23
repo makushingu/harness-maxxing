@@ -8,12 +8,16 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 New:
 - **Download the Android app without the QR code**: Settings -> Devices -> Add a device -> Android now has a
   **Download the app (APK)** button under the code.
+- **Your computer and your phone show the same sessions view.** The Tabs / Zones mode and the session in front follow
+  the last device you chose them on: switch from the computer to the phone (or back) and you find the same view.
 - **Jarvis: one assistant who runs Harness for you.** Turn it on in Settings -> Features -> Jarvis: it sits at the
   top of the sidebar. Say what you want; it picks or creates the right project and topic, hands the work to a session
   there, gets the answer back by itself when the session is done and tells you, in the same conversation. Its Work
   list shows what waits for you, what is in progress and what was answered; a morning brief opens each day, and a
-  night pass tidies its memory so it always knows where everything is. Full rights, "Ask me first" and its own compaction threshold
-  are in its settings. [Show me](#show:jarvis)
+  night pass tidies its memory so it always knows where everything is. It hands the work over rather than doing it
+  itself, so it answers fast while sessions work side by side; it follows a piece of work through several rounds on
+  its own, reads reports that arrive together in one turn, and a brief that fails is tried again, then reported.
+  Full rights, "Ask me first" and its own compaction threshold are in its settings. [Show me](#show:jarvis)
 
 Added:
 - **Notifications on your phone, even with the app closed.** Settings -> Notifications -> *Mobile notifications*:
@@ -26,6 +30,12 @@ Added:
   opens in the viewer with a click, before you send it.
 
 Fixed:
+- **On a phone, the Tabs / Zones switch is in every session.** It sits next to the ⋯ menu: Tabs shows the open sessions
+  above the conversation (even when only one is open), Zones hides them.
+- **On a phone, Settings -> Notifications shows the name of each source.** The rule menu took the room and the
+  names were cut to two letters ("Cr…", "Sig…"): it now goes under the name when the screen is narrow.
+- **On a phone, Settings -> Memory lists whole file paths.** Cut to one line, every row read
+  "projects/…/topi…" and you could not tell which memory file was too long: the path now wraps on a narrow screen.
 - **The "Harness has finished" notification now works on Android Chrome** when the app is open in the background (it
   was silently dropped: only the banner inside the app showed).
 
@@ -38,6 +48,14 @@ Changed:
 - **Scrolling up a long session no longer freezes the page.** Show earlier (and the automatic loading when you reach
   the top) now adds the older messages a few at a time instead of all at once: the page stays responsive, mostly
   felt on a phone.
+- **Dependencies updated** (minor and patch versions only): web (@tanstack/react-query 5.108.0 -> 5.108.3, lucide-react 1.74.0 -> 1.77.0, react-router 8.5.1 -> 8.5.2, tailwind-merge 3.7.0 -> 3.7.1) and server (fastapi 0.163.2 -> 0.165.0, pydantic 2.14.3 -> 2.14.4, pyyaml 6.0.3 -> 6.0.4, certifi, filelock, ctranslate2, av).
+
+## 2.0.0-alpha.164 - 2026-11-23
+
+Fixed:
+- **With several sessions open, a message no longer stays on "Sending…" (local or Tailscale access, plain HTTP).**
+  Each open tab kept a live connection and the browser allows only six per server: the send waited for a free one and
+  never left. Only the sessions on screen keep one now; a tab you come back to catches up at once.
 
 ## 2.0.0-alpha.163 - 2026-11-22
 

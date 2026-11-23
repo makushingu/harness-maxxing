@@ -6,6 +6,7 @@ writes the person's answer: "done" (they took over and handed back), "skip". A r
 """
 from __future__ import annotations
 
+import contextlib
 import logging
 import math
 import re
@@ -125,10 +126,8 @@ def _where(d: dict) -> tuple[str, str]:
     if owner.startswith("agent:"):
         from .. import agents
         name = path.rsplit("/", 1)[-1]
-        try:
+        with contextlib.suppress(Exception):
             name = agents.load(path).get("name") or name
-        except Exception:  # noqa: BLE001
-            pass
         return name, (f"/settings/browser?session={d.get('session')}" if d.get("session") else "/settings/browser")
     name = "A session"
     try:

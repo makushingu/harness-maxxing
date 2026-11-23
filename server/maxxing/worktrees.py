@@ -191,14 +191,13 @@ def describe(repo: Path) -> dict:
     from .gitview import github_name
     return {"root": str(repo), "name": repo.name, "branch": head["branch"], "branches": refs,
             "default_base": base, "github": github_name(head["remote"] or "") if head.get("remote") else None,
-            **{"prefs": prefs(repo)}}
+            "prefs": prefs(repo)}
 
 
 def place(topic: Path, repo: Path) -> Path:
     """The folder that holds the copies of `repo` made from `topic`."""
     t, r = topic.resolve(), repo.resolve()
-    inside = t == r or r in t.parents
-    return t / (HIDDEN if inside else DIR)
+    return t / (HIDDEN if t == r or r in t.parents else DIR)
 
 
 def _exclude(holder: Path, folder: Path) -> None:
@@ -241,7 +240,7 @@ def create(topic_path: str, repo: str, base: str | None, title: str, sid: str, *
     if holder is not None:
         _exclude(holder, folder_root)
     if pr:
-        branch, start, track = _pr_branch(r, pr)
+        branch, track = _pr_branch(r, pr)
         codediff._git(r, "worktree", "add", str(folder), branch, write=True, timeout=codediff.WRITE_TIMEOUT)
         if track:
             codediff._run(folder, "branch", f"--set-upstream-to={track}", check=False, write=True)
@@ -289,30 +288,29 @@ def undo(sid: str, wt: dict) -> None:
         log.warning("copy %s of %s not cleaned up", wt.get("path"), sid[:8])
 
 
-def _pr_branch(repo: Path, pr: dict) -> tuple[str, str, str | None]:
+def _pr_branch(repo: Path, pr: dict) -> tuple[str, str | None]:
     """Fetch a pull request's head into a local branch. Same repository: the branch itself (tracking origin);
-    a fork: `pr/<n>` from refs/pull/<n>/head (pushing back is not possible)."""
+    a fork: `pr/<n>` from refs/pull/<n>/head (pushing back is not possible). -> (branch, upstream to track)."""
     n = int(pr["number"])
     if pr.get("fork") or not pr.get("ref"):
         local = f"pr/{n}"
         codediff._git(repo, "fetch", "origin", f"+refs/pull/{n}/head:refs/heads/{local}", write=True,
                       timeout=codediff.WRITE_TIMEOUT)
-        return local, local, None
+        return local, None
     ref = str(pr["ref"])
     if not _valid_branch(repo, ref):
         raise GitError(400, "bad_branch", "the pull request's branch name is not valid here")
     codediff._git(repo, "fetch", "origin", f"+refs/heads/{ref}:refs/remotes/origin/{ref}", write=True,
                   timeout=codediff.WRITE_TIMEOUT)
     if _branch_exists(repo, ref):
-        used = codediff._git(repo, "worktree", "list", "--porcelain", check=False)
-        if f"branch refs/heads/{ref}\n" in used + "\n":
+        if _checked_out(repo, ref) is not None:
             raise GitError(409, "branch_in_use", f"the branch {ref} is already open in another folder")
         # only moved forward: a local branch with commits of its own is never reset
         if codediff._run(repo, "merge-base", "--is-ancestor", ref, f"origin/{ref}", check=False).returncode == 0:
             codediff._run(repo, "branch", "-f", ref, f"origin/{ref}", check=False, write=True)
     else:
         codediff._git(repo, "branch", ref, f"origin/{ref}", write=True)
-    return ref, ref, f"origin/{ref}"
+    return ref, f"origin/{ref}"
 
 
 def _copy_env(repo: Path, folder: Path) -> list[str]:

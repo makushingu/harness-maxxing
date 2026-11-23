@@ -125,8 +125,7 @@ def where_of(folder: str | None) -> dict:
 
 
 def _kind(cfg: dict) -> str:
-    t = str(cfg.get("type") or ("stdio" if cfg.get("command") else "http"))
-    return t if t in ("stdio", "http", "sse", "ws") else t
+    return str(cfg.get("type") or ("stdio" if cfg.get("command") else "http"))
 
 
 SECRET_RE = re.compile(r"[A-Za-z0-9_\-]{20,}")
@@ -256,6 +255,10 @@ def _refs(cfg: dict) -> set[str]:
     vals = [*_dict(cfg.get("headers")).values(), *_dict(cfg.get("env")).values(), *_list(cfg.get("args")),
             cfg.get("url") or ""]
     return {m.group(1) for v in vals for m in REF_RE.finditer(str(v))}
+
+
+def _blank_args(args: Any) -> list:
+    return ["" if hid else a for a, hid in zip(_list(args), _secret_args(args))]
 
 
 def _command_secret(cmd: Any) -> bool:
@@ -404,8 +407,6 @@ _lock = threading.Lock()
 _status: dict[str, dict] = {}
 _check: dict[str, Any] = {"running": False, "at": None}
 LIST_LINE = re.compile(r"^(?P<name>[A-Za-z0-9_.-]{1,64}): (?P<what>.*) - (?P<mark>\S)️?\s+(?P<detail>.*)$")
-
-
 CONNECTOR_LINE = re.compile(r"^(claude\.ai [^:]{1,100}): .* - \S")
 
 
@@ -444,13 +445,15 @@ def check(wait: bool = False) -> dict:
         try:
             todo: dict[str | None, list[dict]] = {}
             for s in servers():
-                folder = s["where"]["path"]
-                todo.setdefault(folder, []).append(s)
+                todo.setdefault(s["where"]["path"], []).append(s)
+
+            def failed(items: list[dict], detail: str) -> None:
+                for s in items:
+                    _status[s["id"]] = {"state": "failed", "detail": detail, "at": time.time()}
+
             def one(folder: str | None, items: list[dict]) -> None:
                 if folder is not None and not Path(folder).is_dir():
-                    for s in items:
-                        _status[s["id"]] = {"state": "failed", "detail": "folder no longer exists", "at": time.time()}
-                    return
+                    return failed(items, "folder no longer exists")
                 try:
                     out = _cli(["list"], folder, timeout=120)
                     found = parse_list(out)
@@ -458,9 +461,7 @@ def check(wait: bool = False) -> dict:
                         from . import mcp_auto
                         mcp_auto.record_connectors(connectors_of_list(out))
                 except McpError as e:
-                    for s in items:
-                        _status[s["id"]] = {"state": "failed", "detail": e.message, "at": time.time()}
-                    return
+                    return failed(items, e.message)
                 for s in items:
                     if s["name"] in found:
                         _status[s["id"]] = {**found[s["name"]], "at": time.time()}
@@ -512,8 +513,8 @@ def build(spec: dict) -> dict:
         if not re.match(r"^https?://\S+$", url):
             raise McpError(400, "bad_url", "the address must start with https://")
         cfg: dict = {"type": t, "url": url}
-        if clean(spec.get("headers")):
-            cfg["headers"] = clean(spec.get("headers"))
+        if headers := clean(spec.get("headers")):
+            cfg["headers"] = headers
     elif t == "stdio":
         command = str(spec.get("command") or "").strip()
         if not command:
@@ -529,8 +530,8 @@ def build(spec: dict) -> dict:
         except ValueError as e:                            # unbalanced quotes
             raise McpError(400, "bad_command", f"the command cannot be parsed: {e}") from None
         cfg = {"type": "stdio", "command": command, "args": [str(a) for a in args]}
-        if clean(spec.get("env")):
-            cfg["env"] = clean(spec.get("env"))
+        if env := clean(spec.get("env")):
+            cfg["env"] = env
     else:
         raise McpError(400, "bad_type", "type must be http, sse or stdio")
     values = [cfg.get("url") or cfg.get("command"), *cfg.get("args", []),
@@ -561,7 +562,7 @@ def _redacted(cfg: dict) -> dict:
         if k in c:
             c[k] = {str(n): (str(v) if _only_refs(v) else "") for n, v in _dict(c[k]).items()}
     if "args" in c:
-        c["args"] = ["" if hid else a for a, hid in zip(_list(c["args"]), _secret_args(c["args"]))]
+        c["args"] = _blank_args(c["args"])
     if c.get("url"):
         c["url"] = _url_masked(str(c["url"]), "") or "https://redacted.invalid/"
     return c
@@ -662,16 +663,13 @@ def _write_cfg(fn) -> None:
             d = _read_cfg(fresh=True)
             if not d or not fn(d):
                 return
-            # the file holds the Claude account (maybe an API key): the copy is private from its creation, unique
-            tmp = target.with_name(f"{target.name}.{uuid.uuid4().hex[:12]}.mx-tmp")
-            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            # the file holds the Claude account (maybe an API key): the copy is private from its creation
+            text = json.dumps(d, indent=2, ensure_ascii=False)
             try:
-                with os.fdopen(fd, "w", encoding="utf-8") as fh:
-                    fh.write(json.dumps(d, indent=2, ensure_ascii=False))
-                os.replace(tmp, target)
-            except BaseException:
-                tmp.unlink(missing_ok=True)
-                raise
+                raw = text.encode("utf-8")
+            except UnicodeEncodeError:                   # a lone surrogate (json.loads accepts it): escaped instead
+                raw = json.dumps(d, indent=2).encode("ascii")
+            _replace(target, raw, 0o600)
         finally:
             if lock is not None:
                 try:
@@ -689,11 +687,16 @@ def _write_mcp_json(f: Path, data: dict) -> None:
     except UnicodeEncodeError:
         raw = (json.dumps(data, indent=2) + "\n").encode("ascii")
     target = f.resolve()                                 # a symlinked file is written through the link
-    tmp = target.with_name(f"{target.name}.{uuid.uuid4().hex[:12]}.mx-tmp")
     try:
         mode = target.stat().st_mode & 0o777
     except OSError:
         mode = 0o644
+    _replace(target, raw, mode)
+
+
+def _replace(target: Path, raw: bytes, mode: int) -> None:
+    """`target` replaced by `raw` through a unique temp file created with `mode`."""
+    tmp = target.with_name(f"{target.name}.{uuid.uuid4().hex[:12]}.mx-tmp")
     fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, mode)
     try:
         with os.fdopen(fd, "wb") as fh:
@@ -761,7 +764,7 @@ def export() -> list[dict]:
             if k in c:
                 c[k] = _blank_secrets(c[k])
         if "args" in c:
-            c["args"] = ["" if hid else a for a, hid in zip(_list(c["args"]), _secret_args(c["args"]))]
+            c["args"] = _blank_args(c["args"])
         if c.get("url"):
             c["url"] = _url_masked(str(c["url"]), "")
         return {"name": name, "where": rel, "config": c}

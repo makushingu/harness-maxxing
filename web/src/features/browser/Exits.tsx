@@ -65,7 +65,7 @@ export function AddExit() {
 }
 
 /** The result of a test: address, country, operator, kind, delay, speed. */
-export function TestResult({ test, className }: { test: BrowserExitTest | null | undefined; className?: string }) {
+function TestResult({ test, className }: { test: BrowserExitTest | null | undefined; className?: string }) {
   const t = useT()
   if (!test) return null
   if (!test.ok)

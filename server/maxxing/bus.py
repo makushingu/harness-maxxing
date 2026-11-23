@@ -8,12 +8,11 @@ thread / unread, `agents_layout` = the Office layout only).
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
-import threading
 
 _subscribers: set[asyncio.Queue] = set()
 _loop: asyncio.AbstractEventLoop | None = None
-_lock = threading.Lock()
 _browsers = 0                                   # open /api/stream connections of signed-in browsers
 
 
@@ -60,10 +59,8 @@ def invalidate(*topics: str) -> None:
     if running is _loop:
         _publish(topics)
     else:
-        try:
+        with contextlib.suppress(RuntimeError):          # loop closed between the check and the call
             _loop.call_soon_threadsafe(_publish, topics)
-        except RuntimeError:          # loop closed between the check and the call
-            pass
 
 
 async def stream(cookie: str | None = None, check: bool = True):
@@ -73,8 +70,7 @@ async def stream(cookie: str | None = None, check: bool = True):
     from .security import StreamAuth
     auth = StreamAuth(cookie) if check else None
     global _browsers
-    q: asyncio.Queue = asyncio.Queue(maxsize=200)
-    _subscribers.add(q)
+    q = subscribe()
     if check:
         _browsers += 1
     try:

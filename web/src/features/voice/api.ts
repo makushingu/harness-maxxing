@@ -54,7 +54,7 @@ export type Transcript = {
   audio_path: string | null
 }
 
-export const voiceKey = ['voice'] as const
+const voiceKey = ['voice'] as const
 
 /** Polls every second while an install/download is running. */
 export function useVoice(enabled = true) {

@@ -14,6 +14,7 @@ import logging
 import os
 import re
 import time
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -126,13 +127,9 @@ def always_rule(d: dict) -> str:
         except ValueError:                           # "http://[::1": not a URL, no rule
             return ""
         return f"WebFetch(domain:{host})" if re.fullmatch(r"[a-z0-9.-]{1,253}", host) else ""
-    if tool in ("Task", "Agent", "Skill"):           # the subagent / skill runs under the same rules: ask each time
-        return ""
-    if tool in ("ExitPlanMode", "AskUserQuestion"):  # each plan / question is read by the user: never allowed for good
-        return ""
-    if tool in _READS:                               # the bare tool would allow reading any file: ask each time
-        return ""
-    return tool
+    # ask each time: a subagent / skill runs under the same rules, each plan / question is read by the user, and
+    # the bare read tool would allow reading any file
+    return "" if tool in ("Task", "Agent", "Skill", "ExitPlanMode", "AskUserQuestion", *_READS) else tool
 
 
 def topic_of_session(sid: str) -> str:
@@ -170,7 +167,12 @@ def _all() -> list[dict]:
         d = hit[1] if hit and hit[0] == key else approval_mcp.read(Path(path))
         _parsed[path] = (key, d)
         if d and ID_RE.match(str(d.get("id") or "")) and name[:-5] == d["id"]:
-            out.append(dict(d))
+            d = dict(d)
+            for k in ("at", "expires", "decided_at"):        # a hand-edited file: a time that is not a number is no time
+                v = d.get(k)
+                if v is not None and (isinstance(v, bool) or not isinstance(v, (int, float))):
+                    d[k] = None
+            out.append(d)
     for path in set(_parsed) - {p for p, _, _ in files}:
         _parsed.pop(path, None)
     out.sort(key=lambda d: d.get("at") or 0)
@@ -182,12 +184,8 @@ def pending(session: str | None = None) -> list[dict]:
     return [public(d) for d in _all() if d.get("status") == "pending" and (not session or d.get("session") == session)]
 
 
-def _count(items: list[dict]) -> dict[str, int]:
-    out: dict[str, int] = {}
-    for d in items:
-        if d.get("status") == "pending" and d.get("session"):
-            out[d["session"]] = out.get(d["session"], 0) + 1
-    return out
+def _count(items: list[dict]) -> Counter:
+    return Counter(d["session"] for d in items if d.get("status") == "pending" and d.get("session"))
 
 
 def waiting(sid: str) -> int:
@@ -211,18 +209,17 @@ def decide(rid: str, decision: str, message: str = "", by: str = "web", always: 
     topic's sessions run it without asking (the running turn still asks for other calls of it)."""
     if decision not in DECISIONS:
         raise ApprovalError(400, "bad_decision", "decision: allow or deny")
-    if always:
-        if decision != "allow":
-            raise ApprovalError(400, "bad_decision", "always: only with allow")
-        d = get(rid)
-        rule, topic = always_rule(d), topic_of_session(str(d.get("session") or ""))
-        if not rule or not topic:
-            raise ApprovalError(400, "no_rule", "This request cannot be allowed for good: allow it once")
+    if always and decision != "allow":
+        raise ApprovalError(400, "bad_decision", "always: only with allow")
     # an agent's settings change that can no longer be applied as its card shows it (agent gone, a value changed
     # since): the Allow is refused with the reason and the request closed (denied, `stale`), nothing applied
     problem = ""
     if decision == "allow":
         d = get(rid)
+        if always:
+            rule, topic = always_rule(d), topic_of_session(str(d.get("session") or ""))
+            if not rule or not topic:
+                raise ApprovalError(400, "no_rule", "This request cannot be allowed for good: allow it once")
         if d.get("kind") == "agent_change" and d.get("status") == "pending":
             from . import agents
             problem = agents.change_problem(d)
@@ -446,8 +443,8 @@ def scan(force: bool = False) -> bool:
         elif prev is not None:                  # decided elsewhere (timeout, expired): our own decide() noted it
             _note(d)
     live = {d["id"] for d in final}
-    for rid in [r for r in _seen if r not in live]:
-        _seen.pop(rid, None)
+    for rid in set(_seen) - live:
+        del _seen[rid]
     _counts.clear()
     _counts.update(_count(final))
     if changed:
@@ -459,7 +456,8 @@ def prime() -> None:
     """At startup: what is already there is not new (no repeated thread messages after a restart), except a request
     written while the server was down (its turn survives restarts): announced once, when it has no feed event yet."""
     now = time.time()
-    for d in _all():
+    items = _all()
+    for d in items:
         if d.get("status") != "pending":
             _feed_done(d)                       # answered or expired while the server was down: its event says so
         elif (_running(d.get("session") or "") or d.get("kind") == "agent_change") and _feed_new(d) is not False:
@@ -470,7 +468,7 @@ def prime() -> None:
         else:
             _seen[d["id"]] = str(d.get("status"))
     _counts.clear()
-    _counts.update(_count(_all()))
+    _counts.update(_count(items))
     try:                                        # the runner's MCP config files of old sessions
         for f in (folder() / "config").glob("*.json"):
             if now - f.stat().st_mtime > KEEP_S * 7:

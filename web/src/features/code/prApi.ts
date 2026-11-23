@@ -70,7 +70,7 @@ export function checksState(cs: PrCheck[]): 'failed' | 'pending' | 'ok' | null {
 
 // ---- viewer paths: `mx-pr:<owner/name>|<n>` = the PR (Conversation), `…|<n>|files` / `…|<n>|checks` its other
 // tabs, `…|<n>|file|<path>` one file's diff. Fields URI-encoded.
-export const PR_PREFIX = 'mx-pr:'
+const PR_PREFIX = 'mx-pr:'
 export type PrTab = 'conversation' | 'files' | 'checks'
 export type PrRef = { full: string; n: number; tab: PrTab; path?: string }
 const enc = encodeURIComponent

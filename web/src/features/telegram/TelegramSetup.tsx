@@ -11,7 +11,7 @@ import { Button, CodeBlock, FormField, SecretInput, Sensitive, Skeleton, Spinner
 import { QRCode } from '@/components/ui/qr-code'
 import { Callout, Steps } from '../common'
 
-export type TelegramStage = 'token' | 'link' | 'done'
+type TelegramStage = 'token' | 'link' | 'done'
 
 /** Done once a chat is linked: threads are a bonus (off when the bot has no BotFather "Threaded Mode" -> notice). */
 export function telegramStage(s: TelegramStatus | undefined): TelegramStage {
@@ -50,7 +50,7 @@ function SubSteps({ stage, threadsOk }: { stage: TelegramStage; threadsOk: boole
 const SETUP_ERRORS = ['conflict', 'webhook_check_failed', 'unreachable'] as const
 
 /** Token field: verify + store. A webhook set by another program can be removed from here, then the token saved again. */
-export function TokenForm({ onDone, onCancel, autoFocus }: { onDone?: () => void; onCancel?: () => void; autoFocus?: boolean }) {
+function TokenForm({ onDone, onCancel, autoFocus }: { onDone?: () => void; onCancel?: () => void; autoFocus?: boolean }) {
   const t = useT()
   const [token, setToken] = React.useState('')
   const [error, setError] = React.useState<string | null>(null)

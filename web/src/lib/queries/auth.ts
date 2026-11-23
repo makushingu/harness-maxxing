@@ -12,7 +12,7 @@ declare global {
   }
 }
 
-export const fetchAuthState = async () => {
+const fetchAuthState = async () => {
   const early = window.__mxAuth
   window.__mxAuth = undefined
   const state = await early

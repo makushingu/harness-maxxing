@@ -14,18 +14,8 @@ declare global {
   }
 }
 
-export const bootStep = (n: 1 | 2 | 3) => window.mxStep?.(n)
+const bootStep = (n: 1 | 2 | 3) => window.mxStep?.(n)
 
-/** Runs `cb` once the loader has played (at once when there is none), so non-critical work never competes with it.
- *  Returns a cancel function. */
-export function afterBoot(cb: () => void): () => void {
-  if (!window.mxStep || window.mxBooted) {
-    cb()
-    return () => {}
-  }
-  window.addEventListener('mxbooted', cb, { once: true })
-  return () => window.removeEventListener('mxbooted', cb)
-}
 
 /** A screen with nothing to wait for (sign-in, setup, onboarding, an error): the loader can end once it is painted. */
 export function useBootReady() {

@@ -3,6 +3,7 @@ board and the reports, the brief and the night pass, the filters of what the own
 from __future__ import annotations
 
 import time
+from pathlib import Path
 from datetime import datetime
 
 import pytest
@@ -92,6 +93,7 @@ def test_a_session_on_the_board_reports_into_the_conversation(client, topic):
     w = wait_for(lambda: next((i for i in jarvis.work() if i["id"] == 1 and i["state"] != "running"), None))
     assert w["state"] == "replied" and w["turns"] >= 1
     # the owner typing in that session himself: the board follows, no report
+    wait_idle(client, jsid)
     n = sum("[Work #1" in str(e) for e in all_events(client, jsid))
     client.post(f"/api/sessions/{s['id']}/messages", json={"text": "thanks, I take it from here"})
     wait_idle(client, s["id"])
@@ -139,6 +141,7 @@ def test_tick_starts_the_brief_in_a_new_conversation(client):
     now = datetime.now(crons.tz()).replace(hour=23, minute=0).timestamp()
     st = jarvis._read_state()
     st["since"] = now - 86400                        # the conversation began before today's brief time
+    st["armed"] = now - 86400                        # switched on yesterday
     jarvis._write_state(st)
     assert jarvis.tick(now) == "brief"
     st = client.get("/api/jarvis").json()
@@ -255,8 +258,9 @@ def test_its_conversation_has_its_own_compaction(client):
     cfg = {**config.load_config(), "auto_compact_tokens": 300000, "idle_compact_tokens": 200000,
            "smart_resume_tokens": 100000, "jarvis": {}}
     own = config.session_config(cfg, jarvis.PATH)
-    assert own["auto_compact_tokens"] == 150000 and own["idle_compact_tokens"] == 150000
-    assert own["smart_resume_tokens"] == 100000
+    assert own["auto_compact_tokens"] == 150000
+    # reports come back hours later on a cold cache: summarized sooner than the rest of its compaction
+    assert own["idle_compact_tokens"] == config.JARVIS_IDLE_COMPACT == own["smart_resume_tokens"]
     assert config.session_config(cfg, "projects/acme/topics/blog") is cfg      # every other session: the server's
     same = {**cfg, "jarvis": {"compact_tokens": 0}}
     assert config.session_config(same, jarvis.PATH) is same
@@ -321,3 +325,92 @@ def test_work_board_written_by_another_process_is_announced(tmp_path, monkeypatc
         task.cancel()
     asyncio.run(run())
     assert ("jarvis",) in seen
+
+
+def test_work_registered_from_several_processes_gets_unique_ids(client, mx):
+    """The CLI (sessions new --report-to, agents run) registers work in its own process while the server rewrites
+    work.json: a thread lock did not protect it (lost entries, repeated ids)."""
+    import os
+    import subprocess
+    import sys
+    code = ("import sys\nfrom maxxing import jarvis\n"
+            "for i in range(40):\n    jarvis.register(sys.argv[1] + format(i, '02d') * 17, 'p', 't', 'b')\n")
+    env = dict(os.environ, MAXXING_STATE=str(config.STATE), MAXXING_WORKSPACE=str(mx["ws"]))
+    root = str(Path(jarvis.__file__).resolve().parent.parent)
+    procs = [subprocess.Popen([sys.executable, "-c", code, c], cwd=root, env=env) for c in "abc"]
+    assert [p.wait(120) for p in procs] == [0, 0, 0]
+    ids = [i["id"] for i in jarvis._read_work()["items"]]
+    assert len(ids) == 120 and len(set(ids)) == 120
+
+
+def test_a_brief_refused_because_jarvis_is_off_does_not_mark_the_day_done(client, mx):
+    with pytest.raises(jarvis.JarvisError):
+        jarvis.brief()
+    assert "last_brief" not in jarvis._read_state()
+
+
+def test_a_project_cannot_be_renamed_to_the_name_kept_for_jarvis(mx):
+    workspace.create_project("alpha")
+    with pytest.raises(workspace.WorkspaceError) as e:
+        workspace.update_project("alpha", name=jarvis.PROJECT)
+    assert e.value.code == "reserved" if hasattr(e.value, "code") else True
+    assert not (mx["ws"] / "projects" / jarvis.PROJECT).exists() and (mx["ws"] / "projects" / "alpha").is_dir()
+
+
+def test_reports_waiting_in_a_row_are_read_in_one_turn():
+    from maxxing.sessions import runner
+    rep = lambda n, h=0: {"text": f"[Work #{n}] done", "source": "session",
+                          "relay": {"from": f"s{n}", "report": n, "hops": h}}
+    owner = {"text": "and the newsletter?", "source": "web"}
+    q = [rep(2, 9), rep(3), owner, rep(4)]
+    item = runner._merge_reports(rep(1), q)
+    assert item["text"].count("[Work #") == 3 and item["relay"]["reports"] == [1, 2, 3]
+    assert item["relay"]["hops"] == 9                 # the strictest one holds
+    assert q == [owner, rep(4)]                       # the owner's message stays its own turn, in order
+    assert runner._merge_reports(owner, [rep(5)]) == owner
+    # a report says itself where it comes from: no "message from another session" preface
+    assert not runner.build_prompt(rep(1)).startswith("[Message sent by Claude")
+
+
+def test_a_report_starts_a_fresh_round_until_too_many_follow_ups(client, topic, monkeypatch):
+    _on(client)
+    jsid = client.post("/api/jarvis/open").json()["session"]["id"]
+    from maxxing.sessions import service
+    s = client.post("/api/sessions", json={"path": topic}).json()
+    jarvis.register(s["id"], topic, "Next post", "write the post")
+    sent = []
+    monkeypatch.setattr(service, "send_message", lambda to, text, **kw: sent.append(kw.get("relay")) or {})
+    for turns in (0, jarvis.FOLLOW_UPS + 1):
+        w = jarvis._read_work()
+        w["items"][0].update(state="running", turns=turns)
+        jarvis._write_work(w)
+        jarvis.on_turn_end({**service.get_session(s["id"]), "last_turn": {"source": "session"}}, {"ok": True})
+    assert sent[0]["hops"] == 0 and sent[0]["effort"] == "medium"
+    assert sent[1]["hops"] == service.MAX_HOPS        # past FOLLOW_UPS rounds: Jarvis can only ask the owner
+    assert jsid
+
+
+def test_switching_on_does_not_start_the_night_pass_at_once(client):
+    _on(client)
+    from maxxing import crons
+    now = datetime.now(crons.tz()).replace(hour=23, minute=0).timestamp()
+    assert jarvis.tick(now) == ""                     # armed: no night pass, no brief over a fresh start
+    st = jarvis._read_state()
+    assert st["armed"] and st["last_dream"] == jarvis._day(now) and st["last_brief"] == jarvis._day(now)
+
+
+def test_a_failed_brief_is_tried_again_then_reported(client, monkeypatch):
+    _on(client)
+    from maxxing import feed
+    posted = []
+    monkeypatch.setattr(feed, "post", lambda title, body="", **kw: posted.append(title))
+    st = jarvis._read_state()
+    st.update(armed=1, last_brief="2000-01-01")
+    jarvis._write_state(st)
+    for _ in range(jarvis.BRIEF_RETRIES):
+        jarvis._brief_failed("OAuth session expired")
+        st = jarvis._read_state()
+        assert st["last_brief"] == "" and st["brief_retry_at"] > time.time()   # not done: tried again later
+    assert not posted
+    jarvis._brief_failed("OAuth session expired")
+    assert posted and "brief" in posted[0] and "brief_retry" not in jarvis._read_state()

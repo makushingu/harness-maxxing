@@ -62,11 +62,7 @@ def parse(value: str) -> tuple[str, int]:
 
 def configured(cfg: dict | None = None) -> tuple[str, int] | None:
     """The proxy address to open, or None (off, invalid, or no secret yet)."""
-    cfg = cfg if cfg is not None else config.load_config()
-    try:
-        addr = parse(str(cfg.get("proxy_listen") or "")) if cfg.get("proxy_listen") else None
-    except ValueError:
-        return None
+    addr = saved(cfg if cfg is not None else config.load_config())
     return addr if addr and config.get_secret(SECRET_NAME) else None
 
 

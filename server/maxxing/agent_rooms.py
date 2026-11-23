@@ -261,7 +261,8 @@ def _member_view(m: dict, st: dict, current: str) -> dict:
     p = m["path"]
     ok = agents.exists(p)
     a = agents.load(p) if ok else {}
-    return {"path": p, "slug": m.get("handle") or slug(p), "handle": m.get("handle") or slug(p), "role": m["role"], "exists": ok,
+    h = m.get("handle") or slug(p)
+    return {"path": p, "slug": h, "handle": h, "role": m["role"], "exists": ok,
             "display_name": (a.get("name") or slug(p)) if ok else slug(p),
             "avatar": a.get("avatar") if ok else agents._clean_avatar({}, p),
             "enabled": bool(a.get("enabled")) if ok else False,
@@ -371,14 +372,12 @@ def _update(path: str, fields: dict) -> list[str]:
         _write_goal(path, data["name"] or parse(path)[1], _text(text, GOAL_MAX))
     gone = {m["path"] for m in cur["members"]} - {m["path"] for m in data["members"]}
     if gone:
-        with _lock:
-            st = _read_state(path)
+        with _state(path) as st:
             for p in gone:
                 (st.get("sessions") or {}).pop(p, None)
             st["queue"] = [q for q in st.get("queue") or [] if q.get("path") not in gone]
             if (st.get("current") or {}).get("path") in gone:   # its answer is not posted (on_turn_end)
                 st["current"] = None
-            _write_state(path, st)
     return dropped
 
 
@@ -488,16 +487,22 @@ def _read_state(path: str) -> dict:
 
 
 def _write_state(path: str, st: dict) -> None:
-    if not exists(path):                                # deleted meanwhile: its state file is not made again
-        return
-    config.write_json(_state_file(path, "json"), st)
+    if exists(path):                                    # deleted meanwhile: its state file is not made again
+        config.write_json(_state_file(path, "json"), st)
+
+
+@contextlib.contextmanager
+def _state(path: str):
+    """Read-change-write the room state under the lock."""
+    with _lock:
+        st = _read_state(path)
+        yield st
+        _write_state(path, st)
 
 
 def mark_seen(path: str) -> None:
-    with _lock:
-        st = _read_state(path)
+    with _state(path) as st:
         st["seen_at"] = time.time()
-        _write_state(path, st)
     _invalidate(path)
 
 
@@ -569,13 +574,11 @@ def say(path: str, text: str, attachments: list[str] | None = None) -> dict:
 def stop(path: str, note: bool = True) -> None:
     """Stop button: the queue is emptied and the turn in progress is stopped."""
     from .sessions import service
-    with _lock:
-        st = _read_state(path)
+    with _state(path) as st:
         cur = st.get("current") or {}
         had = bool(cur or st.get("queue"))
         st["queue"] = []
         st["current"] = None                            # its answer is still posted, it hands over to nobody
-        _write_state(path, st)
     if cur.get("session"):
         try:
             service.stop(cur["session"])
@@ -589,10 +592,8 @@ def stop(path: str, note: bool = True) -> None:
 def reset(path: str) -> None:
     """"New topic": the members start from new sessions next time (the conversation stays on screen)."""
     stop(path, note=False)
-    with _lock:
-        st = _read_state(path)
+    with _state(path) as st:
         st.update(sessions={}, since={})
-        _write_state(path, st)
     post(path, "note", "New topic: the members start fresh from here", reset=True)
 
 
@@ -600,12 +601,10 @@ def set_paused(path: str, member: str, paused: bool) -> dict:
     _need(path)
     if member not in [m["path"] for m in load(path)["members"]]:
         raise GroupError(404, "not_member", "Not a member of this group")
-    with _lock:
-        st = _read_state(path)
+    with _state(path) as st:
         st["paused"] = [x for x in st.get("paused") or [] if x != member] + ([member] if paused else [])
         if paused:
             st["queue"] = [q for q in st.get("queue") or [] if q.get("path") != member]
-        _write_state(path, st)
     _invalidate(path)
     return get(path)
 
@@ -650,8 +649,7 @@ def header(path: str, me: str) -> str:
     hs = handles(g)
     lines = [f"You are @{hs.get(me, slug(me))} in the agent group \"{g['name'] or parse(path)[1]}\". Only the owner writes to "
              "the group; your answer is posted there for the owner and the other members to read."]
-    gl = goal(path).strip()
-    if gl:
+    if gl := goal(path).strip():
         lines.append("Goal of the group:\n" + gl)
     lines.append("Members:")
     for m in g["members"]:
@@ -715,9 +713,8 @@ def pump(path: str) -> None:
                 return
             g = load(path)
             lim = g["limits"]
-            hit = "replies" if int(st.get("replies") or 0) >= lim["replies"] else \
-                "per_hour" if _answers_last_hour(path) >= lim["per_hour"] else ""
-            if hit:
+            if hit := "replies" if int(st.get("replies") or 0) >= lim["replies"] else \
+                    "per_hour" if _answers_last_hour(path) >= lim["per_hour"] else "":
                 st["queue"] = []
                 _write_state(path, st)
                 post(path, "note", f"Limit reached: {lim[hit]} answers " + (
@@ -730,8 +727,7 @@ def pump(path: str) -> None:
             if me not in members or me in (st.get("paused") or []):
                 _write_state(path, st)
                 continue
-            r = _start(path, me, item, st, g)
-            if r:
+            if r := _start(path, me, item, st, g):
                 st["current"] = {"path": me, "session": r, "at": time.time(), "reason": item.get("reason"),
                                  "wave": int(item.get("wave") or 1), "origin": st.get("origin")}
                 _write_state(path, st)
@@ -758,8 +754,7 @@ def _start(path: str, me: str, item: dict, st: dict, g: dict) -> str | None:
     with agents._lock:
         # only the owner writes to a group: its turns are bounded by the group's limits, never held by the member's
         # runs per hour or the server's daily budget
-        reason = agents.gate(me, owner=True)
-        if reason:
+        if reason := agents.gate(me, owner=True):
             post(path, "skip", f"{_at(g, me)}: {SKIP_GROUP.get(reason, reason)}", author=me, reason=reason)
             if reason == "budget":
                 agents._limit_alert(me, reason)
@@ -914,8 +909,7 @@ def remap(old_prefix: str, new_prefix: str) -> None:
                 raw = json.loads(f.read_text())
             except (OSError, ValueError):
                 continue
-            moved = _swap(raw, old_prefix, new_prefix)
-            if moved != raw:
+            if (moved := _swap(raw, old_prefix, new_prefix)) != raw:
                 config.write_json(f, moved)
             st = _swap(_read_state(path), old_prefix, new_prefix)
             if po != pn:

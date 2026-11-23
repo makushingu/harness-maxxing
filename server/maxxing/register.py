@@ -149,11 +149,7 @@ def health_codes() -> list[str]:
         codes.append("telegram_on")
     if (cfg.get("backup") or {}).get("repo"):
         codes.append("backup_on")
-    out: list[str] = []
-    for c in codes:
-        if isinstance(c, str) and HEALTH_RE.match(c) and c not in out:
-            out.append(c)
-    return out[:HEALTH_MAX]
+    return list(dict.fromkeys(c for c in codes if isinstance(c, str) and HEALTH_RE.match(c)))[:HEALTH_MAX]
 
 
 def anonymous() -> dict:
@@ -221,14 +217,9 @@ def sync() -> dict:
 def save(count: bool | None = None, email: str | None = None, news: bool | None = None, asked: bool | None = None) -> dict:
     cur = settings()
     new = dict(cur)
-    if count is not None:
-        new["count"] = bool(count)
+    new.update({k: bool(v) for k, v in (("count", count), ("news", news), ("asked", asked)) if v is not None})
     if email is not None:
         new["email"] = email.strip().lower()[:254]
-    if news is not None:
-        new["news"] = bool(news)
-    if asked is not None:
-        new["asked"] = bool(asked)
     if not new["email"]:
         new["news"] = False
     config.update_config(register=new)

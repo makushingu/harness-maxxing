@@ -12,7 +12,7 @@ import { fromHeading, getReadPos, headingAt, setReadPos, useTextZoom, type ReadP
 
 /** Ctrl/⌘ + wheel (a trackpad pinch sends the same) or a two-finger pinch on a touch screen over `ref` zooms the
  *  text instead of the whole page. One finger still scrolls natively. */
-export function useCtrlWheelZoom(ref: React.RefObject<HTMLElement | null>) {
+function useCtrlWheelZoom(ref: React.RefObject<HTMLElement | null>) {
   const from = React.useRef(1)
   useTouchZoom(ref, {
     pinchStart: () => void (from.current = useTextZoom.getState().zoom),

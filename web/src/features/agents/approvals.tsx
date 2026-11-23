@@ -22,7 +22,7 @@ export function useAgentBrowserAsks(path: string) {
 }
 
 /** The requests waiting now for one agent (oldest first). */
-export function useAgentApprovals(path: string, enabled = true): Approval[] {
+function useAgentApprovals(path: string, enabled = true): Approval[] {
   const { data } = usePendingApprovals(enabled)
   return React.useMemo(() => (data || []).filter((x) => x.agent_path === path && x.status === 'pending'), [data, path])
 }

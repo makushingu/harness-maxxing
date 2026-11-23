@@ -17,7 +17,7 @@ export function canPrefetch(): boolean {
 }
 
 /** `cb` once the boot loader has fully played (at once when there is none). Returns a cancel function. */
-export function whenBootDone(cb: () => void): () => void {
+function whenBootDone(cb: () => void): () => void {
   const root = document.documentElement
   const w = window as Window & { mxBooted?: number }
   if (!root.hasAttribute('data-boot') || w.mxBooted) {
@@ -45,7 +45,7 @@ export function whenBootDone(cb: () => void): () => void {
 }
 
 /** `cb` when the browser is idle (at most `timeout` ms later). Returns a cancel function. */
-export function whenIdle(cb: () => void, timeout = 2000): () => void {
+function whenIdle(cb: () => void, timeout = 2000): () => void {
   const w = window as IdleWindow
   if (w.requestIdleCallback) {
     const h = w.requestIdleCallback(cb, { timeout })

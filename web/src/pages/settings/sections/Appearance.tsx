@@ -66,7 +66,7 @@ function MonoFontPicker({ value, onChange, label }: { value: keyof typeof MONO_F
   )
 }
 
-export function AccentPicker() {
+function AccentPicker() {
   const t = useT()
   const accent = useUI((s) => s.accent)
   const setAccent = useUI((s) => s.setAccent)

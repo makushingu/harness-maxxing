@@ -150,14 +150,16 @@ class LinkService : Service() {
                 }
             }
 
-            override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
-                webSocket.close(1000, null)
+            fun closed(webSocket: WebSocket, code: Int) {
                 loop.post { if (gen == generation && ws === webSocket) onDown(code == 4401 || code == 4403, "closed $code") }
             }
 
-            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-                loop.post { if (gen == generation && ws === webSocket) onDown(code == 4401 || code == 4403, "closed $code") }
+            override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                webSocket.close(1000, null)
+                closed(webSocket, code)
             }
+
+            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) = closed(webSocket, code)
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 val code = response?.code
@@ -335,13 +337,13 @@ class LinkService : Service() {
 
     private fun buildNotification(): Notification {
         val paused = ::config.isInitialized && config.paused
-        val text = when {
-            paused -> getString(R.string.notif_paused)
-            LinkState.conn == LinkState.Conn.CONNECTED && LinkState.busyBy == "claude" -> getString(R.string.notif_claude)
-            LinkState.conn == LinkState.Conn.CONNECTED && LinkState.busyBy == "human" -> getString(R.string.notif_human)
-            LinkState.conn == LinkState.Conn.CONNECTED -> getString(R.string.notif_connected)
-            else -> getString(R.string.notif_connecting)
-        }
+        val text = getString(when {
+            paused -> R.string.notif_paused
+            LinkState.conn != LinkState.Conn.CONNECTED -> R.string.notif_connecting
+            LinkState.busyBy == "claude" -> R.string.notif_claude
+            LinkState.busyBy == "human" -> R.string.notif_human
+            else -> R.string.notif_connected
+        })
         val open = PendingIntent.getActivity(
             this, 0, Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,

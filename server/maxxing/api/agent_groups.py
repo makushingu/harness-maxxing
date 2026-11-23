@@ -14,7 +14,8 @@ from ..security import require_auth
 from .agents import _errors, _on
 
 log = logging.getLogger("maxxing.api.agent_groups")
-router = APIRouter(prefix="/api/agent-groups", tags=["agents"], dependencies=[Depends(require_auth)])
+# every route answers 404 while the Agents page is off (_on)
+router = APIRouter(prefix="/api/agent-groups", tags=["agents"], dependencies=[Depends(require_auth), Depends(_on)])
 
 
 def _path(project: str, name: str) -> str:
@@ -74,20 +75,17 @@ class PauseIn(BaseModel):
 
 @router.get("")
 def list_groups():
-    _on()
     return {"groups": agent_rooms.list_groups()}
 
 
 @router.post("")
 def create_group(body: GroupIn):
-    _on()
     with _errors():
         return agent_rooms.create(body.project or "", body.name or "", _fields(body))
 
 
 @router.get("/{project}/{name}")
 def get_group(project: str, name: str):
-    _on()
     with _errors():
         return agent_rooms.get(_path(project, name))
 
@@ -95,20 +93,17 @@ def get_group(project: str, name: str):
 @router.get("/{project}/{name}/media-roots")
 def group_media_roots(project: str, name: str):
     """The folders whose files the group's messages may show (agent_rooms.media_roots)."""
-    _on()
     return {"roots": agent_rooms.media_roots(_get(project, name))}
 
 
 @router.patch("/{project}/{name}")
 def update_group(project: str, name: str, body: GroupIn):
-    _on()
     with _errors():
         return agent_rooms.update(_get(project, name), _fields(body))
 
 
 @router.delete("/{project}/{name}")
 def delete_group(project: str, name: str, keep_files: bool = Query(False)):
-    _on()
     with _errors():
         agent_rooms.delete(_get(project, name), keep_files=keep_files)
     return {"ok": True}
@@ -117,13 +112,11 @@ def delete_group(project: str, name: str, keep_files: bool = Query(False)):
 @router.get("/{project}/{name}/messages")
 def group_messages(project: str, name: str, limit: int = Query(200, ge=1, le=1000),
                    before: Optional[float] = Query(None), after: Optional[float] = Query(None)):
-    _on()
     return {"messages": agent_rooms.room(_get(project, name), limit, before, after)}
 
 
 @router.post("/{project}/{name}/messages")
 def group_say(project: str, name: str, body: SayIn):
-    _on()
     with _errors():
         return agent_rooms.say(_get(project, name), body.text, body.attachments)
 
@@ -131,7 +124,6 @@ def group_say(project: str, name: str, body: SayIn):
 @router.post("/{project}/{name}/uploads")
 async def group_uploads(project: str, name: str, file: list[UploadFile] = File(...)):
     """Files for the next message of the owner, saved under <group>/attachments/YYYY-MM/ (read by every member)."""
-    _on()
     from ..sessions.service import SessionError
     from .sessions import save_uploads
     path = _get(project, name)
@@ -144,28 +136,24 @@ async def group_uploads(project: str, name: str, file: list[UploadFile] = File(.
 
 @router.post("/{project}/{name}/stop")
 def group_stop(project: str, name: str):
-    _on()
     agent_rooms.stop(_get(project, name))
     return {"ok": True}
 
 
 @router.post("/{project}/{name}/reset")
 def group_reset(project: str, name: str):
-    _on()
     agent_rooms.reset(_get(project, name))
     return {"ok": True}
 
 
 @router.post("/{project}/{name}/seen")
 def group_seen(project: str, name: str):
-    _on()
     agent_rooms.mark_seen(_get(project, name))
     return {"ok": True}
 
 
 @router.post("/{project}/{name}/members/{mp}/{mt}/{ma}/pause")
 def group_pause(project: str, name: str, mp: str, mt: str, ma: str, body: PauseIn):
-    _on()
     with _errors():
         return agent_rooms.set_paused(_get(project, name), agents.agent_path(mp, mt, ma), body.paused)
 

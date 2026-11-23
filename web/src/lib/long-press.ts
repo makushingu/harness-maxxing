@@ -5,7 +5,7 @@ import * as React from 'react'
 const HOLD_MS = 450
 const SLOP = 8
 
-export type LongPressHandlers = Pick<React.HTMLAttributes<HTMLElement>, 'onTouchStart' | 'onTouchMove' | 'onTouchEnd' | 'onTouchCancel'>
+type LongPressHandlers = Pick<React.HTMLAttributes<HTMLElement>, 'onTouchStart' | 'onTouchMove' | 'onTouchEnd' | 'onTouchCancel'>
 
 export function useLongPress(onFire: () => void): LongPressHandlers {
   const fire = React.useRef(onFire)

@@ -4,10 +4,10 @@ import { api } from '../api'
 
 // Infra -> E-mail (server/maxxing/infra/mailinfo.py, GET /api/infra/mail): view only. The server caches the providers
 // 5 min and the DNS 1 h; refresh() asks it to skip both.
-export type MailProblemLevel = 'error' | 'warn' | 'info'
+type MailProblemLevel = 'error' | 'warn' | 'info'
 export type MailProblem = { level: MailProblemLevel; code: string; text: string; fix: string; params: Record<string, string | number> }
-export type MailLastCheck = { at: number; ok: boolean; error: string } | null
-export type InfraMailbox = {
+type MailLastCheck = { at: number; ok: boolean; error: string } | null
+type InfraMailbox = {
   id: string
   address: string
   label?: string
@@ -19,8 +19,8 @@ export type InfraMailbox = {
   has_password?: boolean
   last_check: MailLastCheck
 }
-export type MailCfRule = { name: string; enabled: boolean; catch_all: boolean; from: string | null; action: string | null; to: string[]; worker: string | null }
-export type MailCfZone = {
+type MailCfRule = { name: string; enabled: boolean; catch_all: boolean; from: string | null; action: string | null; to: string[]; worker: string | null }
+type MailCfZone = {
   zone: string
   name: string
   routing: { enabled: boolean; status: string | null } | null
@@ -29,7 +29,7 @@ export type MailCfZone = {
   message?: string
   missing_permission?: boolean
 }
-export type MailCloudflare = {
+type MailCloudflare = {
   connected: boolean
   key: string | null
   error?: string
@@ -41,7 +41,7 @@ export type MailCloudflare = {
   missing_permission_zones?: number
   fix?: string
 }
-export type MailHostingerOrder = {
+type MailHostingerOrder = {
   id: string
   domain: string | null
   status: string | null
@@ -55,8 +55,8 @@ export type MailHostingerOrder = {
   error?: string
   message?: string
 }
-export type MailHostinger = { connected: boolean; key: string | null; error?: string; message?: string; orders: MailHostingerOrder[] }
-export type MailRouteKind = 'forward' | 'worker' | 'drop' | 'mailbox' | 'alias' | 'catchall' | 'other'
+type MailHostinger = { connected: boolean; key: string | null; error?: string; message?: string; orders: MailHostingerOrder[] }
+type MailRouteKind = 'forward' | 'worker' | 'drop' | 'mailbox' | 'alias' | 'catchall' | 'other'
 export type MailRoute = {
   domain: string
   address: string
@@ -90,7 +90,7 @@ export type InfraMailView = {
   domains: MailDomainHealth[]
 }
 
-export const infraMailKey = ['infra', 'mail'] as const
+const infraMailKey = ['infra', 'mail'] as const
 
 export function useInfraMail(enabled = true) {
   const qc = useQueryClient()

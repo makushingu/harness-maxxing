@@ -10,7 +10,7 @@ export type Preset = {
   weekday: number // 0 = Sunday
   day: number // day of month
 }
-export const DEFAULT_PRESET: Preset = { kind: 'daily', every: 15, minute: 0, hour: 7, weekday: 1, day: 1 }
+const DEFAULT_PRESET: Preset = { kind: 'daily', every: 15, minute: 0, hour: 7, weekday: 1, day: 1 }
 export const PRESET_KINDS: PresetKind[] = ['minutes', 'hours', 'hourly', 'daily', 'weekdays', 'weekly', 'monthly', 'custom']
 
 const int = (s: string, lo: number, hi: number): number | null => {

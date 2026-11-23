@@ -591,23 +591,32 @@ async def answer(rid: str, body: AnswerIn) -> dict:
 
 
 # ---- live view -----------------------------------------------------------------------------------------------------
-_live: dict[str, float] = {}
+class LiveTokens:
+    """One-use tokens (LIVE_TOKEN_S) opening a live-view WebSocket, on top of the signed-in cookie."""
+
+    def __init__(self) -> None:
+        self._at: dict[str, float] = {}
+
+    def new(self) -> dict:
+        now = time.time()
+        for k, at in list(self._at.items()):
+            if now - at > LIVE_TOKEN_S:
+                self._at.pop(k, None)
+        t = secrets.token_urlsafe(24)
+        self._at[t] = now
+        return {"token": t}
+
+    def take(self, t: str) -> bool:
+        at = self._at.pop(t or "", None)
+        return bool(at and time.time() - at <= LIVE_TOKEN_S)
+
+
+_live = LiveTokens()
 
 
 @router.post("/live-token", dependencies=AUTH)
 async def live_token() -> dict:
-    now = time.time()
-    for k, at in list(_live.items()):
-        if now - at > LIVE_TOKEN_S:
-            _live.pop(k, None)
-    t = secrets.token_urlsafe(24)
-    _live[t] = now
-    return {"token": t}
-
-
-def _take_token(t: str) -> bool:
-    at = _live.pop(t or "", None)
-    return bool(at and time.time() - at <= LIVE_TOKEN_S)
+    return _live.new()
 
 
 @router.websocket("/live")
@@ -618,7 +627,7 @@ async def live(ws: WebSocket):
     {"t":"size","w","h"}; {"t":"quality","q"}). Each picture is confirmed by the page ({"t":"got"}): a few may be on
     their way at once (live.INFLIGHT), so a far connection still gets several per round trip and a slow one never a
     pile of late ones (live.Watcher.delivered). The signed-in cookie AND a live token (POST /live-token) are needed."""
-    if not _take_token(ws.query_params.get("t", "")) or not cookie_valid(ws.cookies.get(COOKIE)):
+    if not _live.take(ws.query_params.get("t", "")) or not cookie_valid(ws.cookies.get(COOKIE)):
         await ws.close(code=4403)
         return
     pid = ws.query_params.get("profile") or browser.MAIN
@@ -708,7 +717,7 @@ async def live(ws: WebSocket):
             elif t == "size":
                 if b and b.watcher:
                     with contextlib.suppress(Exception):
-                        await b.watcher.resize(vid, ev.get("w"), ev.get("h"), ev.get("dpr"))
+                        await b.watcher.resize(vid, ev.get("w"), ev.get("h"))
             elif t == "take":
                 if b:
                     p.input(b, vid, nav)

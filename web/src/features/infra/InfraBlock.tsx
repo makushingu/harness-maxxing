@@ -63,7 +63,7 @@ export function matchInfra(spec: InfraBlockSpec, all: InfraResource[]): InfraRes
   return out.slice(0, MAX)
 }
 
-export function InfraBlock({ code, className }: { code: string; className?: string }) {
+function InfraBlock({ code, className }: { code: string; className?: string }) {
   const t = useT()
   const { data: settings } = useSettings()
   const on = !!settings?.infra_page

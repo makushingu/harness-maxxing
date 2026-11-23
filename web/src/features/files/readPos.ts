@@ -4,7 +4,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
-export const TEXT_ZOOMS = [0.75, 0.85, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5] as const
+const TEXT_ZOOMS = [0.75, 0.85, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5] as const
 
 type ZoomState = { zoom: number; setZoom: (z: number) => void; step: (dir: 1 | -1) => void }
 
@@ -43,7 +43,7 @@ const int = (n: unknown) => Number.isInteger(n) && (n as number) >= 0
 const num = (n: unknown) => typeof n === 'number' && Number.isFinite(n)
 
 /** A position read back from storage (edited by hand, an older version…): every field checked, or dropped. */
-export function validReadPos(v: unknown): v is ReadPos {
+function validReadPos(v: unknown): v is ReadPos {
   if (!v || typeof v !== 'object') return false
   const p = v as Partial<ReadPos>
   if ((p.view !== 'src' && p.view !== 'md') || !num(p.frac)) return false

@@ -58,14 +58,9 @@ def _write(rel: str, data: dict) -> dict:
     return data
 
 
-def _wt_git(wt: Path, *args: str, timeout: float = 120) -> tuple[int, str]:
-    from .customs import IDENT
-    env = {**os.environ, "GIT_TERMINAL_PROMPT": "0", "GIT_EDITOR": "true", "GIT_PAGER": "cat"}
-    try:
-        r = subprocess.run(["git", *IDENT, "-C", str(wt), *args], capture_output=True, text=True, timeout=timeout, env=env)
-    except (OSError, subprocess.TimeoutExpired) as e:
-        return 1, str(e)
-    return r.returncode, (r.stdout or "") + (r.stderr or "")
+def _wt_git(wt: Path, *args: str) -> tuple[int, str]:
+    from .customs import git
+    return git(*args, cwd=wt)
 
 
 def _asks_something(note: str) -> bool:
@@ -93,20 +88,16 @@ def _api_range(src: str) -> tuple[int, int]:
     """(EXT_API_MIN, EXT_API) declared by a version of extensions.py (1, 1 when absent: before versioning)."""
     hi = re.search(r"^EXT_API\s*=\s*(\d+)", src or "", re.M)
     lo = re.search(r"^EXT_API_MIN\s*=\s*(\d+)", src or "", re.M)
-    top = int(hi.group(1)) if hi else 1
-    return (int(lo.group(1)) if lo else 1), top
+    return (int(lo.group(1)) if lo else 1), (int(hi.group(1)) if hi else 1)
 
 
 def _extensions_against(target_src: str) -> list[dict]:
     """Installed extensions the target version would not load (api outside its range)."""
     from . import extensions
     lo, hi = _api_range(target_src)
-    out = []
-    for e in extensions.scan():
-        if e.api < lo or e.api > hi:
-            out.append({"id": e.id, "name": e.label(), "api": e.api,
-                        "reason": f"built for extension API {e.api}, the new version supports {lo}-{hi}"})
-    return out
+    return [{"id": e.id, "name": e.label(), "api": e.api,
+             "reason": f"built for extension API {e.api}, the new version supports {lo}-{hi}"}
+            for e in extensions.scan() if e.api < lo or e.api > hi]
 
 
 # ---- preflight -----------------------------------------------------------------------------------
@@ -114,20 +105,15 @@ def _signature() -> list[str]:
     """What a cached preflight depends on: local HEAD, the target, the uncommitted files."""
     from . import customs
     from .cmd_core import _rev, _current_branch
-    branch = _current_branch()
-    return [_rev("HEAD"), _rev(f"origin/{branch}"), ",".join(sorted(customs.dirty_files()))]
+    return [_rev("HEAD"), _rev(f"origin/{_current_branch()}"), ",".join(sorted(customs.dirty_files()))]
 
 
 def cached_preflight() -> dict | None:
     d = _read(PREFLIGHT)
-    if not d:
-        return None
     try:
-        if d.get("sig") != _signature():
-            return None
+        return d if d and d.get("sig") == _signature() else None
     except Exception:  # noqa: BLE001
         return None
-    return d
 
 
 def preflight(branch: str | None = None, fetch: bool = True, ui_check: bool = True) -> dict:
@@ -269,7 +255,7 @@ def _replay(mine: list[dict], target: str, upstream_files: set[str], rep: dict |
         for item, c in zip(out, mine):
             code, msg = _wt_git(wt, "cherry-pick", "--no-commit", c["commit"])
             if code != 0:
-                c2, files = _wt_git(wt, "diff", "--name-only", "--diff-filter=U")
+                _, files = _wt_git(wt, "diff", "--name-only", "--diff-filter=U")
                 item["status"], item["conflicts"] = "conflict", [f for f in files.splitlines() if f.strip()]
                 _wt_git(wt, "cherry-pick", "--abort")
                 _wt_git(wt, "reset", "-q", "--hard")
@@ -342,10 +328,9 @@ def verify() -> dict:
     exts = [_check_extension(e) for e in extensions.scan()]
     checks = []
     for c in customs.list_customs() if customs.is_git() else []:
-        if not c.get("check"):
-            continue
-        ok, output = _run_check(c["check"])
-        checks.append({"id": c["id"], "title": c["title"], "check": c["check"], "ok": ok, "output": output})
+        if c.get("check"):
+            ok, output = _run_check(c["check"])
+            checks.append({"id": c["id"], "title": c["title"], "check": c["check"], "ok": ok, "output": output})
     problems = [x for x in exts if not x["ok"]] + [x for x in checks if not x["ok"]]
     rep = {"at": time.time(), "version": __version__, "ok": not problems, "extensions": exts, "checks": checks,
            "problems": len(problems)}

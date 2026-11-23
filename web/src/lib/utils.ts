@@ -28,9 +28,6 @@ export function safeNext(next: string | null | undefined): string {
   return next && /^\/(?![/\\])[^\x00-\x1f\\]*$/.test(next) ? next : '/'
 }
 
-export function sleep(ms: number) {
-  return new Promise((r) => setTimeout(r, ms))
-}
 
 export async function copyText(text: string): Promise<boolean> {
   const w = window

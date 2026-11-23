@@ -20,7 +20,7 @@ import type { Agent, ClaudeModel, Session, Topic, WorkspaceTree } from '@/lib/ty
 import { AGENT_PATH_RE, agentRunRoute } from '@/lib/queries/agents'
 
 /** Fallback context window when the server does not know it yet (no turn reported it). */
-export const CONTEXT_MAX = 200_000
+const CONTEXT_MAX = 200_000
 /**
  * The window to measure against, from the most to the least specific:
  * 1. the model chosen for the NEXT turn, when it differs from the last one (its window as Claude Code
@@ -88,7 +88,7 @@ export function topicLabel(path: string, rootLabel: string, sep = ' / ', ws?: Wo
 }
 
 /** The topic of a path; for an agent path, the topic the agent lives in. */
-export function findTopic(ws: WorkspaceTree | undefined, path: string): Topic | undefined {
+function findTopic(ws: WorkspaceTree | undefined, path: string): Topic | undefined {
   const tp = topicPathOf(path)
   for (const p of ws?.projects || []) for (const t of p.topics) if (t.path === tp) return t
   return undefined
@@ -122,14 +122,17 @@ export type PathBases = { topicDir: string | null; wsRoot: string | null }
 
 const reEscape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
+/** The bases without their trailing slash, with the prefix each one is shown as. */
+const basesOf = ({ topicDir, wsRoot }: PathBases) =>
+  [
+    [topicDir?.replace(/\/+$/, ''), ''],
+    [wsRoot?.replace(/\/+$/, ''), '~/'],
+  ] as const
+
 /** An absolute path relative to the topic folder ("src/app.py", "." for the folder itself), else to the
  *  workspace ("~/projects/acme/…"), else unchanged. */
-export function relPath(p: string, { topicDir, wsRoot }: PathBases): string {
-  for (const [base, pre] of [
-    [topicDir, ''],
-    [wsRoot, '~/'],
-  ] as const) {
-    const b = base?.replace(/\/+$/, '')
+export function relPath(p: string, bases: PathBases): string {
+  for (const [b, pre] of basesOf(bases)) {
     if (!b) continue
     if (p === b) return pre ? '~' : '.'
     if (p.startsWith(b + '/')) return pre + p.slice(b.length + 1)
@@ -138,13 +141,9 @@ export function relPath(p: string, { topicDir, wsRoot }: PathBases): string {
 }
 
 /** Same as relPath for every absolute path inside a one-line text (tool summaries, commands). */
-export function relPaths(text: string, { topicDir, wsRoot }: PathBases): string {
+export function relPaths(text: string, bases: PathBases): string {
   let out = text
-  for (const [base, pre] of [
-    [topicDir, ''],
-    [wsRoot, '~/'],
-  ] as const) {
-    const b = base?.replace(/\/+$/, '')
+  for (const [b, pre] of basesOf(bases)) {
     if (!b || b === '/') continue
     out = out.replace(new RegExp(`${reEscape(b)}(/|(?![\\w.-]))`, 'g'), (_m, slash: string) => (slash ? pre : pre ? '~' : '.'))
   }
@@ -159,22 +158,12 @@ export const sessionsUrl = (s: Pick<Session, 'id' | 'path'>) =>
 const IMG = /\.(png|jpe?g|gif|webp|avif|bmp|svg|ico|heic|heif|tiff?)$/i
 const VID = /\.(mp4|webm|mov|m4v|mkv|ogv|avi)$/i
 const AUD = /\.(mp3|wav|ogg|oga|m4a|aac|flac|opus)$/i
-export type FileKind = 'image' | 'video' | 'audio' | 'pdf' | 'markdown' | 'text'
-export function fileKind(path: string, mime?: string): FileKind {
-  if (IMG.test(path) || mime?.startsWith('image/')) return 'image'
-  if (VID.test(path) || mime?.startsWith('video/')) return 'video'
-  if (AUD.test(path) || mime?.startsWith('audio/')) return 'audio'
-  if (/\.pdf$/i.test(path) || mime === 'application/pdf') return 'pdf'
-  if (/\.(md|markdown|mdx)$/i.test(path)) return 'markdown'
-  return 'text'
-}
 export const isImage = (p: string) => IMG.test(p)
 export const isVideo = (p: string) => VID.test(p)
 export const isAudio = (p: string) => AUD.test(p)
 export const baseName = (p: string) => p.replace(/\/+$/, '').split('/').pop() || p
 // Same URL builder as the viewer, so the viewer's instant placeholder is the thumbnail already in the cache.
 export const thumbUrl = (p: string, w = 320, h?: number) => fileThumbUrl(p, w, null, false, 0, null, h)
-export const rawUrl = (p: string, download = false) => `/api/files/raw?path=${encodeURIComponent(p)}${download ? '&download=1' : ''}`
 export const filesUrl = (p: string) => `/files?path=${encodeURIComponent(p)}`
 
 /* ---------------------------------------------------------------- Path linkification */
@@ -184,7 +173,7 @@ const TRAIL = new Set('.,:;!?)]')
 
 /** Where file paths are looked for: the files root (a session), or a list of folders (a scope: what an agent's answers
  *  may show, see ItemCtx.scope) - then a path must sit in one of them and hold no `.` / `..` part. */
-export type PathRoots = string | readonly string[] | null | undefined
+type PathRoots = string | readonly string[] | null | undefined
 
 /** The folder of `roots` (a scope) that holds `p`, or null: outside, or a `.` / `..` part, or an empty part. */
 export function scopeOf(p: string, roots: readonly string[]): string | null {
@@ -197,7 +186,7 @@ export function scopeOf(p: string, roots: readonly string[]): string | null {
 }
 
 /** Absolute paths inside `root` (or one folder of a scope) found in plain text → [start, end, path]. */
-export function findPaths(text: string, root: PathRoots): [number, number, string][] {
+function findPaths(text: string, root: PathRoots): [number, number, string][] {
   if (!root || (typeof root !== 'string' && !root.length)) return []
   const scope = typeof root === 'string' ? null : root
   const r = typeof root === 'string' ? root.replace(/\/+$/, '') || '/' : ''
@@ -262,7 +251,7 @@ function pathsOf(text: string, root: PathRoots, keep: (p: string) => boolean, ma
 
 /* ---------------------------------------------------------------- Quotes */
 /** A quoted file (right click -> Quote): one line `📎 /abs/path` - the path, never the file's content. */
-export const FILE_QUOTE = '📎 '
+const FILE_QUOTE = '📎 '
 export const fileQuote = (path: string) => FILE_QUOTE + path
 /** The path of a quoted-file line, or null for a text quote. */
 export const quotedFile = (q: string): string | null => (q.startsWith(FILE_QUOTE) && !q.includes('\n') && q.slice(FILE_QUOTE.length).startsWith('/') ? q.slice(FILE_QUOTE.length).trim() : null)

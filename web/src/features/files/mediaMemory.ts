@@ -4,7 +4,7 @@
 // No React here.
 import { store } from '@/lib/utils'
 
-export type MediaPrefs = { volume: number; muted: boolean; speed: number }
+type MediaPrefs = { volume: number; muted: boolean; speed: number }
 
 const PREFS = 'mx-media-prefs'
 const POS = 'mx-media-pos'

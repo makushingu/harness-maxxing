@@ -6,10 +6,9 @@ import { useT } from '@/i18n'
 import { buttonVariants } from './button'
 import { Input } from './input'
 
-export const AlertDialog = AD.Root
-export const AlertDialogTrigger = AD.Trigger
+const AlertDialog = AD.Root
 
-export function AlertDialogContent({ className, children, ...props }: React.ComponentProps<typeof AD.Content>) {
+function AlertDialogContent({ className, children, ...props }: React.ComponentProps<typeof AD.Content>) {
   return (
     <AD.Portal>
       <AD.Overlay className="fixed inset-0 z-50 bg-overlay data-[state=closed]:animate-overlay-out data-[state=open]:animate-overlay-in" />
@@ -27,20 +26,20 @@ export function AlertDialogContent({ className, children, ...props }: React.Comp
     </AD.Portal>
   )
 }
-export const AlertDialogTitle = ({ className, ...p }: React.ComponentProps<typeof AD.Title>) => (
+const AlertDialogTitle = ({ className, ...p }: React.ComponentProps<typeof AD.Title>) => (
   <AD.Title className={cn('text-base font-semibold tracking-tight [overflow-wrap:anywhere]', className)} {...p} />
 )
-export const AlertDialogDescription = ({ className, ...p }: React.ComponentProps<typeof AD.Description>) => (
+const AlertDialogDescription = ({ className, ...p }: React.ComponentProps<typeof AD.Description>) => (
   <AD.Description className={cn('text-sm text-muted-foreground', className)} {...p} />
 )
-export const AlertDialogAction = AD.Action
-export const AlertDialogCancel = AD.Cancel
+const AlertDialogAction = AD.Action
+const AlertDialogCancel = AD.Cancel
 
 /* ------------------------------------------------------------------------------------------
  * confirm({title, description, destructive, confirmText, typeToConfirm}) → Promise<boolean>
  * Imperative helper, rendered by <ConfirmHost/> (mounted once in App). Never use window.confirm.
  * ---------------------------------------------------------------------------------------- */
-export type ConfirmOptions = {
+type ConfirmOptions = {
   title: React.ReactNode
   description?: React.ReactNode
   destructive?: boolean

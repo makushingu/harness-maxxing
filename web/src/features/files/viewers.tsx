@@ -555,32 +555,49 @@ export function ImageView({ path, version, onPrev, onNext, position, className }
             </Tooltip>
           )}
           {(onPrev || onNext) && <span className="mx-1 h-5 w-px bg-border" aria-hidden />}
-          <Button variant="ghost" size="icon-sm" onClick={() => step(-1)} aria-label={t('files.zoomOut')}>
-            <Minus />
-          </Button>
-          <button
-            type="button"
-            onClick={() => {
+          <ZoomButtons
+            fit={zoom === 'fit'}
+            current={current}
+            step={step}
+            fitLabel={t('files.actualSize')}
+            onToggle={() => {
               pz.capture()
               toggle(null)
             }}
-            className="h-8 min-w-14 rounded-md px-2 text-xs font-medium text-muted-foreground tabular-nums outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring max-md:h-10"
-            aria-label={zoom === 'fit' ? t('files.actualSize') : t('files.fit')}
-          >
-            {zoom === 'fit' ? t('files.fit') : `${Math.round(current * 100)}%`}
-          </button>
-          <Button variant="ghost" size="icon-sm" onClick={() => step(1)} aria-label={t('files.zoomIn')}>
-            <Plus />
-          </Button>
-          <Tooltip content={t('files.fit')}>
-            <Button variant="ghost" size="icon-sm" onClick={() => setZoom('fit')} aria-label={t('files.fit')} disabled={zoom === 'fit'}>
-              <Maximize />
-            </Button>
-          </Tooltip>
+            onFit={() => setZoom('fit')}
+          />
           {natural && ready && <span className="px-1.5 text-xs text-muted-foreground tabular-nums max-sm:hidden">{natural.w}×{natural.h}</span>}
         </div>
       </div>
     </div>
+  )
+}
+
+/** Zoom out / current zoom (a click toggles fit) / zoom in / fit: the toolbar of an image and of a diagram. */
+function ZoomButtons({ fit, current, step, fitLabel, onToggle, onFit }: { fit: boolean; current: number; step: (dir: 1 | -1) => void; fitLabel: string; onToggle: () => void; onFit: () => void }) {
+  const t = useT()
+  return (
+    <>
+      <Button variant="ghost" size="icon-sm" onClick={() => step(-1)} aria-label={t('files.zoomOut')}>
+        <Minus />
+      </Button>
+      <button
+        type="button"
+        onClick={onToggle}
+        className="h-8 min-w-14 rounded-md px-2 text-xs font-medium text-muted-foreground tabular-nums outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring max-md:h-10"
+        aria-label={fit ? fitLabel : t('files.fit')}
+      >
+        {fit ? t('files.fit') : `${Math.round(current * 100)}%`}
+      </button>
+      <Button variant="ghost" size="icon-sm" onClick={() => step(1)} aria-label={t('files.zoomIn')}>
+        <Plus />
+      </Button>
+      <Tooltip content={t('files.fit')}>
+        <Button variant="ghost" size="icon-sm" onClick={onFit} aria-label={t('files.fit')} disabled={fit}>
+          <Maximize />
+        </Button>
+      </Tooltip>
+    </>
   )
 }
 
@@ -659,25 +676,7 @@ export function DiagramView({ code, className }: { code: string; className?: str
       </div>
       <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center px-3">
         <div className="pointer-events-auto flex items-center gap-0.5 rounded-lg border bg-popover p-1 shadow-pop">
-          <Button variant="ghost" size="icon-sm" onClick={() => step(-1)} aria-label={t('files.zoomOut')}>
-            <Minus />
-          </Button>
-          <button
-            type="button"
-            onClick={() => toggle()}
-            className="h-8 min-w-14 rounded-md px-2 text-xs font-medium text-muted-foreground tabular-nums outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring max-md:h-10"
-            aria-label={zoom === 'fit' ? t('files.zoomIn') : t('files.fit')}
-          >
-            {zoom === 'fit' ? t('files.fit') : `${Math.round(current * 100)}%`}
-          </button>
-          <Button variant="ghost" size="icon-sm" onClick={() => step(1)} aria-label={t('files.zoomIn')}>
-            <Plus />
-          </Button>
-          <Tooltip content={t('files.fit')}>
-            <Button variant="ghost" size="icon-sm" onClick={() => setZoom('fit')} aria-label={t('files.fit')} disabled={zoom === 'fit'}>
-              <Maximize />
-            </Button>
-          </Tooltip>
+          <ZoomButtons fit={zoom === 'fit'} current={current} step={step} fitLabel={t('files.zoomIn')} onToggle={() => toggle()} onFit={() => setZoom('fit')} />
         </div>
       </div>
     </div>

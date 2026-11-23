@@ -11,6 +11,7 @@ Commands run without a shell and never put a secret on a command line (passwords
 """
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import os
 import platform
@@ -138,10 +139,8 @@ def pg_create(name: str, project: str | None = None) -> dict:
         _psql(f'drop database if exists "{name}";')
         _psql(f'drop role if exists "{name}";')
         if stored:
-            try:
+            with contextlib.suppress(Exception):
                 vault.delete(key)
-            except Exception:
-                pass
         raise ActionError(f"cannot record the database: {e}", "record_failed") from e
     ensure_backup_job()
     return {"id": rid, "name": name, "vault_key": key, "url_hint": f"postgresql://{name}:…@127.0.0.1:5432/{name}"}
@@ -396,10 +395,8 @@ def bucket_create(name: str, public: bool = False, project: str | None = None) -
     except Exception:
         # a half-made bucket blocked the next try ("bucket already exists") and left keys in the vault
         if "site" in done:
-            try:
+            with contextlib.suppress(Exception):
                 caddy.remove_site(name)
-            except Exception:
-                pass
         if "vault" in done:
             for k in keys:
                 vault.delete(k)

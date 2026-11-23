@@ -3,7 +3,6 @@
 package main
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 )
@@ -25,10 +24,7 @@ func unregisterAutostart() error {
 	if err != nil {
 		return err
 	}
-	if err := os.Remove(p); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
-	return nil
+	return removeFile(p)
 }
 
 func removeLegacyCopy() error { return nil }

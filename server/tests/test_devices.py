@@ -835,3 +835,11 @@ def test_a_huge_number_from_the_app_or_a_tool_is_refused_not_a_crash(dv):
                       "screen": {"w": 10 ** 400, "h": 1080, "scale": 1}})
         ws.send_json({"t": "paused", "on": True})
         wait_for(lambda: dv.get("/api/devices").json()["devices"][0]["paused"], 5)
+
+
+def test_a_devices_file_that_does_not_parse_is_kept_before_it_is_rewritten(dv):
+    store.new_invite()
+    path = store._path()
+    path.write_text(path.read_text()[:-4])              # cut: no longer JSON
+    store.new_invite()
+    assert list(path.parent.glob("devices.json.damaged-*"))

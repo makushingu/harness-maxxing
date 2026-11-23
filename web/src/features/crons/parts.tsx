@@ -39,7 +39,7 @@ export function StateBadge({ job }: { job: Cron }) {
 }
 
 /** How a run was started, when it is worth saying: a catch-up, a retry, an answer with nothing to report. */
-export function RunNotes({ run, className }: { run: Pick<CronRun, 'trigger' | 'attempt' | 'silent'>; className?: string }) {
+function RunNotes({ run, className }: { run: Pick<CronRun, 'trigger' | 'attempt' | 'silent'>; className?: string }) {
   const t = useT()
   const notes = [
     run.trigger === 'catch-up' && t('crons.trigger.catchUp'),

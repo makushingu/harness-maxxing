@@ -37,7 +37,7 @@ def _configure(p) -> None:
     sub.add_parser("brief", help="the morning brief, now")
     sub.add_parser("dream", help="the night pass, now (a separate session)")
     se = sub.add_parser("set", help="a setting")
-    se.add_argument("key", choices=["model", "dream_model", "root", "ask_first", "internals", "daily", "brief", "dream", "compact_tokens", "telegram"])
+    se.add_argument("key", choices=["model", "dream_model", "root", "ask_first", "internals", "daily", "brief", "dream", "compact_tokens", "telegram", "report_effort"])
     se.add_argument("value")
 
 
@@ -87,20 +87,12 @@ def _handler(a) -> int:
                 print(f"closed #{i['id']} {i['title']}")
                 return 0
             items = jarvis.work(None if a.all else "open", everyone=a.all)
-            if a.json:
-                print(json.dumps(items, indent=2))
-            else:
-                for i in items:
-                    print(_row(i))
-                if not items:
-                    print("no open work")
+            print(json.dumps(items, indent=2) if a.json else "\n".join(map(_row, items)) or "no open work")
             return 0
         if a.jarvis_cmd == "digest":
             if a.mark:
                 jarvis.mark_dream()
-                print("night pass marked: the next digest starts now")
-                return 0
-            print(jarvis.digest(a.since))
+            print("night pass marked: the next digest starts now" if a.mark else jarvis.digest(a.since))
             return 0
         if a.jarvis_cmd == "brief":
             s = jarvis.brief()
@@ -111,16 +103,12 @@ def _handler(a) -> int:
             print(f"night pass started: {s.get('id', '')[:8]}")
             return 0
         if a.jarvis_cmd == "set":
-            v: object = a.value
-            if isinstance(jarvis.DEFAULTS[a.key], bool):
-                v = a.value.lower() in ("1", "on", "true", "yes")
+            boolean = isinstance(jarvis.DEFAULTS[a.key], bool)
+            v: object = a.value.lower() in ("1", "on", "true", "yes") if boolean else a.value
             jarvis.save_settings({a.key: v})
             print(f"{a.key} = {jarvis.settings()[a.key]}")
             return 0
-    except jarvis.JarvisError as e:
-        print(e.message, file=sys.stderr)
-        return 1
-    except service.SessionError as e:
+    except (jarvis.JarvisError, service.SessionError) as e:
         print(e.message, file=sys.stderr)
         return 1
     return 2

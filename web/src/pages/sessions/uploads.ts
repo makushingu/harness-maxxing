@@ -4,7 +4,7 @@ import { uploadAttachment } from '@/lib/queries'
 import { busyEnd, busyStart } from '@/lib/busy'
 import { loadAtts, saveAtts } from './store'
 
-export type Upload = { lid: string; key: string; name: string; size: number; progress: number }
+type Upload = { lid: string; key: string; name: string; size: number; progress: number }
 type Event =
   | { kind: 'progress'; up: Upload }
   | { kind: 'done'; up: Upload; path: string; name: string }
