@@ -16,7 +16,6 @@ from datetime import datetime
 from pathlib import Path
 
 from . import config
-from .sessions import spawn
 
 CHECK_EVERY_S = 6 * 3600
 ENDS_WARN_S = 10 * 86400            # a stored sign-in that ends within this is told (Claude Code warns from 10 days too)
@@ -77,12 +76,28 @@ def detect(text: str | None) -> str | None:
     return text[a: b if b >= 0 else len(text)].strip()[:300] or m.group(0)
 
 
-def last() -> dict:
+def _read(p: Path) -> object:
     try:
-        with open(state_file()) as f:
-            d = json.load(f)
+        with open(p) as f:
+            return json.load(f)
     except (OSError, ValueError):
-        return {}
+        return None
+
+
+def _write(p: Path, data: dict) -> None:
+    """Atomic, safe across processes (a pid-named temporary file)."""
+    try:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        tmp = p.with_name(f"{p.name}.{os.getpid()}.tmp")
+        with open(tmp, "w") as f:
+            json.dump(data, f)
+        os.replace(tmp, p)
+    except OSError:
+        pass
+
+
+def last() -> dict:
+    d = _read(state_file())
     return d if isinstance(d, dict) else {}
 
 
@@ -104,22 +119,11 @@ def record(ok: bool, error: str | None = None, source: str = "turn", ends: objec
     end = _epoch(ends) if data["method"] == "credentials" else None
     if end is not None:
         data["ends"] = end
-    p = state_file()
-    try:
-        p.parent.mkdir(parents=True, exist_ok=True)
-        tmp = p.with_name(f"{p.name}.{os.getpid()}.tmp")
-        with open(tmp, "w") as f:
-            json.dump(data, f)
-        os.replace(tmp, p)
-    except OSError:
-        pass
+    _write(state_file(), data)
 
 
 def forget() -> None:
-    try:
-        state_file().unlink()
-    except FileNotFoundError:
-        pass
+    state_file().unlink(missing_ok=True)
 
 
 def _relevant(rec: dict, method: str | None) -> bool:
@@ -192,25 +196,13 @@ def record_limits(info: object) -> None:
             data[key] = {"utilization": float(w["utilization"]), "resets_at": w.get("resetsAt")}
     if len(data) == 1:
         return
-    p = limits_file()
-    try:
-        p.parent.mkdir(parents=True, exist_ok=True)
-        tmp = p.with_name(f"{p.name}.{os.getpid()}.tmp")
-        with open(tmp, "w") as f:
-            json.dump(data, f)
-        os.replace(tmp, p)
-    except OSError:
-        pass
+    _write(limits_file(), data)
 
 
 def limits(now: float | None = None) -> dict | None:
     """The last limits seen in a turn, as /api/usage gives them ({available, five_hour, seven_day, seen_at}):
     pct 0-100, resets_at in Unix seconds; a window whose reset time has passed is back to 0. None = never seen."""
-    try:
-        with open(limits_file()) as f:
-            d = json.load(f)
-    except (OSError, ValueError):
-        return None
+    d = _read(limits_file())
     if not isinstance(d, dict):
         return None
     now = time.time() if now is None else now

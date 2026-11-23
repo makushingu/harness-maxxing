@@ -122,7 +122,6 @@ def main(argv: list[str] | None = None) -> int:
 def _stdout_gone() -> bool:
     """After a BrokenPipeError: True when it is stdout's reader that left (the write end of a pipe without reader
     polls POLLERR); stdout then points at /dev/null so the flush at exit stays quiet."""
-    import os
     import select
     try:
         fd = sys.stdout.fileno()
@@ -138,12 +137,10 @@ def _stdout_gone() -> bool:
 
 def _load_plugins() -> None:
     """Domain modules that add sub-commands (import errors must not break the CLI)."""
-    import importlib
-    for mod in ("maxxing.commands",):
-        try:
-            importlib.import_module(mod)
-        except ModuleNotFoundError:
-            pass
+    try:
+        from . import commands  # noqa: F401
+    except ModuleNotFoundError:
+        pass
 
 
 if __name__ == "__main__":

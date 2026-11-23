@@ -23,7 +23,6 @@ import subprocess
 import tempfile
 import threading
 import time
-from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Callable
 
@@ -132,13 +131,12 @@ def _git_sig(code: Path) -> tuple:
         head = ""
     if head.startswith("ref: refs/") and ".." not in head:
         names.append(head[5:])                     # the branch the customizations are committed on
-    out = []
-    for name in names:
+    def mtime(name: str) -> int | None:
         try:
-            out.append(os.stat(code / ".git" / name).st_mtime_ns)
+            return os.stat(code / ".git" / name).st_mtime_ns
         except OSError:
-            out.append(None)
-    return tuple(out)
+            return None
+    return tuple(mtime(n) for n in names)
 
 
 def _cached_context(key: str | None) -> dict[str, Any] | None:
@@ -193,10 +191,13 @@ def active_dist(ttl: float = 5.0) -> Path:
         return config.WEB_DIST
     with _refresh:
         now = time.monotonic()
-        if (_active.get("path") is not None and _active.get("shipped") == (config.WEB_DIST, config.STATE)
-                and now - _active.get("at", 0.0) < ttl):
-            return _active["path"]
-        return _look(now)
+        return _active["path"] if _fresh(now, ttl) else _look(now)
+
+
+def _fresh(now: float, ttl: float) -> bool:
+    """The last answer of active_dist() still holds (same shipped build and state dir, younger than `ttl`)."""
+    return (_active.get("path") is not None and _active.get("shipped") == (config.WEB_DIST, config.STATE)
+            and now - _active.get("at", 0.0) < ttl)
 
 
 def _look(now: float) -> Path:
@@ -226,10 +227,7 @@ def cached_dist() -> Path | None:
     event loop then: it hashes the web sources)."""
     if os.environ.get("MAXXING_WEB_DIST"):
         return config.WEB_DIST
-    if _active.get("path") is not None and _active.get("shipped") == (config.WEB_DIST, config.STATE) \
-            and time.monotonic() - _active.get("at", 0.0) < 5.0:
-        return _active["path"]
-    return None
+    return _active["path"] if _fresh(time.monotonic(), 5.0) else None
 
 
 def _sweep(parent: Path, pattern: str, age: float = 3600) -> None:
@@ -271,7 +269,7 @@ def status() -> dict[str, Any]:
 
 
 # ---- build -----------------------------------------------------------------------------------------------------
-@contextmanager
+@contextlib.contextmanager
 def _lock():
     config.STATE.mkdir(parents=True, exist_ok=True)
     with open(config.STATE / "web-build.lock", "w") as fh:
@@ -319,13 +317,14 @@ def _install(web: Path, env: dict[str, str], node: Path, share_from: Path | None
     lock = (web / "package-lock.json").read_bytes() if (web / "package-lock.json").is_file() else b""
     want = hashlib.sha256(lock).hexdigest()
     mods = web / "node_modules"
-    if share_from is not None:
-        theirs = share_from / "node_modules"
-        if (theirs / LOCK_STAMP).is_file() and (theirs / LOCK_STAMP).read_text().strip() == want:
-            if not mods.exists():
-                mods.symlink_to(theirs)
-            return True, ""
-    if mods.is_dir() and (mods / LOCK_STAMP).is_file() and (mods / LOCK_STAMP).read_text().strip() == want:
+
+    def installed(d: Path) -> bool:
+        return (d / LOCK_STAMP).is_file() and (d / LOCK_STAMP).read_text().strip() == want
+    if share_from is not None and installed(share_from / "node_modules"):
+        if not mods.exists():
+            mods.symlink_to(share_from / "node_modules")
+        return True, ""
+    if mods.is_dir() and installed(mods):
         return True, ""
     if not install:
         return None, "the build tools are not installed for these sources (package-lock.json differs)"

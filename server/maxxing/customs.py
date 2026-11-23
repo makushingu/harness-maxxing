@@ -42,10 +42,11 @@ class CustomError(Exception):
 
 
 # ---- git -----------------------------------------------------------------------------------
-def git(*args: str, timeout: float = 120, check: bool = False) -> tuple[int, str]:
+def git(*args: str, timeout: float = 120, check: bool = False, cwd: Path | None = None) -> tuple[int, str]:
+    """git in the code directory (or `cwd`) -> (exit code, stdout + stderr)."""
     env = {**os.environ, "GIT_TERMINAL_PROMPT": "0", "GIT_EDITOR": "true", "GIT_PAGER": "cat"}
     try:
-        r = subprocess.run(["git", *IDENT, "-C", str(config.CODE), *args], capture_output=True, text=True,
+        r = subprocess.run(["git", *IDENT, "-C", str(cwd or config.CODE), *args], capture_output=True, text=True,
                            errors="surrogateescape", timeout=timeout, env=env)   # a file name that is not UTF-8
     except (OSError, subprocess.TimeoutExpired) as e:
         if check:
@@ -312,9 +313,9 @@ def pick(sha: str) -> tuple[str, str]:
 
 def _find(cid: str) -> dict[str, Any]:
     items = list_customs()
-    for it in items:
-        if cid and it["id"] == cid:
-            return it
+    found = next((it for it in items if cid and it["id"] == cid), None)
+    if found:
+        return found
     hits = [it for it in items if len(cid) >= 4 and it["commit"].startswith(cid)]   # "" or "a" would pick the first one
     if len(hits) > 1:
         raise CustomError(f"{cid!r} matches several customizations: give a longer id (see: maxxing custom list)")
@@ -339,9 +340,7 @@ def restore(from_dir: Path | None = None) -> dict[str, Any]:
     """Apply the exported patches (e.g. after restoring the memory backup on a new server)."""
     pdir = from_dir or (_workspace() / PATCH_DIR)
     patches = sorted(pdir.glob("*.patch")) if pdir.is_dir() else []
-    if not patches:
-        return {"applied": 0, **export()}
-    have = {it["id"] for it in list_customs()}
+    have = {it["id"] for it in list_customs()} if patches else set()
     todo = [p for p in patches if _patch_id(p) not in have]
     if not todo:
         return {"applied": 0, **export()}
@@ -402,10 +401,7 @@ def set_pending(**info: Any) -> dict[str, Any]:
 
 
 def clear_pending() -> None:
-    try:
-        pending_path().unlink()
-    except FileNotFoundError:
-        pass
+    pending_path().unlink(missing_ok=True)
 
 
 def conflicts() -> list[str]:

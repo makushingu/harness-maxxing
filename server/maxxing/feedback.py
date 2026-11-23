@@ -23,6 +23,7 @@ import threading
 import urllib.error
 
 from . import config, license, register
+from .vault import _is_text
 
 log = logging.getLogger("maxxing.feedback")
 
@@ -36,7 +37,6 @@ _MAGIC = {"image/png": b"\x89PNG", "image/jpeg": b"\xff\xd8\xff", "image/webp": 
 # added to a message sent although this server's Claude had answered it (the authors see the check was overruled)
 FORCED_NOTE = "\n\n[Sent anyway: the sender's own Harness had answered this message]"
 
-VERDICTS = ("send", "answer", "self")
 CHECK_TIMEOUT_S = 90
 CHECK_TOOLS = "Read,Grep,Glob"     # read-only: the check looks things up, it changes nothing
 MAX_ANSWER = 6000
@@ -94,13 +94,7 @@ extension when possible, else as a customization with the skill maxxing-customiz
 """
 
 
-def utf8(s: str) -> bool:
-    """False for a lone surrogate ("\\ud800" is valid JSON): it cannot be written to config.json."""
-    try:
-        s.encode()
-        return True
-    except UnicodeEncodeError:
-        return False
+utf8 = _is_text   # False for a lone surrogate ("\\ud800" is valid JSON): it cannot be written to config.json
 
 
 class FeedbackError(Exception):
@@ -181,12 +175,12 @@ def parse_check(text: str, topics: list[dict], message: str = "") -> dict:
         data = None
     if not isinstance(data, dict):
         return _send_verdict()
-    verdict = data.get("verdict")
-    answer = data.get("answer").strip()[:MAX_ANSWER] if isinstance(data.get("answer"), str) else ""
+    def text(k: str) -> str:
+        return data[k].strip() if isinstance(data.get(k), str) else ""
+    verdict, answer = data.get("verdict"), text("answer")[:MAX_ANSWER]
     if verdict not in ("answer", "self") or not answer:
         return _send_verdict(checked=verdict == "send")
-    prompt = data.get("prompt").strip()[:MAX_PROMPT] if isinstance(data.get("prompt"), str) else ""
-    topic = data.get("topic").strip().strip("/") if isinstance(data.get("topic"), str) else ""
+    prompt, topic = text("prompt")[:MAX_PROMPT], text("topic").strip("/")
     if not any(t["path"] == topic for t in topics):
         topic = _default_topic(topics)
     return {"verdict": verdict, "answer": answer, "prompt": prompt or message, "topic": topic, "checked": True}

@@ -109,16 +109,7 @@ def ensure_setup_token() -> str:
 
 
 def clear_setup_token() -> None:
-    config.set_secret("setup_token", None)
-    config.set_secret("setup_token_at", None)
-
-
-def setup_token_expires_at() -> float | None:
-    try:
-        at = float(config.get_secret("setup_token_at") or 0)
-    except (TypeError, ValueError):
-        return None
-    return at + SETUP_TOKEN_TTL if at and config.get_secret("setup_token") else None
+    config.set_secrets({"setup_token": None, "setup_token_at": None})
 
 
 def check_setup_token(tok: str) -> bool:
@@ -130,15 +121,20 @@ def check_setup_token(tok: str) -> bool:
 
 
 # ---- cookie --------------------------------------------------------------------------------
-def _cookie_key() -> bytes:
-    k = config.get_secret("cookie_key")
+def secret_key(name: str) -> bytes:
+    """A signing key of secrets.json (cookie_key, device_key), made on first use."""
+    k = config.get_secret(name)
     if not k:
         with config._lock:                    # noqa: SLF001 - re-read: a key made meanwhile must not be replaced
-            k = config.get_secret("cookie_key")
+            k = config.get_secret(name)
             if not k:
                 k = secrets.token_hex(32)
-                config.set_secret("cookie_key", k)
+                config.set_secret(name, k)
     return str(k).encode()                    # str(): a hand-edited secrets.json (a number) is not a 500
+
+
+def _cookie_key() -> bytes:
+    return secret_key("cookie_key")
 
 
 def make_cookie() -> str:
@@ -146,10 +142,6 @@ def make_cookie() -> str:
     body = f"{ts}.{secrets.token_hex(8)}"
     sig = hmac.new(_cookie_key(), body.encode(), hashlib.sha256).hexdigest()
     return f"{body}.{sig}"
-
-
-def _cookie_id(value: str) -> str:
-    return hashlib.sha256(value.encode()).hexdigest()[:32]
 
 
 def _issued_at(value: str | None, key: bytes | None = None) -> int | None:
@@ -168,7 +160,7 @@ def _issued_at(value: str | None, key: bytes | None = None) -> int | None:
 
 def session_id(cookie: str) -> str:
     """Public id of a sign-in cookie (what a revocation records): links handed to that session carry it."""
-    return _cookie_id(cookie)
+    return hashlib.sha256(cookie.encode()).hexdigest()[:32]
 
 
 def session_revoked(sid: str) -> bool:
@@ -191,7 +183,7 @@ def cookie_valid(value: str | None) -> bool:
     except (TypeError, ValueError):
         pass
     revoked = s.get("revoked_sessions")
-    return not (isinstance(revoked, dict) and _cookie_id(value) in revoked)
+    return not (isinstance(revoked, dict) and session_id(value) in revoked)
 
 
 def revoke_cookie(value: str | None) -> bool:
@@ -204,7 +196,7 @@ def revoke_cookie(value: str | None) -> bool:
         cur = config.load_secrets().get("revoked_sessions")
         revoked = {k: v for k, v in (cur.items() if isinstance(cur, dict) else ())
                    if isinstance(v, (int, float)) and v > now}
-        revoked[_cookie_id(value)] = ts + COOKIE_MAX_AGE
+        revoked[session_id(value)] = ts + COOKIE_MAX_AGE
         if len(revoked) > REVOKED_MAX:          # never drop a revocation: refuse every older cookie instead
             # cookie times are whole seconds: one issued later in this same second must still work, so the cutoff is
             # this second and the revocations of cookies issued in it are kept
@@ -218,10 +210,13 @@ def revoke_cookie(value: str | None) -> bool:
     return True
 
 
+def is_https(request: Request) -> bool:
+    return request.headers.get("x-forwarded-proto", request.url.scheme).startswith("https")
+
+
 def set_cookie(response, request: Request) -> None:
-    https = request.headers.get("x-forwarded-proto", request.url.scheme).startswith("https")
     response.set_cookie(COOKIE, make_cookie(), max_age=COOKIE_MAX_AGE, httponly=True,
-                        samesite="strict", secure=https, path="/")
+                        samesite="strict", secure=is_https(request), path="/")
 
 
 def loopback(conn) -> bool:
@@ -374,8 +369,7 @@ async def require_auth(request: Request) -> None:
     """Router dependency: authenticated + CSRF header on mutating methods."""
     if not is_authenticated(request):
         raise HTTPException(401, detail={"error": "auth_required", "message": "Sign in required"})
-    if request.method not in ("GET", "HEAD", "OPTIONS") and request.headers.get("x-maxxing") != "1":
-        raise HTTPException(403, detail={"error": "csrf", "message": "Missing X-Maxxing header"})
+    csrf_only(request)
 
 
 def csrf_only(request: Request) -> None:

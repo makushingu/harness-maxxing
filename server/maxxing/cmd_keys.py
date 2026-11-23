@@ -16,6 +16,7 @@ commands are refused.
 """
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import sys
@@ -109,10 +110,8 @@ def _save(data: bytes, output: str, force: bool) -> int:
         print(f"{output}: {e.strerror or e}", file=sys.stderr)
         return 1
     finally:
-        try:
+        with contextlib.suppress(OSError):
             os.unlink(tmp)
-        except OSError:
-            pass
     return 0
 
 
@@ -163,10 +162,11 @@ def _files(a) -> int:
 def _handler(a) -> int:
     from . import agent_guard, vault, vault_files
     agent = agent_guard.agent_turn()["path"]        # from the turn's own session, not its (changeable) environment
+    if agent:
+        from . import agents
+        mine = set(agents.load(agent)["keys"] if agents.exists(agent) else [])
     if a.action == "list":
         if agent:                                   # an agent sees its own text keys only, never a file (like get)
-            from . import agents
-            mine = set(agents.load(agent)["keys"] if agents.exists(agent) else [])
             rows = [{**r, "kind": "text"} for r in vault.list_secrets() if r["name"] in mine]
         else:
             rows = [{**r, "kind": "text"} for r in vault.list_secrets()] + \
@@ -179,11 +179,9 @@ def _handler(a) -> int:
         for r in [] if a.json else rows:
             print(f"{r['name']:<40} {'env' if r['expose'] else '   '} {'file' if r['kind'] == 'file' else '    '}  {r['note']}")
         return 0
-    if agent and a.action in ("get", "set", "delete", "put-file", "get-file", "delete-file"):
+    if agent:
         # a turn of an agent: only its own keys, read-only; never a file (those never reach an agent). A speed bump against injected orders (the real limit is
         # its permission mode and approvals), so a message saying "run maxxing keys get" gets nothing.
-        from . import agents
-        mine = agents.load(agent)["keys"] if agents.exists(agent) else []
         if a.action != "get" or a.name not in mine:
             print(f"{a.name}: not available to this agent (its Keys setting)", file=sys.stderr)
             return 1
@@ -201,9 +199,8 @@ def _handler(a) -> int:
         print(v, end="" if v.endswith("\n") else "\n")
         return 0
     if a.action == "set":
-        cap = VALUE_READ_MAX
-        data = sys.stdin.buffer.read(cap + 1)   # bounded: `< /dev/zero` or a huge pipe is refused, not loaded
-        if len(data) > cap:
+        data = sys.stdin.buffer.read(VALUE_READ_MAX + 1)   # bounded: `< /dev/zero` or a huge pipe is refused, not loaded
+        if len(data) > VALUE_READ_MAX:
             print(f"{a.name}: value must be 1 to 16384 characters", file=sys.stderr)
             return 2
         try:

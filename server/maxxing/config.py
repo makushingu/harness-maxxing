@@ -94,8 +94,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "git_page": False,                 # Settings -> Features: the Git & GitHub page and its sidebar entry
     "code_mode": False,                # Settings -> Features -> Sessions -> Code mode: the terminal drawer (POST /api/term/enable: password)
     "infra_page": False,               # Settings -> Features: the Infra page (sites, databases, buckets, domains, servers)
-    "infra_refresh_min": 15,
-    "result_line_hidden": [],          # Sessions: parts of the line under each answer that are hidden (cost, tokens...)           # Infra: background refresh period (minutes) while the page is on
+    "infra_refresh_min": 15,           # Infra: background refresh period (minutes) while the page is on
+    "result_line_hidden": [],          # Sessions: parts of the line under each answer that are hidden (cost, tokens...)
     "donation_hidden": False,          # Settings -> About: hide the donation links shown elsewhere in the app
     "mail_page": False,                # Settings -> Features: the E-mail page (IMAP/SMTP mailboxes)
     "sidebar_order": [],               # sidebar: the pages in the order the user dragged them (routes; empty = default)
@@ -449,8 +449,7 @@ def session_config(cfg: dict, path: str | None) -> dict:
 def update_config(**changes: Any) -> dict:
     """Shallow-merge top-level keys (dict values are deep-merged) and save."""
     with _lock:
-        cfg = load_config()
-        cfg = _merge(cfg, changes)
+        cfg = _merge(load_config(), changes)
         save_config(cfg)
         return cfg
 

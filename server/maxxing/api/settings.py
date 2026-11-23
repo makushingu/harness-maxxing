@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 from .. import budget, bus, config, crons, memory, profile_photo
 from ..security import require_auth
+from ..vault import _is_text as _utf8
 
 router = APIRouter(prefix="/api/settings", tags=["settings"], dependencies=[Depends(require_auth)])
 
@@ -21,6 +22,10 @@ KEYS = ("timezone", "language", "public_url", "files_root", "presentation_defaul
         "daily_budget_usd", "limit_retry", "limit_retry_delay_s")
 RESULT_FIELDS = ("model", "duration", "cost", "tokens", "cache")   # parts of the line under each answer
 BADGE_PAGES = ("/", "/sessions", "/team", "/agents")                 # sidebar entries with a counter badge
+# on / off settings, off by default (code_mode is read-only here: /api/term/enable|disable)
+FLAGS = ("presentation_default", "usage_widget", "tasks_page", "git_page", "code_mode", "infra_page", "team_page",
+         "agents_page", "mail_page", "browser_feature", "devices_feature", "jarvis_feature", "maxxing_mode",
+         "donation_hidden")
 _ROUTE = re.compile(r"^/(x/[a-z0-9][a-z0-9-]{0,47}|[a-z0-9-]{0,40})\Z")   # a page (/sessions) or a pinned extension page (/x/<id>)
 _URL = config.PUBLIC_URL_RE
 
@@ -63,26 +68,13 @@ def current() -> dict:
     hidden = hidden if isinstance(hidden, list) else []       # a hand-edited value of another type: nothing hidden
     return {"timezone": cfg.get("timezone") or "UTC", "language": cfg.get("language") or "en",
             "public_url": cfg.get("public_url") or "", "files_root": cfg.get("files_root") or "/root",
-            "presentation_default": bool(cfg.get("presentation_default", False)),
-            "usage_widget": bool(cfg.get("usage_widget", False)),
+            **{k: bool(cfg.get(k)) for k in FLAGS},
             "daily_budget_usd": budget.limit(),
             "limit_retry": crons.limit_retry_on(),
             "limit_retry_delay_s": int(crons.limit_retry_delay()),
-            "tasks_page": bool(cfg.get("tasks_page", False)),
-            "git_page": bool(cfg.get("git_page", False)),
-            "code_mode": bool(cfg.get("code_mode", False)),   # read-only here: /api/term/enable|disable
-            "infra_page": bool(cfg.get("infra_page", False)),
-            "team_page": bool(cfg.get("team_page", False)),
-            "agents_page": bool(cfg.get("agents_page", False)),
-            "mail_page": bool(cfg.get("mail_page", False)),
-            "browser_feature": bool(cfg.get("browser_feature", False)),
-            "devices_feature": bool(cfg.get("devices_feature", False)),
-            "jarvis_feature": bool(cfg.get("jarvis_feature", False)),
-            "maxxing_mode": bool(cfg.get("maxxing_mode", False)),
             "memory_max_lines": memory.max_lines(),
             "cpu_priorities": cfg.get("cpu_priorities", True) is not False,
             "result_line_hidden": [f for f in RESULT_FIELDS if f in hidden],
-            "donation_hidden": bool(cfg.get("donation_hidden", False)),
             "sidebar_order": sidebar_order(cfg.get("sidebar_order")),
             "nav_badges_hidden": [p for p in BADGE_PAGES if p in _list(cfg.get("nav_badges_hidden"))]}
 
@@ -158,14 +150,6 @@ def clean_profile(name: str, color: str, emoji: str) -> dict:
     if not _utf8(name):                        # a lone surrogate: config.json could not be written
         raise _err("invalid_name", "name: printable characters only")
     return {"name": name, "color": color, "emoji": emoji}
-
-
-def _utf8(s: str) -> bool:
-    try:
-        s.encode()
-    except UnicodeEncodeError:
-        return False
-    return True
 
 
 @router.get("/profile")
@@ -403,7 +387,6 @@ def put_settings(body: SettingsIn):
     if changes:
         config.update_config(**changes)
         if "timezone" in changes:
-            from .. import crons
             if not crons.keep_system_clock() and not crons.align_system_timezone(changes["timezone"]):
                 # cron must fire at the times the UI shows: the system zone cannot be switched, so the server
                 # clock is kept and the crontab lines check the schedule in the new zone

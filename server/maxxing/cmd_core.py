@@ -33,7 +33,6 @@ UNIT_PATH = Path("/etc/systemd/system/claude-maxxing.service")
 JOBS_SLICE_PATH = Path("/etc/systemd/system/maxxing-jobs.slice")
 SYSTEMD_DIR = Path("/run/systemd/system")          # present when systemd is PID 1
 CADDYFILE = Path("/etc/caddy/Caddyfile")
-CADDY_SITE = Path("/etc/caddy/claude-maxxing.caddy")
 BIN_LINK = Path("/usr/local/bin/maxxing")
 PRODUCT_SKILLS_EXTRA = ("memory", "memory-compaction", "video-motion-design", "pdf-document", "image-edit",
                         "seo-audit", "web-scraping")                     # + every skill named maxxing-*
@@ -226,10 +225,9 @@ def install_skills() -> dict:
         installed.append(n)
     for n in sorted(previous - set(names)):
         dst = dst_root / n
-        if n.startswith("maxxing-") or n in PRODUCT_SKILLS_EXTRA:
-            if dst.is_dir() and not dst.is_symlink():
-                shutil.rmtree(dst, ignore_errors=True)
-                removed.append(n)
+        if (n.startswith("maxxing-") or n in PRODUCT_SKILLS_EXTRA) and dst.is_dir() and not dst.is_symlink():
+            shutil.rmtree(dst, ignore_errors=True)
+            removed.append(n)
     _save_install_state(skills=installed)
     return {"installed": installed, "removed": removed, "backed_up": backed_up}
 
@@ -371,12 +369,10 @@ def _is_public_bind(ip: str) -> bool:
 
 def update_topic() -> str:
     """The topic that handles updates: `system/harness` since 2.0.0a33, `system/update` on older workspaces."""
-    try:
+    with contextlib.suppress(Exception):
         ws = config.workspace()
         if (ws / "projects/system/topics/update").is_dir() and not (ws / "projects/system/topics/harness").is_dir():
             return "system/update"
-    except Exception:  # noqa: BLE001
-        pass
     return "system/harness"
 
 
@@ -418,19 +414,12 @@ def ensure_default_crons() -> str:
         return "crons module not available - skipped"
     done = set(_install_state().get("default_crons", []))
     existing_install = bool(done)                  # jobs added by a later version arrive off there (no silent change)
-    lister = getattr(crons, "list_jobs", None)
-    creator = getattr(crons, "create_job", None) or getattr(crons, "create", None)
-    if creator is None:
-        return "crons module has no create_job() - skipped"
     todo = [(k, j) for k, j in default_jobs() if k not in done]
     if not todo:
         return "default jobs already created"
     made, problems = [], []
     try:
-        existing = lister() if lister else []
-        if isinstance(existing, dict):
-            existing = existing.get("jobs", [])
-        names = {j.get("name") for j in existing or []}
+        names = {j.get("name") for j in crons.list_jobs()}
     except Exception as e:  # noqa: BLE001
         return f"could not create the default jobs: {e}"
     pending = list(_install_state().get("enable_after_onboarding", []))
@@ -439,7 +428,7 @@ def ensure_default_crons() -> str:
             if job["name"] not in names:
                 if existing_install and key in OFF_ON_EXISTING_INSTALLS:
                     job = {**job, "enabled": False}
-                created = creator(dict(job))
+                created = crons.create_job(dict(job))
                 made.append(job["name"] + ("" if job.get("enabled", True) else " (disabled)"))
                 if key in ENABLE_AFTER_ONBOARDING and isinstance(created, dict) and created.get("id"):
                     pending.append(created["id"])
@@ -475,6 +464,11 @@ def enable_pending_jobs() -> list[str]:
     return turned_on
 
 
+def _no_systemd() -> bool:
+    """No systemd to write units for, or tests/dev (MAXXING_SPAWN=direct)."""
+    return os.environ.get("MAXXING_SPAWN") == "direct" or not SYSTEMD_DIR.is_dir()
+
+
 # ---- jobs slice ----------------------------------------------------------------------------
 _SLICE_MEMORY_RE = re.compile(r"^\d+(\.\d+)?[%KMGT]?$")
 
@@ -492,16 +486,11 @@ def jobs_slice_text(cfg: dict | None = None) -> str:
 def ensure_jobs_slice() -> str:
     """Write /etc/systemd/system/maxxing-jobs.slice (the memory budget shared by the jobs running at once) when it
     changed, then daemon-reload. Skipped without systemd and in tests/dev (MAXXING_SPAWN=direct)."""
-    if os.environ.get("MAXXING_SPAWN") == "direct" or not SYSTEMD_DIR.is_dir():
+    if _no_systemd():
         return "skipped (no systemd)"
-    text = jobs_slice_text()
     try:
-        if JOBS_SLICE_PATH.is_file() and JOBS_SLICE_PATH.read_text() == text:
+        if not _write_if_changed(JOBS_SLICE_PATH, jobs_slice_text()):
             return "unchanged"
-        JOBS_SLICE_PATH.parent.mkdir(parents=True, exist_ok=True)
-        tmp = JOBS_SLICE_PATH.with_name(JOBS_SLICE_PATH.name + ".tmp")
-        tmp.write_text(text)
-        os.replace(tmp, JOBS_SLICE_PATH)
     except OSError as e:
         return f"not written: {e}"
     systemctl("daemon-reload")
@@ -548,7 +537,7 @@ def ensure_cpu_slices(jobs: str | None = None, apply_now: bool = True) -> str:
     """Write the slices of the CPU priorities (+ the jobs slice) when they changed, then daemon-reload and give the
     running slices their new weight at once (`set-property --runtime`). The server moves into the live slice at its
     next restart (never restarted here). Skipped without systemd and in tests/dev (MAXXING_SPAWN=direct)."""
-    if os.environ.get("MAXXING_SPAWN") == "direct" or not SYSTEMD_DIR.is_dir():
+    if _no_systemd():
         return "skipped (no systemd)"
     from . import cpu
     cfg = config.load_config()
@@ -571,7 +560,7 @@ def ensure_cpu_slices(jobs: str | None = None, apply_now: bool = True) -> str:
 
 def check_cpu_priorities() -> Check | None:
     """The slice files match the setting (a restored config, an install older than the feature)."""
-    if os.environ.get("MAXXING_SPAWN") == "direct" or not SYSTEMD_DIR.is_dir():
+    if _no_systemd():
         return None
     from . import cpu
     cfg = config.load_config()
@@ -631,23 +620,18 @@ def do_init(a: argparse.Namespace) -> dict:
         raw.setdefault(k, config.DEFAULT_CONFIG[k])
     raw.setdefault("timezone", detect_timezone())
     raw.setdefault("public_url", "")
-    before_a70 = bool(_install_state().get("default_crons"))   # an install that already had its default jobs
-    if "cron_keep_background" not in raw:         # written once: installed before 2.0.0a70 = background programs of
-        raw["cron_keep_background"] = before_a70  # jobs keep living, as they did
-    if "unit_hardening" not in raw:               # same: the turn / job unit protections are new there, so off
-        raw["unit_hardening"] = not before_a70
-    if "health_feed" not in raw:                  # health problems in the feed: new installs only (they may reach
-        old = _install_state()                    # Telegram); an older install turns it on itself (Notifications)
-        raw["health_feed"] = not (old.get("version") or old.get("initialized") or old.get("default_crons"))
-    if "tasks_page" not in raw:                   # Tasks became optional, off for new installs; older
-        old = _install_state()                    # ones keep the page they had
-        raw["tasks_page"] = bool(old.get("version") or old.get("initialized") or old.get("default_crons"))
-    if "agents_page" not in raw:                  # 2.0.0a132: Agents on for new installs; older ones keep
-        old = _install_state()                    # what they had (off unless switched on)
-        raw["agents_page"] = not (old.get("version") or old.get("initialized") or old.get("default_crons"))
-    if "usage_widget" not in raw:                 # 2.0.0a132: plan usage shown on new installs; older ones keep
-        old = _install_state()                    # what they had (off unless switched on)
-        raw["usage_widget"] = not (old.get("version") or old.get("initialized") or old.get("default_crons"))
+    old = _install_state()
+    before_a70 = bool(old.get("default_crons"))   # an install that already had its default jobs
+    older = bool(old.get("version") or old.get("initialized") or old.get("default_crons"))
+    # each written once: installed before 2.0.0a70 = background programs of jobs keep living, as they did, and the
+    # turn / job unit protections (new there) are off; health problems in the feed: new installs only (they may
+    # reach Telegram; an older install turns it on itself); Tasks became optional, off for new installs, older ones
+    # keep the page they had; 2.0.0a132: Agents and the plan usage widget on for new installs, older ones keep what
+    # they had (off unless switched on)
+    for k, v in (("cron_keep_background", before_a70), ("unit_hardening", not before_a70),
+                 ("health_feed", not older), ("tasks_page", older), ("agents_page", not older),
+                 ("usage_widget", not older)):
+        raw.setdefault(k, v)
     from . import register                        # once (2.0.0a94): anonymous counter on unless the user was asked
     register.migrate(raw)
     config.write_json(config.config_path(), raw)
@@ -676,11 +660,9 @@ def do_init(a: argparse.Namespace) -> dict:
     report["cpu_priorities"] = ensure_cpu_slices(report["jobs_slice"])
     report["service_memory"] = ensure_service_memory()
     cr = _optional("crons")
-    try:
-        # lines are guarded or not depending on the clock mode; older lines get `--detach` (job units)
+    # lines are guarded or not depending on the clock mode; older lines get `--detach` (job units)
+    with contextlib.suppress(Exception):
         cr and cr.sync_crontab()
-    except Exception:  # noqa: BLE001
-        pass
     _save_install_state(version=__version__, code_dir=str(config.CODE), initialized=time.time())
     from . import security
     if not security.password_is_set():
@@ -752,28 +734,18 @@ def _c(cid: str, level: str, title: str, detail: str = "", fix: str = "") -> Che
 
 
 def claude_bin() -> str | None:
-    env = os.environ.get("MAXXING_CLAUDE_BIN")
-    if env:
-        return env
-    found = shutil.which("claude")
+    found = os.environ.get("MAXXING_CLAUDE_BIN") or shutil.which("claude")
     if found:
         return found
-    for p in (home() / ".local" / "bin" / "claude", Path("/usr/local/bin/claude")):
-        if p.exists():
-            return str(p)
-    return None
+    return next((str(p) for p in (home() / ".local" / "bin" / "claude", Path("/usr/local/bin/claude")) if p.exists()),
+                None)
 
 
 def uv_bin() -> str | None:
     if Path("/usr/local/bin/uv").exists():            # the pinned one (deps.toml) before any other on PATH
         return "/usr/local/bin/uv"
-    found = shutil.which("uv")
-    if found:
-        return found
-    for p in (home() / ".local" / "bin" / "uv",):
-        if p.exists():
-            return str(p)
-    return None
+    p = home() / ".local" / "bin" / "uv"
+    return shutil.which("uv") or (str(p) if p.exists() else None)
 
 
 def claude_auth() -> tuple[str | None, str]:
@@ -1013,17 +985,13 @@ def service_memory_path() -> Path:
 def ensure_service_memory() -> str:
     """A web service unit written before 2.0.0a70 has no MemoryMax: a drop-in adds one (every `maxxing init`, so
     every update; install.sh now writes it in the unit itself, sized from the RAM)."""
-    if os.environ.get("MAXXING_SPAWN") == "direct" or not SYSTEMD_DIR.is_dir() or not UNIT_PATH.is_file():
+    if _no_systemd() or not UNIT_PATH.is_file():
         return "skipped"
     try:
         if "MemoryMax=" in UNIT_PATH.read_text():
             return "in the unit"
-        p = service_memory_path()
-        if p.is_file() and p.read_text() == SERVICE_MEMORY:
+        if not _write_if_changed(service_memory_path(), SERVICE_MEMORY):
             return "unchanged"
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(SERVICE_MEMORY)
-        os.chmod(p, 0o644)
     except OSError as e:
         return f"not written: {e}"
     systemctl("daemon-reload")
@@ -1245,12 +1213,10 @@ def check_crontab() -> Check | None:
     if crons is None:
         return None
     try:
-        jobs = crons.list_jobs() if hasattr(crons, "list_jobs") else []
-        if isinstance(jobs, dict):
-            jobs = jobs.get("jobs", [])
+        jobs = crons.list_jobs()
     except Exception as e:  # noqa: BLE001
         return _c("crontab", WARN, "cannot list scheduled jobs", str(e))
-    enabled = [j for j in jobs or [] if j.get("enabled")]
+    enabled = [j for j in jobs if j.get("enabled")]
     text = _crontab_text()
     if text is None:
         return _c("crontab", FAIL, "cron is not installed", "", "apt-get install -y cron && systemctl enable --now cron")
@@ -1278,7 +1244,7 @@ def check_timezone(cfg: dict) -> Check:
 def check_telegram(cfg: dict) -> Check:
     st = None
     gw = _optional("telegram.gateway")
-    if gw is not None and hasattr(gw, "status"):
+    if gw is not None:
         try:
             st = gw.status()
         except Exception:  # noqa: BLE001
@@ -1329,7 +1295,7 @@ def backup_info(cfg: dict) -> dict:
     repo = (cfg.get("backup") or {}).get("repo") or ""
     last = None
     mod = _optional("backup")
-    if mod is not None and hasattr(mod, "status"):
+    if mod is not None:
         try:
             s = mod.status() or {}
             repo, last = s.get("repo") or repo, s.get("last")
@@ -1337,11 +1303,9 @@ def backup_info(cfg: dict) -> dict:
             last = None
     if last is None:
         h = _optional("health")
-        if h is not None and hasattr(h, "last_backup"):
+        if h is not None:
             last = h.last_backup()
-    age = None
-    if last and last.get("at"):
-        age = (time.time() - float(last["at"])) / 3600
+    age = (time.time() - float(last["at"])) / 3600 if last and last.get("at") else None
     return {"repo": repo, "age_h": age, "last_ok": (last or {}).get("ok")}
 
 
@@ -1442,12 +1406,9 @@ NODE_PARTS = ("bin/node", "bin/npm", "bin/npx", "bin/corepack", "include/node", 
 def node_prefixes() -> list[Path]:
     """Where the installer put Node.js: /usr/local, or <state>/tools/node next to an older system Node."""
     out = [config.STATE / "tools" / "node"]
-    try:
-        for ln in (config.STATE / "install-manifest").read_text().splitlines():
-            if ln.startswith("node "):
-                out.append(Path(ln[5:].strip()))
-    except OSError:
-        pass
+    with contextlib.suppress(OSError):
+        out += [Path(ln[5:].strip()) for ln in (config.STATE / "install-manifest").read_text().splitlines()
+                if ln.startswith("node ")]
     return [p for p in dict.fromkeys(out) if (p / "bin" / "node").exists()]
 
 
@@ -1469,10 +1430,8 @@ def foreign_owned(prefix: Path, limit: int = 20) -> list[str]:
             if st.st_uid != 0 or st.st_gid != 0:
                 bad.append(str(p))
             if p.is_dir() and not p.is_symlink():
-                try:
+                with contextlib.suppress(OSError):
                     todo.extend(p.iterdir())
-                except OSError:
-                    pass
     return bad
 
 
@@ -1739,17 +1698,22 @@ def upgrade_notes(old: str, new: str, root: Path | None = None) -> list[Path]:
     lo, hi = version_key(old), version_key(new)
     if not d.is_dir() or hi is None:
         return []
-    out = []
-    for f in d.glob("*.md"):
-        k = version_key(f.stem)
-        if k is not None and (lo is None or k > lo) and k <= hi:
-            out.append((k, f))
-    return [f for _, f in sorted(out)]
+    keyed = [(k, f) for f in d.glob("*.md")
+             if (k := version_key(f.stem)) is not None and (lo is None or k > lo) and k <= hi]
+    return [f for _, f in sorted(keyed)]
 
 
 def _version_in(text: str) -> str | None:
     m = re.search(r"__version__\s*=\s*[\"']([^\"']+)[\"']", text or "")
     return m.group(1) if m else None
+
+
+def _disk_version() -> str | None:
+    """The version of the code on disk (not the HEAD commit, nor this process)."""
+    try:
+        return _version_in((config.CODE / "server" / "maxxing" / "__init__.py").read_text())
+    except OSError:
+        return None
 
 
 def changelog_since(old: str, new: str) -> list[str]:
@@ -1818,12 +1782,8 @@ def check_update(branch: str | None = None) -> dict:
         return {"ok": False, "error": f"branch {branch} not found on origin", "current": __version__}
     code, cnt = _git("rev-list", "--count", f"HEAD..{remote}")
     behind = int(cnt.strip()) if code == 0 and cnt.strip().isdigit() else 0
-    try:                                              # the code on disk (not the HEAD commit, nor this process)
-        local_src = (config.CODE / "server" / "maxxing" / "__init__.py").read_text()
-    except OSError:
-        local_src = ""
     code, remote_src = _git("show", f"{remote}:server/maxxing/__init__.py")
-    current = _version_in(local_src) or __version__
+    current = _disk_version() or __version__
     latest = (_version_in(remote_src) if code == 0 else None) or current
     from . import customs
     return {"ok": True, "git": True, "branch": branch, "current": current, "latest": latest,
@@ -1934,10 +1894,7 @@ def _record_start(old: str, start: str) -> None:
 
 def _recorded_start(old: str) -> str | None:
     """Branch recorded with the rollback point `old` ("" = detached), None when unknown (older version)."""
-    try:
-        d = json.loads((config.STATE / PRE_UPDATE_BRANCH).read_text())
-    except (OSError, ValueError):
-        return None
+    d = config.read_json(config.STATE / PRE_UPDATE_BRANCH)
     if not isinstance(d, dict) or d.get("commit") != old or not isinstance(d.get("branch"), str):
         return None
     return d["branch"]
@@ -1958,10 +1915,7 @@ def _mark_in_progress(old: str) -> None:
 def _interrupted() -> dict | None:
     """The update killed before its end, if any (its rollback point still exists): this run takes over its rollback
     point, starting branch, version and auto-save."""
-    try:
-        d = json.loads((config.STATE / IN_PROGRESS).read_text())
-    except (OSError, ValueError):
-        return None
+    d = config.read_json(config.STATE / IN_PROGRESS)
     if not isinstance(d, dict) or not isinstance(d.get("commit"), str) or not _rev(d["commit"]):
         return None
     _UPDATE_CTX.update(branch=d.get("branch") or "", from_version=str(d.get("version") or ""))
@@ -2028,11 +1982,9 @@ def _rollback(old: str, reason: str, restart: bool, **info) -> None:
 def _notify(text: str) -> None:
     from . import feed
     feed.system("Update needs attention", text, "warning", "system", f"/sessions?path=projects/{update_topic().replace('/', '/topics/')}")
-    try:
+    with contextlib.suppress(Exception):               # Telegram is optional
         from .telegram import gateway
         gateway.system_alert(text)
-    except Exception:  # noqa: BLE001 - Telegram is optional
-        pass
 
 
 def cmd_update(a) -> int:
@@ -2088,10 +2040,7 @@ def update_lock():
 def _code_not_moved() -> bool:
     """A failed update that stopped before the code moved (a merge that cannot run, an index.lock...): the next
     update starts afresh instead of "resuming" from this stale point."""
-    try:
-        d = json.loads((config.STATE / IN_PROGRESS).read_text())
-    except (OSError, ValueError):
-        return False
+    d = config.read_json(config.STATE / IN_PROGRESS)
     return (isinstance(d, dict) and d.get("commit") == _rev("HEAD")
             and (d.get("branch") or _current_branch()) == _current_branch())
 
@@ -2121,16 +2070,8 @@ def _update_code(a) -> int:
     from . import license
     if license.enabled():                              # fair source: an install still on archives moves to git first
         dirty = [f for f in customs.dirty_files() if not f.startswith("web/dist/")]
-        if dirty:                                      # the move needs a clean tree: keep them as a customization
-            try:
-                it = customs.save("Unsaved changes found by the update",
-                                  why=f"auto-saved by maxxing update ({', '.join(dirty[:5])}) - "
-                                      f"give it a real title and reason (topic {update_topic()})")
-                line(WARN, f"{len(dirty)} uncommitted change(s) saved as customization {it['id']}",
-                     "Claude: rename it with the real purpose (skill maxxing-customize)")
-            except customs.CustomError as e:
-                line(FAIL, "uncommitted changes in the code directory cannot be kept", str(e))
-                return 1
+        if dirty and not _autosave(dirty):             # the move needs a clean tree: keep them as a customization
+            return 1
         r = license.try_move_to_git()
         if r.get("moved"):
             line(OK, f"this server now updates from {license.GIT_URL} (branch {r['branch']}, "
@@ -2216,14 +2157,7 @@ def _update_code(a) -> int:
                    f"git -C {config.CODE} stash show -p stash@{{0}})")
     dirty = customs.dirty_files()
     if dirty:                                          # never lose a change made in the code directory
-        try:
-            it = customs.save("Unsaved changes found by the update",
-                              why=f"auto-saved by maxxing update ({', '.join(dirty[:5])}) - "
-                                  f"give it a real title and reason (topic {update_topic()})")
-            line(WARN, f"{len(dirty)} uncommitted change(s) saved as customization {it['id']}",
-                 "Claude: rename it with the real purpose (skill maxxing-customize)")
-        except customs.CustomError as e:
-            line(FAIL, "uncommitted changes in the code directory cannot be kept", str(e))
+        if not _autosave(dirty):
             _unstash_web()
             return 1
         if not switched and not resumed:               # (after a branch switch the save sits on the new branch)
@@ -2285,6 +2219,21 @@ def _update_code(a) -> int:
     return _update_finish(a, old)
 
 
+def _autosave(dirty: list[str]) -> bool:
+    """Uncommitted changes of the code directory saved as a customization; False (said) when they cannot be."""
+    from . import customs
+    try:
+        it = customs.save("Unsaved changes found by the update",
+                          why=f"auto-saved by maxxing update ({', '.join(dirty[:5])}) - "
+                              f"give it a real title and reason (topic {update_topic()})")
+    except customs.CustomError as e:
+        line(FAIL, "uncommitted changes in the code directory cannot be kept", str(e))
+        return False
+    line(WARN, f"{len(dirty)} uncommitted change(s) saved as customization {it['id']}",
+         "Claude: rename it with the real purpose (skill maxxing-customize)")
+    return True
+
+
 def verify_target(target: str) -> tuple[bool, str]:
     """Config `update_verify_signature`: the commit to install must carry a valid signature (`git verify-commit`),
     or a tag pointing at it must (`git verify-tag`). Trust = the keys git knows (gpg keyring, or
@@ -2317,10 +2266,7 @@ def _update_finish(a, old: str) -> int:
     line(OK if code == 0 else WARN, "workspace templates and skills refreshed" if code == 0 else "init reported a problem",
          "" if code == 0 else out.strip()[-300:])
     _deps_core_update()
-    try:
-        new_version = _version_in((config.CODE / "server" / "maxxing" / "__init__.py").read_text()) or __version__
-    except OSError:
-        new_version = __version__
+    new_version = _disk_version() or __version__
     if old != new:
         notes = changelog_since(old, new)
         if notes:
@@ -2335,16 +2281,12 @@ def _update_finish(a, old: str) -> int:
     if customs.list_customs():
         customs.export()
         line(OK, f"customizations recorded in {customs._workspace() / customs.REGISTRY}")
-    if a.no_restart:
+    no_unit = not a.no_restart and (systemctl("is-enabled", SERVICE, timeout=10)[0] == 127 or not UNIT_PATH.exists())
+    if no_unit:
+        line(INFO, "service not installed - restart `maxxing serve` yourself")
+    if a.no_restart or no_unit:
         customs.clear_pending()
         _mark_updated(new_version, a)                  # checked when the server next starts
-        _rebuild_web_ui()
-        return 0
-    code, out = systemctl("is-enabled", SERVICE, timeout=10)
-    if code == 127 or not UNIT_PATH.exists():
-        line(INFO, "service not installed - restart `maxxing serve` yourself")
-        customs.clear_pending()
-        _mark_updated(new_version, a)
         _rebuild_web_ui()
         return 0
     code, out = systemctl("restart", SERVICE, timeout=60)
@@ -2395,7 +2337,7 @@ def _deps_core_update() -> None:
 def _deps_background_update() -> None:
     """After a healthy restart: the other components of deps.toml move to this release's versions in a background
     unit (downloads can take minutes; each is checked, installed next to the old one, then switched)."""
-    if os.environ.get("MAXXING_SPAWN") == "direct" or not Path("/run/systemd/system").is_dir():
+    if _no_systemd():
         line(INFO, "external components: run `maxxing deps update` to move them to this release's versions")
         return
     log = config.STATE / "logs" / "deps-update.log"
@@ -2417,11 +2359,9 @@ def _mark_updated(new_version: str, a) -> None:
     """The restarted server verifies extensions and customizations (and, for the Update button, opens the
     upgrade-notes session) - see smartupdate.after_update."""
     from . import smartupdate
-    try:
+    with contextlib.suppress(Exception):               # never fail an update for this
         smartupdate.mark_updated(_from_version(), new_version, smart=bool(getattr(a, "smart", False)),
                                  auto=bool(getattr(a, "auto", False)))
-    except Exception:  # noqa: BLE001 - never fail an update for this
-        pass
 
 
 def cmd_update_preflight(a) -> int:
@@ -2660,7 +2600,7 @@ def remove_crontab_block() -> str:
     while keep and not keep[-1].strip():
         keep.pop()
     new = "\n".join(keep) + "\n" if keep else ""
-    if crons is not None and hasattr(crons, "write_crontab"):
+    if crons is not None:
         crons.write_crontab(new)
     elif os.environ.get("MAXXING_CRONTAB_FILE"):
         Path(os.environ["MAXXING_CRONTAB_FILE"]).write_text(new)
@@ -2743,9 +2683,7 @@ def cmd_harden(a) -> int:
         if before == HARDENING:
             line(OK, f"service sandboxing already applied ({p})")
             return 0
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(HARDENING)
-        os.chmod(p, 0o644)
+        _write_if_changed(p, HARDENING)
         line(OK, f"wrote {p}")
     code, out = systemctl("daemon-reload", timeout=60)
     if code != 0:
@@ -2792,20 +2730,15 @@ def cmd_uninstall(a) -> int:
         changed = []
     systemctl("disable", "--now", SERVICE, timeout=60)
     systemctl("stop", "maxxing-*", timeout=60)        # running turns (transient units)
-    if service_memory_path().is_file():
-        service_memory_path().unlink()
+    service_memory_path().unlink(missing_ok=True)
     if hardening_path().is_file():
         hardening_path().unlink()
-        try:
+        with contextlib.suppress(OSError):
             hardening_path().parent.rmdir()
-        except OSError:
-            pass
-    if JOBS_SLICE_PATH.is_file():
-        JOBS_SLICE_PATH.unlink()
     from . import cpu
-    for p in (cpu.SLICE_DIR / cpu.SLICES[cpu.LIVE], cpu.SLICE_DIR / cpu.SLICES[cpu.NORMAL], service_cpu_path()):
-        if p.is_file():
-            p.unlink()
+    for p in (JOBS_SLICE_PATH, cpu.SLICE_DIR / cpu.SLICES[cpu.LIVE], cpu.SLICE_DIR / cpu.SLICES[cpu.NORMAL],
+              service_cpu_path()):
+        p.unlink(missing_ok=True)
     if UNIT_PATH.exists():
         UNIT_PATH.unlink()
         systemctl("daemon-reload")
@@ -2845,7 +2778,6 @@ def cmd_uninstall(a) -> int:
         line(INFO, f"workspace kept: {cfg['workspace']}")
     if not a.purge:
         line(INFO, f"code and state kept ({config.CODE}, {config.STATE}) - use --purge to remove them")
-    if not a.purge:
         line(INFO, "Claude Code, uv, Node.js and the tools were left installed (--purge removes them)")
     for c in changed:                                  # what install.sh changed on this server
         if c == "ufw enabled":
@@ -2921,7 +2853,7 @@ def _uninstall_components(changed: list[str], purge: bool) -> None:
             run(["swapoff", str(sw)], timeout=120)
             with contextlib.suppress(OSError):
                 lines = FSTAB.read_text().splitlines()
-                keep = [ln for ln in lines if not (ln.split()[:1] == [str(sw)])]
+                keep = [ln for ln in lines if ln.split()[:1] != [str(sw)]]
                 if keep != lines:
                     FSTAB.write_text("".join(ln + "\n" for ln in keep))
             with contextlib.suppress(OSError):

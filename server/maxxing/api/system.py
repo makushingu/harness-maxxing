@@ -138,9 +138,8 @@ def _git(*args: str, timeout: float = 10, auth: bool = False) -> str | None:
     from ..cmd_core import git_auth_env
     tok = config.get_secret("github_update_token") if auth else None   # private repository: same token as `maxxing update`
     env = git_auth_env(tok, {**os.environ, "GIT_ASKPASS": "true"})
-    cmd = ["git"]
     try:
-        r = subprocess.run([*cmd, "-C", str(config.CODE), *args], capture_output=True, text=True,
+        r = subprocess.run(["git", "-C", str(config.CODE), *args], capture_output=True, text=True,
                            timeout=timeout, env=env)
     except (OSError, subprocess.TimeoutExpired):
         return None
@@ -154,7 +153,7 @@ def _refresh_remote() -> None:
         from .. import license
         if license.enabled():                          # pre-a87 install still on archives: nothing to fetch until
             with _ver_lock:                            # it has moved to git (a few minutes after the start)
-                _ver.update(latest=latest, behind=behind)
+                _ver.update(latest=None, behind=None)
             return
         from ..cmd_core import _current_branch, valid_branch
         branch = _current_branch()                     # the installed branch, as `maxxing update --check` compares
@@ -189,14 +188,13 @@ def _git_sig() -> tuple:
             paths.append(g / head[5:])
     except OSError:
         pass
-    sig = []
-    for p in paths:
+    def stamp(p) -> tuple | None:
         try:
             st = p.stat()
-            sig.append((st.st_mtime_ns, st.st_size))
         except OSError:
-            sig.append(None)
-    return (str(config.CODE), *sig)
+            return None
+        return st.st_mtime_ns, st.st_size
+    return (str(config.CODE), *map(stamp, paths))
 
 
 def invalidate_version() -> None:
@@ -253,8 +251,7 @@ def version_info(refresh: bool = False) -> dict:
     from .. import smartupdate
     rep = smartupdate.last_report()
     out["report"] = {k: rep.get(k) for k in ("at", "version", "ok", "problems")} if rep else None
-    after = smartupdate.after_info()
-    out["after"] = after
+    out["after"] = smartupdate.after_info()
     from .. import auto_update
     out["auto_update"] = auto_update.public()
     return out

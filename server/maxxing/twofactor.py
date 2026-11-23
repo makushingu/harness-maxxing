@@ -24,7 +24,7 @@ import threading
 import time
 from dataclasses import dataclass
 
-from . import config
+from . import config, security
 
 log = logging.getLogger("maxxing.twofactor")
 
@@ -136,14 +136,7 @@ def set_on(on: bool) -> None:
 
 # ---- trusted browsers ----------------------------------------------------------------------
 def _device_key() -> bytes:
-    k = config.get_secret("device_key")
-    if not k:
-        with config._lock:                    # noqa: SLF001 - re-read: a key made meanwhile must not be replaced
-            k = config.get_secret("device_key")
-            if not k:
-                k = secrets.token_hex(32)
-                config.set_secret("device_key", k)
-    return str(k).encode()                    # str(): a hand-edited secrets.json (a number) is not a 500
+    return security.secret_key("device_key")
 
 
 def make_device_cookie() -> str:
@@ -181,9 +174,8 @@ def revoke_all() -> None:
 
 
 def set_device_cookie(response, request) -> None:
-    https = request.headers.get("x-forwarded-proto", request.url.scheme).startswith("https")
     response.set_cookie(DEVICE_COOKIE, make_device_cookie(), max_age=DEVICE_MAX_AGE, httponly=True,
-                        samesite="strict", secure=https, path="/api/auth")
+                        samesite="strict", secure=security.is_https(request), path="/api/auth")
 
 
 # ---- challenges ----------------------------------------------------------------------------
@@ -254,11 +246,8 @@ def check(cid: str, code: str | None = None) -> tuple[str, Challenge | None]:
         c = _ch.get(cid or "")
         if c is None:
             return "expired", None
-        if c.created <= _not_before():              # revoked from another process (maxxing password, 2fa off...)
-            del _ch[cid]
-            _close(c, _w("gone"))
-            return "expired", None
-        if c.status == "pending" and now > c.expires:
+        # revoked from another process (maxxing password, 2fa off...), or no answer in time
+        if c.created <= _not_before() or (c.status == "pending" and now > c.expires):
             del _ch[cid]
             _close(c, _w("gone"))
             return "expired", None

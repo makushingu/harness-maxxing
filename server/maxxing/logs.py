@@ -49,10 +49,8 @@ def setup(level: int = logging.INFO) -> None:
     for name in ("httpx", "httpcore"):
         logging.getLogger(name).setLevel(logging.WARNING)
     f = RedactSecrets()
-    for h in logging.getLogger().handlers:
-        if not any(isinstance(x, RedactSecrets) for x in h.filters):
-            h.addFilter(f)
-    for name in ("uvicorn", "uvicorn.error", "uvicorn.access"):   # own handlers, no propagation to the root
-        lg = logging.getLogger(name)                               # a logger filter survives uvicorn's dictConfig
-        if not any(isinstance(x, RedactSecrets) for x in lg.filters):
-            lg.addFilter(f)
+    # uvicorn's loggers have their own handlers, no propagation to the root: a logger filter survives its dictConfig
+    uvicorn = [logging.getLogger(n) for n in ("uvicorn", "uvicorn.error", "uvicorn.access")]
+    for target in [*logging.getLogger().handlers, *uvicorn]:
+        if not any(isinstance(x, RedactSecrets) for x in target.filters):
+            target.addFilter(f)

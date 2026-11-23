@@ -19,10 +19,6 @@ class SecretIn(BaseModel):
     create: bool = False          # "Add key": 409 exists instead of replacing a key of that name
 
 
-def _bad(e: vault.VaultError) -> HTTPException:
-    return HTTPException(400, detail={"error": e.code, "message": str(e)})
-
-
 @router.get("")
 def list_secrets():
     return vault.list_secrets()
@@ -33,9 +29,8 @@ def put_secret(name: str, body: SecretIn):
     try:
         vault.put(name, body.value, body.note, body.expose, create=body.create)
     except vault.VaultError as e:
-        if e.code in ("exists", "name_taken"):
-            raise HTTPException(409, detail={"error": e.code, "message": str(e)}) from None
-        raise _bad(e) from None
+        status = 409 if e.code in ("exists", "name_taken") else 400
+        raise HTTPException(status, detail={"error": e.code, "message": str(e)}) from None
     return {"ok": True}
 
 

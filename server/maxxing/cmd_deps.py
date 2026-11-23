@@ -14,7 +14,6 @@ def _human(n: int) -> str:
         if n < 1024 or unit == "GB":
             return f"{n:.0f} {unit}" if unit == "B" else f"{n:.1f} {unit}"
         n /= 1024
-    return str(n)
 
 
 def _root_only() -> bool:
@@ -40,6 +39,8 @@ def cmd_deps(a) -> int:
     what = a.action
     if what in ("verify", "update") and _unknown(a.names, what == "update"):
         return 1
+    if what in ("update", "remove", "clean") and not _root_only():
+        return 1
     if what == "list":
         rows = deps.status()
         if a.json:
@@ -48,10 +49,8 @@ def cmd_deps(a) -> int:
         w = max(len(r["name"]) for r in rows)
         for r in rows:
             mark = {"ok": "✔", "outdated": "!", "missing": "✘"}.get(r["state"], "–")
-            have = r["installed"] or "-"
-            want = r["expected"] or "-"
-            extra = "" if r["state"] in ("ok", "not installed") else f"  (expected {want})"
-            print(f"  {mark} {r['name']:<{w}}  {have}{extra}  [{r['update']}]  {r['detail']}".rstrip())
+            extra = "" if r["state"] in ("ok", "not installed") else f"  (expected {r['expected'] or '-'})"
+            print(f"  {mark} {r['name']:<{w}}  {r['installed'] or '-'}{extra}  [{r['update']}]  {r['detail']}".rstrip())
         return 1 if any(r["state"] in ("missing", "outdated") for r in rows) else 0
     if what == "verify":
         res = deps.verify(a.names or None, fresh=True)
@@ -62,8 +61,6 @@ def cmd_deps(a) -> int:
                 print(f"  {'✔' if r['level'] == 'ok' else ('!' if r['level'] == 'warn' else '✘')} {r['name']}: {r['text']}")
         return 1 if any(r["level"] == "fail" for r in res) else 0
     if what == "update":
-        if not _root_only():
-            return 1
         rep = deps.update(a.names or None, log=(lambda s: None) if a.quiet else (lambda s: print("  " + s, flush=True)),
                           explicit=False if a.auto else None)
         failed = [r for r in rep if r["result"] == "failed"]
@@ -78,8 +75,6 @@ def cmd_deps(a) -> int:
                 print(f"{r['name']}: {r['text']}", file=sys.stderr)
         return 1 if failed else 0
     if what == "remove":
-        if not _root_only():
-            return 1
         if not a.names:
             print("Name the component(s) to remove (see: maxxing deps list).", file=sys.stderr)
             return 2
@@ -93,8 +88,6 @@ def cmd_deps(a) -> int:
                 rc = 1
         return rc
     if what == "clean":
-        if not _root_only():
-            return 1
         try:
             out = deps.clean(dry=a.dry_run, caches=a.caches)
         except deps.Busy as e:                          # the weekly job meets an update: next week (not a failure)

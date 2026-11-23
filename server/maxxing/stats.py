@@ -39,7 +39,6 @@ def _scan_log(sid: str) -> dict:
     return tk
 
 
-
 def _int(v) -> int:
     """A counter from a meta or a log; anything that is not a number (hand edit, other tool) counts as 0."""
     try:

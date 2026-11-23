@@ -95,12 +95,7 @@ def busy_reason(now: float | None = None) -> str | None:
     """Why the update must wait (None = nobody is here and nothing runs)."""
     if browsers():
         return "someone is on the interface"
-    why = claude_update.busy_reason(now)
-    if why:
-        return why
-    if _update_running():
-        return "an update is already running"
-    return None
+    return claude_update.busy_reason(now) or ("an update is already running" if _update_running() else None)
 
 
 def preflight() -> dict:
@@ -177,8 +172,6 @@ async def _loop(spawn) -> None:
         result = ""
         try:
             result = await asyncio.to_thread(tick, spawn)
-        except asyncio.CancelledError:
-            raise
         except Exception:  # noqa: BLE001
             log.exception("automatic update pass failed")
         await asyncio.sleep(BUSY_POLL_S if result == "busy" else POLL_S)
