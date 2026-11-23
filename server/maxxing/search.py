@@ -706,6 +706,10 @@ def search(q: str, kinds: list[str] | None = None, limit: int = 30,
         finally:
             _lock.release()
     marks = ",".join("?" * len(wanted))
+    from . import jarvis
+    # Jarvis's rows are left out in SQL: filtered after the LIMIT they would take the places of the visible ones
+    skip = ("AND items.path != ? AND items.path NOT LIKE ? ESCAPE '\\'", (jarvis.PREFIX, jarvis.PREFIX + "/%")) \
+        if jarvis.hides(jarvis.PREFIX) else ("", ())
     while not _rlock.acquire(timeout=0.05):                  # one reader: queries take turns
         if gone():
             return {"results": [], "took_ms": 0, "cancelled": True}
@@ -719,8 +723,8 @@ def search(q: str, kinds: list[str] | None = None, limit: int = 30,
             # (a rowid range is cheap for FTS5; `rowid IN (...)` would run the match once per row)
             floor = con.execute(
                 f"""SELECT MIN(id) FROM (SELECT fts.rowid AS id FROM fts JOIN items ON items.id = fts.rowid
-                    WHERE fts MATCH ? AND items.kind IN ({marks}) ORDER BY fts.rowid DESC LIMIT ?)""",
-                (match, *wanted, RANK_MAX)).fetchone()[0] or 0
+                    WHERE fts MATCH ? AND items.kind IN ({marks}) {skip[0]} ORDER BY fts.rowid DESC LIMIT ?)""",
+                (match, *wanted, *skip[1], RANK_MAX)).fetchone()[0] or 0
             # best row per session / file / task (bare columns of MIN)
             # (MATERIALIZED: bm25 cannot run inside the aggregate itself)
             best = con.execute(
@@ -728,10 +732,10 @@ def search(q: str, kinds: list[str] | None = None, limit: int = 30,
                         SELECT items.kind AS kind, items.ref AS ref, items.path AS path, items.title AS title,
                                items.at AS at, fts.rowid AS id, bm25(fts, 4.0, 1.0) AS score
                         FROM fts JOIN items ON items.id = fts.rowid
-                        WHERE fts MATCH ? AND fts.rowid >= ? AND items.kind IN ({marks}))
+                        WHERE fts MATCH ? AND fts.rowid >= ? AND items.kind IN ({marks}) {skip[0]})
                     SELECT kind, ref, path, title, at, id, MIN(score) AS best FROM hits
                     GROUP BY kind, ref ORDER BY best LIMIT ?""",
-                (match, floor, *wanted, limit)).fetchall()
+                (match, floor, *wanted, *skip[1], limit)).fetchall()
             # snippets of the shown rows only: snippet() tokenizes the whole text again, so running it on every
             # matching row (thousands for a common prefix) cost ten times the ranking itself
             ids = [r[5] for r in best]
@@ -753,7 +757,6 @@ def search(q: str, kinds: list[str] | None = None, limit: int = 30,
             con.set_progress_handler(None, 0)
     finally:
         _rlock.release()
-    from . import jarvis
     out = []
     for kind, ref, path, title, at, snip, score in rows:
         if jarvis.hides(path):

@@ -529,3 +529,17 @@ def test_a_corrupt_search_db_is_rebuilt(client, mx):
     search.db_path().write_bytes(os.urandom(5000))
     search.refresh()
     assert sid in {x["id"] for x in client.get("/api/search", params={"q": "zebra"}).json()["results"]}
+
+
+def test_hidden_jarvis_sessions_do_not_take_the_places_of_visible_results(client, mx):
+    from maxxing import jarvis, workspace
+    pdir = config.workspace() / jarvis.PREFIX
+    pdir.mkdir(parents=True)
+    workspace._set_folder_meta(pdir, "system", jarvis.MARK)
+    for i in range(5):
+        _session(jarvis.PATH, f"Hidden {i}", [("user", "zebra zebra zebra")])
+    sid = _session("projects/acme/topics/blog", "Visible", [("user", "a zebra passed by")])
+    search.refresh()
+    assert jarvis.hides(jarvis.PREFIX)
+    ids = [x["id"] for x in client.get("/api/search", params={"q": "zebra", "limit": 3}).json()["results"]]
+    assert ids == [sid]
