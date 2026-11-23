@@ -1,4 +1,4 @@
-"""Telegram modes: the simple mode (one chat, replies continue a session), the bell, health problems and alerts,
+"""Telegram modes: the simple mode (one chat, replies continue a session), the bell and alerts,
 choosing a mode (fake Bot API, fake sessions service)."""
 from __future__ import annotations
 
@@ -163,38 +163,6 @@ async def test_threads_to_simple_deletes_the_threads(api, tg, svc):
     assert gateway.thread_of(web) and set(gateway.tg_config()["threads"]) == {"#crons", "#alerts", "#feed"}
 
 
-async def test_health_problems_become_alerts(api, tg, svc, monkeypatch):
-    await _link_simple(api, tg)
-    from maxxing import health
-    monkeypatch.setattr(gateway, "_feed_alerts", lambda: False)   # an older feed: the bridge posts them itself
-    issues = [{"id": "aaa", "level": "error", "code": "disk_full", "text": "Disk 97 % full", "seen": False},
-              {"id": "bbb", "level": "warn", "code": "cron_failed", "text": "Job failed", "seen": False}]
-    seen: list = []
-    monkeypatch.setattr(health, "collect", lambda force=False: {"issues": [dict(i) for i in issues]})
-    monkeypatch.setattr(health, "mark_seen", lambda iid, s=True: seen.append(iid) or True)
-    gw = gateway.gateway()
-    await gw._health_pass()
-    sent = [p for p in tg.sent() if "Disk" in (p.get("text") or "")]
-    assert len(sent) == 1 and sent[0]["text"].startswith("🚨") and not sent[0].get("disable_notification")
-    assert sent[0]["reply_markup"]["inline_keyboard"][0][0]["callback_data"] == "h:aaa"
-    assert not any("Job failed" in (p.get("text") or "") for p in tg.sent())   # failed jobs: their own report
-    await gw._health_pass()
-    assert len([p for p in tg.sent() if "Disk" in (p.get("text") or "")]) == 1   # once
-    mid = gateway.load_state()["health"]["aaa"]["mid"]
-    tg.callback("h:aaa", message_id=mid)
-    await wait_for(lambda: seen == ["aaa"], what="seen")
-    await wait_for(lambda: any("✓ Seen" in (p.get("text") or "") for p in tg.sent("editMessageText")), what="edited")
-    issues.clear()                                                 # fixed
-    await gw._health_pass()
-    assert any("Resolved" in (p.get("text") or "") for p in tg.sent("editMessageText"))
-    assert gateway.load_state()["health"] == {}
-    # notify_system off: nothing
-    gateway.update_settings(notify_system=False)
-    issues.append({"id": "ccc", "level": "warn", "code": "backup_old", "text": "Backup old", "seen": False})
-    await gw._health_pass()
-    assert not any("Backup old" in (p.get("text") or "") for p in tg.sent())
-
-
 async def test_feed_alerts_buttons_call_feed_act(api, tg, svc, monkeypatch):
     await _link_simple(api, tg)
     from maxxing import feed, health
@@ -233,12 +201,6 @@ async def test_feed_alerts_buttons_call_feed_act(api, tg, svc, monkeypatch):
     await wait_for(lambda: any("Soft one" in (q.get("text") or "") for q in tg.sent()), what="silent")
     assert _bot("Soft one", tg).get("disable_notification") and "×3" in _bot("Soft one", tg)["text"]
     assert not any("Quiet one" in (q.get("text") or "") for q in tg.sent())
-    # the feed carries the alerts: the bridge no longer posts health problems itself
-    gw = gateway.gateway()
-    monkeypatch.setattr(health, "collect", lambda force=False: {"issues": [
-        {"id": "zzz", "level": "error", "code": "disk_full", "text": "Disk full", "seen": False}]})
-    await gw._health_pass()
-    assert not any("Disk full" in (q.get("text") or "") for q in tg.sent())
 
 
 async def test_an_alert_answered_while_it_was_sent_loses_its_buttons(api, tg, svc):

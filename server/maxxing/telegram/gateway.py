@@ -59,6 +59,7 @@ State files (state_dir('telegram')):
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import hashlib
 import hmac
 import importlib
@@ -72,7 +73,8 @@ import sqlite3
 import threading
 import time
 from pathlib import Path
-from typing import Any, Awaitable, Callable
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from .. import bus, config
 from . import format as fmt
@@ -81,6 +83,7 @@ from .texts import (AGENT_REASONS, COMMANDS, CONFLICT_HELP, LINK_WORDS, STATUS_W
 from .client import TOKEN_RE, Client, TelegramError, call_sync, keyboard
 
 log = logging.getLogger("maxxing.telegram")
+_u16 = fmt._u16                                   # noqa: SLF001 - Telegram counts UTF-16 units
 
 ROOT, CRONS, ALERTS, FEED = "", "#crons", "#alerts", "#feed"
 SPECIAL = {ROOT: "General", CRONS: "Crons", ALERTS: "Alerts", FEED: "Notifications"}
@@ -198,8 +201,6 @@ JARVIS_PREVIEW = 2500          # Jarvis's answers come whole (within one Telegra
 THREAD_DAYS = 30               # default of config.telegram.thread_days
 MAX_THREADS = 50               # open sessions mirrored as threads (most recent first)
 NEW_WAIT = 300                 # "where?" unanswered -> the default topic
-HEALTH_EVERY = 60.0            # health problems checked this often (the first time after this delay)
-HEALTH_SKIP = ("cron_failed", "login_failures")   # told by their own messages (cron reports, sign-in alerts)
 PURGE_PAUSE = 0.3              # between two thread deletions (flood limits)
 LAST_WAIT = 7200               # "↩ Continue" offers the last Telegram session written to less than this ago
 SYNC_DEBOUNCE = 3.0            # session changes come in bursts
@@ -262,10 +263,14 @@ def _inflight_path() -> Path:
     return config.state_dir("telegram") / "inflight.json"
 
 
+def _read_dict(p: Path) -> dict:
+    d = config.read_json(p, {})
+    return d if isinstance(d, dict) else {}
+
+
 def load_state() -> dict:
     """Gateway runtime state (bot identity, last error, pending link…)."""
-    st = config.read_json(_state_path(), {}) or {}
-    return st if isinstance(st, dict) else {}
+    return _read_dict(_state_path())
 
 
 def update_state(**changes: Any) -> dict:
@@ -352,13 +357,23 @@ def _transient(e: TelegramError) -> bool:
     return e.network or e.code == 429 or e.code >= 500
 
 
+def _not_modified(e: TelegramError) -> bool:
+    d = e.description.lower()
+    return "not_modified" in d or "not modified" in d
+
+
+def _slow_error(e: TelegramError) -> str:
+    """The error of a sync stopped by a network error or a flood limit (retried at the next sync)."""
+    return f"Telegram {'unreachable' if e.network else 'asks to slow down'}: {e.description}"
+
+
 def reopen_sync(tok: str, chat: int, tid: int) -> bool:
     """Reopen a closed thread (blocking). True when it is open again."""
     try:
         call_sync(tok, "reopenForumTopic", chat_id=chat, message_thread_id=tid)
         return True
     except TelegramError as e:
-        return "not_modified" in e.description.lower() or "not modified" in e.description.lower()
+        return _not_modified(e)
     except Exception:  # noqa: BLE001
         return False
 
@@ -375,11 +390,14 @@ def _emoji(project: str) -> str:
         return ""
 
 
+_TOPIC_RE = re.compile(r"^projects/([^/]+)/topics/([^/]+)(?:/agents/([^/]+))?$")
+
+
 def topic_label(path: str) -> str:
     """Human name of a topic path: "acme / blog", with the project's emoji in front when it has one."""
     if path in SPECIAL:
         return SPECIAL[path]
-    m = re.match(r"^projects/([^/]+)/topics/([^/]+)(?:/agents/([^/]+))?$", path)
+    m = _TOPIC_RE.match(path)
     if not m:
         return path[:128]
     e = _emoji(m.group(1))
@@ -575,8 +593,7 @@ def _replied_id(msg: dict) -> int | None:
 
 def _notes() -> dict:
     """Messages edited later (an approval, an alert): key -> [chat, message id, html]."""
-    d = config.read_json(config.state_dir("telegram") / "notes.json", {}) or {}
-    return d if isinstance(d, dict) else {}
+    return _read_dict(config.state_dir("telegram") / "notes.json")
 
 
 def _note_set(key: str, value: list | None) -> None:
@@ -598,21 +615,20 @@ def is_human(s: dict) -> bool:
     return s.get("source") != "cron" and not s.get("cron")
 
 
-def topic_name(path: str, topics: list[str] | None = None) -> str:
-    """Topic part of a thread name: "acme/blog", with the project's emoji in front ("🛒 acme/blog").
-    (`topics` is no longer needed - the project is always shown - and kept for callers.)"""
-    m = re.match(r"^projects/([^/]+)/topics/([^/]+)(?:/agents/([^/]+))?$", path or "")
+def topic_name(path: str) -> str:
+    """Topic part of a thread name: "acme/blog", with the project's emoji in front ("🛒 acme/blog")."""
+    m = _TOPIC_RE.match(path or "")
     if not m:
-        return "General" if not path else path
+        return path or "General"
     e = _emoji(m.group(1))
     agent = f"/{AGENT_ICON}{m.group(3)}" if m.group(3) else ""
     return (f"{e} " if e else "") + f"{m.group(1)}/{m.group(2)}{agent}"
 
 
-def session_label(s: dict, topics: list[str] | None = None) -> str:
+def session_label(s: dict) -> str:
     """Thread name of a session: "[<emoji> ]<project>/<topic> · <title>" (e.g. "🛒 acme/blog · Launch plan")."""
     title = " ".join((s.get("title") or "Untitled").split())
-    return f"{topic_name(s.get('path') or '', topics)} · {title}"[:128]
+    return f"{topic_name(s.get('path') or '')} · {title}"[:128]
 
 
 # =============================================================================================
@@ -666,27 +682,12 @@ def _topic_dir(path: str) -> Path:
 
 def _models() -> list[tuple[str, str]]:
     """(id, label) of selectable models (sessions.service.models() when available)."""
-    for modname in ("maxxing.sessions.service", "maxxing.claude"):
-        try:
-            mod = importlib.import_module(modname)
-        except ImportError:
-            continue
-        for name in ("models", "known_models", "list_models"):
-            fn = getattr(mod, name, None)
-            if not callable(fn):
-                continue
-            try:
-                out: list[tuple[str, str]] = [("", "Default")]
-                for m in fn():
-                    if isinstance(m, dict) and m.get("id"):
-                        out.append((m["id"], m.get("label") or m["id"]))
-                    elif isinstance(m, str):
-                        out.append((m, m))
-            except Exception:
-                continue
-            if len(out) > 1:
-                return out[:12]
-    return list(FALLBACK_MODELS)
+    try:
+        out = [("", "Default")] + [(m["id"], m.get("label") or m["id"]) for m in _service().models()
+                                   if isinstance(m, dict) and m.get("id")]
+    except Exception:
+        out = []
+    return out[:12] if len(out) > 1 else list(FALLBACK_MODELS)
 
 
 def _expand_entities(text: str, entities: list | None) -> str:
@@ -914,7 +915,6 @@ class Gateway:
         self.running = True
         self._task = self.loop.create_task(self._run(), name="telegram-gateway")
         self.spawn(self._watch_sessions(), "session-threads")
-        self.spawn(self._watch_health(), "health")
 
     async def stop(self) -> None:
         self._stopping = True
@@ -977,7 +977,7 @@ class Gateway:
                         await self.sync_threads()
                     try:
                         topics = await asyncio.wait_for(q.get(), timeout=30)
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         continue
                     # sessions changed, or a project (its emoji, its name) -> thread names to update
                     if ("sessions" in topics or "workspace" in topics) and tg_config().get("chat_id") and uses_threads():
@@ -993,55 +993,7 @@ class Gateway:
         finally:
             bus.unsubscribe(q)
 
-    # ---- health problems of the dashboard -> alerts ---------------------------------------------
-    async def _watch_health(self) -> None:
-        """Every HEALTH_EVERY seconds (the first time after it): `_health_pass`."""
-        while not self._stopping:
-            await asyncio.sleep(HEALTH_EVERY)
-            try:
-                await self._health_pass()
-            except asyncio.CancelledError:
-                raise
-            except Exception:  # noqa: BLE001 - next pass
-                log.warning("telegram health alerts failed", exc_info=True)
-
-    async def _health_pass(self) -> None:
-        """A new problem of the dashboard's health card (not seen there) -> one alert with a "Seen" button; seen on
-        the web -> the message says so; gone -> "Resolved". Off with `notify_system`; skipped while a
-        feed carries the alerts (`feed.act`; health problems there with `health_feed`). Failed jobs and sign-ins have their own
-        messages (cron reports, sign-in alerts)."""
-        tg = tg_config()
-        if not tg.get("chat_id") or not tg.get("notify_system", True) or _feed_alerts():
-            return
-        from .. import health
-        issues = [i for i in (await asyncio.to_thread(health.collect)).get("issues") or []
-                  if i.get("id") and i.get("code") not in HEALTH_SKIP]
-        cur = {i["id"]: i for i in issues}
-        sent = dict(load_state().get("health") or {})
-        changed = False
-        for iid, i in cur.items():
-            old = sent.get(iid)
-            if old is None and not i.get("seen"):
-                html = f"{'🚨' if i.get('level') == 'error' else '⚠️'} {fmt.escape(i.get('text') or '')}"
-                chat, tid = _target(ALERTS)
-                r = await self.send_html(chat, tid, html, silent=i.get("level") != "error",
-                                         markup=keyboard([[(_w("seen_btn"), f"h:{iid}")]])) if chat else None
-                if r:
-                    sent[iid] = {"chat": chat, "mid": r.get("message_id"), "html": html, "seen": False}
-                    changed = True
-            elif old is not None and i.get("seen") and not old.get("seen"):
-                await self._edit({"chat": {"id": old["chat"]}, "message_id": old["mid"]},
-                                 f"{old['html']}\n{_w('seen')}")
-                old["seen"] = changed = True
-        for iid in [k for k in sent if k not in cur]:
-            old = sent.pop(iid)
-            changed = True
-            if isinstance(old, dict) and old.get("mid"):
-                await self._edit({"chat": {"id": old["chat"]}, "message_id": old["mid"]},
-                                 f"<s>{old['html']}</s>\n{_w('resolved')}")
-        if changed:
-            update_state(health=sent)
-
+    # ---- buttons of health alerts and feed alerts ----------------------------------------------
     async def _on_health_seen(self, msg: dict, iid: str) -> str:
         from .. import health
         if not await asyncio.to_thread(health.mark_seen, iid, True):
@@ -1061,9 +1013,6 @@ class Gateway:
         too, at once)."""
         aid, _, action = val.rpartition(":")
         from .. import feed
-        if not _feed_alerts():
-            await self._edit_markup(msg, None)
-            return _w("cb_done")
         # only the message posted for that event: an older one with the same id (feed.db recreated, ids restarted)
         # must not decide a new, unrelated request
         info, here = _notes().get(f"al:{aid}"), [str((msg.get("chat") or {}).get("id")), str(msg.get("message_id"))]
@@ -1085,11 +1034,9 @@ class Gateway:
         return "OK"
 
     async def _edit_markup(self, msg: dict, markup: dict | None) -> None:
-        try:
+        with contextlib.suppress(TelegramError):
             await self.client.call("editMessageReplyMarkup", chat_id=msg["chat"]["id"], message_id=msg.get("message_id"),
                                    reply_markup=markup or {"inline_keyboard": []})
-        except TelegramError:
-            pass
 
     # ---- leaving the threads modes ------------------------------------------------------------
     async def purge_threads(self) -> int:
@@ -1232,8 +1179,7 @@ class Gateway:
             await self.client.call("reopenForumTopic", chat_id=chat, message_thread_id=tid)
             return True
         except TelegramError as e:
-            d = e.description.lower()
-            if "not_modified" in d or "not modified" in d:  # already open
+            if _not_modified(e):                        # already open
                 return True
             log.info("reopenForumTopic %s failed: %s", tid, e.description)
             return False
@@ -1250,7 +1196,7 @@ class Gateway:
         s = session if session is not None else (await _svc(svc.get_session, sid) if svc is not None else None)
         if not s or s.get("archived") or not is_human(s):
             return None
-        name = session_label(s, [t["path"] for t in _topics()])
+        name = session_label(s)
         assert self._sync_lock is not None
         async with self._sync_lock:                     # a sync running meanwhile may have made it already
             tid = thread_of(sid)
@@ -1444,19 +1390,20 @@ class Gateway:
                 break
             await asyncio.sleep(delay)
         g = self._agent_pieces.pop(gk)
+        self._lane(key, lambda: self._then_drop(self._agent_message(g["msgs"], path, g["texts"]), g["marks"]), "agent")
 
-        async def run() -> None:
-            try:
-                await self._agent_message(g["msgs"], path, g["texts"])
-            except asyncio.CancelledError:                  # stopping: told at the next start
-                raise
-            except BaseException:
-                for m in g["marks"]:
+    async def _then_drop(self, work: Awaitable[Any], marks: list[str]) -> None:
+        """Await `work`, then forget the in-flight `marks` (kept when stopping: told at the next start)."""
+        cancelled = False
+        try:
+            await work
+        except asyncio.CancelledError:
+            cancelled = True
+            raise
+        finally:
+            if not cancelled:
+                for m in marks:
                     self._inflight_drop(m)
-                raise
-            for m in g["marks"]:
-                self._inflight_drop(m)
-        self._lane(key, run, "agent")
 
     async def _agent_command(self, msg: dict, path: str, cmd: str = "") -> None:
         name = await asyncio.to_thread(_agent_display, path)
@@ -1597,21 +1544,10 @@ class Gateway:
         p = self._pastes.pop(pk, None)
         if p is None:
             return
-        msgs, text, key, marks = p["msgs"], "\n".join(p["texts"]), p["key"], p["marks"]
-
-        async def run() -> None:
-            try:
-                await self._converse(msgs, p["path"], text, sid=p["sid"])
-            except asyncio.CancelledError:                  # stopping: told at the next start
-                raise
-            except BaseException:
-                for m in marks:
-                    self._inflight_drop(m)
-                raise
-            for m in marks:
-                self._inflight_drop(m)
-        if key in self._lanes:
-            self._lane(key, run, "message")
+        def run() -> Awaitable[None]:
+            return self._then_drop(self._converse(p["msgs"], p["path"], "\n".join(p["texts"]), sid=p["sid"]), p["marks"])
+        if p["key"] in self._lanes:
+            self._lane(p["key"], run, "message")
         else:
             await run()
 
@@ -1639,9 +1575,8 @@ class Gateway:
 
     def _inflight_add(self, msg: dict, kind: str) -> str:
         mark = self._inflight_mark(msg)
-        thread = msg.get("message_thread_id") if msg.get("is_topic_message") or msg.get("message_thread_id") else None
         with self._inflight_lock:
-            self._inflight[mark] = {"chat": (msg.get("chat") or {}).get("id"), "thread": thread, "kind": kind}
+            self._inflight[mark] = {"chat": (msg.get("chat") or {}).get("id"), "thread": _msg_thread(msg), "kind": kind}
             self._inflight_save()
         return mark
 
@@ -1652,12 +1587,8 @@ class Gateway:
 
     def _replies_load(self) -> None:
         """At start: the answers the previous process still owed (see _replies_path)."""
-        try:
-            raw = config.read_json(_replies_path(), {}) or {}
-        except (TypeError, ValueError, AttributeError):
-            raw = {}
         now, self._left = time.time(), {}
-        for sid, v in (raw.items() if isinstance(raw, dict) else []):
+        for sid, v in _read_dict(_replies_path()).items():
             if isinstance(v, dict) and isinstance(v.get("chat"), int) and isinstance(v.get("refs"), list) \
                     and now - float(v.get("at") or 0) < REPLIES_KEEP:
                 self._left[sid] = {"chat": v["chat"], "thread": v["thread"] if isinstance(v.get("thread"), int) else None,
@@ -1695,13 +1626,10 @@ class Gateway:
         if self._inflight_taken:
             return {}
         self._inflight_taken = True
-        try:
-            left = config.read_json(_inflight_path(), {}) or {}
-        except (TypeError, ValueError, AttributeError):
-            left = {}
+        left = _read_dict(_inflight_path())
         if left:
             self._inflight_save()
-        return left if isinstance(left, dict) else {}
+        return left
 
     async def _inflight_recover(self, left: dict) -> None:
         """Lanes cut by a restart: ask for those messages again (replaying them could start a turn twice)."""
@@ -1766,14 +1694,8 @@ class Gateway:
         if self._new_taken:
             return
         self._new_taken = True
-        try:
-            left = config.read_json(_new_path(), {}) or {}
-        except (TypeError, ValueError, AttributeError):
-            left = {}
-        if not isinstance(left, dict):
-            left = {}
         lost: list[dict] = []
-        for k, p in left.items():
+        for k, p in _read_dict(_new_path()).items():
             try:
                 key = int(k)
             except ValueError:
@@ -1870,7 +1792,7 @@ class Gateway:
             self._new_save()
             await self.send_html(p["chat"], p["thread"], "⚠️ " + fmt.escape(_w("start_failed", err=str(e)[:300])))
             return
-        where = topic_label(path) if path else "General"
+        where = topic_label(path)
         try:
             if p["asked"]:
                 words = "continued" if sid else "moved" if p["thread"] is None and tid is not None and not flat \
@@ -1912,7 +1834,7 @@ class Gateway:
         assert self._sync_lock is not None
         async with self._sync_lock:                       # the sync must not race the new mapping
             s = await _svc(svc.create_session, path, source="telegram", title=title, plan_mode=plan_mode, **kw)
-            name = session_label(s, [t["path"] for t in _topics()])
+            name = session_label(s)
             if tid is not None:
                 _set_session_thread(s["id"], tid, "")
                 try:
@@ -2104,11 +2026,9 @@ class Gateway:
             return None
         if not saved:
             return None
-        try:
+        with contextlib.suppress(TelegramError):
             await self.client.call("sendChatAction", chat_id=msg["chat"]["id"], message_thread_id=_msg_thread(msg),
                                    action="typing")
-        except TelegramError:
-            pass
         try:
             res = await asyncio.to_thread(voice.transcribe_file, Path(saved[0]))
         except voice.VoiceError as e:
@@ -2297,10 +2217,8 @@ class Gateway:
                 return
             log.warning("telegram sendChatAction in thread %s failed (%s) - using the main chat", thread, e.description)
             p["typing_flat"] = True                    # this chat refuses actions in threads
-            try:
+            with contextlib.suppress(TelegramError):
                 await self.client.call("sendChatAction", chat_id=p["chat"], action="typing")
-            except TelegramError:
-                pass
 
     async def _progress(self, sid: str, p: dict, final: str | None = None) -> None:
         """Read the new events of the turn and create/edit the status message."""
@@ -2499,7 +2417,7 @@ class Gateway:
             if cmd == "new" and uses_threads():
                 s, tid, name = await self.new_session(path, arg[:80] or "Telegram", msg["chat"]["id"])
                 await self._reply(msg, _w("moved" if tid else "started", title=fmt.escape(s.get("title") or "Telegram"),
-                                         where=fmt.escape(topic_label(path) if path else "General"),
+                                         where=fmt.escape(topic_label(path)),
                                          name=fmt.escape(name)), html=True, bind={"sid": s["id"]})
                 if tid:
                     await self.send_html(msg["chat"]["id"], tid, _w("ready"), silent=True)
@@ -2507,7 +2425,7 @@ class Gateway:
                 s, _, _ = await self.new_session(path, arg[:80] or "Telegram", msg["chat"]["id"], flat=True)
                 update_state(last={"sid": s["id"], "at": time.time()})
                 await self._reply(msg, _w("started", title=fmt.escape(s.get("title") or "Telegram"),
-                                          where=fmt.escape(topic_label(path) if path else "General")) + _w("reply_hint"),
+                                          where=fmt.escape(topic_label(path))) + _w("reply_hint"),
                                   html=True, bind={"sid": s["id"]})
             elif cmd == "sessions" and uses_threads():
                 await self._cmd_open_sessions(msg)
@@ -2662,11 +2580,9 @@ class Gateway:
             log.exception("telegram callback failed")
             answer = _w("cb_error", error=e)[:190]
         finally:
-            try:
+            with contextlib.suppress(TelegramError):
                 await self.client.call("answerCallbackQuery", callback_query_id=cq.get("id"),
                                        text=answer or None)
-            except TelegramError:
-                pass
 
     async def _on_open(self, msg: dict, sid: str) -> str:
         s = await self._open_session(sid)
@@ -2676,7 +2592,7 @@ class Gateway:
         path = s.get("path") or ""
         await self.send_html(msg["chat"]["id"], _msg_thread(msg),
                              _w("card", title=fmt.escape(s.get("title") or _w("untitled")),
-                                where=fmt.escape(topic_label(path) if path else "General")),
+                                where=fmt.escape(topic_label(path))),
                              silent=True, bind={"sid": sid})
         return "OK"
 
@@ -2735,12 +2651,10 @@ class Gateway:
         if key not in self._new or self._new[key].get("starting"):
             return _w("cb_done")
         if h == "+":
-            try:
+            with contextlib.suppress(TelegramError):
                 await self.client.call("editMessageReplyMarkup", chat_id=msg["chat"]["id"],
                                        message_id=msg.get("message_id"),
                                        reply_markup=keyboard(await self._where_rows(key, more=True)))
-            except TelegramError:
-                pass
             return ""
         if h == "s":                                       # "↩ Continue" the last session
             last = await self._recent_session()
@@ -2990,7 +2904,6 @@ async def _sync_sessions(call: Callable[..., Awaitable[Any]], chat: int) -> dict
         return res
     wanted = await asyncio.to_thread(open_sessions)
     want = {s["id"]: s for s in wanted}
-    topics = [t["path"] for t in _topics()]
     mapped = session_threads()
     exists = getattr(svc, "session_exists", None)
     later = float("inf")                               # seconds before a postponed creation / rename is due
@@ -3004,7 +2917,7 @@ async def _sync_sessions(call: Callable[..., Awaitable[Any]], chat: int) -> dict
             await call("deleteForumTopic", chat_id=chat, message_thread_id=info["tid"])
         except TelegramError as e:
             if e.network or e.code == 429:
-                res["error"] = f"Telegram {'unreachable' if e.network else 'asks to slow down'}: {e.description}"
+                res["error"] = _slow_error(e)
                 return res                             # mapping kept: the next sync deletes the thread
             log.info("deleteForumTopic %s failed: %s", info["tid"], e.description)
             if not _thread_gone(e) and (e.code or 0) >= 500:   # Telegram's own error: retried next sync
@@ -3012,7 +2925,7 @@ async def _sync_sessions(call: Callable[..., Awaitable[Any]], chat: int) -> dict
         _drop_session_thread(sid)
         res["deleted"] += 1
     for s in reversed(wanted):                         # oldest first: the newest thread ends on top
-        sid, name = s["id"], session_label(s, topics)
+        sid, name = s["id"], session_label(s)
         info = mapped.get(sid)
         if info is None:
             wait = _title_wait(s)
@@ -3054,12 +2967,12 @@ async def _sync_sessions(call: Callable[..., Awaitable[Any]], chat: int) -> dict
                 except TelegramError as e2:
                     log.info("createForumTopic failed: %s", e2.description)
                     if e2.network or e2.code == 429:
-                        res["error"] = f"Telegram {'unreachable' if e2.network else 'asks to slow down'}: {e2.description}"
+                        res["error"] = _slow_error(e2)
                         break
-            elif "not_modified" in e.description.lower() or "not modified" in e.description.lower():
+            elif _not_modified(e):
                 _set_session_thread(sid, info["tid"], name)
             elif e.network or e.code == 429:
-                res["error"] = f"Telegram {'unreachable' if e.network else 'asks to slow down'}: {e.description}"
+                res["error"] = _slow_error(e)
                 break
             else:
                 log.info("editForumTopic %s failed: %s", info["tid"], e.description)
@@ -3117,7 +3030,7 @@ def _rename_wait(sid: str, s: dict, info: dict, name: str) -> float:
 async def _intro(call: Callable[..., Awaitable[Any]], chat: int, tid: int, s: dict) -> None:
     """First message of a thread opened for a web session."""
     html = _w("intro", title=fmt.escape(s.get("title") or "Untitled"),
-              where=fmt.escape(topic_label(s.get("path") or "") if s.get("path") else "General"))
+              where=fmt.escape(topic_label(s.get("path") or "")))
     base = (config.load_config().get("public_url") or "").rstrip("/")
     if base:
         html += f'\n<a href="{fmt.escape(base)}/sessions/{fmt.escape(s["id"])}">Open in the web UI</a>'
@@ -3373,10 +3286,8 @@ async def forget() -> None:
     for p in (_state_path(), _offset_path(), _inflight_path(), _replies_path(), _msgs_path(),
               Path(f"{_msgs_path()}-wal"), Path(f"{_msgs_path()}-shm"), _msgs_path().with_name("messages.json"),
               _new_path(), config.state_dir("telegram") / "notes.json"):
-        try:
+        with contextlib.suppress(OSError):
             p.unlink()
-        except OSError:
-            pass
     bus.invalidate("telegram", "workspace")
 
 
@@ -3565,15 +3476,17 @@ def _post(key: str, parts: list[str], silent: bool, markup: dict | None = None) 
     if gw is not None and gw.running and gw.loop is not None and not gw.loop.is_closed():
         gw.submit(gw.send_key(key, parts, silent, markup))
         return
+    _off_loop(_send_sync, key, parts, silent, markup)
+
+
+def _off_loop(fn: Callable[..., Any], *args: Any) -> None:
+    """fn(*args) now, or in a thread when called on an event loop (never block it)."""
     try:
         asyncio.get_running_loop()
-        in_loop = True
     except RuntimeError:
-        in_loop = False
-    if in_loop:                                        # never block an event loop
-        threading.Thread(target=_send_sync, args=(key, parts, silent, markup), daemon=True).start()
-    else:
-        _send_sync(key, parts, silent, markup)
+        fn(*args)
+        return
+    threading.Thread(target=fn, args=args, daemon=True).start()
 
 
 def alert(text: str, loud: bool = False) -> None:
@@ -3669,7 +3582,7 @@ def _agent_thread_sync(tok: str, chat: int, path: str) -> int | None:
                     call_sync(tok, "editForumTopic", chat_id=chat, message_thread_id=info["tid"], name=name)
                     _set_agent_thread(path, info["tid"], name)
                 except TelegramError as e:
-                    if "not_modified" in e.description.lower() or "not modified" in e.description.lower():
+                    if _not_modified(e):
                         _set_agent_thread(path, info["tid"], name)
                     elif _thread_gone(e):
                         drop_agent_thread(path)
@@ -3728,18 +3641,24 @@ def _agent_send_sync(path: str, parts: list[str], silent: bool, thread_msg: str 
 _approval_msgs: dict[str, tuple[int, int, str]] = {}     # request id -> (chat, message id, html)
 
 
+def _agent_target(tok: str, chat: int, path: str) -> tuple[int, int | None] | None:
+    """(chat, thread) of an agent with the `telegram` option, else None (Alerts)."""
+    from .. import agents
+    try:
+        if path and agents.exists(path) and agents.load(path)["telegram"]:
+            return chat, _agent_thread_sync(tok, chat, path)
+    except Exception:  # noqa: BLE001 - a broken agent.json: Alerts
+        log.exception("agent thread for %s", path)
+    return None
+
+
 def _approval_send_sync(d: dict) -> None:
-    from .. import agents, approvals
+    from .. import approvals
     tok, chat = token(), tg_config().get("chat_id")
     if not tok or not chat or not d.get("id"):
         return
     path = d.get("agent_path") or ""
-    target = None
-    try:
-        if path and agents.exists(path) and agents.load(path)["telegram"]:
-            target = (chat, _agent_thread_sync(tok, chat, path))
-    except Exception:  # noqa: BLE001 - a broken agent.json: Alerts
-        log.exception("agent thread for an approval")
+    target = _agent_target(tok, chat, path)
     name = fmt.escape(_agent_display(path) if path else approvals.requester(d)[0])
     what, whole = approvals.summary(str(d.get("tool") or ""), d.get("input"))
     html = _w("approval_ask", name=name, what=fmt.escape(what))
@@ -3797,15 +3716,7 @@ def notify_agent(path: str, text: str, ok: bool = True, thread_msg: str | None =
             parts = [f"⚠️ {parts[0]}" if parts else "⚠️"] + parts[1:]
         if not parts:
             parts = ["✅"]
-        try:
-            asyncio.get_running_loop()
-            in_loop = True
-        except RuntimeError:
-            in_loop = False
-        if in_loop:
-            threading.Thread(target=_agent_send_sync, args=(path, parts, silent, thread_msg), daemon=True).start()
-        else:
-            _agent_send_sync(path, parts, silent, thread_msg)
+        _off_loop(_agent_send_sync, path, parts, silent, thread_msg)
     except Exception:
         log.exception("telegram notify_agent failed")
 
@@ -3819,15 +3730,6 @@ def notify_agent(path: str, text: str, ok: bool = True, thread_msg: str | None =
 # UI; the others are `al:<id>:<action>` -> feed.act(id, action, by="telegram"); feed.py then calls update_alert,
 # which edits the message (resolution, no buttons once resolved).
 ALERT_ICON = {"error": "🚨", "warning": "⚠️", "success": "✅", "info": "ℹ️"}
-
-
-def _feed_alerts() -> bool:
-    """The feed carries the alerts (feed.act exists): health problems come from it, not from `_health_pass`."""
-    try:
-        from .. import feed
-        return callable(getattr(feed, "act", None))
-    except Exception:  # noqa: BLE001
-        return False
 
 
 ALERT_BODY = 1500
@@ -3846,10 +3748,6 @@ def _alert_files(ev: dict) -> list[str]:
 def _alert_cut(ev: dict) -> bool:
     """Only part of the event fits in the message: no button that acts on it (Open shows it all)."""
     return len(_alert_body(ev)) < len(str(ev.get("body") or ""))
-
-
-def _u16(s: str) -> int:
-    return len(s.encode("utf-16-le", "surrogatepass")) // 2
 
 
 def _alert_body(ev: dict) -> str:
@@ -3884,6 +3782,14 @@ def _utf8(s: str) -> str:
     return s.encode("utf-8", "replace").decode("utf-8")
 
 
+def _https_url(url: str) -> str:
+    """A link for a button: a UI path on the public URL, or an https URL; "" when there is none."""
+    if url.startswith("/"):
+        base = (config.load_config().get("public_url") or "").rstrip("/")
+        url = base + url if base.startswith("https://") else ""
+    return url if url.startswith("https://") else ""
+
+
 def _alert_markup(ev: dict) -> dict | None:
     if ev.get("resolved"):
         return None
@@ -3892,11 +3798,8 @@ def _alert_markup(ev: dict) -> dict | None:
         if not isinstance(act, dict) or not act.get("id"):
             continue
         if act["id"] == "open" or act.get("style") == "link":
-            url = str(ev.get("url") or "")
-            if url.startswith("/"):
-                base = (config.load_config().get("public_url") or "").rstrip("/")
-                url = base + url if base.startswith("https://") else ""
-            if url.startswith("https://"):
+            url = _https_url(str(ev.get("url") or ""))
+            if url:
                 row.append({"text": _utf8(str(act.get("label") or _w("open_btn"))[:40]), "url": url})
             continue
         if act["id"] == "seen" and ev.get("read"):
@@ -3910,7 +3813,6 @@ def _alert_markup(ev: dict) -> dict | None:
 
 
 def _alert_send_sync(ev: dict) -> None:
-    from .. import agents
     tok, chat = token(), tg_config().get("chat_id")
     if not tok or not chat or ev.get("id") is None:
         return
@@ -3921,12 +3823,7 @@ def _alert_send_sync(ev: dict) -> None:
     if ev.get("source") in ("health", "system") and not asks and not tg_config().get("notify_system", True):
         return
     path = ev.get("agent") or ""
-    target = None
-    try:
-        if path and agents.exists(path) and agents.load(path)["telegram"]:
-            target = (chat, _agent_thread_sync(tok, chat, path))
-    except Exception:  # noqa: BLE001 - a broken agent.json: Alerts
-        log.exception("agent thread for an alert")
+    target = _agent_target(tok, chat, path)
     sent: list = []
     _send_sync(ALERTS, [_alert_html(ev)], not (asks or rule == "loud"), _alert_markup(ev), target=target, sent=sent,
                bind={"agent": path} if path and (target is None or target[1] is None) else None)
@@ -4010,11 +3907,8 @@ def feed_message(ev: dict) -> tuple[str, dict]:
     body = (parts[0] + "\n…" if len(parts) > 1 else parts[0]) if parts else ""
     text = top + (f"\n{body}" if body else "") + foot
     row = [{"text": "🤖 Ask Harness", "callback_data": f"f:{ev['id']}"}]
-    url = ev.get("url") or ""
-    if url.startswith("/"):
-        base = (config.load_config().get("public_url") or "").rstrip("/")
-        url = base + url if base.startswith("https://") else ""
-    if url.startswith("https://"):
+    url = _https_url(ev.get("url") or "")
+    if url:
         row.append({"text": "Open", "url": url})
     return text, {"inline_keyboard": [row]}
 

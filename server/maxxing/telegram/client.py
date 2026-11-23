@@ -42,13 +42,8 @@ def _scrub(text: str, token: str) -> str:
 
 
 def _payload(params: dict[str, Any]) -> dict[str, Any]:
-    """Drop None values; JSON-encode nested structures (reply_markup, commands…)."""
-    out: dict[str, Any] = {}
-    for k, v in params.items():
-        if v is None:
-            continue
-        out[k] = v
-    return out
+    """Drop None values (nested structures - reply_markup, commands… - go as JSON)."""
+    return {k: v for k, v in params.items() if v is not None}
 
 
 def _parse(resp: httpx.Response, token: str) -> Any:
@@ -131,8 +126,7 @@ class Client:
         except httpx.HTTPError as e:
             raise TelegramError(0, _scrub(f"download failed: {type(e).__name__}", self.token)) from None
         finally:
-            if tmp.exists():
-                tmp.unlink(missing_ok=True)
+            tmp.unlink(missing_ok=True)
         return dest
 
     async def aclose(self) -> None:
