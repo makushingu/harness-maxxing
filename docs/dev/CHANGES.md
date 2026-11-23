@@ -7,6 +7,9 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- `SessionColumn`: `useSessionStream(place?.hidden ? null : sid)`: a hidden tab (tabs view) closes its SSE. Over
+  HTTP/1.1 (local mode, no Caddy h2) one `EventSource` per open tab + `/api/stream` filled the browser's 6 connections
+  per host and queued `POST /messages` (#178). Shown again, the stream resumes from `get(id).next` (no gap).
 - `FeedSettings` source row: the name column is `flex-1 basis-40` (was `flex-1`, basis 0): the `flex-wrap` row now
   wraps the `w-44` rule select under the name below ~22 rem instead of truncating the name; guarded by
   `test_web_mobile.py::test_a_notification_source_keeps_its_name_readable_on_a_phone`.

@@ -24,6 +24,9 @@ Added:
   opens in the viewer with a click, before you send it.
 
 Fixed:
+- **With several sessions open, a message no longer stays on "Sending…" (local mode).** Each open tab kept a live
+  connection and the browser has only six per server: the send waited for a free one. Only the sessions on screen keep one
+  now; a tab you come back to catches up at once.
 - **On a phone, Settings -> Notifications shows the name of each source.** The rule menu took the room and the
   names were cut to two letters ("Cr…", "Sig…"): it now goes under the name when the screen is narrow.
 - **On a phone, Settings -> Memory lists whole file paths.** Cut to one line, every row read
