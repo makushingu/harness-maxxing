@@ -3,7 +3,7 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
-## Unreleased
+## 2.0.0-alpha.165 - 2026-11-23
 
 New:
 - **Harness Link 0.1.1: a new look for the Android app.** A terminal-style header with the LINK logo, one centered
@@ -22,7 +22,6 @@ New:
   its own, reads reports that arrive together in one turn, and a brief that fails is tried again, then reported.
   Full rights, "Ask me first" and its own compaction threshold are in its settings. [Show me](#show:jarvis)
 
-Added:
 - **Notifications on your phone, even with the app closed.** Settings -> Notifications -> *Mobile notifications*:
   turn on *Notify on this device* and every finished turn of yours rings there ("Harness has finished", the session and
   the start of the answer); a tap opens the session. No Telegram needed, nothing of the conversation goes through
@@ -31,6 +30,12 @@ Added:
   it in the file viewer, as in a conversation (documents, sheets, slides, PDF, pictures, videos, code...), ← / →
   between the attachments; Ctrl+click still downloads it. A file you just attached in a session, Team or an agent
   opens in the viewer with a click, before you send it.
+
+Changed:
+- **Scrolling up a long session no longer freezes the page.** Show earlier (and the automatic loading when you reach
+  the top) now adds the older messages a few at a time instead of all at once: the page stays responsive, mostly
+  felt on a phone.
+- **Dependencies updated** (minor and patch versions only): web (@tanstack/react-query 5.108.0 -> 5.108.3, lucide-react 1.74.0 -> 1.77.0, react-router 8.5.1 -> 8.5.2, tailwind-merge 3.7.0 -> 3.7.1) and server (fastapi 0.163.2 -> 0.165.0, pydantic 2.14.3 -> 2.14.4, pyyaml 6.0.3 -> 6.0.4, certifi, filelock, ctranslate2, av).
 
 Fixed:
 - **On a phone, the Tabs / Zones switch is in every session.** It sits next to the ⋯ menu: Tabs shows the open sessions
@@ -42,16 +47,9 @@ Fixed:
 - **The "Harness has finished" notification now works on Android Chrome** when the app is open in the background (it
   was silently dropped: only the banner inside the app showed).
 
-Fixed:
 - **Usage reset times are on your clock.** The Claude usage card of the dashboard showed when the 5-hour and
   7-day windows reset (and the next reading) in the server's time, often UTC, instead of the time zone set in
   Settings.
-
-Changed:
-- **Scrolling up a long session no longer freezes the page.** Show earlier (and the automatic loading when you reach
-  the top) now adds the older messages a few at a time instead of all at once: the page stays responsive, mostly
-  felt on a phone.
-- **Dependencies updated** (minor and patch versions only): web (@tanstack/react-query 5.108.0 -> 5.108.3, lucide-react 1.74.0 -> 1.77.0, react-router 8.5.1 -> 8.5.2, tailwind-merge 3.7.0 -> 3.7.1) and server (fastapi 0.163.2 -> 0.165.0, pydantic 2.14.3 -> 2.14.4, pyyaml 6.0.3 -> 6.0.4, certifi, filelock, ctranslate2, av).
 
 ## 2.0.0-alpha.164 - 2026-11-23
 
