@@ -32,6 +32,9 @@ Changed:
   the last 30 minutes, never one of another topic) instead of a new one each time. And once a piece of work is done,
   the session Jarvis started for it goes to the Archives, unless you wrote in it; it comes back by itself if Jarvis
   follows the work up. Both are on by default, in the settings of Jarvis (gear icon).
+- **Messages between sessions are folded into a small card.** Jarvis's instructions in a session, the reports that
+  come back to Jarvis and the messages one session sends another no longer look like something you typed: a card
+  says who sent it and what it is about (a report says if it answered, asks you or failed), and a click shows it all.
 
 Fixed:
 - **`@Jarvis` in a message reaches Jarvis, once.** The `@` menu of a session showed each of Jarvis's daily

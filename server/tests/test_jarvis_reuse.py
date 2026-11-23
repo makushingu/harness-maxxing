@@ -143,3 +143,34 @@ def test_the_rules_follow_the_settings(on, mx):
     text = rules.read_text()
     assert "always gets a new session" in text and "leaves its session as it is" in text
     assert config.load_config()["jarvis"]["reuse"] is False
+
+
+def test_a_relayed_message_says_who_sent_it_for_its_card():
+    from maxxing.sessions import runner
+    assert runner._relay_from({"relay": {"hops": 1}}) == {}
+    f = runner._relay_from({"relay": {"from": "a" * 36, "title": "Jarvis", "path": jarvis.PATH, "jarvis": True}})
+    assert f["from"] == {"session": "a" * 36, "title": "Jarvis", "path": jarvis.PATH, "jarvis": True}
+    rep = runner._relay_from({"relay": {"from": "b" * 36, "title": "Post", "path": "p", "report": 4, "outcome": "asks"}})
+    assert rep["from"]["reports"] == [{"id": 4, "outcome": "asks"}] and "jarvis" not in rep["from"]
+    merged = runner._merge_reports({"text": "r1", "relay": {"from": "b" * 36, "report": 4, "outcome": "done"}},
+                                   [{"text": "r2", "relay": {"from": "c" * 36, "report": 5, "outcome": "failed"}}])
+    assert runner._relay_from(merged)["from"]["reports"] == [{"id": 4, "outcome": "done"}, {"id": 5, "outcome": "failed"}]
+
+
+def test_jarvis_s_sends_are_marked(on, topic):
+    s = on.post("/api/sessions", json={"path": topic}).json()
+    seen = {}
+    real = service.send_message
+    def spy(sid, text, attachments=None, source="web", **kw):
+        seen.update(kw.get("relay") or {})
+        return real(sid, text, attachments, source, **kw)
+    import maxxing.sessions.service as svc
+    svc.send_message = spy
+    try:
+        service.relay_message(s["id"], "brief", sender={"id": "x" * 36, "title": "Jarvis", "path": jarvis.PATH})
+        assert seen.get("jarvis") is True
+        seen.clear()
+        service.relay_message(s["id"], "hi", sender={"id": "y" * 36, "title": "Other", "path": topic})
+        assert "jarvis" not in seen
+    finally:
+        svc.send_message = real

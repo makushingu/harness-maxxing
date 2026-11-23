@@ -1,7 +1,6 @@
 // Rendering of one thread item. Every row is memoised on the item object (items keep their identity
 // when the log grows, see log.ts), so appending events only renders the new rows.
 import * as React from 'react'
-import { Link } from 'react-router'
 import { AlertTriangle, Brain, FolderSearch, Check, ChevronRight, CircleAlert, Copy, FileText, GripVertical, History, Info, MessageSquarePlus, Mic, Paperclip, Pause, Pencil, Play, ScrollText, Trash2, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useT, useLang } from '@/i18n'
@@ -10,7 +9,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Markdown } from '@/components/ui/markdown'
 import { filePreviewUrl, fileRawUrl, fileStamp, fileThumbUrl, prefetchImage, PREVIEW_W } from '@/lib/queries/files'
 import { Thumb } from '@/features/files/Thumb'
-import type { ChangesEvent, ClaudeModel, ResultField, SentMention } from '@/lib/types'
+import type { ChangesEvent, ClaudeModel, RelayFrom, ResultField, SentMention } from '@/lib/types'
+import { RelayCard } from './RelayCard'
 import { ChipText } from './mentions'
 import { costTip, ResultLineMenu, useCostIsBilled, useResultLine } from './resultLine'
 import { isShownTask, taskStatus, type Item } from './log'
@@ -301,7 +301,7 @@ export function UserMessage({
   at?: number
   source?: string
   /** Sent by another session's turn (maxxing sessions send): a link to it. */
-  from?: { session: string; title: string }
+  from?: RelayFrom
   /** The @ it names: drawn as chips (with the "/" command it starts with). */
   mentions?: SentMention[]
   /** Added to a running turn (Add to task). */
@@ -323,7 +323,8 @@ export function UserMessage({
       {menu}
       {voice && <VoiceNote paths={voice === true ? [] : voice} heard={heard} pending={pending} />}
       {attachments.length > 0 && <AttachmentStrip paths={attachments} />}
-      {text && (
+      {text && from && <RelayCard from={from} text={text} />}
+      {text && !from && (
         <div className="relative max-w-full rounded-2xl rounded-br-md bg-secondary px-3.5 py-2 text-[14px] leading-relaxed whitespace-pre-wrap text-secondary-foreground [overflow-wrap:anywhere]">
           <Sensitive block className="min-w-24 bg-transparent">
             {quotes.map((q, i) =>
@@ -349,15 +350,7 @@ export function UserMessage({
         ) : (
           <>
             {(text || heard?.text) && <MessageGrip text={[text, heard?.text].filter(Boolean).join('\n\n')} />}
-            {from ? (
-              <Tooltip content={t('sessions.msg.from', { title: from.title || from.session.slice(0, 8) })}>
-                <Link to={`/sessions?session=${encodeURIComponent(from.session)}`} className="max-w-48 truncate rounded bg-muted px-1 hover:text-foreground">
-                  ↩ {from.title || from.session.slice(0, 8)}
-                </Link>
-              </Tooltip>
-            ) : (
-              source && source !== 'web' && <span className="rounded bg-muted px-1">{sourceLabel(source, t)}</span>
-            )}
+            {!from && source && source !== 'web' && <span className="rounded bg-muted px-1">{sourceLabel(source, t)}</span>}
             {injected && (
               <Tooltip content={t('sessions.msg.injectedTip')}>
                 <span className="rounded bg-muted px-1">{t('sessions.msg.injected')}</span>

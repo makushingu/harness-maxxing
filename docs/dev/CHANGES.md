@@ -20,6 +20,13 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   `{id, title, state, updated, archived, started_by_jarvis, owner_wrote, context_tokens, last_answer, reusable,
   why_not}`, `why_not` = `running` (running or queued) | `owner_active` (`owner_at` < 30 min) | `context_full`
   (>= 80 % of the path's `auto_compact_tokens`, else of the model window). Tests `test_jarvis_reuse.py`.
+- Relayed messages as cards: the log line `from` (`runner._relay_from`) is now `{session, title, path, jarvis?,
+  reports?: [{id, outcome: done|asks|failed}]}` (type `RelayFrom`). `relay_message` sets `relay.jarvis` when the
+  sender is `config.JARVIS_PATH`; `jarvis.on_turn_end` sets `relay.outcome`; `_merge_reports` keeps `outcomes`
+  beside `reports`. Web `pages/sessions/RelayCard.tsx` replaces the bubble of a `from` message (the "↩ title" link
+  of its footer is gone): folded label + first line, unfolded = the text (reports: only the answers between their
+  `<<WORK-x … WORK-x>>` marks). Older lines without the new fields: read from the text (`[Work #N · …] The session
+  … FAILED.`, a sender titled `Jarvis · …`).
 - `deps.drop_other_libc(node_modules)`, called by `_up_remotion` after `npm ci`: npm 10 does not store `libc` in
   package-lock.json, so `npm ci` installed both `@rspack/binding-linux-x64-{gnu,musl}` and
   `@remotion/compositor-linux-x64-{gnu,musl}`. On a glibc host (`platform.libc_ver()`) the top-level and scoped

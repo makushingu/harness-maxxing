@@ -513,6 +513,8 @@ def relay_message(to: str, text: str, attachments: list[str] | None = None, send
     if sender:
         relay.update({"from": sender.get("id") or "", "title": sender.get("title") or "",
                       "path": sender.get("path") or ""})
+        if (sender.get("path") or "").strip("/") == config.JARVIS_PATH:
+            relay["jarvis"] = True                           # shown as a card of Jarvis (runner._relay_from)
     if short:
         relay["short"] = True
     return send_message(target["id"], text, attachments, "session" if sender else "cli", relay=relay)

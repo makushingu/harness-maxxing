@@ -684,7 +684,7 @@ def on_turn_end(session: dict, result: dict | None) -> None:
     from .sessions.service import MAX_HOPS
     hops = 0 if int(item.get("turns") or 0) <= FOLLOW_UPS else MAX_HOPS
     relay = {"from": sid, "title": session.get("title") or "", "path": item["path"], "hops": hops,
-             "report": item["id"]}
+             "report": item["id"], "outcome": "failed" if not ok else "asks" if item.get("question") else "done"}
     if (eff := settings()["report_effort"]) and not to:
         relay["effort"] = eff
     try:

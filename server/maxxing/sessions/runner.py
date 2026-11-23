@@ -1216,9 +1216,20 @@ SHORT_ANSWER_NOTE = ("[Your final answer is read by an assistant, not shown to a
 
 
 def _relay_from(item: dict) -> dict:
-    """The log line of a message sent by another session's turn: who sent it (shown on the message)."""
+    """The log line of a message sent by another session's turn: who sent it (the UI folds it into a small card):
+    its path, `jarvis` when Jarvis's conversation sent it, and for the reports of Jarvis's work board their
+    numbers and outcomes ({id, outcome: done | asks | failed}, several when reports were read together)."""
     r = item.get("relay") or {}
-    return {"from": {"session": r["from"], "title": r.get("title") or ""}} if r.get("from") else {}
+    if not r.get("from"):
+        return {}
+    out: dict = {"session": r["from"], "title": r.get("title") or "", "path": r.get("path") or ""}
+    if r.get("jarvis"):
+        out["jarvis"] = True
+    ids = r.get("reports") or ([r["report"]] if r.get("report") else [])
+    if ids:
+        outs = r.get("outcomes") or [r.get("outcome") or "done"] * len(ids)
+        out["reports"] = [{"id": i, "outcome": (outs[n] if n < len(outs) else "done")} for n, i in enumerate(ids)]
+    return {"from": out}
 
 
 def _merge_reports(item: dict, q: list) -> dict:
@@ -1227,15 +1238,16 @@ def _merge_reports(item: dict, q: list) -> dict:
     rel = item.get("relay") or {}
     if not rel.get("report") or item.get("held"):
         return item
-    texts, refs = [item.get("text") or ""], [rel["report"]]
+    texts, refs, outs = [item.get("text") or ""], [rel["report"]], [rel.get("outcome") or "done"]
     while q and (q[0].get("relay") or {}).get("report") and not q[0].get("held") and not q[0].get("attachments"):
         nxt = q.pop(0)
         texts.append(nxt.get("text") or "")
         refs.append(nxt["relay"]["report"])
+        outs.append(nxt["relay"].get("outcome") or "done")
         rel = {**rel, "hops": max(int(rel.get("hops") or 0), int(nxt["relay"].get("hops") or 0))}
     if len(texts) == 1:
         return item
-    return {**item, "text": "\n\n".join(texts), "relay": {**rel, "reports": refs}}
+    return {**item, "text": "\n\n".join(texts), "relay": {**rel, "reports": refs, "outcomes": outs}}
 
 
 def relay_preface(r: dict) -> str:

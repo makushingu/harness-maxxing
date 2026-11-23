@@ -441,7 +441,7 @@ export type UploadResult = { files: Upload[] }
 
 type Usage = { input: number; output: number; cache_read: number; cache_write: number }
 export type SessionEvent =
-  | { type: 'user'; text: string; attachments: string[]; at: number; source: SessionSource; /** Audio of a voice message sent directly. */ voice?: string[]; /** The web pages' ids of the message(s) it carries (SendMessageBody.client_id). */ client_ids?: string[]; /** Added to a running turn (Add to task): read at Claude's next step. */ injected?: boolean; /** Sent by another session's turn (`maxxing sessions send`). */ from?: { session: string; title: string }; /** The @ it names (composer menu): drawn as chips. */ mentions?: SentMention[] }
+  | { type: 'user'; text: string; attachments: string[]; at: number; source: SessionSource; /** Audio of a voice message sent directly. */ voice?: string[]; /** The web pages' ids of the message(s) it carries (SendMessageBody.client_id). */ client_ids?: string[]; /** Added to a running turn (Add to task): read at Claude's next step. */ injected?: boolean; /** Sent by another session's turn (`maxxing sessions send`): shown as a folded card (RelayCard). */ from?: RelayFrom; /** The @ it names (composer menu): drawn as chips. */ mentions?: SentMention[] }
   /** Transcript of the voice message just above (or why it failed). */
   | { type: 'voice_text'; text: string; error: string | null; stopped?: boolean; at: number }
   | { type: 'assistant'; text: string; at: number; /** Written by Claude Code in place of an answer, the API refused the call: why (rate_limit, server_error…). */ error?: string }
@@ -1759,6 +1759,17 @@ export interface CleanupResult {
 /* ---------------------------------------------------------------- Jarvis (Settings -> Features -> jarvis_feature) */
 type JarvisWorkState = 'running' | 'replied' | 'failed' | 'closed'
 /** One piece of work Jarvis handed to a session (server jarvis.py work board). */
+/** Who sent a message from another session's turn (log line `from`). */
+export interface RelayFrom {
+  session: string
+  title: string
+  /** the sender's topic path (older log lines: absent) */
+  path?: string
+  /** sent by Jarvis's conversation */
+  jarvis?: boolean
+  /** reports of Jarvis's work board read in this message */
+  reports?: { id: number; outcome: 'done' | 'asks' | 'failed' }[]
+}
 export interface JarvisWork {
   id: number
   session: string

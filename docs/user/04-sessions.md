@@ -231,6 +231,10 @@ into another app, the content arrives as plain text (a file as its path).
 - Answers stream live (markdown, code, images). A picture from another website shows as a **Load image from …**
   button and loads only when you click it (a page Claude read cannot make the answer send data to its server);
   links to other websites open in a new tab.
+- **Messages from another session** (Jarvis's instructions, a session that hands work to this one, the reports
+  that come back to Jarvis) are folded into a small card instead of a bubble: who sent it (**Instructions from
+  Jarvis**, **Message from <session>**, **Report #N · <session>** with *answered*, *asks you* or *failed*) and its
+  first line. Click it to read the whole text; the arrow opens the other session.
 - **Tool calls** (reading files, running commands, editing) appear as compact cards with a title in plain words
   ("Runs the tests", "Searches “useT”", "Reads app.py") and, in grey after it, what really runs (the command, the
   file, the pattern; in full when you hover it); expand them to see input and output. Edits are shown as diffs (on a
