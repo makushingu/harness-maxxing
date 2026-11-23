@@ -93,6 +93,8 @@ def test_topic_sessions_says_which_one_may_be_continued(on, topic, mx):
     store.update(old_owner["id"], owner_at=now - 86400)
     full = on.post("/api/sessions", json={"path": topic, "title": "Full"}).json()
     store.update(full["id"], context_tokens=290000)
+    before = on.post("/api/sessions", json={"path": topic, "title": "Before the field"}).json()
+    store.update(before["id"], last_turn={"at": now - 120, "source": "web"})
     stale = on.post("/api/sessions", json={"path": topic, "title": "Stale"}).json()
     store.update(stale["id"], updated=now - 31 * 86400)
     hidden = on.post("/api/sessions", json={"path": topic, "title": "Archived by the owner"}).json()
@@ -101,11 +103,12 @@ def test_topic_sessions_says_which_one_may_be_continued(on, topic, mx):
     jarvis.close(2)                                         # archived by Jarvis: listed, it may follow it up
     elsewhere = on.post("/api/sessions", json={"path": other, "title": "Other topic"}).json()
     rows = {r["title"]: r for r in jarvis.topic_sessions(topic, now=now)}
-    assert set(rows) == {"Free", "Busy", "Owner yesterday", "Full", "Done"}
+    assert set(rows) == {"Free", "Busy", "Owner yesterday", "Full", "Before the field", "Done"}
     assert rows["Free"]["reusable"] and rows["Free"]["started_by_jarvis"]
     assert rows["Busy"]["why_not"] == "owner_active"
     assert rows["Owner yesterday"]["reusable"] and rows["Owner yesterday"]["owner_wrote"]
     assert rows["Full"]["why_not"] == "context_full"
+    assert rows["Before the field"]["why_not"] == "owner_active"
     assert rows["Done"]["archived"] and rows["Done"]["reusable"]
     assert elsewhere["id"] not in {r["id"] for r in jarvis.topic_sessions(topic, now=now)}
     assert free["id"] in {r["id"] for r in jarvis.topic_sessions(topic, now=now)}

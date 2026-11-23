@@ -499,7 +499,7 @@ def _archivable(item: dict, items: list[dict]) -> bool:
     if any(i is not item and i.get("session") == sid and i.get("state") != "closed" for i in items):
         return False
     m = store.read(sid) or {}
-    return (bool(m.get("jarvis_made")) and not m.get("owner_at") and not m.get("archived")
+    return (bool(m.get("jarvis_made")) and not _owner_at(m) and not m.get("archived")
             and m.get("state") != "running" and not m.get("queue") and m.get("source") != "agent")
 
 
@@ -508,6 +508,16 @@ def _compact_limit(m: dict) -> int:
     cfg = config.load_config()
     limit = config.int_setting(config.session_config(cfg, m.get("path")), "auto_compact_tokens")
     return limit if limit > 0 else int(m.get("context_window") or 0)
+
+
+def _owner_at(m: dict) -> float:
+    """When the owner last wrote in a session: `owner_at`, else (sessions older than it) its last turn's message."""
+    from .sessions.service import OWNER_SOURCES
+    lt = m.get("last_turn") if isinstance(m.get("last_turn"), dict) else {}
+    try:
+        return float(m.get("owner_at") or (lt.get("at") if lt.get("source") in OWNER_SOURCES else 0) or 0)
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def topic_sessions(path: str, days: int = REUSE_DAYS, now: float | None = None) -> list[dict]:
@@ -525,7 +535,7 @@ def topic_sessions(path: str, days: int = REUSE_DAYS, now: float | None = None) 
             continue
         if s.get("archived") and not m.get("jarvis_archived"):
             continue
-        owner_at = float(m.get("owner_at") or 0)
+        owner_at = _owner_at(m)
         ctx, limit = int(s.get("context_tokens") or 0), _compact_limit(m)
         why = ("running" if s.get("state") == "running" or s.get("queue") else
                "owner_active" if owner_at and now - owner_at < OWNER_QUIET_S else
