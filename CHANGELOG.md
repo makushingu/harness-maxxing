@@ -28,9 +28,6 @@ Added:
 Fixed:
 - **On a phone, the Tabs / Zones switch is in every session.** It sits next to the ⋯ menu: Tabs shows the open sessions
   above the conversation (even when only one is open), Zones hides them.
-- **With several sessions open, a message no longer stays on "Sending…" (local mode).** Each open tab kept a live
-  connection and the browser has only six per server: the send waited for a free one. Only the sessions on screen keep one
-  now; a tab you come back to catches up at once.
 - **On a phone, Settings -> Notifications shows the name of each source.** The rule menu took the room and the
   names were cut to two letters ("Cr…", "Sig…"): it now goes under the name when the screen is narrow.
 - **On a phone, Settings -> Memory lists whole file paths.** Cut to one line, every row read
@@ -47,6 +44,13 @@ Changed:
 - **Scrolling up a long session no longer freezes the page.** Show earlier (and the automatic loading when you reach
   the top) now adds the older messages a few at a time instead of all at once: the page stays responsive, mostly
   felt on a phone.
+
+## 2.0.0-alpha.164 - 2026-11-23
+
+Fixed:
+- **With several sessions open, a message no longer stays on "Sending…" (local or Tailscale access, plain HTTP).**
+  Each open tab kept a live connection and the browser allows only six per server: the send waited for a free one and
+  never left. Only the sessions on screen keep one now; a tab you come back to catches up at once.
 
 ## 2.0.0-alpha.163 - 2026-11-22
 

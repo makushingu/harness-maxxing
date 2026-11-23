@@ -21,9 +21,6 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   shared OSV lookup in `depcheck`/`deps`, one `LiveTokens` class for browser/devices live views, `useDebounced`,
   `STATUS_TONE`), 80 unused i18n keys and 3 unused Radix packages dropped. `maxxing team send --file` reserves the
   target name atomically (`reserve_path`); `imap._date` tolerates a malformed server date.
-- `SessionColumn`: `useSessionStream(place?.hidden ? null : sid)`: a hidden tab (tabs view) closes its SSE. Over
-  HTTP/1.1 (local mode, no Caddy h2) one `EventSource` per open tab + `/api/stream` filled the browser's 6 connections
-  per host and queued `POST /messages` (#178). Shown again, the stream resumes from `get(id).next` (no gap).
 - `FeedSettings` source row: the name column is `flex-1 basis-40` (was `flex-1`, basis 0): the `flex-wrap` row now
   wraps the `w-44` rule select under the name below ~22 rem instead of truncating the name; guarded by
   `test_web_mobile.py::test_a_notification_source_keeps_its_name_readable_on_a_phone`.
@@ -99,6 +96,12 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   `start` moves to `start + added - STEP` during the render and grows back to the old `start` the same way. Longest
   task on a 4 MB log 223 -> 144 ms (945 -> 639 ms at 4x CPU slowdown); on 120 loaded rows 268 -> 117 ms
   (876 -> 400 ms at 4x). Same final rows, reading position kept.
+
+## 2.0.0-alpha.164 - 2026-11-23
+
+- `SessionColumn`: `useSessionStream(place?.hidden ? null : sid)`: a hidden tab (tabs view) closes its SSE. Over
+  HTTP/1.1 (local / Tailscale mode, no Caddy h2) one `EventSource` per open tab + `/api/stream` filled the browser's 6
+  connections per host and queued `POST /messages` (#178). Shown again, the stream resumes from `get(id).next`.
 
 ## 2.0.0-alpha.163 - 2026-11-22
 
