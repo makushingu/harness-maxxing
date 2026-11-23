@@ -144,7 +144,9 @@ function view(s: Shared, here: string | null) {
     if (c) st.focus(c.key)
   }
   sync.front = s.front ?? null
-  sync.mine = frontId()
+  // brought in front here since (a click, a link): still to send; else the one shown now is the agreed one, even when
+  // the other device's could not come in front (not open here)
+  sync.mine = here === before || here === s.front ? frontId() : before
 }
 
 /** The shared list and view (one request for every reader). */
