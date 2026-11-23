@@ -512,10 +512,21 @@ def unread_count() -> int:
                          (time.time() - RETENTION_DAYS * 86400,)).fetchone()[0]
 
 
+_SIGNATURE_SQL = ("SELECT MAX(id), SUM(read), SUM(count), COUNT(*), SUM(resolved IS NOT NULL) FROM events")
+
+
+def _signature(r) -> int:
+    """One number that changes when an event is added, read, grouped (count), resolved or deleted - by any process."""
+    n = 0
+    for v in r:
+        n = (n * 1000003 + (v or 0)) % (1 << 52)         # below 2**53: it travels as a JSON number
+    return n
+
+
 def last_id() -> int:
     with _conn() as c:
-        r = c.execute("SELECT MAX(id), SUM(read) FROM events").fetchone()
-    return (r[0] or 0) * 100000 + (r[1] or 0)              # changes on new events and on reads
+        r = c.execute(_SIGNATURE_SQL).fetchone()
+    return _signature(r)
 
 
 _watch_lock = threading.Lock()
@@ -544,12 +555,12 @@ def watch_id() -> int:
             c = sqlite3.connect(path, timeout=10, check_same_thread=False)    # used under _watch_lock only
             _watch.update(conn=c, ident=ident)
         try:
-            r = c.execute("SELECT MAX(id), SUM(read) FROM events").fetchone()
+            r = c.execute(_SIGNATURE_SQL).fetchone()
         except sqlite3.Error:
             c.close()
             _watch.update(conn=None, ident=None, stamp=None)
             raise
-        last = (r[0] or 0) * 100000 + (r[1] or 0)
+        last = _signature(r)
         _watch.update(stamp=stamp, last=last)
         return last
 
