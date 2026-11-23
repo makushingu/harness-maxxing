@@ -308,3 +308,20 @@ def test_parallel_edits_of_a_claude_md_do_not_share_a_temporary_file(client, mx)
     [t.join() for t in ts]
     assert not errors, errors[:1]
     assert "@memory.md" in (mx["ws"] / "projects/par/CLAUDE.md").read_text()
+
+
+def test_claude_md_that_is_a_pipe_or_a_device_does_not_hang_or_crash_the_tree(mx):
+    import os
+    from maxxing import config, workspace
+    ws = config.workspace()
+    for name, make in (("fifo", lambda p: os.mkfifo(p)), ("zero", lambda p: p.symlink_to("/dev/zero"))):
+        d = ws / "projects" / name
+        d.mkdir(parents=True)
+        make(d / "CLAUDE.md")
+        make(d / ".maxxing.json")
+        assert workspace.read_description(d) == ""
+        assert workspace._folder_meta(d) == {}
+    big = ws / "projects" / "big"
+    big.mkdir()
+    (big / "CLAUDE.md").write_text("# Big\n\n" + "x" * (workspace.SMALL_FILE_MAX * 4))
+    assert len(workspace.read_description(big)) <= workspace.SMALL_FILE_MAX

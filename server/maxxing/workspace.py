@@ -25,6 +25,7 @@ import logging
 import os
 import re
 import shutil
+import stat
 import threading
 import time
 from pathlib import Path
@@ -149,10 +150,29 @@ def read_description(folder: Path) -> str:
     return _cached(folder / "CLAUDE.md", _parse_description)
 
 
-def _parse_description(f: Path) -> str:
+SMALL_FILE_MAX = 64 * 1024      # CLAUDE.md / .maxxing.json / .order.json: read at most this much of a regular file
+
+
+def _read_small(f: Path) -> str:
+    """The start of a regular file; "" for a pipe, a device (/dev/zero), a missing or unreadable file."""
     try:
-        lines = f.read_text(errors="replace").splitlines()
+        fd = os.open(f, os.O_RDONLY | os.O_NONBLOCK)
     except OSError:
+        return ""
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            return ""
+        with os.fdopen(fd, "rb", closefd=False) as fh:
+            return fh.read(SMALL_FILE_MAX).decode("utf-8", "replace")
+    except (OSError, MemoryError):
+        return ""
+    finally:
+        os.close(fd)
+
+
+def _parse_description(f: Path) -> str:
+    lines = _read_small(f).splitlines()
+    if not lines:
         return ""
     out, started = [], False
     for ln in lines:
@@ -282,8 +302,8 @@ def _ordered(names: list[str], order: object) -> list[str]:
 
 def _parse_order(f: Path) -> object:
     try:
-        return json.loads(f.read_text()).get("projects")
-    except (OSError, ValueError, AttributeError, RecursionError):
+        return json.loads(_read_small(f)).get("projects")
+    except (ValueError, AttributeError, RecursionError):
         return None
 
 
@@ -328,9 +348,9 @@ PERMISSION_MODES = ("bypass", "acceptEdits", "default", "ask")
 
 def _parse_meta(f: Path) -> dict:
     try:
-        data = json.loads(f.read_text())
+        data = json.loads(_read_small(f))
         return data if isinstance(data, dict) else {}
-    except (OSError, ValueError, RecursionError):      # RecursionError: JSON nested too deep
+    except (ValueError, RecursionError):      # RecursionError: JSON nested too deep
         return {}
 
 
