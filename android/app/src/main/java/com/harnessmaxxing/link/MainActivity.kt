@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.graphics.drawable.GradientDrawable
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.widget.Button
@@ -72,6 +73,9 @@ class MainActivity : AppCompatActivity() {
             false
         }
         name.setOnFocusChangeListener { _, has -> if (!has) saveName() }
+
+        val version = runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrNull() ?: "?"
+        findViewById<TextView>(R.id.terminal_line).text = getString(R.string.terminal_line, version)
 
         handleLink(intent)
     }
@@ -162,6 +166,13 @@ class MainActivity : AppCompatActivity() {
         val a11y = LinkAccessibilityService.enabled
         val title = findViewById<TextView>(R.id.status_title)
         val detail = findViewById<TextView>(R.id.status_detail)
+        val dot = when {
+            !paired -> R.color.dot_off
+            config.paused || !a11y -> R.color.dot_wait
+            LinkState.conn == LinkState.Conn.CONNECTED -> if (LinkState.busyBy == "claude" || LinkState.busyBy == "human") R.color.brand else R.color.dot_ok
+            else -> R.color.dot_wait
+        }
+        (findViewById<View>(R.id.status_dot).background.mutate() as GradientDrawable).setColor(getColor(dot))
         when {
             !paired -> {
                 title.setText(R.string.status_not_paired)

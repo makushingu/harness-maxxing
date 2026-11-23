@@ -1,5 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="brand">#FF6D4AFF</color>
+    <!-- Harness Maxxing blue (web UI primary). -->
+    <color name="brand">#FF1874ED</color>
     <color name="icon_background">#FF14121C</color>
+    <!-- The terminal header stays dark in both themes, like the desktop app's window. -->
+    <color name="terminal_bg">#FF0D0C12</color>
+    <color name="terminal_border">#FF2A2836</color>
+    <color name="terminal_text">#FFB8B6C8</color>
+    <color name="terminal_dim">#FF6E6C80</color>
+    <color name="terminal_title">#FF5FAFFF</color>
+    <color name="dot_ok">#FF22C55E</color>
+    <color name="dot_wait">#FFF59E0B</color>
+    <color name="dot_off">#FF8A8898</color>
+    <color name="dot_error">#FFEF4444</color>
+    <color name="page_bg">#FFF6F6F8</color>
+    <color name="card_bg">#FFFFFFFF</color>
+    <color name="card_border">#FFE4E4EA</color>
+    <color name="field_border">#FFB4B4BE</color>
 </resources>

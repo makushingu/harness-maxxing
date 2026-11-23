@@ -15,7 +15,7 @@
     <string name="resume">Resume</string>
 
     <string name="status_not_paired">Not paired</string>
-    <string name="status_not_paired_detail">Open the pairing link shown by Harness (Settings → Devices → Add a device → Android), or type the server address and the code below.</string>
+    <string name="status_not_paired_detail">Pair it with your Harness server so that Claude can use it when you ask.</string>
     <string name="status_revoked_detail">This phone was removed from Harness. Pair it again to use it.</string>
     <string name="status_connected">Connected</string>
     <string name="status_connected_detail">Claude can use this phone when you ask it to, within the rights set in Harness.</string>
@@ -34,7 +34,7 @@
     <string name="app_info_button">App info</string>
     <string name="notifications_button">Allow notifications</string>
 
-    <string name="pair_help">Pair this phone with your Harness server.</string>
+    <string name="pair_help">Open the pairing link shown by Harness (Settings → Devices → Add a device → Android), or type the server address and the code.</string>
     <string name="server_hint">Server address</string>
     <string name="code_hint">Code</string>
     <string name="pair_button">Pair</string>
@@ -50,14 +50,19 @@
     <string name="pair_network">Cannot reach the server (%1$s).</string>
     <string name="pair_server">The server refused the pairing (%1$s).</string>
 
-    <string name="server_label">Server: %1$s</string>
+    <string name="server_label">%1$s</string>
     <string name="name_hint">Name of this phone in Harness</string>
     <string name="name_saved">Name saved</string>
-    <string name="forget_button">Forget this server</string>
+    <string name="forget_button">Forget server</string>
     <string name="forget_title">Forget this server?</string>
     <string name="forget_text">The phone disconnects now and forgets its key. To remove it from the list in Harness too, use Remove in Settings → Devices.</string>
     <string name="forget_confirm">Forget</string>
 
     <string name="about_title">What Claude can do here</string>
     <string name="about_text">Only what you ask for in a Harness session, and only what this app offers: take a screenshot, tap, long-press, swipe and scroll, type into the text field that has the focus, press Back / Home / Recents / Enter, read the list of elements on the screen, list your apps and open one.\n\nIt cannot read your files, run commands, install anything or see screens that apps protect (banking apps, passwords). It does nothing while the phone is locked. Pause in the notification refuses everything until you resume.</string>
+
+    <string name="terminal_line">v%1$s · Claude can use this phone while it is linked</string>
+    <string name="accessibility_title">Turn on accessibility</string>
+    <string name="pair_title">Pair this phone</string>
+    <string name="server_title">Linked server</string>
 </resources>

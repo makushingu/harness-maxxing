@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="brand">#FF3C91FD</color>
+    <color name="page_bg">#FF0F0F13</color>
+    <color name="card_bg">#FF17171D</color>
+    <color name="card_border">#FF26262E</color>
+    <color name="field_border">#FF4A4A55</color>
+</resources>

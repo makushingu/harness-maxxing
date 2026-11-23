@@ -41,6 +41,20 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   workspace CLAUDE.md template (CLI table, skills table, "Use what Harness already has"), the `help` topic index and
   the Jarvis skill list it. User docs `37-webhooks.md`, `38-events.md`; `08-crons`, `24-feed`, `30-agents`,
   `14-skills`, `17-cli-reference`, `01-welcome`, README updated. Tests `tests/test_webhooks.py`.
+- Mentions: new kind `jarvis` (`mentions.KINDS`, `MentionKind`, `ChipKind`): `candidates()` offers one row
+  `{kind: jarvis, ref: jarvis, label: Jarvis, state}` first when `jarvis.feature_on()` (not from one of its own
+  conversations) and drops every session under `projects/jarvis` from the sessions; `resolve()` gives the command
+  `maxxing sessions send jarvis`. `service.relay_message` (`_jarvis_target`): `to` = `jarvis` -> its current
+  conversation (made when none), a past conversation's id -> the current one (`jarvis.current_for`). Composer: the
+  group `@jarvis` has no title (`SlashMenu.groupTitle` returns "" -> no header), chip/route `/jarvis`, Sparkles icon.
+
+## 2.0.0-alpha.165 - 2026-11-23
+
+- Harness Link 0.1.1 (`server/maxxing/link.json`, release `link-v0.1.1`): Android main screen redesigned (`LogoView.kt`
+  draws the LINK logo of `link/console.go` cell by cell, `activity_main.xml` cards, `colors`/`themes`/`dimens`, status
+  dot drawables), `versionCode` 2 / `versionName` 0.1.1. Desktop binaries rebuilt with VERSION=0.1.1, code unchanged.
+- Devices, Add a device -> Android: an APK button under the QR code (`devices-add-apk`) links to the invite's
+  `downloads.android` (`/api/devices/download/android?code=`, the personalised APK); texts `devices.add.apk` / `.apkHelp`.
 - `sessions/opened.py`: `open_sessions.json` also keeps `tabs` (bool) and `front` (session id), set by `POST /api/sessions/open
   {tabs?, front?}` (a change bumps `rev`, same value = no rev); keys absent until a browser sends them. `openSync.ts`:
   sends the mode / focused session when they change here (debounced with the cols), applies the other device's unless

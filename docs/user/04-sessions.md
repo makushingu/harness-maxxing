@@ -161,7 +161,9 @@ on its first message. A title you typed, a Telegram thread you named, or a renam
   message asks for it - "summarize this and send it to @Shop opening", "ask @Lea if the site works for her",
   "hand this to @Writer". A session receives it as a message (marked **↩ the sending session**, a click opens it),
   an agent as work handed over, a Team contact as a message in your name. Claude says in its answer what it sent.
-  Sessions that keep answering each other stop after 3 sends in a row.
+  Sessions that keep answering each other stop after 3 sends in a row. With Jarvis on, **@Jarvis** is the first line
+  of the menu: one entry that always reaches its conversation of the moment (its daily conversations are never listed
+  as sessions).
 - **Attachments**: drag and drop files, paste an image, or use the paperclip. Files are saved in
   `<topic>/attachments/YYYY-MM/` and their paths are given to Claude. With many files, they sit in a small
   strip of two rows that scrolls (the newest in view), so the conversation keeps its room.

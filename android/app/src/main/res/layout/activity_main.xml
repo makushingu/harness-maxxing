@@ -1,208 +1,315 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:fillViewport="true">
 
     <LinearLayout
+        android:id="@+id/content"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:gravity="center_horizontal"
         android:orientation="vertical"
-        android:padding="20dp">
+        android:paddingHorizontal="@dimen/page_margin"
+        android:paddingTop="@dimen/gap"
+        android:paddingBottom="8dp">
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
-            android:text="@string/app_name"
-            android:textAppearance="?attr/textAppearanceHeadlineSmall" />
-
-        <com.google.android.material.card.MaterialCardView
-            style="?attr/materialCardViewFilledStyle"
+        <!-- Header: the terminal window of the desktop app, with the LINK logo -->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp">
+            android:layout_marginBottom="@dimen/gap"
+            android:background="@drawable/terminal_bg"
+            android:orientation="vertical"
+            android:paddingBottom="20dp">
 
-            <LinearLayout
+            <FrameLayout
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="16dp">
+                android:layout_height="34dp"
+                android:paddingHorizontal="14dp">
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="match_parent"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <View
+                        android:layout_width="9dp"
+                        android:layout_height="9dp"
+                        android:layout_marginEnd="6dp"
+                        android:background="@drawable/window_dot" />
+
+                    <View
+                        android:layout_width="9dp"
+                        android:layout_height="9dp"
+                        android:layout_marginEnd="6dp"
+                        android:background="@drawable/window_dot" />
+
+                    <View
+                        android:layout_width="9dp"
+                        android:layout_height="9dp"
+                        android:background="@drawable/window_dot" />
+                </LinearLayout>
 
                 <TextView
-                    android:id="@+id/status_title"
+                    style="@style/Link.Mono"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:textAppearance="?attr/textAppearanceTitleMedium" />
+                    android:layout_gravity="center"
+                    android:text="harness-link"
+                    android:textColor="@color/terminal_dim"
+                    android:textSize="11sp"
+                    tools:ignore="HardcodedText" />
+            </FrameLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="@color/terminal_border" />
+
+            <TextView
+                style="@style/Link.Mono"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="22dp"
+                android:gravity="center"
+                android:letterSpacing="0.5"
+                android:text="HARNESS"
+                android:textColor="@color/terminal_title"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                tools:ignore="HardcodedText" />
+
+            <com.harnessmaxxing.link.LogoView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:contentDescription="@string/app_name"
+                android:paddingHorizontal="24dp" />
+
+            <TextView
+                android:id="@+id/terminal_line"
+                style="@style/Link.Mono"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="18dp"
+                android:gravity="center"
+                android:paddingHorizontal="16dp"
+                android:textColor="@color/terminal_dim" />
+        </LinearLayout>
+
+        <!-- Connection status -->
+        <com.google.android.material.card.MaterialCardView style="@style/Link.Card">
+
+            <LinearLayout
+                style="@style/Link.CardBody"
+                android:gravity="center_horizontal">
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <View
+                        android:id="@+id/status_dot"
+                        android:layout_width="10dp"
+                        android:layout_height="10dp"
+                        android:layout_marginEnd="10dp"
+                        android:background="@drawable/status_dot" />
+
+                    <TextView
+                        android:id="@+id/status_title"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textAppearance="?attr/textAppearanceTitleLarge" />
+                </LinearLayout>
 
                 <TextView
                     android:id="@+id/status_detail"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:textAppearance="?attr/textAppearanceBodyMedium" />
+                    style="@style/Link.Body"
+                    android:layout_marginTop="8dp"
+                    android:gravity="center" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
         <!-- Accessibility service off -->
-        <LinearLayout
+        <com.google.android.material.card.MaterialCardView
             android:id="@+id/accessibility_block"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
-            android:orientation="vertical">
+            style="@style/Link.Card">
 
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/accessibility_help"
-                android:textAppearance="?attr/textAppearanceBodyMedium" />
+            <LinearLayout style="@style/Link.CardBody">
 
-            <Button
-                android:id="@+id/accessibility_button"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:text="@string/accessibility_button" />
+                <TextView
+                    style="@style/Link.SectionTitle"
+                    android:gravity="center"
+                    android:text="@string/accessibility_title" />
 
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:text="@string/restricted_help"
-                android:textAppearance="?attr/textAppearanceBodySmall" />
+                <TextView
+                    style="@style/Link.Body"
+                    android:gravity="center"
+                    android:text="@string/accessibility_help" />
 
-            <Button
-                android:id="@+id/app_info_button"
-                style="?attr/borderlessButtonStyle"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/app_info_button" />
-        </LinearLayout>
+                <Button
+                    android:id="@+id/accessibility_button"
+                    style="@style/Link.Button"
+                    android:layout_marginTop="16dp"
+                    android:text="@string/accessibility_button" />
+
+                <TextView
+                    style="@style/Link.Body"
+                    android:layout_marginTop="16dp"
+                    android:gravity="center"
+                    android:text="@string/restricted_help"
+                    android:textAppearance="?attr/textAppearanceBodySmall" />
+
+                <Button
+                    android:id="@+id/app_info_button"
+                    style="@style/Link.Button.Text"
+                    android:layout_marginTop="4dp"
+                    android:text="@string/app_info_button" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
 
         <Button
             android:id="@+id/notifications_button"
-            style="?attr/materialButtonOutlinedStyle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
-            android:text="@string/notifications_button" />
+            style="@style/Link.Button.Outlined"
+            android:layout_marginBottom="@dimen/gap"
+            android:text="@string/notifications_button"
+            app:icon="@drawable/ic_notification"
+            app:iconGravity="textStart" />
 
         <!-- Not paired -->
-        <LinearLayout
+        <com.google.android.material.card.MaterialCardView
             android:id="@+id/pair_block"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical">
+            style="@style/Link.Card">
 
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="8dp"
-                android:text="@string/pair_help"
-                android:textAppearance="?attr/textAppearanceBodyMedium" />
+            <LinearLayout style="@style/Link.CardBody">
 
-            <com.google.android.material.textfield.TextInputLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:hint="@string/server_hint"
-                app:placeholderText="https://ui.example.com">
+                <TextView
+                    style="@style/Link.SectionTitle"
+                    android:gravity="center"
+                    android:text="@string/pair_title" />
 
-                <com.google.android.material.textfield.TextInputEditText
-                    android:id="@+id/server_input"
+                <TextView
+                    style="@style/Link.Body"
+                    android:layout_marginBottom="16dp"
+                    android:gravity="center"
+                    android:text="@string/pair_help" />
+
+                <com.google.android.material.textfield.TextInputLayout
+                    style="?attr/textInputOutlinedStyle"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:inputType="textUri"
-                    android:maxLines="1" />
-            </com.google.android.material.textfield.TextInputLayout>
+                    android:hint="@string/server_hint"
+                    app:placeholderText="https://ui.example.com">
 
-            <com.google.android.material.textfield.TextInputLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:hint="@string/code_hint">
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/server_input"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="textUri"
+                        android:maxLines="1" />
+                </com.google.android.material.textfield.TextInputLayout>
 
-                <com.google.android.material.textfield.TextInputEditText
-                    android:id="@+id/code_input"
+                <com.google.android.material.textfield.TextInputLayout
+                    style="?attr/textInputOutlinedStyle"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:inputType="textCapCharacters|textNoSuggestions"
-                    android:maxLines="1" />
-            </com.google.android.material.textfield.TextInputLayout>
+                    android:layout_marginTop="12dp"
+                    android:hint="@string/code_hint">
 
-            <Button
-                android:id="@+id/pair_button"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:text="@string/pair_button" />
-        </LinearLayout>
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/code_input"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="monospace"
+                        android:inputType="textCapCharacters|textNoSuggestions"
+                        android:maxLines="1" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <Button
+                    android:id="@+id/pair_button"
+                    style="@style/Link.Button"
+                    android:layout_marginTop="20dp"
+                    android:text="@string/pair_button" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
 
         <!-- Paired -->
-        <LinearLayout
+        <com.google.android.material.card.MaterialCardView
             android:id="@+id/paired_block"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical">
+            style="@style/Link.Card">
 
-            <TextView
-                android:id="@+id/server_label"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp"
-                android:textAppearance="?attr/textAppearanceBodyLarge" />
+            <LinearLayout style="@style/Link.CardBody">
 
-            <com.google.android.material.textfield.TextInputLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:hint="@string/name_hint">
+                <TextView
+                    style="@style/Link.SectionTitle"
+                    android:gravity="center"
+                    android:text="@string/server_title" />
 
-                <com.google.android.material.textfield.TextInputEditText
-                    android:id="@+id/name_input"
+                <TextView
+                    android:id="@+id/server_label"
+                    style="@style/Link.Mono"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:imeOptions="actionDone"
-                    android:inputType="textCapWords"
-                    android:maxLength="64"
-                    android:maxLines="1" />
-            </com.google.android.material.textfield.TextInputLayout>
+                    android:layout_marginBottom="20dp"
+                    android:ellipsize="middle"
+                    android:gravity="center"
+                    android:singleLine="true"
+                    android:textColor="?attr/colorPrimary"
+                    android:textSize="14sp" />
 
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:orientation="horizontal">
+                <com.google.android.material.textfield.TextInputLayout
+                    style="?attr/textInputOutlinedStyle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="@string/name_hint">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/name_input"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:imeOptions="actionDone"
+                        android:inputType="textCapWords"
+                        android:maxLength="64"
+                        android:maxLines="1" />
+                </com.google.android.material.textfield.TextInputLayout>
 
                 <Button
                     android:id="@+id/pause_button"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginEnd="8dp"
+                    style="@style/Link.Button"
+                    android:layout_marginTop="20dp"
                     android:text="@string/pause" />
 
                 <Button
                     android:id="@+id/forget_button"
-                    style="?attr/materialButtonOutlinedStyle"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
+                    style="@style/Link.Button.Outlined"
+                    android:layout_marginTop="8dp"
                     android:text="@string/forget_button" />
             </LinearLayout>
-        </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
-            android:text="@string/about_title"
-            android:textAppearance="?attr/textAppearanceTitleSmall" />
+        <!-- What Claude can do -->
+        <com.google.android.material.card.MaterialCardView style="@style/Link.Card">
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:text="@string/about_text"
-            android:textAppearance="?attr/textAppearanceBodySmall" />
+            <LinearLayout style="@style/Link.CardBody">
+
+                <TextView
+                    style="@style/Link.SectionTitle"
+                    android:layout_marginBottom="10dp"
+                    android:gravity="center"
+                    android:text="@string/about_title" />
+
+                <TextView
+                    style="@style/Link.Body"
+                    android:text="@string/about_text"
+                    android:textAppearance="?attr/textAppearanceBodySmall" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
     </LinearLayout>
 </ScrollView>
