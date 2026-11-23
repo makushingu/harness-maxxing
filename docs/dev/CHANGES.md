@@ -7,6 +7,9 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Harness Link 0.1.1 (`server/maxxing/link.json`, release `link-v0.1.1`): Android main screen redesigned (`LogoView.kt`
+  draws the LINK logo of `link/console.go` cell by cell, `activity_main.xml` cards, `colors`/`themes`/`dimens`, status
+  dot drawables), `versionCode` 2 / `versionName` 0.1.1. Desktop binaries rebuilt with VERSION=0.1.1, code unchanged.
 - Devices, Add a device -> Android: an APK button under the QR code (`devices-add-apk`) links to the invite's
   `downloads.android` (`/api/devices/download/android?code=`, the personalised APK); texts `devices.add.apk` / `.apkHelp`.
 - `sessions/opened.py`: `open_sessions.json` also keeps `tabs` (bool) and `front` (session id), set by `POST /api/sessions/open

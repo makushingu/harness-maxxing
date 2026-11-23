@@ -6,6 +6,9 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 ## Unreleased
 
 New:
+- **Harness Link 0.1.1: a new look for the Android app.** A terminal-style header with the LINK logo, one centered
+  card per section, the Harness blue, a coloured status dot and full-width buttons. Phones get it from Settings ->
+  Devices -> Add a device (it installs over 0.1.0); the computer apps are unchanged.
 - **Download the Android app without the QR code**: Settings -> Devices -> Add a device -> Android now has a
   **Download the app (APK)** button under the code.
 - **Your computer and your phone show the same sessions view.** The Tabs / Zones mode and the session in front follow
