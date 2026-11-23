@@ -4,11 +4,10 @@ import { Check, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useMenuSheetDrag } from './sheet-drag'
 
-export const SelectRoot = SelectPrimitive.Root
-export const SelectValue = SelectPrimitive.Value
-export const SelectGroup = SelectPrimitive.Group
+const SelectRoot = SelectPrimitive.Root
+const SelectValue = SelectPrimitive.Value
 
-export function SelectTrigger({ className, children, ...props }: React.ComponentProps<typeof SelectPrimitive.Trigger>) {
+function SelectTrigger({ className, children, ...props }: React.ComponentProps<typeof SelectPrimitive.Trigger>) {
   return (
     <SelectPrimitive.Trigger
       className={cn(
@@ -25,7 +24,7 @@ export function SelectTrigger({ className, children, ...props }: React.Component
   )
 }
 
-export function SelectContent({ className, children, position = 'popper', ref, ...props }: React.ComponentProps<typeof SelectPrimitive.Content>) {
+function SelectContent({ className, children, position = 'popper', ref, ...props }: React.ComponentProps<typeof SelectPrimitive.Content>) {
   const sheet = useMenuSheetDrag(ref)
   return (
     <SelectPrimitive.Portal>
@@ -47,7 +46,7 @@ export function SelectContent({ className, children, position = 'popper', ref, .
   )
 }
 
-export function SelectItem({ className, children, ...props }: React.ComponentProps<typeof SelectPrimitive.Item>) {
+function SelectItem({ className, children, ...props }: React.ComponentProps<typeof SelectPrimitive.Item>) {
   return (
     <SelectPrimitive.Item
       className={cn(
@@ -66,7 +65,7 @@ export function SelectItem({ className, children, ...props }: React.ComponentPro
   )
 }
 
-export type SelectOption = { value: string; label: React.ReactNode; disabled?: boolean }
+type SelectOption = { value: string; label: React.ReactNode; disabled?: boolean }
 
 /** Shorthand select: <Select value onValueChange options placeholder />. */
 export function Select({

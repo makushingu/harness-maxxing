@@ -8,7 +8,7 @@ import { Button, Checkbox, Dialog, DialogContent, DialogDescription, DialogFoote
 import { Markdown } from '@/components/ui/markdown'
 import { DonationLine } from '@/features/donation/Donation'
 import { useUI } from '@/stores/ui'
-import { useFeedbackDialog } from './feedback-store'
+import { useFeedbackDialog } from './dialog-stores'
 import { type Shot, type Zone, ZoneSelect, blobBase64, shootZone } from './zoneShot'
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/

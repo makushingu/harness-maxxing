@@ -4,7 +4,7 @@ import type { InfraView } from '../types'
 import { useMut } from './util'
 
 // Infra page (server/maxxing/infra): one snapshot refreshed in the background; the bus topic `infra` says when.
-export const infraKeys = { all: ['infra'] as const }
+const infraKeys = { all: ['infra'] as const }
 
 export function useInfra(enabled = true) {
   return useQuery({
@@ -23,7 +23,7 @@ export function useInfraAnnotate() {
     invalidate: [infraKeys.all],
   })
 }
-export type InfraConnectIn = { id?: string; host?: string; user?: string; port?: number; label?: string }
+type InfraConnectIn = { id?: string; host?: string; user?: string; port?: number; label?: string }
 export type InfraConnectOut = { connected: boolean; name?: string; label?: string; via?: string; message?: string; public_key?: string; command?: string }
 export function useInfraConnect() {
   return useMut((b: InfraConnectIn) => api.post<InfraConnectOut>('/api/infra/servers/connect', b), {

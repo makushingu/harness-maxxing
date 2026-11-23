@@ -7,13 +7,12 @@ import { cn } from '@/lib/utils'
 import { startTour } from '@/tour/store'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Tooltip } from '@/components/ui'
 import { iconBtn, navRow } from './nav'
-import { useShortcutsDialog } from './shortcuts-store'
-import { useFeedbackDialog } from './feedback-store'
+import { useFeedbackDialog, useShortcutsDialog } from './dialog-stores'
 
-export type HelpAction = { id: string; label: string; icon: LucideIcon; run: () => void }
+type HelpAction = { id: string; label: string; icon: LucideIcon; run: () => void }
 
 /** The Help entries. Keyboard shortcuts only with a mouse or a trackpad around (they need a keyboard). */
-export function useHelpActions(): HelpAction[] {
+function useHelpActions(): HelpAction[] {
   const t = useT()
   const navigate = useNavigate()
   const keyboard = typeof window !== 'undefined' && window.matchMedia('(any-pointer: fine)').matches

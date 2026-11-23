@@ -3,7 +3,7 @@ import { api } from '@/lib/api'
 import { qk } from './keys'
 
 /** Where a skill comes from: `product` = shipped and refreshed by every update (read-only). */
-export type SkillOrigin = 'product' | 'user' | 'workspace' | 'project' | 'topic'
+type SkillOrigin = 'product' | 'user' | 'workspace' | 'project' | 'topic'
 
 export interface Skill {
   name: string

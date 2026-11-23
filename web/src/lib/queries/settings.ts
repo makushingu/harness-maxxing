@@ -33,7 +33,7 @@ export function useSaveSettings() {
   )
 }
 
-export const profileQuery = () => ({ queryKey: qk.profile, queryFn: () => api.get<Profile>('/api/settings/profile'), staleTime: 5 * 60_000 })
+const profileQuery = () => ({ queryKey: qk.profile, queryFn: () => api.get<Profile>('/api/settings/profile'), staleTime: 5 * 60_000 })
 /** The user's pseudo (empty name: none). */
 export function useProfile() {
   return useQuery(profileQuery())

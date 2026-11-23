@@ -6,7 +6,6 @@ import { useMenuSheetDrag } from './sheet-drag'
 export const Popover = PopoverPrimitive.Root
 export const PopoverTrigger = PopoverPrimitive.Trigger
 export const PopoverAnchor = PopoverPrimitive.Anchor
-export const PopoverClose = PopoverPrimitive.Close
 
 /** `sheet`: a list of choices - on phones it opens as a bottom sheet like the menus (`.mx-sheet`). */
 export function PopoverContent({ className, align = 'center', sideOffset = 6, sheet, ref, ...props }: React.ComponentProps<typeof PopoverPrimitive.Content> & { sheet?: boolean }) {

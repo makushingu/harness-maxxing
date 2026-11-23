@@ -5,7 +5,7 @@ import { useMut } from './util'
 
 // Jarvis (Settings -> Features -> jarvis_feature): its conversation, work board and settings (server jarvis.py).
 // The bus topic "jarvis" refreshes it (a report came, the board moved, a new conversation).
-export const jarvisKey = ['jarvis'] as const
+const jarvisKey = ['jarvis'] as const
 
 export function useJarvis(enabled = true) {
   return useQuery({ queryKey: jarvisKey, queryFn: () => api.get<JarvisStatus>('/api/jarvis'), enabled, refetchInterval: 60_000 })

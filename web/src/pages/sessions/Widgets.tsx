@@ -193,7 +193,7 @@ export function CompactGauge({ tokens, window: reported, model, realModel, setti
 }
 
 /** Tokens at which the server compacts a session (null: automatic compaction off). Mirrors runner._auto_compact. */
-export function compactAt(setting: number | null | undefined, window: number | null | undefined): number | null {
+function compactAt(setting: number | null | undefined, window: number | null | undefined): number | null {
   if (!setting || setting <= 0) return null
   const limit = Math.max(setting, 100_000)
   if (!window || window <= 0) return limit

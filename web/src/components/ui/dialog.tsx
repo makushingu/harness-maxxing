@@ -6,10 +6,8 @@ import { useT } from '@/i18n'
 import { sheetIsBottom, useSheetDrag } from './sheet-drag'
 
 export const Dialog = DialogPrimitive.Root
-export const DialogTrigger = DialogPrimitive.Trigger
-export const DialogClose = DialogPrimitive.Close
 
-export function DialogOverlay({ className, ...props }: React.ComponentProps<typeof DialogPrimitive.Overlay>) {
+function DialogOverlay({ className, ...props }: React.ComponentProps<typeof DialogPrimitive.Overlay>) {
   return <DialogPrimitive.Overlay className={cn('fixed inset-0 z-50 bg-overlay data-[state=closed]:animate-overlay-out data-[state=open]:animate-overlay-in', className)} {...props} />
 }
 

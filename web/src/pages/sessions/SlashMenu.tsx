@@ -7,12 +7,12 @@ import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
 
 /** The menu's groups, in this order: the session's commands, the skills of this topic / project, the others. */
-export type SlashGroup = 'session' | 'here' | 'other'
+type SlashGroup = 'session' | 'here' | 'other'
 const GROUPS: SlashGroup[] = ['session', 'here', 'other']
 /** A group of skills longer than this is folded when nothing is typed: its first rows, then "+ N more". */
 export const FOLD = 6
 
-export type SlashArg = { value: string; label: string; hint?: string; current?: boolean }
+type SlashArg = { value: string; label: string; hint?: string; current?: boolean }
 export type SlashCommand = {
   name: string
   description: string
@@ -27,7 +27,7 @@ export type SlashCommand = {
 
 /** A row of the composer's menus ("/" commands, "@" mentions). */
 export type MenuRow = { key: string; label: string; hint: string; badge?: string; current?: boolean; icon?: React.ReactNode; /** Title shown above the first row of its group ("@session"...: the @ menu's). */ group?: string; /** "+ N more": unfolds the group. */ more?: number }
-export type SlashItem = MenuRow & { cmd: SlashCommand; arg?: string; /** The "+ N more" row of this group. */ expand?: SlashGroup }
+type SlashItem = MenuRow & { cmd: SlashCommand; arg?: string; /** The "+ N more" row of this group. */ expand?: SlashGroup }
 
 export const fold = (s: string) => s.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
 

@@ -8,7 +8,7 @@ import { agentKeys, agentUrl } from './agents'
 
 // Agent groups (on the Agents page): the owner talks to 2-6 agents of one project, who answer in turn.
 // The bus topic `agent-groups` refreshes the list and the groups, `agent-groups:<path>` one group and its messages.
-export const groupKeys = {
+const groupKeys = {
   all: ['agent-groups'] as const,
   list: ['agent-groups', 'list'] as const,
   one: (path: string) => ['agent-groups', 'one', path] as const,

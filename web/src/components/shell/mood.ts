@@ -6,7 +6,7 @@ import type { Health, UsagePayload, UsageWindow } from '@/lib/types'
 import { useNav } from './nav'
 
 /** What the status line says is picked from these (everything the shell already loads). */
-export type MoodFacts = {
+type MoodFacts = {
   health?: Health
   usage?: UsagePayload | null
   feedUnread: number
@@ -23,7 +23,7 @@ export type MoodFacts = {
 /** One short sentence about the server. `level`: ok (green dot), note (amber dot), warn / error (the line in its
  *  alert colour), idle (not known yet). `issues`: about the health problems (the line opens their window). `when`:
  *  times (Unix seconds) the text names, formatted by the hook (`days`: another day is named without its hour). */
-export type Mood = {
+type Mood = {
   key: TKey
   vars?: TVars
   when?: { hit?: number; reset?: number; days?: boolean }
@@ -38,7 +38,7 @@ const WEEK = 7 * 86400
 /** A light forecast of a plan window: the usage so far drawn as a straight line to the reset. `hit`: when the quota
  *  would run out, only when that is before the reset; null too early in the window (under 15 % of it, or under
  *  20 % used: a first burst says nothing) to tell. */
-export function forecast(w: UsageWindow | null | undefined, len: number, now: number): { pct: number; reset: number | null; hit: number | null } | null {
+function forecast(w: UsageWindow | null | undefined, len: number, now: number): { pct: number; reset: number | null; hit: number | null } | null {
   if (!w || typeof w.pct !== 'number' || !Number.isFinite(w.pct)) return null
   const pct = w.pct
   const reset = w.resets_at && w.resets_at > now ? w.resets_at : null
@@ -65,7 +65,7 @@ const ISSUE_MOOD: Record<string, TKey> = {
 
 /** The one thing worth saying now, most pressing first: health problems, quota out, a busy server (CPU, memory),
  *  quota that will not last until its reset, disk filling up, things left unread, then how well it all goes. */
-export function pickMood(f: MoodFacts): Mood {
+function pickMood(f: MoodFacts): Mood {
   const h = f.health
   if (!h) return { key: 'health.checking', level: 'idle' }
 

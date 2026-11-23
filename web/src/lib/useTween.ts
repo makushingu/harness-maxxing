@@ -1,9 +1,5 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
-
-/** True when the user asked the system for less motion (read at call time: the setting can change live). */
-export function reducedMotion(): boolean {
-  return typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-}
+import { reducedMotion } from './presence'
 
 const easeOut = (x: number) => 1 - (1 - x) ** 3
 

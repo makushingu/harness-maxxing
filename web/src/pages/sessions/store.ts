@@ -78,7 +78,7 @@ function detach(cols: Col[], key: string): Col[] {
 
 /** Whether `key` can move one strip column to the left (-1) or right (+1): a session of a pair always can (it leaves
  *  the pair on that side). */
-export function canShift(cols: Col[], key: string, dir: -1 | 1): boolean {
+function canShift(cols: Col[], key: string, dir: -1 | 1): boolean {
   const i = cols.findIndex((c) => c.key === key)
   if (i < 0) return false
   if (cols[i].below || cols[i + 1]?.below) return true

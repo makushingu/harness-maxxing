@@ -130,7 +130,7 @@ function MobileTabs() {
 }
 
 /* ---------------------------------------------------------------- shell */
-export function ColumnShell({ col, index, count, variant, place, children }: { col: Col; index: number; count: number; variant: ColumnVariant; place?: Place; children: React.ReactNode }) {
+function ColumnShell({ col, index, count, variant, place, children }: { col: Col; index: number; count: number; variant: ColumnVariant; place?: Place; children: React.ReactNode }) {
   const t = useT()
   const focused = useSessionsUI((s) => s.focused === col.key)
   const focus = useSessionsUI((s) => s.focus)
@@ -293,6 +293,43 @@ function quoteDropped(colKey: string, composer: ComposerHandle | null, d: Droppe
   // a folded composer (two sessions in a column) unfolds with the focus
   useSessionsUI.getState().focus(colKey)
   requestAnimationFrame(() => composer.focus())
+}
+
+/** Files dropped on a column go to its composer; a content drag (a message, a picture of a thread) is quoted. The
+ *  handlers for the column's body and its overlays. */
+function useFileDrop(colKey: string, sid: string | null, composer: React.RefObject<ComposerHandle | null>) {
+  const t = useT()
+  const [dragFiles, setDragFiles] = React.useState(false)
+  // (a picture dragged from a thread carries a file too: that is a content drag)
+  const isFileDrag = (e: React.DragEvent) => e.dataTransfer.types.includes('Files') && !e.dataTransfer.types.includes(CONTENT_MIME)
+  const props = {
+    onDragEnter: (e: React.DragEvent) => isFileDrag(e) && setDragFiles(true),
+    onDragOver: (e: React.DragEvent) => !contentDragOver(e, colKey, sid) && isFileDrag(e) && e.preventDefault(),
+    onDragLeave: (e: React.DragEvent) => {
+      contentDragLeave(e, colKey)
+      if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragFiles(false)
+    },
+    onDrop: (e: React.DragEvent) => {
+      const d = contentDrop(e, sid)
+      if (d !== undefined) return d && quoteDropped(colKey, composer.current, d)
+      if (!isFileDrag(e)) return
+      e.preventDefault()
+      setDragFiles(false)
+      composer.current?.addFiles(Array.from(e.dataTransfer.files))
+    },
+  }
+  const overlay = (
+    <>
+      {dragFiles && (
+        <div className="pointer-events-none absolute inset-2 z-30 flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-primary bg-background/95 text-sm font-medium">
+          <Upload className="size-6 text-primary" />
+          {t('sessions.dropToAttach')}
+        </div>
+      )}
+      <ContentDropOverlay colKey={colKey} sid={sid} />
+    </>
+  )
+  return { props, overlay }
 }
 
 /** While content of another session is dragged: this column is a drop zone (stronger under the pointer). Only these
@@ -461,7 +498,7 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
     window.addEventListener(QUOTE_EVENT, on)
     return () => window.removeEventListener(QUOTE_EVENT, on)
   }, [sid])
-  const [dragFiles, setDragFiles] = React.useState(false)
+  const drop = useFileDrop(col.key, sid, composer)
 
   const notFound = (isError && isApiError(error) && error.status === 404) || deleted
   const running = session?.state === 'running'
@@ -726,8 +763,6 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
     />
   )
 
-  // (a picture dragged from a thread carries a file too: that is a content drag)
-  const isFileDrag = (e: React.DragEvent) => e.dataTransfer.types.includes('Files') && !e.dataTransfer.types.includes(CONTENT_MIME)
   return (
     <ColumnShell col={col} index={index} count={count} variant={variant} place={place}>
       <div
@@ -739,23 +774,7 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
             toggleTerm()
           }
         }}
-        onDragEnter={(e) => isFileDrag(e) && setDragFiles(true)}
-        onDragOver={(e) => {
-          if (contentDragOver(e, col.key, sid)) return
-          if (isFileDrag(e)) e.preventDefault()
-        }}
-        onDragLeave={(e) => {
-          contentDragLeave(e, col.key)
-          if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragFiles(false)
-        }}
-        onDrop={(e) => {
-          const d = contentDrop(e, sid)
-          if (d !== undefined) return d && quoteDropped(col.key, composer.current, d)
-          if (!isFileDrag(e)) return
-          e.preventDefault()
-          setDragFiles(false)
-          composer.current?.addFiles(Array.from(e.dataTransfer.files))
-        }}
+        {...drop.props}
       >
         {!own && <ColumnHeader
           col={col}
@@ -927,13 +946,7 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
           />
           </StackedComposer>
         )}
-        {dragFiles && (
-          <div className="pointer-events-none absolute inset-2 z-30 flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-primary bg-background/95 text-sm font-medium">
-            <Upload className="size-6 text-primary" />
-            {t('sessions.dropToAttach')}
-          </div>
-        )}
-        <ContentDropOverlay colKey={col.key} sid={sid} />
+        {drop.overlay}
       </div>
     </ColumnShell>
   )
@@ -977,6 +990,13 @@ function ColumnHeader({
   const billed = useCostIsBilled()
   const showCost = !useResultLine().hidden.includes('cost')
   const maxxing = useMaxxingEnabled()
+  const cost = session && session.cost_usd > 0 && showCost && (
+    <Tooltip content={<span className="block max-w-72 whitespace-normal">{costTip(t, billed, session.turns)}</span>}>
+      <span tabIndex={0} className="rounded outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        <Sensitive length={4}>{fmtCost(session.cost_usd)}</Sensitive>
+      </span>
+    </Tooltip>
+  )
   if (variant === 'mobile')
     // phone / tablet: app bar (☰ logo ⋯ ⊞), then the session's title, then its topic and what it used
     return (
@@ -1003,13 +1023,7 @@ function ColumnHeader({
               {session.source === 'cron' && <Clock className="size-3.5 shrink-0" aria-label={t('sessions.source.cron')} />}
               <SessionMarks session={session} className="size-3.5" />
               <span className="ml-auto flex shrink-0 items-center gap-3 tabular-nums">
-                {session.cost_usd > 0 && showCost && (
-                  <Tooltip content={<span className="block max-w-72 whitespace-normal">{costTip(t, billed, session.turns)}</span>}>
-                    <span tabIndex={0} className="rounded outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                      <Sensitive length={4}>{fmtCost(session.cost_usd)}</Sensitive>
-                    </span>
-                  </Tooltip>
-                )}
+                {cost}
               </span>
             </>
           ) : (
@@ -1045,7 +1059,7 @@ function ColumnHeader({
         {session ? (
           <>
             {!hidePlace && <MoveSessionPicker session={session} rootLabel={rootLabel} locked={fixedPlace || (!!session.worktree && !session.worktree.removed)} />}
-              <CopyMark session={session} />
+            <CopyMark session={session} />
             {session.source === 'cron' && (
               <Tooltip content={t('sessions.source.cron')}>
                 <span className="inline-flex shrink-0 items-center"><Clock className="size-3" /></span>
@@ -1053,13 +1067,7 @@ function ColumnHeader({
             )}
             <SessionMarks session={session} className="size-3" />
             <span className="ml-auto flex shrink-0 items-center gap-2.5 tabular-nums">
-              {session.cost_usd > 0 && showCost && (
-                <Tooltip content={<span className="block max-w-72 whitespace-normal">{costTip(t, billed, session.turns)}</span>}>
-                  <span tabIndex={0} className="rounded outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                    <Sensitive length={4}>{fmtCost(session.cost_usd)}</Sensitive>
-                  </span>
-                </Tooltip>
-              )}
+              {cost}
             </span>
           </>
         ) : (
@@ -1223,7 +1231,7 @@ function MoveSessionPicker({ session, rootLabel, locked }: { session: Session; r
 }
 
 /** One part of the session's place (project or topic) as a badge; hovering it explains what it is. */
-export function WhereBadge({ kind, name, description, dir, hint, children }: { kind: 'project' | 'topic' | 'agent'; name: string; description?: string; dir?: string | null; hint: string; children?: React.ReactNode }) {
+function WhereBadge({ kind, name, description, dir, hint, children }: { kind: 'project' | 'topic' | 'agent'; name: string; description?: string; dir?: string | null; hint: string; children?: React.ReactNode }) {
   const t = useT()
   return (
     <TooltipRoot delayDuration={350}>
@@ -1266,7 +1274,7 @@ export function NewSessionColumn({ col, variant, index, count, place }: { col: E
   const copy = useNewCopy(col.path)
   const newCommands = useSlashCommands(col.path, { model, onModel: setModel, effort, onEffort: setEffort, plan: planMode, onPlan: () => setPlanMode((p) => !p) })
   const composer = React.useRef<ComposerHandle>(null)
-  const [dragFiles, setDragFiles] = React.useState(false)
+  const drop = useFileDrop(col.key, null, composer)
   const mask = useMask()
   const options = placeOptions(ws, false, (l) => mask(l, 10))
   const valid = options.some((o) => o.value === col.path)
@@ -1291,14 +1299,14 @@ export function NewSessionColumn({ col, variant, index, count, place }: { col: E
     }
   }
 
-  const onSend = async (text: string, attachments: string[], clientId?: string) => {
-    if (made.current) return toMade(made.current, text, attachments, { client_id: clientId })
+  // The first message (or voice note) creates the session, which then takes the column.
+  const start = async (body: { message?: string; client_id?: string; attachments?: string[]; voice?: string }, pending: Parameters<ReturnType<typeof usePending.getState>['add']>[1]) => {
     try {
-      const s = await create.mutateAsync({ path: col.path, message: text, client_id: clientId, title: title.trim() || undefined, model: model || undefined, effort: effort || undefined, attachments, plan_mode: planMode || undefined, worktree: copy.value })
+      const s = await create.mutateAsync({ path: col.path, title: title.trim() || undefined, model: model || undefined, effort: effort || undefined, plan_mode: planMode || undefined, worktree: copy.value, ...body })
       made.current = s.id
       seedEmptyLog(s.id)
-      usePending.getState().add(s.id, { text, attachments, queued: false })
-      saveDraft(`new:${col.path}`, '')
+      usePending.getState().add(s.id, pending)
+      if (!body.voice) saveDraft(`new:${col.path}`, '')
       becomeSession(col.key, s.id)
       requestAnimationFrame(() => focusComposer(col.key))
       return true
@@ -1307,22 +1315,20 @@ export function NewSessionColumn({ col, variant, index, count, place }: { col: E
       return false
     }
   }
-
+  const onSend = async (text: string, attachments: string[], clientId?: string) => {
+    if (made.current) return toMade(made.current, text, attachments, { client_id: clientId })
+    return start({ message: text, client_id: clientId, attachments }, { text, attachments, queued: false })
+  }
   const onSendVoice = async (file: File) => {
+    let voice: string
     try {
-      const up = await uploadAttachment(col.path, file)
-      if (made.current) return toMade(made.current, '', [], { voice: up.path })
-      const s = await create.mutateAsync({ path: col.path, title: title.trim() || undefined, model: model || undefined, effort: effort || undefined, plan_mode: planMode || undefined, voice: up.path, worktree: copy.value })
-      made.current = s.id
-      seedEmptyLog(s.id)
-      usePending.getState().add(s.id, { text: '', attachments: [], queued: false, voice: true })
-      becomeSession(col.key, s.id)
-      requestAnimationFrame(() => focusComposer(col.key))
-      return true
+      voice = (await uploadAttachment(col.path, file)).path
     } catch (e) {
       toast.error(errorMessage(e))
       return false
     }
+    if (made.current) return toMade(made.current, '', [], { voice })
+    return start({ voice }, { text: '', attachments: [], queued: false, voice: true })
   }
 
   // The first message was being sent when the page went away: if the server made the session (its first message,
@@ -1358,26 +1364,11 @@ export function NewSessionColumn({ col, variant, index, count, place }: { col: E
     [qc, col.path, col.key, becomeSession],
   )
 
-  // (a picture dragged from a thread carries a file too: that is a content drag)
-  const isFileDrag = (e: React.DragEvent) => e.dataTransfer.types.includes('Files') && !e.dataTransfer.types.includes(CONTENT_MIME)
   return (
     <ColumnShell col={col} index={index} count={count} variant={variant} place={place}>
       <div
         className="relative flex min-h-0 flex-1 flex-col"
-        onDragEnter={(e) => isFileDrag(e) && setDragFiles(true)}
-        onDragOver={(e) => !contentDragOver(e, col.key, null) && isFileDrag(e) && e.preventDefault()}
-        onDragLeave={(e) => {
-          contentDragLeave(e, col.key)
-          if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragFiles(false)
-        }}
-        onDrop={(e) => {
-          const d = contentDrop(e, null)
-          if (d !== undefined) return d && quoteDropped(col.key, composer.current, d)
-          if (!isFileDrag(e)) return
-          e.preventDefault()
-          setDragFiles(false)
-          composer.current?.addFiles(Array.from(e.dataTransfer.files))
-        }}
+        {...drop.props}
       >
         <header data-col-head className={cn('shrink-0 border-b px-3 py-1.5', variant !== 'column' && 'pt-[calc(0.375rem+var(--safe-top))]')}>
           <div className="flex h-9 items-center gap-1">
@@ -1439,13 +1430,7 @@ export function NewSessionColumn({ col, variant, index, count, place }: { col: E
           autoFocus={variant !== 'mobile'}
           placeholder={planMode ? t('plan.placeholder') : t('sessions.new.placeholder')}
         />
-        {dragFiles && (
-          <div className="pointer-events-none absolute inset-2 z-30 flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-primary bg-background/95 text-sm font-medium">
-            <Upload className="size-6 text-primary" />
-            {t('sessions.dropToAttach')}
-          </div>
-        )}
-        <ContentDropOverlay colKey={col.key} sid={null} />
+        {drop.overlay}
       </div>
     </ColumnShell>
   )

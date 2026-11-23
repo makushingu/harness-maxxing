@@ -97,7 +97,7 @@ export function prefetchShell(qc: QueryClient) {
 }
 
 /** A nav link is about to be clicked (hover, focus, touch): load the page's code and its data. */
-export function prefetchPage(qc: QueryClient, to: string) {
+function prefetchPage(qc: QueryClient, to: string) {
   const url = new URL(to, window.location.origin)
   prefetchPageChunk(url.pathname)
   prefetchPageData(qc, url.pathname, url.search)

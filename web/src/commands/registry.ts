@@ -6,7 +6,7 @@ import type { LucideIcon } from 'lucide-react'
 import type { NavigateFunction } from 'react-router'
 import { create } from 'zustand'
 
-export type CommandContext = { navigate: NavigateFunction; close: () => void }
+type CommandContext = { navigate: NavigateFunction; close: () => void }
 
 export type Command = {
   id: string
@@ -27,7 +27,7 @@ export type Command = {
   perform: (ctx: CommandContext) => void
 }
 
-export type CommandProvider = {
+type CommandProvider = {
   id: string
   group: string
   /** Minimum query length before `search` runs. */
@@ -49,7 +49,7 @@ export const useCommandStore = create<State>((set) => ({
   setOpen: (open) => set({ open }),
 }))
 
-export function registerCommands(source: string, cmds: Command[]) {
+function registerCommands(source: string, cmds: Command[]) {
   useCommandStore.setState((s) => ({ sources: { ...s.sources, [source]: cmds } }))
   return () =>
     useCommandStore.setState((s) => {
@@ -58,7 +58,7 @@ export function registerCommands(source: string, cmds: Command[]) {
     })
 }
 
-export function registerProvider(p: CommandProvider) {
+function registerProvider(p: CommandProvider) {
   useCommandStore.setState((s) => ({ providers: { ...s.providers, [p.id]: p } }))
   return () =>
     useCommandStore.setState((s) => {

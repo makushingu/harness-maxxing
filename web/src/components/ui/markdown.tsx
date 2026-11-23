@@ -99,7 +99,7 @@ function RemoteImage({ src, alt }: { src: string; alt: string }) {
   )
 }
 
-export type MarkdownProps = {
+type MarkdownProps = {
   children: string
   className?: string
   /** Rewrite internal links (e.g. docs slugs). Return null to keep the default behaviour. */

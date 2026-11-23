@@ -6,7 +6,7 @@ import * as React from 'react'
 export const PINCH_ATTR = 'data-pinch'
 
 export type Pt = { x: number; y: number }
-export type TouchZoomHandlers = {
+type TouchZoomHandlers = {
   /** Two fingers are down. Return false to ignore this pinch. */
   pinchStart?: (mid: Pt) => boolean | void
   /** `scale` = distance between the fingers / distance at the start; `mid` = their midpoint now (client px). */

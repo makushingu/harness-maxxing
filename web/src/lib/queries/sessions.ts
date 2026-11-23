@@ -11,7 +11,6 @@ import type {
   SendMessageResult,
   Session,
   SessionEventsBackPage,
-  SessionSearchHit,
   UploadResult,
 } from '../types'
 import { qk, unlessBus } from './keys'
@@ -24,10 +23,6 @@ export const sessionsQuery = (path?: string | null, archived = false) => ({
 })
 export const sessionQuery = (id: string) => ({ queryKey: qk.sessions.one(id), queryFn: () => api.get<Session>(`/api/sessions/${seg(id)}`) })
 
-/** Warms the live sessions list (the Sessions page and its tree read this key first). */
-export function prefetchSessions(qc: QueryClient) {
-  return qc.prefetchQuery(sessionsQuery(undefined, false))
-}
 
 /** The user's sessions: the runs of agents are left out (they live on the Agents page, see agents.ts). */
 const withoutAgentRuns = (list: Session[]) => (list.some(isAgentSession) ? list.filter((s) => !isAgentSession(s)) : list)
@@ -40,14 +35,6 @@ export function useSession(id: string | null | undefined) {
   return useQuery({ ...sessionQuery(id || ''), enabled: !!id })
 }
 
-export function useSessionSearch(q: string) {
-  return useQuery({
-    queryKey: qk.sessions.search(q),
-    queryFn: ({ signal }) => api.get<SessionSearchHit[]>('/api/sessions/search', { q }, { signal }),
-    enabled: q.trim().length >= 2,
-    staleTime: 10_000,
-  })
-}
 
 /** Fields that move on every metadata write of a running turn (tokens, cost, preview text, timestamps). */
 const TICKING = new Set<string>(['updated', 'cost_usd', 'context_tokens', 'context_window', 'real_model', 'last_text'])
@@ -269,9 +256,6 @@ export function useMarkAllRead() {
     invalidate: inv,
   })
 }
-export function useUpload() {
-  return useMut(({ path, files }: { path: string; files: File[] }) => api.upload<UploadResult>('/api/uploads', files, { path }))
-}
 
 /* ---------------------------------------------------------------- Sessions page helpers */
 
@@ -311,12 +295,6 @@ export function takeEarlyTail(id: string): Promise<SessionEventsBackPage> | unde
   return e && Date.now() - e.at < 15_000 ? e.p : undefined
 }
 
-/** The tail started by `prefetchTail`, without consuming it (the sidebar's session preview reads the same load the
- *  thread then opens with). */
-export function peekEarlyTail(id: string): Promise<SessionEventsBackPage> | undefined {
-  const e = earlyTails.get(id)
-  return e && Date.now() - e.at < 60_000 ? e.p : undefined
-}
 
 /** Events strictly before byte `before` ("Show earlier messages"). `reset` = the log was rewritten. */
 export function fetchBefore(id: string, before: number, limit = 200, signal?: AbortSignal): Promise<SessionEventsBackPage> {

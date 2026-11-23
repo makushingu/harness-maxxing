@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
 import { Popover, PopoverContent, PopoverTrigger } from './popover'
 
-export type ComboOption = { value: string; label: string; hint?: string }
+type ComboOption = { value: string; label: string; hint?: string }
 
 /** Searchable select for long lists (time zones, topics…). `options` may be a function: an expensive list is then
  *  only built when the popover opens (`labelOf` names the value while it is closed). */

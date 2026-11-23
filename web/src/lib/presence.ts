@@ -11,10 +11,10 @@ export const PRESENCE_MS = 220
 export const EASE_OUT = 'cubic-bezier(0.22, 1, 0.36, 1)'
 const EASE_IN_OUT = 'cubic-bezier(0.4, 0, 0.2, 1)'
 
-export type Presence<T> = { item: T; key: string; leaving: boolean; appear: boolean }
+type Presence<T> = { item: T; key: string; leaving: boolean; appear: boolean }
 type Gone<T> = { item: T; after: string | null; at: number }
 
-export const reducedMotion = () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+export const reducedMotion = () => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 
 /** `ms = 0`: no animation (e.g. while a filter is typed: rows must follow at once). */
 export function usePresence<T>(items: readonly T[], keyOf: (t: T) => string, ms = PRESENCE_MS): Presence<T>[] {

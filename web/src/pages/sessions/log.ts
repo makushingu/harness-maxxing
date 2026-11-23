@@ -128,7 +128,7 @@ function subscribe(id: string, fn: () => void) {
 }
 
 /** Fold raw events into items (returns a new state; untouched items keep their identity). */
-export function fold(st: LogState, evs: SessionEvent[], next: number, sid: string, keyPrefix = 'e', settlePending = true): LogState {
+function fold(st: LogState, evs: SessionEvent[], next: number, sid: string, keyPrefix = 'e', settlePending = true): LogState {
   if (!evs.length) return next === st.next ? st : { ...st, next }
   const items = st.items.slice()
   const toolIdx = { ...st.toolIdx }
@@ -277,7 +277,7 @@ export function taskStatus(tk: Task, sessionRunning: boolean): TaskStatus {
 }
 
 /** Prepend an older page (events strictly before `st.start`): existing items keep their identity. */
-export function foldBefore(st: LogState, evs: SessionEvent[], start: number, moreBefore: boolean, sid: string): LogState {
+function foldBefore(st: LogState, evs: SessionEvent[], start: number, moreBefore: boolean, sid: string): LogState {
   const base = { ...st, start, moreBefore, loadingEarlier: false }
   if (!evs.length) return base
   const older = fold({ ...INITIAL, status: 'ready' }, evs, 0, sid, `b${st.batches}-`, false)

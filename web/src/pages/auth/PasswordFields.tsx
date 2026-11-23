@@ -5,7 +5,7 @@ import { MIN_PASSWORD, passwordScore } from './strength'
 
 const LABELS: TKey[] = ['pw.strength.0', 'pw.strength.1', 'pw.strength.2', 'pw.strength.3', 'pw.strength.4']
 
-export function StrengthMeter({ password }: { password: string }) {
+function StrengthMeter({ password }: { password: string }) {
   const t = useT()
   const s = passwordScore(password)
   const color = s <= 1 ? 'bg-destructive' : s === 2 ? 'bg-warning' : 'bg-success'

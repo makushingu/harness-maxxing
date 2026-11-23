@@ -14,13 +14,11 @@ export const qk = {
     list: (path?: string | null, archived?: boolean) => ['sessions', 'list', path ?? null, archived ?? false] as const,
     one: (id: string) => ['sessions', 'one', id] as const,
     events: (id: string) => ['sessions', 'events', id] as const,
-    search: (q: string) => ['sessions', 'search', q] as const,
   },
   files: {
     all: ['files'] as const,
     list: (path: string) => ['files', 'list', path] as const,
     read: (path: string) => ['files', 'read', path] as const,
-    search: (q: string) => ['files', 'search', q] as const,
   },
   tasks: ['tasks'] as const,
   packs: ['workspace', 'packs'] as const,
@@ -152,13 +150,9 @@ export const BUS_TURN_KEYS: readonly (readonly unknown[])[] = [qk.claude, qk.sta
  *  ids whose own stream is connected (useSessionStream: its `state` frames carry the Session at every change). */
 export const liveStreams = { bus: false, sessions: new Map<string, number>() }
 
-/** Keys a bus batch leaves alone: the Session of a column whose stream is open (the stream already pushed it), and
- *  the session searches outside turn batches (a snapshot: only a finished turn adds text to find). */
-export function busSkips(key: readonly unknown[], turn: boolean): boolean {
-  if (key[0] !== 'sessions') return false
-  if (key[1] === 'one') return liveStreams.sessions.has(key[2] as string)
-  return key[1] === 'search' && !turn
-}
+/** Keys a bus batch leaves alone: the Session of a column whose stream is open (the stream already pushed it). */
+export const busSkips = (key: readonly unknown[]): boolean =>
+  key[0] === 'sessions' && key[1] === 'one' && liveStreams.sessions.has(key[2] as string)
 
 /** For a write the server announces on the bus itself: nothing to invalidate while the bus is connected (it
  *  refetches the same keys a moment later; invalidating here too fetched everything twice), `keys` otherwise. */

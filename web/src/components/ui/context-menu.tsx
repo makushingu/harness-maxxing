@@ -20,7 +20,7 @@ export type ContextMenuHandlers = Pick<React.HTMLAttributes<HTMLElement>, 'onCon
 const FIELD = 'input, textarea, select, [contenteditable=""], [contenteditable="true"], [data-native-menu]'
 
 /** True when a right click on `target` should keep the browser's menu: a field, selected text, a link (`links`). */
-export function wantsNativeMenu(target: EventTarget | null, links = true): boolean {
+function wantsNativeMenu(target: EventTarget | null, links = true): boolean {
   if (!(target instanceof Element)) return false
   if (target.closest(FIELD)) return true
   if (links && target.closest('a[href]')) return true

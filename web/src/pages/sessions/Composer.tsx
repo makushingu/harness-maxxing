@@ -17,12 +17,12 @@ import { VoiceButton } from '@/features/voice/VoiceButton'
 import { SlashMenu, slashAction, slashItems, type MenuRow, type SlashCommand } from './SlashMenu'
 import { mentionAt, mentionRows, targetChip, usedMentions } from './mentions'
 import { ChipBackdrop, findCommand, findNames } from '@/features/chips/Chip'
-import { AttachmentChip, type Att } from '@/features/composer/AttachmentChip'
+import type { Att } from '@/features/composer/AttachmentChip'
 import { CloseButton, MessageBox, StopButton, TuckedCard } from '@/features/composer/MessageBox'
 
 const NO_ITEMS: QueueItem[] = []
 
-export { AttachmentChip, type Att }
+export type { Att }
 export const fromDraftAtt = (a: DraftAtt): Att => ({ lid: Math.random().toString(36).slice(2), name: a.name, size: a.size, path: a.path, progress: 1, error: null, preview: isImage(a.path) ? thumbUrl(a.path, 160, 160) : null })
 export const toDraftAtts = (atts: Att[]): DraftAtt[] => atts.filter((a) => a.path && !a.error).map((a) => ({ path: a.path!, name: a.name, size: a.size }))
 

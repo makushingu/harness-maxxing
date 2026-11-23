@@ -8,7 +8,7 @@ import { useBootReady } from '@/lib/bootLoader'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger, Button } from '@/components/ui'
 import type { Language } from '@/lib/types'
 
-export function LanguageMenu() {
+function LanguageMenu() {
   const t = useT()
   const lang = useUI((s) => s.language)
   const setLanguage = useUI((s) => s.setLanguage)

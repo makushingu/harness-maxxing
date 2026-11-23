@@ -10,7 +10,7 @@ import { useCloseJarvisWork, useJarvis, useJarvisBrief, useJarvisDream, useJarvi
 import type { JarvisSettings, JarvisWork } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { fmtRelative } from '@/lib/format'
-import { Button, EmptyState, Input, Select, Skeleton, StatusDot, Switch, Tooltip } from '@/components/ui'
+import { Button, EmptyState, Input, Select, Skeleton, StatusDot, Tooltip } from '@/components/ui'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { ResizeEdge } from '@/components/shell/ResizeEdge'
 import { PageHeader } from '@/components/shell/Page'
@@ -19,6 +19,7 @@ import { SessionColumn } from '@/pages/sessions/Column'
 import type { Col } from '@/pages/sessions/store'
 import { PreviewProvider } from '@/pages/sessions/FilePreview'
 import { sessionsUrl } from '@/pages/sessions/util'
+import { Toggle } from '@/pages/sessions/SessionOptions'
 
 /** File links of its conversation open the file viewer, as in a session (the provider the Sessions page has). */
 export default function JarvisPage() {
@@ -272,7 +273,7 @@ function JarvisSettingsDialog({ open, onOpenChange, settings, onNew, renewing }:
 
         <div className="border-t px-2 py-2">
           {toggles.map((x) => (
-            <ToggleRow key={x.k} icon={x.icon} label={t(x.label)} hint={t(x.hint)} checked={settings[x.k]} onChange={(v) => set(x.k, v)} />
+            <Toggle key={x.k} icon={x.icon} label={t(x.label)} hint={t(x.hint)} checked={settings[x.k]} onChange={(v) => set(x.k, v)} />
           ))}
         </div>
 
@@ -325,20 +326,6 @@ function JarvisSettingsDialog({ open, onOpenChange, settings, onNew, renewing }:
         </div>
       </DialogContent>
     </Dialog>
-  )
-}
-
-function ToggleRow({ icon: Icon, label, hint, checked, onChange }: { icon: LucideIcon; label: string; hint: string; checked: boolean; onChange: (v: boolean) => void }) {
-  const id = React.useId()
-  return (
-    <label htmlFor={id} className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-muted">
-      <Icon className={cn('size-4 shrink-0', checked ? 'text-primary' : 'text-muted-foreground')} />
-      <span className="min-w-0 flex-1">
-        <span className="block text-sm">{label}</span>
-        <span className="block text-xs text-muted-foreground">{hint}</span>
-      </span>
-      <Switch id={id} checked={checked} onCheckedChange={onChange} />
-    </label>
   )
 }
 
