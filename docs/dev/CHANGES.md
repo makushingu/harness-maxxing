@@ -5,6 +5,10 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## Unreleased
+
+- Dependencies: `npm update` in `web/` and `uv lock --upgrade` in `server/` (minor and patch only). Majors left alone: emojibase-data 18, mermaid 12. `templates/` untouched.
+
 ## 2.0.0-alpha.164 - 2026-11-23
 
 - `SessionColumn`: `useSessionStream(place?.hidden ? null : sid)`: a hidden tab (tabs view) closes its SSE. Over
