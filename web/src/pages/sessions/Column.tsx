@@ -445,6 +445,9 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
   const { data: claude } = useClaudeStatus()
   const { data: tg } = useTelegram()
   const focused = useSessionsUI((s) => s.focused === col.key)
+  // only the column in front when it mounts takes the caret (several columns shown at once: the last one to load
+  // would else come in front, and other devices follow the session in front)
+  const [inFront] = React.useState(() => useSessionsUI.getState().focused === col.key)
   const onRetry = React.useCallback(() => void loadLog(sid, true), [sid])
   const onLoadEarlier = React.useCallback(() => void loadEarlier(sid), [sid])
   const close = useSessionsUI((s) => s.close)
@@ -930,7 +933,7 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
             onSendVoice={onSendVoice}
             onStop={onStop}
             stopping={stop.isPending}
-            autoFocus={variant !== 'mobile' && !background}
+            autoFocus={variant !== 'mobile' && !background && inFront}
             toolbar={
               session ? (
                 <>
