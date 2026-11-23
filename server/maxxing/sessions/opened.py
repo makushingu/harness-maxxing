@@ -1,8 +1,9 @@
 """The sessions open on screen, shared by every browser of the user: a session opened on the computer is open on the
-phone too (a column there, a tab here), and closing it anywhere closes it everywhere. Ids only, in the order they
-were opened; each browser keeps its own layout (widths, stacks, which one is in front).
+phone too (a column there, a tab here), and closing it anywhere closes it everywhere. Ids in the order they
+were opened, plus the view to come back to on another device: `tabs` (Tabs or Zones mode) and `front` (the session in
+front); each browser keeps its own layout (widths, stacks).
 
-`<state>/open_sessions.json` = `{"ids": [...], "rev": n}`; no file = no browser has shared its sessions yet
+`<state>/open_sessions.json` = `{"ids": [...], "rev": n, "tabs"?: bool, "front"?: id}`; no file = no browser has shared its sessions yet
 (`ids: null`). `rev` grows with every change: a browser ignores an answer older than the one it already applied.
 """
 from __future__ import annotations
@@ -35,12 +36,23 @@ def load() -> dict:
     if not isinstance(data, dict) or not isinstance(data.get("ids"), list):
         return {"ids": None, "rev": 0}
     rev = data.get("rev")
-    return {"ids": _ids(data["ids"]), "rev": rev if isinstance(rev, int) and rev > 0 else 0}
+    out = {"ids": _ids(data["ids"]), "rev": rev if isinstance(rev, int) and rev > 0 else 0}
+    _view(out, data.get("tabs"), data.get("front"))
+    return out
 
 
-def update(add: list | None = None, remove: list | None = None, order: list | None = None) -> dict:
+def _view(out: dict, tabs, front) -> None:
+    """The mode and the session in front, when well-formed (kept as they were otherwise)."""
+    if isinstance(tabs, bool):
+        out["tabs"] = tabs
+    if isinstance(front, str) and _ID.match(front):
+        out["front"] = front
+
+
+def update(add: list | None = None, remove: list | None = None, order: list | None = None,
+           tabs: bool | None = None, front: str | None = None) -> dict:
     """Open (`add`) and close (`remove`) sessions, then put them in `order` (the ones it does not name keep their
-    place, after)."""
+    place, after); `tabs` / `front`: the mode and the session in front chosen on this device."""
     opened, closed, wanted = _ids(add), set(_ids(remove)), _ids(order)
     with _lock:
         cur = load()
@@ -50,9 +62,12 @@ def update(add: list | None = None, remove: list | None = None, order: list | No
             rank = {x: i for i, x in enumerate(wanted)}
             ids.sort(key=lambda x: rank.get(x, len(rank)))      # stable: the others stay in their order, at the end
         ids = ids[-MAX_OPEN:]
-        if cur["ids"] is not None and ids == cur["ids"]:
+        new = {"ids": ids, "rev": cur["rev"]}
+        _view(new, cur.get("tabs"), cur.get("front"))
+        _view(new, tabs, front)
+        if cur["ids"] is not None and new == cur:
             return cur
-        new = {"ids": ids, "rev": cur["rev"] + 1}
+        new["rev"] = cur["rev"] + 1
         config.write_json(_file(), new)
     bus.invalidate("open_sessions")
     return new

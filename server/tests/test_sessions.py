@@ -960,3 +960,14 @@ def test_the_open_sessions_are_shared_between_the_browsers(client, topic):
     assert client.post("/api/sessions/open", json={"open": [s["id"]]}).json()["ids"][-1] == s["id"]
     assert client.delete(f"/api/sessions/{s['id']}").status_code == 200
     assert client.get("/api/sessions/open").json()["ids"] == ["d", "b", "c"]
+
+
+def test_the_mode_and_the_session_in_front_follow_the_last_device(client):
+    # chosen on the computer, found again on the phone (and back): Tabs or Zones, and the session in front
+    assert client.post("/api/sessions/open", json={"open": ["a", "b"]}).json() == {"ids": ["a", "b"], "rev": 1}
+    r = client.post("/api/sessions/open", json={"tabs": False, "front": "b"}).json()
+    assert r == {"ids": ["a", "b"], "rev": 2, "tabs": False, "front": "b"}
+    assert client.post("/api/sessions/open", json={"tabs": False}).json()["rev"] == 2     # the same view: no new rev
+    assert client.post("/api/sessions/open", json={"open": ["c"]}).json()["tabs"] is False  # kept by other changes
+    assert client.post("/api/sessions/open", json={"tabs": True, "front": "bad id!"}).json()["front"] == "b"
+    assert client.get("/api/sessions/open").json() == {"ids": ["a", "b", "c"], "rev": 4, "tabs": True, "front": "b"}

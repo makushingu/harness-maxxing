@@ -7,6 +7,12 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- `sessions/opened.py`: `open_sessions.json` also keeps `tabs` (bool) and `front` (session id), set by `POST /api/sessions/open
+  {tabs?, front?}` (a change bumps `rev`, same value = no rev); keys absent until a browser sends them. `openSync.ts`:
+  sends the mode / focused session when they change here (debounced with the cols), applies the other device's unless
+  changed here since the last agreement (`sync.tabs` / `sync.front`, `sync.start` = front at mount so a link is not
+  undone); the query runs on a phone in Zones too (ids still shared only in tabs view). Phone: `/sessions` with nothing
+  on screen waits for the shared list and opens its `front`; a front applied while a session is shown updates the URL.
 - Phone: `ViewSwitch` (now `className`-able, `pointer-coarse:size-10`) in the `mobile` session header and the mobile new-session
   header; `MobileOverlay` gives the chips when `tabs` (was `cols.length > 1` in both modes), swipe still on `several`.
 - Slimming pass (no behaviour change, ~-2 000 lines): dead code removed across server, web and Harness Link (e.g.

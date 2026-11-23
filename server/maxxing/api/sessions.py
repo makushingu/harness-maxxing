@@ -182,6 +182,8 @@ class OpenIn(BaseModel):
     open: list[str] = Field(default_factory=list, max_length=200)
     close: list[str] = Field(default_factory=list, max_length=200)
     order: list[str] = Field(default_factory=list, max_length=200)
+    tabs: bool | None = None
+    front: str | None = Field(default=None, max_length=64)
 
 
 @router.get("/sessions/open")
@@ -192,7 +194,7 @@ async def open_sessions():
 
 @router.post("/sessions/open")
 async def set_open_sessions(body: OpenIn):
-    return await asyncio.to_thread(opened.update, body.open, body.close, body.order)
+    return await asyncio.to_thread(opened.update, body.open, body.close, body.order, body.tabs, body.front)
 
 
 # ---- one session ---------------------------------------------------------------------------

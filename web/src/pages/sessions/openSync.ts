@@ -1,23 +1,31 @@
 // The open sessions are the same on every device of the user: a session opened on the computer is a tab on the phone,
 // and closing it anywhere closes it everywhere (server: sessions/opened.py, ids only). Each browser keeps its own
-// layout - widths, stacks, the session in front, columns or tabs. A new session not sent yet stays where it is typed.
+// layout - widths, stacks. The mode (Tabs or Zones) and the session in front follow the last device they were chosen
+// on: going from the computer to the phone (or back) shows the same view. A new session not sent yet stays where it is.
 //
 // Three-way: `base` is the list this browser and the server last agreed on (kept in localStorage). What the browser
 // has and `base` has not, it opened: sent. What the server has and `base` has not, another device opened: shown.
 // The same for what was closed. No base yet (first time): a computer adds its sessions to the shared ones (and starts
 // the list when there is none); a phone takes the shared ones and keeps only the session on screen of its own.
-// A phone shares only in tabs view: without it, it shows one session at a time and has no bar to close the others.
+// A phone shares its sessions only in tabs view: without it, it shows one session at a time and has no bar to close
+// the others (it still follows and shares the mode and the session in front).
 import * as React from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { qk } from '@/lib/queries/keys'
 import { normalizeCols, useSessionsUI, type Col } from './store'
 
-type Shared = { ids: string[] | null; rev: number }
+type Shared = { ids: string[] | null; rev: number; tabs?: boolean; front?: string }
 const BASE_KEY = 'mx-open-sync'
 
 const isSession = (c: Col): c is Extract<Col, { kind: 'session' }> => c.kind === 'session'
 const localIds = () => useSessionsUI.getState().cols.filter(isSession).map((c) => c.id)
+/** The session in front here (null: none, or a new session not sent yet). */
+function frontId(): string | null {
+  const st = useSessionsUI.getState()
+  const c = st.cols.find((x) => x.key === st.focused)
+  return c && isSession(c) ? c.id : null
+}
 
 function readBase(): string[] | null {
   try {
@@ -58,21 +66,37 @@ const sync = {
   rev: 0,
   /** a computer: its own order, sent when it changes (a column was moved) */
   order: '',
+  /** this browser shares its open sessions (a computer, or a phone in tabs view) */
+  ids: false,
+  /** the mode and the session in front agreed on last (undefined: not yet); a change here is sent, one there shown */
+  tabs: undefined as boolean | null | undefined,
+  front: undefined as string | null | undefined,
+  /** the session in front when the page opened: a link that brought another one in front is not undone */
+  start: null as string | null,
 }
 
 /** Browser -> server: what was opened, closed or (a computer) moved here since `base`. */
 function flush() {
+  const body: { open?: string[]; close?: string[]; order?: string[]; tabs?: boolean; front?: string } = {}
   const b = sync.base
-  if (b === null) return
-  const local = localIds()
-  const open = local.filter((x) => !b.includes(x))
-  const close = b.filter((x) => !local.includes(x))
-  const mine = local.join(' ')
-  const moved = !sync.mobile && sync.order !== mine && [...local].sort().join(' ') === sync.order.split(' ').sort().join(' ')
-  sync.order = mine
-  if (!open.length && !close.length && !moved) return
+  if (b !== null) {
+    const local = localIds()
+    const open = local.filter((x) => !b.includes(x))
+    const close = b.filter((x) => !local.includes(x))
+    const mine = local.join(' ')
+    const moved = !sync.mobile && sync.order !== mine && [...local].sort().join(' ') === sync.order.split(' ').sort().join(' ')
+    sync.order = mine
+    if (open.length) body.open = open
+    if (close.length) body.close = close
+    if (moved) body.order = local
+  }
+  const st = useSessionsUI.getState()
+  if (sync.tabs !== undefined && st.tabs !== sync.tabs) body.tabs = st.tabs
+  const f = frontId()
+  if (sync.front !== undefined && f && f !== sync.front) body.front = f
+  if (!Object.keys(body).length) return
   api
-    .post<Shared>('/api/sessions/open', { open, close, order: moved ? local : [] })
+    .post<Shared>('/api/sessions/open', body)
     .then(pull)
     .catch(() => {})                      // offline: sent again with the next change, or when the list comes back
 }
@@ -82,12 +106,22 @@ function pull(s: Shared) {
   const st = useSessionsUI.getState()
   const local = localIds()
   if (s.ids === null) {
-    // nothing shared yet: a computer starts the list with its own sessions
-    if (!sync.mobile) api.post<Shared>('/api/sessions/open', { open: local }).then(pull).catch(() => {})
+    // nothing shared yet: a computer starts the list with its own sessions (and its view)
+    if (!sync.mobile) api.post<Shared>('/api/sessions/open', { open: local, tabs: st.tabs, front: frontId() ?? undefined }).then(pull).catch(() => {})
     return
   }
   if (s.rev < sync.rev) return
   sync.rev = s.rev
+  const front = frontId()          // before the sessions opened below (the first one opened comes in front by itself)
+  // The mode chosen on another device, unless it was just changed here too (then this one is sent).
+  const before = sync.tabs ?? st.tabs
+  if (typeof s.tabs === 'boolean' && st.tabs === before && s.tabs !== st.tabs) st.setTabs(s.tabs)
+  sync.tabs = typeof s.tabs === 'boolean' ? s.tabs : null   // none shared yet: ours is sent
+  if (!sync.ids) {
+    view(s, front)
+    flush()
+    return
+  }
   const ids = s.ids
   const b = sync.base
   const shown = st.cols.find((c) => c.key === st.focused)
@@ -99,33 +133,45 @@ function pull(s: Shared) {
   for (const id of toClose) st.closeSession(id)
   for (const id of toOpen) st.openSession(id, { focus: false })
   if (sync.mobile) reorder(ids)
+  view(s, front)
   const now = useSessionsUI.getState()
   if (!now.focused && now.cols[0]) now.focus(now.cols[0].key)
   flush()
 }
 
+/** The session in front on another device comes in front here, unless another one was just brought in front here. */
+function view(s: Shared, here: string | null) {
+  const st = useSessionsUI.getState()
+  const before = sync.front === undefined ? sync.start : sync.front
+  if (s.front && here === before && s.front !== frontId()) {
+    const c = st.cols.find((x) => isSession(x) && x.id === s.front)
+    if (c) st.focus(c.key)
+  }
+  sync.front = s.front ?? null
+}
+
+/** The shared list and view (one request for every reader). */
+export const useShared = () =>
+  useQuery({
+    queryKey: qk.openSessions,
+    queryFn: ({ signal }) => api.get<Shared>('/api/sessions/open', undefined, { signal }),
+    refetchOnWindowFocus: 'always',
+  })
+
 export function useOpenSync(mobile: boolean) {
   const tabs = useSessionsUI((s) => s.tabs)
   const active = !mobile || tabs
-  const { data } = useQuery({
-    queryKey: qk.openSessions,
-    queryFn: ({ signal }) => api.get<Shared>('/api/sessions/open', undefined, { signal }),
-    enabled: active,
-    refetchOnWindowFocus: 'always',
-  })
+  const { data } = useShared()
   React.useEffect(() => {
     sync.mobile = mobile
     sync.rev = 0
-    if (!active) {
-      sync.base = null
-      writeBase(null)
-      return
-    }
-    sync.base = readBase()
+    sync.ids = active
+    sync.base = active ? readBase() : null
+    if (!active) writeBase(null)
     sync.order = localIds().join(' ')
     let timer: ReturnType<typeof setTimeout> | undefined
     const unsub = useSessionsUI.subscribe((s, prev) => {
-      if (s.cols === prev.cols) return
+      if (s.cols === prev.cols && s.tabs === prev.tabs && s.focused === prev.focused) return
       clearTimeout(timer)
       timer = setTimeout(flush, 150)
     })
@@ -135,6 +181,12 @@ export function useOpenSync(mobile: boolean) {
     }
   }, [active, mobile])
   React.useEffect(() => {
-    if (active && data) pull(data)
+    // a new page: the mode and the session in front start from what the other devices chose last
+    sync.tabs = undefined
+    sync.front = undefined
+    sync.start = frontId()
+  }, [mobile])
+  React.useEffect(() => {
+    if (data) pull(data)
   }, [active, mobile, data])
 }

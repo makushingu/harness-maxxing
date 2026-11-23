@@ -11,7 +11,7 @@ import { useT } from '@/i18n'
 import { cn } from '@/lib/utils'
 import { animateIn, animateOut, EASE_OUT, reducedMotion, usePresence } from '@/lib/presence'
 import { useModeMotion, useTabSwitchMotion } from './tabMotion'
-import { useOpenSync } from './openSync'
+import { useOpenSync, useShared } from './openSync'
 import { useRegisterCommands } from '@/commands/registry'
 import { useHotkey } from '@/commands/shortcuts'
 import { agentRunRoute, isAgentSession, useSessions, useSessionSeeded, useSettings, useWorkspace } from '@/lib/queries'
@@ -168,6 +168,16 @@ function Workspace() {
   }, [mobile, focusedCol, focusedSession?.path, cols]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const mobileOpen = mobile && (!!params.get('session') || params.get('new') === '1') && !!focusedCol
+  // Phone: a session brought in front from another device (openSync) is the one shown: the URL follows it.
+  React.useEffect(() => {
+    if (!mobileOpen) return
+    const st = useSessionsUI.getState()
+    const c = st.cols.find((x) => x.key === st.focused)
+    if (c?.kind === 'session' && params.get('session') && params.get('session') !== c.id) {
+      const p = sessions?.find((x) => x.id === c.id)?.path
+      navigate(`/sessions?${p !== undefined ? `path=${encodeURIComponent(p)}&` : ''}session=${c.id}`, { replace: true })
+    }
+  }, [focused]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Touch layout, no session asked: blank (background) until the redirect below picks one (or the asked one is set up) - no list or header flash.
   // Not when the list failed to load: the header and a retry stay reachable.
@@ -175,8 +185,10 @@ function Workspace() {
   const touchPicking = mobile && !mobileOpen && !(sessionsFailed && !sessions) && (asked || !sessions || sessions.length > 0)
   // Touch layout: /sessions always shows a session, full screen - the one on screen last time, else the most recent.
   // The list lives in the sessions drawer (☰).
+  // A phone with nothing on screen yet waits for the session in front on the other devices (openSync).
+  const { data: shared, isPending: sharedPending } = useShared()
   React.useEffect(() => {
-    if (!mobile || params.get('session') || params.get('new') === '1' || !sessions) return
+    if (!mobile || params.get('session') || params.get('new') === '1' || !sessions || sharedPending) return
     const f = useSessionsUI.getState().cols.find((c) => c.key === useSessionsUI.getState().focused)
     const show = params.get('show')
     const keep = show ? `&show=${show}` : ''
@@ -184,9 +196,12 @@ function Workspace() {
       navigate(`/sessions?path=${encodeURIComponent(f.path)}&new=1${keep}`, { replace: true })
       return
     }
-    const last = (f?.kind === 'session' && sessions.find((s) => s.id === f.id)) || [...sessions].sort((a, b) => b.updated - a.updated)[0]
+    const last =
+      (f?.kind === 'session' && sessions.find((s) => s.id === f.id)) ||
+      (shared?.front && sessions.find((s) => s.id === shared.front)) ||
+      [...sessions].sort((a, b) => b.updated - a.updated)[0]
     if (last) navigate(`/sessions?path=${encodeURIComponent(last.path)}&session=${last.id}${keep}`, { replace: true })
-  }, [mobile, location.search, !!sessions]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [mobile, location.search, !!sessions, sharedPending]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const openSession = React.useCallback(
     (s: Pick<Session, 'id' | 'path'>) => {

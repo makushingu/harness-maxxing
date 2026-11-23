@@ -1336,8 +1336,12 @@ R('POST', '/api/sessions/open', ({ body }) => {
     const rank = (x) => (order.includes(x) ? order.indexOf(x) : order.length)
     ids = ids.map((x, i) => [x, i]).sort((a, b) => rank(a[0]) - rank(b[0]) || a[1] - b[1]).map((x) => x[0])
   }
-  if (openShared.ids && ids.join() === openShared.ids.join()) return openShared
-  Object.assign(openShared, { ids, rev: openShared.rev + 1 })
+  const view = {}
+  if (typeof body.tabs === 'boolean') view.tabs = body.tabs
+  if (typeof body.front === 'string' && body.front) view.front = body.front
+  const same = Object.entries(view).every(([k, v]) => openShared[k] === v)
+  if (openShared.ids && ids.join() === openShared.ids.join() && same) return openShared
+  Object.assign(openShared, view, { ids, rev: openShared.rev + 1 })
   bus('open_sessions')
   return openShared
 })
