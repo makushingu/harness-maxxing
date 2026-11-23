@@ -415,7 +415,8 @@ def test_a_group_line_with_a_non_text_value_does_not_stop_the_index(client, topi
                                                    {"path": f"{topic}/agents/editor", "role": "edits"}]})
     assert r.status_code == 200, r.text
     room = config.state_dir("agents", "rooms") / "acme__team.jsonl"
-    room.write_text(json.dumps({"kind": "message", "text": 5, "at": "x"}) + "\n"
+    room.write_text("[" * 100000 + "\n"                                   # nested deeper than Python parses
+                    + json.dumps({"kind": "message", "text": 5, "at": "x"}) + "\n"
                     + json.dumps({"kind": "message", "text": "cut \ud800 zqxsurrogate", "at": 1.0}) + "\n"   # a lone surrogate
                     + json.dumps({"kind": "message", "text": "zqxgroupline", "at": 1.0}) + "\n")
     (config.workspace() / "fresh.md").write_text("zqxfreshfile321\n")
@@ -543,3 +544,25 @@ def test_hidden_jarvis_sessions_do_not_take_the_places_of_visible_results(client
     assert jarvis.hides(jarvis.PREFIX)
     ids = [x["id"] for x in client.get("/api/search", params={"q": "zebra", "limit": 3}).json()["results"]]
     assert ids == [sid]
+
+
+def test_a_session_event_with_a_non_text_value_does_not_stop_the_index(client, mx):
+    bad = _session("", "Abîmée", [])
+    with open(store.log_path(bad), "a") as fh:
+        fh.write('{"type":"mx_user","text":{"a":1},"attachments":[],"source":"web","at":1.0}\n')
+    good = _session("", "Saine", [("assistant", "fine zqxkoalaword")])
+    search.refresh()
+    assert [x["id"] for x in search.search("zqxkoalaword")["results"]] == [good]
+
+
+def test_a_session_without_a_log_is_not_read_again_while_nothing_changes(client, mx, monkeypatch):
+    m = store.new_meta("", "Sans journal")
+    store.create(m)
+    store.log_path(m["id"]).unlink(missing_ok=True)
+    search.refresh()
+    reads = []
+    real = store.read
+    monkeypatch.setattr(store, "read", lambda sid: (reads.append(sid), real(sid))[1])
+    search.refresh()
+    search.refresh()
+    assert reads == []

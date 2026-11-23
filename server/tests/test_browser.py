@@ -1644,3 +1644,20 @@ def test_a_decision_is_announced_once_even_if_the_scan_runs_in_between(tmp_path,
     monkeypatch.setattr(asks, "_done", fake_done)
     asks.decide(rid, "skip")
     assert done == [rid]
+
+
+def test_a_request_file_is_parsed_again_only_when_it_changes(mx, monkeypatch):
+    from maxxing import browser, browser_mcp
+    from maxxing.browser import asks
+    folder = browser.asks_dir()
+    folder.mkdir(parents=True)
+    f = folder / "a1b2c3d4e5f60718.json"
+    f.write_text(json.dumps({"id": "a1b2c3d4e5f60718", "status": "pending", "at": 1.0, "img": "x" * 1000, "profile": "main"}))
+    reads = []
+    real = browser_mcp.read
+    monkeypatch.setattr(browser_mcp, "read", lambda p: (reads.append(p), real(p))[1])
+    for _ in range(3):
+        asks.pending_for_profile("main")
+    assert len(reads) == 1
+    f.write_text(json.dumps({"id": "a1b2c3d4e5f60718", "status": "done", "at": 1.0}))
+    assert not asks.pending() and len(reads) == 2

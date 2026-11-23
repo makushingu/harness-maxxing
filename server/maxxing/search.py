@@ -214,18 +214,25 @@ def _index_sessions(con: sqlite3.Connection) -> None:
     from .sessions import normalize, store
     known = {k for (k,) in con.execute("SELECT key FROM src WHERE key LIKE 's:%'")}
     alive = set()
-    for sid in store.list_ids():
+    ids = list(store.list_ids())
+    for k in [k for k, v in _seen.items() if k.startswith("s:") and v[:1] == ("skip",) and k[2:] not in ids]:
+        del _seen[k]                                         # a session that was deleted meanwhile
+    for sid in ids:
         key = f"s:{sid}"
         alive.add(key)
         p = store.log_path(sid)
         stamp = (_stat_key(store.meta_path(sid)), _stat_key(p))
         if key in known and _seen.get(key) == stamp and None not in stamp:
             continue                                         # neither the meta nor the log changed
+        if _seen.get(key) == ("skip", stamp):                # no log / unreadable meta, and still the same files
+            alive.discard(key)
+            continue
         _seen.pop(key, None)
         m = store.read(sid)
         size = stamp[1][2] if stamp[1] else -1
         if m is None or size < 0:                            # unreadable / no log: drop its rows
             alive.discard(key)
+            _seen[key] = ("skip", stamp)                     # and do not read its meta again until a file changes
             continue
         title, path = _clean(m.get("title") or "Untitled"), _clean(m.get("path") or "")
         row = con.execute("SELECT sig FROM src WHERE key=?", (key,)).fetchone()
@@ -259,8 +266,9 @@ def _index_sessions(con: sqlite3.Connection) -> None:
             if end:
                 lines = chunk[:end].decode("utf-8", "replace").split("\n")
                 for ev in normalize.normalize_lines(lines):
-                    if ev.get("type") in ("user", "assistant", "voice_text") and (ev.get("text") or "").strip():
-                        con.execute(_ADD, (key, "session", sid, path, "", ev["text"][:MAX_MESSAGE_CHARS], ev.get("at")))
+                    txt = ev.get("text")
+                    if ev.get("type") in ("user", "assistant", "voice_text") and isinstance(txt, str) and txt.strip():
+                        con.execute(_ADD, (key, "session", sid, path, "", txt[:MAX_MESSAGE_CHARS], ev.get("at")))
                 sig["offset"] += end
         new = json.dumps(sig)
         if not row or new != row[0]:                         # unchanged (a log ending in a cut line): no write
@@ -322,7 +330,7 @@ def _index_groups(con: sqlite3.Connection) -> None:
             for line in chunk[:end].decode("utf-8", "replace").split("\n"):
                 try:
                     m = json.loads(line)
-                except ValueError:
+                except (ValueError, RecursionError):         # RecursionError: a line of 100000 "["
                     continue
                 raw = m.get("text") if isinstance(m, dict) and m.get("kind") == "message" else None
                 text = raw.strip() if isinstance(raw, str) else ""

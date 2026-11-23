@@ -325,3 +325,11 @@ def test_claude_md_that_is_a_pipe_or_a_device_does_not_hang_or_crash_the_tree(mx
     big.mkdir()
     (big / "CLAUDE.md").write_text("# Big\n\n" + "x" * (workspace.SMALL_FILE_MAX * 4))
     assert len(workspace.read_description(big)) <= workspace.SMALL_FILE_MAX
+
+
+def test_a_description_with_a_nul_or_control_character_is_refused(client, mx, topic):
+    for bad in ("a\x00b", "a\x07b"):
+        r = client.post("/api/workspace/projects", json={"name": "pnul", "description": bad})
+        assert r.status_code == 400 and r.json()["error"] == "bad_description"
+    assert not (mx["ws"] / "projects/pnul").exists()
+    assert client.post("/api/workspace/projects", json={"name": "pnul", "description": "two\nlines\tok"}).status_code == 200
