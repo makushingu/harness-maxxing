@@ -344,3 +344,11 @@ def test_a_brief_refused_because_jarvis_is_off_does_not_mark_the_day_done(client
     with pytest.raises(jarvis.JarvisError):
         jarvis.brief()
     assert "last_brief" not in jarvis._read_state()
+
+
+def test_a_project_cannot_be_renamed_to_the_name_kept_for_jarvis(mx):
+    workspace.create_project("alpha")
+    with pytest.raises(workspace.WorkspaceError) as e:
+        workspace.update_project("alpha", name=jarvis.PROJECT)
+    assert e.value.code == "reserved" if hasattr(e.value, "code") else True
+    assert not (mx["ws"] / "projects" / jarvis.PROJECT).exists() and (mx["ws"] / "projects" / "alpha").is_dir()

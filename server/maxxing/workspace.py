@@ -597,6 +597,10 @@ def update_project(project: str, name: str | None = None, description: str | Non
         raise WorkspaceError(404, "not_found", f"Project {project!r} not found")
     check_description(description)
     new = check_slug(name) if name and name != project else project
+    if new != project:
+        from . import jarvis
+        if new == jarvis.PROJECT:
+            raise WorkspaceError(409, "reserved", f"{new!r} is kept for Jarvis (Settings -> Features): pick another name")
     _check_rename(topic_path(project), topic_path(new))
     if emoji is not None:
         set_project_emoji(project, check_emoji(emoji))
