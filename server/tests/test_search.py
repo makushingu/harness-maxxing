@@ -553,3 +553,16 @@ def test_a_session_event_with_a_non_text_value_does_not_stop_the_index(client, m
     good = _session("", "Saine", [("assistant", "fine zqxkoalaword")])
     search.refresh()
     assert [x["id"] for x in search.search("zqxkoalaword")["results"]] == [good]
+
+
+def test_a_session_without_a_log_is_not_read_again_while_nothing_changes(client, mx, monkeypatch):
+    m = store.new_meta("", "Sans journal")
+    store.create(m)
+    store.log_path(m["id"]).unlink(missing_ok=True)
+    search.refresh()
+    reads = []
+    real = store.read
+    monkeypatch.setattr(store, "read", lambda sid: (reads.append(sid), real(sid))[1])
+    search.refresh()
+    search.refresh()
+    assert reads == []
