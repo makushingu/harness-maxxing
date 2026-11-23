@@ -316,9 +316,7 @@ def _sync(data: dict, names: list[str]) -> bool:
             continue
         proj = next((p for p in projects if not p.get("workspace") and str(p.get("name", "")).lower() == name.lower()), None)
         if proj is None:
-            proj = {"id": _new_id("p_", 4), "name": name, "color": _next_color(data)}
-            while any(p["id"] == proj["id"] for p in projects):
-                proj["id"] = _new_id("p_", 4)
+            proj = {"id": _new_id("p_", 4, projects), "name": name, "color": _next_color(data)}
             if name in _HIDDEN_BY_DEFAULT:
                 proj["hidden"] = True
             projects.append(proj)
@@ -418,8 +416,12 @@ def on_workspace_change(change: dict) -> None:
     sync_workspace()
 
 
-def _new_id(prefix: str, n: int) -> str:
-    return prefix + secrets.token_hex(n)[:n]
+def _new_id(prefix: str, n: int, items: list[dict]) -> str:
+    """A random id not used by any of `items`."""
+    taken = {x["id"] for x in items}
+    while (new := prefix + secrets.token_hex(n)[:n]) in taken:
+        pass
+    return new
 
 
 def _today() -> dt.date:
@@ -507,13 +509,8 @@ def _apply(task: dict, body: TaskIn, data: dict, fields: set[str]) -> None:
         task["priority"] = body.priority
     if "due" in fields:
         due = body.due or None
-        if due is not None:
-            try:
-                dt.date.fromisoformat(due)
-                if not _DATE.match(due):
-                    raise ValueError
-            except ValueError:
-                raise _err(400, "invalid_due", "due must be YYYY-MM-DD") from None
+        if due is not None and not _real_date(due):
+            raise _err(400, "invalid_due", "due must be YYYY-MM-DD")
         task["due"] = due
     if "project_id" in fields:
         pid = body.project_id or None
@@ -565,6 +562,13 @@ def _guard(copy_: bool = True):
         raise _err(409, "corrupt_file", str(e)) from None
 
 
+def _project(data: dict, pid: str) -> dict:
+    proj = next((p for p in data["projects"] if p["id"] == pid), None)
+    if proj is None:
+        raise _err(404, "not_found", f"no task project {pid}")
+    return proj
+
+
 # ---- tasks ----------------------------------------------------------------------------------
 @router.get("")
 def list_tasks():
@@ -583,13 +587,11 @@ def create_task(body: TaskIn):
     with _lock:
         data = _guard()
         now = time.time()
-        task: dict = _norm_task({"id": _new_id("t_", 6), "created": now, "updated": now})
+        task: dict = _norm_task({"id": _new_id("t_", 6, data["tasks"]), "created": now, "updated": now})
         _apply(task, body, data, fields | {"title"})
         if "order" not in fields or body.order is None:
             same = [t["order"] for t in data["tasks"] if t["status"] == task["status"]]
             task["order"] = (max(same) + 1.0) if same else 1.0
-        while any(t["id"] == task["id"] for t in data["tasks"]):
-            task["id"] = _new_id("t_", 6)
         data["tasks"].append(task)
         save(data)
     return task
@@ -600,9 +602,7 @@ def create_task(body: TaskIn):
 def patch_project(pid: str, body: ProjectIn):
     with _lock:
         data = _guard()
-        proj = next((p for p in data["projects"] if p["id"] == pid), None)
-        if proj is None:
-            raise _err(404, "not_found", f"no task project {pid}")
+        proj = _project(data, pid)
         _apply_project(proj, body)
         save(data)
     return proj
@@ -613,9 +613,7 @@ def patch_project(pid: str, body: ProjectIn):
 def delete_project(pid: str):
     with _lock:
         data = _guard()
-        proj = next((p for p in data["projects"] if p["id"] == pid), None)
-        if proj is None:
-            raise _err(404, "not_found", f"no task project {pid}")
+        proj = _project(data, pid)
         if proj.get("workspace") and proj["workspace"] in (_workspace_names() or []):
             raise _err(409, "linked_project", "this task project follows a workspace project: hide it instead")
         data["projects"] = [p for p in data["projects"] if p["id"] != pid]
@@ -633,9 +631,7 @@ def create_project(body: ProjectIn):
         raise _err(400, "invalid_name", "name is required")
     with _lock:
         data = _guard()
-        proj = {"id": _new_id("p_", 4), "name": "", "color": "zinc"}
-        while any(p["id"] == proj["id"] for p in data["projects"]):
-            proj["id"] = _new_id("p_", 4)
+        proj = {"id": _new_id("p_", 4, data["projects"]), "name": "", "color": "zinc"}
         _apply_project(proj, body)
         data["projects"].append(proj)
         save(data)
