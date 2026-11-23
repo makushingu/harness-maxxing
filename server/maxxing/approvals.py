@@ -170,7 +170,12 @@ def _all() -> list[dict]:
         d = hit[1] if hit and hit[0] == key else approval_mcp.read(Path(path))
         _parsed[path] = (key, d)
         if d and ID_RE.match(str(d.get("id") or "")) and name[:-5] == d["id"]:
-            out.append(dict(d))
+            d = dict(d)
+            for k in ("at", "expires", "decided_at"):        # a hand-edited file: a time that is not a number is no time
+                v = d.get(k)
+                if v is not None and (isinstance(v, bool) or not isinstance(v, (int, float))):
+                    d[k] = None
+            out.append(d)
     for path in set(_parsed) - {p for p, _, _ in files}:
         _parsed.pop(path, None)
     out.sort(key=lambda d: d.get("at") or 0)
