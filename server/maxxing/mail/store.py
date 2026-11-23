@@ -202,12 +202,9 @@ def add_contacts(account: str, addresses: list[str]) -> None:
 
 def unknown(account: str, addresses: list[str]) -> list[str]:
     """The addresses the owner never wrote to from Harness (nor allowed an agent to)."""
-    out = []
     with conn() as c:
-        for a in addresses:
-            if not c.execute("SELECT 1 FROM contacts WHERE account=? AND address=?", (account, a.lower())).fetchone():
-                out.append(a)
-    return out
+        return [a for a in addresses
+                if not c.execute("SELECT 1 FROM contacts WHERE account=? AND address=?", (account, a.lower())).fetchone()]
 
 
 def recent(accounts: list[str], limit: int = 100, before: float | None = None) -> list[dict]:

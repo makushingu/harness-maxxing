@@ -62,6 +62,10 @@ def t(text: str) -> str:
     return _T.get(lang, {}).get(text, text)
 
 
+def _en() -> bool:
+    return t("ago") == "ago"
+
+
 def _zone() -> ZoneInfo:
     try:
         return ZoneInfo(config.load_config().get("timezone") or "UTC")
@@ -80,8 +84,8 @@ def ago(ts: float | None) -> str:
     elif s < 86400:
         v = f"{int(s // 3600)} h"
     else:
-        v = f"{int(s // 86400)} d" if t("ago") == "ago" else f"{int(s // 86400)} j"
-    return f"{v} ago" if t("ago") == "ago" else f"il y a {v}"
+        v = f"{int(s // 86400)} {'d' if _en() else 'j'}"
+    return f"{v} ago" if _en() else f"il y a {v}"
 
 
 def _gb(n: float) -> str:
@@ -92,6 +96,8 @@ def _gb(n: float) -> str:
 def activity(force: bool = False) -> dict:
     from .sessions import service                       # owned by core
     sessions = [s for s in service.list_sessions() if not s.get("archived")]
+    if not sessions:
+        return {"title": t("Activity"), "link": "/sessions", "blocks": _first_steps()}
     midnight = dt.datetime.now(_zone()).replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
     running = [s for s in sessions if s.get("state") == "running"]
     unread = [s for s in sessions if s.get("unread")]
@@ -102,8 +108,6 @@ def activity(force: bool = False) -> dict:
               "href": f"/sessions/{s['id']}",
               "status": "error" if s.get("state") == "error" else ("ok" if s.get("unread") else None)}
              for s in recent]
-    if not sessions:
-        return {"title": t("Activity"), "link": "/sessions", "blocks": _first_steps()}
     return {"title": t("Activity"), "link": "/sessions", "blocks": [
         {"type": "stats", "items": [
             {"type": "stat", "label": t("Running"), "value": len(running)},
@@ -140,12 +144,9 @@ def tasks(force: bool = False) -> dict:
     if not s["open"]:
         return {"title": t("Tasks"), "link": "/tasks", "blocks": [{"type": "markdown", "text": t(
             "No open task. Add one on the Tasks page, or just tell Harness \"remind me to...\".")}]}
-    items = []
-    for task in s["items"][:6]:
-        overdue = bool(task.get("due") and task["due"] < s["today"])
-        items.append({"title": task["title"], "subtitle": task.get("due") or t("Doing"),
-                      "href": f"/tasks?task={task['id']}", "status": "error" if overdue else "warn"
-                      if task.get("due") == s["today"] else "ok"})
+    items = [{"title": task["title"], "subtitle": task.get("due") or t("Doing"), "href": f"/tasks?task={task['id']}",
+              "status": "error" if task.get("due") and task["due"] < s["today"] else "warn"
+              if task.get("due") == s["today"] else "ok"} for task in s["items"][:6]]
     return {"title": t("Tasks"), "link": "/tasks", "status": "warn" if s["overdue"] else "ok", "blocks": [
         {"type": "stats", "items": [
             {"type": "stat", "label": t("Doing"), "value": s["doing"]},
@@ -276,7 +277,7 @@ def _next_run_blocks(cr: Any, zone: ZoneInfo, now: float, start: float) -> list[
     when = dt.datetime.fromtimestamp(nxt[0], zone)
     days = (when.date() - dt.datetime.fromtimestamp(start, zone).date()).days
     day_label = t("today") if days == 0 else t("tomorrow") if days == 1 else \
-        when.strftime("%a") if t("ago") == "ago" else ["lun.", "mar.", "mer.", "jeu.", "ven.", "sam.", "dim."][when.weekday()]
+        when.strftime("%a") if _en() else ["lun.", "mar.", "mer.", "jeu.", "ven.", "sam.", "dim."][when.weekday()]
     return [{"type": "markdown", "text": t("Nothing scheduled today.")},
             {"type": "list", "items": [{"title": nxt[1], "subtitle": t("Next run"),
                                         "value": f"{day_label} {when:%H:%M}", "href": f"/settings/crons?job={nxt[2]}"}]}]
@@ -296,21 +297,25 @@ def server(force: bool = False) -> dict:
                  "hint": f"{t('Load')} {' / '.join(f'{x:.2f}' for x in h['load'])}"},
                 {"type": "progress", "label": t("Memory"), "value": round(used / 1e9, 1),
                  "max": round(mem["total"] / 1e9, 1) or 1, "unit": "GB",
-                 "hint": f"{_gb(mem['avail'])} available" if t("ago") == "ago" else f"{_gb(mem['avail'])} disponibles"},
+                 "hint": f"{_gb(mem['avail'])} {'available' if _en() else 'disponibles'}"},
                 {"type": "progress", "label": t("Disk"), "value": dsk["pct"], "max": 100, "format": "percent",
-                 "hint": f"{_gb(dsk['free'])} free" if t("ago") == "ago" else f"{_gb(dsk['free'])} libres"},
+                 "hint": f"{_gb(dsk['free'])} {'free' if _en() else 'libres'}"},
                 *([{"type": "list", "items": [{"title": i["text"], "status": i["level"]} for i in h["issues"]]}]
                   if h["issues"] else []),
-                {"type": "markdown", "text": f"{t('Up')} {up_d:.1f} {'d' if t('ago') == 'ago' else 'j'}" if up_d >= 1 else
+                {"type": "markdown", "text": f"{t('Up')} {up_d:.1f} {'d' if _en() else 'j'}" if up_d >= 1 else
                  f"{t('Up')} {h['uptime_s'] / 3600:.1f} h"}]}
+
+
+def _not_configured(title: str, link: str) -> dict:
+    return {"title": t(title), "link": link, "blocks": [
+        {"type": "stat", "label": t("Status"), "value": t("Not configured")},
+        {"type": "markdown", "text": f"[{t('Set it up')}]({link})"}]}
 
 
 def backup(force: bool = False) -> dict:
     from . import health
     if not health.backup_configured():
-        return {"title": t("Memory backup"), "link": "/settings/backup", "blocks": [
-            {"type": "stat", "label": t("Status"), "value": t("Not configured")},
-            {"type": "markdown", "text": f"[{t('Set it up')}](/settings/backup)"}]}
+        return _not_configured("Memory backup", "/settings/backup")
     last = health.last_backup()
     repo = (config.load_config().get("backup") or {}).get("repo", "")
     if last is None:
@@ -335,9 +340,7 @@ def telegram(force: bool = False) -> dict:
     except ImportError:
         st = {"configured": False}
     if not st.get("configured"):
-        return {"title": t("Telegram"), "link": "/settings/telegram", "blocks": [
-            {"type": "stat", "label": t("Status"), "value": t("Not configured")},
-            {"type": "markdown", "text": f"[{t('Set it up')}](/settings/telegram)"}]}
+        return _not_configured("Telegram", "/settings/telegram")
     bot = st.get("bot") or {}
     status = "ok" if st.get("running") and not st.get("last_error") else "warn"
     blocks: list[dict] = [{"type": "stats", "items": [
@@ -350,20 +353,18 @@ def telegram(force: bool = False) -> dict:
 
 
 def _clock(at: float) -> str:
-    import datetime as _dt
-    return _dt.datetime.fromtimestamp(at, _zone()).strftime("%H:%M")     # the workspace clock, not the server's
+    return dt.datetime.fromtimestamp(at, _zone()).strftime("%H:%M")     # the workspace clock, not the server's
 
 
 def _reset(at: object) -> str:
     """A reset time: Unix seconds (seen in a turn) or the ISO string of the usage endpoint."""
     if isinstance(at, (int, float)):
-        import datetime as _dt
         zone = _zone()
         try:
-            d = _dt.datetime.fromtimestamp(at, zone)
+            d = dt.datetime.fromtimestamp(at, zone)
         except (OverflowError, OSError, ValueError):     # 1e300 / -1e15: out of the datetime range
             return ""
-        today = _dt.datetime.now(zone).date()
+        today = dt.datetime.now(zone).date()
         return d.strftime("%H:%M") if d.date() == today else d.strftime("%d/%m %H:%M")
     return str(at)
 

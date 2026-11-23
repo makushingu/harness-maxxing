@@ -85,9 +85,7 @@ def _addr_list(values: Any) -> list[str]:
         elif addr.isascii():
             out.append(email.utils.formataddr((name, addr)))
         else:       # non-ASCII before the @ (SMTPUTF8): formataddr cannot, the header is written as UTF-8 (`build`)
-            if re.search(r'[()<>\[\]:;@\\,."]', name):
-                name = '"' + name.replace("\\", "\\\\").replace('"', '\\"') + '"'
-            out.append(f"{name} <{addr}>")
+            out.append(_fmt({"name": name, "email": addr}))
     return out
 
 
@@ -199,11 +197,10 @@ def compose(acc: dict, mode: str, folder: str, uid: int) -> dict:
             if x["email"] and x["email"].lower() not in seen:
                 seen.add(x["email"].lower())
                 cc.append(_fmt(x))
-    sender = (m["from"]["email"] or "").lower()
-    other = [x["email"] for x in m["reply_to"] if x["email"] and x["email"].lower() != sender]
+    from ..cmd_mail import _reply_to_differs
     return {"to": to, "cc": cc, "subject": _subject("Re", m["subject"]), "text": signature_block(acc) + _quote(m),
             "in_reply_to": m.get("message_id") or "", "references": refs, "attachments": [],
-            "from": m["from"]["email"] or "", "reply_to": other}    # where the answer goes instead of the sender
+            "from": m["from"]["email"] or "", "reply_to": _reply_to_differs(m)}    # where the answer goes instead of the sender
 
 
 # ---------------------------------------------------------------- daily cap

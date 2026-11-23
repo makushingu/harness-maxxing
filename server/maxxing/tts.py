@@ -266,7 +266,7 @@ def synth(text: str, voice_id: str | None = None, speed: float = 1.0, lang: str 
            "length": round(1.0 / max(0.6, min(1.6, speed or 1.0)), 2), "speaker": VOICES[vid].get("speaker")}
     with _lock:
         _worker_used = time.time()
-        for attempt in (1, 2):                       # a dead worker is started again once
+        for _ in (1, 2):                       # a dead worker is started again once
             w = _get_worker()
             try:
                 w.stdin.write(json.dumps(req) + "\n")  # type: ignore[union-attr]

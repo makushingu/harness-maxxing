@@ -15,6 +15,7 @@ import time
 from typing import Any
 
 from .. import config
+from . import imap
 from .imap import MailError, open_imap
 
 ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,40}$")
@@ -85,7 +86,6 @@ def public(acc: dict) -> dict:
     out["poll_min"] = poll.interval_min(acc)
     out["auth_servers"] = acc.get("auth_servers") or []
     try:
-        from . import imap
         out["sender_check"] = imap.sender_check(acc)
     except Exception:  # noqa: BLE001
         out["sender_check"] = {"state": "none", "server": ""}
@@ -203,24 +203,22 @@ def _mx(domain: str, strict: bool = False) -> list[str] | None:
 def _ispdb(domain: str) -> dict | None:
     import xml.etree.ElementTree as ET
     import httpx
-    for url in (f"https://autoconfig.thunderbird.net/v1.1/{domain}",):
-        try:
-            r = httpx.get(url, timeout=6)
-            if r.status_code != 200:
-                continue
-            root = ET.fromstring(r.text)
-            inc = root.find(".//incomingServer[@type='imap']")
-            out = root.find(".//outgoingServer[@type='smtp']")
-            if inc is None or out is None:
-                continue
-            tls = lambda s: {"SSL": "ssl", "STARTTLS": "starttls"}.get((s or "").upper(), "ssl")  # noqa: E731
-            return {"imap_host": inc.findtext("hostname"), "imap_port": int(inc.findtext("port") or 993),
-                    "imap_tls": tls(inc.findtext("socketType")),
-                    "smtp_host": out.findtext("hostname"), "smtp_port": int(out.findtext("port") or 465),
-                    "smtp_tls": tls(out.findtext("socketType"))}
-        except Exception:  # noqa: BLE001
-            continue
-    return None
+    try:
+        r = httpx.get(f"https://autoconfig.thunderbird.net/v1.1/{domain}", timeout=6)
+        if r.status_code != 200:
+            return None
+        root = ET.fromstring(r.text)
+        inc = root.find(".//incomingServer[@type='imap']")
+        out = root.find(".//outgoingServer[@type='smtp']")
+        if inc is None or out is None:
+            return None
+        tls = lambda s: {"SSL": "ssl", "STARTTLS": "starttls"}.get((s or "").upper(), "ssl")  # noqa: E731
+        return {"imap_host": inc.findtext("hostname"), "imap_port": int(inc.findtext("port") or 993),
+                "imap_tls": tls(inc.findtext("socketType")),
+                "smtp_host": out.findtext("hostname"), "smtp_port": int(out.findtext("port") or 465),
+                "smtp_tls": tls(out.findtext("socketType"))}
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def detect(address: str) -> dict:
@@ -299,11 +297,7 @@ def test(acc: dict, password: str) -> dict:
     m = open_imap(acc["imap_host"], int(acc["imap_port"]), acc["imap_tls"], acc["username"], password)
     with contextlib.suppress(Exception):
         m.logout()
-    tries = [(int(acc["smtp_port"]), acc["smtp_tls"])]
-    if (587, "starttls") not in tries:
-        tries.append((587, "starttls"))
-    if (465, "ssl") not in tries:
-        tries.append((465, "ssl"))
+    tries = list(dict.fromkeys([(int(acc["smtp_port"]), acc["smtp_tls"]), (587, "starttls"), (465, "ssl")]))
     err: MailError | None = None
     for port, tls in tries:
         try:
@@ -348,7 +342,6 @@ def add_account(data: dict, password: str, skip_test: bool = False) -> tuple[dic
 
 def update_account(acc_id: str, data: dict, password: str | None = None) -> tuple[dict, dict | None]:
     from .. import vault
-    from . import imap
     rows = _load()
     cur = next((a for a in rows if a["id"] == acc_id), None)
     if not cur:
@@ -382,7 +375,6 @@ def update_account(acc_id: str, data: dict, password: str | None = None) -> tupl
 
 def delete_account(acc_id: str) -> None:
     from .. import vault
-    from . import imap
     with _lock:
         rows = _load()
         cur = next((a for a in rows if a["id"] == acc_id), None)

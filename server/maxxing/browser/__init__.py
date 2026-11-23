@@ -39,7 +39,6 @@ from .. import config
 from . import rules
 
 MCP_NAME = "maxxing-browser"                  # Claude Code's MCP server name: tools are mcp__maxxing-browser__*
-NAME = "Harness Browser"
 MAIN = "main"
 DIRECT = "direct"
 DEFAULTS = {"ask": True, "wait_min": 30, "downloads": False, "idle_min": 30, "tab_sleep_min": 20, "max_tabs": 12,

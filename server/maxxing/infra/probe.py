@@ -11,6 +11,7 @@ Options (argv[1], JSON): {"sqlite_roots": [dirs], "sqlite_files": [paths], "budg
 """
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import re
@@ -181,10 +182,9 @@ def containers():
             c = json.loads(line)
         except ValueError:
             continue
-        ports = []
-        for m in re.finditer(r"(?:([\d.:\[\]a-f]+):)?(\d+)->(\d+)/(tcp|udp)", c.get("Ports", "")):
-            ports.append({"host_ip": (m.group(1) or "").strip("[]"), "host": int(m.group(2)), "container": int(m.group(3)),
-                          "proto": m.group(4)})
+        ports = [{"host_ip": (m.group(1) or "").strip("[]"), "host": int(m.group(2)), "container": int(m.group(3)),
+                  "proto": m.group(4)}
+                 for m in re.finditer(r"(?:([\d.:\[\]a-f]+):)?(\d+)->(\d+)/(tcp|udp)", c.get("Ports", ""))]
         labels = dict(kv.split("=", 1) for kv in (c.get("Labels") or "").split(",") if "=" in kv)
         item = {"id": c.get("ID", "")[:12], "name": c.get("Names", ""), "image": c.get("Image", ""),
                 "status": c.get("Status", ""), "state": c.get("State", ""), "ports": ports,
@@ -199,17 +199,13 @@ def containers():
 
 # ---- web servers --------------------------------------------------------------------------------
 def _caddy_config():
-    try:
+    with contextlib.suppress(Exception):  # admin API off: adapt the Caddyfile instead
         return http_json(CADDY_API.rstrip("/") + "/config/"), "api"
-    except Exception:  # noqa: BLE001 - admin API off: adapt the Caddyfile instead
-        pass
     if shutil.which("caddy") and os.path.exists(CADDYFILE):
         code, txt = run(["caddy", "adapt", "--config", CADDYFILE, "--adapter", "caddyfile"], timeout=10)
         if code == 0:
-            try:
+            with contextlib.suppress(ValueError):
                 return json.loads(txt), "caddyfile"
-            except ValueError:
-                pass
     return None, None
 
 
@@ -279,12 +275,9 @@ def _merge_sites(found, server_name):
                     cur["root"] = root if f.get("strip") or not path else root.rstrip("/") + path
                 cur["redirect"] = cur["redirect"] or f.get("redirect")
                 cur["sandbox"] = cur["sandbox"] or bool(f.get("sandbox"))
-    out = []
-    for s in sites.values():
-        if s["kind"] == "respond" and any(k[0] == s["host"] and k[1] != s["path"] for k in sites):
-            continue                                          # a bare 404 next to real routes of the same host
-        out.append(s)
-    return out
+    # a bare 404 next to real routes of the same host is left out
+    return [s for s in sites.values()
+            if not (s["kind"] == "respond" and any(k[0] == s["host"] and k[1] != s["path"] for k in sites))]
 
 
 def caddy_sites():
@@ -370,10 +363,8 @@ def _pg_rows(txt):
     for line in txt.splitlines():
         parts = line.split("|")
         if len(parts) >= 3:
-            try:
+            with contextlib.suppress(ValueError):
                 dbs.append({"name": parts[0], "size": int(parts[1]), "owner": parts[2]})
-            except ValueError:
-                pass
     return dbs
 
 

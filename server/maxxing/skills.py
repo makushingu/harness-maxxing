@@ -82,14 +82,7 @@ def _scan(root: Path, origin: str, skip: set[str] | None = None, **where: str) -
         folders = sorted(p for p in root.iterdir() if _utf8(p) and p.is_dir() and (p / "SKILL.md").is_file())
     except (OSError, ValueError):               # ValueError: a NUL in the path
         return []
-    out = []
-    for p in folders:
-        if skip and p.name in skip:
-            continue
-        s = _read(p, origin, **where)
-        if s:
-            out.append(s)
-    return out
+    return [s for p in folders if not (skip and p.name in skip) and (s := _read(p, origin, **where))]
 
 
 def _server_skills() -> list[dict]:

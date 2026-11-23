@@ -144,8 +144,6 @@ async def forward_root(eid: str, request: Request):
 
 
 UI_KIT = Path(__file__).resolve().parent.parent / "assets" / "ui-kit.css"
-
-
 _KIT: dict = {"key": None, "css": "", "etag": ""}
 
 
@@ -186,11 +184,22 @@ def _own_file(ext: extensions.Extension, name: str) -> Path:
     return p
 
 
+async def _serving(eid: str, has: str, what: str) -> extensions.Extension:
+    """The extension `eid` when it is usable and has `has` (has_page, has_html, agents_view), else a 404."""
+    ext = await asyncio.to_thread(extensions.get, eid)
+    if ext is None or not ext.enabled or ext.error or not getattr(ext, has):
+        raise _err(404, "not_found", f"no {what} for extension {eid}")
+    return ext
+
+
+def _raw_text(ext: extensions.Extension, name: str) -> FileResponse:
+    return FileResponse(_own_file(ext, name), media_type="text/plain; charset=utf-8",
+                        headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
+
+
 @router.get("/ext/{eid}/page.js", include_in_schema=False)
 async def page_js(eid: str):
-    ext = await asyncio.to_thread(extensions.get, eid)
-    if ext is None or not ext.enabled or ext.error or not ext.has_page:
-        raise _err(404, "not_found", f"no page for extension {eid}")
+    ext = await _serving(eid, "has_page", "page")
     return FileResponse(_own_file(ext, "page.js"), media_type="text/javascript",
                         headers={"Cache-Control": "no-store"})
 
@@ -234,42 +243,26 @@ async def _frame(ext: extensions.Extension, name: str) -> HTMLResponse:
 
 @router.get("/ext/{eid}/widget-frame", include_in_schema=False)
 async def widget_frame(eid: str):
-    ext = await asyncio.to_thread(extensions.get, eid)
-    if ext is None or not ext.enabled or ext.error or not ext.has_html:
-        raise _err(404, "not_found", f"no HTML widget for extension {eid}")
-    return await _frame(ext, "widget.html")
-
-
-async def _view(eid: str) -> extensions.Extension:
-    ext = await asyncio.to_thread(extensions.get, eid)
-    if ext is None or not ext.enabled or ext.error or not ext.agents_view:
-        raise _err(404, "not_found", f"no Office view for extension {eid}")
-    return ext
+    return await _frame(await _serving(eid, "has_html", "HTML widget"), "widget.html")
 
 
 @router.get("/ext/{eid}/agents-view-frame", include_in_schema=False)
 async def agents_view_frame(eid: str):
     """An Office view of the Agents page (agents-view.html): the same frame, bridge and sandbox as an HTML widget."""
-    return await _frame(await _view(eid), "agents-view.html")
+    return await _frame(await _serving(eid, "agents_view", "Office view"), "agents-view.html")
 
 
 @router.api_route("/ext/{eid}/agents-view.html", methods=["GET", "HEAD"], include_in_schema=False)
 async def agents_view_html(eid: str):
     """Raw agents-view.html (text/plain); HEAD = the Office's existence check before it loads the frame."""
-    ext = await _view(eid)
-    return FileResponse(_own_file(ext, "agents-view.html"), media_type="text/plain; charset=utf-8",
-                        headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
+    return _raw_text(await _serving(eid, "agents_view", "Office view"), "agents-view.html")
 
 
 @router.api_route("/ext/{eid}/widget.html", methods=["GET", "HEAD"], include_in_schema=False)
 async def widget_html(eid: str):
     """Raw widget.html; the UI loads it into a sandboxed iframe (srcdoc, no access to the app). HEAD: the dashboard
     only checks that the widget exists (the frame loads /widget-frame)."""
-    ext = await asyncio.to_thread(extensions.get, eid)
-    if ext is None or not ext.enabled or ext.error or not ext.has_html:
-        raise _err(404, "not_found", f"no HTML widget for extension {eid}")
-    return FileResponse(_own_file(ext, "widget.html"), media_type="text/plain; charset=utf-8",
-                        headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
+    return _raw_text(await _serving(eid, "has_html", "HTML widget"), "widget.html")
 
 
 async def startup() -> None:

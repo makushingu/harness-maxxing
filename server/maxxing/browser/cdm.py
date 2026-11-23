@@ -7,6 +7,7 @@ emulation, memory or network tools, nothing that reads or writes a file of this 
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import os
 from pathlib import Path
@@ -143,10 +144,8 @@ class Child:
                 self.proc.terminate()
                 await asyncio.wait_for(self.proc.wait(), 5)
             except (ProcessLookupError, asyncio.TimeoutError):
-                try:
+                with contextlib.suppress(ProcessLookupError):
                     self.proc.kill()
-                except ProcessLookupError:
-                    pass
         self._reader.cancel()
 
 

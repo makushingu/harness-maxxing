@@ -100,10 +100,6 @@ def checked_repo(path: str) -> Path:
 
 
 def head_sha(repo: Path) -> str | None:
-    return _head(repo)
-
-
-def _head(repo: Path) -> str | None:
     r = _run(repo, "rev-parse", "--verify", "-q", "HEAD^{commit}", check=False)
     return r.stdout.strip() or None
 
@@ -122,7 +118,7 @@ def snapshot(repo: Path, ref: str | None = None) -> str:
         env = {"GIT_INDEX_FILE": str(idx)}
         _git(repo, "add", "-A", "--", ".", env=env, timeout=WRITE_TIMEOUT)
         tree = _git(repo, "write-tree", env=env).strip()
-    head = _head(repo)
+    head = head_sha(repo)
     ident = {"GIT_AUTHOR_NAME": "Harness", "GIT_AUTHOR_EMAIL": "harness@localhost",
              "GIT_COMMITTER_NAME": "Harness", "GIT_COMMITTER_EMAIL": "harness@localhost"}
     sha = _git(repo, "commit-tree", tree, *(["-p", head] if head else []), "-m", "Harness photo", env=ident).strip()
@@ -161,17 +157,20 @@ def turn_end(sid: str, n: int, pre: dict[str, str], touched: set[str], cwd: str 
             post = snapshot(repo, _ref(sid, n, "post"))
             base = pre.get(root)
             approx = base is None
-            if base is None:
-                base = _head(repo) or EMPTY_TREE
+            base = base or head_sha(repo) or EMPTY_TREE
             files = numstat(repo, base, post)
         except (GitError, OSError):
             continue
         if not files:
             continue
-        repos.append({**repo_head(repo), "pre": base, "post": post, "approx": approx,
-                      "files": files[:MAX_FILES], "more": max(0, len(files) - MAX_FILES),
-                      "add": sum(f["add"] for f in files), "del": sum(f["del"] for f in files)})
+        repos.append(_summary(repo, base, post, approx, files))
     return {"n": n, "repos": repos} if repos else None
+
+
+def _summary(repo: Path, pre: str, post: str, approx: bool, files: list[dict]) -> dict:
+    return {**repo_head(repo), "pre": pre, "post": post, "approx": approx, "files": files[:MAX_FILES],
+            "more": max(0, len(files) - MAX_FILES), "add": sum(f["add"] for f in files),
+            "del": sum(f["del"] for f in files)}
 
 
 # ---- reading --------------------------------------------------------------------------------------------------
@@ -246,9 +245,7 @@ def parse_patch(raw: str, full: bool = False) -> dict:
             o, n = int(m.group(1)), int(m.group(3))
             hunks.append({"head": ln, "o": o, "n": n, "lines": []})
             continue
-        if not hunks or not ln or ln[0] not in " +-\\":
-            continue
-        if ln[0] == "\\":
+        if not hunks or not ln or ln[0] not in " +-":      # "\ No newline at end of file" too
             continue
         if not full and total >= MAX_DIFF_LINES:
             cut = True
@@ -287,10 +284,8 @@ def dirty(repo: Path) -> int:
 def default_base(repo: Path) -> str | None:
     """The branch a feature branch is compared with: origin's HEAD, else main / master / beta that exists."""
     r = _run(repo, "symbolic-ref", "-q", "--short", "refs/remotes/origin/HEAD", check=False).stdout.strip()
-    cands = [r] if r else []
-    cands += ["origin/main", "origin/master", "main", "master"]
-    for c in cands:
-        if c and _run(repo, "rev-parse", "--verify", "-q", f"{c}^{{commit}}", check=False).returncode == 0:
+    for c in ([r] if r else []) + ["origin/main", "origin/master", "main", "master"]:
+        if _run(repo, "rev-parse", "--verify", "-q", f"{c}^{{commit}}", check=False).returncode == 0:
             return c
     return None
 
@@ -314,11 +309,8 @@ def view(repo: Path, scope: str, base_sha: str | None = None, base_branch: str |
             raise GitError(400, "no_base", "no main branch to compare with")
         a = _git(repo, "merge-base", b, "HEAD").strip()
     else:
-        a = _head(repo) or EMPTY_TREE
-    files = numstat(repo, a, now)
-    return {**repo_head(repo), "pre": a, "post": now, "approx": False, "files": files[:MAX_FILES],
-            "more": max(0, len(files) - MAX_FILES), "add": sum(f["add"] for f in files),
-            "del": sum(f["del"] for f in files)}
+        a = head_sha(repo) or EMPTY_TREE
+    return _summary(repo, a, now, False, numstat(repo, a, now))
 
 
 def commits(repo: Path, base_branch: str | None = None, limit: int = 100, everything: bool = False) -> list[dict]:
@@ -326,13 +318,9 @@ def commits(repo: Path, base_branch: str | None = None, limit: int = 100, everyt
     b = None if everything else (_base(base_branch) or default_base(repo))
     rng = [f"{b}..HEAD"] if b else ["HEAD"]
     out = _git(repo, "log", f"-n{limit}", "--format=%H%x1f%h%x1f%s%x1f%an%x1f%at", *rng, check=False) \
-        if _head(repo) else ""
-    res = []
-    for ln in out.splitlines():
-        f = ln.split("\x1f")
-        if len(f) == 5:
-            res.append({"sha": f[0], "short": f[1], "subject": f[2], "author": f[3], "at": int(f[4] or 0)})
-    return res
+        if head_sha(repo) else ""
+    return [{"sha": f[0], "short": f[1], "subject": f[2], "author": f[3], "at": int(f[4] or 0)}
+            for f in (ln.split("\x1f") for ln in out.splitlines()) if len(f) == 5]
 
 
 # ---- writing --------------------------------------------------------------------------------------------------

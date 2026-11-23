@@ -207,19 +207,16 @@ def _ext_list(key: str) -> list:
 
 
 def disabled_ids() -> set[str]:
-    d = _ext_list("disabled")
-    return {x for x in d if isinstance(x, str)}
+    return {x for x in _ext_list("disabled") if isinstance(x, str)}
 
 
 def pinned_ids() -> set[str]:
     """Page extensions shown directly in the sidebar (the others are listed under "Extensions")."""
-    d = _ext_list("pinned")
-    return {x for x in d if isinstance(x, str)}
+    return set(_pinned_list())
 
 
 def _pinned_list() -> list[str]:
-    d = _ext_list("pinned")
-    return list(dict.fromkeys(x for x in d if isinstance(x, str)))
+    return list(dict.fromkeys(x for x in _ext_list("pinned") if isinstance(x, str)))
 
 
 def pin_order(eid: str) -> int | None:
@@ -275,11 +272,8 @@ def _load_one(d: Path) -> Extension:
             raise ValueError("manifest.json is nested too deeply") from None
         if m.get("id", d.name) != d.name:
             raise ValueError(f"manifest id {m.get('id')!r} differs from the folder name {d.name!r}")
-        raw = m.get("name")
-        if isinstance(raw, dict):
-            ext.names = {str(k): str(v)[:80] for k, v in raw.items() if isinstance(v, str) and v.strip()}
-            raw = ext.names.get("en") or next(iter(ext.names.values()), "")
-        ext.name = str(raw or d.name)[:80]
+        name, ext.names = _names(m.get("name"), 80)
+        ext.name = str(name or d.name)[:80]
         ext.type = m.get("type", "widget")
         if ext.type not in TYPES:
             raise ValueError("type must be widget or page")
@@ -332,11 +326,16 @@ def _agents_view(raw: Any, d: Path) -> dict | None:
         raise ValueError("manifest \"agents_view\" must be true or an object {\"name\", \"icon\"}")
     if not (d / "agents-view.html").is_file():
         raise ValueError("\"agents_view\" needs agents-view.html in the extension folder")
-    name, names = raw.get("name"), {}
-    if isinstance(name, dict):
-        names = {str(k): str(v)[:40] for k, v in name.items() if isinstance(v, str) and v.strip()}
-        name = names.get("en") or next(iter(names.values()), "")
+    name, names = _names(raw.get("name"), 40)
     return {"name": str(name or "")[:40], "names": names, "icon": str(raw.get("icon") or "")[:40]}
+
+
+def _names(raw: Any, cap: int) -> tuple[Any, dict[str, str]]:
+    """A manifest name, plain or per language ({"en": ..., "fr": ...}): (the name, the names per language)."""
+    if not isinstance(raw, dict):
+        return raw, {}
+    names = {str(k): str(v)[:cap] for k, v in raw.items() if isinstance(v, str) and v.strip()}
+    return names.get("en") or next(iter(names.values()), ""), names
 
 
 def _import(ext: Extension) -> ModuleType:
@@ -388,16 +387,13 @@ def _signature() -> tuple:
     r = root()
     if not r.is_dir():
         return ()
-    out = []
-    for d in _folders(r):
-        stamps = []
-        for f in ("manifest.json", "api.py", "page.js", "widget.html", "agents-view.html"):
-            try:
-                stamps.append((d / f).stat().st_mtime_ns)
-            except OSError:
-                stamps.append(None)
-        out.append((d.name, *stamps))
-    return tuple(out)
+    def mtime(f: Path) -> int | None:
+        try:
+            return f.stat().st_mtime_ns
+        except OSError:
+            return None
+    return tuple((d.name, *(mtime(d / f) for f in ("manifest.json", "api.py", "page.js", "widget.html",
+                                                   "agents-view.html"))) for d in _folders(r))
 
 
 def scan(only_if_stale: bool = False) -> list[Extension]:
