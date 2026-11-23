@@ -46,7 +46,7 @@ func configDir() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if runtime.GOOS == "linux" || (runtime.GOOS != "windows" && runtime.GOOS != "darwin") {
+	if runtime.GOOS != "windows" && runtime.GOOS != "darwin" {
 		return filepath.Join(base, "harness-link"), nil
 	}
 	return filepath.Join(base, "HarnessLink"), nil
@@ -123,24 +123,10 @@ func readTrailer(path string) (*Trailer, error) {
 	if err != nil {
 		return nil, err
 	}
-	size := st.Size()
-	tail := int64(len(trailerMagic) + 4)
-	if size < tail {
-		return nil, nil
-	}
-	foot := make([]byte, tail)
-	if _, err := f.ReadAt(foot, size-tail); err != nil {
-		return nil, err
-	}
-	if !bytes.HasSuffix(foot, []byte(trailerMagic)) {
-		return nil, nil
-	}
-	n := int64(binary.BigEndian.Uint32(foot[:4]))
-	if n == 0 || n > maxTrailerLen || n > size-tail {
-		return nil, errors.New("corrupt trailer length")
-	}
-	buf := make([]byte, n+tail)
-	if _, err := f.ReadAt(buf, size-tail-n); err != nil && !errors.Is(err, io.EOF) {
+	// the largest possible trailer is read at once; parseTrailer finds and checks it
+	n := min(st.Size(), int64(maxTrailerLen+len(trailerMagic)+4))
+	buf := make([]byte, n)
+	if _, err := f.ReadAt(buf, st.Size()-n); err != nil && !errors.Is(err, io.EOF) {
 		return nil, err
 	}
 	return parseTrailer(buf)
@@ -188,11 +174,7 @@ func saveConfig(dir string, c *Config) error {
 }
 
 func deleteConfig(dir string) error {
-	err := os.Remove(filepath.Join(dir, configName))
-	if errors.Is(err, os.ErrNotExist) {
-		return nil
-	}
-	return err
+	return removeFile(filepath.Join(dir, configName))
 }
 
 func writeFileAtomic(path string, data []byte, mode os.FileMode) error {

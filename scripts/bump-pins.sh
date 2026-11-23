@@ -108,17 +108,17 @@ ok = [v for v, f in d["releases"].items() if f and not any(x.get("yanked") for x
 print(max(ok, key=key) if ok else "")' "$SCRAPLING_BELOW")
 if [ -n "$scr" ]; then
   pin scrapling version "$scr"
+  resolve() { UV_CACHE_DIR="$W/uvcache" uv pip compile "$W/in.txt" --universal --generate-hashes --python-version 3.12 \
+    --no-header --no-annotate -q -o "$W/req.txt"; }
   { echo "scrapling[fetchers,rag]==$scr"; for x in $SCRAPLING_EXTRA; do echo "$x"; done; } > "$W/in.txt"
-  UV_CACHE_DIR="$W/uvcache" uv pip compile "$W/in.txt" --universal --generate-hashes --python-version 3.12 \
-    --no-header --no-annotate -q -o "$W/req.txt"
+  resolve
   # Playwright and Patchright must share a Chromium revision: `playwright install` deletes the browsers no
   # Playwright install links to, Patchright's included. Same minor = same revision; re-resolve when they differ.
   ver() { sed -n "s/^$1==\([0-9]*\.[0-9]*\)\..*/\1/p" "$W/req.txt"; }
   if [ -n "$(ver patchright)" ] && [ "$(ver playwright)" != "$(ver patchright)" ]; then
     SCRAPLING_EXTRA="$SCRAPLING_EXTRA playwright==$(ver patchright).*"
     echo "playwright==$(ver patchright).*" >> "$W/in.txt"
-    UV_CACHE_DIR="$W/uvcache" uv pip compile "$W/in.txt" --universal --generate-hashes --python-version 3.12 \
-      --no-header --no-annotate -q -o "$W/req.txt"
+    resolve
   fi
   [ "$(ver playwright)" = "$(ver patchright)" ] || { echo "scrapling: playwright $(ver playwright) vs patchright $(ver patchright)" >&2; exit 1; }
   { printf '# Scrapling and every package it needs, each pinned with its sha256 (installed with uv pip install --require-hashes).\n'

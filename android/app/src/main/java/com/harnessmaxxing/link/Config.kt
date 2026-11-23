@@ -9,7 +9,6 @@ class Config(context: Context) {
 
     val server: String? get() = prefs.getString("server", null)
     val token: String? get() = prefs.getString("token", null)
-    val deviceId: String? get() = prefs.getString("device_id", null)
     val paired: Boolean get() = !server.isNullOrEmpty() && !token.isNullOrEmpty()
 
     var name: String

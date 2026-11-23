@@ -349,11 +349,15 @@ func (a *agent) write(conn *websocket.Conn, v any) error {
 	return nil
 }
 
+func (a *agent) current() *websocket.Conn {
+	a.connMu.Lock()
+	defer a.connMu.Unlock()
+	return a.conn
+}
+
 // send writes to the current control connection (dropped if there is none).
 func (a *agent) send(v any) error {
-	a.connMu.Lock()
-	c := a.conn
-	a.connMu.Unlock()
+	c := a.current()
 	if c == nil {
 		return errors.New("not connected")
 	}
@@ -480,10 +484,7 @@ func accessLine(before, now string) (lineKind, string) {
 
 // helloAgain sends the hello frame now if it changed (the screen in use changed).
 func (a *agent) helloAgain() {
-	a.connMu.Lock()
-	c := a.conn
-	a.connMu.Unlock()
-	if c != nil {
+	if c := a.current(); c != nil {
 		_ = a.sendHello(c, false)
 	}
 }

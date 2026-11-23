@@ -9,7 +9,6 @@ import org.json.JSONObject
  * `{"t":"ok","id":...}` or `{"t":"err","id":...,"code":...,"message":...}`.
  */
 object Protocol {
-    const val VERSION = 2
     val CAPS = listOf("screen", "input", "tree", "apps")
 
     /** Error codes of `{"t":"err"}` replies (table of link/PROTOCOL.md). */
@@ -94,14 +93,11 @@ object Protocol {
     /** One frame received from the server. `raw` keeps every field for the handlers. */
     class Frame(val t: String, val id: Any?, val raw: JSONObject) {
         fun str(key: String): String? = if (raw.has(key) && !raw.isNull(key)) raw.optString(key) else null
-        fun num(key: String): Double? = if (raw.has(key) && !raw.isNull(key)) {
-            val v = raw.opt(key)
-            when (v) {
-                is Number -> v.toDouble()
-                is String -> v.toDoubleOrNull()
-                else -> null
-            }
-        } else null
+        fun num(key: String): Double? = when (val v = raw.opt(key)) {
+            is Number -> v.toDouble()
+            is String -> v.toDoubleOrNull()
+            else -> null // absent or JSON null
+        }
         fun int(key: String): Int? = num(key)?.toInt()
         fun bool(key: String): Boolean = when (val v = raw.opt(key)) {
             is Boolean -> v

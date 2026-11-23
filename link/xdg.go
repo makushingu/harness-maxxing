@@ -168,7 +168,7 @@ func xdgAppDirs() []string {
 	seen := map[string]bool{}
 	for _, d := range l {
 		d = filepath.Join(d, "applications")
-		if d != "" && !seen[d] {
+		if !seen[d] {
 			seen[d] = true
 			out = append(out, d)
 		}

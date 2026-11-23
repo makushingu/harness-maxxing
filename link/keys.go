@@ -1,6 +1,7 @@
 package main
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 	"unicode"
@@ -105,7 +106,7 @@ func parseKeys(s string) ([][]string, error) {
 				if main != "" {
 					return nil, badRequest("modifier %q after the key in %q", p, f)
 				}
-				if !contains(mods, k) {
+				if !slices.Contains(mods, k) {
 					mods = append(mods, k)
 				}
 				continue
@@ -122,15 +123,6 @@ func parseKeys(s string) ([][]string, error) {
 		out = append(out, combo)
 	}
 	return out, nil
-}
-
-func contains(l []string, s string) bool {
-	for _, x := range l {
-		if x == s {
-			return true
-		}
-	}
-	return false
 }
 
 func compareFold(a, b string) int {
