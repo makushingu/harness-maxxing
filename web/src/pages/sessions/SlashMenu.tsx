@@ -80,11 +80,12 @@ function groupTitle(g: string, t: ReturnType<typeof useT>, chat?: boolean): stri
     session: t(chat ? 'slash.group.chat' : 'slash.group.session'),
     here: t('slash.group.here'),
     other: t('slash.group.other'),
+    '@jarvis': '', // its one row stands alone at the top, no title
     '@session': t('mention.group.session'),
     '@agent': t('mention.group.agent'),
     '@team': t('mention.group.team'),
   }
-  return titles[g] || g
+  return g in titles ? titles[g] : g
 }
 
 export function SlashMenu({ items, active, onPick, onHover, stage, label, keys, chat }: { items: MenuRow[]; active: number; onPick: (i: number) => void; onHover: (i: number) => void; stage: 'name' | 'arg'; label?: string; keys?: string; /** An agent's conversation: its commands are "This conversation"'s. */ chat?: boolean }) {
@@ -103,7 +104,7 @@ export function SlashMenu({ items, active, onPick, onHover, stage, label, keys, 
       <div ref={list} className="max-h-72 overflow-y-auto overscroll-contain p-1 [scrollbar-width:thin]">
         {items.map((it, i) => (
           <React.Fragment key={it.key}>
-          {it.group && it.group !== items[i - 1]?.group && (
+          {it.group && it.group !== items[i - 1]?.group && groupTitle(it.group, t, chat) && (
             <div className={cn('px-2.5 pt-1.5 pb-0.5 text-[10px] font-medium tracking-wide text-muted-foreground uppercase', i > 0 && 'mt-1 border-t pt-2')}>
               {groupTitle(it.group, t, chat)}
             </div>

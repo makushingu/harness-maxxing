@@ -293,6 +293,7 @@ export const en = {
   'sessions.model.lastUsed': 'last used',
   'mention.label': 'Name someone',
   'mention.keys': '↑↓ choose · Enter name · Claude writes to them when your message asks it',
+  'mention.jarvis.hint': 'Current conversation',
   'mention.group.session': 'Sessions',
   'mention.group.agent': 'Agents',
   'mention.group.team': 'Team',

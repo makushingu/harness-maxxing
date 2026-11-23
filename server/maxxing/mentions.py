@@ -1,5 +1,5 @@
 """@ mentions of the composer: who a session's message can name - the other sessions, the agents, the Team contacts
-and groups - and what Claude reads with the message (the command that writes to each of them).
+and groups, Jarvis - and what Claude reads with the message (the command that writes to each of them).
 
 Nothing is sent here: the message goes to the session as usual and Claude sends, if the message asks it to, with
 `maxxing sessions send`, `maxxing agents send` or `maxxing team send` (one hop more each time, see
@@ -12,7 +12,7 @@ import re
 
 from . import config
 
-KINDS = ("session", "agent", "team")
+KINDS = ("jarvis", "session", "agent", "team")
 MAX = 8                                   # mentions read per message
 SESSIONS = 60                             # most recent sessions offered
 
@@ -28,14 +28,26 @@ def _topic(path: str) -> str:
     return f"{m.group(1)} / {m.group(2)}" if m else (path or "")
 
 
+def _jarvis_on() -> bool:
+    from . import jarvis
+    return jarvis.feature_on() and jarvis.is_jarvis_project(jarvis.PROJECT)
+
+
 def candidates(exclude: str = "") -> list[dict]:
-    """[{kind, ref, label, hint, state?, group?}]: sessions (running first, then the most recent; not archived, not
-    an agent's), agents (Agents page on), Team contacts and groups (Team page on)."""
-    from . import agents
+    """[{kind, ref, label, hint, state?, group?}]: Jarvis (its feature on: one row, its conversation of the moment),
+    sessions (running first, then the most recent; not archived, not an agent's, not one of Jarvis's conversations),
+    agents (Agents page on), Team contacts and groups (Team page on)."""
+    from . import agents, jarvis
     from .sessions import service
     rows: list[dict] = []
+    jarvis_on = _jarvis_on()
+    if jarvis_on and not jarvis.is_internal((service.get_session(exclude) or {}).get("path") if exclude else ""):
+        cur = jarvis.current_session()
+        state = ((service.get_session(cur) or {}).get("state") if cur else None) or "idle"
+        rows.append({"kind": "jarvis", "ref": "jarvis", "label": "Jarvis", "hint": "", "state": state})
     sess = [s for s in service.list_sessions(archived=False)
-            if s["id"] != exclude and not agents.is_agent_path(s["path"])]
+            if s["id"] != exclude and not agents.is_agent_path(s["path"])
+            and not (jarvis_on and jarvis.is_internal(s["path"]))]
     sess.sort(key=lambda s: (s["state"] != "running", -(s.get("updated") or 0)))
     rows += [{"kind": "session", "ref": s["id"], "label": s["title"], "hint": _topic(s["path"]), "state": s["state"]}
              for s in sess[:SESSIONS]]
@@ -64,7 +76,13 @@ def resolve(items: list[dict] | None, sender: str = "") -> list[dict]:
         if kind not in KINDS or not ref or (kind, ref) in seen or len(out) >= MAX:
             continue
         seen.add((kind, ref))
-        if kind == "session":
+        if kind == "jarvis":
+            from . import jarvis
+            # its conversation changes (a new one each morning): the command names Jarvis, not a session id
+            if ref == "jarvis" and _jarvis_on() and not jarvis.is_internal(
+                    (service.get_session(sender) or {}).get("path") if sender else ""):
+                out.append({"kind": kind, "ref": ref, "label": "Jarvis", "command": "maxxing sessions send jarvis"})
+        elif kind == "session":
             s = service.get_session(ref) if ref != sender else None
             if s and not agents.is_agent_path(s["path"]):
                 out.append({"kind": kind, "ref": ref, "label": s["title"], "where": _topic(s["path"]),

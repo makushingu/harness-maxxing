@@ -68,4 +68,5 @@ brief or night pass time in its settings.
 ## From the command line
 `maxxing jarvis status | say "..." | new | work [--all] | work close N | digest | brief | dream | set KEY VALUE`, and
 `maxxing topics list | new <project>/<topic>`. Any session can also hand work to another and get its answers back:
-`maxxing sessions new <project>/<topic> "..." --report-to me`.
+`maxxing sessions new <project>/<topic> "..." --report-to me`. From any session, `@Jarvis` in a message (or
+`maxxing sessions send jarvis "..."`) writes into its conversation of the moment, never into an older one.

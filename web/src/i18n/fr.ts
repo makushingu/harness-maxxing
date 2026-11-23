@@ -291,6 +291,7 @@ export const fr: Record<keyof typeof en, string> = {
   'sessions.model.lastUsed': 'utilisé',
   'mention.label': 'Nommer quelqu’un',
   'mention.keys': '↑↓ choisir · Entrée nommer · Claude lui écrit quand votre message le demande',
+  'mention.jarvis.hint': 'Conversation en cours',
   'mention.group.session': 'Sessions',
   'mention.group.agent': 'Agents',
   'mention.group.team': 'Team',

@@ -427,7 +427,7 @@ export type PatchSessionBody = { title?: string; model?: string; effort?: Effort
 export type SendMessageBody = { text: string; attachments?: string[]; /** Sent during a voice call, in that language: Claude answers short and easy to say. */ call?: string; /** Absolute path of a voice message sent directly: the server transcribes it, then sends it. */ voice?: string; /** This page's id for the message, found again in `client_ids` of its queue item and its log event (a reload mid-send checks it). */ client_id?: string; /** The @ of the composer: the server tells Claude how to write to each. */ mentions?: Mention[] }
 export type SendMessageResult = { queued: boolean; session: Session }
 /** Who the composer's @ can name (GET /api/sessions/{id}/mentions). */
-type MentionKind = 'session' | 'agent' | 'team'
+type MentionKind = 'jarvis' | 'session' | 'agent' | 'team'
 type Mention = { kind: MentionKind; ref: string }
 /** A name of a sent message (log line `mentions`). */
 export type SentMention = Mention & { label: string; group?: boolean; avatar?: Partial<AgentAvatar> | null }

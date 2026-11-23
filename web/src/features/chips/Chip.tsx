@@ -3,13 +3,13 @@
 // behind the composer's text (ChipBackdrop: the same colour, the text stays the textarea's own).
 import * as React from 'react'
 import { Link } from 'react-router'
-import { Bot, MessageSquare, Slash, User, Users, UsersRound } from 'lucide-react'
+import { Bot, MessageSquare, Slash, Sparkles, User, Users, UsersRound } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Sensitive } from '@/components/ui'
 import type { AgentAvatar } from '@/lib/types'
 import { AgentAvatarIcon } from '@/features/agents/Avatar'
 
-export type ChipKind = 'session' | 'agent' | 'team' | 'group' | 'all' | 'command'
+export type ChipKind = 'jarvis' | 'session' | 'agent' | 'team' | 'group' | 'all' | 'command'
 
 export type ChipData = {
   kind: ChipKind
@@ -43,6 +43,7 @@ function ChipIcon({ c }: { c: ChipData }) {
     : c.kind === 'group' ? <Users className={k} />
     : c.kind === 'all' ? <UsersRound className={k} />
     : c.kind === 'command' ? <Slash className={k} />
+    : c.kind === 'jarvis' ? <Sparkles className={k} />
     : <MessageSquare className={k} />
   return (
     <span className="relative grid size-4 shrink-0 place-items-center rounded-full bg-background/60">

@@ -3,6 +3,13 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## Unreleased
+
+Fixed:
+- **`@Jarvis` in a message reaches Jarvis, once.** The `@` menu of a session showed each of Jarvis's daily
+  conversations as a session; it now has a single **@Jarvis** line at the top, with its own icon, which always writes
+  into its conversation of the moment.
+
 ## 2.0.0-alpha.165 - 2026-11-23
 
 New:

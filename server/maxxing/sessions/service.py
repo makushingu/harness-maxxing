@@ -501,7 +501,7 @@ def relay_message(to: str, text: str, attachments: list[str] | None = None, send
     (the sender turn's, + 1): refused above MAX_HOPS, so two sessions never answer each other forever.
     `short`: its answer is a report read by another turn (Jarvis's board): Claude is asked for a short final answer
     (runner.SHORT_ANSWER_NOTE, not displayed). -> {queued, session}"""
-    target = find_session(to)
+    target = _jarvis_target(to) or find_session(to)
     if sender and target["id"] == sender.get("id"):
         raise SessionError(400, "self", "A session cannot send a message to itself")
     check_hops(hops)
@@ -512,6 +512,21 @@ def relay_message(to: str, text: str, attachments: list[str] | None = None, send
     if short:
         relay["short"] = True
     return send_message(target["id"], text, attachments, "session" if sender else "cli", relay=relay)
+
+
+def _jarvis_target(to: str) -> dict | None:
+    """`to` = "jarvis" (its feature on): Jarvis's conversation of the moment (made when there is none yet); one of
+    its past conversations -> the current one too (it changes each morning, a send never lands in yesterday's)."""
+    from .. import jarvis
+    if not jarvis.feature_on() or not jarvis.is_jarvis_project(jarvis.PROJECT):
+        return None
+    want = (to or "").strip()
+    if want.casefold() == "jarvis":
+        sid = jarvis.current_session()
+        return (get_session(sid) if sid else None) or jarvis.conversation()
+    if store.is_valid_id(want) and want != (cur := jarvis.current_for(want)):
+        return get_session(cur)
+    return None
 
 
 def check_hops(hops: int) -> None:

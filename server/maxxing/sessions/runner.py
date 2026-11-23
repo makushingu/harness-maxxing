@@ -1246,7 +1246,8 @@ def relay_preface(r: dict) -> str:
             "\n\n")
 
 
-MENTION_KIND = {"session": "a Harness session", "agent": "a Harness agent", "team": "a person on Team"}
+MENTION_KIND = {"jarvis": "Jarvis, the user's assistant on Harness (its conversation of the moment)",
+                "session": "a Harness session", "agent": "a Harness agent", "team": "a person on Team"}
 
 
 def _copy_note(meta: dict, cwd: str) -> str:

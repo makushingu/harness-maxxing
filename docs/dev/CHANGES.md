@@ -5,6 +5,15 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## Unreleased
+
+- Mentions: new kind `jarvis` (`mentions.KINDS`, `MentionKind`, `ChipKind`): `candidates()` offers one row
+  `{kind: jarvis, ref: jarvis, label: Jarvis, state}` first when `jarvis.feature_on()` (not from one of its own
+  conversations) and drops every session under `projects/jarvis` from the sessions; `resolve()` gives the command
+  `maxxing sessions send jarvis`. `service.relay_message` (`_jarvis_target`): `to` = `jarvis` -> its current
+  conversation (made when none), a past conversation's id -> the current one (`jarvis.current_for`). Composer: the
+  group `@jarvis` has no title (`SlashMenu.groupTitle` returns "" -> no header), chip/route `/jarvis`, Sparkles icon.
+
 ## 2.0.0-alpha.165 - 2026-11-23
 
 - Harness Link 0.1.1 (`server/maxxing/link.json`, release `link-v0.1.1`): Android main screen redesigned (`LogoView.kt`

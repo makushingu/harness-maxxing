@@ -189,3 +189,31 @@ def test_sessions_send_and_new_refuse_a_file_path_they_cannot_resolve(client, to
     assert cli.main(["sessions", "send", "x", "hi", "--file", "~no-such-user-zz/f"]) == 2
     assert cli.main(["sessions", "new", "general/inbox", "hi", "--file", "a\0b"]) == 2
     assert capsys.readouterr().err.count("--file") == 3
+
+
+def test_jarvis_is_one_row_its_conversation_of_the_moment(client, topic, mx):
+    from maxxing import jarvis
+    a = _session(client, topic, "Blog writer")
+    assert client.put("/api/settings", json={"jarvis_feature": True}).status_code == 200
+    old = client.post("/api/jarvis/open").json()["session"]["id"]
+    cur = client.post("/api/jarvis/new").json()["session"]
+    cur = (cur or {}).get("id") or jarvis.conversation("hello")["id"]
+    assert cur != old
+    rows = client.get(f"/api/sessions/{a['id']}/mentions").json()["items"]
+    assert rows[0]["kind"] == "jarvis" and rows[0]["ref"] == "jarvis" and rows[0]["label"] == "Jarvis"
+    assert not [r for r in rows if r["kind"] == "session" and r["ref"] in (old, cur)]   # never as sessions
+    # from its own conversation, Jarvis is not offered
+    assert all(r["kind"] != "jarvis" for r in client.get(f"/api/sessions/{cur}/mentions").json()["items"])
+    found = mentions.resolve([{"kind": "jarvis", "ref": "jarvis"}], sender=a["id"])
+    assert found == [{"kind": "jarvis", "ref": "jarvis", "label": "Jarvis", "command": "maxxing sessions send jarvis"}]
+    assert mentions.resolve([{"kind": "jarvis", "ref": "jarvis"}], sender=cur) == []
+    # `maxxing sessions send jarvis` (or an old conversation's id) lands in the current one
+    sender = {"id": a["id"], "title": a["title"], "path": a["path"]}
+    assert service.relay_message("jarvis", "hi", sender=sender, hops=1)["session"]["id"] == cur
+    assert service.relay_message(old, "hi", sender=sender, hops=1)["session"]["id"] == cur
+
+
+def test_jarvis_off_is_not_offered(client, topic):
+    a = _session(client, topic, "Blog writer")
+    assert all(r["kind"] != "jarvis" for r in client.get(f"/api/sessions/{a['id']}/mentions").json()["items"])
+    assert mentions.resolve([{"kind": "jarvis", "ref": "jarvis"}], sender=a["id"]) == []

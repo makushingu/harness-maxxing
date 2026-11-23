@@ -1,9 +1,9 @@
 // The composer's "@" menu: typing "@" (at the start or after a space) lists who the message can name - the other
-// sessions, the agents, the Team contacts and groups (GET /api/sessions/{id}/mentions). The pick writes "@Name" in
+// sessions, the agents, the Team contacts and groups, Jarvis (one row: its conversation of the moment) (GET /api/sessions/{id}/mentions). The pick writes "@Name" in
 // the text; when the message is sent, the server tells Claude how to write to each one named (mentions.py), and Claude
 // sends if the message asks it to ("summarize and send it to @Lea"). Nothing goes out by itself.
 import * as React from 'react'
-import { Bot, MessageSquare, User, Users } from 'lucide-react'
+import { Bot, MessageSquare, Sparkles, User, Users } from 'lucide-react'
 import type { useT } from '@/i18n'
 import { FOLD, fold, type MenuRow } from './SlashMenu'
 import { agentRoute, useTopicSkills } from '@/lib/queries'
@@ -12,7 +12,7 @@ import type { MentionTarget, SentMention } from '@/lib/types'
 
 type MentionRow = MenuRow & { target?: MentionTarget; /** The "+ N more" row of this group. */ expand?: string }
 
-const KINDS = ['session', 'agent', 'team'] as const
+const KINDS = ['jarvis', 'session', 'agent', 'team'] as const
 
 /** The "@" being typed just before the caret: `start` = index of the "@", `q` = what follows it. */
 export function mentionAt(text: string, caret: number): { start: number; q: string } | null {
@@ -22,6 +22,13 @@ export function mentionAt(text: string, caret: number): { start: number; q: stri
 
 function icon(x: MentionTarget) {
   const c = 'size-3.5 shrink-0 text-muted-foreground'
+  if (x.kind === 'jarvis')
+    return (
+      <span className="relative shrink-0">
+        <Sparkles className="size-3.5 shrink-0 text-primary" />
+        {x.state === 'running' && <span className="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-emerald-500" />}
+      </span>
+    )
   if (x.kind === 'agent') return <Bot className={c} />
   if (x.kind === 'team') return x.group ? <Users className={c} /> : <User className={c} />
   return (
@@ -50,7 +57,7 @@ export function mentionRows(q: string, targets: MentionTarget[], t: ReturnType<t
       out.push({
         key: `${x.kind}:${x.ref}`,
         label: `@${x.label}`,
-        hint: x.hint,
+        hint: x.kind === 'jarvis' ? t('mention.jarvis.hint') : x.hint,
         badge: x.kind === 'team' && x.group ? t('mention.kind.group') : undefined,
         icon: <span className="flex size-4 items-center justify-center">{icon(x)}</span>,
         group: g,
@@ -75,6 +82,7 @@ export function usedMentions(text: string, picked: MentionTarget[]): SentMention
 
 /** Where a click on a named one goes: the session, the agent's page, Team. */
 function chipTo(kind: string, ref: string): string | undefined {
+  if (kind === 'jarvis') return '/jarvis'
   if (kind === 'session') return `/sessions?session=${encodeURIComponent(ref)}`
   if (kind === 'agent') {
     const m = /^projects\/([^/]+)\/topics\/([^/]+)\/agents\/([^/]+)$/.exec(ref)
@@ -86,7 +94,7 @@ function chipTo(kind: string, ref: string): string | undefined {
 /** A name of the "@" menu (or of a sent message, SentMention) as a chip. */
 export function targetChip(x: Pick<MentionTarget, 'kind' | 'ref' | 'label' | 'group' | 'state' | 'avatar'>): ChipData {
   return {
-    kind: x.kind === 'team' ? (x.group ? 'group' : 'team') : x.kind === 'agent' ? 'agent' : 'session',
+    kind: x.kind === 'team' ? (x.group ? 'group' : 'team') : x.kind === 'agent' ? 'agent' : x.kind === 'jarvis' ? 'jarvis' : 'session',
     label: x.label,
     raw: `@${x.label}`,
     avatar: x.kind === 'agent' ? (x.avatar ?? null) : undefined,
