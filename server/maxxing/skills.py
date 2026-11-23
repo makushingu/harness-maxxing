@@ -40,7 +40,7 @@ def _front(text: str) -> dict[str, str]:
         v = re.sub(r"^[|>][-+]?", "", v).strip()                  # its header: | |- |+ > >- >+
         q = re.match(r"""^(['"])(.*?)\1(?:[ \t]+#.*)?$""", v)
         if q and not block:                                       # quoted, maybe followed by a comment
-            v = q.group(2)
+            v = q.group(2).replace("''", "'") if q.group(1) == "'" else re.sub(r'\\(["\\])', r"\1", q.group(2))
         elif not block:
             v = re.split(r"[ \t]#", v, maxsplit=1)[0].strip()      # a trailing ` # comment`
         out[k] = " ".join(v.split())
