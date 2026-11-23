@@ -19,6 +19,7 @@ ROUTERS = [
     "filesite",
     "tasks",
     "crons",
+    "webhooks",
     "telegram",
     "backup",
     "settings",

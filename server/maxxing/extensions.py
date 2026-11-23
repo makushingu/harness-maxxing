@@ -18,7 +18,8 @@ Loading (the enabled check + the import) runs under `publishing()` - a lock shar
 files: a scan never imports code the restore is still holding back.
 
 `ctx` passed to card()/handle(): {"id", "workspace", "state_dir", "secret": fn(name) -> str|None,
-"config": {"timezone", "language", "public_url"}}.
+"config": {"timezone", "language", "public_url"}, "webhook_data": fn(id_or_name, after=0, limit=100) -> [row]}
+(the rows of a "store" webhook, webhooks.py: {id, at, call, data, fields?}).
 """
 from __future__ import annotations
 
@@ -453,12 +454,25 @@ def set_enabled(eid: str, enabled: bool) -> bool:
 
 
 # ---- calling extension code -----------------------------------------------------------------
+def _webhook_data(hook: str, after: int = 0, limit: int = 100) -> list[dict]:
+    """The rows of a "store" webhook, by its id or its name (a widget's chart of the sales of a Stripe webhook)."""
+    from . import webhooks
+    hid = hook if webhooks.HID_RE.match(hook or "") else next(
+        (h["id"] for h in webhooks._load() if h["name"].lower() == str(hook or "").lower()), "")
+    if not hid:
+        return []
+    try:
+        return webhooks.data(hid, after=int(after or 0), limit=int(limit or 100))
+    except webhooks.WebhookError:
+        return []
+
+
 def make_ctx(ext: Extension) -> dict[str, Any]:
     from . import vault
     cfg = config.load_config()
     return {"id": ext.id, "workspace": str(config.workspace()),
             "state_dir": str(config.state_dir("extensions", ext.id)),
-            "secret": vault.get,
+            "secret": vault.get, "webhook_data": _webhook_data,
             "config": {"timezone": cfg.get("timezone", "UTC"), "language": cfg.get("language", "en"),
                        "public_url": cfg.get("public_url", "")}}
 

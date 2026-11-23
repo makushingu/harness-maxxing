@@ -2661,6 +2661,9 @@ def on_turn_end(session: dict, result: dict | None) -> None:
             chain_after(path, text, ok, depth=_int(env.get("MAXXING_AGENT_DEPTH")))
         except Exception:  # noqa: BLE001
             log.exception("agent %s: agents after it", path)
+        from . import webhooks                          # the "agent" event hooks (no AI: Settings -> Events)
+        webhooks.emit("agent", {"agent": path, "ok": bool(ok), "text": (text or "")[:4000],
+                                "session": session.get("id"), "depth": _int(env.get("MAXXING_AGENT_DEPTH"))})
     if not group:
         try:
             _plan_limit_retry(path, session["id"], ok, text, str(session.get("error") or ""), env)

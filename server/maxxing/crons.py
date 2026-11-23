@@ -1907,6 +1907,11 @@ def run_job(cid: str, trigger: str = "manual", attempt: int = 1) -> dict | None:
         if lost:
             _notify(job, lost)
     _notify(job, run, answer)                            # after the lock: a slow Telegram never holds the job
+    if run and not run.get("retry_at"):                  # the final outcome: the "cron" event hooks (webhooks.py)
+        from . import webhooks
+        webhooks.emit("cron", {"cron": cid, "name": job.get("name", ""), "ok": bool(run.get("ok")),
+                               "exit": run.get("code"), "duration_s": run.get("duration_s"),
+                               "output": (run.get("output_tail") or "")[-2000:], "trigger": run.get("trigger")})
     return run
 
 

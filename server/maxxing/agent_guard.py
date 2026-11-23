@@ -740,6 +740,8 @@ def in_the_sandbox() -> bool:
 
 BROWSER_OWNER_ONLY = {"set", "profile", "forget", "setup", "settings", "enable", "disable"}
 DEVICES_OWNER_ONLY = {"add", "confirm", "remove", "rename", "access", "mode", "screen", "enable", "disable"}
+WEBHOOKS_OWNER_ONLY = frozenset({"add", "edit", "remove", "on", "off", "rotate", "secret", "replay", "test", "run",
+                                 "describe"})
 OWNER_SUBS = {      # command -> (sub-commands of the owner only in any agent turn, why)
     "agents": (AGENT_OWNER_ONLY, "an agent never changes agents (its own triggers, settings or role included). Say "
                                  "what should change in your answer; the owner applies it from the agent page or a "
@@ -750,6 +752,8 @@ OWNER_SUBS = {      # command -> (sub-commands of the owner only in any agent tu
     "devices": (DEVICES_OWNER_ONLY, "the person's devices belong to the owner. Say what should change in your answer "
                                     "(the owner's conversation asks for a device with `maxxing agents set <itself> "
                                     "devices='[\"<id>\"]'`: a request the owner allows)."),
+    "webhooks": (WEBHOOKS_OWNER_ONLY, "webhooks and events run commands and calls with the owner's rights, without "
+                                      "an agent's budget or guards. Say what should be done in your answer."),
 }
 
 

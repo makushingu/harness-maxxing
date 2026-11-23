@@ -16,7 +16,7 @@ Single source of truth between `server/` and `web/`. Change it here first, then 
 - Other request bodies (JSON, forms...) are capped before they are read (`maxxing/bodylimit.py`), on the declared
   `Content-Length` and, for a chunked body, while it streams: without a valid cookie a mutating request to a route
   that needs one gets `401 auth_required` before a byte is read; the public `/api/auth/*` routes check the CSRF header
-  first (`403 csrf`) and take at most 64 kB, `/api/hooks/{token}` 1 MB. Signed in: 1 MB by default; 16 MB for
+  first (`403 csrf`) and take at most 64 kB, `/api/hooks/{token}` 1 MB (a hook of Settings -> Webhooks: its `max_mb`, 1-50). Signed in: 1 MB by default; 16 MB for
   `PUT /api/files/write` (the editor opens text up to 2 MB, JSON escaping can grow it), 8 MB for the session routes
   that carry a prompt (`POST /api/sessions`, `/messages`, `/steer`, `/ask`), 5 MB for `/api/ext/*`. Over it:
   `413 {"error":"too_large"}` (`Connection: close`).
@@ -256,6 +256,49 @@ Run  = {id, cron_id, name, at, ok, code, duration_s, output_tail, session_id|nul
 | GET | `/api/crons/{id}` | – | `Cron` |
 | GET | `/api/crons/preview?schedule=` | – | `{valid, human, next:[at×5], error?}` (next runs in the configured time zone) |
 | GET | `/api/crons/preview?once_at=` | – | `{valid, human, next:[at], once:true, error?}` (a one-time date, read in the configured time zone) · POST/PATCH with a past `once_at` -> `400 invalid_once` |
+
+## Webhooks & events (Settings -> Automate, `maxxing/webhooks.py`)
+Automations without AI: one trigger + one action. Made by Harness from a session (`maxxing webhooks add`); the pages
+Webhooks (trigger `in`) and Events (trigger `event`) show, switch, test, replay and copy the URL.
+```
+Hook = {id:"w_xxxxxxxx", name, description, enabled, created, updated, owner:null,
+        trigger: {kind:"in", source:"stripe"|"shopify"|"github"|"generic"|"phone", methods:["GET"?,"POST"?],
+                  max_mb:1-50, reply:"now"|"wait", filter:{events?:[glob], branch?:glob}}
+               | {kind:"event", on:"feed", source?, levels?:[level], contains?}
+               | {kind:"event", on:"agent"|"cron", agent?|cron?, when:"any"|"ok"|"fail"},
+        action:  {kind:"shell", command (one line), cwd?, timeout_s:1-3600 (300)}
+               | {kind:"call", url (fixed), method, headers:{k: v with {{path}} / {{key:NAME}}}, body:"raw"|"json"|template,
+                  sign:bool (X-Harness-Signature: sha256=<hmac of the body>), retries:0-5 (2), timeout_s:1-60 (15)}
+               | {kind:"store", fields:{column: "data.path"}, keep:rows (100000)}
+               | {kind:"notify", level?, title?, body?, url?}   // templates; empty title: the feed's parser of the source
+        queue: {parallel:1-4 (1), max_waiting:0-500 (50)}, report:"never"|"fail"|"always",
+        // read-only:
+        url:string ("" for events), has_secret, has_sign, needs_secret, last_call:Call|null, calls_24h, waiting,
+        data?:{rows, today, days:[7 counts], last_id}}      // store hooks
+Call = {id, at, trigger:"in"|"event"|"test"|"replay", event, summary, status:"queued"|"running"|"ok"|"failed"|"ignored",
+        http?, exit?, duration_s?, output? (last 4 kB), error?, attempts?, of? (replay: the call replayed)}
+```
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| GET | `/api/webhooks` | – | `{hooks:[Hook], feed_hooks:[{id, name, kind, url, has_secret, created, agent:path\|null}], https:bool}` (feed_hooks: the notification webhooks of Settings -> Notifications and of agents, shown read-only) |
+| POST | `/api/webhooks` | Hook fields + `secret?` | `Hook` · `400 invalid\|bad_secret`, `409 exists` (same name) |
+| GET | `/api/webhooks/{id}` | – | `Hook` · `404` |
+| PATCH | `/api/webhooks/{id}` | `{enabled?, description?}` or Hook fields (top-level keys replaced) | `Hook` · `409 owned` |
+| DELETE | `/api/webhooks/{id}` | – | `{ok}` (its calls and rows too) |
+| POST | `/api/webhooks/{id}/rotate` | – | `Hook` with a new `url` (the old one stops at once) |
+| POST | `/api/webhooks/{id}/secret` | `{secret}` (`""` removes it) | `Hook` |
+| POST | `/api/webhooks/{id}/test` | – | `{id, status:"queued"}`: a realistic sample of its source / event, filters skipped |
+| GET | `/api/webhooks/{id}/calls?limit=50` | – | `{calls:[Call]}` newest first (the last 50 kept) |
+| GET | `/api/webhooks/{id}/calls/{call}` | – | `Call` + `{request:{method, content_type, headers (secrets as ***), query, event, files, size}, body (64 kB), body_truncated}` |
+| POST | `/api/webhooks/{id}/calls/{call}/replay` | – | `{id, status:"queued"}` (a new call with the same request) · `404` (no longer kept) |
+| GET | `/api/webhooks/{id}/data?after=&limit=100&format=json\|csv` | – | `{rows:[{id, at, call, data, fields?}], stats}` · csv: a download |
+| GET / POST | `/api/hooks/{token}` | anything (JSON, form, multipart files, text; GET: the query) | **public**. A hook of Settings -> Webhooks: `202 {ok, call}`; reply "wait": the action's result within 30 s (shell: `$MAXXING_RESPONSE_FILE` or stdout, type sniffed; call: the remote answer as is; else `{ok, call}`), `502 {error:"failed", exit}`, `504 {error:"timeout", call}` · `200 {ok, ignored}` (filter), `{ok, duplicate}` · `401 secret_required\|bad_signature\|bad_key`, `405` (method), `413` (over `max_mb`), `429` (120/min), `503 disabled\|busy` (+ `Retry-After`). Any other token: a feed webhook (below, POST only) |
+
+The shell action gets the call as data, never in its command line: stdin = the body; `MAXXING_WEBHOOK_BODY` (file),
+`_PAYLOAD` (parsed JSON / form / query, file), `_HEADERS` (request.json: method, headers, query, files), `_QUERY`
+(JSON), `_FILES` (folder, or empty), `_EVENT`, `_METHOD`, `_TRIGGER`, `_ID`, `_NAME`, `_CALL`, `MAXXING_RESPONSE_FILE`
+(what a "wait" caller gets; `<file>.type` = its content type), plus the vault keys exposed to jobs. It runs in a transient
+unit `maxxing-hook-<id>-<call>` (jobs slice, timeout), like a cron job.
 
 ## Telegram
 | GET | `/api/telegram` | – | `{configured, running, bot:{id, username, name}\|null, chat:{id, title, type}\|null, topics_enabled, mode:"simple"\|"threads"\|"mirror", threads:[{path, thread_id, name, session_id?}], agent_threads:[{path, thread_id, name}], settings:{mode, notify_crons, notify_system:bool(true), login_alerts, two_factor:bool, reply_mode:"progress"(default)\|"final", thread_days:int(30), mirror_web:bool (= mode "mirror")}, linking:bool, link:{code, deep_link, expires_at, expires_in, expired}\|null, poll_error, poll_error_code:"token_rejected"\|"conflict"\|"unreachable"\|null, sync_error, topics_notice, last_poll_ok, last_poll_age, last_error}` (special threads: path `"#crons"` / `"#alerts"` / `"#feed"`; session threads: `session_id`, path `""`). `mode`: `simple` (default of a new link: one chat - sessions without threads, their messages sent as replies, a reply continues the session; alerts in the main chat), `threads` (one thread per open session + Crons, Alerts, Notifications), `mirror` (threads + web turns copied). Not chosen yet in config.json: `threads` (or `mirror` if the old `mirror_web` was chosen) when the chat already has threads, else `simple`; the gateway writes it at start. A chat without threads (`topics_enabled:false`) works as `simple` whatever the mode. `running`: in the server, the poller itself; in another process (CLI, doctor), the `poller_pid` of the server's heartbeat is alive. `poll_error` is set and cleared only by the poller (getUpdates: 401 → `token_rejected`, the poller stops; 409 → `conflict`, another program reads the bot); `sync_error` only by the thread sync; `topics_notice` = threads are off for the bot (BotFather "Threaded Mode") - information, not an error. `last_poll_ok` = last successful getUpdates (Unix s, written at most every 30 s). `link` = the last link code, pending or expired (kept until a chat links). `last_error` (older readers) = `poll_error` or `sync_error`. Setup is done once a chat is linked (same rule as `/api/onboarding`) |
@@ -1070,7 +1113,7 @@ cause is handled; their `actions` are then `[]`. `open` is a link button (the UI
 | PATCH | `/api/feed/hooks/{id}` | `{secret?, regenerate?: bool}` | `FeedHook` (regenerate = new token, the old URL dies) |
 | DELETE | `/api/feed/hooks/{id}` | – | `{ok}` |
 | POST | `/api/feed/hooks/{id}/test` | – | `{event}` |
-| POST | `/api/hooks/{token}` | the service's payload (<= 1 MB) | **public** (no cookie, no CSRF header: the token is the permission). Signatures: Stripe `Stripe-Signature` (5 min tolerance), Shopify `X-Shopify-Hmac-Sha256`, GitHub `X-Hub-Signature-256`, generic `X-Signature: sha256=<hex>` - checked when the hook has a secret; a stripe/shopify/github hook WITHOUT a secret refuses every delivery with `401 secret_required` (+ one folded `security` warning in the feed); a generic hook without a secret accepts the token alone. `200 {ok, duplicate, id}` / `{ok, ignored}` (a delivery verified with a secret whose body was already received is a duplicate whatever its unsigned headers, even if it was ignored or its event deleted: 30 days, generic 24 h; Shopify keys a known topic too) · `401 bad_signature\|secret_required`, `404` (unknown token: checked before the body is read), `413` (Content-Length or streamed body over 1 MB), `429` (120/min/hook), `400 bad_json` (also for JSON nested too deep), `400 bad_payload` (valid JSON whose fields have an unexpected shape for that service) |
+| POST | `/api/hooks/{token}` | the service's payload (<= 1 MB) | (a token of Settings -> Webhooks: see Webhooks & events) **public** (no cookie, no CSRF header: the token is the permission). Signatures: Stripe `Stripe-Signature` (5 min tolerance), Shopify `X-Shopify-Hmac-Sha256`, GitHub `X-Hub-Signature-256`, generic `X-Signature: sha256=<hex>` - checked when the hook has a secret; a stripe/shopify/github hook WITHOUT a secret refuses every delivery with `401 secret_required` (+ one folded `security` warning in the feed); a generic hook without a secret accepts the token alone. `200 {ok, duplicate, id}` / `{ok, ignored}` (a delivery verified with a secret whose body was already received is a duplicate whatever its unsigned headers, even if it was ignored or its event deleted: 30 days, generic 24 h; Shopify keys a known topic too) · `401 bad_signature\|secret_required`, `404` (unknown token: checked before the body is read), `413` (Content-Length or streamed body over 1 MB), `429` (120/min/hook), `400 bad_json` (also for JSON nested too deep), `400 bad_payload` (valid JSON whose fields have an unexpected shape for that service) |
 
 Telegram: rule `auto` = error -> loud, warning -> silent, else off; built-in `crons`, `system`, `security` default to off
 (own threads). The bot posts in the thread "Notifications" (`telegram.threads["#feed"]`) with buttons *Ask Claude*

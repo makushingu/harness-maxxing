@@ -6,7 +6,8 @@ decides from the headers alone, before a byte of the body is received:
 - a mutating request to a route that needs a session, without a valid cookie -> 401 `auth_required`;
 - the public sign-in routes (/api/auth/*): the CSRF header is checked first (403 `csrf`), the body is capped at
   PUBLIC_MAX (a password, a setup token or a code: a few hundred bytes);
-- /api/hooks/<token> (public, the token is the permission): feedhooks.MAX_BODY;
+- /api/hooks/<token> (public, the token is the permission): the hook's own cap (webhooks.py `max_mb`), else
+  feedhooks.MAX_BODY;
 - signed in: DEFAULT_MAX, or a larger cap for the few routes whose JSON is legitimately big (`ROUTES`).
 A declared `Content-Length` over the cap -> 413 `too_large` at once; a chunked body is counted while it streams and
 the request is aborted with 413 as soon as it goes over. Multipart bodies on the upload routes (`UPLOADS`) are left to `uploads.UploadGuard` (auth,
@@ -46,7 +47,12 @@ def _public(path: str) -> bool:
 def cap_for(method: str, path: str, authed: bool) -> int:
     if path.startswith("/api/hooks/"):
         from .feedhooks import MAX_BODY
-        return MAX_BODY
+        from .webhooks import cap_for_token
+        try:
+            own = cap_for_token(path[len("/api/hooks/"):].strip("/"))
+        except Exception:  # noqa: BLE001 - a damaged hooks file: the feed's cap
+            own = None
+        return own or MAX_BODY
     if path.startswith(("/api/browser/mcp/", "/api/devices/mcp/")):   # tool arguments (a form's text, a script)
         return DEFAULT_MAX
     if not authed:
