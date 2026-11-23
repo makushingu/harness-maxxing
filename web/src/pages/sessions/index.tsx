@@ -152,16 +152,20 @@ function Workspace() {
   // State → URL (desktop): the focused column + the other open sessions, replace-only.
   React.useEffect(() => {
     if (mobile || agentRun) return // leaving for the Agents page (above)
+    // the state as it is now, not as rendered: a link just opened by the effect above (same pass) must not be
+    // replaced by the session that was in front before it
+    const st = useSessionsUI.getState()
+    const front = st.cols.find((c) => c.key === st.focused) || null
     const next = new URLSearchParams()
-    if (focusedCol?.kind === 'session') {
-      const p = focusedSession?.path ?? paramPath
+    if (front?.kind === 'session') {
+      const p = front.id === focusedId ? (focusedSession?.path ?? paramPath) : front.id === params.get('session') ? paramPath : (sessions?.find((x) => x.id === front.id)?.path ?? paramPath)
       if (p !== null && p !== undefined) next.set('path', p)
-      next.set('session', focusedCol.id)
-    } else if (focusedCol?.kind === 'new') {
-      next.set('path', focusedCol.path)
+      next.set('session', front.id)
+    } else if (front?.kind === 'new') {
+      next.set('path', front.path)
       next.set('new', '1')
     } else if (paramPath) next.set('path', paramPath)
-    const others = cols.filter((c): c is Extract<Col, { kind: 'session' }> => c.kind === 'session' && c.key !== focused).map((c) => c.id)
+    const others = st.cols.filter((c): c is Extract<Col, { kind: 'session' }> => c.kind === 'session' && c.key !== st.focused).map((c) => c.id)
     if (others.length) next.set('open', others.join(','))
     const s = next.toString()
     if (s !== params.toString()) navigate({ search: s ? `?${s}` : '' }, { replace: true })
