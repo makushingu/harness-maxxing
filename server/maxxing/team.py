@@ -533,6 +533,9 @@ def delete_message(cid: str, mid: str) -> dict:
     return msg
 
 
+MAX_CHAT_MESSAGES = 5000                       # the newest messages kept per conversation
+
+
 def _drop_received_file(f: dict) -> None:
     """A downloaded copy of someone's file, when they delete the message (only inside the team folder)."""
     root = (config.workspace() / "team" / "attachments").resolve()
@@ -936,6 +939,11 @@ def apply_remote(frm: str, contact: bool, event: dict) -> None:
                 msg["id"] = "m_" + hashlib.sha256(f"{who}\0{msg['id']}".encode()).hexdigest()[:24]
             chat["messages"].append(msg)
             chat["messages"].sort(key=lambda m: m["at"])
+            if len(chat["messages"]) > MAX_CHAT_MESSAGES:   # a member cannot grow the file (read on each save) forever
+                for old in chat["messages"][:-MAX_CHAT_MESSAGES]:
+                    for f in _blank(old):
+                        _drop_received_file(f)
+                del chat["messages"][:-MAX_CHAT_MESSAGES]
             _typing.get(cid, {}).pop(who, None)     # the message is there: no more "is writing"
             _typing_gen.pop((cid, who), None)
             fetch = [(msg["id"], f) for f in msg.get("files") or []]
