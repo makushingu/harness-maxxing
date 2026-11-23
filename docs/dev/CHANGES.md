@@ -7,6 +7,8 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- Phone: `ViewSwitch` (now `className`-able, `pointer-coarse:size-10`) in the `mobile` session header and the mobile new-session
+  header; `MobileOverlay` gives the chips when `tabs` (was `cols.length > 1` in both modes), swipe still on `several`.
 - Slimming pass (no behaviour change, ~-2 000 lines): dead code removed across server, web and Harness Link (e.g.
   Telegram health watcher superseded by feed alerts, `crons._run_claude`, `SessionPreviewCard`, `UsageIndicator`,
   `FilePreview`, unused ui parts and hooks), duplicates merged (`security.secret_key`, `vault.set_note_expose`,

@@ -24,6 +24,8 @@ Added:
   opens in the viewer with a click, before you send it.
 
 Fixed:
+- **On a phone, the Tabs / Zones switch is in every session.** It sits next to the ⋯ menu: Tabs shows the open sessions
+  above the conversation (even when only one is open), Zones hides them.
 - **With several sessions open, a message no longer stays on "Sending…" (local mode).** Each open tab kept a live
   connection and the browser has only six per server: the send waited for a free one. Only the sessions on screen keep one
   now; a tab you come back to catches up at once.

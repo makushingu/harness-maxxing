@@ -756,7 +756,8 @@ const ColumnFor = React.memo(function ColumnFor({ col, index, count, variant, pl
 /** Touch layout: the session is a full-screen layer, sized to the visual viewport so the composer stays pinned right
  *  above the on-screen keyboard. Its header opens the sessions (☰) and the app menu (⊞). */
 function MobileOverlay({ col, sessions, onPick }: { col: Col; sessions: Session[] | undefined; onPick: (c: Col) => void }) {
-  const several = useSessionsUI((s) => s.cols.length > 1) // one tab only would repeat the title under it
+  const several = useSessionsUI((s) => s.cols.length > 1) // a swipe goes to the next open session
+  const tabs = useSessionsUI((s) => s.tabs) // the switch in the session's header: Tabs shows the chips, Zones hides them
   const ref = React.useRef<HTMLDivElement>(null)
   const body = React.useRef<HTMLDivElement>(null)
   const go = React.useCallback(
@@ -802,7 +803,7 @@ function MobileOverlay({ col, sessions, onPick }: { col: Col; sessions: Session[
   return (
     <div ref={ref} className="fixed inset-0 z-[45] flex flex-col bg-background pr-[var(--safe-right)] pl-[var(--safe-left)]" data-touch-layer data-testid="touch-session">
       <div ref={body} className="flex min-h-0 flex-1 flex-col">
-        <MobileTabsSlot.Provider value={several ? <TabsBar sessions={sessions} onPick={onPick} edge className="-mx-3 border-b-0 bg-transparent px-0 py-1 [&>button]:mr-3" /> : null}>
+        <MobileTabsSlot.Provider value={tabs ? <TabsBar sessions={sessions} onPick={onPick} edge className="-mx-3 border-b-0 bg-transparent px-0 py-1 [&>button]:mr-3" /> : null}>
           <ColumnFor col={col} index={0} count={1} variant="mobile" />
         </MobileTabsSlot.Provider>
       </div>

@@ -76,7 +76,7 @@ import { SessionBrowserBar } from '@/features/browser/SessionBrowser'
 import { SessionDevicesBar } from '@/features/devices/SessionDevices'
 import { MaxxingControls, MaxxingMeter } from './MaxxingMeter'
 import { notifySendFailed, notifySent, useMaxxingEnabled } from './maxxing'
-import { MobileTabsSlot } from './Tabs'
+import { MobileTabsSlot, ViewSwitch } from './Tabs'
 import { AsidePanel, useAside } from './Aside'
 import { LayoutPicker } from './LayoutPicker'
 import { MIN_W } from './layouts'
@@ -1007,6 +1007,7 @@ function ColumnHeader({
           <Logo className="min-w-0 flex-1 gap-2 [&_img]:size-6" nameClassName={maxxing ? 'max-[479px]:sr-only' : undefined} />
           <div className="flex shrink-0 items-center">
             {maxxing && <MaxxingControls compact />}
+            <ViewSwitch className="pointer-coarse:size-10" />
             {menu}
           </div>
         </div>
@@ -1375,6 +1376,7 @@ export function NewSessionColumn({ col, variant, index, count, place }: { col: E
             {variant === 'mobile' && <TouchSessionsButton className="-ml-2" />}
             {variant === 'column' && <DragGrip colKey={col.key} />}
             <span className="truncate px-1 text-sm font-semibold max-md:flex-1 max-md:text-[15px]">{t('sessions.new.title')}</span>
+            {variant === 'mobile' && <ViewSwitch className="pointer-coarse:size-10" />}
             {variant === 'column' && (
               <Tooltip content={t('sessions.closeColumn')}>
                 <Button variant="ghost" size="icon-sm" className="ml-auto" aria-label={t('sessions.closeColumn')} onClick={() => close(col.key)}>

@@ -58,10 +58,10 @@ def test_the_tasks_open_as_a_list_on_a_phone():
 
 
 def test_a_session_header_on_a_phone_leaves_room_to_read():
-    # one tab repeated the title under it, the tabs stayed while typing, and held sideways only ~90 px were left to read
+    # the tabs stayed while typing, and held sideways only ~90 px were left to read; the Tabs / Zones switch is in every
+    # session's header: Tabs shows the open sessions (even one), Zones hides them
     src = (WEB / "pages" / "sessions" / "index.tsx").read_text()
-    assert "const several = useSessionsUI((s) => s.cols.length > 1)" in src
-    assert "<MobileTabsSlot.Provider value={several ? <TabsBar" in src  # the phone always shows its open sessions as tabs
+    assert "<MobileTabsSlot.Provider value={tabs ? <TabsBar" in src
     column = (WEB / "pages" / "sessions" / "Column.tsx").read_text()
     assert '<div data-kbd-hide="" data-tabs="">{tabs}</div>' in column
     css = (WEB / "styles" / "globals.css").read_text()
