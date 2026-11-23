@@ -29,6 +29,7 @@ See docs/dev/API.md#search.
 """
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import math
@@ -151,8 +152,18 @@ def _db() -> sqlite3.Connection:
     if _con is None or _con_path != db_path():
         if _con is not None:
             _con.close()
-        _con = _connect()
-        _migrate(_con)
+        try:
+            _con = _connect()
+            _migrate(_con)
+        except sqlite3.DatabaseError as e:               # not a database / malformed: the index is only a cache
+            log.warning("search index unreadable (%s): rebuilding it", e)
+            if _con is not None:
+                _con.close()
+            for suffix in ("", "-wal", "-shm"):
+                with contextlib.suppress(OSError):
+                    os.unlink(str(db_path()) + suffix)
+            _con = _connect()
+            _migrate(_con)
         _con_path = db_path()
         _state.update(sessions_at=0.0, full_at=0.0, files_at=0.0)   # another index: nothing is fresh
         _seen.clear()
