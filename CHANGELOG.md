@@ -44,6 +44,7 @@ Changed:
 - **Scrolling up a long session no longer freezes the page.** Show earlier (and the automatic loading when you reach
   the top) now adds the older messages a few at a time instead of all at once: the page stays responsive, mostly
   felt on a phone.
+- **Dependencies updated** (minor and patch versions only): web (@tanstack/react-query 5.108.0 -> 5.108.3, lucide-react 1.74.0 -> 1.77.0, react-router 8.5.1 -> 8.5.2, tailwind-merge 3.7.0 -> 3.7.1) and server (fastapi 0.163.2 -> 0.165.0, pydantic 2.14.3 -> 2.14.4, pyyaml 6.0.3 -> 6.0.4, certifi, filelock, ctranslate2, av).
 
 ## 2.0.0-alpha.164 - 2026-11-23
 

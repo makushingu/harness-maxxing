@@ -96,6 +96,7 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   `start` moves to `start + added - STEP` during the render and grows back to the old `start` the same way. Longest
   task on a 4 MB log 223 -> 144 ms (945 -> 639 ms at 4x CPU slowdown); on 120 loaded rows 268 -> 117 ms
   (876 -> 400 ms at 4x). Same final rows, reading position kept.
+- Dependencies: `npm update` in `web/` and `uv lock --upgrade` in `server/` (minor and patch only). Majors left alone: emojibase-data 18, mermaid 12. `templates/` untouched.
 
 ## 2.0.0-alpha.164 - 2026-11-23
 
