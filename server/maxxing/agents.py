@@ -1645,15 +1645,18 @@ def _fingerprint(path: str) -> dict[str, str]:
 
 
 def _hash_regular(f: Path) -> str:
-    """sha1 of a regular file of at most FINGERPRINT_MAX bytes; "" for a link, a pipe, a device or a huge file."""
+    """sha1 of a regular file (a link is followed) of at most FINGERPRINT_MAX bytes; "big:<size>" for a larger one
+    (a change of size still counts); "" for a pipe, a device or a missing file."""
     try:
-        fd = os.open(f, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        fd = os.open(f, os.O_RDONLY | os.O_NONBLOCK)
     except OSError:
         return ""
     try:
         st = os.fstat(fd)
-        if not stat.S_ISREG(st.st_mode) or st.st_size > FINGERPRINT_MAX:
+        if not stat.S_ISREG(st.st_mode):
             return ""
+        if st.st_size > FINGERPRINT_MAX:
+            return f"big:{st.st_size}"
         h, left = hashlib.sha1(), FINGERPRINT_MAX + 1
         while left > 0:
             chunk = os.read(fd, min(65536, left))
@@ -1661,7 +1664,7 @@ def _hash_regular(f: Path) -> str:
                 break
             h.update(chunk)
             left -= len(chunk)
-        return h.hexdigest() if left > 0 else ""
+        return h.hexdigest() if left > 0 else f"big:{FINGERPRINT_MAX + 1}"
     except OSError:
         return ""
     finally:
