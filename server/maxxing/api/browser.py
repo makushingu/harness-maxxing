@@ -699,7 +699,7 @@ async def live(ws: WebSocket):
                 continue
             try:
                 ev = json.loads(raw)
-            except ValueError:
+            except (ValueError, RecursionError):             # RecursionError: "[[[[..." under the size limit
                 continue
             if not isinstance(ev, dict):
                 continue

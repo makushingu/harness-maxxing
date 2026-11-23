@@ -2,6 +2,7 @@
 Claude's tools, rights and access, the person taking over, ask_human, the live view, the runner, the CLI."""
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 import struct
@@ -843,3 +844,18 @@ def test_a_devices_file_that_does_not_parse_is_kept_before_it_is_rewritten(dv):
     path.write_text(path.read_text()[:-4])              # cut: no longer JSON
     store.new_invite()
     assert list(path.parent.glob("devices.json.damaged-*"))
+
+
+def test_a_strange_answer_from_a_device_is_an_error_not_a_crash(monkeypatch):
+    from maxxing.devices import tools
+
+    class H:
+        def __init__(self, ans): self.ans = ans
+        async def request(self, did, msg): return self.ans
+
+    for ans in ({"jpeg": "x", "w": "abc", "h": 5}, {"jpeg": "x", "w": float("inf"), "h": 5}, {"jpeg": "x", "w": 10**400, "h": 5}):
+        monkeypatch.setattr(tools, "hub", lambda ans=ans: H(ans))
+        with pytest.raises(tools.DeviceError):
+            asyncio.run(tools._shot("d"))
+    assert tools._tree_text([{"id": "a", "b": [float("inf"), 1, 10**400, 2]}]).startswith("[a]")
+    assert tools._list(5) == [] and tools._list([1]) == [1]
