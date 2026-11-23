@@ -62,3 +62,12 @@ export function useReplayWebhookCall() {
 export function useWebhookSecret(id: string, successToast: string) {
   return useMut((secret: string) => api.post<Webhook>(`/api/webhooks/${seg(id)}/secret`, { secret }), { invalidate: inv, successToast })
 }
+/** Create (no id) or change a hook from the form of Settings -> Webhooks / Events. `trigger` and `action` are sent
+ *  whole (the server replaces top-level keys), so the form merges them with what it does not show. */
+export function useSaveWebhook() {
+  return useMut(
+    ({ id, ...b }: { id?: string; name: string; description: string; trigger: object; action: object; report: string; secret?: string }) =>
+      id ? api.patch<Webhook>(`/api/webhooks/${seg(id)}`, b) : api.post<Webhook>('/api/webhooks', b),
+    { invalidate: inv, errorToast: false },
+  )
+}

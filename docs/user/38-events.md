@@ -20,9 +20,19 @@ messages to an agent. A cron job that is retried counts once, when its last atte
 **Without AI.** When the work needs judgement, an agent's own triggers do it: *Notification* and *After another agent*
 (see [Agents](agents#triggers)). An event costs nothing and does the same thing every time.
 
-## Make one by asking Harness
+## Make one
 
-Type it in the **Ask Harness** box at the top of the page (or in any session), for example:
+**New event** at the top of the page opens a short form, as for a cron job:
+
+- **Name**, and the sentence shown in the list (optional);
+- **When**: a notification arrives (from one source or all, optionally containing a text), an agent finishes, or a
+  cron job ends (one or any, on success, failure or always);
+- **Then**: post a notification, call a URL (Discord, Slack, ntfy, n8n: the event is sent as JSON), run a script, or
+  keep the data in a table;
+- the **Telegram report**: never, on failure, always.
+
+**Edit** on an open event opens the same form. For levels, headers or a message made to measure, ask Harness in any
+session, for example:
 
 - *"Send my errors and warnings to my Discord channel."*
 - *"When a cron job fails, push a notification to my phone with ntfy."*

@@ -19,11 +19,25 @@ needs judgement (read an order, decide, write an answer), use an [agent](agents)
 trigger. Something that must happen at set times is a [cron job](crons); something that must happen when something
 happens *inside* Harness (a notification, an agent or a cron job that ends) is an [event](events).
 
-## Make one by asking Harness
+## Make one
 
-There is no form to fill in: type what you want in the **Ask Harness** box at the top of the page (or in any
-session). Harness writes the script if one is needed, creates the webhook, tests it and tells you where to paste the
-URL. For example:
+**New webhook** at the top of the page opens a short form, as for a cron job:
+
+- **Name**, and the sentence shown in the list (optional);
+- **Who calls**: Stripe, Shopify, GitHub, another service (JSON or a form: Zapier, n8n, Make, Tally...) or your
+  phone (an iPhone Shortcut, Tasker, an NFC tag);
+- the **signing secret** (or, for the phone, an access key). Stripe gives it only once the URL is added there:
+  leave it empty and add it after, from the webhook's **⋯** menu;
+- **Then**: run a script, call a URL, keep the data in a table, or post a notification;
+- **Send the result back to the caller** (another service or the phone, with a script or a URL): the caller waits up
+  to 30 seconds and gets the output;
+- the **Telegram report**: never, on failure, always.
+
+**Create** shows the URL and where to paste it in the service. **Edit** on an open webhook opens the same form; what
+the form does not show (filters, headers, stored columns, a reply template) is kept as it is.
+
+For those options, or to have the script written for you, ask Harness in any session: it creates the webhook, tests
+it and tells you where to paste the URL. For example:
 
 - *"When I push to main on GitHub, update the blog on this server."*
 - *"Keep every Stripe sale with its amount and e-mail, and show this month's sales on my dashboard."*
@@ -32,9 +46,8 @@ URL. For example:
 - *"When UptimeRobot says the shop is down, restart it."*
 - *"Pass the calls of this URL to my n8n workflow and send back what n8n answers."*
 
-Click an example under the box to start with it. Each webhook has a sentence that says what it does ("When GitHub
-gets a push on main, update the blog"), written in your language; **Change with Harness** opens a session to change
-it, **Fix with Harness** appears on a webhook whose last call failed.
+Each webhook has a sentence that says what it does ("When GitHub gets a push on main, update the blog");
+**Fix with Harness** appears on a webhook whose last call failed and opens a session about it.
 
 ## What you see on the page
 

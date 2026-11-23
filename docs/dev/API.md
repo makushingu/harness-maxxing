@@ -258,8 +258,10 @@ Run  = {id, cron_id, name, at, ok, code, duration_s, output_tail, session_id|nul
 | GET | `/api/crons/preview?once_at=` | – | `{valid, human, next:[at], once:true, error?}` (a one-time date, read in the configured time zone) · POST/PATCH with a past `once_at` -> `400 invalid_once` |
 
 ## Webhooks & events (Settings -> Automate, `maxxing/webhooks.py`)
-Automations without AI: one trigger + one action. Made by Harness from a session (`maxxing webhooks add`); the pages
-Webhooks (trigger `in`) and Events (trigger `event`) show, switch, test, replay and copy the URL.
+Automations without AI: one trigger + one action. Made from the pages' short form (`POST /api/webhooks`, `PATCH`
+with the whole `trigger` / `action`, the form merging what it does not show) or by Harness from a session
+(`maxxing webhooks add`); the pages Webhooks (trigger `in`) and Events (trigger `event`) also show, switch, test,
+replay and copy the URL.
 ```
 Hook = {id:"w_xxxxxxxx", name, description, enabled, created, updated, owner:null,
         trigger: {kind:"in", source:"stripe"|"shopify"|"github"|"generic"|"phone", methods:["GET"?,"POST"?],

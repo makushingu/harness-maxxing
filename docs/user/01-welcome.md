@@ -75,7 +75,7 @@ missing and never re-create a project or topic you deleted.
   pass that tidies its memory. See [Jarvis](jarvis).
 - **Webhooks and events** (in **Settings -> Automate**): URLs that other services call (Stripe, GitHub, forms, n8n,
   a phone Shortcut) and "when this happens in Harness, do that", without AI: run a script, call a URL, store the data,
-  post a notification. Ask Harness to make one. See [Webhooks](webhooks) and [Events](events).
+  post a notification. **New webhook** / **New event** on the page, or ask Harness. See [Webhooks](webhooks) and [Events](events).
 - **Tasks** (optional, **Settings -> Features**): a kanban board stored in `tasks.json`, which Claude can read and update.
 - **Crons** (in **Settings**): scheduled shell commands or Harness prompts, with history and Telegram reports.
 - **Telegram**: talk to the same sessions from your phone, one thread per open session.

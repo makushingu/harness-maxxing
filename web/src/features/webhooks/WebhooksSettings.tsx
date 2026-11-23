@@ -13,14 +13,14 @@ import {
   Download,
   GitBranch,
   KeyRound,
-  MessageSquareText,
   MoreHorizontal,
+  Pencil,
+  Plus,
   RefreshCw,
   RotateCcw,
   Send,
   ShoppingBag,
   Smartphone,
-  Sparkles,
   Trash2,
   Webhook as WebhookIcon,
   Wrench,
@@ -67,7 +67,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
   EmptyState,
-  Input,
   SecretInput,
   Sensitive,
   Skeleton,
@@ -80,6 +79,8 @@ import {
 import { Callout } from '@/features/common'
 import { draftUrl } from '@/features/agents/EditWithClaude'
 import { useHarnessTopic } from '@/pages/settings/sections/harnessTopic'
+import { useRegisterCommands } from '@/commands/registry'
+import { HookEditor, type HookSeed } from './HookEditor'
 
 type Kind = 'in' | 'event'
 
@@ -224,15 +225,25 @@ function HooksPage({ kind }: { kind: Kind }) {
   const [open, setOpen] = React.useState<string | null>(null)
   const hooks = (q.data?.hooks ?? []).filter((h) => h.trigger.kind === kind)
   const feedHooks = kind === 'in' ? (q.data?.feed_hooks ?? []) : []
+  const [seed, setSeed] = React.useState<HookSeed | null>(null)
+  const add = () => setSeed({ mode: 'new', kind })
+  const edit = (h: Webhook) => setSeed({ mode: 'edit', kind, hook: h })
+  const newLabel = t(kind === 'in' ? 'webhooks.new' : 'webhooks.newEvent')
+  useRegisterCommands(`webhooks.${kind}`, [{ id: `webhooks.new.${kind}`, title: newLabel, group: t(kind === 'in' ? 'nav.webhooks' : 'nav.events'), icon: Plus, perform: ({ close }) => (close(), add()) }], [newLabel, kind])
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
-      <p className="-mt-3 text-sm text-muted-foreground">
-        {t(kind === 'in' ? 'webhooks.noAi' : 'webhooks.noAiEvents')}{' '}
-        <Link to="/agents" className="font-medium text-primary underline-offset-4 hover:underline">
-          {t('webhooks.useAgent')}
-        </Link>
-      </p>
-      <AskBox kind={kind} />
+      <div className="-mt-3 flex flex-wrap items-center justify-between gap-3">
+        <p className="min-w-0 flex-1 basis-64 text-sm text-muted-foreground">
+          {t(kind === 'in' ? 'webhooks.noAi' : 'webhooks.noAiEvents')}{' '}
+          <Link to="/agents" className="font-medium text-primary underline-offset-4 hover:underline">
+            {t('webhooks.useAgent')}
+          </Link>
+        </p>
+        <Button onClick={add} data-testid="hook-new" data-tour="webhooks-new">
+          <Plus />
+          {newLabel}
+        </Button>
+      </div>
       {q.isError && !q.data ? (
         <EmptyState
           tone="error"
@@ -260,85 +271,36 @@ function HooksPage({ kind }: { kind: Kind }) {
         </div>
       ) : hooks.length === 0 && feedHooks.length === 0 ? (
         <div className="rounded-xl border">
-          <EmptyState icon={kind === 'in' ? WebhookIcon : Zap} title={t(kind === 'in' ? 'webhooks.empty' : 'webhooks.emptyEvents')} description={t('webhooks.emptyDesc')} />
+          <EmptyState
+            icon={kind === 'in' ? WebhookIcon : Zap}
+            title={t(kind === 'in' ? 'webhooks.empty' : 'webhooks.emptyEvents')}
+            description={t('webhooks.emptyDesc')}
+            action={
+              <Button onClick={add}>
+                <Plus />
+                {newLabel}
+              </Button>
+            }
+          />
         </div>
       ) : (
         <ul className="divide-y overflow-hidden rounded-xl border bg-card" data-testid={kind === 'in' ? 'webhook-list' : 'event-list'}>
           {hooks.map((h) => (
-            <HookRow key={h.id} hook={h} kind={kind} now={now} https={q.data.https} open={open === h.id} onOpen={() => setOpen((o) => (o === h.id ? null : h.id))} />
+            <HookRow key={h.id} hook={h} kind={kind} now={now} https={q.data.https} open={open === h.id} onOpen={() => setOpen((o) => (o === h.id ? null : h.id))} onEdit={edit} />
           ))}
           {feedHooks.map((h) => (
             <FeedHookRow key={h.id} hook={h} https={q.data.https} open={open === h.id} onOpen={() => setOpen((o) => (o === h.id ? null : h.id))} />
           ))}
         </ul>
       )}
-    </div>
-  )
-}
-
-/* ------------------------------------------------------------------ "Ask Harness" */
-
-const EXAMPLES: Record<Kind, TKey[]> = {
-  in: ['webhooks.ex.deploy', 'webhooks.ex.stripe', 'webhooks.ex.photo', 'webhooks.ex.form'],
-  event: ['webhooks.ex.discord', 'webhooks.ex.cronFail', 'webhooks.ex.agentDone'],
-}
-
-function AskBox({ kind }: { kind: Kind }) {
-  const t = useT()
-  const ask = useAskHarness()
-  const [text, setText] = React.useState('')
-  const input = React.useRef<HTMLInputElement>(null)
-  const send = () => {
-    const v = text.trim()
-    if (v) ask(`${v}\n\n${t('webhooks.askHint')}`)
-  }
-  const pick = (v: string) => {
-    setText(v)
-    requestAnimationFrame(() => {
-      const el = input.current
-      if (el) {
-        el.focus()
-        el.setSelectionRange(v.length, v.length)
-      }
-    })
-  }
-  return (
-    <div className="grid gap-3 rounded-xl border bg-card p-4" data-tour="webhooks-ask">
-      <form
-        className="flex flex-wrap items-center gap-2"
-        onSubmit={(e) => {
-          e.preventDefault()
-          send()
-        }}
-      >
-        <div className="relative min-w-0 flex-1 basis-60">
-          <Sparkles aria-hidden className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-primary" />
-          <Input ref={input} value={text} onChange={(e) => setText(e.target.value)} placeholder={t('webhooks.askPlaceholder')} aria-label={t('webhooks.askPlaceholder')} className="pl-9" />
-        </div>
-        <Button type="submit" disabled={!text.trim()} className="max-sm:w-full">
-          <MessageSquareText />
-          {t('webhooks.ask')}
-        </Button>
-      </form>
-      <div className="flex flex-wrap gap-1.5">
-        {EXAMPLES[kind].map((k) => (
-          <button
-            key={k}
-            type="button"
-            onClick={() => pick(t(k))}
-            className="rounded-full border bg-fill-1 px-3 py-1 text-left text-xs text-muted-foreground transition-colors outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:py-2"
-          >
-            {t(k)}
-          </button>
-        ))}
-      </div>
+      <HookEditor seed={seed} onOpenChange={(o) => !o && setSeed(null)} />
     </div>
   )
 }
 
 /* ------------------------------------------------------------------ one hook */
 
-function HookRow({ hook, kind, now, https, open, onOpen }: { hook: Webhook; kind: Kind; now: number; https: boolean; open: boolean; onOpen: () => void }) {
+function HookRow({ hook, kind, now, https, open, onOpen, onEdit }: { hook: Webhook; kind: Kind; now: number; https: boolean; open: boolean; onOpen: () => void; onEdit: (h: Webhook) => void }) {
   const t = useT()
   const lang = useLang()
   const tz = useTz()
@@ -410,19 +372,17 @@ function HookRow({ hook, kind, now, https, open, onOpen }: { hook: Webhook; kind
           <ChevronRight aria-hidden className={cn('size-4 text-muted-foreground transition-transform max-sm:hidden', open && 'rotate-90')} />
         </div>
       </div>
-      {open && <HookDetails hook={hook} kind={kind} now={now} https={https} onFix={failed ? fix : undefined} />}
+      {open && <HookDetails hook={hook} kind={kind} now={now} https={https} onFix={failed ? fix : undefined} onEdit={hook.owner ? undefined : () => onEdit(hook)} />}
     </li>
   )
 }
 
-function HookDetails({ hook, kind, now, https, onFix }: { hook: Webhook; kind: Kind; now: number; https: boolean; onFix?: () => void }) {
+function HookDetails({ hook, kind, now, https, onFix, onEdit }: { hook: Webhook; kind: Kind; now: number; https: boolean; onFix?: () => void; onEdit?: () => void }) {
   const t = useT()
-  const ask = useAskHarness()
   const test = useTestWebhook()
   const rotate = useRotateWebhook()
   const del = useDeleteWebhook()
   const [secret, setSecret] = React.useState(false)
-  const edit = () => ask(t(kind === 'in' ? 'webhooks.editPrompt' : 'webhooks.editPromptEvent', { name: hook.name, id: hook.id }))
   const newUrl = async () => {
     if (await confirm({ title: t('webhooks.rotateTitle'), description: t('webhooks.rotateDesc'), confirmText: t('webhooks.rotate'), destructive: true }))
       rotate.mutate(hook.id, { onSuccess: () => toast.success(t('webhooks.rotated')) })
@@ -465,10 +425,12 @@ function HookDetails({ hook, kind, now, https, onFix }: { hook: Webhook; kind: K
             {t('webhooks.fix')}
           </Button>
         )}
-        <Button size="sm" variant="secondary" onClick={edit}>
-          <MessageSquareText />
-          {t('webhooks.edit')}
-        </Button>
+        {onEdit && (
+          <Button size="sm" variant="secondary" onClick={onEdit}>
+            <Pencil />
+            {t('webhooks.edit')}
+          </Button>
+        )}
         <Button size="sm" variant="secondary" loading={test.isPending} onClick={() => test.mutate(hook.id, { onSuccess: () => toast.success(t('webhooks.testSent')) })}>
           <Send />
           {t('webhooks.test')}

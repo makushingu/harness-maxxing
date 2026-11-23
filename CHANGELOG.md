@@ -21,10 +21,15 @@ New:
   sends a photo and gets a link back); **Events** acts when something happens in Harness (a notification arrives, an
   agent or a cron job finishes or fails). Each one does one thing by itself, at once and for free: run a script (update
   a site after a push, restart a service when it is down), call a URL (Discord, Slack, ntfy, n8n), keep the data (a
-  table of your sales, CSV, dashboard widgets) or post a notification. Just ask Harness: it writes the script, creates
-  it, tests it and tells you where to paste the URL. The pages show the last calls with what was received, **Replay**,
-  **Send a test**, the URL to copy and an on/off switch. Your notification webhooks keep working with the same URL and
-  are listed there too. With AI, it is still an agent. [Show me](#show:webhooks)
+  table of your sales, CSV, dashboard widgets) or post a notification. **New webhook** / **New event** opens a short
+  form, as for a cron job; or ask Harness in a session: it writes the script, creates it, tests it and tells you where
+  to paste the URL. The pages show the last calls with what was received, **Replay**, **Send a test** (marked *Test* in
+  the list), the URL to copy and an on/off switch. Every webhook is there: your notification webhooks (same URL, now
+  managed there) and those of your agents. With AI, it is still an agent. [Show me](#show:webhooks)
+- **Settings, tidied up.** A new **Notifications** group: **Alerts** (what this browser and your phone do: a finished
+  answer, Team messages, sound, badge, mobile notifications), **Feed** (the notifications feed: its sources, what goes
+  to Telegram, server problems) and **Telegram**. **Automate** keeps Crons, Webhooks and Events; **Voice** moves to
+  General. Old links to Settings -> Notifications open Alerts.
 
 Added:
 - **Notifications on your phone, even with the app closed.** Settings -> Notifications -> *Mobile notifications*:

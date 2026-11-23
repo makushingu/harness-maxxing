@@ -16,10 +16,16 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   (`hooks.json` under flock, `calls/<id>.jsonl` last 50 + per-call folders, `spool/`, `feed-pos.json`), secrets in
   secrets.json `webhooks`. Durable queue (record before run, `recover()` at start), per-hook `queue.parallel` /
   `max_waiting` (503 + Retry-After), 120/min, 4 waiting callers, 30 s wait (504). See INTERNALS.md `maxxing.webhooks`.
-- API: `/api/webhooks` (list + `feed_hooks` read-only + `https`, create, get, PATCH, DELETE, rotate, secret, test,
+- API: `/api/webhooks` (list + `feed_hooks` + `https`, create, get, PATCH, DELETE, rotate, secret, test,
   calls, call, replay, data json/csv) in `api/webhooks.py` (also the loop: spool every 2 s, feed scan every 5 s,
   `MAXXING_WEBHOOKS_LOOP=0` turns it off); `api/hooks.py` serves a webhooks token first (GET/POST, multipart, wait
   reply), any other token is a feed webhook as before (unchanged URLs, no migration). API.md "Webhooks & events".
+- Settings: group `notify` (sections `alerts` = `AlertsSection`, `feed` = `FeedSection`, `telegram`), `voice` in
+  `general`; `SECTION_MOVED.notifications` -> `/settings/alerts`; push test URL `/settings/alerts`. Feed webhooks
+  (`feedhooks.py`, storage unchanged) are listed and managed on Settings -> Webhooks (`FeedHookRow`: test, secret, new
+  URL, delete; an agent's one: link to the agent, no delete) through `/api/feed/hooks`; the feed's add dialog is gone
+  (`useCreateHook` removed). Form `features/webhooks/HookEditor.tsx` (`useSaveWebhook`: POST, or PATCH with the whole
+  `trigger` / `action` merged over the hook's own). Test sample of a phone hook: `Test sent from the Webhooks page`.
 - CLI `cmd_webhooks.py`: `maxxing webhooks list|show|add|edit|describe|on|off|remove|url|rotate|secret|calls|call|test|
   replay|data|run` (`add`/`edit` JSON by `--spec` or stdin, secret on stdin, `test`/`replay` inline).
 - `agent_guard`: `WEBHOOKS_OWNER_ONLY` (add, edit, remove, on, off, rotate, secret, replay, test, run, describe) in

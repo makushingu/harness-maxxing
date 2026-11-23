@@ -12,8 +12,9 @@ A **hook** = one trigger + one action, run by the server itself: instant, free, 
 - Actions: `shell` (run a command, the request given as files and variables), `call` (call a URL), `store` (keep the
   data in the hook's own table), `notify` (post a notification).
 
-You create and change hooks from the session with `maxxing webhooks`; the pages only show them, switch them, copy
-the URL, test, replay, and send the user back to a session ("Ask Harness"). Docs: `docs/user/37-webhooks.md`,
+You create and change hooks from the session with `maxxing webhooks`. The pages also have a short form (**New
+webhook** / **New event**, **Edit**: name, source or event, one action with its main field, reply, report); the
+rest (filters, headers, body templates, stored fields, queue, size) is set here, and the form keeps it. Docs: `docs/user/37-webhooks.md`,
 `docs/user/38-events.md` (Docs -> Webhooks, Events).
 
 ## Pick the right tool

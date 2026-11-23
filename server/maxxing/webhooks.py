@@ -1,6 +1,6 @@
 """Webhooks and events: automations without AI (Settings -> Automate -> Webhooks / Events).
 
-A hook = one trigger + one action, made by Harness from a session (`maxxing webhooks add`) and shown on two pages:
+A hook = one trigger + one action, made from the pages' form or by Harness (`maxxing webhooks add`), shown on two pages:
   trigger "in"     another service calls the hook's URL  (/api/hooks/<token>, GET or POST): page Webhooks
   trigger "event"  something happened in Harness: a feed event, the end of an automatic agent run, the end of a
                    cron run                                                                   : page Events
