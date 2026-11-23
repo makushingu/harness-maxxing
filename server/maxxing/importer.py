@@ -434,7 +434,7 @@ def _defang_imports(text: str) -> str:
 
 def _strip_skill_hooks(text: str) -> str:
     """Remove the `hooks:` field of the front matter of a SKILL.md: a hook runs a command by itself."""
-    lines = text.split("\n")
+    lines = text.removeprefix("\ufeff").split("\n")
     if not lines or lines[0].strip() != "---":
         return text
     try:
@@ -443,7 +443,7 @@ def _strip_skill_hooks(text: str) -> str:
         return text
     out, skipping = [lines[0]], False
     for ln in lines[1:end]:
-        if re.match(r"hooks\s*:", ln):
+        if re.match(r"""\s*["']?hooks["']?\s*:""", ln):
             skipping = True
             continue
         if skipping and (not ln.strip() or ln[:1] in (" ", "\t", "-")):
