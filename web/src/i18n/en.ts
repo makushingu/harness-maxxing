@@ -5008,7 +5008,7 @@ export const en = {
   'webhooks.loadError': "The webhooks could not be loaded",
   'webhooks.empty': "No webhook yet",
   'webhooks.emptyEvents': "No event yet",
-  'webhooks.emptyDesc': "Describe above what should happen, or pick an example: Harness sets it up and it shows here.",
+  'webhooks.emptyDesc': "Make one with the short form, or ask Harness in a session: it shows here.",
   'webhooks.when.stripe': "When Stripe calls",
   'webhooks.when.shopify': "When Shopify calls",
   'webhooks.when.github': "When GitHub calls",

@@ -4990,7 +4990,7 @@ export const fr: Record<keyof typeof en, string> = {
   'webhooks.loadError': "Impossible de charger les webhooks",
   'webhooks.empty': "Aucun webhook pour l’instant",
   'webhooks.emptyEvents': "Aucun événement pour l’instant",
-  'webhooks.emptyDesc': "Décrivez ci-dessus ce qui doit se passer, ou choisissez un exemple : Harness le met en place et il apparaît ici.",
+  'webhooks.emptyDesc': "Créez-en un avec le petit formulaire, ou demandez à Harness en session : il apparaîtra ici.",
   'webhooks.when.stripe': "Quand Stripe appelle",
   'webhooks.when.shopify': "Quand Shopify appelle",
   'webhooks.when.github': "Quand GitHub appelle",
