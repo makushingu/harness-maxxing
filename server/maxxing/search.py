@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 import re
 import sqlite3
@@ -150,8 +151,9 @@ def _db() -> sqlite3.Connection:
     if _con is None or _con_path != db_path():
         if _con is not None:
             _con.close()
-        _con, _con_path = _connect(), db_path()
+        _con = _connect()
         _migrate(_con)
+        _con_path = db_path()
         _state.update(sessions_at=0.0, full_at=0.0, files_at=0.0)   # another index: nothing is fresh
         _seen.clear()
     return _con
@@ -171,6 +173,13 @@ def _log_ident(p: Path) -> str:
         return f"{os.stat(p).st_ino}:{zlib.crc32(head):x}"
     except OSError:
         return ""
+
+
+def _stamp(v) -> float | None:
+    """A session's updated/created as SQLite can store it: a finite number of sane size, else None."""
+    if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) or abs(v) >= 2 ** 53:
+        return None
+    return v
 
 
 def _clean(v) -> str:
@@ -215,7 +224,7 @@ def _index_sessions(con: sqlite3.Connection) -> None:
             sig = {"offset": 0, "ident": ident, "title": title, "path": path}
             # a title row, so a session is found by its name even before any message is indexed
             con.execute("INSERT INTO items(src, kind, ref, path, title, body, at) VALUES (?,?,?,?,?,?,?)",
-                        (key, "session", sid, path, title, "", m.get("updated") or m.get("created")))
+                        (key, "session", sid, path, title, "", _stamp(m.get("updated")) or _stamp(m.get("created"))))
         elif sig.get("title") != title or sig.get("path") != path:   # renamed, or moved to another topic
             if sig.get("title") != title:                    # the title row only (messages have no title)
                 con.execute("UPDATE items SET title=? WHERE src=? AND body=''", (title, key))
