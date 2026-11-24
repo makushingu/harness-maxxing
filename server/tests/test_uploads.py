@@ -35,6 +35,15 @@ def test_cap_per_file_in_save_upload(client, mx, monkeypatch):
     assert not (mx["files"] / "up.bin").exists()
 
 
+def test_cap_is_per_file_not_per_request(client, mx):
+    config.update_config(upload_max_mb=1)
+    files = [("file", (f"f{i}.bin", b"x" * (900 * 1024), "application/octet-stream")) for i in range(3)]
+    r = client.post("/api/files/upload", params={"dir": str(mx["files"])}, files=files)
+    assert r.status_code == 200, r.text
+    big = [("file", (f"b{i}.bin", b"x" * (3 * uploads.MB), "application/octet-stream")) for i in range(2)]
+    assert client.post("/api/files/upload", params={"dir": str(mx["files"])}, files=big).status_code == 413
+
+
 def test_a_refused_file_removes_the_ones_saved_before_it(client, mx):
     # all or nothing: a client retrying the request must not find f0.bin kept (and get f0-1.bin)
     config.update_config(upload_max_mb=1)
@@ -49,7 +58,7 @@ def test_cap_while_streaming_without_content_length(client, mx):
     config.update_config(upload_max_mb=1)
 
     def body():
-        for _ in range(4):
+        for _ in range(uploads.REQUEST_FILES + 2):
             yield b"x" * uploads.MB
     r = client.post("/api/files/upload", params={"dir": str(mx["files"])}, content=body(),
                     headers={"Content-Type": "multipart/form-data; boundary=zz"})

@@ -9,7 +9,7 @@ Single source of truth between `server/` and `web/`. Change it here first, then 
 - CSRF: every non-GET request must carry header `X-Maxxing: 1`, else `403 {"error":"csrf"}`.
 - Multipart requests (uploads, import, voice): the cookie and the CSRF header are checked **before** the body is
   read (`401` / `403`). Then `413 too_large` if `Content-Length` (or the streamed body) exceeds config
-  `upload_max_mb` (default 2048; 0 = no cap; + 1 MB of multipart framing), and `507 disk_full` if the body does not fit
+  `upload_max_mb` x 10 files (default 2048; 0 = no cap; + 1 MB of multipart framing; each file is held to `upload_max_mb` itself), and `507 disk_full` if the body does not fit
   in the spool dir (`<state>/tmp/uploads`, where the server spools uploads) with min(`upload_min_free_mb`, 128 MB)
   to spare. The full `upload_min_free_mb` reserve (default 1024) is checked on the destination disk per file.
   Both keys are read from config.json on every request (no restart).
@@ -134,7 +134,7 @@ Session = {
 | GET | `/api/sessions/{id}/stream?from=0` | – | **SSE**. `event: events` `data: {events, next}` · `event: state` `data: Session` · `event: reset` `data: {}` then end of stream when the log was rewritten or shrank (or `from` is stale): reload with `?tail=` · heartbeat comment every 15 s. New lines and state changes are pushed ~0.05-0.15 s after they are written (inotify on the sessions folder; without it the stream polls every 0.1 s while the session runs) |
 | GET | `/api/sessions/search?q=` | – | `[{id, title, path, snippet, at}]` (served by the full-text index, see Search; max 50) |
 | GET / POST | `/api/sessions/open` | POST `{open?:[id], close?:[id], order?:[id], tabs?:bool, front?:id}` | `{ids:[id]\|null, rev, tabs?, front?}` — the sessions open on screen, shared by every browser of the user (a column on a computer, a tab on a phone), with the Tabs / Zones mode and the session in front last chosen on one of them: ids in the order they were opened, `null` while no browser has shared its own; `rev` grows with each change (a browser ignores an answer older than the one it applied). POST opens, closes, then sorts by `order` (ids it does not name stay after); bus topic `open_sessions`. A deleted session leaves the list |
-| POST | `/api/uploads?path=<topic path>` | multipart `file` (multi) | `{files:[{path, name, size, mime}]}` saved in `<topic>/attachments/YYYY-MM/` · each file `413 too_large` over `upload_max_mb`, `507 disk_full` when it would leave less than `upload_min_free_mb` free on the destination disk (all or nothing: the files saved before it in the same request are removed); the whole request, all its files together, is capped too (see Conventions) |
+| POST | `/api/uploads?path=<topic path>` | multipart `file` (multi) | `{files:[{path, name, size, mime}]}` saved in `<topic>/attachments/YYYY-MM/` · each file `413 too_large` over `upload_max_mb`, `507 disk_full` when it would leave less than `upload_min_free_mb` free on the destination disk (all or nothing: the files saved before it in the same request are removed); the whole request is capped at 10 files' worth (see Conventions) |
 
 `from`/`next`/`start`/`before` = byte offsets in the raw log (always line boundaries). Backward reads scan at
 most 64 MB per call (then `more_before` with the `start` reached; a single line longer than that is skipped). A `task` whose `task_started` line is before the
