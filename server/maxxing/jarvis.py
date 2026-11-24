@@ -248,7 +248,8 @@ def _write_rules(tdir: Path) -> None:
              "one long conversation (compacted when long); what matters lives in brain/")
     reuse = ("before starting a session for new work, look at the recent sessions of the topic you chose (`maxxing "
              "sessions list --topic <project>/<topic> --json`): one marked `reusable` on the same subject or a "
-             "follow-up of it gets the work (`maxxing sessions send <id>`), never one of another topic" if s["reuse"]
+             "follow-up of it gets the work (`maxxing sessions send <id>`), never one of another topic; `sessions new` refuses "
+             "while there are reusable ones (`--fresh` = another subject on purpose)" if s["reuse"]
              else "new work always gets a new session (a follow-up of work on your board still goes to its session)")
     archive = ("when you close work (`maxxing jarvis work close`), Harness archives its session if you started it and "
                "the owner never wrote in it; it comes back by itself when you send to it again" if s["archive_done"]

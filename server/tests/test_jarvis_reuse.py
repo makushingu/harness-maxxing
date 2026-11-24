@@ -136,6 +136,23 @@ def test_sessions_new_from_jarvis_marks_the_session(on, topic, monkeypatch, caps
     assert not store.read(json.loads(capsys.readouterr().out)["session"]).get("jarvis_made")
 
 
+def test_sessions_new_from_jarvis_points_to_a_reusable_session_first(on, topic, monkeypatch, capsys):
+    from maxxing import agent_guard, cli
+    jsid = jarvis.current_session()
+    monkeypatch.setattr(agent_guard, "turn_meta", lambda: {"id": jsid, "title": "Jarvis", "path": jarvis.PATH})
+    old = _made(on, topic, "Next post")
+    p = topic.split("/")
+    before = len(service.list_sessions(path=topic))
+    assert cli.main(["sessions", "new", f"{p[1]}/{p[3]}", "--title", "Post 2", "--json"]) == 3
+    err = capsys.readouterr().err
+    assert old["id"][:8] in err and "--fresh" in err and "sessions send" in err
+    assert len(service.list_sessions(path=topic)) == before        # nothing created
+    assert cli.main(["sessions", "new", f"{p[1]}/{p[3]}", "--title", "Other", "--fresh", "--json"]) == 0
+    capsys.readouterr()
+    jarvis.save_settings({"reuse": False})
+    assert cli.main(["sessions", "new", f"{p[1]}/{p[3]}", "--title", "Third", "--json"]) == 0
+
+
 def test_the_rules_follow_the_settings(on, mx):
     rules = jarvis.folder() / "rules.md"
     assert "sessions list --topic" in rules.read_text() and "archives its session" in rules.read_text()

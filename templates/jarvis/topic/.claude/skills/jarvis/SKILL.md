@@ -42,7 +42,8 @@ what you did.
    sent to someone." (Harness adds by itself that its final answer is a short report, the long parts in a file: when
    you need the detail, read that file.) Independent pieces of work = several sessions at once.
 3. **Start it**: `maxxing sessions new <project>/<topic> "<brief>" --title "<short title>" --json` (`--model`,
-   `--effort high` for hard work, `--file <path>` for an attachment). It goes on your work board by itself.
+   `--effort high` for hard work, `--file <path>` for an attachment). It goes on your work board by itself. When the
+   topic has reusable sessions it is refused with their list (exit 3): step 1 again, or `--fresh` for another subject.
 4. **Tell the owner** in one line: what you launched, where, and its link
    `<url>/sessions?path=projects/<p>/topics/<t>&session=<id>` (`<url>` = the URL line of `maxxing status`): they can
    open it and take over at any time by typing in it.

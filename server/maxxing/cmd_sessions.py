@@ -11,7 +11,7 @@
   maxxing sessions list --topic P/T [--days N] [--json]
                                               a topic's recent sessions for Jarvis: about (title, last answer), who
                                               started it, reusable / why_not (running, owner_active, context_full)
-  maxxing sessions new TOPIC [TEXT...] [--title T] [--model M] [--effort E] [--file P] [--report-to S] [--json]
+  maxxing sessions new TOPIC [TEXT...] [--title T] [--model M] [--effort E] [--file P] [--report-to S] [--fresh] [--json]
                                               start a session in a topic (TOPIC = <project>/<topic> or its path) with
                                               a first message; from a turn, the message says which session sent it
   --report-to me|<session>                    its answers come back to that session when its turns end (the
@@ -46,6 +46,8 @@ def _configure(p) -> None:
     n.add_argument("--file", action="append", default=[], help="attach a file (absolute path), repeatable")
     n.add_argument("--report-to", default="", help="the session its answers are reported to (`me` = the session of "
                                                    "this turn); from Jarvis's conversation: always Jarvis")
+    n.add_argument("--fresh", action="store_true", help="from Jarvis's conversation: start a new session even though the "
+                                                       "topic has reusable ones (new work on another subject)")
     n.add_argument("--json", action="store_true")
     ls = sub.add_parser("list", help="the sessions that are not archived")
     ls.add_argument("--topic", default="", help="<project>/<topic>: its recent sessions, with what they are about and "
@@ -151,6 +153,10 @@ def _new(a) -> int:
     except (OSError, ValueError, RuntimeError) as e:    # a NUL byte, an unknown ~user
         print(f"--file: {e}", file=sys.stderr)
         return 2
+    reuse = _reusable_first(meta, path, a.fresh)
+    if reuse:
+        print(reuse, file=sys.stderr)
+        return 3
     try:
         # created empty, then the first message goes in like a send: from a turn it says who sent it, and the
         # sends in a row stay capped (MAX_HOPS) - a session that starts sessions never loops forever
@@ -180,6 +186,25 @@ def _new(a) -> int:
     else:
         print(f"started {s.get('id', '')[:8]} {s.get('title', '')} in {s.get('path', '')}")
     return 0
+
+
+def _reusable_first(meta: dict | None, path: str, fresh: bool) -> str:
+    """From Jarvis's conversation (setting `reuse` on), a new session is refused while the topic has reusable ones:
+    the refusal lists them, so the work goes to one on the same subject (`sessions send`) or, on purpose, to a new
+    one (`--fresh`). Its rules said so, but it never looked: each piece of work started from zero."""
+    if fresh or not meta:
+        return ""
+    from . import jarvis
+    if meta.get("path") != jarvis.PATH or not jarvis.feature_on() or not jarvis.settings()["reuse"]:
+        return ""
+    rows = [r for r in jarvis.topic_sessions(path) if r["reusable"]]
+    if not rows:
+        return ""
+    lines = [f"  {r['id'][:8]}  {r['title']}" + (f" - {r['last_answer'][:120]}" if r["last_answer"] else "")
+             for r in rows[:5]]
+    return ("Not started: this topic has recent sessions that can take the work (its context is already there):\n"
+            + "\n".join(lines) + "\nSame subject or a follow-up: `maxxing sessions send <id> \"<brief>\"`. "
+            "Another subject: run the same command again with --fresh.")
 
 
 def _list(a) -> int:
