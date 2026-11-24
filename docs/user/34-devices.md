@@ -95,7 +95,8 @@ phone. Removing a device (**Remove**) disconnects it, and Harness Link there for
 ## Watching and taking over
 
 **Watch** opens the screen of the device live. While a session uses a device, a line above its message box says so,
-with **Watch** next to it.
+with **Watch** next to it (the line goes away when the turn ends: Watch stays in Settings -> Devices). To take the
+device yourself, just tell Claude ("let me do it"): it hands it over with a card that opens the device.
 
 - Touch the picture to **take over**: a click or a tap, a long press, a drag (a swipe on a phone), the wheel, the keyboard
   on a computer, Back, Home and Recent apps on a phone. While you have the device, Claude waits.

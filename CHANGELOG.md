@@ -6,6 +6,7 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 ## Unreleased
 
 Fixes:
+- **"Let me do it" on a device hands it over.** Asked to let you take over a computer or a phone, Claude pointed to the Watch line above the message box, which is gone once its turn ends. It now hands the device over with a card that opens it.
 - **No more message stuck on "Sending…".** Two messages sent close together (while Harness was summarizing a session, or before a turn starts) arrive as one: the first one stayed below the conversation as "Sending…" forever. Each message is now recognized by its id.
 - **A long message no longer hides the end of the conversation.** As the message box grew line after line, the conversation above it (sessions, Jarvis) let go of the bottom and the last message slipped under the box. It now stays at the bottom while you type.
 - **Jarvis continues a recent session instead of always starting a new one.** Its rules asked it to check the topic's recent sessions first, but it never did: every piece of work started from zero. Now `maxxing sessions new` from Jarvis's conversation is refused while the topic has a session that can take the work, with their list; closest to the subject first. Jarvis sends the work there (its context is already there), or for another subject starts one with `--fresh "<reason>"`: the reason shows on its card in the work board.

@@ -72,8 +72,9 @@ TOOLS = [
     _spec("wait", "Wait a few seconds (a page loading, an animation), then look again with screenshot.",
           {"s": {"type": "number", "description": "Seconds, 0.5 to 30."}}, ["s"]),
     _spec("ask_human", "Ask the person to do a step themselves on the device (type a password or a code received by "
-                       "SMS, solve a captcha, confirm a payment, choose), then wait until they hand it back (with a "
-                       "word) or skip. Use it instead of guessing a password or a code.",
+                       "SMS, solve a captcha, confirm a payment, choose) or take over when they want to (\"let me do it\", "
+                       "play), then wait until they hand it back (with a word) or skip. Use it instead of guessing a "
+                       "password or a code, and instead of pointing them to Watch.",
           {"message": {"type": "string", "description": "What they must do, one short sentence in their language "
                                                         "(shown in their notification)."}}, ["message"]),
 ]
