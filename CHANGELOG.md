@@ -12,7 +12,7 @@ Fixes:
 
 New:
 - **Jarvis shows the sessions at work.** Beside its conversation, a panel with two tabs: **At work**, each session working now as a small animated pictogram in its project's colour (a "!" when its work waits for you, a check once done), and **Work**, the board. The Work button carries a count (orange: work waiting for you).
-- **Agents come more alive.** They breathe and look around all the time (lists, headers, the office), not only while they work; a switched-off agent sleeps, breathing slowly with "z" floating above its head; three new faces (grin, cheeky, calm), three new hairstyles (afro, ponytail, mohawk) and a lightly matte skin; a random character now has a matte or lightly matte skin four times in five.
+- **Agents come more alive.** They breathe and look around all the time (lists, headers, the office), not only while they work, at a slow and calm pace; a switched-off agent sleeps, breathing slowly with "z" floating above its head; three new faces (grin, cheeky, calm), three new hairstyles (afro, ponytail, mohawk) and a lightly matte skin; a random character now has a matte or lightly matte skin four times in five.
 - **Webhooks and events: automations without AI.** Two new pages in Settings -> Automate. **Webhooks** gives your
   server URLs that other services call (Stripe, Shopify, GitHub, Tally, n8n, Zapier, a Shortcut on your phone that
   sends a photo and gets a link back); **Events** acts when something happens in Harness (a notification arrives, an
