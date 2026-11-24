@@ -152,6 +152,13 @@ def _clean(kind: str, name: str, v: Any) -> str | None:
             return "none"
         if not re.fullmatch(r"[0-9a-z.,%\s()/#+-]+", low) or not set(re.findall(r"[a-z]+", low)) <= _SHADOW_WORDS:
             return None
+        depth = 0                       # an open "(" would swallow the rest of the theme's rules
+        for c in low:
+            depth += (c == "(") - (c == ")")
+            if depth < 0 or depth > 1:
+                return None
+        if depth:
+            return None
         return v
     try:
         n = float(v.rstrip("%"))
@@ -341,7 +348,7 @@ _CSS_BANNED = [
      "no url(), image() or element(): images go in wallpaper"),
     (re.compile(r"@(?!media\b|supports\b|container\b)[a-z-]+", re.I), "only @media, @supports and @container"),
     (re.compile(r"expression\s*\(|javascript:|-moz-binding|behavior\s*:", re.I), "nothing that runs code"),
-    (re.compile(r"position\s*:\s*fixed", re.I), "no position: fixed (nothing may cover the app)"),
+    (re.compile(r"position\s*:\s*(fixed|var\s*\()", re.I), "no position: fixed nor var() (nothing may cover the app)"),
     (re.compile(r"[<\\]"), "no < and no backslash"),
 ]
 
@@ -357,6 +364,10 @@ def _css(v: Any, warn: list[str]) -> str | None:
         return None
     if len(v.encode()) > MAX_CSS:
         warn.append(f"css: over {MAX_CSS // 1024} KB, ignored")
+        return None
+    # CR and form feed end a string for the browser too: one unseen newline would let a rule leave the scope
+    if re.search(r"[\x00-\x08\x0b-\x1f\x7f\u2028\u2029]", v):
+        warn.append("css: control characters (only newlines and tabs), ignored")
         return None
     bare = re.sub(r"/\*.*?\*/", " ", v, flags=re.S)
     if "/*" in bare:
@@ -397,19 +408,26 @@ def ui_fingerprint() -> str:
     return hashlib.sha256("\n".join(names).encode()).hexdigest()[:16]
 
 
+def _css_hash(css: str) -> str:
+    import hashlib
+    return hashlib.sha256(css.encode()).hexdigest()[:16]
+
+
 def _css_state(d: Path, css: str | None) -> str:
-    """none | on | stale (checked against another build of the interface, or never checked: off until verified)."""
+    """none | on | stale: off until verified when it was never checked, was checked against another build of the
+    interface, or was edited since (the stamp holds both)."""
     if not css:
         return "none"
     try:
         stamp = json.loads((d / CSS_STAMP).read_text())
     except (OSError, ValueError):
         return "stale"
-    return "on" if isinstance(stamp, dict) and stamp.get("ui") == ui_fingerprint() else "stale"
+    ok = isinstance(stamp, dict) and stamp.get("ui") == ui_fingerprint() and stamp.get("css") == _css_hash(css)
+    return "on" if ok else "stale"
 
 
-def _stamp(d: Path) -> None:
-    config.write_json(d / CSS_STAMP, {"ui": ui_fingerprint()})
+def _stamp(d: Path, css: str) -> None:
+    config.write_json(d / CSS_STAMP, {"ui": ui_fingerprint(), "css": _css_hash(css)})
 
 
 def _image(d: Path, name: Any, what: str, warn: list[str]) -> str | None:
@@ -578,10 +596,14 @@ def install(src: Path, force: bool = False) -> tuple[dict, list[str]]:
         f = src / n
         if f.is_file() and not f.is_symlink():
             shutil.copy2(f, tmp / n)
-    shutil.rmtree(dest, ignore_errors=True)
-    tmp.rename(dest)
     if t["css"]:
-        _stamp(dest)                    # installed by Claude after `check`: checked against this interface
+        _stamp(tmp, t["css"])           # installed by Claude after `check`: checked against this interface
+    old = root() / f".{t['id']}.old"
+    shutil.rmtree(old, ignore_errors=True)
+    if dest.exists():
+        dest.rename(old)                # never a moment without the theme for a browser that lists it
+    tmp.rename(dest)
+    shutil.rmtree(old, ignore_errors=True)
     t2, warn2, _ = load(dest)
     return t2 or t, warn2
 
@@ -595,7 +617,7 @@ def verify(tid: str) -> dict:
     if err or not t:
         raise ThemeError(err or "not a theme")
     if t["css"]:
-        _stamp(d)
+        _stamp(d, t["css"])
         t["css_state"] = "on"
     return t
 

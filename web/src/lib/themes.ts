@@ -60,7 +60,7 @@ export function themeLook(t: InstalledTheme): ThemeLook | null {
 
 /** Second line of defense behind the server (themes.py _css): nothing that loads, nothing that leaves the scope. */
 function ADVANCED_OK(css: string): boolean {
-  if (/[<\\]|url\s*\(|image(-set)?\s*\(|@import|expression\s*\(|javascript:|position\s*:\s*fixed/i.test(css)) return false
+  if (/[<\\\x00-\x08\x0b-\x1f\x7f\u2028\u2029]|url\s*\(|image(-set)?\s*\(|@import|expression\s*\(|javascript:|position\s*:\s*(fixed|var\s*\()/i.test(css)) return false
   let depth = 0
   for (const c of css.replace(/"[^"\n]*"|'[^'\n]*'/g, '')) {
     if (c === '{') depth++

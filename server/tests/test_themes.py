@@ -149,3 +149,21 @@ def test_advanced_css_is_checked_and_switched_off_by_an_update(mx, client, tmp_p
     assert cli.main(["themes", "verify", "neon"]) == 0
     assert client.get("/api/themes").json()["themes"][0]["css_state"] == "on"
     assert cli.main(["themes", "verify", "nope"]) == 1
+
+
+def test_advanced_css_cannot_leave_its_scope_nor_stay_on_after_an_edit(mx, client, tmp_path):
+    for bad in ['a{b:"\r}}:root{--bg:red}x{y:"}', 'a{b:"\f}}:root{--bg:red}x{y:"}', "a{b:c}\x00",
+                "--p: fixed; & .x { position: var(--p); inset: 0 }"]:
+        t, warn, _ = themes.load(_theme(tmp_path, "esc", {"name": "E", "css": bad}))
+        assert t["css"] is None and any(w.startswith("css:") for w in warn), repr(bad)
+    t, warn, _ = themes.load(_theme(tmp_path, "sh", {"name": "S", "light": {"shadow-panel": "0 0 1px rgb("}}))
+    assert "shadow-panel" not in t["light"]
+    src = _theme(tmp_path / "src", "edited", {"name": "Ed", "css": "& aside { opacity: .9 }"})
+    assert cli.main(["themes", "install", str(src)]) == 0
+    dest = mx["ws"] / "themes" / "edited"
+    assert themes.get("edited")["css_state"] == "on"
+    _theme(dest.parent, "edited", {"name": "Ed", "css": "& aside { opacity: .5 }"})     # edited in place
+    assert themes.get("edited")["css_state"] == "stale"
+    assert cli.main(["themes", "verify", "edited"]) == 0 and themes.get("edited")["css_state"] == "on"
+    assert cli.main(["themes", "install", str(src), "--force"]) == 0
+    assert sorted(p.name for p in dest.parent.iterdir()) == ["edited"]                  # no .tmp / .old left

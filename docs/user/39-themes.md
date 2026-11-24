@@ -52,11 +52,12 @@ rules in **one field**, `"css"` of `theme.json`: a string, or a list of lines, a
   starts with `&` (the page), `&.dark` for the dark mode, `&:not(.dark)` for the light one.
 - Refused as a whole, with a warning (the rest of the theme still works): `url()` and other images, `@import`,
   `@font-face` and every at-rule except `@media`, `@supports` and `@container`, `position: fixed`, `<`, backslashes,
-  unbalanced braces or quotes.
+  control characters, unbalanced braces or quotes.
 - **Unlike the values, these rules may look wrong after an update** (the interface they style changes). So an update
   that changes the interface's CSS **switches them off by itself**: Settings -> Appearance -> Options says "Switched
   off" with a button that asks Harness to check them. Harness looks at the pages with the new version, fixes the
-  rules if needed and switches them back on (`maxxing themes verify <id>`).
+  rules if needed and switches them back on (`maxxing themes verify <id>`). Rules edited by hand wait for the same
+  check.
 - You can switch them off yourself at any time: Settings -> Appearance -> Options -> **Advanced CSS** (this browser).
 - On Community, a theme with advanced CSS is marked "may break after an update".
 

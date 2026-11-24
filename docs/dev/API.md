@@ -271,9 +271,9 @@ wallpaper: {light: url|null, dark: url|null}, preview: url|null, css: str|null, 
 `css` = the theme's one field of advanced CSS, checked by `themes._css` (refused as a whole on `url()`/images, any
 at-rule but `@media|@supports|@container`, `position: fixed`, `<`, `\`, unbalanced braces or quotes; 16 KB); the web
 app nests it in `html[data-theme-id="<id>"]{…}` and applies it only when `css_state` is `on`: `<theme>/.css-check.json`
-`{"ui": fingerprint}` matches `themes.ui_fingerprint()` (hash of the names of the served build's `assets/*.css`, i.e.
-of the interface's CSS). Written by `install` and `maxxing themes verify <id>`; any update that changes the CSS makes
-it `stale` (off).
+`{"ui": fingerprint, "css": sha256 of the css}` matches `themes.ui_fingerprint()` (hash of the names of the served build's `assets/*.css`, i.e.
+of the interface's CSS) and the css itself. Written by `install` and `maxxing themes verify <id>`; an update that changes
+the interface's CSS, or an edit of the rules, makes it `stale` (off).
 
 | Method | Path | Body | Response |
 |---|---|---|---|

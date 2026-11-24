@@ -11,7 +11,8 @@ export function useThemeSync() {
     if (!id || !data) return
     const t = data.themes.find((x) => x.id === id) ?? null
     const cur = useUI.getState().customTheme
-    if (!t) return useUI.getState().refreshTheme(null)
+    // gone: back to its base; listed in errors (being edited or reinstalled): keep the last good look
+    if (!t) return data.errors.some((e) => e.id === id) ? undefined : useUI.getState().refreshTheme(null)
     const next = themeLook(t)
     if (!cur || !next || next.css !== cur.css || next.extra !== cur.extra || next.cssState !== cur.cssState || next.base !== cur.base || next.mode !== cur.mode || next.ownAccent !== cur.ownAccent || next.ownSurfaces !== cur.ownSurfaces) useUI.getState().refreshTheme(t)
   }, [id, data])

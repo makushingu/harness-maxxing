@@ -61,8 +61,8 @@ an update, so Harness switches them off by itself when an update changes the int
   `&.dark main { … }` (dark mode only), `&:not(.dark) …` (light only). `@media`, `@supports` and `@container` are
   allowed, nested the same way.
 - **Refused as a whole** (warning `css: …`, the theme still works without it): `url()`, `image()`, `image-set()`,
-  `@import`, `@font-face`, `@keyframes` and any other at-rule, `position: fixed`, `<`, a backslash, `expression()`,
-  `javascript:`, unbalanced braces or quotes. Never try to get around a refusal.
+  `@import`, `@font-face`, `@keyframes` and any other at-rule, `position: fixed` (or `var()` in `position`), `<`, a
+  backslash, control characters, `expression()`, `javascript:`, unbalanced braces or quotes. Never try to get around a refusal.
 - **Selectors that last**: landmarks and roles (`aside`, `main`, `nav`, `[role="dialog"]`), `data-*` attributes of
   the sources (`[data-tour="…"]`), never a long chain of Tailwind classes. Look them up in `{{CODE_DIR}}/web/src`
   before writing; use the variables in the values (`color: var(--primary)` is fine here, the ban on `var()` is for
@@ -72,8 +72,8 @@ an update, so Harness switches them off by itself when an update changes the int
   the user from using Harness, do not write it.
 - **Check it for real**: `maxxing themes check` only checks the rules are safe, not that they look right. After
   installing, look at the pages it touches (Harness Browser or playwright, both modes, desktop and phone width).
-- **Off after an update**: an update that changes the interface's CSS switches every theme's advanced CSS off
-  (`maxxing themes list` shows `css OFF: verify`, Settings -> Appearance shows "Switched off" with a button that
+- **Off after an update or an edit**: an update that changes the interface's CSS switches every theme's advanced CSS off, and
+  so does editing the rules by hand (`maxxing themes list` shows `css OFF: verify`, Settings -> Appearance shows "Switched off" with a button that
   asks you). Then: look at the pages again with the new version, fix the rules in
   `<workspace>/themes/<id>/theme.json` if needed, `maxxing themes check`, and `maxxing themes verify <id>` to switch
   it back on. Never `verify` without having looked.
@@ -90,6 +90,7 @@ sets. `git clone --depth 1 <repo> /tmp/x` (or the `path` folder inside it), then
 
 - `maxxing themes list`: installed themes and folders that are not usable (with the reason: fix the theme.json).
 - Change: edit `<workspace>/themes/<id>/theme.json` directly, then `maxxing themes check <workspace>/themes/<id>`.
+  Edited advanced CSS stays off until you look at it in the app and run `maxxing themes verify <id>`.
 - `maxxing themes remove <id>`: browsers using it go back to its base.
 - Something looks wrong after an update: run `maxxing themes check` on it; a variable that no longer exists is reported
   (it falls back to built-in, never breaks the page). Its advanced CSS: see "Off after an update" above.

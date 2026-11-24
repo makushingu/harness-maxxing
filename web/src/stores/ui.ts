@@ -157,7 +157,7 @@ export const useUI = create<UIState>()(
           material: t.base,
           customTheme: look,
           themeCssOff: false,
-          theme: look.mode ?? o.mode ?? s.theme,
+          theme: o.mode ?? s.theme,   // a one-mode theme forces its mode while in use (bindUIToDocument), the setting stays
           accent: o.accent ?? s.accent,
           tint: o.tint ?? s.tint,
           font: o.font && o.font in SANS_FONTS ? o.font : s.font,
