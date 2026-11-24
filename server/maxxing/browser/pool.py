@@ -44,6 +44,7 @@ WATCH_EVERY = 15.0
 CHILD_IDLE = 300.0                     # a turn's tools stop after this long without a call
 CONTROL_IDLE = 60.0                    # the person's hand on a tab lapses after this long without input
 TAB_WAIT = 100.0                       # Claude's command on a tab the person has waits at most this long
+TURN_END_SLEEP = 15 * 60.0             # a session's tabs sleep this long after its turn ended (if no new turn)
 CLAUDE_BUSY = 15.0                     # Claude acted on a tab this recently: it is "using" it
 EXIT_POLL = 10.0                       # a tool waiting for its exit checks it this often
 TRAIL_MAX = 30                         # pages a person went to in a tab of a turn (told to Claude after)
@@ -97,6 +98,7 @@ class Browser:
         self.released = asyncio.Event()
         self.released.set()
         self.claude_at: dict[str, float] = {}       # targetId -> last command of a turn on it
+        self.turn_ended: dict[str, float] = {}      # session navigator -> when its last turn ended
         self.trail: dict[str, list[dict]] = {}      # targetId -> pages the person went to
         self.mem = 0
         self.last_input: dict[str, float] = {}      # navigator -> the person's last input in it
@@ -327,8 +329,13 @@ class Pool:
                 await t.stop()
                 b.turns.pop(sid, None)
                 self._changed()
-                if ended:
-                    await self._sleep_turn_tabs(b, t.nav)
+                if ended and navs.kind(t.nav) == "session":
+                    b.turn_ended[t.nav] = now
+        for nav, at in list(b.turn_ended.items()):
+            if any(x.nav == nav for x in b.turns.values()):
+                b.turn_ended.pop(nav, None)                 # a new turn uses it again
+            elif now - at > TURN_END_SLEEP and await self._sleep_turn_tabs(b, nav):
+                b.turn_ended.pop(nav, None)
         for nav, c in list(b.control.items()):
             if now - c["at"] > CONTROL_IDLE:
                 self._release(b, nav)
@@ -340,19 +347,21 @@ class Pool:
         await self._level(b)
         await self._sleep_tabs(b, s, now)
 
-    async def _sleep_turn_tabs(self, b: Browser, nav: str) -> None:
-        """A session's turn ended: its tabs sleep at once (a page left running - a 3D render, a video - would keep
-        the CPU busy until `tab_sleep_min`). They stay in the list; the next turn opens them again. Not while the
-        person watches or drives that navigator, nor while another turn of it runs."""
-        if navs.kind(nav) != "session" or not b.watcher or b.control.get(nav) or b.watcher.watched(nav) \
-                or any(x.nav == nav for x in b.turns.values()):
-            return
+    async def _sleep_turn_tabs(self, b: Browser, nav: str) -> bool:
+        """A session's turn ended TURN_END_SLEEP ago: its tabs sleep (a page left running - a 3D render, a video -
+        would keep the CPU busy). They stay in the list; the next turn opens them again. Not while the person
+        watches or drives that navigator, nor while another turn of it runs (False: try again later)."""
+        if navs.kind(nav) != "session":
+            return True
+        if not b.watcher or b.control.get(nav) or b.watcher.watched(nav) or any(x.nav == nav for x in b.turns.values()):
+            return False
         going = b.tabs.awake(nav)
         for tab in going:
             await b.watcher.close_tab(tab["target"], sleep=True)
         if going:
             log.info("Harness Browser %s: %d tab(s) of %s asleep (turn ended)", b.pid, len(going), nav)
             self._changed()
+        return True
 
     async def _close_sessions(self) -> None:
         """A session's navigator is temporary: once the session has had no turn on it for `idle_min`, its tabs are

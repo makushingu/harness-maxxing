@@ -1664,8 +1664,8 @@ def test_a_request_file_is_parsed_again_only_when_it_changes(mx, monkeypatch):
 
 
 def test_a_sessions_tabs_sleep_when_its_turn_ends(mx):
-    """A page left running by a turn (a 3D render) does not keep the CPU busy: the session's tabs sleep at once,
-    the person's and those of a navigator someone watches stay awake."""
+    """A page left running by a turn (a 3D render) does not keep the CPU busy: the session's tabs sleep once its turn
+    ended TURN_END_SLEEP ago, the person's and those of a navigator someone watches stay awake."""
     p, b = _browser()
     closed = []
 
@@ -1683,8 +1683,7 @@ def test_a_sessions_tabs_sleep_when_its_turn_ends(mx):
         b.tabs.assign(target, by, nav)
 
     async def run():
-        for nav in ("session:s1", "me", "session:s2"):
-            await p._sleep_turn_tabs(b, nav)
+        assert [await p._sleep_turn_tabs(b, nav) for nav in ("session:s1", "me", "session:s2")] == [True, True, False]
     asyncio.run(run())
     assert closed == [("t1", True)]
     assert [t["nav"] for t in b.tabs.asleep()] == ["session:s1"]
