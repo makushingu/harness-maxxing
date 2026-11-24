@@ -99,6 +99,7 @@ def test_agent_run_stopped_by_the_limit_starts_again_in_its_session_after_the_re
     note = [m for m in agents.thread(A) if m["kind"] == "note" and m.get("status") == "limit_retry"]
     assert note and note[-1]["session"] == sid
     assert agents.retry_limits() == 0                     # not due yet
+    wait_for(lambda: agents.gate(A) != "busy")          # the stopped run gave the budget back
     st = agents._read_state(A)
     st["limit_retry"]["at"] = time.time() - 1
     agents._write_state(A, st)

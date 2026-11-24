@@ -5,7 +5,7 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
-## Unreleased
+## 2.0.0-alpha.168 - 2026-11-24
 
 - Devices: `ask_human` description and skill `maxxing-devices` cover taking over ("let me do it"), not only passwords and codes; the session's Watch line exists only during a turn (`SessionDevices.tsx`), so Claude points to `ask_human` or Settings -> Devices.
 - `Pending.cid` (the outbox id sent as `client_id`); `usePending.settle(sid, text, ids)` drops every pending whose `cid` is in the event's `client_ids` (a merged event carries several, its text is the joined texts), else the first same-text one as before. Mock: `MOCK_HOLD_MS` holds an idle session's messages, then starts one merged turn with all their ids.

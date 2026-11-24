@@ -3,16 +3,9 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
-## Unreleased
-
-Fixes:
-- **"Let me do it" on a device hands it over.** Asked to let you take over a computer or a phone, Claude pointed to the Watch line above the message box, which is gone once its turn ends. It now hands the device over with a card that opens it.
-- **No more message stuck on "Sending…".** Two messages sent close together (while Harness was summarizing a session, or before a turn starts) arrive as one: the first one stayed below the conversation as "Sending…" forever. Each message is now recognized by its id.
-- **A long message no longer hides the end of the conversation.** As the message box grew line after line, the conversation above it (sessions, Jarvis) let go of the bottom and the last message slipped under the box. It now stays at the bottom while you type.
-- **Jarvis continues a recent session instead of always starting a new one.** Its rules asked it to check the topic's recent sessions first, but it never did: every piece of work started from zero. Now `maxxing sessions new` from Jarvis's conversation is refused while the topic has a session that can take the work, with their list; closest to the subject first. Jarvis sends the work there (its context is already there), or for another subject starts one with `--fresh "<reason>"`: the reason shows on its card in the work board.
+## 2.0.0-alpha.168 - 2026-11-24
 
 New:
-- **Agents come more alive.** They breathe and look around all the time (lists, headers, the office), not only while they work, at a slow and calm pace; a switched-off agent sleeps, breathing slowly with "z" floating above its head; three new faces (grin, cheeky, calm), nine new hairstyles (afro, ponytail, mohawk, buzz cut, bob, braids, pigtails, space buns, side swept) plus three special characters (a frog, a big brain, a giga chad) and a lightly matte skin; a random character now has a matte or lightly matte skin four times in five.
 - **Webhooks and events: automations without AI.** Two new pages in Settings -> Automate. **Webhooks** gives your
   server URLs that other services call (Stripe, Shopify, GitHub, Tally, n8n, Zapier, a Shortcut on your phone that
   sends a photo and gets a link back); **Events** acts when something happens in Harness (a notification arrives, an
@@ -29,27 +22,32 @@ New:
   General. Old links to Settings -> Notifications open Alerts.
 - **Send before the files are up.** Press send while attachments are still uploading: the message goes by itself as
   soon as the last file is up (press again to cancel; a failed file stops it and says why).
+- **Agents come more alive.** They breathe and look around all the time (lists, headers, the office), not only while they work, at a slow and calm pace; a switched-off agent sleeps, breathing slowly with "z" floating above its head; three new faces (grin, cheeky, calm), nine new hairstyles (afro, ponytail, mohawk, buzz cut, bob, braids, pigtails, space buns, side swept) plus three special characters (a frog, a big brain, a giga chad) and a lightly matte skin; a random character now has a matte or lightly matte skin four times in five.
 
 Changed:
-- **The video tools take about 90 MB less disk.** Remotion was installed with a second copy of its native parts,
-  built for another kind of Linux and never used on yours: it is now left out (≈ 413 MB -> 325 MB).
-
 - **Jarvis continues the sessions you already have, and tidies up after itself.** New work on the same subject
   now goes to a recent session of the topic it belongs to (active in the last 30 days, never one you wrote in during
   the last 30 minutes, never one of another topic) instead of a new one each time. And once a piece of work is done,
   the session Jarvis started for it goes to the Archives, unless you wrote in it; it comes back by itself if Jarvis
   follows the work up. Both are on by default, in the settings of Jarvis (gear icon).
+  `maxxing sessions new` from Jarvis's conversation is refused while such a session exists, with the list, closest
+  to the subject first; for another subject Jarvis starts one with a reason, shown on its card in the work board.
 - **Only your own words look like your messages.** Everything else a session receives is folded into one small
   card that says who sent it: another session or Jarvis, an agent, a scheduled job, a group, an event, an e-mail, the
   command line or Harness itself. Jarvis's morning brief comes as a card of its backstage agent, the reports that
   come back to Jarvis say if the work answered, asks you or failed, and a click shows the message (only what is meant
   for you, not the instructions for Claude around it). Messages you type to an agent, on Telegram or by voice stay
   bubbles.
+- **The video tools take about 90 MB less disk.** Remotion was installed with a second copy of its native parts,
+  built for another kind of Linux and never used on yours: it is now left out (≈ 413 MB -> 325 MB).
 
 Fixed:
 - **`@Jarvis` in a message reaches Jarvis, once.** The `@` menu of a session showed each of Jarvis's daily
   conversations as a session; it now has a single **@Jarvis** line at the top, with its own icon, which always writes
   into its conversation of the moment.
+- **"Let me do it" on a device hands it over.** Asked to let you take over a computer or a phone, Claude pointed to the Watch line above the message box, which is gone once its turn ends. It now hands the device over with a card that opens it.
+- **No more message stuck on "Sending…".** Two messages sent close together (while Harness was summarizing a session, or before a turn starts) arrive as one: the first one stayed below the conversation as "Sending…" forever. Each message is now recognized by its id.
+- **A long message no longer hides the end of the conversation.** As the message box grew line after line, the conversation above it (sessions, Jarvis) let go of the bottom and the last message slipped under the box. It now stays at the bottom while you type.
 
 ## 2.0.0-alpha.167 - 2026-11-24
 
