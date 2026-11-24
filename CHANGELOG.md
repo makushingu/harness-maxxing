@@ -6,12 +6,6 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 ## Unreleased
 
 Fixes:
-- **Security: five holes closed.** An agent turn could run a command as root outside its sandbox by adding `-h` to
-  `maxxing heavy`, or write any file as root with `maxxing agents export --output` (an agent turn now gets the text
-  only). A git submodule with its own filter settings could run a command when the Git page or the Changes view was
-  opened: status and diffs no longer look inside submodules. A backup restored on a server in use keeps this server's
-  security settings of agents and topics (sandbox, permission mode, budget; a new agent comes back switched off), and
-  never turns back on a scheduled job or an extension that is off here.
 - **Jarvis continues a recent session instead of always starting a new one.** Its rules asked it to check the topic's recent sessions first, but it never did: every piece of work started from zero. Now `maxxing sessions new` from Jarvis's conversation is refused while the topic has a session that can take the work, with their list; Jarvis sends the work there (its context is already there) or uses `--fresh` for another subject.
 
 New:
@@ -49,6 +43,16 @@ Fixed:
 - **`@Jarvis` in a message reaches Jarvis, once.** The `@` menu of a session showed each of Jarvis's daily
   conversations as a session; it now has a single **@Jarvis** line at the top, with its own icon, which always writes
   into its conversation of the moment.
+
+## 2.0.0-alpha.167 - 2026-11-24
+
+Fixed:
+- **Security: five holes closed.** An agent turn could run a command as root outside its sandbox by adding `-h` to
+  `maxxing heavy`, or write any file as root with `maxxing agents export --output` (an agent turn now gets the text
+  only). A git submodule with its own filter settings could run a command when the Git page or the Changes view was
+  opened: status and diffs no longer look inside submodules. A backup restored on a server in use keeps this server's
+  security settings of agents and topics (sandbox, permission mode, budget; a new agent comes back switched off), and
+  never turns back on a scheduled job or an extension that is off here.
 
 ## 2.0.0-alpha.166 - 2026-11-23
 
