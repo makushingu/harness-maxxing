@@ -71,7 +71,7 @@ Settings -> Backup.
 - On a **new server** (no session started yet: the installer's restore, a move to another server) everything comes
   back as it was, jobs and extensions on. On a server **already in use**, code that runs on the server comes back
   **turned off**: scheduled jobs (shell or Claude) this server does not
-  already have exactly the same, and extensions any of whose code files the restore writes (turned off before their
+  already have exactly the same and turned on (a job that is off here stays off), and extensions any of whose code files the restore writes (turned off before their
   files are written: their code never runs, even for a moment); Claude Code `hooks` and the other settings that run
   a command or redirect Claude (`statusLine`, `apiKeyHelper`, `env`, project MCP servers...) are
   removed from restored `.claude/settings.json` files (kept in `hooks-held.json` in the restore's trash folder); files
@@ -79,7 +79,9 @@ Settings -> Backup.
   `outside` folder of the restore's trash; local MCP servers (a command Claude Code starts at every turn) are
   not added back - they are saved in `mcp-held.json` in the restore's trash folder, add the ones you trust again in
   **Settings → MCP** (remote servers, an URL, are restored). Restored skills and customizations are listed to review
-  before use. A notification lists all of it; check them, then turn them on in Crons and Extensions. Anyone able to push to the backup repository could otherwise
+  before use. Agents and topics keep this server's security settings (sandbox, permission mode, allowed tools,
+  budget...; an agent the server does not have comes back switched off), and extensions turned off here stay off.
+  A notification lists all of it; check them, then turn them on in Crons and Extensions. Anyone able to push to the backup repository could otherwise
   get their code run here. The memory backup job itself stays on.
 - One old version of one file: browse its history on GitHub and copy it back.
 

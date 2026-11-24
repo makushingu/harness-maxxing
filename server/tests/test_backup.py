@@ -394,7 +394,7 @@ def test_restore_on_a_new_server_brings_everything_back(ws, mx_state, monkeypatc
                        "projects/acme/topics/blog/.claude/settings.json": json.dumps(settings).encode(),
                        f"{backup.META_DIR}/mcp.json": json.dumps([{"name": "local", "where": None,
                                                                     "config": {"command": "node"}}]).encode()})
-    assert r["held"] == {"crons": [], "extensions": [], "mcp": [], "hooks": [], "review": []}
+    assert r["held"] == {"crons": [], "extensions": [], "mcp": [], "hooks": [], "rules": [], "review": []}
     assert crons.list_jobs()[0]["enabled"] and [i["name"] for i in added] == ["local"]
     assert "probe" not in (config.load_config().get("extensions") or {}).get("disabled", [])
     assert json.loads((ws / "projects/acme/topics/blog/.claude/settings.json").read_text()) == settings
@@ -779,3 +779,38 @@ def test_restore_on_a_used_server_keeps_its_permission_mode_and_budget(ws, mx_st
     cfg = config.load_config()
     assert cfg["permission_mode"] == "acceptEdits" and cfg["daily_budget_usd"] == 5
     assert cfg["language"] == "fr"
+
+
+def test_restore_on_a_server_in_use_keeps_the_agents_security_settings(ws, mx_state):
+    """A restore never loosens an agent or a topic: sandbox, permission mode, budget... stay this server's; a new
+    agent comes back switched off."""
+    _in_use()
+    rel = "projects/acme/topics/blog/agents/writer/agent.json"
+    (ws / rel).parent.mkdir(parents=True)
+    (ws / rel).write_text(json.dumps({"name": "writer", "sandbox": True, "permission_mode": "default"}))
+    (ws / "projects/acme/topics/blog/.maxxing.json").write_text(json.dumps({"permission_mode": "default"}))
+    loose = {"name": "writer 2", "sandbox": False, "permission_mode": "bypassPermissions", "trust_outside": True,
+             "usd_per_day": 0}
+    new = "projects/acme/topics/blog/agents/spy/agent.json"
+    r = backup._apply({rel: json.dumps(loose).encode(), new: json.dumps(loose).encode(),
+                       "projects/acme/topics/blog/.maxxing.json": b'{"permission_mode": "bypassPermissions", "emoji": "x"}'})
+    assert json.loads((ws / rel).read_text()) == {"name": "writer 2", "sandbox": True, "permission_mode": "default"}
+    assert json.loads((ws / new).read_text())["enabled"] is False
+    assert json.loads((ws / "projects/acme/topics/blog/.maxxing.json").read_text()) == \
+        {"permission_mode": "default", "emoji": "x"}
+    assert len(r["held"]["rules"]) == 3 and any("security settings" in x for x in backup.held_lines(r["held"]))
+
+
+def test_restore_on_a_server_in_use_never_turns_a_job_or_an_extension_back_on(ws, mx_state):
+    """A job switched off here, the same in the backup but on, stays off; an extension disabled here stays disabled."""
+    crons = pytest.importorskip("maxxing.crons")
+    _in_use()
+    job = {"id": "j1", "name": "Blog", "schedule": "0 1 * * *", "kind": "shell", "command": "bash run.sh",
+           "enabled": False}
+    backup._cron_jobs_file().parent.mkdir(parents=True, exist_ok=True)
+    backup._cron_jobs_file().write_text(json.dumps({"jobs": [job]}))
+    config.update_config(extensions={"disabled": ["evil"]})
+    r = backup._apply({f"{backup.META_DIR}/crons/jobs.json": json.dumps({"jobs": [{**job, "enabled": True}]}).encode(),
+                       f"{backup.META_DIR}/config.json": json.dumps({"extensions": {"disabled": []}}).encode()})
+    assert not crons.list_jobs()[0]["enabled"] and r["held"]["crons"] == ["Blog"]
+    assert "evil" in config.load_config()["extensions"]["disabled"]

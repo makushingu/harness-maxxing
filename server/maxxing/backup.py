@@ -813,6 +813,7 @@ def _apply(files: dict[str, bytes], hold: bool | None = None) -> dict:
     if hold is None:
         hold = not _fresh_server()
     hooks_kept: dict[str, object] = {}
+    rules_held: list[str] = []
     skipped: list[str] = []
 
     def put(dest: Path, data: bytes, rel_trash: str) -> bool:
@@ -879,6 +880,9 @@ def _apply(files: dict[str, bytes], hold: bool | None = None) -> dict:
                 if stripped is not None:
                     hooks_held.append(rel)
                     hooks_kept[rel] = stripped
+                data, kept = _keep_local_rules(rel, data, dest)
+                if kept:
+                    rules_held.append(rel)
             if put(dest, data, "workspace/" + rel):
                 restored.append(rel)
 
@@ -938,12 +942,15 @@ def _apply(files: dict[str, bytes], hold: bool | None = None) -> dict:
                             except BackupError as e:      # the same checks as Settings: else the current value stays
                                 log.warning("backup: restored %s ignored: %s", k, e)
                     config.save_config(cfg)
-            if ext_held and isinstance(changes.get("extensions"), dict):
+            if hold and isinstance(changes.get("extensions"), dict):
                 # the saved settings bring their own disabled list: what this restore holds stays off in the same
                 # write (never a moment where held code looks enabled)
                 ext = dict(changes["extensions"])
                 dis = ext.get("disabled") if isinstance(ext.get("disabled"), list) else []
-                ext["disabled"] = sorted({x for x in dis if isinstance(x, str)} | set(ext_held))
+                # what is off here stays off too: a backup never turns code back on
+                now = (config.load_config().get("extensions") or {}).get("disabled")
+                now = now if isinstance(now, list) else []
+                ext["disabled"] = sorted({x for x in dis + now if isinstance(x, str)} | set(ext_held))
                 changes["extensions"] = ext
             if changes:
                 config.update_config(**changes)
@@ -951,6 +958,7 @@ def _apply(files: dict[str, bytes], hold: bool | None = None) -> dict:
             log.warning("restore: config not restored: %s", e)
     held["extensions"] = ext_held
     held["hooks"] = hooks_held
+    held["rules"] = rules_held
     if hooks_kept:                                   # kept aside, to put back by hand once checked
         _write_private(trash / "hooks-held.json", hooks_kept)
     # not run by the restore, but worth a look before use: skills (instructions + scripts), product patches
@@ -1030,7 +1038,7 @@ def _hold_new_jobs(blob: bytes) -> tuple[bytes, list[str], list[str]]:
     mode): the ones this server does not already have exactly the same come back disabled (whoever can push to the
     backup repository must not get code run here)."""
     data = json.loads(blob)
-    current = {_job_key(j) for j in _current_jobs()}
+    current = {_job_key(j) for j in _current_jobs() if j.get("enabled", True)}   # off here = never turned on
     names, ids = [], []
     for j in (data.get("jobs") if isinstance(data, dict) else None) or []:
         if isinstance(j, dict) and j.get("enabled", True) and _job_key(j) not in current \
@@ -1103,6 +1111,46 @@ def _strip_hooks(rel: str, data: bytes) -> tuple[bytes, object]:
     return data, None
 
 
+# What decides how far an agent / a topic goes (sandbox, permission mode, budget...): a server in use keeps its own.
+_AGENT_FILE = re.compile(r"\Aprojects/[^/]+/topics/[^/]+/agents/[^/]+/agent\.json\Z")
+_FOLDER_FILE = re.compile(r"\Aprojects/[^/]+(/topics/[^/]+)?/\.maxxing\.json\Z")
+_FOLDER_RULES = ("permission_mode", "allowed_tools", "browser", "devices")
+
+
+def _keep_local_rules(rel: str, data: bytes, dest: Path) -> tuple[bytes, bool]:
+    """agent.json / .maxxing.json restored on a server in use: their security settings stay the ones of this server
+    (a new agent comes back switched off, a new folder with the default rules). -> (data to write, changed)."""
+    agent = bool(_AGENT_FILE.match(rel))
+    if not agent and not _FOLDER_FILE.match(rel):
+        return data, False
+    from . import agents
+    keys = (*agents.SECURITY_FIELDS, *agents.SECURITY_LIMITS) if agent else _FOLDER_RULES
+    try:
+        d = json.loads(data)
+    except ValueError:
+        d = None
+    if not isinstance(d, dict):
+        return data, False                       # not a settings file the product would read anyway
+    try:
+        local = json.loads(dest.read_text()) if dest.is_file() else None
+    except (OSError, ValueError):
+        local = None
+    out = dict(d)
+    if isinstance(local, dict):
+        for k in keys:
+            out.pop(k, None)
+            if k in local:
+                out[k] = local[k]
+    else:
+        for k in keys if not agent else ():
+            out.pop(k, None)
+        if agent and out.get("enabled") is not False:
+            out["enabled"] = False
+    if out == d:
+        return data, False
+    return (json.dumps(out, indent=2, ensure_ascii=False) + "\n").encode(), True
+
+
 def _fresh_server() -> bool:
     """No session was ever started here: a new install (the installer's restore, a move to a new server)."""
     try:
@@ -1133,6 +1181,9 @@ def held_lines(held: dict) -> list[str]:
         out.append(f"{len(held['extensions'])} extension(s) with code disabled: {', '.join(held['extensions'][:10])}")
     if held.get("hooks"):
         out.append(f"Claude Code hooks / commands taken out of: {', '.join(held['hooks'][:5])}")
+    if held.get("rules"):
+        out.append(f"{len(held['rules'])} agent / topic setting file(s) restored with this server's security settings "
+                   f"(new agents switched off): {', '.join(held['rules'][:5])}")
     if held.get("mcp"):
         out.append(f"{len(held['mcp'])} local MCP server(s) not added: {', '.join(held['mcp'][:10])}")
     if held.get("outside"):
