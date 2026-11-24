@@ -241,7 +241,7 @@ function Console({ agent: a, index, layout, s, color, active }: { agent: Agent; 
         <div className="relative" style={{ width: W * s, height: H * s }}>
           <PodChair s={s} color={color} off={off} />
           <span className={cn('absolute', working && 'mx-game-bob', off && 'opacity-70')} style={{ left: 3 * s, top: s }}>
-            <AgentAvatarIcon avatar={a.avatar} size={16 * s} tile={false} mood={off ? 'sleep' : 'idle'} />
+            <AgentAvatarIcon avatar={a.avatar} size={16 * s} tile={false} mood={off ? 'sleep' : 'idle'} zzz={false} />
           </span>
           <ConsoleFront s={s} color={color} screen={st.id} decor={hash(a.path) % 4} />
           <StatusChip agent={a} status={st} s={s} />

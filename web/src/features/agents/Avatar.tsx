@@ -15,7 +15,7 @@ type AvatarMood = 'idle' | 'sleep'
 /** `tile` false = the character alone (sitting at its desk); `animate` = alive: breathes (head up and down one
  *  pixel), blinks now and then, looks left and right; asleep, slow breath and floating "z" (each face on its own beat;
  *  all off under reduced motion). On by default from 24 px: the 16 px faces of lists and chips stay still. */
-type Props = { avatar?: Partial<AgentAvatar> | null; size?: number; className?: string; title?: string; tile?: boolean; mood?: AvatarMood; animate?: boolean }
+type Props = { avatar?: Partial<AgentAvatar> | null; size?: number; className?: string; title?: string; tile?: boolean; mood?: AvatarMood; animate?: boolean; /** asleep and animated: the floating "z" (off where the page shows its own) */ zzz?: boolean }
 
 // The runs come from pixelsOf's cache (same array for the same face), so a redraw of the page skips the rects.
 const Rects = React.memo(({ runs }: { runs: Run[] }) => (
@@ -28,7 +28,7 @@ const TILE = `M1 0h${GRID - 2}v1h1v${GRID - 2}h-1v1h-${GRID - 2}v-1h-1v-${GRID -
 /** A 4x4 pixel "z" at (x, y). */
 const zPath = (x: number, y: number) => `M${x} ${y}h4v1h-4zM${x + 2} ${y + 1}h1v1h-1zM${x + 1} ${y + 2}h1v1h-1zM${x} ${y + 3}h4v1h-4z`
 
-function AvatarIcon({ avatar, size = 32, className, title, tile = true, mood = 'idle', animate = size >= 24 }: Props) {
+function AvatarIcon({ avatar, size = 32, className, title, tile = true, mood = 'idle', animate = size >= 24, zzz = true }: Props) {
   const a = normalize(avatar)
   const px = pixelsOf(a, mood === 'sleep')
   const blink = animate && mood !== 'sleep' && px.blink.length > 0
@@ -43,7 +43,7 @@ function AvatarIcon({ avatar, size = 32, className, title, tile = true, mood = '
       role={title ? 'img' : undefined}
       aria-hidden={title ? undefined : true}
       className={cn('shrink-0', blink && 'mx-px-blinker', className)}
-      style={animate ? ({ '--mx-blink-delay': `${delay}s` } as React.CSSProperties) : undefined}
+      style={animate ? ({ '--mx-blink-delay': `${delay}s`, '--mx-look-l': `${-px.look[0]}px`, '--mx-look-r': `${px.look[1]}px` } as React.CSSProperties) : undefined}
     >
       {title && <title>{title}</title>}
       {tile && <path d={TILE} fill={px.tile} fillOpacity={0.22} />}
@@ -54,10 +54,12 @@ function AvatarIcon({ avatar, size = 32, className, title, tile = true, mood = '
             <Rects runs={px.head} />
             <Rects runs={px.eyes} />
           </g>
-          <g fill="#5b9cf6">
-            <path className="mx-px-z" d={zPath(9, 3)} />
-            <path className="mx-px-z mx-px-z2" d={zPath(12, 0)} />
-          </g>
+          {zzz && (
+            <g fill="#5b9cf6">
+              <path className="mx-px-z" d={zPath(12, 3)} />
+              <path className="mx-px-z mx-px-z2" d={zPath(12, 3)} />
+            </g>
+          )}
         </>
       ) : animate ? (
         <>
@@ -66,8 +68,8 @@ function AvatarIcon({ avatar, size = 32, className, title, tile = true, mood = '
             <Rects runs={px.head} />
             <g className="mx-px-look">
               <g className="mx-px-eyes"><Rects runs={px.eyes} /></g>
-              {blink && <g className="mx-px-blink"><Rects runs={px.blink} /></g>}
             </g>
+            {blink && <g className="mx-px-blink"><Rects runs={px.blink} /></g>}
           </g>
         </>
       ) : (

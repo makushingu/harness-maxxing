@@ -47,8 +47,8 @@ const BLUSH = L(9, '....b...')
 const HAIR_FRONT: Record<string, Layer> = {
   short: L(2, '.....hhh', '....hhhh', '...hhhhh', '...hhhhh', '...h....'),
   spiky: L(1, '...h..h.', '...hh.hh', '...hhhhh', '...hhhhh', '...hh.hh', '...h....'),
-  long: L(2, '.....hhh', '....hhhh', '...hhhhh', '...hhhhh', '...hh...', '...h....', '...h....'),
-  curly: L(1, '....hh.h', '...hhhhh', '..hhhhhh', '..hhhhhh', '..hhhhhh', '..hhh...', '..hh....', '..hh....'),
+  long: L(2, '.....hhh', '....hhhh', '...hhhhh', '...hhhhh', '...h....', '...h....', '...h....'),
+  curly: L(1, '....hh.h', '...hhhhh', '..hhhhhh', '..hhhhhh', '..hhh...', '..hh....', '..hh....', '..hh....'),
   bun: L(0, '......hh', '......hh', '.....hhh', '....hhhh', '...hhhhh', '...hhhhh', '...h....'),
   afro: L(0, '....hhhh', '..hhhhhh', '.hhhhhhh', '.hhhhhhh', '.hhhhhhh', '.hhhhhhh', '.hh.....', '.hh.....', '..h.....'),
   ponytail: L(2, '.....hhh', '....hhhh', '...hhhhh', '...hhhhh', '...h....'),
@@ -58,7 +58,7 @@ const HAIR_FRONT: Record<string, Layer> = {
   braids: L(2, '.....hhh', '....hhhh', '...hhhhh', '...hhh.h', '...h....'),
   pigtails: L(2, '.....hhh', '....hhhh', '...hhhhh', '...hhhhh', '...h....'),
   spacebuns: L(0, '..hh....', '.hhhh...', '.hhhhhhh', '...hhhhh', '...hhhhh', '...h....'),
-  swept: L(2, '.....hhhhhh.....', '....hhhhhhhh....', '...hhhhhhhhhh...', '...hhhhhhhhhh...', '...hhhhhh...h...', '...hh...........'),
+  swept: L(2, '.....hhhhhh.....', '....hhhhhhhh....', '...hhhhhhhhhh...', '...hhhhhhh..h...', '...h........h...', '...h............'),
 }
 const HAIR_BACK: Record<string, Layer> = {
   long: L(5, ...rep(9, '..hh....')),
@@ -79,16 +79,16 @@ const HAIR_DARK: Record<string, [number, number][]> = {
   swept: [[9, 3], [7, 5]],
 }
 
-// ---- faces: eyes (rows 6-8, hidden by the blink) and mouth (rows 9-10) ----
+// ---- faces: eyes (rows 6-8, hidden by the blink; never touching the mouth) and mouth (rows 9-10) ----
 const EYES: Record<string, Layer> = {
-  smile: L(7, '.....k..', '.....k..'),
-  happy: L(7, '.....k..', '....k.k.'),
+  smile: L(6, '.....k..', '.....k..'),
+  happy: L(6, '.....k..', '....k.k.'),
   focused: L(6, '....kk..', '.....k..', '.....k..'),
   sleepy: L(8, '....kk..'),
-  wink: L(7, '.....k..........', '.....k....kk....'),
+  wink: L(6, '.....k..........', '.....k....kk....'),
   surprised: L(7, '....wk....wk....', '....kk....kk....'),
-  grin: L(7, '.....k..', '.....k..'),
-  cheeky: L(7, '.....k..', '....k.k.'),
+  grin: L(6, '.....k..', '.....k..'),
+  cheeky: L(6, '.....k..', '....k.k.'),
   calm: L(7, '....k.k.', '.....k..'),
 }
 const MOUTHS: Record<string, Layer> = {
@@ -104,11 +104,11 @@ const MOUTHS: Record<string, Layer> = {
 }
 /** the eyes closed, for the blink (none for the faces whose eyes are closed already) */
 const BLINK: Record<string, Layer> = {
-  smile: L(8, '....kk..'),
+  smile: L(7, '....kk..'),
   focused: L(6, '....kk..', '........', '....kk..'),
-  wink: L(8, '....kk....kk....'),
+  wink: L(7, '....kk....kk....'),
   surprised: L(8, '....kk..'),
-  grin: L(8, '....kk..'),
+  grin: L(7, '....kk..'),
 }
 /** the eyes of a character asleep (an agent that is off) */
 const ASLEEP = L(8, '....kk..')
@@ -157,7 +157,9 @@ function palette(a: AgentAvatar): Record<string, string> {
 
 export type Run = { x: number; y: number; w: number; fill: string }
 /** `head` + `bust` = `body` split at the neck (the head nods on its own). */
-type Pixels = { body: Run[]; head: Run[]; bust: Run[]; eyes: Run[]; blink: Run[]; tile: string }
+/** `look` = how far the eyes may glance left / right (0 or 1 pixel): only onto bare skin, never over hair, glasses
+ *  or out of the face. */
+type Pixels = { body: Run[]; head: Run[]; bust: Run[]; eyes: Run[]; blink: Run[]; tile: string; look: [number, number] }
 
 function runs(grid: (string | null)[], pal: Record<string, string>): Run[] {
   const out: Run[] = []
@@ -200,6 +202,16 @@ export function pixelsOf(a: AgentAvatar, sleep = false): Pixels {
   const eyes = blank()
   paint(eyes, sleep ? ASLEEP : EYES[a.face])
   paint(g, ACCESSORY[a.accessory])
+  // How far the eyes can glance: every open-eye pixel must land on skin (the blink stays in place).
+  const glance = (dx: number) => {
+    for (let i = 0; i < eyes.length; i++) {
+      if (!eyes[i]) continue
+      const x = (i % GRID) + dx
+      if (x < 0 || x >= GRID || (g[i + dx] !== 's' && g[i + dx] !== 'b')) return 0
+    }
+    return 1
+  }
+  const look: [number, number] = [glance(-1), glance(1)]
   // Ink outline around the silhouette (4 neighbours), so the character reads on any background.
   const filled = g.slice()
   const at = (x: number, y: number) => x >= 0 && x < GRID && y >= 0 && y < GRID && !!filled[y * GRID + x]
@@ -210,7 +222,7 @@ export function pixelsOf(a: AgentAvatar, sleep = false): Pixels {
   // the outline only fills empty cells: the glasses' cells are the same as before it
   if (a.accessory === 'glasses') for (let i = 0; i < g.length; i++) if (g[i] === 'g') eyes[i] = blink[i] = null
   const body = runs(g, pal)
-  const out = { body, head: body.filter((r) => r.y < NECK), bust: body.filter((r) => r.y >= NECK), eyes: runs(eyes, pal), blink: runs(blink, pal), tile: sleep ? grey(pal.c) : pal.c }
+  const out = { body, head: body.filter((r) => r.y < NECK), bust: body.filter((r) => r.y >= NECK), eyes: runs(eyes, pal), blink: runs(blink, pal), tile: sleep ? grey(pal.c) : pal.c, look }
   cache.set(key, out)
   return out
 }

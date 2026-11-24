@@ -458,6 +458,8 @@ export type Pending = { lid: string; text: string; attachments: string[]; queued
 type PendingState = {
   bySession: Record<string, Pending[]>
   add: (sid: string, p: Omit<Pending, 'lid' | 'at'>) => string
+  /** The server queued it, or not (the answer of the send): changes it in place (gone if already settled). */
+  setQueued: (sid: string, lid: string, queued: boolean) => void
   remove: (sid: string, lid: string) => void
   /** A `user` event arrived: drop every pending it carries (`ids`: the server merges the messages sent while a turn
    *  runs, or held behind a summary, into ONE event with all their ids and the texts joined), else the first one with
@@ -474,6 +476,8 @@ export const usePending = create<PendingState>((set) => ({
     set((s) => ({ bySession: { ...s.bySession, [sid]: [...(s.bySession[sid] || []), { ...p, lid, at: Date.now() }] } }))
     return lid
   },
+  setQueued: (sid, lid, queued) =>
+    set((s) => ({ bySession: { ...s.bySession, [sid]: (s.bySession[sid] || []).map((p) => (p.lid === lid ? { ...p, queued } : p)) } })),
   remove: (sid, lid) => set((s) => ({ bySession: { ...s.bySession, [sid]: (s.bySession[sid] || []).filter((p) => p.lid !== lid) } })),
   settle: (sid, text, ids) =>
     set((s) => {
@@ -483,8 +487,9 @@ export const usePending = create<PendingState>((set) => ({
         const left = list.filter((p) => !p.cid || !ids.includes(p.cid))
         if (left.length < list.length) return { bySession: { ...s.bySession, [sid]: left } }
       }
+      // by text: only a message sent without an id when the event carries ids (one with its own id waits for it)
       const norm = text.trim()
-      const i = list.findIndex((p) => p.text.trim() === norm)
+      const i = list.findIndex((p) => p.text.trim() === norm && !(ids?.length && p.cid))
       if (i < 0) return s
       return { bySession: { ...s.bySession, [sid]: list.filter((_, j) => j !== i) } }
     }),

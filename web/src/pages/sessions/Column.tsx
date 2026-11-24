@@ -548,10 +548,8 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
     notifySent(sid)
     try {
       const r = await send.mutateAsync({ id: sid, text, attachments, client_id: clientId, mentions, ...(call ? { call } : {}) })
-      if (r.queued !== running) {
-        remove(sid, lid)
-        add(sid, { text, attachments, queued: r.queued, mentions: named, cid: clientId })
-      }
+      // in place: the live stream may have settled it already, it must not come back
+      if (r.queued !== running) usePending.getState().setQueued(sid, lid, r.queued)
       return true
     } catch {
       remove(sid, lid)
