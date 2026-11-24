@@ -5,6 +5,10 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## Unreleased
+
+- Backup restore (`backup._keep_local_rules`, hold mode): an `agent.json` whose local copy has `"enabled": false` is written with `"enabled": false` whatever the backup says, as `_hold_new_jobs` and the extensions' disabled list already do; held in `held["rules"]`. Test `test_restore_on_a_server_in_use_never_turns_an_agent_back_on`.
+
 ## 2.0.0-alpha.169 - 2026-11-24
 
 - Browser (FEU): `pool.TURN_END_SLEEP` 15 min; `turn_ended[nav]` set when a session navigator's turn is found dead,

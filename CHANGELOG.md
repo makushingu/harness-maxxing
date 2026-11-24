@@ -3,6 +3,11 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## Unreleased
+
+Fixes:
+- **A restore no longer switches an agent back on.** Restoring a backup on a server in use kept every job and extension you had switched off, but an agent you had switched off here came back on if it was on in the backup. It now stays off, like the rest; switch it on again from the Agents page if you want it.
+
 ## 2.0.0-alpha.169 - 2026-11-24
 
 New:
