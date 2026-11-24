@@ -2,15 +2,12 @@
 // Its conversation is a session of its hidden topic (server jarvis.py), shown with the same column as the Sessions
 // page (SessionColumn, "solo"); beside it, the work board: what Jarvis handed to which session, and where it stands.
 // Its settings (rights, ask first, daily conversation, brief and night pass times, internals) sit in the gear menu.
-// On the right, one panel with two tabs: "At work", the sessions working now drawn as little pixel characters (Crew.tsx),
-// and "Work", the board.
 import * as React from 'react'
 import { Link } from 'react-router'
 import { Archive, CalendarDays, Check, ExternalLink, Eye, Hand, ListTodo, MessageSquarePlus, MessagesSquare, Minimize2, Moon, PanelRightClose, Send, Settings2, ShieldCheck, Sparkles, Sun, X, type LucideIcon } from 'lucide-react'
 import { useLang, useT, type TKey } from '@/i18n'
 import { useCloseJarvisWork, useJarvis, useJarvisBrief, useJarvisDream, useJarvisSettings, useNewJarvisConversation, useOpenJarvis } from '@/lib/queries'
 import type { JarvisSettings, JarvisWork } from '@/lib/types'
-import { Crew, CREW_STYLES, GLYPHS, useCrew, type CrewStyle, type GlyphKind } from './Crew'
 import { cn } from '@/lib/utils'
 import { fmtRelative } from '@/lib/format'
 import { Button, EmptyState, Input, Select, Skeleton, StatusDot, Tooltip } from '@/components/ui'
@@ -64,8 +61,6 @@ function JarvisView() {
     if (st?.on && !st.session && !opening && !open.isError) openMutate()
   }, [st?.on, st?.session, opening, open.isError, openMutate])
   const col = React.useMemo<Col>(() => ({ key: `jarvis:${sid}`, kind: 'session', id: sid }), [sid])
-  const crew = useCrew(st?.path || '', st?.work)
-  const busy = crew.filter((c) => c.mood === 'work').length
 
   if (isLoading) return <Skeleton className="m-6 h-40" />
   if (!st?.on)
@@ -104,24 +99,13 @@ function JarvisView() {
               <Button
                 variant={board ? 'secondary' : 'ghost'}
                 size="icon-sm"
-                className={cn('relative', workOpen && 'lg:bg-secondary')}
+                className={cn(workOpen && 'lg:bg-secondary')}
                 aria-label={t('jarvis.board.title')}
                 aria-pressed={board || undefined}
                 onClick={toggleWork}
                 data-testid="jarvis-work-toggle"
               >
                 <ListTodo />
-                {(waiting > 0 || busy > 0) && (
-                  <span
-                    className={cn(
-                      'pointer-events-none absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-medium tabular-nums text-white',
-                      waiting > 0 ? 'bg-warning' : 'bg-primary',
-                    )}
-                    data-testid="jarvis-work-count"
-                  >
-                    {waiting || busy}
-                  </span>
-                )}
               </Button>
             </Tooltip>
             <Tooltip content={t('jarvis.set.title')}>
@@ -144,113 +128,17 @@ function JarvisView() {
           data-testid="jarvis-board"
         >
           <ResizeEdge side={aside} edge="left" min={WORK_W.min} max={WORK_W.max} onWidth={saveWorkW} />
-          <Side work={st.work} crew={crew} busy={busy} asks={waiting} onHide={toggleWork} />
+          <Board work={st.work} onHide={toggleWork} />
         </aside>
       </div>
     </div>
   )
 }
 
-/* ---------------------------------------------------------------- the side panel: at work / the board */
-const TAB_KEY = 'mx.jarvis.tab'
-const LOOK_KEY = 'mx.jarvis.crew'
-const GLYPH_KEY = 'mx.jarvis.glyph'
-
-function Side({ work, crew, busy, asks, onHide }: { work: JarvisWork[]; crew: ReturnType<typeof useCrew>; busy: number; asks: number; onHide: () => void }) {
-  const t = useT()
-  const [tab, setTab] = React.useState<'crew' | 'work'>(() => (localStorage.getItem(TAB_KEY) === 'work' ? 'work' : 'crew'))
-  const [look, setLook] = React.useState<CrewStyle>(() => {
-    const v = localStorage.getItem(LOOK_KEY) as CrewStyle
-    return CREW_STYLES.includes(v) ? v : 'desk'
-  })
-  const [glyph, setGlyph] = React.useState<GlyphKind>(() => {
-    const v = localStorage.getItem(GLYPH_KEY) as GlyphKind
-    return GLYPHS.includes(v) ? v : 'orb'
-  })
-  const pick = (v: 'crew' | 'work') => {
-    setTab(v)
-    localStorage.setItem(TAB_KEY, v)
-  }
-  const open = work.filter((w) => w.state !== 'closed').length
-  const tabs = [
-    { v: 'crew' as const, label: t('jarvis.live.title'), n: busy },
-    { v: 'work' as const, label: t('jarvis.board.title'), n: open, warn: asks > 0 },
-  ]
-  return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex h-11 shrink-0 items-center gap-1 border-b pr-2 pl-2">
-        <div className="flex min-w-0 flex-1 items-center gap-1" role="tablist">
-          {tabs.map((x) => (
-            <button
-              key={x.v}
-              type="button"
-              role="tab"
-              aria-selected={tab === x.v}
-              onClick={() => pick(x.v)}
-              className={cn(
-                'flex h-7 items-center gap-1.5 rounded-md px-2.5 text-sm transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                tab === x.v ? 'bg-secondary font-medium text-foreground' : 'text-muted-foreground hover:text-foreground',
-              )}
-              data-testid={`jarvis-tab-${x.v}`}
-            >
-              {x.label}
-              {x.n > 0 && <span className={cn('rounded-full px-1.5 text-[11px] tabular-nums', x.warn ? 'bg-warning/20 text-warning' : 'bg-muted text-muted-foreground')}>{x.n}</span>}
-            </button>
-          ))}
-        </div>
-        <Tooltip content={t('jarvis.board.hide')}>
-          <Button variant="ghost" size="icon-sm" aria-label={t('jarvis.board.hide')} onClick={onHide} data-testid="jarvis-work-hide">
-            <PanelRightClose className="max-lg:hidden" />
-            <X className="lg:hidden" />
-          </Button>
-        </Tooltip>
-      </div>
-      {tab === 'crew' ? (
-        <div className="min-h-0 flex-1 overflow-y-auto p-3">
-          {/* the three looks, side by side while one is chosen */}
-          <div className="mb-3 flex gap-1" data-testid="jarvis-crew-looks">
-            {CREW_STYLES.map((v) => (
-              <button
-                key={v}
-                type="button"
-                onClick={() => {
-                  setLook(v)
-                  localStorage.setItem(LOOK_KEY, v)
-                }}
-                className={cn('rounded-md border px-2 py-0.5 text-xs', look === v ? 'border-primary text-primary' : 'text-muted-foreground hover:text-foreground')}
-              >
-                {t(`jarvis.crew.${v}`)}
-              </button>
-            ))}
-          </div>
-          <div className="-mt-2 mb-3 flex gap-1" data-testid="jarvis-crew-glyphs">
-            {GLYPHS.map((v) => (
-              <button
-                key={v}
-                type="button"
-                onClick={() => {
-                  setGlyph(v)
-                  localStorage.setItem(GLYPH_KEY, v)
-                }}
-                className={cn('rounded-md border px-2 py-0.5 text-xs', glyph === v ? 'border-primary text-primary' : 'text-muted-foreground hover:text-foreground')}
-              >
-                {t(`jarvis.crew.${v}`)}
-              </button>
-            ))}
-          </div>
-          <Crew crew={crew} look={look} glyph={glyph} />
-        </div>
-      ) : (
-        <Board work={work} />
-      )}
-    </div>
-  )
-}
-
+/* ---------------------------------------------------------------- the work board */
 type Group = { key: string; title: TKey; items: JarvisWork[] }
 
-/* ---------------------------------------------------------------- the work board */
-function Board({ work }: { work: JarvisWork[] }) {
+function Board({ work, onHide }: { work: JarvisWork[]; onHide: () => void }) {
   const t = useT()
   const [closed, setClosed] = React.useState(false)
   const groups: Group[] = [
@@ -262,13 +150,20 @@ function Board({ work }: { work: JarvisWork[] }) {
   const empty = groups.every((g) => !g.items.length)
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {old.length > 0 && (
-        <div className="flex shrink-0 justify-end px-3 pt-2">
-          <button type="button" className="text-xs text-muted-foreground hover:text-foreground" onClick={() => setClosed((c) => !c)}>
+      <div className="flex h-11 shrink-0 items-center gap-2 border-b pr-2 pl-4">
+        <span className="min-w-0 flex-1 truncate text-sm font-medium">{t('jarvis.board.title')}</span>
+        {old.length > 0 && (
+          <button type="button" className="shrink-0 text-xs text-muted-foreground hover:text-foreground" onClick={() => setClosed((c) => !c)}>
             {t(closed ? 'jarvis.board.hideClosed' : 'jarvis.board.showClosed', { count: old.length })}
           </button>
-        </div>
-      )}
+        )}
+        <Tooltip content={t('jarvis.board.hide')}>
+          <Button variant="ghost" size="icon-sm" aria-label={t('jarvis.board.hide')} onClick={onHide} data-testid="jarvis-work-hide">
+            <PanelRightClose className="max-lg:hidden" />
+            <X className="lg:hidden" />
+          </Button>
+        </Tooltip>
+      </div>
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-3">
         {empty && !closed && <p className="px-1 py-6 text-center text-[13px] text-muted-foreground">{t('jarvis.board.empty')}</p>}
         {groups
@@ -278,8 +173,8 @@ function Board({ work }: { work: JarvisWork[] }) {
               <h3 className="px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 {t(g.title)} · {g.items.length}
               </h3>
-              {g.items.map((w, i) => (
-                <WorkCard key={w.id} w={w} i={i} />
+              {g.items.map((w) => (
+                <WorkCard key={w.id} w={w} />
               ))}
             </section>
           ))}
@@ -304,20 +199,14 @@ const STATE_LABEL: Record<JarvisWork['state'], TKey> = {
   closed: 'jarvis.state.closed',
 }
 
-function WorkCard({ w, i = 0 }: { w: JarvisWork; i?: number }) {
+function WorkCard({ w }: { w: JarvisWork }) {
   const t = useT()
   const lang = useLang()
   const close = useCloseJarvisWork()
-  // closed at once on screen (the board's refresh confirms it, an error puts it back)
-  const shut = close.isPending || w.state === 'closed'
   const where = w.path.replace(/^projects\//, '').replace('/topics/', '/').replace('/agents/', ' · ')
   const asks = w.state === 'replied' && w.question
   return (
-    <article
-      className={cn('mx-rise rounded-lg border bg-card p-3 text-sm transition-[opacity,border-color] duration-300', asks && 'border-warning/50', shut && 'opacity-60')}
-      style={{ '--i': Math.min(i, 8) } as React.CSSProperties}
-      data-testid="jarvis-work"
-    >
+    <article className={cn('rounded-lg border bg-card p-3 text-sm', asks && 'border-warning/50', w.state === 'closed' && 'opacity-60')} data-testid="jarvis-work">
       <div className="flex items-start gap-2">
         <StatusDot tone={asks ? 'warn' : TONE[w.state]} pulse={w.state === 'running'} className="mt-1.5" label={t(STATE_LABEL[w.state])} />
         <div className="min-w-0 flex-1">
@@ -343,8 +232,8 @@ function WorkCard({ w, i = 0 }: { w: JarvisWork; i?: number }) {
             {t('jarvis.work.open')}
           </Link>
         </Button>
-        {!shut && (
-          <Button variant="ghost" size="sm" onClick={() => close.mutate(w.id)}>
+        {w.state !== 'closed' && (
+          <Button variant="ghost" size="sm" onClick={() => close.mutate(w.id)} disabled={close.isPending}>
             <Check />
             {t('jarvis.work.close')}
           </Button>

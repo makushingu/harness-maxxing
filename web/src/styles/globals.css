@@ -394,26 +394,6 @@ html[data-material='glass'] :is(.mx-lg-btn, .mx-lg-pill):focus-visible {
 @keyframes mx-sweep { from { transform: scaleX(0); } }
 @keyframes mx-dot-in { from { opacity: 0; transform: scale(0); } 70% { opacity: 1; transform: scale(1.3); } }
 @keyframes mx-draw { from { stroke-dashoffset: 1; } }
-/* Jarvis's side panel pictograms (pages/jarvis/Crew.tsx), coloured by --c: an orb that breathes inside a turning arc,
-   terminal lines that type, sound bars that bounce. */
-.mx-orb-ring { background: conic-gradient(from 0deg, transparent 0 55%, var(--c) 85%, transparent 100%); -webkit-mask: radial-gradient(circle, transparent 62%, #000 64%); mask: radial-gradient(circle, transparent 62%, #000 64%); animation: mx-orb-spin 1.6s linear infinite; }
-@keyframes mx-orb-spin { to { transform: rotate(360deg); } }
-.mx-orb-pulse { animation: mx-orb-pulse 2.2s ease-in-out infinite; }
-@keyframes mx-orb-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(0.86); } }
-.mx-term-type { animation: mx-term-type 2.4s steps(8, end) infinite; transform-origin: left; }
-@keyframes mx-term-type { 0% { transform: scaleX(0); } 70%, 100% { transform: scaleX(1); } }
-.mx-eq { animation: mx-eq 1s ease-in-out infinite; }
-@keyframes mx-eq { 0%, 100% { transform: scaleY(0.35); } 50% { transform: scaleY(1); } }
-/* Jarvis's side panel, "track" look (pages/jarvis/Crew.tsx): a session's character runs back and forth along its
-   lane while it works, turning round at each end; stepped like the pixel office. */
-.mx-crew-run { animation: mx-crew-run 7s steps(28, end) infinite; }
-@keyframes mx-crew-run {
-  0% { left: 0; transform: scaleX(1); }
-  49.9% { left: calc(100% - 24px); transform: scaleX(1); }
-  50% { left: calc(100% - 24px); transform: scaleX(-1); }
-  99.9% { left: 0; transform: scaleX(-1); }
-  100% { left: 0; transform: scaleX(1); }
-}
 
 @layer base {
   * { border-color: var(--color-border); }

@@ -7,11 +7,10 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 
 Fixes:
 - **No more message stuck on "Sending…".** Two messages sent close together (while Harness was summarizing a session, or before a turn starts) arrive as one: the first one stayed below the conversation as "Sending…" forever. Each message is now recognized by its id.
-- **A long message no longer hides the end of the conversation.** As the message box grew line after line, the conversation above it (Jarvis, sessions) let go of the bottom and the last message slipped under the box. It now stays at the bottom while you type.
+- **A long message no longer hides the end of the conversation.** As the message box grew line after line, the conversation above it (sessions, Jarvis) let go of the bottom and the last message slipped under the box. It now stays at the bottom while you type.
 - **Jarvis continues a recent session instead of always starting a new one.** Its rules asked it to check the topic's recent sessions first, but it never did: every piece of work started from zero. Now `maxxing sessions new` from Jarvis's conversation is refused while the topic has a session that can take the work, with their list; closest to the subject first. Jarvis sends the work there (its context is already there), or for another subject starts one with `--fresh "<reason>"`: the reason shows on its card in the work board.
 
 New:
-- **Jarvis shows the sessions at work.** Beside its conversation, a panel with two tabs: **At work**, each session working now as a small animated pictogram in its project's colour (a "!" when its work waits for you, a check once done), and **Work**, the board. The Work button carries a count (orange: work waiting for you).
 - **Agents come more alive.** They breathe and look around all the time (lists, headers, the office), not only while they work, at a slow and calm pace; a switched-off agent sleeps, breathing slowly with "z" floating above its head; three new faces (grin, cheeky, calm), nine new hairstyles (afro, ponytail, mohawk, buzz cut, bob, braids, pigtails, space buns, side swept) plus three special characters (a frog, a big brain, a giga chad) and a lightly matte skin; a random character now has a matte or lightly matte skin four times in five.
 - **Webhooks and events: automations without AI.** Two new pages in Settings -> Automate. **Webhooks** gives your
   server URLs that other services call (Stripe, Shopify, GitHub, Tally, n8n, Zapier, a Shortcut on your phone that
