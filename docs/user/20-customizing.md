@@ -7,7 +7,7 @@ Your server, your product: you can change anything, and updates keep your change
 Claude ("put a snake game on my dashboard", "allow 20 sessions per topic") - it picks the right
 level below, records what it did and carries it over every update.
 
-Many changes need no code at all: **Settings -> Appearance** (colours, layout, fonts), **Settings -> Features**
+Many changes need no code at all: **Settings -> Appearance** (theme, colours, fonts, layout), **Settings -> Features**
 (which pages show, their order in the sidebar), the dashboard's **Edit layout**. Claude points to them first.
 
 ## Three levels

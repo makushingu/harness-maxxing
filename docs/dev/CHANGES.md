@@ -8,6 +8,7 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 ## Unreleased
 
 - Mail: `AccountDialog.tsx` `setPort()` sets `imap_tls` / `smtp_tls` from `PORT_TLS` (SMTP 465 ssl, 587/25 starttls; IMAP 993 ssl, 143 starttls, as `cmd_mail` picks them) when a well-known port is typed; other ports and a later Security choice are left alone. `imap.tls_error()` (used by `open_imap` and `mail.open_smtp`) turns `WRONG_VERSION_NUMBER` with `tls == "ssl"` into "this port expects STARTTLS, not SSL/TLS". Test: `test_ssl_on_a_starttls_port_says_to_pick_starttls`.
+- Appearance: cards Theme (`ThemePicker`, tiles with `ThemePreview` for `material` solid / glass, `THEMES` list where installed themes will go) -> Options of <theme> (mode, accent, tint, fonts) -> Layout. Store fields unchanged (`material` is the theme). Keys `appearance.theme*`, `appearance.default`, `appearance.solidDesc` / `glassDesc`, `appearance.options*` added; `appearance.colors*`, `appearance.fonts`, `settings.material*` removed; `shell.theme` reads Mode.
 - Session watcher (`service._scan`): a meta file is identified by `(inode, mtime_ns, size)` (`_ident`, as `meta_ident` and `store._cache`), no longer by `mtime_ns` alone: two atomic writes in one tick of the kernel's coarse clock share the mtime, and the second was skipped (an idle session until its next write, a running one until `RUNNING_RECHECK_S`). `_known` / `_damaged` hold that tuple. `tests/test_agent_turn_bus.py` failed about 2 runs in 3 because of it.
 
 ## 2.0.0-alpha.168 - 2026-11-24

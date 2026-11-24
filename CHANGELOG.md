@@ -5,6 +5,9 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 
 ## Unreleased
 
+Improvements:
+- **A clearer Appearance page.** Settings -> Appearance now starts with the theme: *Solid* (the default) or *Glass*, each shown as a small preview. Below it, the options of that theme: dark or light mode, accent color, background and fonts. The layout of the device gets its own card.
+
 Fixed:
 - **The Harness Browser no longer keeps a session's pages running after its turn.** 15 minutes after the turn ends, if no new turn uses them, the tabs it opened sleep (a 3D render left open kept the CPU busy). They are still listed and open again at the next turn.
 - **Changing a mailbox's port now changes its security too.** In the mailbox dialog of the E-mail page, typing 465 or 993 picks SSL/TLS and 587, 25 or 143 picks STARTTLS (a security picked afterwards is kept). SSL/TLS on a port that expects STARTTLS now fails with "this port expects STARTTLS" instead of a bare TLS error.
