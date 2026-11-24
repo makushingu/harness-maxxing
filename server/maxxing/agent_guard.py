@@ -752,6 +752,8 @@ OWNER_SUBS = {      # command -> (sub-commands of the owner only in any agent tu
     "devices": (DEVICES_OWNER_ONLY, "the person's devices belong to the owner. Say what should change in your answer "
                                     "(the owner's conversation asks for a device with `maxxing agents set <itself> "
                                     "devices='[\"<id>\"]'`: a request the owner allows)."),
+    "themes": (frozenset({"install", "remove"}), "themes change the owner's interface. Say which theme to install in "
+                                                 "your answer."),
     "webhooks": (WEBHOOKS_OWNER_ONLY, "webhooks and events run commands and calls with the owner's rights, without "
                                       "an agent's budget or guards. Say what should be done in your answer."),
 }

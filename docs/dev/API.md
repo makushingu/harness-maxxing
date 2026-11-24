@@ -260,6 +260,20 @@ Run  = {id, cron_id, name, at, ok, code, duration_s, output_tail, session_id|nul
 | GET | `/api/crons/preview?schedule=` | – | `{valid, human, next:[at×5], error?}` (next runs in the configured time zone) |
 | GET | `/api/crons/preview?once_at=` | – | `{valid, human, next:[at], once:true, error?}` (a one-time date, read in the configured time zone) · POST/PATCH with a past `once_at` -> `400 invalid_once` |
 
+## Themes (Settings -> Appearance, `maxxing/themes.py`)
+Installed themes, read-only: `<workspace>/themes/<id>/theme.json` (format: docs/user/39-themes.md), installed by Claude
+with `maxxing themes install` (never from the UI). Each theme is returned checked and cleaned: only variables of
+`themes.TOKENS`, values re-validated by kind (colors, sizes, shadows, numbers; no `url()`, `var()`, `;`, braces), text
+pairs below their contrast dropped. The web app writes them as CSS rules on `html[data-theme-id]` (`lib/themes.ts`).
+`Theme = {id, name, description, author, version, homepage, base: solid|glass, modes: [light|dark], light: {token: css},
+dark: {...}, options: {mode?, accent?, tint?, font?, mono?, density?}, own_accent, own_surfaces,
+wallpaper: {light: url|null, dark: url|null}, preview: url|null, warnings: [str]}`.
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | `/api/themes` | - | `{themes: Theme[], errors: [{id, error}]}` (folders that are not usable, with the reason) |
+| GET | `/api/themes/{id}/file/{name}` | - | an image the theme names (`wallpaper`, `wallpaper_dark`, `preview`), else 404 |
+
 ## Webhooks & events (Settings -> Automate, `maxxing/webhooks.py`)
 Automations without AI: one trigger + one action. Made from the pages' short form (`POST /api/webhooks`, `PATCH`
 with the whole `trigger` / `action`, the form merging what it does not show) or by Harness from a session

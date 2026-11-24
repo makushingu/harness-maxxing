@@ -37,6 +37,7 @@ The page only reads the skills: changes go through Claude (or your editor), neve
 | `maxxing-webhooks` | you want a URL that a service calls (Stripe, GitHub, a form, n8n, a phone Shortcut) or "when X happens, do Y" without AI: Settings -> Webhooks / Events |
 | `maxxing-mail` | you talk about your inbox, mail to answer or sort, drafts, or want an agent to handle a mailbox |
 | `maxxing-mcp` | you want Claude to use a service through MCP ("connect the Google Ads MCP"), an MCP tool is missing or needs a sign-in |
+| `maxxing-theme` | you want a theme (other colors, your brand's look, a wallpaper behind Glass) or to install one from Community: Settings -> Appearance -> Theme |
 | `maxxing-browser` | you want Claude to open a site, sign in or fill in a form for you, it says it has no browser, a page is refused or a connection is down |
 | `maxxing-devices` | you want Claude to do something on your computer or phone, add a device, or a device is offline, view only or on the wrong screen |
 | `maxxing-extension` | you want a dashboard widget (Card, or HTML: a game, a canvas) or a custom page |

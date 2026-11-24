@@ -1186,6 +1186,17 @@ R('POST', '/api/auth/password', ({ body }) => {
 
 /* ---- onboarding */
 R('GET', '/api/onboarding', () => onboardingObj())
+// Installed themes (Settings -> Appearance): two examples, as the server sends them once checked (themes.py).
+const MOCK_THEMES = [
+  { id: 'nord', name: 'Nord', description: { en: 'Arctic blues, calm and cold.', fr: 'Bleus arctiques, calmes et froids.' }, author: 'acme', version: '1.0.0', homepage: '', base: 'solid', modes: ['light', 'dark'],
+    light: { sidebar: '#e5e9f0', list: '#eceff4', background: '#f4f6f9', card: '#ffffff', popover: '#ffffff', foreground: '#2e3440', 'muted-foreground': '#4c566a', primary: '#5e81ac', 'primary-foreground': '#ffffff', border: '#d8dee9', radius: '0.4rem' },
+    dark: { sidebar: '#242933', list: '#2b303b', background: '#2e3440', card: '#3b4252', popover: '#3b4252', foreground: '#eceff4', 'muted-foreground': '#a3acbd', primary: '#88c0d0', 'primary-foreground': '#2e3440', border: '#434c5e', radius: '0.4rem' },
+    options: { font: 'plex', mono: 'jetbrains' }, own_accent: true, own_surfaces: true, wallpaper: { light: null, dark: null }, preview: null, warnings: [] },
+  { id: 'sunset', name: 'Sunset glass', description: 'Warm glass over an orange and violet sky.', author: 'acme', version: '1.0.0', homepage: '', base: 'glass', modes: ['dark'],
+    light: {}, dark: { 'wall-a': 'oklch(0.7 0.19 45 / 0.55)', 'wall-b': 'oklch(0.55 0.22 320 / 0.5)', primary: 'oklch(0.75 0.17 55)', 'primary-foreground': 'oklch(0.2 0.03 55)', radius: '1rem' },
+    options: { font: 'outfit' }, own_accent: true, own_surfaces: false, wallpaper: { light: null, dark: null }, preview: null, warnings: [] },
+]
+R('GET', '/api/themes', () => ({ themes: MOCK_THEMES, errors: [] }))
 R('POST', '/api/onboarding/complete', () => { S.onboarding_completed = true; return { ok: true } })
 
 /* ---- claude */

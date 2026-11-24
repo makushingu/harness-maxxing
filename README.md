@@ -149,7 +149,7 @@ User documentation is in [`docs/user/`](docs/user) and inside the app (the book 
 [CLI](docs/user/17-cli-reference.md) · [files](docs/user/06-files.md) ·
 [settings](docs/user/11-settings-and-keys.md) · [customizing](docs/user/20-customizing.md) ·
 [import](docs/user/21-import.md) · [tools](docs/user/22-tools.md) · [license](docs/user/23-license.md) · [notifications](docs/user/24-feed.md) · [starter projects](docs/user/25-starter-projects.md) ·
-[webhooks](docs/user/37-webhooks.md) · [events](docs/user/38-events.md).
+[webhooks](docs/user/37-webhooks.md) · [events](docs/user/38-events.md) · [themes](docs/user/39-themes.md).
 
 Developers: [`docs/dev/PLAN.md`](docs/dev/PLAN.md) (architecture), [`docs/dev/API.md`](docs/dev/API.md)
 (HTTP contract), [`docs/dev/INTERNALS.md`](docs/dev/INTERNALS.md).

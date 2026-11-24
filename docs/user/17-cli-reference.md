@@ -244,6 +244,19 @@ OAuth sign-ins (state "To connect") are done in Settings -> MCP -> **Connect**. 
 `AGENT` = `project/topic/agent` (or `projects/P/topics/T/agents/A`, or the agent's name when it is unique). See
 [Agents](30-agents.md) and [Agent groups](31-agent-groups.md).
 
+## Themes
+
+Settings -> Appearance -> [Theme](39-themes.md): a theme is a `theme.json` of values (no CSS, no code), made or
+installed by Harness (skill `maxxing-theme`).
+
+| Command | Purpose |
+|---|---|
+| `maxxing themes list [--json]` | installed themes, and folders that are not usable with the reason |
+| `maxxing themes check FOLDER [--json]` | read a theme like the interface will: what it sets, what is dropped and why (nothing installed) |
+| `maxxing themes install FOLDER [--force]` | check it, then copy it into `<workspace>/themes/<id>/` (`--force` replaces it); refused in an agent's run |
+| `maxxing themes remove ID` | delete an installed theme (browsers using it go back to its base); refused in an agent's run |
+| `maxxing themes tokens [--json]` | the variables a theme may set and their kind |
+
 ## Webhooks and events
 
 Settings -> Automate -> [Webhooks](37-webhooks.md) and [Events](38-events.md): automations without AI (one trigger,

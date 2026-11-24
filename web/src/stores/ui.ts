@@ -5,6 +5,7 @@ import { persist } from 'zustand/middleware'
 import type { Language } from '@/lib/types'
 import { applyFavicon } from '@/lib/accent'
 import { applyFonts, MONO_FONTS, SANS_FONTS, type MonoFont, type SansFont } from '@/lib/fonts'
+import { applyThemeCss, type InstalledTheme, type ThemeLook, themeLook } from '@/lib/themes'
 
 export type Theme = 'dark' | 'light' | 'system'
 export type Density = 'comfortable' | 'compact'
@@ -34,6 +35,9 @@ type UIState = {
   density: Density
   tint: Tint
   material: Material
+  /** An installed theme in use (<workspace>/themes, lib/themes.ts) on top of `material` (its base); null = the
+   *  built-in Solid or Glass. Its CSS is kept here so index.html paints it before the app loads. */
+  customTheme: ThemeLook | null
   /** Interface and code fonts (this browser). */
   font: SansFont
   monoFont: MonoFont
@@ -78,6 +82,10 @@ type UIState = {
   setDensity: (d: Density) => void
   setTint: (t: Tint) => void
   setMaterial: (m: Material) => void
+  /** Picks an installed theme: its base, its CSS, and its preset options (fonts, accent...) once. */
+  pickTheme: (t: InstalledTheme) => void
+  /** The installed theme changed on the server (null: removed, back to its base). */
+  refreshTheme: (t: InstalledTheme | null) => void
   setFont: (f: SansFont) => void
   setMonoFont: (f: MonoFont) => void
   setLanguage: (l: Language) => void
@@ -108,6 +116,7 @@ export const useUI = create<UIState>()(
       density: 'comfortable',
       tint: 'neutral',
       material: 'solid',
+      customTheme: null,
       font: 'inter',
       monoFont: 'system',
       language: initialLang(),
@@ -134,7 +143,24 @@ export const useUI = create<UIState>()(
       setAccent: (accent) => set({ accent, lookChosen: true }),
       setDensity: (density) => set({ density }),
       setTint: (tint) => set({ tint, lookChosen: true }),
-      setMaterial: (material) => set({ material }),
+      setMaterial: (material) => set({ material, customTheme: null }),
+      pickTheme: (t) => {
+        const look = themeLook(t)
+        if (!look) return
+        const o = t.options
+        set((s) => ({
+          material: t.base,
+          customTheme: look,
+          theme: look.mode ?? o.mode ?? s.theme,
+          accent: o.accent ?? s.accent,
+          tint: o.tint ?? s.tint,
+          font: o.font && o.font in SANS_FONTS ? o.font : s.font,
+          monoFont: o.mono && o.mono in MONO_FONTS ? o.mono : s.monoFont,
+          density: o.density ?? s.density,
+          lookChosen: true,
+        }))
+      },
+      refreshTheme: (t) => set((s) => (t ? { customTheme: themeLook(t), material: t.base } : { customTheme: null, material: s.material })),
       setFont: (font) => set({ font }),
       setMonoFont: (monoFont) => set({ monoFont }),
       setLanguage: (language) => set({ language }),
@@ -169,6 +195,8 @@ export const useUI = create<UIState>()(
         if (!(out.font in SANS_FONTS)) out.font = 'inter'
         if (out.tint !== 'tinted') out.tint = 'neutral'
         if (out.material !== 'glass') out.material = 'solid'
+        const ct = out.customTheme as ThemeLook | null | undefined
+        out.customTheme = ct && typeof ct === 'object' && typeof ct.css === 'string' && /^[a-z0-9][a-z0-9-]{1,39}$/.test(ct.id) ? ct : null
         if (!(out.monoFont in MONO_FONTS)) out.monoFont = 'system'
         if (out.layout !== 'touch' && out.layout !== 'desktop') out.layout = 'auto'
         out.sidebarWidth = typeof out.sidebarWidth === 'number' && Number.isFinite(out.sidebarWidth) ? clampSidebar(out.sidebarWidth) : null
@@ -197,12 +225,16 @@ export function bindUIToDocument() {
   const apply = () => {
     const s = useUI.getState()
     const r = document.documentElement
-    const dark = resolveTheme(s.theme) === 'dark'
+    const ct = s.customTheme
+    const dark = ct?.mode ? ct.mode === 'dark' : resolveTheme(s.theme) === 'dark'
     r.classList.toggle('dark', dark)
     r.dataset.accent = s.accent
     r.dataset.density = s.density
     r.dataset.tint = s.tint
     r.dataset.material = s.material
+    if (ct) r.dataset.themeId = ct.id
+    else delete r.dataset.themeId
+    applyThemeCss(ct)
     r.lang = s.language
     applyFavicon(s.accent)
     applyFonts(s.font, s.monoFont)

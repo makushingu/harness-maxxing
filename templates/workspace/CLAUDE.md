@@ -95,6 +95,7 @@ UI; the server CLI is `maxxing`:
 | `maxxing custom [status\|save\|drop\|restore]` | customizations of the product code (see below) |
 | `maxxing cron list\|sync\|run <id>` | scheduled jobs |
 | `maxxing webhooks list\|add\|edit\|test\|calls\|replay\|url <id>` | webhooks and events without AI (Settings -> Automate -> Webhooks / Events, skill `maxxing-webhooks`) |
+| `maxxing themes list\|check\|install\|remove` | themes of Settings -> Appearance: a `theme.json` of values on top of Solid or Glass, checked then installed (skill `maxxing-theme`) |
 | `maxxing backup run\|status\|restore` | memory backup to a private GitHub repo |
 | `maxxing telegram status\|test` | Telegram bridge |
 | `maxxing import ZIP [--dry-run]` / `--prompt AGENT` | import another agent's memory: Hermes, OpenClaw, Claude Code... (Settings -> Import does the same) |
@@ -120,7 +121,7 @@ served by it (running turns survive, they live in their own units).
 This installation is the user's own copy: they may change anything, including the product itself (on
 this server - the public product is not theirs to change, and they do not need it to be). Never answer
 "I can't modify Harness Maxxing", "ask the authors" or "an update would erase it": find the way, in this order:
-0. **A setting**: Settings -> Appearance (colours, layout, fonts), Features (which pages, their order in
+0. **A setting**: Settings -> Appearance (theme, colours, fonts, layout; a new theme: skill `maxxing-theme`), Features (which pages, their order in
    the sidebar), Widgets and Pages, the dashboard's Edit layout. Point to it before writing anything.
 1. **Extension** (`{{WORKSPACE}}/extensions/`, skill `maxxing-extension`): widgets - Card or free
    HTML (games, canvas) -, pages, their API. Untouched by updates.
@@ -181,6 +182,7 @@ under the answer: diff, Undo a file, commit, push, pull request); a branch and a
 | `maxxing-infra` | put a site online, create a database or a bucket on this server, add another server, "where is X / is it up" |
 | `maxxing-mail` | the user's inbox (read, sort, draft replies with `maxxing mail`), or an agent that handles a mailbox |
 | `maxxing-mcp` | add, connect or remove an MCP server (a service's tools for Claude), for every session or one topic |
+| `maxxing-theme` | a theme (other colours, a brand's look, a wallpaper behind the glass), install one from Community, a theme that looks wrong |
 | `maxxing-devices` | Claude does something on the user's computer or phone (Harness Link), adds a device, a device is offline, view only or on the wrong screen |
 | `maxxing-browser` | Claude opens a site, signs in or fills in a form (Harness Browser), its tools are missing, a page is refused or a connection is down |
 | `maxxing-agents` | create or configure an agent (a lasting role in a topic, started by a schedule, a webhook, the feed, Telegram or another agent, with a budget) |

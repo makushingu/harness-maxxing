@@ -20,6 +20,7 @@ ROUTERS = [
     "tasks",
     "crons",
     "webhooks",
+    "themes",
     "telegram",
     "backup",
     "settings",

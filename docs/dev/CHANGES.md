@@ -9,6 +9,21 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 - Mail: `AccountDialog.tsx` `setPort()` sets `imap_tls` / `smtp_tls` from `PORT_TLS` (SMTP 465 ssl, 587/25 starttls; IMAP 993 ssl, 143 starttls, as `cmd_mail` picks them) when a well-known port is typed; other ports and a later Security choice are left alone. `imap.tls_error()` (used by `open_imap` and `mail.open_smtp`) turns `WRONG_VERSION_NUMBER` with `tls == "ssl"` into "this port expects STARTTLS, not SSL/TLS". Test: `test_ssl_on_a_starttls_port_says_to_pick_starttls`.
 - Appearance: cards Theme (`ThemePicker`, tiles with `ThemePreview` for `material` solid / glass, `THEMES` list where installed themes will go) -> Options of <theme> (mode, accent, tint, fonts) -> Layout. Store fields unchanged (`material` is the theme). Keys `appearance.theme*`, `appearance.default`, `appearance.solidDesc` / `glassDesc`, `appearance.options*` added; `appearance.colors*`, `appearance.fonts`, `settings.material*` removed; `shell.theme` reads Mode.
+- Themes: `maxxing/themes.py` (contract `TOKENS` = CSS variables of globals.css a theme may set, by kind; only ever add,
+  renames via `ALIASES`; `load()` cleans values by kind, drops unknown keys, checks text contrast per mode on the effective
+  values (`_effective`, built-in levels `_LEVELS` / `_TEXT`) and drops failing pairs then the levels; `install()` copies
+  theme.json + named images + README/LICENSE). API `GET /api/themes`, `GET /api/themes/{id}/file/{name}` (api/themes.py).
+  CLI `maxxing themes list|check|install|remove|tokens` (cmd_themes.py); `install` / `remove` owner-only in agent turns
+  (agent_guard `OWNER_SUBS`). Skill `maxxing-theme`. Web: `lib/themes.ts` (`themeLook` -> CSS on
+  `html[:not(.dark)|.dark][data-theme-id]`, `<style id="mx-theme">`), store `customTheme` (persisted, painted by index.html
+  before the app) + `pickTheme` (base + preset options) / `refreshTheme`; `features/themes/useThemeSync` (AppShell)
+  refreshes or drops it from the server list; HtmlWidget resends the theme variables when it changes. Appearance: cards
+  Theme (`ThemePicker`: Solid, Glass, installed; `ThemePreview` from the theme's values; Ask Harness -> a draft in the
+  Harness topic) -> Options of <theme> (mode fixed for a one-mode theme, accent / background hidden when the theme sets
+  `primary` / a surface) -> Layout. Mock: `/api/themes` (nord, sunset). Tests `test_themes.py` (tokens exist in
+  globals.css, fonts / accents = catalog, docs list every token). Upgrade note at release: add the `maxxing themes` row,
+  the `maxxing-theme` skill row and the Appearance clause of `templates/workspace/CLAUDE.md`, and the `39-themes.md` row
+  of the help topic.
 - Session watcher (`service._scan`): a meta file is identified by `(inode, mtime_ns, size)` (`_ident`, as `meta_ident` and `store._cache`), no longer by `mtime_ns` alone: two atomic writes in one tick of the kernel's coarse clock share the mtime, and the second was skipped (an idle session until its next write, a running one until `RUNNING_RECHECK_S`). `_known` / `_damaged` hold that tuple. `tests/test_agent_turn_bus.py` failed about 2 runs in 3 because of it.
 
 ## 2.0.0-alpha.168 - 2026-11-24

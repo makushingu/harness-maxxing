@@ -214,8 +214,8 @@ that builds one with you.
 
 ## 5. Community extensions
 
-The [community library](https://harness-maxxing.com/community) lists extensions, widgets and skills written by other
-people, kept in their own GitHub repositories and maintained by their authors. Each listing gives a request to copy
+The [community library](https://harness-maxxing.com/community) lists widgets, pages, Agents views, skills and themes
+([39-themes.md](39-themes.md)) written by other people, kept in their own GitHub repositories and maintained by their authors. Each listing gives a request to copy
 into a session ("Install the community extension from …"): Claude reads the code at the commit we reviewed, tells you
 what it does, then installs it.
 

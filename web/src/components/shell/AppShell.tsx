@@ -6,6 +6,7 @@ import { FILE_HREF, useFileViewer } from '@/features/files/viewerStore'
 import { useMyBrowserOpen } from '@/features/browser/open'
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
+import { useThemeSync } from '@/features/themes/useThemeSync'
 import { useGlobalBus } from '@/lib/sse'
 import { api } from '@/lib/api'
 import { startIdlePrefetch } from '@/lib/prefetchIdle'
@@ -239,6 +240,7 @@ export function AppShell() {
   const bus = useGlobalBus(true)
   useSyncLanguage()
   useShareLook()
+  useThemeSync()
   useBootReadyWhenIdle()
   usePrefetch()
   useDoneNotifier()

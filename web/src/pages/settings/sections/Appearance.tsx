@@ -3,6 +3,10 @@
 // the layout of this device. Everything here is saved in this browser (the last choice also colors the sign-in page).
 import * as React from 'react'
 import { Check, Monitor, Moon, Sun } from 'lucide-react'
+import { useNavigate } from 'react-router'
+import { label, useInstalledThemes } from '@/lib/themes'
+import { draftUrl } from '@/features/agents/EditWithClaude'
+import { useHarnessTopic } from './harnessTopic'
 import { ACCENTS, resolveTheme, useUI, type Accent, type Density, type Layout, type Theme, type Tint, type Material, type TouchHome } from '@/stores/ui'
 import { cn } from '@/lib/utils'
 import { FONT_GROUPS, loadFontPreview, MONO_FONTS, SANS_FONTS, type FontGroup } from '@/lib/fonts'
@@ -95,84 +99,155 @@ function AccentPicker() {
   )
 }
 
-/** The look of a theme card: a tiny window drawn with the theme's own rules (sidebar, card, a button in the accent). */
-function ThemePreview({ id, accent, dark }: { id: Material; accent: string; dark: boolean }) {
-  const glass = id === 'glass'
-  const base = dark ? 'oklch(0.2 0.006 286)' : 'oklch(0.98 0 0)'
-  const panel = dark ? 'oklch(0.27 0.006 286)' : 'oklch(1 0 0)'
-  const line = dark ? 'oklch(1 0 0 / 0.1)' : 'oklch(0 0 0 / 0.08)'
-  const soft = `color-mix(in oklch, ${accent} ${dark ? 45 : 35}%, transparent)`
-  const wall = glass ? `radial-gradient(120% 90% at 15% 10%, ${soft} 0%, transparent 60%), radial-gradient(90% 80% at 95% 100%, ${soft} 0%, transparent 55%), ${base}` : base
-  const pane = glass ? (dark ? 'oklch(0.25 0.006 286 / 0.55)' : 'oklch(1 0 0 / 0.55)') : panel
+/** The look of a theme card: a tiny window drawn with the theme's own colors (sidebar, card, a button in the accent).
+ *  `vars` = an installed theme's values for this mode (what it leaves out keeps the built-in look). */
+function ThemePreview({ glass, accent, dark, vars, wallpaper, image }: { glass: boolean; accent: string; dark: boolean; vars?: Record<string, string>; wallpaper?: string | null; image?: string | null }) {
+  if (image) return <img src={image} alt="" className="h-20 w-full rounded-md border object-cover" />
+  const v = vars ?? {}
+  const base = v.background || (dark ? 'oklch(0.2 0.006 286)' : 'oklch(0.98 0 0)')
+  const side = v.sidebar || base
+  const panel = v.card || (dark ? 'oklch(0.27 0.006 286)' : 'oklch(1 0 0)')
+  const line = v.border || (dark ? 'oklch(1 0 0 / 0.1)' : 'oklch(0 0 0 / 0.08)')
+  const fg = v.foreground || (dark ? 'oklch(1 0 0)' : 'oklch(0 0 0)')
+  const btn = v.primary || accent
+  const radius = v.radius ? `min(${v.radius}, 0.5rem)` : undefined
+  const soft = `color-mix(in oklch, ${btn} ${dark ? 45 : 35}%, transparent)`
+  const wall = glass
+    ? wallpaper
+      ? `url("${wallpaper}") center / cover no-repeat, ${side}`
+      : `radial-gradient(120% 90% at 15% 10%, ${v['wall-a'] || soft} 0%, transparent 60%), radial-gradient(90% 80% at 95% 100%, ${v['wall-b'] || soft} 0%, transparent 55%), ${side}`
+    : side
+  const pane = (c: string) => (glass ? `color-mix(in oklch, ${c} 55%, transparent)` : c)
+  const blur = glass ? 'blur(6px)' : undefined
   return (
     <div aria-hidden className="relative h-20 overflow-hidden rounded-md border" style={{ background: wall, borderColor: line }}>
-      <div className="absolute inset-y-0 left-0 w-1/4 border-r" style={{ background: pane, borderColor: line, backdropFilter: glass ? 'blur(6px)' : undefined }} />
-      <div className="absolute top-3 right-3 left-[calc(25%+0.75rem)] grid gap-1.5 rounded border p-2" style={{ background: pane, borderColor: line, backdropFilter: glass ? 'blur(6px)' : undefined }}>
-        <div className="h-1.5 w-3/4 rounded-full" style={{ background: dark ? 'oklch(1 0 0 / 0.35)' : 'oklch(0 0 0 / 0.25)' }} />
-        <div className="h-1.5 w-1/2 rounded-full" style={{ background: dark ? 'oklch(1 0 0 / 0.18)' : 'oklch(0 0 0 / 0.12)' }} />
-        <div className="mt-0.5 h-3 w-10 rounded-sm" style={{ background: accent }} />
+      <div className="absolute inset-y-0 left-0 w-1/4 border-r" style={{ background: glass ? 'transparent' : side, borderColor: line }} />
+      <div className="absolute inset-y-1.5 right-1.5 left-1/4 rounded" style={{ background: pane(base), backdropFilter: blur }} />
+      <div className="absolute top-3 right-3 left-[calc(25%+0.75rem)] grid gap-1.5 rounded border p-2" style={{ background: pane(panel), borderColor: line, backdropFilter: blur, borderRadius: radius }}>
+        <div className="h-1.5 w-3/4 rounded-full" style={{ background: `color-mix(in oklch, ${fg} 45%, transparent)` }} />
+        <div className="h-1.5 w-1/2 rounded-full" style={{ background: `color-mix(in oklch, ${fg} 22%, transparent)` }} />
+        <div className="mt-0.5 h-3 w-10 rounded-sm" style={{ background: btn }} />
       </div>
     </div>
   )
 }
 
-/** The themes: Solid (the default) and Glass. Installed themes will sit next to them. */
-const THEMES: { id: Material; name: TKey; desc: TKey }[] = [
+function ThemeTile({ active, onClick, preview, name, note, desc }: { active: boolean; onClick: () => void; preview: React.ReactNode; name: string; note?: string; desc: string }) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={active}
+      onClick={onClick}
+      className={cn(
+        'grid content-start gap-2 rounded-lg border p-2 text-left outline-none transition focus-visible:ring-2 focus-visible:ring-ring',
+        active ? 'border-primary ring-1 ring-primary' : 'hover:bg-accent',
+      )}
+    >
+      {preview}
+      <div className="flex items-start gap-2 px-1 pb-0.5">
+        <div className="grid min-w-0 flex-1 gap-0.5">
+          <span className="truncate text-sm font-medium">
+            {name}
+            {note && <span className="ml-1.5 text-xs font-normal text-muted-foreground">{note}</span>}
+          </span>
+          <span className="line-clamp-2 text-xs text-muted-foreground">{desc}</span>
+        </div>
+        {active && <Check className="mt-0.5 size-4 shrink-0 text-primary" strokeWidth={3} />}
+      </div>
+    </button>
+  )
+}
+
+/** The built-in themes: Solid (the default) and Glass. Installed themes sit next to them. */
+const BUILT_IN: { id: Material; name: TKey; desc: TKey }[] = [
   { id: 'solid', name: 'material.solid', desc: 'appearance.solidDesc' },
   { id: 'glass', name: 'material.glass', desc: 'appearance.glassDesc' },
 ]
 
 function ThemePicker() {
   const t = useT()
+  const lang = useUI((s) => s.language)
   const material = useUI((s) => s.material)
+  const custom = useUI((s) => s.customTheme?.id ?? null)
   const setMaterial = useUI((s) => s.setMaterial)
+  const pickTheme = useUI((s) => s.pickTheme)
   const accent = ACCENT_SWATCH[useUI((s) => s.accent)]
   const dark = resolveTheme(useUI((s) => s.theme)) === 'dark'
+  const { data } = useInstalledThemes()
+  const ask = useAskHarness()
   return (
-    <div role="radiogroup" aria-label={t('appearance.theme')} className="grid grid-cols-2 gap-3 max-sm:grid-cols-1">
-      {THEMES.map((th) => {
-        const active = material === th.id
-        return (
-          <button
+    <div className="grid gap-3">
+      <div role="radiogroup" aria-label={t('appearance.theme')} data-tour="themes" className="grid grid-cols-2 gap-3 max-sm:grid-cols-1 lg:grid-cols-3">
+        {BUILT_IN.map((th) => (
+          <ThemeTile
             key={th.id}
-            type="button"
-            role="radio"
-            aria-checked={active}
+            active={!custom && material === th.id}
             onClick={() => setMaterial(th.id)}
-            className={cn(
-              'grid gap-2 rounded-lg border p-2 text-left outline-none transition focus-visible:ring-2 focus-visible:ring-ring',
-              active ? 'border-primary ring-1 ring-primary' : 'hover:bg-accent',
-            )}
-          >
-            <ThemePreview id={th.id} accent={accent} dark={dark} />
-            <div className="flex items-start gap-2 px-1 pb-0.5">
-              <div className="grid min-w-0 flex-1 gap-0.5">
-                <span className="text-sm font-medium">
-                  {t(th.name)}
-                  {th.id === 'solid' && <span className="ml-1.5 text-xs font-normal text-muted-foreground">{t('appearance.default')}</span>}
-                </span>
-                <span className="text-xs text-muted-foreground">{t(th.desc)}</span>
-              </div>
-              {active && <Check className="mt-0.5 size-4 shrink-0 text-primary" strokeWidth={3} />}
-            </div>
-          </button>
-        )
-      })}
+            preview={<ThemePreview glass={th.id === 'glass'} accent={accent} dark={dark} />}
+            name={t(th.name)}
+            note={th.id === 'solid' ? t('appearance.default') : undefined}
+            desc={t(th.desc)}
+          />
+        ))}
+        {(data?.themes ?? []).map((th) => {
+          const mode = th.modes.length === 1 ? th.modes[0] === 'dark' : dark
+          const by = [th.author && t('appearance.by', { name: th.author }), t(th.base === 'glass' ? 'appearance.onGlass' : 'appearance.onSolid')].filter(Boolean).join(' · ')
+          return (
+            <ThemeTile
+              key={th.id}
+              active={custom === th.id}
+              onClick={() => pickTheme(th)}
+              preview={<ThemePreview glass={th.base === 'glass'} accent={accent} dark={mode} vars={mode ? th.dark : th.light} wallpaper={th.wallpaper[mode ? 'dark' : 'light']} image={th.preview} />}
+              name={label(th.name, lang)}
+              note={by}
+              desc={label(th.description, lang) || t('appearance.installedDesc')}
+            />
+          )
+        })}
+      </div>
+      {!!data?.errors.length && (
+        <p className="text-xs text-muted-foreground">
+          {t('appearance.unusable')} {data.errors.map((e) => `${e.id} (${e.error})`).join(' · ')}
+        </p>
+      )}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+        <span>{t('appearance.moreThemes')}</span>
+        <button type="button" onClick={() => ask(t('appearance.askPrompt'))} className="font-medium text-primary underline-offset-4 outline-none hover:underline focus-visible:underline pointer-coarse:py-1">
+          {t('appearance.ask')}
+        </button>
+      </div>
     </div>
   )
+}
+
+/** Opens a new session draft in the Harness topic with `prompt` written (the user reads it and sends). */
+function useAskHarness() {
+  const navigate = useNavigate()
+  const topic = useHarnessTopic()
+  return (prompt: string) => navigate(draftUrl(topic, prompt))
 }
 
 export function AppearanceSection() {
   const t = useT()
   const ui = useUI()
+  const ct = ui.customTheme
+  const { data } = useInstalledThemes(!!ct)
+  const installed = ct ? data?.themes.find((x) => x.id === ct.id) : undefined
+  const themeName = ct ? (installed ? label(installed.name, ui.language) : ct.id) : t(ui.material === 'glass' ? 'material.glass' : 'material.solid')
   return (
     <SectionStack>
       <SettingsCard title={t('appearance.theme')} description={t('appearance.themeDesc')}>
         <ThemePicker />
       </SettingsCard>
 
-      <SettingsCard title={t('appearance.options', { name: t(ui.material === 'glass' ? 'material.glass' : 'material.solid') })} description={t('appearance.optionsDesc')}>
+      <SettingsCard title={t('appearance.options', { name: themeName })} description={t('appearance.optionsDesc')}>
         <div className="divide-y">
+          {ct?.mode ? (
+            <SettingRow label={t('shell.theme')} description={t('appearance.fixedMode')}>
+              <span className="text-sm text-muted-foreground">{t(ct.mode === 'dark' ? 'theme.dark' : 'theme.light')}</span>
+            </SettingRow>
+          ) : (
           <SettingRow label={t('shell.theme')}>
             <Segmented<Theme>
               value={ui.theme}
@@ -185,9 +260,15 @@ export function AppearanceSection() {
               ]}
             />
           </SettingRow>
-          <SettingRow label={t('settings.accent')} description={t('settings.accentDesc')}>
-            <AccentPicker />
-          </SettingRow>
+          )}
+          {ct?.ownAccent ? (
+            <SettingRow label={t('settings.accent')} description={t('appearance.ownAccent')}>{null}</SettingRow>
+          ) : (
+            <SettingRow label={t('settings.accent')} description={t('settings.accentDesc')}>
+              <AccentPicker />
+            </SettingRow>
+          )}
+          {!ct?.ownSurfaces && (
           <SettingRow label={t('settings.tint')} description={t('settings.tintDesc')}>
             <Segmented<Tint>
               value={ui.tint}
@@ -199,6 +280,7 @@ export function AppearanceSection() {
               ]}
             />
           </SettingRow>
+          )}
           <div className="grid gap-3 py-4">
             <div className="grid gap-0.5">
               <span className="text-sm font-medium">{t('settings.font')}</span>

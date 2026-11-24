@@ -14,6 +14,7 @@ const DEMO_DIAGRAM = `flowchart LR
   D --> E`
 
 const SHOWCASES: Record<string, TourStep[]> = {
+  themes: [{ id: 'themes', targets: ['themes'], title: 'show.themes.title', body: 'show.themes.body', route: (c) => (c.pathname === '/settings/appearance' ? null : '/settings/appearance') }],
   look: [{ id: 'look', targets: ['accent'], title: 'show.look.title', body: 'show.look.body', route: (c) => (c.pathname === '/settings/appearance' ? null : '/settings/appearance') }],
   diagram: [{ id: 'diagram', targets: [], title: 'show.diagram.title', body: 'show.diagram.body', cta: 'show.try', after: () => showDiagram(DEMO_DIAGRAM) }],
   'text-zoom': [{ id: 'text-zoom', targets: [], title: 'show.textZoom.title', body: 'show.textZoom.body' }],
