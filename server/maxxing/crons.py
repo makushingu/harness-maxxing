@@ -1311,7 +1311,7 @@ def _claude_turn(job: dict, auto: bool = False) -> dict:
         prev = (config.read_json(smap_path, {}) or {}).get(job["id"])
         if prev and service.get_session(prev):
             store_mode(prev, job.get("permission_mode") or "")
-            service.send_message(prev, job["prompt"], source="cron", **silent)
+            service.send_message(prev, job["prompt"], source="cron", sender=_sender(job), **silent)
             sid = prev
     if sid is None and agents.is_agent_path(job["topic_path"]):
         # an agent's cron trigger: its budget / rate / on-off decide, the run is written in the agent's thread
@@ -1324,7 +1324,8 @@ def _claude_turn(job: dict, auto: bool = False) -> dict:
         s = service.create_session(job["topic_path"], message=job["prompt"], title=title,
                                    model=job.get("model") or None, source="cron", notify=False,
                                    cron=True, env=env, timeout_s=timeout,
-                                   permission_mode=job.get("permission_mode") or "", **silent)
+                                   permission_mode=job.get("permission_mode") or "", sender=_sender(job),
+                                   **silent)
         sid = s["id"]
         if job.get("reuse_session"):
             with _lock:
@@ -1809,6 +1810,11 @@ def _skip_reason(cid: str, trigger: str, attempt: int, now: float) -> str | None
                                              for r in _runs_of(cid)):
             return "one-time job already done"
     return None
+
+
+def _sender(job: dict) -> dict:
+    """Who sends a job's prompt (sessions.service.send_message `sender`): shown as a card with the job's name."""
+    return {"kind": "cron", "title": job.get("name") or job.get("id") or ""}
 
 
 def run_job(cid: str, trigger: str = "manual", attempt: int = 1) -> dict | None:

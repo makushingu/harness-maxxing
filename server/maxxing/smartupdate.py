@@ -461,7 +461,8 @@ def start_assist(rep: dict | None = None) -> dict:
     from .sessions import service
     rep = rep or cached_preflight() or preflight()
     return service.create_session(update_topic_path(), message=assist_prompt(rep),
-                                  title=f"Update to {rep.get('latest') or 'the new version'}", source="web")
+                                  title=f"Update to {rep.get('latest') or 'the new version'}", source="web",
+                                  sender={"kind": "system"})
 
 
 def fix_prompt(rep: dict) -> str:

@@ -666,6 +666,11 @@ def header(path: str, me: str) -> str:
     return "\n".join(lines)
 
 
+def _group_sender(path: str, g: dict) -> dict:
+    """Who sends a group's message to a member's session (sessions.service.send_message `sender`): the group."""
+    return {"kind": "group", "title": g.get("name") or (parse(path) or ("", ""))[1], "path": path}
+
+
 def _message(path: str, me: str, item: dict, st: dict, fresh: bool) -> str:
     g = load(path)
     msgs = room(path, 300)
@@ -774,7 +779,7 @@ def _start(path: str, me: str, item: dict, st: dict, g: dict) -> str | None:
                 st["turns"][sid] = {"outside": outside}
                 _write_state(path, st)
                 service.send_message(sid, _message(path, me, item, st, False), attachments=files or None,
-                                     source="agent")
+                                     source="agent", sender=_group_sender(path, g))
             else:
                 env = {"MAXXING_AGENT": me, "MAXXING_AGENT_TRIGGER": f"group:{path}", "MAXXING_AGENT_DEPTH": "0",
                        "MAXXING_AGENT_GROUP": path}
@@ -783,7 +788,8 @@ def _start(path: str, me: str, item: dict, st: dict, g: dict) -> str | None:
                                            attachments=files or None,
                                            model=a["model"] or None, source="agent", notify=False, cron=True,
                                            env=env, timeout_s=a["limits"]["timeout_s"],
-                                           permission_mode=a["permission_mode"])
+                                           permission_mode=a["permission_mode"],
+                                           sender=_group_sender(path, g))
                 sid = s["id"]
                 sessions[me] = sid
                 st["turns"][sid] = {"outside": outside}

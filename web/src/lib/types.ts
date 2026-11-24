@@ -335,7 +335,7 @@ export type PatchNameBody = { name?: string; description?: string; /** Projects 
 
 /* ---------------------------------------------------------------- Sessions */
 type SessionState = 'idle' | 'running' | 'error'
-type SessionSource = 'web' | 'telegram' | 'cron' | 'agent' | 'session' | 'cli'
+type SessionSource = 'web' | 'telegram' | 'cron' | 'agent' | 'session' | 'cli' | 'github' | 'system' | 'browser'
 export type QueueItem = { text: string; attachments: number; source: 'web' | 'telegram' | 'cron' | 'system' | string; kind: string; /** A voice message sent directly (transcribed before its turn). */ voice?: boolean; client_ids?: string[] }
 /** A message sent but not in the log yet (held at the head while a summary runs first, or its turn starting). */
 export type SentItem = { text: string; attachments: string[]; source: string; voice?: string[]; client_ids?: string[] }
@@ -441,7 +441,7 @@ export type UploadResult = { files: Upload[] }
 
 type Usage = { input: number; output: number; cache_read: number; cache_write: number }
 export type SessionEvent =
-  | { type: 'user'; text: string; attachments: string[]; at: number; source: SessionSource; /** Audio of a voice message sent directly. */ voice?: string[]; /** The web pages' ids of the message(s) it carries (SendMessageBody.client_id). */ client_ids?: string[]; /** Added to a running turn (Add to task): read at Claude's next step. */ injected?: boolean; /** Sent by another session's turn (`maxxing sessions send`): shown as a folded card (RelayCard). */ from?: RelayFrom; /** The @ it names (composer menu): drawn as chips. */ mentions?: SentMention[] }
+  | { type: 'user'; text: string; attachments: string[]; at: number; source: SessionSource; /** Audio of a voice message sent directly. */ voice?: string[]; /** The web pages' ids of the message(s) it carries (SendMessageBody.client_id). */ client_ids?: string[]; /** Added to a running turn (Add to task): read at Claude's next step. */ injected?: boolean; /** Not typed by the owner (another session, an agent, a job, Harness): shown as a folded card (MessageCard). */ from?: MessageFrom; /** The part of the text for the owner when the rest is instructions for Claude. */ shown?: string; /** The @ it names (composer menu): drawn as chips. */ mentions?: SentMention[] }
   /** Transcript of the voice message just above (or why it failed). */
   | { type: 'voice_text'; text: string; error: string | null; stopped?: boolean; at: number }
   | { type: 'assistant'; text: string; at: number; /** Written by Claude Code in place of an answer, the API refused the call: why (rate_limit, server_error…). */ error?: string }
@@ -1760,13 +1760,16 @@ export interface CleanupResult {
 type JarvisWorkState = 'running' | 'replied' | 'failed' | 'closed'
 /** One piece of work Jarvis handed to a session (server jarvis.py work board). */
 /** Who sent a message from another session's turn (log line `from`). */
-export interface RelayFrom {
-  session: string
-  title: string
-  /** the sender's topic path (older log lines: absent) */
+/** Who sent a message the owner did not type (runner._sender): drawn as a folded card (MessageCard). */
+export type MessageFromKind = 'session' | 'agent' | 'cron' | 'feed' | 'mail' | 'group' | 'manual' | 'cli' | 'github' | 'system'
+export interface MessageFrom {
+  kind: MessageFromKind
+  /** the session that sent it (kind session / agent) */
+  session?: string
+  /** its name: session title, agent, job, group, or what asked for a run */
+  title?: string
+  /** the sender's path (topic, agent, group) */
   path?: string
-  /** sent by Jarvis's conversation */
-  jarvis?: boolean
   /** reports of Jarvis's work board read in this message */
   reports?: { id: number; outcome: 'done' | 'asks' | 'failed' }[]
 }

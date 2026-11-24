@@ -437,7 +437,7 @@ class Runner:
                                     "source": item.get("source") or "web", "kind": kind,
                                     **({"voice": [str(v["path"]) for v in voices]} if voices else {}),
                                     **({"client_ids": item["client_ids"]} if item.get("client_ids") else {}),
-                                    **_relay_from(item), **_mentions_shown(item), "at": self.turn_at})
+                                    **_sender(item), **_mentions_shown(item), "at": self.turn_at})
         if voices:
             heard, err = self._voice(item, voices)
             if heard is None:                          # stopped, or nothing to send: no Claude call
@@ -938,7 +938,7 @@ class Runner:
                                         "attachments": head.get("attachments") or [],
                                         "source": head.get("source") or "web", "kind": "user", "injected": True,
                                         **({"client_ids": head["client_ids"]} if head.get("client_ids") else {}),
-                                        **_relay_from(head), **_mentions_shown(head), "at": time.time()})
+                                        **_sender(head), **_mentions_shown(head), "at": time.time()})
 
     def _steer_step(self, pr: _Proc) -> bool:
         """One pass of a pending steer: True when the process can take the steered message now (the step it was
@@ -1215,21 +1215,30 @@ SHORT_ANSWER_NOTE = ("[Your final answer is read by an assistant, not shown to a
                      "long (results, lists, a report) goes to a file in this topic: give its path.]")
 
 
-def _relay_from(item: dict) -> dict:
-    """The log line of a message sent by another session's turn: who sent it (the UI folds it into a small card):
-    its path, `jarvis` when Jarvis's conversation sent it, and for the reports of Jarvis's work board their
-    numbers and outcomes ({id, outcome: done | asks | failed}, several when reports were read together)."""
+def _sender(item: dict) -> dict:
+    """The log line of a message the owner did not type: who sent it (the UI folds it into a card) and, when the
+    rest is instructions for Claude, the part for the owner (`shown`). Nothing for the owner's own messages.
+    `from` = {kind, title, path?, session?}: kind `session` / `agent` for another session's turn (relay; `agent`
+    when that session is an agent's run), else the queue item's `sender` (send_message), else its source (cron,
+    github, cli, system). The reports of Jarvis's work board add their numbers and outcomes ({id, outcome:
+    done | asks | failed}, several when reports were read together)."""
     r = item.get("relay") or {}
-    if not r.get("from"):
+    src = item.get("source") or "web"
+    if r.get("from"):
+        path = r.get("path") or ""
+        out: dict = {"kind": "agent" if "/agents/" in f"/{path.strip('/')}/" else "session", "session": r["from"],
+                     "title": r.get("title") or "", "path": path}
+        ids = r.get("reports") or ([r["report"]] if r.get("report") else [])
+        if ids:
+            outs = r.get("outcomes") or [r.get("outcome") or "done"] * len(ids)
+            out["reports"] = [{"id": i, "outcome": (outs[n] if n < len(outs) else "done")} for n, i in enumerate(ids)]
+    elif isinstance(item.get("sender"), dict) and item["sender"].get("kind"):
+        out = dict(item["sender"])
+    elif r or src in ("cli", "cron", "github", "system"):
+        out = {"kind": "cli" if r or src == "cli" else src}
+    else:
         return {}
-    out: dict = {"session": r["from"], "title": r.get("title") or "", "path": r.get("path") or ""}
-    if r.get("jarvis"):
-        out["jarvis"] = True
-    ids = r.get("reports") or ([r["report"]] if r.get("report") else [])
-    if ids:
-        outs = r.get("outcomes") or [r.get("outcome") or "done"] * len(ids)
-        out["reports"] = [{"id": i, "outcome": (outs[n] if n < len(outs) else "done")} for n, i in enumerate(ids)]
-    return {"from": out}
+    return {"from": out, **({"shown": item["shown"]} if item.get("shown") else {})}
 
 
 def _merge_reports(item: dict, q: list) -> dict:
@@ -1239,15 +1248,18 @@ def _merge_reports(item: dict, q: list) -> dict:
     if not rel.get("report") or item.get("held"):
         return item
     texts, refs, outs = [item.get("text") or ""], [rel["report"]], [rel.get("outcome") or "done"]
+    shown = [item.get("shown") or ""]
     while q and (q[0].get("relay") or {}).get("report") and not q[0].get("held") and not q[0].get("attachments"):
         nxt = q.pop(0)
         texts.append(nxt.get("text") or "")
+        shown.append(nxt.get("shown") or "")
         refs.append(nxt["relay"]["report"])
         outs.append(nxt["relay"].get("outcome") or "done")
         rel = {**rel, "hops": max(int(rel.get("hops") or 0), int(nxt["relay"].get("hops") or 0))}
     if len(texts) == 1:
         return item
-    return {**item, "text": "\n\n".join(texts), "relay": {**rel, "reports": refs, "outcomes": outs}}
+    return {**item, "text": "\n\n".join(texts), "relay": {**rel, "reports": refs, "outcomes": outs},
+            **({"shown": "\n\n---\n\n".join(x for x in shown if x)} if any(shown) else {})}
 
 
 def relay_preface(r: dict) -> str:

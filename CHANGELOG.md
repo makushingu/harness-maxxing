@@ -38,9 +38,12 @@ Changed:
   the last 30 minutes, never one of another topic) instead of a new one each time. And once a piece of work is done,
   the session Jarvis started for it goes to the Archives, unless you wrote in it; it comes back by itself if Jarvis
   follows the work up. Both are on by default, in the settings of Jarvis (gear icon).
-- **Messages between sessions are folded into a small card.** Jarvis's instructions in a session, the reports that
-  come back to Jarvis and the messages one session sends another no longer look like something you typed: a card
-  says who sent it and what it is about (a report says if it answered, asks you or failed), and a click shows it all.
+- **Only your own words look like your messages.** Everything else a session receives is folded into one small
+  card that says who sent it: another session or Jarvis, an agent, a scheduled job, a group, an event, an e-mail, the
+  command line or Harness itself. Jarvis's morning brief comes as a card of its backstage agent, the reports that
+  come back to Jarvis say if the work answered, asks you or failed, and a click shows the message (only what is meant
+  for you, not the instructions for Claude around it). Messages you type to an agent, on Telegram or by voice stay
+  bubbles.
 
 Fixed:
 - **`@Jarvis` in a message reaches Jarvis, once.** The `@` menu of a session showed each of Jarvis's daily

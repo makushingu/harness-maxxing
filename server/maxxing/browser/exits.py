@@ -943,7 +943,8 @@ def _resume_waiters(eid: str) -> None:
             continue
         try:
             service.send_message(w["session"], "[Harness Maxxing] The browser's exit is back online: go on with what "
-                                 "you were doing in the browser.", None, "browser")
+                                 "you were doing in the browser.", None, "browser",
+                                 sender={"kind": "system"})
         except Exception:  # noqa: BLE001
             log.exception("resuming a session after its browser exit came back")
     with contextlib.suppress(Exception):

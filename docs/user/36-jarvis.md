@@ -27,7 +27,8 @@ long goes to a file it names). When one of its turns ends, its answer comes back
 Jarvis's conversation by itself, and Jarvis tells you what matters and decides the next step. If you take over a
 session yourself, its answers are not reported (you read them there). These hand-offs stay out of your way: in the
 session, Jarvis's instructions are a small folded card, and in Jarvis's conversation each report is one too
-(**Report #N**, with *answered*, *asks you* in orange or *failed*); click one to read it.
+(**Report #N**, with *answered*, *asks you* in orange or *failed*), like the morning brief its backstage agent
+prepared; click one to read it.
 
 Jarvis keeps its own turns short: anything longer than a quick lookup (analysing data, a script, writing in a project)
 goes to a session, so it answers you within a minute while the sessions work side by side. It follows a piece of work

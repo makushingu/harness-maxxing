@@ -86,6 +86,19 @@ def _no_surrogates(v: Any) -> Any:
     return v
 
 
+def _from(f: Any) -> dict | None:
+    """Who sent a message (runner._sender). Lines older than `kind` were all sent by another session's turn."""
+    if not isinstance(f, dict) or not (f.get("kind") or f.get("session")):
+        return None
+    out = {"kind": str(f.get("kind") or "session")}
+    out.update({k: str(f[k]) for k in ("title", "path", "session") if f.get(k)})
+    reps = [{"id": r["id"], "outcome": str(r.get("outcome") or "done")} for r in f.get("reports") or []
+            if isinstance(r, dict) and isinstance(r.get("id"), int)]
+    if reps:
+        out["reports"] = reps
+    return out
+
+
 def normalize(ev: dict) -> list[dict]:
     """One raw event -> 0..n normalised events."""
     t = ev.get("type")
@@ -101,9 +114,10 @@ def normalize(ev: dict) -> list[dict]:
             out["injected"] = True
         if isinstance(ev.get("mentions"), list):   # the @ of the composer (runner._mentions_shown): drawn as chips
             out["mentions"] = [m for m in ev["mentions"] if isinstance(m, dict) and m.get("label")]
-        f = ev.get("from")
-        if isinstance(f, dict) and f.get("session"):   # sent by another session's turn (maxxing sessions send)
-            out["from"] = {"session": str(f["session"]), "title": str(f.get("title") or "")}
+        if sender := _from(ev.get("from")):  # not typed by the owner (runner._sender): drawn as a card
+            out["from"] = sender
+            if isinstance(ev.get("shown"), str) and ev["shown"].strip():
+                out["shown"] = ev["shown"]
         return [out]
     if t == "mx_voice":
         return [{"type": "voice_text", "text": ev.get("text") or "", "error": ev.get("error") or None,

@@ -150,6 +150,9 @@ rewrite, running sessions skipped), and the server does it every night at 04:30 
 previous night — open streams then receive `reset`. **Event** (normalised):
 ```
 {type:"user", text, attachments:[path], at, source, voice?:[path]}   // voice: a voice message sent directly (its audio)
+  // from?: {kind: session|agent|cron|feed|mail|group|manual|cli|github|system, title?, path?, session?,
+  //         reports?:[{id, outcome: done|asks|failed}]} - not typed by the owner (shown as a card); shown?: the part
+  //         of the text meant for the owner (the rest is instructions for Claude)
 {type:"voice_text", text, error:str|null, stopped?:true, at}   // transcript of the voice message just above (error: not transcribed, nothing sent to Claude)
 {type:"assistant", text, at}                       // markdown
 {type:"thinking", text, at}

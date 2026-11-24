@@ -85,4 +85,5 @@ def start_compaction() -> dict:
     """Starts a Claude session at the workspace root that runs the skill now -> the Session."""
     from .sessions import service
     when = time.strftime("%Y-%m-%d %H:%M")
-    return service.create_session("", message=compact_prompt(max_lines()), title=f"Memory clean - {when}")
+    return service.create_session("", message=compact_prompt(max_lines()), title=f"Memory clean - {when}",
+                                  sender={"kind": "system"})

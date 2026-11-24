@@ -76,7 +76,7 @@ def test_sessions_send_from_a_turn_says_who_sent_it_and_stops_ping_pong(client, 
     assert prompt.endswith("\n\nThe post is online")
     got = [e for e in all_events(client, b["id"]) if e["type"] == "user"][-1]
     assert got["text"] == "The post is online" and got["source"] == "session"
-    assert got["from"] == {"session": a["id"], "title": "Blog writer"}
+    assert got["from"] == {"kind": "session", "session": a["id"], "title": "Blog writer", "path": a["path"]}
     assert store.read(b["id"])["turn_hops"] == 1
     # a reply from that turn is one hop more; after MAX_HOPS sends in a row it is refused
     monkeypatch.setattr(agent_guard, "turn_meta", lambda: {**store.read(b["id"]), "turn_hops": service.MAX_HOPS})
@@ -98,7 +98,7 @@ def test_the_owner_shell_can_send_and_list(client, topic, capsys, monkeypatch):
     assert json.loads(capsys.readouterr().out)["session"] == b["id"]
     wait_idle(client, b["id"])
     got = [e for e in all_events(client, b["id"]) if e["type"] == "user"][-1]
-    assert got["source"] == "cli" and "from" not in got
+    assert got["source"] == "cli" and got["from"] == {"kind": "cli"}
 
 
 def test_mentions_survive_a_merge_and_the_note_lists_each_once():
@@ -157,7 +157,7 @@ def test_sessions_new_starts_a_session_in_a_topic_and_says_who_started_it(client
     assert s["model"] == "haiku" and s["effort"] == "high"
     assert _calls(mx)[-1]["prompt"].endswith("\n\nCheck the shop")
     got = [e for e in all_events(client, s["id"]) if e["type"] == "user"][-1]
-    assert got["source"] == "session" and got["from"] == {"session": a["id"], "title": "Blog writer"}
+    assert got["source"] == "session" and got["from"] == {"kind": "session", "session": a["id"], "title": "Blog writer", "path": a["path"]}
     assert store.read(s["id"])["turn_hops"] == 1
     # chains stay capped like sends; an agent, a missing topic: refused
     monkeypatch.setattr(agent_guard, "turn_meta", lambda: {**meta, "turn_hops": service.MAX_HOPS})
@@ -170,7 +170,7 @@ def test_sessions_new_starts_a_session_in_a_topic_and_says_who_started_it(client
     sid = json.loads(capsys.readouterr().out)["session"]
     wait_idle(client, sid)
     got = [e for e in all_events(client, sid) if e["type"] == "user"][-1]
-    assert got["source"] == "cli" and "from" not in got
+    assert got["source"] == "cli" and got["from"] == {"kind": "cli"}
     assert "Session" not in store.read(sid)["title"]
     n = len(service.list_sessions())
     monkeypatch.setattr(agent_guard, "turn_meta", lambda: {**meta, "turn_hops": service.MAX_HOPS})

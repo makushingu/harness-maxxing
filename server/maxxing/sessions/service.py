@@ -300,6 +300,19 @@ def _extras(client_id: str | None, silent_ok: bool, ref: str | None, call: str |
             **({"refs": [str(ref)]} if ref else {}), **({"call": call} if call else {})}
 
 
+SENDER_KINDS = ("session", "agent", "cron", "feed", "mail", "group", "manual", "cli", "github", "system")
+
+
+def _sent_by(sender: dict | None, shown: str | None) -> dict:
+    """The queue item's `sender` and `shown` (send_message), when set: only known kinds and short strings."""
+    out: dict = {}
+    if isinstance(sender, dict) and sender.get("kind") in SENDER_KINDS:
+        out["sender"] = {k: str(sender[k])[:200] for k in ("kind", "title", "path", "session") if sender.get(k)}
+    if shown and str(shown).strip():
+        out["shown"] = str(shown).strip()
+    return out
+
+
 def _check_attachments(paths: list[str] | None) -> list[str]:
     out = []
     for p in paths or []:
@@ -362,9 +375,11 @@ def create_session(path: str, message: str | None = None, title: str | None = No
                    env: dict | None = None, timeout_s: int | None = None, plan_mode: bool = False,
                    permission_mode: str = "", auto_title: bool = False, voice_path: str | None = None,
                    client_id: str | None = None, silent_ok: bool = False, ref: str | None = None,
-                   effort: str | None = None, worktree: dict | None = None, call: str | None = None) -> dict:
+                   effort: str | None = None, worktree: dict | None = None, call: str | None = None,
+                   sender: dict | None = None, shown: str | None = None) -> dict:
     """`worktree` = {repo, base?, prepare?, copy_env?, pr?}: the session works on a separate copy (worktrees.py),
     made before its first turn.
+    `sender`, `shown`: as send_message's, for the first message.
     `auto_title`: `title` was made from the first message by the caller (Telegram) - still worth a short title.
     `silent_ok`: a scheduled job that reports every run - its turn may answer [SILENT] (runner, spawn.CRON_SILENT).
     `ref`, `call`: as send_message's, for the first message."""
@@ -404,7 +419,8 @@ def create_session(path: str, message: str | None = None, title: str | None = No
             from .. import worktrees
             worktrees.undo(meta["id"], meta["worktree"])
         raise
-    first = _item((message or "").strip(), files, source, **_extras(client_id, silent_ok, ref, call))
+    first = _item((message or "").strip(), files, source, **_extras(client_id, silent_ok, ref, call),
+                  **_sent_by(sender, shown))
     if audio:
         _enqueue_voice(meta["id"], first, audio)
     elif (message or "").strip() or files:
@@ -465,12 +481,16 @@ def _enqueue_voice(sid: str, item: dict, audio: str, *, reset_cron: bool = False
 def send_message(sid: str, text: str, attachments: list[str] | None = None, source: str = "web",
                  voice_path: str | None = None, ref: str | None = None,
                  client_id: str | None = None, silent_ok: bool = False, mentions: list[dict] | None = None,
-                 relay: dict | None = None, call: str | None = None) -> dict:
+                 relay: dict | None = None, call: str | None = None, sender: dict | None = None,
+                 shown: str | None = None) -> dict:
     """`ref`: an id the caller (Telegram) finds again in the meta of the turn that ran this message
     (`turn_refs` while it runs, `last_turn.refs` once it ended; see live_refs). `client_id`: the web page's own id
     for it, kept in its queue item and its log line (`client_ids`). `mentions`: the @ of the composer ({kind, ref},
     see mentions.resolve): Claude reads with the message how to write to each. `relay`: sent by another session's
-    turn (relay_message). `call`: sent during a voice call, in that language (runner.CALL_PREFACE)."""
+    turn (relay_message). `call`: sent during a voice call, in that language (runner.CALL_PREFACE).
+    `sender`: who sent it when it is neither the owner nor a session's turn (relay) - {kind, title?, path?, session?},
+    kind = cron | agent | feed | mail | group | manual | cli | github | system (shown as a card, runner._sender).
+    `shown`: the part of the text for the owner, when the rest is instructions for Claude (the card shows it)."""
     _require(sid)
     files = _check_attachments(attachments)
     audio = _check_voice(voice_path)
@@ -483,10 +503,11 @@ def send_message(sid: str, text: str, attachments: list[str] | None = None, sour
             extra["mentions"] = found
     if relay:
         extra["relay"] = relay
+    extra.update(_sent_by(sender, shown))
     if text.strip():
         titles.first_message(sid, text.strip())
     item = _item(text.strip(), files, source, **extra)
-    if source in OWNER_SOURCES and not relay:
+    if source in OWNER_SOURCES and not relay and "sender" not in extra:
         store.update(sid, owner_at=time.time())         # the owner wrote here (Jarvis: reuse and archiving rules)
     reset = source != "cron"
     queued = _enqueue_voice(sid, item, audio, reset_cron=reset) if audio else _enqueue(sid, item, reset_cron=reset)
@@ -513,8 +534,6 @@ def relay_message(to: str, text: str, attachments: list[str] | None = None, send
     if sender:
         relay.update({"from": sender.get("id") or "", "title": sender.get("title") or "",
                       "path": sender.get("path") or ""})
-        if (sender.get("path") or "").strip("/") == config.JARVIS_PATH:
-            relay["jarvis"] = True                           # shown as a card of Jarvis (runner._relay_from)
     if short:
         relay["short"] = True
     return send_message(target["id"], text, attachments, "session" if sender else "cli", relay=relay)

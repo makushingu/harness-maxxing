@@ -9,8 +9,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Markdown } from '@/components/ui/markdown'
 import { filePreviewUrl, fileRawUrl, fileStamp, fileThumbUrl, prefetchImage, PREVIEW_W } from '@/lib/queries/files'
 import { Thumb } from '@/features/files/Thumb'
-import type { ChangesEvent, ClaudeModel, RelayFrom, ResultField, SentMention } from '@/lib/types'
-import { RelayCard } from './RelayCard'
+import type { ChangesEvent, ClaudeModel, MessageFrom, ResultField, SentMention } from '@/lib/types'
+import { MessageCard, messageFrom } from './MessageCard'
 import { ChipText } from './mentions'
 import { costTip, ResultLineMenu, useCostIsBilled, useResultLine } from './resultLine'
 import { isShownTask, taskStatus, type Item } from './log'
@@ -87,6 +87,7 @@ export const ItemRow = React.memo(function ItemRow({
           at={at}
           source={item.ev.source}
           from={item.ev.from}
+          shown={item.ev.shown}
           mentions={item.ev.mentions}
           injected={item.ev.injected}
           onFork={onFork && (() => onFork(seed()))}
@@ -285,6 +286,7 @@ export function UserMessage({
   at,
   source,
   from,
+  shown,
   mentions,
   injected,
   pending,
@@ -300,8 +302,10 @@ export function UserMessage({
   attachments: string[]
   at?: number
   source?: string
-  /** Sent by another session's turn (maxxing sessions send): a link to it. */
-  from?: RelayFrom
+  /** Not typed by the owner (another session, an agent, a job, Harness): a card with who sent it. */
+  from?: MessageFrom
+  /** The part of the text for the owner (the rest is instructions for Claude). */
+  shown?: string
   /** The @ it names: drawn as chips (with the "/" command it starts with). */
   mentions?: SentMention[]
   /** Added to a running turn (Add to task). */
@@ -315,6 +319,7 @@ export function UserMessage({
   const t = useT()
   const lang = useLang()
   const { tz, path } = React.useContext(ItemContext)
+  const card = messageFrom(from, source)
   // Quotes sent from the composer lead the message as Markdown blockquotes: shown as quote blocks (Copy keeps the raw text).
   const { quotes, rest } = React.useMemo(() => splitQuotes(text), [text])
   const { onContextMenu, touch, menu } = useMessageMenu({ text: [text, heard?.text].filter(Boolean).join('\n\n'), onFork, onEdit, onDelete, onRevert })
@@ -323,8 +328,8 @@ export function UserMessage({
       {menu}
       {voice && <VoiceNote paths={voice === true ? [] : voice} heard={heard} pending={pending} />}
       {attachments.length > 0 && <AttachmentStrip paths={attachments} />}
-      {text && from && <RelayCard from={from} text={text} />}
-      {text && !from && (
+      {text && card && <MessageCard from={card} text={text} shown={shown} />}
+      {text && !card && (
         <div className="relative max-w-full rounded-2xl rounded-br-md bg-secondary px-3.5 py-2 text-[14px] leading-relaxed whitespace-pre-wrap text-secondary-foreground [overflow-wrap:anywhere]">
           <Sensitive block className="min-w-24 bg-transparent">
             {quotes.map((q, i) =>
@@ -350,7 +355,7 @@ export function UserMessage({
         ) : (
           <>
             {(text || heard?.text) && <MessageGrip text={[text, heard?.text].filter(Boolean).join('\n\n')} />}
-            {!from && source && source !== 'web' && <span className="rounded bg-muted px-1">{sourceLabel(source, t)}</span>}
+            {!card && source && source !== 'web' && <span className="rounded bg-muted px-1">{sourceLabel(source, t)}</span>}
             {injected && (
               <Tooltip content={t('sessions.msg.injectedTip')}>
                 <span className="rounded bg-muted px-1">{t('sessions.msg.injected')}</span>

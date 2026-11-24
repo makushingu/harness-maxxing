@@ -22,13 +22,25 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   `{id, title, state, updated, archived, started_by_jarvis, owner_wrote, context_tokens, last_answer, reusable,
   why_not}`, `why_not` = `running` (running or queued) | `owner_active` (`owner_at` < 30 min) | `context_full`
   (>= 80 % of the path's `auto_compact_tokens`, else of the model window). Tests `test_jarvis_reuse.py`.
-- Relayed messages as cards: the log line `from` (`runner._relay_from`) is now `{session, title, path, jarvis?,
-  reports?: [{id, outcome: done|asks|failed}]}` (type `RelayFrom`). `relay_message` sets `relay.jarvis` when the
-  sender is `config.JARVIS_PATH`; `jarvis.on_turn_end` sets `relay.outcome`; `_merge_reports` keeps `outcomes`
-  beside `reports`. Web `pages/sessions/RelayCard.tsx` replaces the bubble of a `from` message (the "↩ title" link
-  of its footer is gone): folded label + first line, unfolded = the text (reports: only the answers between their
-  `<<WORK-x … WORK-x>>` marks). Older lines without the new fields: read from the text (`[Work #N · …] The session
-  … FAILED.`, a sender titled `Jarvis · …`).
+- One card for every message the owner did not type. Log line `mx_user.from` (`runner._sender`, was
+  `_relay_from`) = `{kind, title?, path?, session?, reports?: [{id, outcome: done|asks|failed}]}`, kind `session` |
+  `agent` (relay from another session's turn; `agent` when its path is an agent's) | `cron` | `feed` | `mail` |
+  `group` | `manual` | `cli` | `github` | `system`; `mx_user.shown` = the part of the text for the owner (the rest is
+  instructions for Claude). Owner messages (web, Telegram, voice, the owner on an agent's page) have neither.
+  `service.send_message` / `create_session(..., sender=, shown=)` (queue item `sender`, `shown`, `_sent_by`: known
+  kinds only; a message with a sender never sets `owner_at`); no sender + source `cron` / `cli` / `github` /
+  `system`, or a relay without `from`, -> that kind. Senders: `agents.run_sender(trigger, source)` for every run that
+  is not the owner's (`_fire`), `crons._sender(job)` (job name), `agent_rooms._group_sender`, `{kind: system}` for
+  the memory clean, the update assistant, the browser exit back online and the usage-limit retry. Jarvis: the
+  backstage brief is sent with `sender = {kind: agent, title: backstage, path: AGENT_PATH, session: <run>}` and
+  `shown = <brief>`, its fallback with `BRIEF_SENDER` (`{kind: cron, title: Morning brief}`); reports carry `shown =
+  _report_body()`, `_merge_reports` joins them. `relay.jarvis` is gone (no Jarvis case in the display).
+  `normalize` now passes `from` whole (it kept only `session` / `title`, dropping `reports`) and `shown`; lines
+  without `kind` = `session`. Web: `pages/sessions/RelayCard.tsx` -> `MessageCard.tsx` (type `RelayFrom` ->
+  `MessageFrom`), icon and label per kind (`sessions.from.<kind>` / `<kind>Named`), link to the session, else the
+  agent or the group; the outcome dot wraps under the title on narrow screens. Older lines: no `from` + source
+  `cron` / `cli` / `github` / `system` / `browser` -> a card; bodies between `<<WORK-x` / `<<BRIEF-x` marks shown;
+  reports read from `[Work #N · …]`. `sessions.msg.from` and `sessions.relay.fromJarvis` removed.
 - `deps.drop_other_libc(node_modules)`, called by `_up_remotion` after `npm ci`: npm 10 does not store `libc` in
   package-lock.json, so `npm ci` installed both `@rspack/binding-linux-x64-{gnu,musl}` and
   `@remotion/compositor-linux-x64-{gnu,musl}`. On a glibc host (`platform.libc_ver()`) the top-level and scoped

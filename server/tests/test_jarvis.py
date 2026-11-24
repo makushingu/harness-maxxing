@@ -90,6 +90,9 @@ def test_a_session_on_the_board_reports_into_the_conversation(client, topic):
                           hops=1)
     wait_idle(client, s["id"])
     wait_for(lambda: any("[Work #1" in str(e) for e in all_events(client, jsid)))
+    rep = next(e for e in all_events(client, jsid) if e.get("type") == "user" and "[Work #1" in e["text"])
+    assert rep["from"]["kind"] == "session" and rep["from"]["session"] == s["id"]
+    assert rep["from"]["reports"][0]["id"] == 1 and rep["shown"] and "[Work #1" not in rep["shown"]
     w = wait_for(lambda: next((i for i in jarvis.work() if i["id"] == 1 and i["state"] != "running"), None))
     assert w["state"] == "replied" and w["turns"] >= 1
     # the owner typing in that session himself: the board follows, no report
@@ -153,6 +156,13 @@ def test_tick_starts_the_brief_in_a_new_conversation(client):
     assert wait_for(lambda: client.get(f"/api/sessions/{conv}").json()["turns"] >= 1, timeout=30)
     from maxxing.sessions import service
     assert (service.last_user_message(conv) or {}).get("text", "").startswith("[Morning brief]")
+    # shown as a card of the backstage agent's run, with the brief alone (not the instructions around it)
+    ev = next(e for e in all_events(client, conv) if e.get("type") == "user" and e["text"].startswith("[Morning brief]"))
+    assert ev["from"]["kind"] == "agent" and ev["from"]["path"] == jarvis.AGENT_PATH and ev["from"].get("session")
+    assert ev.get("shown") and "<<BRIEF" not in ev["shown"] and "Your backstage agent prepared it" not in ev["shown"]
+    run = ev["from"]["session"]
+    first = next(e for e in all_events(client, run) if e.get("type") == "user")
+    assert first["from"] == {"kind": "manual", "title": "Jarvis"}       # the run: started by Jarvis, not by the owner
     assert all(i.get("state") == "closed" for i in jarvis.work() if i.get("kind") == "brief")
 
 

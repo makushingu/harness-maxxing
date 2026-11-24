@@ -2108,6 +2108,23 @@ CHAT_SOURCES = ("manual", "telegram")   # the owner typing (agent page, Telegram
 RUN_NOW_SOURCE = "run now"              # the Run now button: a run of the routine (not in CHAT_SOURCES)
 
 
+def run_sender(trigger: str, source: str) -> dict:
+    """Who started a run that is not the owner's own words (sessions.service.send_message `sender`): the kind of its
+    trigger (cron, feed, mail, group, another agent), `cli` for a script's `agents run`, else `manual` with the
+    name of what asked for it (the Run now button: no name)."""
+    kind, _, rest = (trigger or "").partition(":")
+    if kind in ("agent", "after") and rest:
+        p = parse(rest)
+        return {"kind": "agent", "title": (p[2] if p else rest), "path": rest}
+    if kind in ("cron", "feed", "mail", "group"):
+        return {"kind": kind}
+    if source == "command line":
+        return {"kind": "cli"}
+    if source in (RUN_NOW_SOURCE, "manual", "conversation") or not source:
+        return {"kind": "manual"}
+    return {"kind": "manual", "title": source}
+
+
 def _owner_chat(trigger: str, source: str, text: str) -> bool:
     """The owner's own words (no outside text): a message of the conversation, not a run of an automation."""
     return trigger in CONVERSATIONAL and source in CHAT_SOURCES and not text
@@ -2229,6 +2246,7 @@ def _fire(path: str, *, trigger: str, text: str, prompt: str, source: str, attac
           voice: str | None = None, call: str | None = None) -> dict:
     """waited: the id of the owner's message that waited (_owner_wait): its run message is already in the thread."""
     owner = _owner_chat(trigger, source, text)
+    sender = None if owner else run_sender(trigger, source)   # the card that shows who started it (runner._sender)
     voice = voice if owner else None                     # only the owner's own words are sent as a recording
     call = call if owner else None
     if depth > MAX_DEPTH:
@@ -2301,7 +2319,7 @@ def _fire(path: str, *, trigger: str, text: str, prompt: str, source: str, attac
 
     if sid:
         r = service.send_message(sid, message, attachments=attachments, source="agent", ref=ref, voice_path=voice,
-                                 call=call)
+                                 call=call, sender=sender)
         started(sid, chat and not reply_to, {"reply_to": reply_to} if reply_to else {}, {})
         return {"started": True, "continued": True, "session": r["session"]}
     outside, inherited = bool(text), False
@@ -2322,7 +2340,7 @@ def _fire(path: str, *, trigger: str, text: str, prompt: str, source: str, attac
                                attachments=attachments, source="agent", notify=False, cron=True, env=env,
                                timeout_s=run_timeout(a, timeout_s),
                                permission_mode=a["permission_mode"], ref=ref, voice_path=voice,
-                               effort=(effort if chat else None) or None, call=call)
+                               effort=(effort if chat else None) or None, call=call, sender=sender)
     started(s["id"], chat, {}, {"chat": "new"} if chat else {})
     return {"started": True, "session": s}
 
@@ -2804,7 +2822,8 @@ def retry_limits(now: float | None = None) -> int:
                              reason=reason, source="usage limit", session=sid)
                     continue
                 mid = _secrets.token_hex(6)
-                service.send_message(sid, LIMIT_RETRY_TEXT, source="agent", ref=f"agent-run:{mid}")
+                service.send_message(sid, LIMIT_RETRY_TEXT, source="agent", ref=f"agent-run:{mid}",
+                                     sender={"kind": "system"})
                 with _edit_state(path) as st:           # marked first: a failure below never sends it twice (paid)
                     st["limit_retry"] = {**e, "fired": True}
                 _limit_waiting.discard(path)
