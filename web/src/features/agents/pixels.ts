@@ -79,36 +79,37 @@ const HAIR_DARK: Record<string, [number, number][]> = {
   swept: [[9, 3], [7, 5]],
 }
 
-// ---- faces: eyes (rows 6-8, hidden by the blink; never touching the mouth) and mouth (rows 9-10) ----
+// ---- faces: eyes (rows 6-8, hidden by the blink) and mouth (rows 9-11): a free row between them, and between
+// the eyes and the fringe (checked for every face x hair) ----
 const EYES: Record<string, Layer> = {
-  smile: L(6, '.....k..', '.....k..'),
-  happy: L(6, '.....k..', '....k.k.'),
-  focused: L(6, '....kk..', '.....k..', '.....k..'),
+  smile: L(7, '.....k..', '.....k..'),
+  happy: L(7, '.....k..', '....k.k.'),
+  focused: L(7, '....kk..', '.....k..'),
   sleepy: L(8, '....kk..'),
-  wink: L(6, '.....k..........', '.....k....kk....'),
+  wink: L(7, '.....k..........', '.....k....kk....'),
   surprised: L(7, '....wk....wk....', '....kk....kk....'),
-  grin: L(6, '.....k..', '.....k..'),
-  cheeky: L(6, '.....k..', '....k.k.'),
+  grin: L(7, '.....k..', '.....k..'),
+  cheeky: L(7, '.....k..', '....k.k.'),
   calm: L(7, '....k.k.', '.....k..'),
 }
 const MOUTHS: Record<string, Layer> = {
-  smile: L(9, '......k.', '.......k'),
-  happy: L(9, '......kk', '.......r'),
+  smile: L(10, '......k.', '.......k'),
+  happy: L(10, '......kk', '.......r'),
   focused: L(10, '.......k'),
   sleepy: L(10, '.......k'),
-  wink: L(9, '......k.', '.......k'),
+  wink: L(10, '......k.', '.......k'),
   surprised: L(9, '.......k', '.......k'),
-  grin: L(9, '.....kkk', '.....kww'),
-  cheeky: L(9, '......kkkk......', '........rr......'),
+  grin: L(10, '.....kkk', '......ww'),
+  cheeky: L(10, '......kkkk......', '........rr......'),
   calm: L(10, '......kk'),
 }
 /** the eyes closed, for the blink (none for the faces whose eyes are closed already) */
 const BLINK: Record<string, Layer> = {
-  smile: L(7, '....kk..'),
-  focused: L(6, '....kk..', '........', '....kk..'),
-  wink: L(7, '....kk....kk....'),
+  smile: L(8, '....kk..'),
+  focused: L(7, '....kk..'),
+  wink: L(8, '....kk....kk....'),
   surprised: L(8, '....kk..'),
-  grin: L(7, '....kk..'),
+  grin: L(8, '....kk..'),
 }
 /** the eyes of a character asleep (an agent that is off) */
 const ASLEEP = L(8, '....kk..')
