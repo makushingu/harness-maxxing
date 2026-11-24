@@ -338,6 +338,7 @@ export const useSessionsUI = create<State>()(
         const cols = get().cols
         const i = cols.findIndex((c) => c.key === key)
         if (i > 0 && cols[i].below) get().moveBeside(key, cols[groupAt(cols, i)[0]].key, 'right')
+        else if (i >= 0 && cols[i + 1]?.below) get().moveBeside(key, cols[i + 1].key, 'left')   // the top one: on its left
       },
       toGrid: () => set((s) => ({ cols: normalizeCols(s.cols.map((c, i) => (i % 2 ? { ...c, below: true } : (({ below: _b, ...r }) => r as Col)(c)))) })),
       toColumns: () => set((s) => ({ cols: s.cols.map((c) => (({ below: _b, ...r }) => r as Col)(c)) })),

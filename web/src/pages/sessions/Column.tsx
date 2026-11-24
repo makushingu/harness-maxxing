@@ -720,9 +720,11 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
   const columnActions: OptionAction[] = []
   if (variant === 'column') {
     columnActions.push({ key: 'detach', icon: ExternalLink, label: t('sessions.options.detach'), run: detach })
-    if (index > 0)
+    // the top session of a stack leaves it too (its own strip column, the others of the stack stay together)
+    const topOfStack = !col.below && (place?.i ?? 0) === 0 && (place?.n ?? 1) > 1
+    if (index > 0 || topOfStack)
       columnActions.push(
-        col.below
+        col.below || topOfStack
           ? { key: 'unstack', icon: Columns2, label: t('sessions.options.unstack'), run: () => useSessionsUI.getState().unstack(col.key) }
           : {
               key: 'stack',
