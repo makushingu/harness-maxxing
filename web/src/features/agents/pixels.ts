@@ -14,7 +14,7 @@ export const GRID = 16
 export const AVATAR_OPTIONS = {
   color: ['blue', 'clay', 'violet', 'green', 'amber', 'rose'],
   skin: ['light', 'tan', 'brown', 'dark', 'olive'],
-  hair: ['none', 'short', 'spiky', 'long', 'curly', 'bun', 'afro', 'ponytail', 'mohawk'],
+  hair: ['none', 'short', 'spiky', 'long', 'curly', 'bun', 'afro', 'ponytail', 'mohawk', 'buzz', 'bobcut', 'braids', 'pigtails', 'spacebuns', 'swept'],
   hair_color: ['black', 'brown', 'blond', 'red', 'white'],
   face: ['smile', 'happy', 'focused', 'sleepy', 'wink', 'surprised', 'grin', 'cheeky', 'calm'],
   accessory: ['none', 'glasses', 'headphones', 'cap', 'crown', 'antenna'],
@@ -53,11 +53,19 @@ const HAIR_FRONT: Record<string, Layer> = {
   afro: L(0, '....hhhh', '..hhhhhh', '.hhhhhhh', '.hhhhhhh', '.hhhhhhh', '.hhhhhhh', '.hh.....', '.hh.....', '..h.....'),
   ponytail: L(2, '.....hhh', '....hhhh', '...hhhhh', '...hhhhh', '...h....'),
   mohawk: L(0, '.......h', '.......h', '.......h', '.......h', '......hh'),
+  buzz: L(3, '.....hhh', '....hhhh', '...h....'),
+  bobcut: L(2, '.....hhh', '....hhhh', '...hhhhh', '..hhhhhh', '..hh....', '..hh....', '..hh....', '..hh....', '..hhh...'),
+  braids: L(2, '.....hhh', '....hhhh', '...hhhhh', '...hhh.h', '...h....'),
+  pigtails: L(2, '.....hhh', '....hhhh', '...hhhhh', '...hhhhh', '...h....'),
+  spacebuns: L(0, '..hh....', '.hhhh...', '.hhhhhhh', '...hhhhh', '...hhhhh', '...h....'),
+  swept: L(2, '.....hhhhhh.....', '....hhhhhhhh....', '...hhhhhhhhhh...', '...hhhhhhhhhh...', '...hhhhhh...h...', '...hh...........'),
 }
 const HAIR_BACK: Record<string, Layer> = {
   long: L(5, ...rep(9, '..hh....')),
   curly: L(9, '..hh....', '..hh....'),
   ponytail: L(3, '.............hh.', '.............hh.', '..............hh', '..............hh', '.............hh.', '............hh..'),
+  braids: L(6, ...rep(9, '.hh.....')),
+  pigtails: L(3, '.hh.....', 'hhh.....', 'hhh.....', 'hhh.....', '.hh.....', '.h......'),
 }
 /** a few darker pixels: the curls, the knot of the bun */
 const HAIR_DARK: Record<string, [number, number][]> = {
@@ -65,6 +73,10 @@ const HAIR_DARK: Record<string, [number, number][]> = {
   bun: [[6, 1], [7, 1], [8, 1], [9, 1]],
   afro: [[4, 1], [11, 2], [2, 4], [13, 3], [6, 3], [9, 4], [3, 7], [12, 7]],
   ponytail: [[13, 3], [14, 6]],
+  braids: [[1, 7], [2, 9], [1, 11], [2, 13], [14, 7], [13, 9], [14, 11], [13, 13]],
+  pigtails: [[2, 4], [13, 4]],
+  spacebuns: [[2, 1], [13, 1]],
+  swept: [[9, 3], [7, 5]],
 }
 
 // ---- faces: eyes (rows 6-8, hidden by the blink) and mouth (rows 9-10) ----

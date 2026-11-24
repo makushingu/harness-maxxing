@@ -57,7 +57,7 @@ MAX_PER_TOPIC = 20
 AVATAR = {
     "color": ("blue", "clay", "violet", "green", "amber", "rose"),
     "skin": ("light", "tan", "brown", "dark", "olive"),
-    "hair": ("none", "short", "spiky", "long", "curly", "bun", "afro", "ponytail", "mohawk"),
+    "hair": ("none", "short", "spiky", "long", "curly", "bun", "afro", "ponytail", "mohawk", "buzz", "bobcut", "braids", "pigtails", "spacebuns", "swept"),
     "hair_color": ("black", "brown", "blond", "red", "white"),
     "face": ("smile", "happy", "focused", "sleepy", "wink", "surprised", "grin", "cheeky", "calm"),
     "accessory": ("none", "glasses", "headphones", "cap", "crown", "antenna"),
