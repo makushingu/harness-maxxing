@@ -1119,7 +1119,8 @@ _FOLDER_RULES = ("permission_mode", "allowed_tools", "browser", "devices")
 
 def _keep_local_rules(rel: str, data: bytes, dest: Path) -> tuple[bytes, bool]:
     """agent.json / .maxxing.json restored on a server in use: their security settings stay the ones of this server
-    (a new agent comes back switched off, a new folder with the default rules). -> (data to write, changed)."""
+    (a new agent, or one switched off here, comes back switched off; a new folder gets the default rules).
+    -> (data to write, changed)."""
     agent = bool(_AGENT_FILE.match(rel))
     if not agent and not _FOLDER_FILE.match(rel):
         return data, False
@@ -1141,6 +1142,8 @@ def _keep_local_rules(rel: str, data: bytes, dest: Path) -> tuple[bytes, bool]:
             out.pop(k, None)
             if k in local:
                 out[k] = local[k]
+        if agent and local.get("enabled") is False:
+            out["enabled"] = False               # switched off here stays off: a backup never turns an agent back on
     else:
         for k in keys if not agent else ():
             out.pop(k, None)
