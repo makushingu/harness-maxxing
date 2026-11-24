@@ -15,7 +15,7 @@ import { SettingsCard, SectionStack } from './ui'
 import { useHarnessTopic } from './harnessTopic'
 
 type Kind = 'widgets' | 'pages' | 'views'
-const inKind = (x: Extension, k: Kind) => (k === 'views' ? !!x.agents_view || x.type === 'view' : k === 'widgets' ? x.type === 'widget' : x.type === 'page')
+const inKind = (x: Extension, k: Kind) => (k === 'views' ? !!x.agents_view || x.type === 'view' : k === 'widgets' ? x.type === 'widget' : x.type !== 'widget' && x.type !== 'view')   // pages: also a wrong type, to show its error
 const TEXT = {
   widgets: { prompt: 'ext.newWidgetPrompt', add: 'ext.newWidget', empty: 'ext.emptyWidgets', emptyDesc: 'ext.emptyWidgetsDesc', community: 'ext.communityWidgets', type: 'widget' },
   pages: { prompt: 'ext.newPagePrompt', add: 'ext.newPage', empty: 'ext.emptyPages', emptyDesc: 'ext.emptyPagesDesc', community: 'ext.communityPages', type: 'page' },

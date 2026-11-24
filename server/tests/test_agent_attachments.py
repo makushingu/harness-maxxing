@@ -136,7 +136,8 @@ def test_group_message_with_files(client, topic, mx):
     assert client.post("/api/agent-groups/acme/nope/uploads", files=[("file", ("x", b"x"))]).status_code == 404
 
 
-def test_group_conversations_are_searched(client, topic, mx):
+def test_group_conversations_are_searched(client, topic, mx, monkeypatch):
+    monkeypatch.setattr(search, "SESSIONS_FRESH_S", 0)   # searches follow each other here faster than a keystroke burst
     _setup(client)
     r = client.post(f"{G}/messages", json={"text": "@writer the zanzibar launch\nREPLY_AS writer: Draft about quokkas"})
     assert r.status_code == 200

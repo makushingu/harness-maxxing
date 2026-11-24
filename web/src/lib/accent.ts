@@ -35,7 +35,13 @@ function setLink(rel: string, href: string, type?: string) {
 export function applyFavicon(accent: Accent, logo?: string | null) {
   // a theme's own logo (an image of the theme, served by the server) replaces the tab icon; the installed app's icons
   // (manifest, iOS home screen) stay the product's: they are fixed when the app is installed
-  setLink('icon', logo || logoSrc(accent), logo ? '' : 'image/svg+xml')
+  setLink('icon', logoSrc(accent), 'image/svg+xml')
+  if (logo) {
+    // only once it loads: signed out, theme files need a session and the tab keeps the product logo
+    const img = new Image()
+    img.onload = () => setLink('icon', logo, '')
+    img.src = logo
+  }
   setLink('manifest', `/manifest-${known(accent)}.webmanifest`)
   setLink('apple-touch-icon', `/icons/apple-touch-icon-${known(accent)}.png`)
 }

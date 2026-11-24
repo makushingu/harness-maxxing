@@ -502,9 +502,10 @@ def load(d: Path) -> tuple[dict | None, list[str], str | None]:
             warn.append(f"options.{k}: {json.dumps(v)[:40]} is not one of {', '.join(OPTIONS[k])}, ignored")
         else:
             options[k] = v
-    if len(present) == 1 and options.get("mode") not in (None, present[0]):
-        warn.append(f"options.mode: the theme only has a {present[0]} mode")
-        options["mode"] = present[0]
+    if len(present) == 1 and "mode" in options:     # its only mode applies while it is in use: nothing to suggest
+        if options["mode"] != present[0]:
+            warn.append(f"options.mode: the theme only has a {present[0]} mode, ignored")
+        del options["mode"]
     wall = {"light": _image(d, raw.get("wallpaper"), "wallpaper", warn)}
     wall["dark"] = _image(d, raw.get("wallpaper_dark"), "wallpaper_dark", warn) or wall["light"]
     if base != "glass" and (wall["light"] or wall["dark"]):

@@ -46,7 +46,9 @@
           // (manifest icons and launch screen) and the iOS home-screen icon.
           var icon = document.querySelector('link[rel="icon"]');
           var tl = ct && ct.logo && ct.logo[dark ? 'dark' : 'light'];
-          if (icon) { if (typeof tl === 'string' && /^\/api\/themes\/[a-z0-9-]+\/file\/[A-Za-z0-9._-]+$/.test(tl)) { icon.removeAttribute('type'); icon.href = tl; } else icon.href = '/icons/logo-' + a + '.svg'; }
+          if (icon) icon.href = '/icons/logo-' + a + '.svg';
+          // the theme's logo once it loads (signed out, theme files need a session: the product logo stays)
+          if (icon && typeof tl === 'string' && /^\/api\/themes\/[a-z0-9-]+\/file\/[A-Za-z0-9._-]+$/.test(tl)) { var im = new Image(); im.onload = function () { icon.removeAttribute('type'); icon.href = tl; }; im.src = tl; }
           var manifest = document.querySelector('link[rel="manifest"]');
           if (manifest) manifest.href = '/manifest-' + a + '.webmanifest';
           var touch = document.querySelector('link[rel="apple-touch-icon"]');

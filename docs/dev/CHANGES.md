@@ -7,6 +7,17 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## 2.0.0-alpha.169 - 2026-11-24
 
+- Browser (FEU): `pool.TURN_END_SLEEP` 15 min; `turn_ended[nav]` set when a session navigator's turn is found dead,
+  popped by a new turn; its tabs sleep after the delay (`_sleep_turn_tabs`). Known gap: a turn whose browser tools were
+  stopped for idleness (`CHILD_IDLE`) is not recorded, its tabs fall back to the unused-tab rule.
+- Team (audit, d80ae9b20): a roster from a remote creator makes one of our contacts a member only if they were already
+  in or the roster carries a well-formed pair key for them (`teampeer._key_ok`). Known limit: the key is not verified,
+  a creator can still vouch for a contact (who would only see what the creator can relay anyway).
+- Uploads (audit, f9aa93047): the request ceiling is `upload_max_mb` x `uploads.REQUEST_FILES` (10) + 1 MB; each file
+  is held to `upload_max_mb` by `save_upload`. Routes with smaller limits still check after the body is spooled.
+- Search (audit, b36a119b1): `SESSIONS_FRESH_S` 0.5 s, a query within that window of the last session refresh does not
+  stat every session again (`_state["sessions_at"]`). `test_group_conversations_are_searched` sets it to 0.
+- Sessions: the hover popup of tool lines is gone (`Items.tsx`), the row expands instead.
 - Mail: `AccountDialog.tsx` `setPort()` sets `imap_tls` / `smtp_tls` from `PORT_TLS` (SMTP 465 ssl, 587/25 starttls; IMAP 993 ssl, 143 starttls, as `cmd_mail` picks them) when a well-known port is typed; other ports and a later Security choice are left alone. `imap.tls_error()` (used by `open_imap` and `mail.open_smtp`) turns `WRONG_VERSION_NUMBER` with `tls == "ssl"` into "this port expects STARTTLS, not SSL/TLS". Test: `test_ssl_on_a_starttls_port_says_to_pick_starttls`.
 - Settings, Extensions group: sections `views` (`ViewsSection`, `Extensions.tsx` kind `views` = `agents_view` or type
   `view`; pages = type `page` only, widgets = type `widget`; a page / widget that also brings a view shows in both with a
@@ -32,7 +43,7 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   could run script when opened at its URL) -> `Theme.logo {light, dark}`, served by `/file/`, copied by `install`. Web:
   `ThemeLook.logo` (`isThemeFile` check, also on the persisted store), `LogoMark` uses it per mode and falls back to the
   product logo on error (signed out: theme files need a session); `applyFavicon(accent, logo)` and index.html set the
-  tab icon (manifest / apple-touch icons unchanged).
+  tab icon once the image loads (signed out it 401s: the product icon stays) (manifest / apple-touch icons unchanged).
 - Themes, advanced CSS: one `"css"` field in theme.json (string or list of lines, 16 KB), checked by `themes._css`
   (refused whole: url()/image()/element(), at-rules but @media/@supports/@container, `position: fixed`, `<`, `\`,
   unbalanced braces/quotes, control characters incl. CR/FF, `var()` in `position`; comments stripped). `css_state`
@@ -42,7 +53,8 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   `themeCssOff` (per browser, reset by `pickTheme`), index.html paints it too; Appearance Options row "Advanced CSS"
   (switch, or "Ask Harness to check" when stale). `useThemeSync` keeps the look while the theme is in `errors`;
   `install --force` swaps folders (`.old`) instead of delete-then-rename; shadows need balanced parentheses;
-  `pickTheme` no longer writes a one-mode theme's mode into the Mode setting. Mock: `nord` css on, `sunset` css stale.
+  `pickTheme` no longer writes a one-mode theme's mode into the Mode setting (and `load` drops `options.mode` of a
+  one-mode theme). Extensions: an extension with a wrong `type` stays in Pages (its error shows). Mock: `nord` css on, `sunset` css stale.
 - Session watcher (`service._scan`): a meta file is identified by `(inode, mtime_ns, size)` (`_ident`, as `meta_ident` and `store._cache`), no longer by `mtime_ns` alone: two atomic writes in one tick of the kernel's coarse clock share the mtime, and the second was skipped (an idle session until its next write, a running one until `RUNNING_RECHECK_S`). `_known` / `_damaged` hold that tuple. `tests/test_agent_turn_bus.py` failed about 2 runs in 3 because of it.
 
 ## 2.0.0-alpha.168 - 2026-11-24
