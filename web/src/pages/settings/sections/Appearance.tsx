@@ -15,7 +15,7 @@ import { Button, Segmented, Switch, Tooltip } from '@/components/ui'
 import { SettingRow } from '@/features/common'
 import { SettingsCard, SectionStack } from './ui'
 
-const ACCENT_SWATCH: Record<Accent, string> = {
+export const ACCENT_SWATCH: Record<Accent, string> = {
   blue: 'oklch(0.62 0.2 256)',
   clay: 'oklch(0.73 0.17 58)',
   violet: 'oklch(0.6 0.25 312)',
@@ -101,7 +101,7 @@ function AccentPicker() {
 
 /** The look of a theme card: a tiny window drawn with the theme's own colors (sidebar, card, a button in the accent).
  *  `vars` = an installed theme's values for this mode (what it leaves out keeps the built-in look). */
-function ThemePreview({ glass, accent, dark, vars, wallpaper, image }: { glass: boolean; accent: string; dark: boolean; vars?: Record<string, string>; wallpaper?: string | null; image?: string | null }) {
+export function ThemePreview({ glass, accent, dark, vars, wallpaper, image }: { glass: boolean; accent: string; dark: boolean; vars?: Record<string, string>; wallpaper?: string | null; image?: string | null }) {
   if (image) return <img src={image} alt="" className="h-20 w-full rounded-md border object-cover" />
   const v = vars ?? {}
   const base = v.background || (dark ? 'oklch(0.2 0.006 286)' : 'oklch(0.98 0 0)')
@@ -222,7 +222,7 @@ function ThemePicker() {
 }
 
 /** Opens a new session draft in the Harness topic with `prompt` written (the user reads it and sends). */
-function useAskHarness() {
+export function useAskHarness() {
   const navigate = useNavigate()
   const topic = useHarnessTopic()
   return (prompt: string) => navigate(draftUrl(topic, prompt))

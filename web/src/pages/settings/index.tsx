@@ -18,7 +18,8 @@ import { BackupSection } from './sections/Backup'
 import { VoiceSection } from './sections/Voice'
 import { KeysSection } from './sections/Keys'
 import { McpSection } from './sections/Mcp'
-import { PagesSection, WidgetsSection } from './sections/Extensions'
+import { PagesSection, ViewsSection, WidgetsSection } from './sections/Extensions'
+import { ThemesSection } from './sections/Themes'
 import { SystemSection } from './sections/System'
 import { TrashSection } from './sections/Trash'
 import { TemplatesSection } from './sections/Templates'
@@ -65,6 +66,8 @@ const COMPONENTS: Record<SettingsSectionId, React.ComponentType> = {
   mcp: McpSection,
   widgets: WidgetsSection,
   pages: PagesSection,
+  views: ViewsSection,
+  themes: ThemesSection,
   templates: TemplatesSection,
   import: ImportSection,
   trash: TrashSection,

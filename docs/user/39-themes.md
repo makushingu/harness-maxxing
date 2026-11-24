@@ -8,7 +8,8 @@ Below the themes, **Options of <theme>** holds what you can still change: dark o
 and fonts. Picking a theme applies its suggested options once (a font, an accent...); you can change them afterwards.
 When a theme fixes something itself (its own accent color, its own surfaces, a single mode), that option says so.
 
-Everything is saved in this browser, like the rest of Appearance.
+Everything is saved in this browser, like the rest of Appearance. Settings -> Extensions -> **Themes** lists the
+installed themes with their state (in use, advanced CSS on or off, values ignored, folders that are not usable).
 
 ## Getting a theme
 

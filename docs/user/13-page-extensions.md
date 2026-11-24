@@ -181,8 +181,9 @@ CSS variables are there for the rest: `--background`, `--foreground`, `--card`, 
 ## Overview views of the Agents page
 
 An extension can also bring a **view of the Overview** (the page of the Agents page with every agent at its desk): it is listed in the Overview's
-view menu after Classic and Space. **Create my custom view**, at the end of that menu, opens a session
-that builds one with you.
+view menu after Classic and Space. **Create my custom view**, at the end of that menu (or **New view** in Settings ->
+Agents views), opens a session that builds one with you. Settings -> **Agents views** lists them (switch on/off,
+**Rescan**).
 
 ```
 /root/maxxing/extensions/mission-control/

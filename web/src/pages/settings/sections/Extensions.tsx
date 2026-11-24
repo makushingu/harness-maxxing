@@ -1,5 +1,6 @@
-// Settings -> Widgets and Settings -> Pages (2.0.0a132, were one Extensions list): the extensions of
-// <workspace>/extensions, each in the section of what it brings (an extension with an Office view shows in Pages too).
+// Settings -> Widgets, Pages and Agents views (2.0.0a132, were one Extensions list; views apart since 2.0.0a169, as on
+// Community): the extensions of <workspace>/extensions, each in the section of what it brings (a page that also
+// brings an Agents view shows in both). Themes: Themes.tsx.
 // The community catalogue stays on the website: only a link here.
 import * as React from 'react'
 import { Link, useNavigate } from 'react-router'
@@ -13,8 +14,13 @@ import { Badge, Button, EmptyState, NamedIcon, Skeleton, Switch, toast } from '@
 import { SettingsCard, SectionStack } from './ui'
 import { useHarnessTopic } from './harnessTopic'
 
-type Kind = 'widgets' | 'pages'
-const inKind = (x: Extension, k: Kind) => (k === 'widgets' ? x.type === 'widget' : x.type !== 'widget' || !!x.agents_view)
+type Kind = 'widgets' | 'pages' | 'views'
+const inKind = (x: Extension, k: Kind) => (k === 'views' ? !!x.agents_view || x.type === 'view' : k === 'widgets' ? x.type === 'widget' : x.type === 'page')
+const TEXT = {
+  widgets: { prompt: 'ext.newWidgetPrompt', add: 'ext.newWidget', empty: 'ext.emptyWidgets', emptyDesc: 'ext.emptyWidgetsDesc', community: 'ext.communityWidgets', type: 'widget' },
+  pages: { prompt: 'ext.newPagePrompt', add: 'ext.newPage', empty: 'ext.emptyPages', emptyDesc: 'ext.emptyPagesDesc', community: 'ext.communityPages', type: 'page' },
+  views: { prompt: 'ext.newViewPrompt', add: 'ext.newView', empty: 'ext.emptyViews', emptyDesc: 'ext.emptyViewsDesc', community: 'ext.communityViews', type: 'view' },
+} as const
 
 export function WidgetsSection() {
   const t = useT()
@@ -34,14 +40,28 @@ export function PagesSection() {
   return <ExtensionList kind="pages" />
 }
 
+export function ViewsSection() {
+  const t = useT()
+  return (
+    <ExtensionList
+      kind="views"
+      extra={
+        <Button variant="outline" size="sm" asChild>
+          <Link to="/agents"><ExternalLink /> {t('ext.openAgents')}</Link>
+        </Button>
+      }
+    />
+  )
+}
+
 /** A link to the community catalogue (on the website, on purpose: nothing is installed from here). */
-export function CommunityLink({ text }: { text: string }) {
+export function CommunityLink({ text, type }: { text: string; type?: string }) {
   return (
     <p className="flex items-center gap-1.5 px-1 text-[13px] text-muted-foreground">
       <Users className="size-3.5 shrink-0" />
       <span>
         {text}{' '}
-        <a href={COMMUNITY_URL} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-medium text-primary hover:underline pointer-coarse:min-h-10">
+        <a href={type ? `${COMMUNITY_URL}?type=${type}` : COMMUNITY_URL} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-medium text-primary hover:underline pointer-coarse:min-h-10">
           harness-maxxing.com/community <ExternalLink className="size-3" />
         </a>
       </span>
@@ -58,6 +78,7 @@ function ExtensionList({ kind, extra }: { kind: Kind; extra?: React.ReactNode })
   const pin = usePinExtension()
   const reload = useReloadExtensions()
   const topic = useHarnessTopic()
+  const tx = TEXT[kind]
   return (
     <SectionStack>
       <SettingsCard
@@ -66,8 +87,8 @@ function ExtensionList({ kind, extra }: { kind: Kind; extra?: React.ReactNode })
         actions={
           <>
             {extra}
-            <Button variant="outline" size="sm" onClick={() => navigate(draftUrl(topic, t(kind === 'widgets' ? 'ext.newWidgetPrompt' : 'ext.newPagePrompt')))}>
-              <Plus /> {t(kind === 'widgets' ? 'ext.newWidget' : 'ext.newPage')}
+            <Button variant="outline" size="sm" onClick={() => navigate(draftUrl(topic, t(tx.prompt)))}>
+              <Plus /> {t(tx.add)}
             </Button>
             <Button variant="outline" size="sm" loading={reload.isPending} onClick={() => reload.mutate(undefined, { onSuccess: () => toast.success(t('ext.reloaded')) })}>
               <RefreshCw /> {t('ext.reload')}
@@ -82,7 +103,7 @@ function ExtensionList({ kind, extra }: { kind: Kind; extra?: React.ReactNode })
             <Skeleton className="h-14" />
           </div>
         ) : !data?.length ? (
-          <EmptyState compact icon={Blocks} title={t(kind === 'widgets' ? 'ext.emptyWidgets' : 'ext.emptyPages')} description={t(kind === 'widgets' ? 'ext.emptyWidgetsDesc' : 'ext.emptyPagesDesc')} />
+          <EmptyState compact icon={Blocks} title={t(tx.empty)} description={t(tx.emptyDesc)} />
         ) : (
           <ul className="divide-y border-t">
             {data.map((x) => (
@@ -93,7 +114,8 @@ function ExtensionList({ kind, extra }: { kind: Kind; extra?: React.ReactNode })
                 <div className="grid min-w-0 flex-1 gap-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm font-medium">{x.name}</span>
-                    {kind === 'pages' && !!x.agents_view && <Badge variant="muted">{t('ext.view')}</Badge>}
+                    {kind === 'views' && x.type !== 'view' && <Badge variant="muted">{t(x.type === 'widget' ? 'ext.alsoWidget' : 'ext.alsoPage')}</Badge>}
+                    {kind !== 'views' && !!x.agents_view && <Badge variant="muted">{t('ext.view')}</Badge>}
                     <span className="font-mono text-xs text-muted-foreground">
                       {x.id} · v{x.version}
                     </span>
@@ -105,7 +127,7 @@ function ExtensionList({ kind, extra }: { kind: Kind; extra?: React.ReactNode })
                       <span className="font-mono break-all">{x.error}</span>
                     </p>
                   )}
-                  {x.type === 'page' && x.enabled && !x.error && (
+                  {kind === 'pages' && x.enabled && !x.error && (
                     <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
                       <Link to={`/x/${x.id}`} className="inline-flex w-fit items-center gap-1 pointer-coarse:min-h-10 text-[13px] font-medium text-primary hover:underline">
                         {t('ext.open')} <ExternalLink className="size-3" />
@@ -123,7 +145,7 @@ function ExtensionList({ kind, extra }: { kind: Kind; extra?: React.ReactNode })
           </ul>
         )}
       </SettingsCard>
-      <CommunityLink text={t(kind === 'widgets' ? 'ext.communityWidgets' : 'ext.communityPages')} />
+      <CommunityLink text={t(tx.community)} type={tx.type} />
     </SectionStack>
   )
 }

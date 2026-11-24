@@ -245,7 +245,7 @@ Rules: render from `onData` every time (it is called again on each change, rebui
 `off`), make every agent clickable (also with the keyboard: a `<button>`), `maxxing.resize(document.body.scrollHeight)`
 after each render, light and dark (`maxxing.theme` + theme variables), a phone width (~360 px), and
 `@media (prefers-reduced-motion: reduce)` stops animations. Ask the user the style they want (a mission control, a
-farm, a train station, a plain table…) before building it. Then: **Settings -> Widgets** (or **Pages**) **-> Rescan**, Agents ->
+farm, a train station, a plain table…) before building it. Then: **Settings -> Agents views -> Rescan**, Agents ->
 Overview -> the view menu -> its name.
 
 ## Steps

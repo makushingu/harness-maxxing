@@ -30,7 +30,9 @@ blocks):
 | | **Feed** | the [notifications feed](feed): its Telegram thread, **Server problems in the notifications**, the sources and what each one does in Telegram |
 | | **Telegram** | bot wizard, linking, mode (simple chat, threads, web mirror), notification options, two-step sign-in (also in Security) – see [Telegram](telegram) |
 | **Extensions** | **Widgets** | the widget extensions of `<workspace>/extensions`: switch on/off, **Rescan**, **Customize the dashboard** (opens the dashboard in edit mode) – see [Dashboard widgets](dashboard-widgets) |
-| | **Pages** | the page extensions and the Overview views of the Agents page: every page pinned or not, switch on/off, **Open page**, **In the sidebar** (pin: the sidebar's Extensions folder), **Rescan** – see [Page extensions](page-extensions) |
+| | **Pages** | the page extensions: every page pinned or not, switch on/off, **Open page**, **In the sidebar** (pin: the sidebar's Extensions folder), **Rescan** – see [Page extensions](page-extensions) |
+| | **Agents views** | the extensions that bring a view of the Overview of the Agents page (a page or a widget that also brings one shows in both), switch on/off, **New view**, **Rescan** – see [Overview views](page-extensions#overview-views-of-the-agents-page) |
+| | **Themes** | the themes installed in `<workspace>/themes`: their state (in use, advanced CSS on or off, values ignored), folders that are not usable, **New theme** (asks Harness), **Choose in Appearance** – see [Themes](themes) |
 | **Workspace** | **Templates** | add a ready-made project (**starter pack**) for your kind of work; an existing project is never overwritten - see [Starter projects](starter-projects) |
 | | **Import** | the memory of another agent (Hermes, OpenClaw, Claude Code, a zip) - see [Import](import); and the way to the other imports: a memory backup (**Backup**), an agent file (Agents page) |
 | | **Backup** | repository, schedule, whitelist, history, restore – see [Backup](backup) |
@@ -40,8 +42,9 @@ blocks):
 | | **About** | the version and the useful links (docs, GitHub, community), the optional **Enterprise key** (only for companies that need one: record it, see it, remove it - see [License](license)), **Support**: Harness Maxxing is free, **Donate** opens the donation page of the website in a new tab (nothing is sent from the app); **Hide the Donate buttons** removes them from What's new and the Feedback window, in every browser - see [License](license#donations) |
 
 The docs are not in Settings: open them with the book icon at the bottom of the sidebar (in the ⊞ menu on a phone).
-The community catalogue (widgets, pages, skills shared by other users) is on the website,
-[harness-maxxing.com/community](https://harness-maxxing.com/community): Widgets, Pages and Skills link to it.
+The community catalogue (widgets, pages, Agents views, skills and themes shared by other users) is on the website,
+[harness-maxxing.com/community](https://harness-maxxing.com/community): Widgets, Pages, Agents views, Themes and Skills
+link to it.
 Old links keep working: `/settings/stats` opens **Usage**, `/settings/license` and `/settings/support` open **About**, `/settings/packs` and `/settings/projects` open **Templates**, `/settings/extensions` opens
 **Widgets**, `/settings/docs` opens the docs.
 

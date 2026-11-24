@@ -7,6 +7,7 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 
 New:
 - **Themes.** Settings -> Appearance now starts with the theme: *Solid* (the default) or *Glass*, and any theme Harness installed for you, each shown as a small preview. Below it, the options of that theme: dark or light mode, accent color, background and fonts; the layout of the device gets its own card. Ask Harness for a theme ("in the colors of my brand", "a warm glass with a wallpaper") or to install one from Community: it is a simple file of colors and sizes, checked before it is used, so a theme can never make the interface unreadable or break after an update; what it leaves out keeps the Solid or Glass look. For what colors and sizes cannot do, a theme may add a few style rules of its own ("advanced CSS"): you can switch them off in the theme's options, and an update that changes the interface switches them off by itself until Harness has checked them again. [Show me](#show:themes)
+- **Settings -> Extensions in the same four parts as Community.** Widgets, Pages, and now **Agents views** (the views of the Overview of the Agents page, until now mixed with the pages) and **Themes** (the installed themes, their state, and a button to ask Harness for a new one).
 
 Fixed:
 - **The Harness Browser no longer keeps a session's pages running after its turn.** 15 minutes after the turn ends, if no new turn uses them, the tabs it opened sleep (a 3D render left open kept the CPU busy). They are still listed and open again at the next turn.

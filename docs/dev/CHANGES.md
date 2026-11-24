@@ -8,6 +8,10 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 ## 2.0.0-alpha.169 - 2026-11-24
 
 - Mail: `AccountDialog.tsx` `setPort()` sets `imap_tls` / `smtp_tls` from `PORT_TLS` (SMTP 465 ssl, 587/25 starttls; IMAP 993 ssl, 143 starttls, as `cmd_mail` picks them) when a well-known port is typed; other ports and a later Security choice are left alone. `imap.tls_error()` (used by `open_imap` and `mail.open_smtp`) turns `WRONG_VERSION_NUMBER` with `tls == "ssl"` into "this port expects STARTTLS, not SSL/TLS". Test: `test_ssl_on_a_starttls_port_says_to_pick_starttls`.
+- Settings, Extensions group: sections `views` (`ViewsSection`, `Extensions.tsx` kind `views` = `agents_view` or type
+  `view`; pages = type `page` only, widgets = type `widget`; a page / widget that also brings a view shows in both with a
+  badge) and `themes` (`sections/Themes.tsx`: installed themes from `/api/themes`, in use, `css_state`, warnings count,
+  `errors`, New theme = draft in the Harness topic, link to Appearance). `CommunityLink` takes `type` (`?type=`).
 - Appearance: cards Theme (`ThemePicker`, tiles with `ThemePreview` for `material` solid / glass then installed themes) -> Options of <theme> (mode, accent, tint, fonts) -> Layout. Store fields unchanged (`material` is the theme). Keys `appearance.theme*`, `appearance.default`, `appearance.solidDesc` / `glassDesc`, `appearance.options*` added; `appearance.colors*`, `appearance.fonts`, `settings.material*` removed; `shell.theme` reads Mode.
 - Themes: `maxxing/themes.py` (contract `TOKENS` = CSS variables of globals.css a theme may set, by kind; only ever add,
   renames via `ALIASES`; `load()` cleans values by kind, drops unknown keys, checks text contrast per mode on the effective
