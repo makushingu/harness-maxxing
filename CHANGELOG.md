@@ -6,6 +6,7 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 ## Unreleased
 
 Fixed:
+- **The Harness Browser no longer keeps a session's pages running after its turn.** When the turn ends, the tabs it opened sleep at once (they stayed awake up to 20 minutes: a 3D render left open kept the CPU busy). They are still listed and open again at the next turn.
 - **A session change made twice in quick succession is no longer missed.** When a session was written twice within a few milliseconds, the server could take the second change for no change: its new state, a turn's end or a held message showed up late, or only at the next change.
 
 ## 2.0.0-alpha.168 - 2026-11-24

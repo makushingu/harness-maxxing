@@ -1661,3 +1661,30 @@ def test_a_request_file_is_parsed_again_only_when_it_changes(mx, monkeypatch):
     assert len(reads) == 1
     f.write_text(json.dumps({"id": "a1b2c3d4e5f60718", "status": "done", "at": 1.0}))
     assert not asks.pending() and len(reads) == 2
+
+
+def test_a_sessions_tabs_sleep_when_its_turn_ends(mx):
+    """A page left running by a turn (a 3D render) does not keep the CPU busy: the session's tabs sleep at once,
+    the person's and those of a navigator someone watches stay awake."""
+    p, b = _browser()
+    closed = []
+
+    class FakeWatcher:
+        def watched(self, nav=None):
+            return nav == "session:s2"
+
+        async def close_tab(self, target, sleep=False):
+            closed.append((target, sleep))
+            b.tabs.gone(target, keep=sleep)
+    b.watcher = FakeWatcher()
+    for target, by, nav in (("t1", {"kind": "session", "sid": "s1"}, "session:s1"), ("t2", {"kind": "you"}, "me"),
+                            ("t3", {"kind": "session", "sid": "s2"}, "session:s2")):
+        b.tabs.resolve({"targetId": target, "type": "page", "url": "https://a.example/"})
+        b.tabs.assign(target, by, nav)
+
+    async def run():
+        for nav in ("session:s1", "me", "session:s2"):
+            await p._sleep_turn_tabs(b, nav)
+    asyncio.run(run())
+    assert closed == [("t1", True)]
+    assert [t["nav"] for t in b.tabs.asleep()] == ["session:s1"]

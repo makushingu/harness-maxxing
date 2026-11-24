@@ -322,10 +322,13 @@ class Pool:
         if not browser.feature_on() or p is None:
             return await self.stop(b.pid, "turned off" if p else "its profile was deleted")
         for sid, t in list(b.turns.items()):
-            if not await asyncio.to_thread(turn_alive, sid) or (now - t.last_call > CHILD_IDLE and not t.lock.locked()):
+            ended = not await asyncio.to_thread(turn_alive, sid)
+            if ended or (now - t.last_call > CHILD_IDLE and not t.lock.locked()):
                 await t.stop()
                 b.turns.pop(sid, None)
                 self._changed()
+                if ended:
+                    await self._sleep_turn_tabs(b, t.nav)
         for nav, c in list(b.control.items()):
             if now - c["at"] > CONTROL_IDLE:
                 self._release(b, nav)
@@ -336,6 +339,20 @@ class Pool:
         b.mem = await asyncio.to_thread(unit.memory_current, b.pid, b.proc)
         await self._level(b)
         await self._sleep_tabs(b, s, now)
+
+    async def _sleep_turn_tabs(self, b: Browser, nav: str) -> None:
+        """A session's turn ended: its tabs sleep at once (a page left running - a 3D render, a video - would keep
+        the CPU busy until `tab_sleep_min`). They stay in the list; the next turn opens them again. Not while the
+        person watches or drives that navigator, nor while another turn of it runs."""
+        if navs.kind(nav) != "session" or not b.watcher or b.control.get(nav) or b.watcher.watched(nav) \
+                or any(x.nav == nav for x in b.turns.values()):
+            return
+        going = b.tabs.awake(nav)
+        for tab in going:
+            await b.watcher.close_tab(tab["target"], sleep=True)
+        if going:
+            log.info("Harness Browser %s: %d tab(s) of %s asleep (turn ended)", b.pid, len(going), nav)
+            self._changed()
 
     async def _close_sessions(self) -> None:
         """A session's navigator is temporary: once the session has had no turn on it for `idle_min`, its tabs are

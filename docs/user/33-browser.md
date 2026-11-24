@@ -210,6 +210,8 @@ action. **Skip** tells it to do without that step. With no answer in time, it gi
 
 ## Sleep and memory
 
+- When a session's turn ends, the tabs it opened **sleep at once** (unless you are watching that browser): a page
+  left running, a 3D render or a video, does not keep the server busy. Claude opens them again at its next turn.
 - A tab unused for 20 minutes **sleeps**: it is closed and kept (italic, moon icon); a click opens it again. Claude
   sees its sleeping tabs and opens them again when it needs them. At most 12 tabs are awake per profile: above that,
   the oldest one sleeps.
