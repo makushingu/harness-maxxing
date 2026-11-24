@@ -5,7 +5,7 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 
 ## Unreleased
 
-Improvements:
+New:
 - **Themes.** Settings -> Appearance now starts with the theme: *Solid* (the default) or *Glass*, and any theme Harness installed for you, each shown as a small preview. Below it, the options of that theme: dark or light mode, accent color, background and fonts; the layout of the device gets its own card. Ask Harness for a theme ("in the colors of my brand", "a warm glass with a wallpaper") or to install one from Community: it is a simple file of colors and sizes, checked before it is used, so a theme can never make the interface unreadable or break after an update; what it leaves out keeps the Solid or Glass look. For what colors and sizes cannot do, a theme may add a few style rules of its own ("advanced CSS"): you can switch them off in the theme's options, and an update that changes the interface switches them off by itself until Harness has checked them again. [Show me](#show:themes)
 
 Fixed:
@@ -2061,7 +2061,7 @@ Fixes:
 
 ## 2.0.0-alpha.74 - 2026-10-20
 
-Improvements:
+New:
 
 - **The Tasks page and its dashboard widget load faster on a big board.** With thousands of tasks the list
   is about six times faster and the widget is instant.
