@@ -872,7 +872,11 @@ def apply_remote(frm: str, contact: bool, event: dict) -> None:
             if chat is None and sum(1 for c in doc["chats"] if c.get("remote") and c.get("admin") == who and not c.get("left")) >= GROUPS_PER_CREATOR:
                 raise TeamError(429, "too_many_groups", "Too many groups from this contact")
             teampeer.add_group_peers(cid, [(a, k if isinstance(k := keys.get(a), str) else None, m) for a, m in addrs if a not in (me, frm)])
-            members = [teampeer.pid(a) for a, _ in addrs if a != me and (a == frm or teampeer.has_link(a, cid))]
+            # A contact of ours is a member only if the creator handed a key for the pair or they were already in:
+            # a roster alone must not make us send this group's messages to a contact who was never invited.
+            prior = set(chat.get("members") or []) if chat else set()
+            members = [teampeer.pid(a) for a, _ in addrs if a != me and (
+                a == frm or (teampeer.has_link(a, cid) and (teampeer.pid(a) in prior or teampeer._key_ok(keys.get(a)))))]
             doc = _load()
             chat = next((c for c in doc["chats"] if c["id"] == cid), None)
             if chat is None:
