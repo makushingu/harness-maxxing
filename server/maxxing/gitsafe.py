@@ -19,7 +19,10 @@ class GitError(Exception):
 # archive, a clone made by a turn): these settings are switched off on the command line, which wins over the repo.
 SAFE_GIT = ("-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null", "-c", "log.showSignature=false",
             "-c", "gpg.program=false", "-c", "gpg.ssh.program=false", "-c", "gpg.x509.program=false",
-            "-c", "diff.external=", "-c", "core.quotepath=off")
+            "-c", "diff.external=", "-c", "core.quotepath=off",
+            # a submodule has its own config (.git/modules/<sub>/config: filters, fsmonitor) that the overrides
+            # below never see: status / diff never look inside submodules
+            "-c", "diff.ignoreSubmodules=all", "-c", "submodule.recurse=false")
 EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"     # attributes read from it = none from the worktree
 _filters: dict[str, tuple[tuple, list[str]]] = {}
 

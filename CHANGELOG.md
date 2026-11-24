@@ -3,6 +3,16 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.167 - 2026-11-24
+
+Fixed:
+- **Security: five holes closed.** An agent turn could run a command as root outside its sandbox by adding `-h` to
+  `maxxing heavy`, or write any file as root with `maxxing agents export --output` (an agent turn now gets the text
+  only). A git submodule with its own filter settings could run a command when the Git page or the Changes view was
+  opened: status and diffs no longer look inside submodules. A backup restored on a server in use keeps this server's
+  security settings of agents and topics (sandbox, permission mode, budget; a new agent comes back switched off), and
+  never turns back on a scheduled job or an extension that is off here.
+
 ## 2.0.0-alpha.166 - 2026-11-23
 
 Fixed:

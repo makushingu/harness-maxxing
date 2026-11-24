@@ -141,6 +141,9 @@ def test_maxxing_cli_in_a_sandboxed_turn(client, topic, mx, monkeypatch, capsys)
     for argv in (["cron", "add", "x"], ["mcp", "add", "x"], ["agents", "create", "a/b/c"], ["keys", "set", "X"],
                  ["custom", "save"], ["update"]):
         assert agent_guard.check_cli(argv), argv
+    assert agent_guard.check_cli(["cron", "add", "-h"]) is None and agent_guard.check_cli(["heavy", "-h"]) is None
+    assert agent_guard.check_cli(["heavy", "sh", "-c", "id", "-h"])     # the "-h" is sh's: it would run as root
+    assert agent_guard.check_cli(["heavy", "--", "sh", "-h"])
     assert cli.main(["cron", "list"]) == 2
     assert "not allowed in a sandboxed agent turn" in capsys.readouterr().err
     client.patch("/api/agents/acme/blog/writer", json={"sandbox": False})
@@ -595,3 +598,16 @@ def test_a_link_to_the_topic_s_own_files_never_makes_them_writable(client, topic
     allow = agent_guard.settings(A, a)["sandbox"]["filesystem"]["allowWrite"]
     assert str(t / "memory.md") not in allow and str(t / "CLAUDE.md") not in allow
     assert agent_guard.writable_dirs(A, {**a, "writable": ["notes", "role"]}) == []
+
+
+def test_agent_export_never_writes_a_file_in_an_agent_turn(client, topic, mx, monkeypatch, tmp_path, capsys):
+    """`agents export --output` writes as root where it is told: an agent turn gets the text on stdout only."""
+    from maxxing import cli, cmd_agents
+    _on(client)
+    _create(client)
+    out = tmp_path / "x.md"
+    monkeypatch.setattr(cmd_agents, "_turn", lambda: {"path": A, "depth": 0})
+    assert cli.main(["agents", "export", A, "--output", str(out)]) != 0 and not out.exists()
+    assert cli.main(["agents", "export", A]) == 0
+    monkeypatch.setattr(cmd_agents, "_turn", lambda: {"path": "", "depth": 0})
+    assert cli.main(["agents", "export", A, "--output", str(out)]) == 0 and out.is_file()

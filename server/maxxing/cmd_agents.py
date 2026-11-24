@@ -599,6 +599,9 @@ def _handler(a) -> int:
     if a.agents_cmd == "export":
         from . import agent_format
         md = agent_format.export_md(path)
+        if a.output and _turn()["path"]:     # root writing any file an agent names: stdout only
+            return _fail("Refused in an agent turn: `--output` writes a file with the owner's rights. "
+                         "Run it without `--output`.")
         if a.output:
             try:
                 with open(a.output, "w", encoding="utf-8") as f:

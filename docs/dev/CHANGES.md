@@ -5,6 +5,18 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## 2.0.0-alpha.167 - 2026-11-24
+
+- `agent_guard.check_cli`: for `heavy`, a `-h`/`--help` after the command's first word is the command's (REMAINDER),
+  not help: the checks run (it ran as root outside the sandbox).
+- `cmd_agents` export: `--output` refused when `_turn()["path"]` (an agent turn); stdout stays.
+- `gitsafe.SAFE_GIT`: `-c diff.ignoreSubmodules=all -c submodule.recurse=false` (a submodule's own
+  `.git/modules/<sub>/config` filters ran on `status`; `_filter_overrides` only sees the main repo).
+- `backup._apply` hold: `_keep_local_rules` keeps the local `SECURITY_FIELDS` + `SECURITY_LIMITS` of `agent.json` and
+  `permission_mode`/`allowed_tools`/`browser`/`devices` of `.maxxing.json` (new agent -> `enabled: false`, new folder
+  -> rules dropped), reported in `held["rules"]`; `_hold_new_jobs` only trusts local jobs that are enabled;
+  `extensions.disabled` = union of the saved list, the current one and the held extensions.
+
 ## 2.0.0-alpha.166 - 2026-11-23
 
 - `openSync.ts`: ids shared on a phone in Zones too (`sync.ids` and the `active` dependency removed; base no longer

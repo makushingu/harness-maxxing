@@ -757,6 +757,8 @@ def check_cli(argv: list[str]) -> str | None:
     """Why `maxxing <argv>` is refused in an agent turn, else None."""
     words = [a for a in argv if not a.startswith("-")]
     head = argv[:argv.index("--")] if "--" in argv else argv    # after `--`, a "-h" is a value, not help
+    if words and words[0] == "heavy" and len(words) > 1:        # its command takes the rest (REMAINDER): a "-h"
+        head = head[:argv.index(words[1])]                      # after it is the command's, argparse prints nothing
     if not words or "-h" in head or "--help" in head:   # help changes nothing (argparse prints it and exits)
         return None
     if in_the_sandbox():
