@@ -77,6 +77,7 @@ VACUUM_EVERY_S = 86400
 
 _lock = threading.RLock()          # writer: refreshes (one connection)
 _rlock = threading.Lock()          # reader: queries use their own connection (WAL), never wait on a refresh
+SESSIONS_FRESH_S = 0.5      # a search right after another one does not stat every session again (a keystroke burst)
 _state = {"sessions_at": 0.0, "full_at": 0.0, "files_at": 0.0}
 # session key -> (meta stat, log stat) when it was last fully indexed: an unchanged session is skipped
 _seen: dict[str, tuple] = {}
@@ -714,7 +715,8 @@ def search(q: str, kinds: list[str] | None = None, limit: int = 30,
     if _lock.acquire(blocking=False):
         try:
             _db()                                            # (re)opens the index of the current state dir
-            refresh(full=_state["full_at"] == 0)             # nothing built yet (just started): build it
+            if _state["full_at"] == 0 or time.time() - _state["sessions_at"] >= SESSIONS_FRESH_S:
+                refresh(full=_state["full_at"] == 0)         # nothing built yet (just started): build it
         finally:
             _lock.release()
     marks = ",".join("?" * len(wanted))

@@ -208,6 +208,22 @@ def test_background_pass_reads_memory_but_walks_rarely(client, mx):
     assert _q(client, "okapi")
 
 
+def test_search_stats_every_session_on_each_query(client, mx, monkeypatch):
+    for i in range(5):
+        _session("projects/acme/topics/blog", f"Session {i}", [("user", f"hello zebra {i}")])
+    search.refresh()
+    calls = []
+    real = search._index_sessions
+    monkeypatch.setattr(search, "_index_sessions", lambda con: (calls.append(1), real(con))[1])
+    for _ in range(5):                                   # a burst of keystrokes: the sessions are walked once
+        assert client.get("/api/search", params={"q": "zebra"}).json()["results"]
+    assert len(calls) <= 1
+    monkeypatch.setattr(search, "SESSIONS_FRESH_S", 0.0)
+    calls.clear()
+    client.get("/api/search", params={"q": "zebra"})
+    assert len(calls) == 1
+
+
 def test_unchanged_sessions_are_not_read_again(client, mx, monkeypatch):
     sids = [_session("", f"Session {i}", [("user", f"message {i}")]) for i in range(5)]
     search.refresh()

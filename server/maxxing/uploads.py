@@ -3,7 +3,7 @@
 Starlette spools every multipart file to a temp dir BEFORE the endpoint (and its auth dependency)
 runs, so the checks live in an ASGI middleware (`UploadGuard`, multipart requests under /api/):
 - the session cookie and the CSRF header are checked first: no byte of an unauthenticated body is read;
-- `Content-Length` above `upload_max_mb` -> 413 `too_large`; a body that would not fit in the temp dir
+- `Content-Length` above `upload_max_mb` x REQUEST_FILES (the cap is per file: `save_upload` checks each) -> 413 `too_large`; a body that would not fit in the temp dir
   with TMP_MARGIN (min(upload_min_free_mb, 128 MB)) to spare -> 507 `disk_full` - both before reading.
   The temp dir is often a small tmpfs (RAM): the full reserve is for the destination disk only;
 - while streaming (also without Content-Length) the same two limits abort the request.
@@ -28,6 +28,7 @@ from . import config
 
 MB = 1024 * 1024
 DEFAULT_MAX_MB = 2048
+REQUEST_FILES = 10          # the request ceiling is this many files at the cap: save_upload holds each file to the cap itself
 DEFAULT_MIN_FREE_MB = 1024
 _CHECK_EVERY = 16 * MB             # free space re-checked every 16 MB received
 TMP_MARGIN = 128 * MB              # what must stay free in the temp dir while spooling (capped by the reserve)
@@ -114,6 +115,7 @@ class UploadGuard:
         if headers.get("x-maxxing") != "1":
             return await _reply(scope, receive, send, 403, "csrf", "Missing X-Maxxing header")
         max_b, reserve = limits()
+        ceiling = max_b * REQUEST_FILES + MB if max_b else 0   # the whole body: several files, each held to max_b later
         reserve = min(reserve, TMP_MARGIN)          # temp dir: the body must fit, the full reserve is for the disk
         tmp = spool_dir()
         try:
@@ -122,7 +124,7 @@ class UploadGuard:
             length = None
         try:
             if length is not None:
-                if max_b and length > max_b + MB:        # + multipart framing
+                if ceiling and length > ceiling:         # + multipart framing
                     raise too_large(max_b)
                 if free_bytes(tmp) - length < reserve:
                     raise disk_full(reserve)
@@ -136,7 +138,7 @@ class UploadGuard:
             msg = await receive()
             if msg["type"] == "http.request":
                 seen += len(msg.get("body", b""))
-                if max_b and seen > max_b + MB:
+                if ceiling and seen > ceiling:
                     raise too_large(max_b)
                 if seen >= next_check:
                     next_check = seen + _CHECK_EVERY
