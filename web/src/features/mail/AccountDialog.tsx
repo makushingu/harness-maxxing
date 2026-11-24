@@ -38,6 +38,12 @@ const empty: Form = {
   smtp_host: '', smtp_port: '465', smtp_tls: 'ssl', signature: '', poll_min: '10', auth_servers: '',
 }
 const POLL: MailPollMin[] = [5, 10, 30, 60]
+// the security a well-known port expects (as `maxxing mail add` picks it): typing the port sets it, picking a
+// security afterwards is kept; any other port leaves it alone
+const PORT_TLS: Record<'imap' | 'smtp', Record<string, MailTls>> = {
+  imap: { 993: 'ssl', 143: 'starttls' },
+  smtp: { 465: 'ssl', 587: 'starttls', 25: 'starttls' },
+}
 
 function fromAccount(a: MailAccount): Form {
   return {
@@ -90,6 +96,10 @@ export function AccountDialog({ open, onOpenChange, account, onSaved, address }:
   }, [open, account?.id, address])
 
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setF((x) => ({ ...x, [k]: v }))
+  const setPort = (kind: 'imap' | 'smtp', v: string) => setF((x) => {
+    const tls = PORT_TLS[kind][v.trim()]
+    return { ...x, [`${kind}_port`]: v, ...(tls ? { [`${kind}_tls`]: tls } : {}) }
+  })
 
   const runDetect = () => {
     if (editing || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(f.address.trim())) return
@@ -197,13 +207,13 @@ export function AccountDialog({ open, onOpenChange, account, onSaved, address }:
               <p className="text-xs font-medium text-muted-foreground">{t('mail.acc.incoming')}</p>
               <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] gap-2 sm:grid-cols-[minmax(0,1fr)_5.5rem_8rem]">
                 <Input aria-label="IMAP" className="max-sm:col-span-2" value={f.imap_host} onChange={(e) => set('imap_host', e.target.value)} placeholder="imap.example.com" required />
-                <Input aria-label={t('mail.acc.port')} inputMode="numeric" value={f.imap_port} onChange={(e) => set('imap_port', e.target.value)} />
+                <Input aria-label={t('mail.acc.port')} inputMode="numeric" value={f.imap_port} onChange={(e) => setPort('imap', e.target.value)} />
                 <Select aria-label={t('mail.acc.security')} value={f.imap_tls} onValueChange={(v) => set('imap_tls', v as MailTls)} options={tlsOptions} />
               </div>
               <p className="text-xs font-medium text-muted-foreground">{t('mail.acc.outgoing')}</p>
               <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] gap-2 sm:grid-cols-[minmax(0,1fr)_5.5rem_8rem]">
                 <Input aria-label="SMTP" className="max-sm:col-span-2" value={f.smtp_host} onChange={(e) => set('smtp_host', e.target.value)} placeholder="smtp.example.com" required />
-                <Input aria-label={t('mail.acc.port')} inputMode="numeric" value={f.smtp_port} onChange={(e) => set('smtp_port', e.target.value)} />
+                <Input aria-label={t('mail.acc.port')} inputMode="numeric" value={f.smtp_port} onChange={(e) => setPort('smtp', e.target.value)} />
                 <Select aria-label={t('mail.acc.security')} value={f.smtp_tls} onValueChange={(v) => set('smtp_tls', v as MailTls)} options={tlsOptions} />
               </div>
               <FormField label={t('mail.acc.username')} hint={t('mail.acc.usernameHint')}>

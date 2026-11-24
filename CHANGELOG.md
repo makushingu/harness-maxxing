@@ -7,6 +7,7 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 
 Fixed:
 - **The Harness Browser no longer keeps a session's pages running after its turn.** 15 minutes after the turn ends, if no new turn uses them, the tabs it opened sleep (a 3D render left open kept the CPU busy). They are still listed and open again at the next turn.
+- **Changing a mailbox's port now changes its security too.** In the mailbox dialog of the E-mail page, typing 465 or 993 picks SSL/TLS and 587, 25 or 143 picks STARTTLS (a security picked afterwards is kept). SSL/TLS on a port that expects STARTTLS now fails with "this port expects STARTTLS" instead of a bare TLS error.
 - **A session change made twice in quick succession is no longer missed.** When a session was written twice within a few milliseconds, the server could take the second change for no change: its new state, a turn's end or a held message showed up late, or only at the next change.
 
 ## 2.0.0-alpha.168 - 2026-11-24

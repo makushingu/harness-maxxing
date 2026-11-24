@@ -16,7 +16,7 @@ from typing import Any
 
 from .. import config
 from . import imap
-from .imap import MailError, open_imap
+from .imap import MailError, open_imap, tls_error
 
 ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,40}$")
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -268,7 +268,7 @@ def open_smtp(host: str, port: int, tls: str, username: str, password: str) -> s
     except (socket.timeout, TimeoutError):
         raise MailError("unreachable", f"{host}:{port} does not answer (port blocked by this server's host, or wrong server)") from None
     except ssl.SSLError as e:
-        raise MailError("tls", f"{host}:{port}: TLS error ({e.reason or e})") from None
+        raise tls_error(host, port, tls, e) from None
     except (OSError, smtplib.SMTPException) as e:
         raise MailError("unreachable", f"{host}:{port}: {e}") from None
     try:

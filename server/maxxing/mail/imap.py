@@ -51,6 +51,15 @@ class MailError(Exception):
         self.message = message
 
 
+def tls_error(host: str, port: int, tls: str, e: ssl.SSLError) -> MailError:
+    """An SSL error, said plainly when the cause is known: SSL/TLS on a port that answers in clear text (587, 25,
+    143) fails with WRONG_VERSION_NUMBER, and the fix is STARTTLS."""
+    reason = str(e.reason or e)
+    if tls == "ssl" and "WRONG_VERSION_NUMBER" in reason:
+        return MailError("tls", f"{host}:{port}: this port expects STARTTLS, not SSL/TLS: set Security to STARTTLS ({reason})")
+    return MailError("tls", f"{host}:{port}: TLS error ({reason})")
+
+
 # ---------------------------------------------------------------- modified UTF-7 (RFC 3501 folder names)
 
 def mutf7_decode(s: str) -> str:
@@ -131,7 +140,7 @@ def open_imap(host: str, port: int, tls: str, username: str, password: str) -> i
         e.timed_out = True
         raise e from None
     except ssl.SSLError as e:
-        raise MailError("tls", f"{host}:{port}: TLS error ({e.reason or e})") from None
+        raise tls_error(host, port, tls, e) from None
     except (OSError, imaplib.IMAP4.error) as e:
         raise MailError("unreachable", f"{host}:{port}: {e}") from None
     try:

@@ -4,6 +4,7 @@ mails, roles follow the server's flags, Gmail archives to All Mail, sign-in in U
 from __future__ import annotations
 
 import concurrent.futures as cf
+import contextlib
 import email.message
 import socket
 import threading
@@ -331,3 +332,25 @@ def test_attachments_open_in_the_file_viewer(client, acc, srv, mx):
     assert client.get("/api/files/raw", params={"path": str(files[0])}).status_code == 200
     gone = client.post(f"/api/mail/{acc['id']}/attachments/view", json={"uid": uid, "indexes": [99]})
     assert gone.status_code == 404
+
+
+def test_ssl_on_a_starttls_port_says_to_pick_starttls():
+    # a port that answers in clear text (587, 25, 143) reached with SSL/TLS: the error names the fix
+    srv = socket.socket()
+    srv.bind(("127.0.0.1", 0))
+    srv.listen(1)
+    port = srv.getsockname()[1]
+
+    def answer():
+        c, _ = srv.accept()
+        c.sendall(b"220 smtp.example.com ESMTP ready\r\n")
+        with contextlib.suppress(OSError):
+            c.recv(4096)
+        c.close()
+
+    threading.Thread(target=answer, daemon=True).start()
+    with pytest.raises(MailError) as e:
+        mail.open_smtp("127.0.0.1", port, "ssl", "me", "pw")
+    srv.close()
+    assert e.value.code == "tls"
+    assert "expects STARTTLS" in e.value.message
