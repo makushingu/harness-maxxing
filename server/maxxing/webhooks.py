@@ -823,6 +823,10 @@ def receive(token: str, method: str, headers: dict, query: dict, body: bytes,
         if claim:
             feed.release_delivery(f"wh:{h['id']}", claim)
         return {"status": e.status, "json": {"error": e.code, "message": e.message}}
+    except BaseException:
+        if claim:   # storage failed (disk full...): free the delivery so the sender's retry is not taken for a duplicate
+            feed.release_delivery(f"wh:{h['id']}", claim)
+        raise
 
 
 def _save_request(hid: str, cid: str, *, method: str, headers: dict, query: dict, body: bytes,

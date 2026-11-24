@@ -382,3 +382,20 @@ def test_url_has_the_public_address(mx):
     h = webhooks.create(_shell("u", "true"))
     assert h["url"].startswith("https://ui.example.com/api/hooks/")
     assert Path(webhooks.hooks_path()).exists()
+
+
+def test_a_failed_save_frees_the_signed_delivery_so_the_retry_is_not_a_duplicate(client, monkeypatch):
+    h = client.post("/api/webhooks", json={**_shell("g", "true", source="generic"), "secret": "k"}).json()
+    body = json.dumps({"a": 1}).encode()
+    hdr = {"X-Signature": hmac.new(b"k", body, hashlib.sha256).hexdigest(), "Content-Type": "application/json"}
+    real = webhooks._save_request
+
+    def boom(*a, **k):
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(webhooks, "_save_request", boom)
+    with pytest.raises(OSError):
+        client.post(f"/api/hooks/{_tok(h)}", content=body, headers=hdr)
+    monkeypatch.setattr(webhooks, "_save_request", real)
+    r = client.post(f"/api/hooks/{_tok(h)}", content=body, headers=hdr)
+    assert r.status_code == 202 and not r.json().get("duplicate"), r.text
