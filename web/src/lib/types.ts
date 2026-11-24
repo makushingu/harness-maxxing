@@ -1786,6 +1786,8 @@ export interface JarvisWork {
   turns: number
   /** closed and its session archived by Harness (one Jarvis started, where the owner never wrote) */
   archived?: boolean
+  /** why Jarvis started a new session although the topic had ones that could take the work */
+  fresh?: string
 }
 export interface JarvisSettings {
   model: string

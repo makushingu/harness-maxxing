@@ -219,6 +219,11 @@ function WorkCard({ w }: { w: JarvisWork }) {
           </p>
         </div>
       </div>
+      {w.fresh && (
+        <p className="mt-2 line-clamp-2 text-xs text-muted-foreground" data-testid="jarvis-work-fresh">
+          {t('jarvis.work.fresh')} {w.fresh}
+        </p>
+      )}
       {w.result && w.state !== 'running' && <p className="mt-2 line-clamp-3 whitespace-pre-line text-[13px] text-muted-foreground">{w.result}</p>}
       <div className="mt-2 flex items-center justify-end gap-1">
         <Button asChild variant="ghost" size="sm">

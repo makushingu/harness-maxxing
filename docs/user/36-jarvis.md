@@ -69,7 +69,8 @@ brief or night pass time in its settings.
 - **Full rights** (on): Jarvis and the sessions it starts work without permission prompts.
 - **Ask me first** (on): before publishing, paying, deleting or writing to someone, it says what it will do and waits
   for your yes. Off: it acts and tells you after.
-- **Continue existing sessions** (on): new work on the same subject goes to a recent session of the topic.
+- **Continue existing sessions** (on): new work on the same subject goes to a recent session of the topic. When
+  Jarvis still starts a new one there, its card on the work board says why.
 - **Archive finished sessions** (on): once work is done, the sessions Jarvis started and you never wrote in go to
   the Archives.
 - **New conversation each morning**: off = one long conversation (compacted when it gets long).

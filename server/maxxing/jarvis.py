@@ -249,7 +249,7 @@ def _write_rules(tdir: Path) -> None:
     reuse = ("before starting a session for new work, look at the recent sessions of the topic you chose (`maxxing "
              "sessions list --topic <project>/<topic> --json`): one marked `reusable` on the same subject or a "
              "follow-up of it gets the work (`maxxing sessions send <id>`), never one of another topic; `sessions new` refuses "
-             "while there are reusable ones (`--fresh` = another subject on purpose)" if s["reuse"]
+             "while there are reusable ones, closest first (`--fresh \"<why>\"` = another subject on purpose, shown to the owner)" if s["reuse"]
              else "new work always gets a new session (a follow-up of work on your board still goes to its session)")
     archive = ("when you close work (`maxxing jarvis work close`), Harness archives its session if you started it and "
                "the owner never wrote in it; it comes back by itself when you send to it again" if s["archive_done"]
@@ -441,8 +441,10 @@ def _write_work(w: dict) -> None:
     bus.invalidate("jarvis")
 
 
-def register(sid: str, path: str, title: str, brief: str, hops: int = 1, to: str = "", kind: str = "") -> dict:
-    """A session got work from Jarvis (or from a turn with --report-to): its turn ends are reported to `to`."""
+def register(sid: str, path: str, title: str, brief: str, hops: int = 1, to: str = "", kind: str = "",
+             fresh: str = "") -> dict:
+    """A session got work from Jarvis (or from a turn with --report-to): its turn ends are reported to `to`. `fresh` =
+    why Jarvis started a new session although the topic had reusable ones (`sessions new --fresh`)."""
     with _lock:
         w = _read_work()
         for i in w["items"]:
@@ -454,7 +456,7 @@ def register(sid: str, path: str, title: str, brief: str, hops: int = 1, to: str
         item = {"id": int(w.get("next") or 1), "session": sid, "path": path, "title": (title or "")[:200],
                 "brief": (brief or "")[:2000], "state": "running", "created": time.time(), "updated": time.time(),
                 "hops": max(1, int(hops)), "to": to or "", "result": "", "cost": 0.0, "question": False, "turns": 0,
-                **({"kind": kind} if kind else {})}
+                **({"kind": kind} if kind else {}), **({"fresh": fresh[:300]} if fresh else {})}
         w["next"] = item["id"] + 1
         w["items"].append(item)
         _write_work(w)

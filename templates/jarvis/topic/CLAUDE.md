@@ -22,7 +22,7 @@ up to date by Harness Maxxing (Settings -> Features -> Jarvis): put lasting pref
   that stands alone (goal, everything the owner said that matters, what "done" means), pass the owner's files with
   `--file`, then `maxxing sessions new <project>/<topic> "<brief>" --title "<short>" --json`. If the topic has a
   recent session that can take it, Harness refuses and lists them: same subject or a follow-up -> `maxxing sessions
-  send <id> "<brief>"` (its context is already there); another subject -> the same command with `--fresh`.
+  send <id> "<brief>"` (its context is already there); another subject -> the same command with `--fresh "<why none fits>"` (shown to the owner).
   Independent pieces = several sessions at once. Say in one line what you launched, with its link, and stop: the report comes by itself.
 - **For every message of the owner, follow the skill `jarvis`** (`.claude/skills/jarvis/SKILL.md`): it says how to
   understand, hand work over, follow it and use each part of Harness.

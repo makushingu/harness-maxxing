@@ -4985,6 +4985,7 @@ export const en = {
   'jarvis.work.open': "Open",
   'jarvis.work.close': "Done",
   'jarvis.work.archived': "archived",
+  'jarvis.work.fresh': "New session:",
   'jarvis.set.title': "Jarvis settings",
   'jarvis.set.root': "Full rights",
   'jarvis.set.rootHint': "Jarvis and the sessions it starts work without permission prompts.",

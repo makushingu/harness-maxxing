@@ -4967,6 +4967,7 @@ export const fr: Record<keyof typeof en, string> = {
   'jarvis.work.open': "Ouvrir",
   'jarvis.work.close': "Terminé",
   'jarvis.work.archived': "archivée",
+  'jarvis.work.fresh': "Nouvelle session :",
   'jarvis.set.title': "Réglages de Jarvis",
   'jarvis.set.root': "Tous les droits",
   'jarvis.set.rootHint': "Jarvis et les sessions qu’il lance travaillent sans demande d’autorisation.",

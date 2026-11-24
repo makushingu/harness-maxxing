@@ -11,7 +11,7 @@
   maxxing sessions list --topic P/T [--days N] [--json]
                                               a topic's recent sessions for Jarvis: about (title, last answer), who
                                               started it, reusable / why_not (running, owner_active, context_full)
-  maxxing sessions new TOPIC [TEXT...] [--title T] [--model M] [--effort E] [--file P] [--report-to S] [--fresh] [--json]
+  maxxing sessions new TOPIC [TEXT...] [--title T] [--model M] [--effort E] [--file P] [--report-to S] [--fresh REASON] [--json]
                                               start a session in a topic (TOPIC = <project>/<topic> or its path) with
                                               a first message; from a turn, the message says which session sent it
   --report-to me|<session>                    its answers come back to that session when its turns end (the
@@ -46,8 +46,9 @@ def _configure(p) -> None:
     n.add_argument("--file", action="append", default=[], help="attach a file (absolute path), repeatable")
     n.add_argument("--report-to", default="", help="the session its answers are reported to (`me` = the session of "
                                                    "this turn); from Jarvis's conversation: always Jarvis")
-    n.add_argument("--fresh", action="store_true", help="from Jarvis's conversation: start a new session even though the "
-                                                       "topic has reusable ones (new work on another subject)")
+    n.add_argument("--fresh", default="", metavar="REASON",
+                   help="from Jarvis's conversation: start a new session even though the topic has reusable ones, "
+                        "with why (another subject): shown on its work board")
     n.add_argument("--json", action="store_true")
     ls = sub.add_parser("list", help="the sessions that are not archived")
     ls.add_argument("--topic", default="", help="<project>/<topic>: its recent sessions, with what they are about and "
@@ -121,11 +122,11 @@ def _reporting(meta: dict | None, report_to: str) -> tuple[bool, str]:
     return True, service.find_session(want)["id"]
 
 
-def _register(meta: dict | None, report: tuple[bool, str], s: dict, text: str, hops: int) -> None:
+def _register(meta: dict | None, report: tuple[bool, str], s: dict, text: str, hops: int, fresh: str = "") -> None:
     if not report[0] or not s.get("id"):
         return
     from . import jarvis
-    jarvis.register(s["id"], s.get("path") or "", s.get("title") or "", text, hops=hops, to=report[1])
+    jarvis.register(s["id"], s.get("path") or "", s.get("title") or "", text, hops=hops, to=report[1], fresh=fresh)
 
 
 def _topic(raw: str) -> str:
@@ -153,7 +154,7 @@ def _new(a) -> int:
     except (OSError, ValueError, RuntimeError) as e:    # a NUL byte, an unknown ~user
         print(f"--file: {e}", file=sys.stderr)
         return 2
-    reuse = _reusable_first(meta, path, a.fresh)
+    reuse = _reusable_first(meta, path, a.fresh, f"{a.title} {text}")
     if reuse:
         print(reuse, file=sys.stderr)
         return 3
@@ -170,7 +171,7 @@ def _new(a) -> int:
                                    model=a.model or None, effort=a.effort or None,
                                    source="session" if meta else "cli", auto_title=not a.title and bool(text),
                                    permission_mode="bypass" if root else "")
-        _register(meta, report, s, text, hops)
+        _register(meta, report, s, text, hops, a.fresh.strip())
         if report[0] and not report[1]:                # started for Jarvis's work board: archivable once done
             from .sessions import store
             store.update(s["id"], jarvis_made=True)
@@ -188,23 +189,43 @@ def _new(a) -> int:
     return 0
 
 
-def _reusable_first(meta: dict | None, path: str, fresh: bool) -> str:
+def _words(text: str) -> set[str]:
+    """The words that tell a subject apart: accents off, lower case, 3 letters or more, plus the short acronyms
+    written in capitals ("YA", "GW": the titles the owner gives)."""
+    import re
+    import unicodedata
+    flat = unicodedata.normalize("NFKD", text or "").encode("ascii", "ignore").decode()
+    return {w.lower() for w in re.findall(r"[A-Za-z0-9]+", flat) if len(w) >= 3 or (len(w) == 2 and w.isupper())}
+
+
+def _closest(rows: list[dict], subject: str) -> list[dict]:
+    """The sessions most likely on the subject first (words shared with its title, then its last answer), the most
+    recent among equals: Jarvis reads 5 of them, short titles ("YA", "GW") included."""
+    want = _words(subject)
+    def score(r: dict) -> tuple[int, int, float]:
+        return (len(want & _words(r["title"])), len(want & _words(r["last_answer"])), r.get("updated") or 0)
+    return sorted(rows, key=score, reverse=True) if want else rows
+
+
+def _reusable_first(meta: dict | None, path: str, fresh: str, subject: str = "") -> str:
     """From Jarvis's conversation (setting `reuse` on), a new session is refused while the topic has reusable ones:
-    the refusal lists them, so the work goes to one on the same subject (`sessions send`) or, on purpose, to a new
-    one (`--fresh`). Its rules said so, but it never looked: each piece of work started from zero."""
-    if fresh or not meta:
+    the refusal lists them, closest to the subject first, so the work goes to one on the same subject (`sessions
+    send`) or, on purpose and saying why, to a new one (`--fresh "<reason>"`, shown on its work board). Its rules
+    said so, but it never looked: each piece of work started from zero."""
+    if fresh.strip() or not meta:
         return ""
     from . import jarvis
     if meta.get("path") != jarvis.PATH or not jarvis.feature_on() or not jarvis.settings()["reuse"]:
         return ""
-    rows = [r for r in jarvis.topic_sessions(path) if r["reusable"]]
+    rows = _closest([r for r in jarvis.topic_sessions(path) if r["reusable"]], subject)
     if not rows:
         return ""
     lines = [f"  {r['id'][:8]}  {r['title']}" + (f" - {r['last_answer'][:120]}" if r["last_answer"] else "")
              for r in rows[:5]]
-    return ("Not started: this topic has recent sessions that can take the work (its context is already there):\n"
-            + "\n".join(lines) + "\nSame subject or a follow-up: `maxxing sessions send <id> \"<brief>\"`. "
-            "Another subject: run the same command again with --fresh.")
+    return ("Not started: this topic has recent sessions that can take the work (its context is already there), "
+            "closest to the subject first:\n" + "\n".join(lines) + "\nSame subject or a follow-up: `maxxing "
+            "sessions send <id> \"<brief>\"`. Another subject: the same command again with `--fresh \"<why none of "
+            "them fits>\"` (shown to the owner on your work board).")
 
 
 def _list(a) -> int:

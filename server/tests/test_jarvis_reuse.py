@@ -147,10 +147,27 @@ def test_sessions_new_from_jarvis_points_to_a_reusable_session_first(on, topic, 
     err = capsys.readouterr().err
     assert old["id"][:8] in err and "--fresh" in err and "sessions send" in err
     assert len(service.list_sessions(path=topic)) == before        # nothing created
-    assert cli.main(["sessions", "new", f"{p[1]}/{p[3]}", "--title", "Other", "--fresh", "--json"]) == 0
-    capsys.readouterr()
+    assert cli.main(["sessions", "new", f"{p[1]}/{p[3]}", "--title", "Other", "--fresh", "invoices, not posts",
+                     "--json"]) == 0
+    sid = json.loads(capsys.readouterr().out)["session"]
+    assert [i["fresh"] for i in jarvis.work() if i["session"] == sid] == ["invoices, not posts"]
     jarvis.save_settings({"reuse": False})
     assert cli.main(["sessions", "new", f"{p[1]}/{p[3]}", "--title", "Third", "--json"]) == 0
+
+
+def test_the_refusal_lists_the_closest_subject_first(on, topic, monkeypatch, capsys):
+    from maxxing import agent_guard, cli
+    jsid = jarvis.current_session()
+    monkeypatch.setattr(agent_guard, "turn_meta", lambda: {"id": jsid, "title": "Jarvis", "path": jarvis.PATH})
+    ya = _made(on, topic, "YA")
+    _made(on, topic, "GW pricing")
+    _made(on, topic, "Montage vidéo")
+    p = topic.split("/")
+    assert cli.main(["sessions", "new", f"{p[1]}/{p[3]}", "stratégie pubs", "--title", "YA : pubs adultes"]) == 3
+    err = capsys.readouterr().err
+    assert err.splitlines()[1].strip().startswith(ya["id"][:8])
+    assert cli.main(["sessions", "new", f"{p[1]}/{p[3]}", "le montage de la video"]) == 3
+    assert "Montage" in capsys.readouterr().err.splitlines()[1]
 
 
 def test_the_rules_follow_the_settings(on, mx):
