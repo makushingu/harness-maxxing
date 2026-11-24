@@ -801,6 +801,22 @@ def test_restore_on_a_server_in_use_keeps_the_agents_security_settings(ws, mx_st
     assert len(r["held"]["rules"]) == 3 and any("security settings" in x for x in backup.held_lines(r["held"]))
 
 
+def test_restore_on_a_server_in_use_never_turns_an_agent_back_on(ws, mx_state):
+    """An agent switched off here, on in the backup, stays off (like a job or an extension); its other fields come back."""
+    _in_use()
+    rel = "projects/acme/topics/blog/agents/writer/agent.json"
+    (ws / rel).parent.mkdir(parents=True)
+    (ws / rel).write_text(json.dumps({"name": "writer", "enabled": False, "sandbox": True}))
+    on = "projects/acme/topics/blog/agents/editor/agent.json"
+    (ws / on).parent.mkdir(parents=True)
+    (ws / on).write_text(json.dumps({"name": "editor", "sandbox": True}))
+    r = backup._apply({rel: json.dumps({"name": "writer 2", "enabled": True, "sandbox": False}).encode(),
+                       on: json.dumps({"name": "editor 2", "enabled": True, "sandbox": True}).encode()})
+    assert json.loads((ws / rel).read_text()) == {"name": "writer 2", "enabled": False, "sandbox": True}
+    assert json.loads((ws / on).read_text())["enabled"] is True        # on here: the backup's switch is kept
+    assert rel in r["held"]["rules"]
+
+
 def test_restore_on_a_server_in_use_never_turns_a_job_or_an_extension_back_on(ws, mx_state):
     """A job switched off here, the same in the backup but on, stays off; an extension disabled here stays disabled."""
     crons = pytest.importorskip("maxxing.crons")
