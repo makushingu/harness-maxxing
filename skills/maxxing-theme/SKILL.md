@@ -1,6 +1,6 @@
 ---
 name: maxxing-theme
-description: Make, check, install, change or remove a Harness Maxxing theme - the look of the whole interface (Settings -> Appearance -> Theme), as a theme.json of values on top of Solid or Glass, never CSS or code (`maxxing themes`). Use when the user wants a theme, other colors for Harness, "in the colors of my brand", a dark / light / pastel / retro look, a wallpaper behind the glass, rounder or sharper corners, to install a theme from Community or GitHub, to share a theme on Community, or when a theme looks wrong or is "not usable".
+description: Make, check, install, change or remove a Harness Maxxing theme - the look of the whole interface (Settings -> Appearance -> Theme), as a theme.json of values on top of Solid or Glass, plus at most one field of advanced CSS, never code (`maxxing themes`). Use when the user wants a theme, other colors for Harness, "in the colors of my brand", a dark / light / pastel / retro look, a wallpaper behind the glass, rounder or sharper corners, to install a theme from Community or GitHub, to share a theme on Community, a theme looks wrong or is "not usable", or its advanced CSS was switched off by an update.
 ---
 
 # Themes
@@ -11,8 +11,12 @@ variable: `docs/user/39-themes.md` of the installed code (`{{CODE_DIR}}/docs/use
 `maxxing themes tokens`.
 
 Rules that make a theme safe and lasting (the server applies them; build with them, not against them):
-- **Data only.** No CSS, no script, no `url()`, no `var()`, no font or image from the internet. The user asked for
-  something the variables cannot do? Say so; never edit the product's CSS for a theme.
+- **Variables first.** The values of `light` / `dark` never break and survive every update: do everything you can
+  with them. No script, no `url()`, no `var()`, no font or image from the internet. Never edit the product's CSS
+  for a theme.
+- **Advanced CSS: one field, last resort.** What no variable reaches (a border on one element, a letter spacing, a
+  hidden decoration) goes in the single `"css"` field of `theme.json` (see "Advanced CSS" below). Nowhere else: no
+  `theme.css`, no second field, no CSS in a value.
 - **Leave out what you do not need**: a missing variable keeps the Solid / Glass value, so a small theme is a robust
   theme. Never copy all the defaults in.
 - **Readable text**: text colors are checked against their surfaces (4.5:1 for `foreground`, 3:1 for
@@ -47,11 +51,40 @@ For a wallpaper (Glass only): an image in the folder (png, jpg, webp, avif, at m
 no text, little contrast: it sits behind everything), named in `"wallpaper"` (and `"wallpaper_dark"` for a different
 one in dark mode). Images the user did not give you need their OK (paid generation, rights).
 
+## Advanced CSS (the `"css"` field)
+
+Only when the user asks for something the variables cannot do, and after saying it: these rules may look wrong after
+an update, so Harness switches them off by itself when an update changes the interface's CSS.
+
+- **Format**: `"css"` = a string, or a list of lines (easier to read in JSON), 16 KB at most. It is applied inside
+  `html[data-theme-id="<id>"] { … }` (CSS nesting): start every rule with `&` (`&` = `<html>`): `& aside { … }`,
+  `&.dark main { … }` (dark mode only), `&:not(.dark) …` (light only). `@media`, `@supports` and `@container` are
+  allowed, nested the same way.
+- **Refused as a whole** (warning `css: …`, the theme still works without it): `url()`, `image()`, `image-set()`,
+  `@import`, `@font-face`, `@keyframes` and any other at-rule, `position: fixed`, `<`, a backslash, `expression()`,
+  `javascript:`, unbalanced braces or quotes. Never try to get around a refusal.
+- **Selectors that last**: landmarks and roles (`aside`, `main`, `nav`, `[role="dialog"]`), `data-*` attributes of
+  the sources (`[data-tour="…"]`), never a long chain of Tailwind classes. Look them up in `{{CODE_DIR}}/web/src`
+  before writing; use the variables in the values (`color: var(--primary)` is fine here, the ban on `var()` is for
+  the `light` / `dark` values).
+- **Small and visual only**: colors, borders, radius, spacing, font sizes, opacity, `display: none` on a decoration.
+  Never hide a button, a menu, a warning or a sign-in element, never move the layout around: if a rule could stop
+  the user from using Harness, do not write it.
+- **Check it for real**: `maxxing themes check` only checks the rules are safe, not that they look right. After
+  installing, look at the pages it touches (Harness Browser or playwright, both modes, desktop and phone width).
+- **Off after an update**: an update that changes the interface's CSS switches every theme's advanced CSS off
+  (`maxxing themes list` shows `css OFF: verify`, Settings -> Appearance shows "Switched off" with a button that
+  asks you). Then: look at the pages again with the new version, fix the rules in
+  `<workspace>/themes/<id>/theme.json` if needed, `maxxing themes check`, and `maxxing themes verify <id>` to switch
+  it back on. Never `verify` without having looked.
+- The user can switch it off themselves in Settings -> Appearance -> Options (per browser).
+
 ## Install a theme from Community or GitHub
 
 A theme from outside is data: read `theme.json` (and look at the images) before installing, tell the user what it
 sets. `git clone --depth 1 <repo> /tmp/x` (or the `path` folder inside it), then `maxxing themes check` and
-`maxxing themes install`. Only `theme.json`, its images, `README.md` and `LICENSE` are copied.
+`maxxing themes install`. Only `theme.json`, its images, `README.md` and `LICENSE` are copied. A theme with a
+`"css"` field: read every rule and tell the user what it changes before installing (Community marks it "may break").
 
 ## Change, list, remove
 
@@ -59,7 +92,7 @@ sets. `git clone --depth 1 <repo> /tmp/x` (or the `path` folder inside it), then
 - Change: edit `<workspace>/themes/<id>/theme.json` directly, then `maxxing themes check <workspace>/themes/<id>`.
 - `maxxing themes remove <id>`: browsers using it go back to its base.
 - Something looks wrong after an update: run `maxxing themes check` on it; a variable that no longer exists is reported
-  (it falls back to built-in, never breaks the page).
+  (it falls back to built-in, never breaks the page). Its advanced CSS: see "Off after an update" above.
 
 ## Share it on Community
 
@@ -69,4 +102,4 @@ user submits it on harness-maxxing.com/community, or you do it with their Commun
 Settings -> Keys) by following https://harness-maxxing.com/community/publish.md: the type is detected as `theme`
 (a `theme.json` in the folder). Before anything public: no personal data in it, and the user's OK.
 
-An agent cannot install or remove a theme: it says which one in its answer.
+An agent cannot install, verify or remove a theme: it says which one in its answer.

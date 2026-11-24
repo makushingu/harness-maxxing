@@ -13,7 +13,7 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   renames via `ALIASES`; `load()` cleans values by kind, drops unknown keys, checks text contrast per mode on the effective
   values (`_effective`, built-in levels `_LEVELS` / `_TEXT`) and drops failing pairs then the levels; `install()` copies
   theme.json + named images + README/LICENSE). API `GET /api/themes`, `GET /api/themes/{id}/file/{name}` (api/themes.py).
-  CLI `maxxing themes list|check|install|remove|tokens` (cmd_themes.py); `install` / `remove` owner-only in agent turns
+  CLI `maxxing themes list|check|install|verify|remove|tokens` (cmd_themes.py); `install` / `verify` / `remove` owner-only in agent turns
   (agent_guard `OWNER_SUBS`). Skill `maxxing-theme`. Web: `lib/themes.ts` (`themeLook` -> CSS on
   `html[:not(.dark)|.dark][data-theme-id]`, `<style id="mx-theme">`), store `customTheme` (persisted, painted by index.html
   before the app) + `pickTheme` (base + preset options) / `refreshTheme`; `features/themes/useThemeSync` (AppShell)
@@ -24,6 +24,14 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   globals.css, fonts / accents = catalog, docs list every token). Upgrade note at release: add the `maxxing themes` row,
   the `maxxing-theme` skill row and the Appearance clause of `templates/workspace/CLAUDE.md`, and the `39-themes.md` row
   of the help topic.
+- Themes, advanced CSS: one `"css"` field in theme.json (string or list of lines, 16 KB), checked by `themes._css`
+  (refused whole: url()/image()/element(), at-rules but @media/@supports/@container, `position: fixed`, `<`, `\`,
+  unbalanced braces/quotes; comments stripped). `css_state` none|on|stale: on while `<theme>/.css-check.json` matches
+  `ui_fingerprint()` (hash of the served build's `assets/*.css` names, `webbuild.active_dist()`), written by `install` and
+  `maxxing themes verify <id>` ⇒ an update that changes the interface's CSS switches it off until Claude verifies it.
+  Web: `ThemeLook.extra` (nested in `html[data-theme-id]`, re-checked client side `ADVANCED_OK`), `themeCss()`, store
+  `themeCssOff` (per browser, reset by `pickTheme`), index.html paints it too; Appearance Options row "Advanced CSS"
+  (switch, or "Ask Harness to check" when stale). Mock: `sunset` has a stale css.
 - Session watcher (`service._scan`): a meta file is identified by `(inode, mtime_ns, size)` (`_ident`, as `meta_ident` and `store._cache`), no longer by `mtime_ns` alone: two atomic writes in one tick of the kernel's coarse clock share the mtime, and the second was skipped (an idle session until its next write, a running one until `RUNNING_RECHECK_S`). `_known` / `_damaged` hold that tuple. `tests/test_agent_turn_bus.py` failed about 2 runs in 3 because of it.
 
 ## 2.0.0-alpha.168 - 2026-11-24

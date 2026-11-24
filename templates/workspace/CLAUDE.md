@@ -95,7 +95,7 @@ UI; the server CLI is `maxxing`:
 | `maxxing custom [status\|save\|drop\|restore]` | customizations of the product code (see below) |
 | `maxxing cron list\|sync\|run <id>` | scheduled jobs |
 | `maxxing webhooks list\|add\|edit\|test\|calls\|replay\|url <id>` | webhooks and events without AI (Settings -> Automate -> Webhooks / Events, skill `maxxing-webhooks`) |
-| `maxxing themes list\|check\|install\|remove` | themes of Settings -> Appearance: a `theme.json` of values on top of Solid or Glass, checked then installed (skill `maxxing-theme`) |
+| `maxxing themes list\|check\|install\|verify\|remove` | themes of Settings -> Appearance: a `theme.json` of values on top of Solid or Glass (+ one optional field of advanced CSS, switched off by updates until `verify`), checked then installed (skill `maxxing-theme`) |
 | `maxxing backup run\|status\|restore` | memory backup to a private GitHub repo |
 | `maxxing telegram status\|test` | Telegram bridge |
 | `maxxing import ZIP [--dry-run]` / `--prompt AGENT` | import another agent's memory: Hermes, OpenClaw, Claude Code... (Settings -> Import does the same) |

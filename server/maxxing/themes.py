@@ -11,6 +11,12 @@ theme can never break the interface nor survive an update badly: the product onl
     preview.png  optional picture for a listing (Community)
     README.md    optional
 
+One escape hatch: `"css"`, a single field of advanced CSS for what no variable reaches. It is checked (no url(),
+no @import, no fixed layer over the app, braces balanced: see _css), applied only inside html[data-theme-id="<id>"]
+(CSS nesting, `&` = <html>), and switched off by itself when an update changes the interface's own CSS, until
+`maxxing themes verify <id>` (Claude, after checking it still looks right) records the new build: this is the part
+of a theme that MAY break with an update, the variables never do.
+
 `load(dir)` -> (theme | None, warnings, error); `list_themes()` = every folder of <workspace>/themes, sanitized:
 the web app writes the values as they come (`web/src/lib/themes.ts`).
 """
@@ -33,6 +39,8 @@ MAX_JSON = 64 * 1024
 MAX_IMAGE = 4 * 1024 * 1024
 IMAGE_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp",
                ".avif": "image/avif"}
+MAX_CSS = 16 * 1024
+CSS_STAMP = ".css-check.json"                    # {"ui": fingerprint of the app's CSS when the theme's css was checked}
 FILES = ("theme.json", "README.md", "LICENSE")    # copied by install (+ the images the theme names)
 
 # The contract: every variable a theme may set, and its kind. Names are the CSS custom properties of
@@ -328,6 +336,82 @@ def _mode_tokens(raw: Any, mode: str, warn: list[str]) -> dict[str, str]:
     return out
 
 
+_CSS_BANNED = [
+    (re.compile(r"url\s*\(|image-set\s*\(|image\s*\(|src\s*\(|element\s*\(", re.I),
+     "no url(), image() or element(): images go in wallpaper"),
+    (re.compile(r"@(?!media\b|supports\b|container\b)[a-z-]+", re.I), "only @media, @supports and @container"),
+    (re.compile(r"expression\s*\(|javascript:|-moz-binding|behavior\s*:", re.I), "nothing that runs code"),
+    (re.compile(r"position\s*:\s*fixed", re.I), "no position: fixed (nothing may cover the app)"),
+    (re.compile(r"[<\\]"), "no < and no backslash"),
+]
+
+
+def _css(v: Any, warn: list[str]) -> str | None:
+    """The advanced CSS of a theme (a string, or a list of lines), or None with a warning: refused as a whole."""
+    if v is None or v == "" or v == []:
+        return None
+    if isinstance(v, list) and all(isinstance(x, str) for x in v):
+        v = "\n".join(v)
+    if not isinstance(v, str):
+        warn.append("css: must be a string or a list of lines, ignored")
+        return None
+    if len(v.encode()) > MAX_CSS:
+        warn.append(f"css: over {MAX_CSS // 1024} KB, ignored")
+        return None
+    bare = re.sub(r"/\*.*?\*/", " ", v, flags=re.S)
+    if "/*" in bare:
+        warn.append("css: unclosed comment, ignored")
+        return None
+    depth, quote = 0, ""
+    for c in bare:
+        if quote:
+            quote = "" if c == quote else quote
+            if c == "\n":
+                break
+        elif c in "\"'":
+            quote = c
+        elif c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+            if depth < 0:
+                break
+    if quote or depth:
+        warn.append("css: braces or quotes do not balance, ignored")
+        return None
+    for rx, why in _CSS_BANNED:
+        if rx.search(bare):
+            warn.append(f"css: {why}, ignored")
+            return None
+    return bare.strip() or None
+
+
+def ui_fingerprint() -> str:
+    """Names of the interface's built CSS files (hashed by Vite: they change exactly when its CSS does)."""
+    import hashlib
+    from . import webbuild
+    try:
+        names = sorted(f.name for f in (webbuild.active_dist() / "assets").glob("*.css"))
+    except OSError:
+        names = []
+    return hashlib.sha256("\n".join(names).encode()).hexdigest()[:16]
+
+
+def _css_state(d: Path, css: str | None) -> str:
+    """none | on | stale (checked against another build of the interface, or never checked: off until verified)."""
+    if not css:
+        return "none"
+    try:
+        stamp = json.loads((d / CSS_STAMP).read_text())
+    except (OSError, ValueError):
+        return "stale"
+    return "on" if isinstance(stamp, dict) and stamp.get("ui") == ui_fingerprint() else "stale"
+
+
+def _stamp(d: Path) -> None:
+    config.write_json(d / CSS_STAMP, {"ui": ui_fingerprint()})
+
+
 def _image(d: Path, name: Any, what: str, warn: list[str]) -> str | None:
     if name is None:
         return None
@@ -382,7 +466,7 @@ def load(d: Path) -> tuple[dict | None, list[str], str | None]:
         base = "solid"
     for k in raw:
         if k not in ("schema", "id", "name", "description", "author", "version", "homepage", "base", "light", "dark",
-                     "options", "wallpaper", "wallpaper_dark", "preview"):
+                     "options", "wallpaper", "wallpaper_dark", "preview", "css"):
             warn.append(f"{k}: unknown key, ignored")
     modes = {m: _mode_tokens(raw.get(m), m, warn) for m in MODES}
     present = [m for m in MODES if isinstance(raw.get(m), dict)]
@@ -406,6 +490,7 @@ def load(d: Path) -> tuple[dict | None, list[str], str | None]:
     if base != "glass" and (wall["light"] or wall["dark"]):
         warn.append("wallpaper: only a glass theme shows a wallpaper (\"base\": \"glass\"), ignored")
         wall = {"light": None, "dark": None}
+    css = _css(raw.get("css"), warn)
     preview = _image(d, raw.get("preview"), "preview", warn) if raw.get("preview") is not None else (
         "preview.png" if (d / "preview.png").is_file() and (d / "preview.png").stat().st_size <= MAX_IMAGE else None)
     return {
@@ -425,6 +510,8 @@ def load(d: Path) -> tuple[dict | None, list[str], str | None]:
         "own_surfaces": any(k in SURFACE for m in MODES for k in modes[m]),
         "wallpaper": {m: (f"/api/themes/{tid}/file/{wall[m]}" if wall[m] else None) for m in MODES},
         "preview": f"/api/themes/{tid}/file/{preview}" if preview else None,
+        "css": css,
+        "css_state": _css_state(d, css),
         "warnings": warn,
     }, warn, None
 
@@ -493,8 +580,24 @@ def install(src: Path, force: bool = False) -> tuple[dict, list[str]]:
             shutil.copy2(f, tmp / n)
     shutil.rmtree(dest, ignore_errors=True)
     tmp.rename(dest)
+    if t["css"]:
+        _stamp(dest)                    # installed by Claude after `check`: checked against this interface
     t2, warn2, _ = load(dest)
     return t2 or t, warn2
+
+
+def verify(tid: str) -> dict:
+    """Records that the theme's css was checked against the interface as it is now (turns it back on)."""
+    d = root() / tid
+    if not ID_RE.match(tid) or not d.is_dir():
+        raise ThemeError(f"no installed theme {tid}")
+    t, warn, err = load(d)
+    if err or not t:
+        raise ThemeError(err or "not a theme")
+    if t["css"]:
+        _stamp(d)
+        t["css_state"] = "on"
+    return t
 
 
 def remove(tid: str) -> bool:

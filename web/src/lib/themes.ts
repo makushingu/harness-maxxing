@@ -24,12 +24,17 @@ export type InstalledTheme = {
   own_surfaces: boolean
   wallpaper: { light: string | null; dark: string | null }
   preview: string | null
+  /** Advanced CSS (one field, checked by the server); applied inside html[data-theme-id] only when `css_state` is on. */
+  css: string | null
+  /** none | on | stale: never checked against this build of the interface, or an update changed its CSS. */
+  css_state: 'none' | 'on' | 'stale'
   warnings: string[]
 }
 export type ThemeList = { themes: InstalledTheme[]; errors: { id: string; error: string }[] }
 
-/** What the store keeps of the theme in use: enough to paint it before the app loads. */
-export type ThemeLook = { id: string; base: Material; mode: 'light' | 'dark' | null; css: string; ownAccent: boolean; ownSurfaces: boolean }
+/** What the store keeps of the theme in use: enough to paint it before the app loads. `extra` = its advanced CSS
+ *  (empty unless the server says it was checked against this interface), dropped while `themeCssOff`. */
+export type ThemeLook = { id: string; base: Material; mode: 'light' | 'dark' | null; css: string; extra: string; cssState: InstalledTheme['css_state']; ownAccent: boolean; ownSurfaces: boolean }
 
 export const label = (l: Label, lang: string) => (typeof l === 'string' ? l : l[lang] || l.en || Object.values(l)[0] || '')
 
@@ -48,10 +53,26 @@ export function themeLook(t: InstalledTheme): ThemeLook | null {
   if (!ID.test(t.id)) return null
   const sel = (dark: boolean) => `html${dark ? '.dark' : ':not(.dark)'}[data-theme-id="${t.id}"]`
   const css = [rules(sel(false), t.light, t.base === 'glass' ? t.wallpaper.light : null), rules(sel(true), t.dark, t.base === 'glass' ? t.wallpaper.dark : null)].join('\n')
-  return { id: t.id, base: t.base, mode: t.modes.length === 1 ? t.modes[0] : null, css, ownAccent: t.own_accent, ownSurfaces: t.own_surfaces }
+  const state = t.css_state ?? 'none'
+  const extra = state === 'on' && t.css && ADVANCED_OK(t.css) ? `html[data-theme-id="${t.id}"]{\n${t.css}\n}` : ''
+  return { id: t.id, base: t.base, mode: t.modes.length === 1 ? t.modes[0] : null, css, extra, cssState: state, ownAccent: t.own_accent, ownSurfaces: t.own_surfaces }
 }
 
-export function applyThemeCss(look: ThemeLook | null) {
+/** Second line of defense behind the server (themes.py _css): nothing that loads, nothing that leaves the scope. */
+function ADVANCED_OK(css: string): boolean {
+  if (/[<\\]|url\s*\(|image(-set)?\s*\(|@import|expression\s*\(|javascript:|position\s*:\s*fixed/i.test(css)) return false
+  let depth = 0
+  for (const c of css.replace(/"[^"\n]*"|'[^'\n]*'/g, '')) {
+    if (c === '{') depth++
+    else if (c === '}' && --depth < 0) return false
+  }
+  return depth === 0
+}
+
+/** The text of <style id="mx-theme"> (index.html repeats it before the first paint). */
+export const themeCss = (look: ThemeLook, cssOff: boolean) => (look.extra && !cssOff ? `${look.css}\n${look.extra}` : look.css)
+
+export function applyThemeCss(look: ThemeLook | null, cssOff = false) {
   let el = document.getElementById('mx-theme') as HTMLStyleElement | null
   if (!look) return el?.remove()
   if (!el) {
@@ -59,7 +80,8 @@ export function applyThemeCss(look: ThemeLook | null) {
     el.id = 'mx-theme'
     document.head.appendChild(el)
   }
-  if (el.textContent !== look.css) el.textContent = look.css
+  const css = themeCss(look, cssOff)
+  if (el.textContent !== css) el.textContent = css
 }
 
 export function useInstalledThemes(enabled = true) {

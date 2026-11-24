@@ -267,7 +267,13 @@ with `maxxing themes install` (never from the UI). Each theme is returned checke
 pairs below their contrast dropped. The web app writes them as CSS rules on `html[data-theme-id]` (`lib/themes.ts`).
 `Theme = {id, name, description, author, version, homepage, base: solid|glass, modes: [light|dark], light: {token: css},
 dark: {...}, options: {mode?, accent?, tint?, font?, mono?, density?}, own_accent, own_surfaces,
-wallpaper: {light: url|null, dark: url|null}, preview: url|null, warnings: [str]}`.
+wallpaper: {light: url|null, dark: url|null}, preview: url|null, css: str|null, css_state: none|on|stale, warnings: [str]}`.
+`css` = the theme's one field of advanced CSS, checked by `themes._css` (refused as a whole on `url()`/images, any
+at-rule but `@media|@supports|@container`, `position: fixed`, `<`, `\`, unbalanced braces or quotes; 16 KB); the web
+app nests it in `html[data-theme-id="<id>"]{…}` and applies it only when `css_state` is `on`: `<theme>/.css-check.json`
+`{"ui": fingerprint}` matches `themes.ui_fingerprint()` (hash of the names of the served build's `assets/*.css`, i.e.
+of the interface's CSS). Written by `install` and `maxxing themes verify <id>`; any update that changes the CSS makes
+it `stale` (off).
 
 | Method | Path | Body | Response |
 |---|---|---|---|

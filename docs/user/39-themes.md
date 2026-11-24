@@ -17,8 +17,9 @@ Themes are installed by Harness, never by a click: ask in any session ("make me 
 `maxxing-theme`: it writes or reads the theme, checks it, installs it, and you pick it in Settings -> Appearance.
 
 A theme is **data, never code**: a `theme.json` file of values (colors, sizes, shadows, fonts) and, optionally, images.
-No CSS, no script, no font or image loaded from the internet. That is why a theme cannot break the interface nor
-leak anything, and why it keeps working after an update.
+No script, no font or image loaded from the internet. That is why a theme cannot break the interface nor leak
+anything, and why it keeps working after an update. The one exception is optional and kept apart: a single field of
+**advanced CSS** (below), for what no value reaches.
 
 ## What a theme can never break
 
@@ -33,6 +34,31 @@ leak anything, and why it keeps working after an update.
 - A theme with only a dark (or light) part shows that mode only. A theme removed while in use: the browser goes back
   to its base (Solid or Glass).
 - If a theme ever bothers you: Settings -> Appearance -> **Solid**.
+
+## Advanced CSS
+
+For what no variable reaches (a border on one element, a letter spacing, a decoration), a theme may carry style
+rules in **one field**, `"css"` of `theme.json`: a string, or a list of lines, at most 16 KB.
+
+```json
+"css": [
+  "& aside { border-right: 2px solid var(--primary) }",
+  "&.dark main h1 { letter-spacing: .02em }",
+  "@media (max-width: 640px) { & main { font-size: 15px } }"
+]
+```
+
+- The rules apply only while the theme is in use: they sit inside `html[data-theme-id="<id>"] { … }`, so every rule
+  starts with `&` (the page), `&.dark` for the dark mode, `&:not(.dark)` for the light one.
+- Refused as a whole, with a warning (the rest of the theme still works): `url()` and other images, `@import`,
+  `@font-face` and every at-rule except `@media`, `@supports` and `@container`, `position: fixed`, `<`, backslashes,
+  unbalanced braces or quotes.
+- **Unlike the values, these rules may look wrong after an update** (the interface they style changes). So an update
+  that changes the interface's CSS **switches them off by itself**: Settings -> Appearance -> Options says "Switched
+  off" with a button that asks Harness to check them. Harness looks at the pages with the new version, fixes the
+  rules if needed and switches them back on (`maxxing themes verify <id>`).
+- You can switch them off yourself at any time: Settings -> Appearance -> Options -> **Advanced CSS** (this browser).
+- On Community, a theme with advanced CSS is marked "may break after an update".
 
 ## The format
 
@@ -62,13 +88,15 @@ themes/nord/
   "options": { "font": "plex", "mono": "jetbrains" },
   "wallpaper": "wallpaper.webp",
   "wallpaper_dark": "wallpaper-dark.webp",
-  "preview": "preview.png"
+  "preview": "preview.png",
+  "css": ["& aside { border-right: 2px solid var(--primary) }"]
 }
 ```
 
 - `id`: 2-40 lowercase letters, digits and dashes, the name of the folder (not `solid` nor `glass`).
 - `name`, `description`: a text, or one per language (`en`, `fr`...).
 - `base`: `solid` or `glass`. A wallpaper only shows on a Glass theme.
+- `css`: optional, see [Advanced CSS](#advanced-css).
 - `light`, `dark`: the variables below (a missing block = that mode keeps the built-in look; only one block = the theme
   has that mode only).
 - `options`: what the theme suggests when it is picked: `mode` (`dark`, `light`, `system`), `accent` (`blue`, `clay`,
@@ -139,11 +167,12 @@ A theme that sets a surface hides the Background option (the theme has its own).
 maxxing themes list                      installed themes (and folders that are not usable, with the reason)
 maxxing themes check <folder>            read a theme like the interface will: what it sets, what is dropped and why
 maxxing themes install <folder> [--force]   check it, then copy it into <workspace>/themes/<id>/
+maxxing themes verify <id>               its advanced CSS was checked with this version: switch it back on
 maxxing themes remove <id>
 maxxing themes tokens                    the variables and their kind
 ```
 
-`install` copies only `theme.json`, the images it names, `README.md` and `LICENSE`. An agent cannot install or remove
+`install` copies only `theme.json`, the images it names, `README.md` and `LICENSE`. An agent cannot install, verify or remove
 a theme (it asks you in its answer).
 
 ## Sharing a theme on Community

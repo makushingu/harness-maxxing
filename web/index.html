@@ -40,7 +40,7 @@
           if (ct && typeof ct.css === 'string' && /^[a-z0-9][a-z0-9-]{1,39}$/.test(ct.id)) {
             r.dataset.themeId = ct.id;
             if (ct.mode) { dark = ct.mode === 'dark'; r.classList.toggle('dark', dark); }
-            var st = document.createElement('style'); st.id = 'mx-theme'; st.textContent = ct.css; document.head.appendChild(st);
+            var st = document.createElement('style'); st.id = 'mx-theme'; st.textContent = typeof ct.extra === 'string' && ct.extra && s.themeCssOff !== true ? ct.css + '\n' + ct.extra : ct.css; document.head.appendChild(st);
           }
           // Logo in the accent color (copy of src/lib/accent.ts applyAppIcons): tab icon, installed app
           // (manifest icons and launch screen) and the iOS home-screen icon.

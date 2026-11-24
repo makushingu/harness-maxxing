@@ -110,7 +110,7 @@ export function HtmlWidget({
   const hostRef = React.useRef(host)
   hostRef.current = host
   const theme = resolveTheme(useUI((s) => s.theme))
-  const look = useUI((s) => `${s.accent}.${s.tint}.${s.density}.${s.material}.${s.customTheme?.css ?? ''}`)
+  const look = useUI((s) => `${s.accent}.${s.tint}.${s.density}.${s.material}.${s.customTheme?.css ?? ''}${s.themeCssOff || !s.customTheme?.extra ? '' : s.customTheme.extra}`)
   const frame = React.useRef<HTMLIFrameElement>(null)
   const [loaded, setLoaded] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)

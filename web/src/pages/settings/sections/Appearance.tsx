@@ -11,7 +11,7 @@ import { ACCENTS, resolveTheme, useUI, type Accent, type Density, type Layout, t
 import { cn } from '@/lib/utils'
 import { FONT_GROUPS, loadFontPreview, MONO_FONTS, SANS_FONTS, type FontGroup } from '@/lib/fonts'
 import { useT, type TKey } from '@/i18n'
-import { Segmented, Tooltip } from '@/components/ui'
+import { Button, Segmented, Switch, Tooltip } from '@/components/ui'
 import { SettingRow } from '@/features/common'
 import { SettingsCard, SectionStack } from './ui'
 
@@ -234,6 +234,7 @@ export function AppearanceSection() {
   const ct = ui.customTheme
   const { data } = useInstalledThemes(!!ct)
   const installed = ct ? data?.themes.find((x) => x.id === ct.id) : undefined
+  const ask = useAskHarness()
   const themeName = ct ? (installed ? label(installed.name, ui.language) : ct.id) : t(ui.material === 'glass' ? 'material.glass' : 'material.solid')
   return (
     <SectionStack>
@@ -280,6 +281,15 @@ export function AppearanceSection() {
               ]}
             />
           </SettingRow>
+          )}
+          {ct && ct.cssState !== 'none' && (
+            <SettingRow label={t('appearance.css')} description={t(ct.cssState === 'stale' ? 'appearance.cssStale' : 'appearance.cssDesc')}>
+              {ct.cssState === 'stale' ? (
+                <Button size="sm" variant="outline" onClick={() => ask(t('appearance.cssVerifyPrompt', { id: ct.id }))}>{t('appearance.cssVerify')}</Button>
+              ) : (
+                <Switch checked={!ui.themeCssOff} onCheckedChange={(on) => ui.setThemeCssOff(!on)} aria-label={t('appearance.css')} />
+              )}
+            </SettingRow>
           )}
           <div className="grid gap-3 py-4">
             <div className="grid gap-0.5">

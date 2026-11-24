@@ -121,3 +121,31 @@ def test_solid_wallpaper_is_ignored(tmp_path):
     d = _theme(tmp_path, "ww", {"name": "W", "wallpaper": "w.png"}, {"w.png": b"x"})
     t, warn, _ = themes.load(d)
     assert t["wallpaper"] == {"light": None, "dark": None} and any("only a glass" in w for w in warn)
+
+
+def test_advanced_css_is_checked_and_switched_off_by_an_update(mx, client, tmp_path, monkeypatch, capsys):
+    ok = ["& .rounded-xl { letter-spacing: .01em }", "&.dark aside { border-right: 2px solid red }",
+          "@media (max-width: 600px) { & h1 { font-size: 1.1rem } }", "/* a comment { */"]
+    t, warn, _ = themes.load(_theme(tmp_path, "fine", {"name": "F", "css": ok}))
+    assert t["css"] and "/*" not in t["css"] and not warn
+    for bad in ["& a { background: url(https://x.example/p.png) }", "@import 'https://x.example/a.css';",
+                "& div { position: fixed; inset: 0 }", "} body { color: red", "& a { color: red",
+                "& a::after { content: '</style>' }", "@font-face { font-family: x }", "& a { b: \\75rl(x) }",
+                "& a { content: 'x }", "& a { color: red } /* open", 5]:
+        t, warn, _ = themes.load(_theme(tmp_path, "bad", {"name": "B", "css": bad}))
+        assert t["css"] is None and any(w.startswith("css:") for w in warn), bad
+    big = "& a { color: red }\n" * 1000
+    t, warn, _ = themes.load(_theme(tmp_path, "big", {"name": "B", "css": big}))
+    assert t["css"] is None and any("KB" in w for w in warn)
+
+    src = _theme(tmp_path / "src", "neon", {"name": "Neon", "css": ok})
+    assert themes.load(src)[0]["css_state"] == "stale"                  # not installed: never checked
+    assert cli.main(["themes", "install", str(src)]) == 0
+    assert client.get("/api/themes").json()["themes"][0]["css_state"] == "on"
+    monkeypatch.setattr(themes, "ui_fingerprint", lambda: "another-build")   # an update changed the app's CSS
+    assert client.get("/api/themes").json()["themes"][0]["css_state"] == "stale"
+    capsys.readouterr()
+    assert cli.main(["themes", "list"]) == 0 and "css OFF" in capsys.readouterr().out
+    assert cli.main(["themes", "verify", "neon"]) == 0
+    assert client.get("/api/themes").json()["themes"][0]["css_state"] == "on"
+    assert cli.main(["themes", "verify", "nope"]) == 1

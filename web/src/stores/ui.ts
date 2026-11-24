@@ -38,6 +38,9 @@ type UIState = {
   /** An installed theme in use (<workspace>/themes, lib/themes.ts) on top of `material` (its base); null = the
    *  built-in Solid or Glass. Its CSS is kept here so index.html paints it before the app loads. */
   customTheme: ThemeLook | null
+  /** The owner switched the advanced CSS of the theme in use off (this browser; back on when a theme is picked). */
+  themeCssOff: boolean
+  setThemeCssOff: (off: boolean) => void
   /** Interface and code fonts (this browser). */
   font: SansFont
   monoFont: MonoFont
@@ -117,6 +120,8 @@ export const useUI = create<UIState>()(
       tint: 'neutral',
       material: 'solid',
       customTheme: null,
+      themeCssOff: false,
+      setThemeCssOff: (themeCssOff) => set({ themeCssOff }),
       font: 'inter',
       monoFont: 'system',
       language: initialLang(),
@@ -151,6 +156,7 @@ export const useUI = create<UIState>()(
         set((s) => ({
           material: t.base,
           customTheme: look,
+          themeCssOff: false,
           theme: look.mode ?? o.mode ?? s.theme,
           accent: o.accent ?? s.accent,
           tint: o.tint ?? s.tint,
@@ -196,7 +202,8 @@ export const useUI = create<UIState>()(
         if (out.tint !== 'tinted') out.tint = 'neutral'
         if (out.material !== 'glass') out.material = 'solid'
         const ct = out.customTheme as ThemeLook | null | undefined
-        out.customTheme = ct && typeof ct === 'object' && typeof ct.css === 'string' && /^[a-z0-9][a-z0-9-]{1,39}$/.test(ct.id) ? ct : null
+        out.customTheme = ct && typeof ct === 'object' && typeof ct.css === 'string' && /^[a-z0-9][a-z0-9-]{1,39}$/.test(ct.id) ? { ...ct, extra: typeof ct.extra === 'string' ? ct.extra : '', cssState: ct.cssState ?? 'none' } : null
+        out.themeCssOff = out.themeCssOff === true
         if (!(out.monoFont in MONO_FONTS)) out.monoFont = 'system'
         if (out.layout !== 'touch' && out.layout !== 'desktop') out.layout = 'auto'
         out.sidebarWidth = typeof out.sidebarWidth === 'number' && Number.isFinite(out.sidebarWidth) ? clampSidebar(out.sidebarWidth) : null
@@ -234,7 +241,7 @@ export function bindUIToDocument() {
     r.dataset.material = s.material
     if (ct) r.dataset.themeId = ct.id
     else delete r.dataset.themeId
-    applyThemeCss(ct)
+    applyThemeCss(ct, s.themeCssOff)
     r.lang = s.language
     applyFavicon(s.accent)
     applyFonts(s.font, s.monoFont)

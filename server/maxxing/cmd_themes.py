@@ -3,6 +3,7 @@
   maxxing themes list [--json]              installed themes (and folders that are not usable)
   maxxing themes check <folder> [--json]    read a theme like the interface will: what it sets, what is dropped and why
   maxxing themes install <folder> [--force] check it, then copy it into <workspace>/themes/<id>/
+  maxxing themes verify <id>                its advanced css still looks right with this interface: switch it back on
   maxxing themes remove <id>                delete an installed theme (browsers using it go back to its base)
   maxxing themes tokens [--json]            the variables a theme may set, and their kind
 """
@@ -23,6 +24,8 @@ def _configure(p) -> None:
     r.add_argument("folder"); r.add_argument("--json", action="store_true")
     r = sub.add_parser("install", help="check a theme folder and install it")
     r.add_argument("folder"); r.add_argument("--force", action="store_true", help="replace an installed theme")
+    r = sub.add_parser("verify", help="switch a theme's advanced css back on after checking it (after an update)")
+    r.add_argument("id")
     r = sub.add_parser("remove", help="delete an installed theme")
     r.add_argument("id")
     r = sub.add_parser("tokens", help="the variables a theme may set")
@@ -44,6 +47,10 @@ def _report(t: dict, warn: list[str]) -> None:
     for m, u in t["wallpaper"].items():
         if u:
             print(f"  wallpaper ({m}): {u.rsplit('/', 1)[1]}")
+    if t.get("css"):
+        state = {"on": "on", "stale": "OFF until `maxxing themes verify " + t["id"] + "` (never checked against "
+                 "this interface, or an update changed its CSS)"}.get(t["css_state"], t["css_state"])
+        print(f"  advanced css: {len(t['css'])} characters, {state}")
     for w in warn:
         print(f"  ! {w}")
     if not warn:
@@ -61,6 +68,7 @@ def _handler(a) -> int:
                 return 0
             for t in data["themes"]:
                 print(f"{t['id']:<20} {_name(t):<24} {t['base']:<6} {', '.join(t['modes'])}"
+                      + ("  (css OFF: verify)" if t["css_state"] == "stale" else "")
                       + (f"  ({len(t['warnings'])} warnings)" if t["warnings"] else ""))
             for e in data["errors"]:
                 print(f"{e['id']:<20} NOT USABLE: {e['error']}")
@@ -83,6 +91,11 @@ def _handler(a) -> int:
             _report(t, warn)
             print(f"Installed in {themes.root() / t['id']}: Settings -> Appearance -> Theme.")
             return 0
+        if c == "verify":
+            t = themes.verify(a.id)
+            _report(t, t["warnings"])
+            print("Advanced css switched on for this interface." if t["css"] else "This theme has no advanced css.")
+            return 0
         if c == "remove":
             if not themes.remove(a.id):
                 print(f"No installed theme {a.id}.", file=sys.stderr)
@@ -103,5 +116,5 @@ def _handler(a) -> int:
     return 2
 
 
-cli.register("themes", "installed themes of Settings -> Appearance (list, check, install, remove, tokens)",
+cli.register("themes", "installed themes of Settings -> Appearance (list, check, install, verify, remove, tokens)",
              _configure, _handler)
