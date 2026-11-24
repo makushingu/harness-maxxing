@@ -57,7 +57,7 @@ function PartRow({ part, value, onChange, project }: { part: AvatarPart; value: 
               {swatches ? (
                 <span className="size-5 rounded-full border border-black/15" style={{ background: swatches[opt] }} />
               ) : (
-                <AgentAvatarIcon avatar={{ ...value, [part]: opt }} size={32} tile={false} />
+                <AgentAvatarIcon avatar={{ ...value, [part]: opt }} size={32} tile={false} animate={false} />
               )}
               {opt === mine && <span className="absolute top-0.5 right-0.5 size-1.5 rounded-full bg-foreground" aria-hidden />}
             </button>

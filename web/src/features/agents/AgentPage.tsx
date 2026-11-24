@@ -106,7 +106,7 @@ export default function AgentPage({ at }: { at?: { project: string; topic: strin
           <div className="flex items-center gap-2">
             {back}
             <button type="button" onClick={() => !wide && openProfile()} className={cn('relative shrink-0 before:absolute before:-inset-1 before:content-[""]', wide && 'cursor-default')} aria-label={t('agents.panel.open')}>
-              <AgentAvatarIcon avatar={a.avatar} size={32} />
+              <AgentAvatarIcon avatar={a.avatar} size={32} mood={a.enabled ? 'idle' : 'sleep'} />
               {running && <StatusDot tone="running" pulse label={t('agents.runningNow')} className="absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full ring-2 ring-background sm:hidden" />}
             </button>
           </div>
@@ -501,7 +501,7 @@ function Flow({ agent: a, onReply, onSuggest, ref }: { agent: AgentDetail; onRep
               {/* nothing said yet (notes such as "Agent created" aside): its greeting, and ideas when it has no role */}
               {!running.length && !msgs.some((m) => m.kind !== 'note') && (
                 <div className="grid justify-items-center gap-3 py-10 text-center" data-testid="agent-start-chat">
-                  <AgentAvatarIcon avatar={a.avatar} size={56} />
+                  <AgentAvatarIcon avatar={a.avatar} size={56} mood={a.enabled ? 'idle' : 'sleep'} />
                   <p className="text-base font-medium">
                     <Sensitive length={8}>{t(a.description ? 'agents.chat.startTitle' : 'agents.new.startTitle', { name: a.display_name })}</Sensitive>
                   </p>

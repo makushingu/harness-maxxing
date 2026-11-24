@@ -210,7 +210,7 @@ function MemberBar({ group: g, onMention }: { group: AgentGroup; onMention: (slu
                     className={cn('flex min-w-0 items-center gap-1.5 rounded-full py-0.5 pr-2.5 pl-0.5 text-left outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring', touch && 'min-h-10 pl-1', (m.paused || !m.exists) && 'opacity-55')}
                     aria-label={m.display_name}
                   >
-                    <AgentAvatarIcon avatar={m.avatar} size={touch ? 28 : 24} />
+                    <AgentAvatarIcon avatar={m.avatar} size={touch ? 28 : 24} mood={m.paused || !m.exists ? 'sleep' : 'idle'} />
                     <span className="grid min-w-0 leading-tight">
                       <span className="flex items-center gap-1 text-[13px] font-medium">
                         <Sensitive length={6}>{m.display_name}</Sensitive>

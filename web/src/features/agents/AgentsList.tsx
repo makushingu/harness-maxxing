@@ -359,7 +359,7 @@ function AgentRow({ agent: a, index, layout }: { agent: Agent; index: number; la
     >
       <DropBar side={dnd.side} />
       <span className={cn('relative shrink-0', state === 'off' && 'opacity-60')}>
-        <AgentAvatarIcon avatar={a.avatar} size={32} />
+        <AgentAvatarIcon avatar={a.avatar} size={32} mood={state === 'off' ? 'sleep' : 'idle'} />
         <span className="absolute -right-0.5 -bottom-0.5 grid size-3 place-items-center rounded-full bg-background">
           <StatusDot tone={dot.tone} pulse={dot.pulse} className="size-2" label={t(`agents.side.state.${state}` as 'agents.side.state.active')} />
         </span>

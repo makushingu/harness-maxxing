@@ -9,11 +9,12 @@ import { AVATAR_PARTS, GRID, normalize, pixelsOf, type Run } from './pixels'
 
 export { AVATAR_OPTIONS, AVATAR_PARTS, DEFAULT_AVATAR, HAIR, OUTFIT, SKIN, projectColor, randomAvatar, type AvatarPart } from './pixels'
 
-/** `sleep` = eyes closed and greyed (agent off). */
+/** `sleep` = eyes closed and greyed (agent off); animated, it breathes slowly and "z z" float above it. */
 type AvatarMood = 'idle' | 'sleep'
 
-/** `tile` false = the character alone (sitting at its desk); `animate` = alive: blinks now and then, looks left and
- *  right, nods its head (each face on its own beat; all off under reduced motion). */
+/** `tile` false = the character alone (sitting at its desk); `animate` = alive: breathes (head up and down one
+ *  pixel), blinks now and then, looks left and right; asleep, slow breath and floating "z" (each face on its own beat;
+ *  all off under reduced motion). On by default from 24 px: the 16 px faces of lists and chips stay still. */
 type Props = { avatar?: Partial<AgentAvatar> | null; size?: number; className?: string; title?: string; tile?: boolean; mood?: AvatarMood; animate?: boolean }
 
 // The runs come from pixelsOf's cache (same array for the same face), so a redraw of the page skips the rects.
@@ -24,10 +25,13 @@ const Rects = React.memo(({ runs }: { runs: Run[] }) => (
 /** The tile: a rounded square (corners cut by one pixel). */
 const TILE = `M1 0h${GRID - 2}v1h1v${GRID - 2}h-1v1h-${GRID - 2}v-1h-1v-${GRID - 2}h1z`
 
-function AvatarIcon({ avatar, size = 32, className, title, tile = true, mood = 'idle', animate = false }: Props) {
+/** A 4x4 pixel "z" at (x, y). */
+const zPath = (x: number, y: number) => `M${x} ${y}h4v1h-4zM${x + 2} ${y + 1}h1v1h-1zM${x + 1} ${y + 2}h1v1h-1zM${x} ${y + 3}h4v1h-4z`
+
+function AvatarIcon({ avatar, size = 32, className, title, tile = true, mood = 'idle', animate = size >= 24 }: Props) {
   const a = normalize(avatar)
   const px = pixelsOf(a, mood === 'sleep')
-  const blink = animate && px.blink.length > 0
+  const blink = animate && mood !== 'sleep' && px.blink.length > 0
   // Each face blinks at its own moment (a stable delay from its parts), so a page never blinks at once.
   const delay = animate ? -([...Object.values(a).join('')].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 997, 7) % 52) / 10 : 0
   return (
@@ -43,7 +47,19 @@ function AvatarIcon({ avatar, size = 32, className, title, tile = true, mood = '
     >
       {title && <title>{title}</title>}
       {tile && <path d={TILE} fill={px.tile} fillOpacity={0.22} />}
-      {animate && mood !== 'sleep' ? (
+      {animate && mood === 'sleep' ? (
+        <>
+          <Rects runs={px.bust} />
+          <g className="mx-px-snore">
+            <Rects runs={px.head} />
+            <Rects runs={px.eyes} />
+          </g>
+          <g fill="#5b9cf6">
+            <path className="mx-px-z" d={zPath(9, 3)} />
+            <path className="mx-px-z mx-px-z2" d={zPath(12, 0)} />
+          </g>
+        </>
+      ) : animate ? (
         <>
           <Rects runs={px.bust} />
           <g className="mx-px-nod">

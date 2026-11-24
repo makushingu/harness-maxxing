@@ -347,7 +347,7 @@ function AtDesk({ agent, status }: { agent?: Agent; status?: Status }) {
   return (
     <div className="relative flex h-[76px] w-32 items-end justify-center" aria-hidden>
       <span className="relative mb-1">
-        <AgentAvatarIcon avatar={agent?.avatar || { ...DEFAULT_AVATAR, face: 'happy' }} size={64} tile={false} mood={off ? 'sleep' : 'idle'} animate={!off} />
+        <AgentAvatarIcon avatar={agent?.avatar || { ...DEFAULT_AVATAR, face: 'happy' }} size={64} tile={false} mood={off ? 'sleep' : 'idle'} />
         {agent && status && <Bubble agent={agent} status={status} />}
       </span>
       <span className={cn('absolute right-3 bottom-3 h-4 w-6 rounded-t-[3px] bg-muted-foreground/25 transition-colors', working && 'bg-primary/45')} />

@@ -74,7 +74,7 @@ export function ProfileHead({ agent: a, className }: { agent: AgentDetail; class
         data-testid="agent-appearance-open"
       >
         <span className="relative shrink-0">
-          <AgentAvatarIcon avatar={a.avatar} size={64} animate={a.enabled} mood={a.enabled ? 'idle' : 'sleep'} />
+          <AgentAvatarIcon avatar={a.avatar} size={64} mood={a.enabled ? 'idle' : 'sleep'} />
           <span className="absolute -right-1 -bottom-1 grid size-6 place-items-center rounded-full border bg-popover text-muted-foreground shadow-xs transition-opacity group-hover/head:opacity-100 group-focus-visible/head:opacity-100 md:opacity-0">
             <Pencil className="size-3" />
           </span>
