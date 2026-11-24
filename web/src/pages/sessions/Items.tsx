@@ -700,7 +700,7 @@ function ToolCard({ item, live }: { item: Extract<Item, { kind: 'tool' }>; live:
               <Sensitive length={14}>{label.title}</Sensitive>
             </span>
             {label.danger && (
-              <span className="inline-flex shrink-0 items-center gap-1 rounded bg-destructive/10 px-1.5 text-[11px] font-medium text-destructive">
+              <span className="inline-flex shrink-0 items-center gap-1 rounded bg-primary/10 px-1.5 text-[11px] font-medium text-primary">
                 <AlertTriangle className="size-3" /> {t('tl.danger')}
               </span>
             )}
