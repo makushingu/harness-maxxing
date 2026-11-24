@@ -6,9 +6,12 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 ## Unreleased
 
 Fixes:
+- **No more message stuck on "Sending…".** Two messages sent close together (while Harness was summarizing a session, or before a turn starts) arrive as one: the first one stayed below the conversation as "Sending…" forever. Each message is now recognized by its id.
+- **A long message no longer hides the end of the conversation.** As the message box grew line after line, the conversation above it (Jarvis, sessions) let go of the bottom and the last message slipped under the box. It now stays at the bottom while you type.
 - **Jarvis continues a recent session instead of always starting a new one.** Its rules asked it to check the topic's recent sessions first, but it never did: every piece of work started from zero. Now `maxxing sessions new` from Jarvis's conversation is refused while the topic has a session that can take the work, with their list; closest to the subject first. Jarvis sends the work there (its context is already there), or for another subject starts one with `--fresh "<reason>"`: the reason shows on its card in the work board.
 
 New:
+- **Jarvis shows what is working.** Its Work list now sits on the left of the conversation, and on a wide screen a column on the right lists every session working right now (its topic, what it is doing, the Jarvis work it belongs to), live; on a smaller screen and on the phone they head the Work list. What is running carries a soft moving light, the Work button a count (orange: work waiting for you), cards appear smoothly and **Close** takes effect at once.
 - **Webhooks and events: automations without AI.** Two new pages in Settings -> Automate. **Webhooks** gives your
   server URLs that other services call (Stripe, Shopify, GitHub, Tally, n8n, Zapier, a Shortcut on your phone that
   sends a photo and gets a link back); **Events** acts when something happens in Harness (a notification arrives, an

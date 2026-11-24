@@ -29,9 +29,14 @@ export function Textarea({ className, autosize = true, minRows = 3, maxRows = 16
       el.style.overflowY = 'hidden'
       return
     }
+    // Measuring collapses the box for an instant: its parent keeps its height meanwhile, or everything around moves
+    // (a conversation above it is clamped up and lets go of the bottom: the last message slips under a full box).
+    const box = el.parentElement
+    if (box) box.style.minHeight = `${box.offsetHeight}px`
     el.style.height = 'auto'
     const h = Math.min(Math.max(el.scrollHeight, minRows * line + pad), maxRows * line + pad)
     el.style.height = `${h}px`
+    if (box) box.style.minHeight = ''
     el.style.overflowY = el.scrollHeight > h ? 'auto' : 'hidden'
   }, [autosize, minRows, maxRows])
   React.useLayoutEffect(resize, [resize, props.value])

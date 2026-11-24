@@ -2,12 +2,14 @@
 // Its conversation is a session of its hidden topic (server jarvis.py), shown with the same column as the Sessions
 // page (SessionColumn, "solo"); beside it, the work board: what Jarvis handed to which session, and where it stands.
 // Its settings (rights, ask first, daily conversation, brief and night pass times, internals) sit in the gear menu.
+// The Work list sits on the left; the sessions working right now (any of them, its own or the owner's) are listed live
+// on the right on a wide screen, at the top of the Work list otherwise. What runs carries a soft moving light.
 import * as React from 'react'
 import { Link } from 'react-router'
-import { Archive, CalendarDays, Check, ExternalLink, Eye, Hand, ListTodo, MessageSquarePlus, MessagesSquare, Minimize2, Moon, PanelRightClose, Send, Settings2, ShieldCheck, Sparkles, Sun, X, type LucideIcon } from 'lucide-react'
+import { Archive, CalendarDays, Check, ExternalLink, Eye, Hand, ListTodo, MessageSquarePlus, MessagesSquare, Minimize2, Moon, PanelLeftClose, Send, Settings2, ShieldCheck, Sparkles, Sun, X, type LucideIcon } from 'lucide-react'
 import { useLang, useT, type TKey } from '@/i18n'
-import { useCloseJarvisWork, useJarvis, useJarvisBrief, useJarvisDream, useJarvisSettings, useNewJarvisConversation, useOpenJarvis } from '@/lib/queries'
-import type { JarvisSettings, JarvisWork } from '@/lib/types'
+import { useCloseJarvisWork, useJarvis, useSessions, useJarvisBrief, useJarvisDream, useJarvisSettings, useNewJarvisConversation, useOpenJarvis } from '@/lib/queries'
+import type { JarvisSettings, JarvisWork, Session } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { fmtRelative } from '@/lib/format'
 import { Button, EmptyState, Input, Select, Skeleton, StatusDot, Tooltip } from '@/components/ui'
@@ -61,6 +63,7 @@ function JarvisView() {
     if (st?.on && !st.session && !opening && !open.isError) openMutate()
   }, [st?.on, st?.session, opening, open.isError, openMutate])
   const col = React.useMemo<Col>(() => ({ key: `jarvis:${sid}`, kind: 'session', id: sid }), [sid])
+  const live = useLiveSessions(st?.path || '', st?.work)
 
   if (isLoading) return <Skeleton className="m-6 h-40" />
   if (!st?.on)
@@ -99,13 +102,24 @@ function JarvisView() {
               <Button
                 variant={board ? 'secondary' : 'ghost'}
                 size="icon-sm"
-                className={cn(workOpen && 'lg:bg-secondary')}
+                className={cn('relative', workOpen && 'lg:bg-secondary')}
                 aria-label={t('jarvis.board.title')}
                 aria-pressed={board || undefined}
                 onClick={toggleWork}
                 data-testid="jarvis-work-toggle"
               >
                 <ListTodo />
+                {(waiting > 0 || live.length > 0) && (
+                  <span
+                    className={cn(
+                      'pointer-events-none absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-medium tabular-nums text-white',
+                      waiting > 0 ? 'bg-warning' : 'bg-primary',
+                    )}
+                    data-testid="jarvis-work-count"
+                  >
+                    {waiting || live.length}
+                  </span>
+                )}
               </Button>
             </Tooltip>
             <Tooltip content={t('jarvis.set.title')}>
@@ -118,27 +132,92 @@ function JarvisView() {
         }
       />
       <div className="flex min-h-0 flex-1" style={{ '--safe-top': '0px' } as React.CSSProperties}>
-        <div className={cn('flex min-h-0 min-w-0 flex-1 flex-col', board && 'max-lg:hidden')}>
-          {sid ? <SessionColumn key={sid} col={col} sid={sid} index={0} count={1} variant="solo" own ownPlaceholder={t('jarvis.placeholder')} /> : <Skeleton className="m-6 h-40" />}
-        </div>
         <aside
           ref={aside}
-          className={cn('relative flex min-h-0 shrink-0 flex-col border-l max-lg:!w-full max-lg:border-l-0', !board && 'max-lg:hidden', !workOpen && 'lg:hidden')}
+          className={cn('relative flex min-h-0 shrink-0 flex-col border-r max-lg:!w-full max-lg:border-r-0', !board && 'max-lg:hidden', !workOpen && 'lg:hidden')}
           style={{ width: workW }}
           data-testid="jarvis-board"
         >
-          <ResizeEdge side={aside} edge="left" min={WORK_W.min} max={WORK_W.max} onWidth={saveWorkW} />
-          <Board work={st.work} onHide={toggleWork} />
+          <ResizeEdge side={aside} edge="right" min={WORK_W.min} max={WORK_W.max} onWidth={saveWorkW} />
+          <Board work={st.work} live={live} onHide={toggleWork} />
+        </aside>
+        <div className={cn('flex min-h-0 min-w-0 flex-1 flex-col', board && 'max-lg:hidden')}>
+          {sid ? <SessionColumn key={sid} col={col} sid={sid} index={0} count={1} variant="solo" own ownPlaceholder={t('jarvis.placeholder')} /> : <Skeleton className="m-6 h-40" />}
+        </div>
+        <aside className="flex min-h-0 w-64 shrink-0 flex-col border-l max-xl:hidden" data-testid="jarvis-live-rail">
+          <div className="flex h-11 shrink-0 items-center gap-2 border-b px-4">
+            <span className="min-w-0 flex-1 truncate text-sm font-medium">{t('jarvis.live.title')}</span>
+            {live.length > 0 && <span className="text-xs text-muted-foreground tabular-nums">{live.length}</span>}
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto p-2">
+            <LiveList live={live} />
+          </div>
         </aside>
       </div>
     </div>
   )
 }
 
-/* ---------------------------------------------------------------- the work board */
 type Group = { key: string; title: TKey; items: JarvisWork[] }
 
-function Board({ work, onHide }: { work: JarvisWork[]; onHide: () => void }) {
+/* ---------------------------------------------------------------- the sessions working now */
+type Live = { s: Session; work?: JarvisWork }
+
+/** Every session running a turn now (agents' runs are on the Agents page), its own folder (conversation, brief, night
+ *  pass) left out; the newest activity first. A session Jarvis handed work to carries that work's number. Refreshed live by the sessions bus. */
+function useLiveSessions(own: string, work: JarvisWork[] | undefined): Live[] {
+  const { data } = useSessions()
+  return React.useMemo(() => {
+    const byS = new Map((work || []).filter((w) => w.state !== 'closed').map((w) => [w.session, w]))
+    return (data || [])
+      .filter((s) => s.state === 'running' && s.path !== own && !s.archived)
+      .sort((a, b) => b.updated - a.updated)
+      .map((s) => ({ s, work: byS.get(s.id) }))
+  }, [data, own, work])
+}
+
+function LiveList({ live }: { live: Live[] }) {
+  const t = useT()
+  if (!live.length) return <p className="px-2 py-4 text-[13px] text-muted-foreground">{t('jarvis.live.empty')}</p>
+  return (
+    <ul className="space-y-1.5">
+      {live.map(({ s, work: w }, i) => (
+        <li key={s.id} className="mx-rise" style={{ '--i': Math.min(i, 8) } as React.CSSProperties}>
+          <LiveRow s={s} w={w} i={i} />
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+function LiveRow({ s, w, i = 0 }: { s: Session; w?: JarvisWork; i?: number }) {
+  const t = useT()
+  const lang = useLang()
+  const where = s.path.replace(/^projects\//, '').replace('/topics/', '/')
+  return (
+    <Link
+      to={sessionsUrl(s)}
+      className="mx-working group block rounded-lg border bg-card px-2.5 py-2 outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+      style={{ '--i': i } as React.CSSProperties}
+      data-testid="jarvis-live"
+    >
+      <span className="flex items-center gap-2">
+        <StatusDot tone="running" pulse label={t('jarvis.state.running')} />
+        <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{s.title || where}</span>
+      </span>
+      <span className="mt-0.5 block truncate pl-4 text-xs text-muted-foreground">
+        {where}
+        {w && ` · #${w.id} ${t('jarvis.live.forJarvis')}`}
+        {s.queue > 0 && ` · ${t('jarvis.live.queue', { count: s.queue })}`}
+      </span>
+      {s.last_text && <span className="mt-1 line-clamp-2 block pl-4 text-xs text-muted-foreground/80">{s.last_text}</span>}
+      <span className="mt-0.5 block pl-4 text-[11px] text-muted-foreground/70">{t('jarvis.live.since', { when: fmtRelative(s.updated, lang) })}</span>
+    </Link>
+  )
+}
+
+/* ---------------------------------------------------------------- the work board */
+function Board({ work, live, onHide }: { work: JarvisWork[]; live: Live[]; onHide: () => void }) {
   const t = useT()
   const [closed, setClosed] = React.useState(false)
   const groups: Group[] = [
@@ -159,12 +238,20 @@ function Board({ work, onHide }: { work: JarvisWork[]; onHide: () => void }) {
         )}
         <Tooltip content={t('jarvis.board.hide')}>
           <Button variant="ghost" size="icon-sm" aria-label={t('jarvis.board.hide')} onClick={onHide} data-testid="jarvis-work-hide">
-            <PanelRightClose className="max-lg:hidden" />
+            <PanelLeftClose className="max-lg:hidden" />
             <X className="lg:hidden" />
           </Button>
         </Tooltip>
       </div>
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-3">
+        {live.length > 0 && (
+          <section className="space-y-1 xl:hidden" data-testid="jarvis-live-board">
+            <h3 className="px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              {t('jarvis.live.title')} · {live.length}
+            </h3>
+            <LiveList live={live} />
+          </section>
+        )}
         {empty && !closed && <p className="px-1 py-6 text-center text-[13px] text-muted-foreground">{t('jarvis.board.empty')}</p>}
         {groups
           .filter((g) => g.items.length)
@@ -173,8 +260,8 @@ function Board({ work, onHide }: { work: JarvisWork[]; onHide: () => void }) {
               <h3 className="px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 {t(g.title)} · {g.items.length}
               </h3>
-              {g.items.map((w) => (
-                <WorkCard key={w.id} w={w} />
+              {g.items.map((w, i) => (
+                <WorkCard key={w.id} w={w} i={i} />
               ))}
             </section>
           ))}
@@ -199,14 +286,20 @@ const STATE_LABEL: Record<JarvisWork['state'], TKey> = {
   closed: 'jarvis.state.closed',
 }
 
-function WorkCard({ w }: { w: JarvisWork }) {
+function WorkCard({ w, i = 0 }: { w: JarvisWork; i?: number }) {
   const t = useT()
   const lang = useLang()
   const close = useCloseJarvisWork()
+  // closed at once on screen (the board's refresh confirms it, an error puts it back)
+  const shut = close.isPending || w.state === 'closed'
   const where = w.path.replace(/^projects\//, '').replace('/topics/', '/').replace('/agents/', ' · ')
   const asks = w.state === 'replied' && w.question
   return (
-    <article className={cn('rounded-lg border bg-card p-3 text-sm', asks && 'border-warning/50', w.state === 'closed' && 'opacity-60')} data-testid="jarvis-work">
+    <article
+      className={cn('mx-rise rounded-lg border bg-card p-3 text-sm transition-[opacity,border-color] duration-300', w.state === 'running' && !shut && 'mx-working', asks && 'border-warning/50', shut && 'opacity-60')}
+      style={{ '--i': Math.min(i, 8) } as React.CSSProperties}
+      data-testid="jarvis-work"
+    >
       <div className="flex items-start gap-2">
         <StatusDot tone={asks ? 'warn' : TONE[w.state]} pulse={w.state === 'running'} className="mt-1.5" label={t(STATE_LABEL[w.state])} />
         <div className="min-w-0 flex-1">
@@ -232,8 +325,8 @@ function WorkCard({ w }: { w: JarvisWork }) {
             {t('jarvis.work.open')}
           </Link>
         </Button>
-        {w.state !== 'closed' && (
-          <Button variant="ghost" size="sm" onClick={() => close.mutate(w.id)} disabled={close.isPending}>
+        {!shut && (
+          <Button variant="ghost" size="sm" onClick={() => close.mutate(w.id)}>
             <Check />
             {t('jarvis.work.close')}
           </Button>

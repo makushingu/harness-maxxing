@@ -543,14 +543,14 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
     const add = usePending.getState().add
     const remove = usePending.getState().remove
     const mentions = named?.map((m) => ({ kind: m.kind, ref: m.ref }))
-    const lid = add(sid, { text, attachments, queued: running, mentions: named })
+    const lid = add(sid, { text, attachments, queued: running, mentions: named, cid: clientId })
     thread.current?.scrollToBottom()
     notifySent(sid)
     try {
       const r = await send.mutateAsync({ id: sid, text, attachments, client_id: clientId, mentions, ...(call ? { call } : {}) })
       if (r.queued !== running) {
         remove(sid, lid)
-        add(sid, { text, attachments, queued: r.queued, mentions: named })
+        add(sid, { text, attachments, queued: r.queued, mentions: named, cid: clientId })
       }
       return true
     } catch {

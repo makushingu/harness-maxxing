@@ -7,6 +7,8 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+- `Pending.cid` (the outbox id sent as `client_id`); `usePending.settle(sid, text, ids)` drops every pending whose `cid` is in the event's `client_ids` (a merged event carries several, its text is the joined texts), else the first same-text one as before. Mock: `MOCK_HOLD_MS` holds an idle session's messages, then starts one merged turn with all their ids.
+- Jarvis page: `useLiveSessions` (`useSessions()` running, not archived, path != `JarvisStatus.path`, newest first, joined to open work by session id) shown as a right rail at `xl` (`jarvis-live-rail`; the Work board moved to the left, `ResizeEdge edge="right"`) and as the first section of the Work board below `xl` (`jarvis-live-board`); `.mx-working` (globals.css: a 2 px light sweeping the bottom edge, staggered by `--i`) on running work cards and live rows; count badge on the Work toggle (`jarvis-work-count`: asks, else live). `Textarea` autosize pins its parent's `min-height` while it measures (`height: auto`), so the surrounding layout never collapses for a frame (a pinned `Thread` was clamped up and unpinned). Mock: `/api/jarvis*` routes, `jarvis_feature` in `PAGE_FLAGS`, `MOCK_JARVIS_EVENTS=<events.json>`.
 - Jarvis reuse and archiving: settings `reuse` and `archive_done` (`jarvis.DEFAULTS`, both True; `SettingsIn`,
   `maxxing jarvis set`), written into its `rules.md` (`RULES` lines Sessions / Finished work) and the skill (§ 2 step
   1, § 3). Session meta `owner_at` (epoch): set by `service.send_message` for a message of source `web` or `telegram`

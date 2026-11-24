@@ -51,7 +51,7 @@ function meters() {
   return { cpu: 65.5 + 30.5 * wave(30), memAvail: 8e9 * (1 - (0.58 + 0.12 * wave(47, 1))), five: 69 + 29 * wave(40, 2), week: 47 + 4 * wave(90) }
 }
 const MOCK_ALL = process.env.MOCK_FEATURES === 'all'
-const PAGE_FLAGS = ['agents_page', 'mail_page', 'infra_page', 'team_page', 'tasks_page', 'git_page']
+const PAGE_FLAGS = ['agents_page', 'mail_page', 'infra_page', 'team_page', 'tasks_page', 'git_page', 'jarvis_feature']
 
 /* =================================================================== helpers */
 const now = () => Date.now() / 1000
@@ -728,7 +728,7 @@ function startTurn(s, text, attachments = [], cid = '') {
   if (s.plan_ready) s.plan_ready = false
   // Maxxing scenario: turns of 8 to 35 s, so several sessions finish while the user types
   const k = S.scenario === 'maxxing' ? (8000 + Math.random() * 27000) / 3400 : 1
-  addEvents(s, { type: 'user', text, attachments, at: now(), source: 'web', ...(cid ? { client_ids: [cid] } : {}) }, { type: 'init', model, cwd, at: now(), ...(s.mockAgent ? { same: true } : {}) })   // its background agent runs on
+  addEvents(s, { type: 'user', text, attachments, at: now(), source: 'web', ...(cid?.length ? { client_ids: Array.isArray(cid) ? cid : [cid] } : {}) }, { type: 'init', model, cwd, at: now(), ...(s.mockAgent ? { same: true } : {}) })   // its background agent runs on
   bus('sessions', 'workspace')
   const tu = `toolu_${crypto.randomBytes(6).toString('hex')}`
   later(s, 700 * k, () => addEvents(s, { type: 'thinking', text: `Let me look at the files in this topic before answering: "${text.slice(0, 80)}"`, at: now() }))
@@ -1390,6 +1390,16 @@ R('POST', '/api/sessions/:id/messages', ({ params, body }) => {
     pushEvents(s.id, [])
     return { queued: true, session: s }
   }
+  // MOCK_HOLD_MS: an idle session holds what is sent (as behind a summary), then starts ONE turn with all of it merged
+  if (process.env.MOCK_HOLD_MS) {
+    const h = (S.held ||= {})[s.id] ||= { items: [] }
+    h.items.push({ text, attachments: body.attachments || [], cid: body.client_id })
+    if (!h.timer) h.timer = setTimeout(() => {
+      delete S.held[s.id]
+      startTurn(s, h.items.map((x) => x.text).join('\n\n'), h.items.flatMap((x) => x.attachments), h.items.map((x) => x.cid).filter(Boolean))
+    }, Number(process.env.MOCK_HOLD_MS))
+    return { queued: false, session: s }
+  }
   startTurn(s, text, body.attachments || [], body.client_id)
   return { queued: false, session: s }
 })
@@ -1973,6 +1983,31 @@ function mockAgents() {
       { last_run: { id: 'm3', at: t - 20 * HOUR, kind: 'result', text: 'Two keywords moved into the top 3: "speed up checkout" and "cart abandonment".', ok: true } }),
   ]
 }
+/* ---- Jarvis (/jarvis, MOCK_FEATURES=all): its conversation (a session of jarvis/main) and its work board */
+const JARVIS_PATH = 'projects/jarvis/topics/main'
+let jarvisSid = ''
+function jarvisStatus() {
+  let s = jarvisSid && S.sessions.find((x) => x.id === jarvisSid)
+  if (!s && S.settings.jarvis_feature) {
+    const t = now()
+    s = { id: uuid(), title: 'Jarvis', path: JARVIS_PATH, state: 'idle', queue: 0, created: t, updated: t, turns: 0, cost_usd: 0, model: '', real_model: null,
+      context_tokens: null, context_window: null, archived: false, notify: false, source: 'web', unread: false, last_text: '', error: null }
+    S.sessions.push(s); S.events[s.id] = []; jarvisSid = s.id
+    if (process.env.MOCK_JARVIS_EVENTS) S.events[s.id] = JSON.parse(fs.readFileSync(process.env.MOCK_JARVIS_EVENTS, 'utf8')).events // a real conversation, for layout checks
+  }
+  const t = now()
+  const live = S.sessions.filter((x) => x.state === 'running' && x.id !== jarvisSid).slice(0, 3)
+  const work = live.map((x, i) => ({ id: 40 + i, session: x.id, path: x.path, title: x.title, brief: '', state: 'running', created: t - 600, updated: t - 60 * (i + 1), result: '', cost: 0.2, question: false, turns: 1 }))
+  work.push({ id: 31, session: S.sessions[0]?.id || '', path: 'projects/acme/topics/blog', title: 'Relire le brouillon', brief: '', state: 'replied', created: t - 7200, updated: t - 3600, result: 'Brouillon relu, 3 corrections.', cost: 0.4, question: true, turns: 2 })
+  return { on: !!S.settings.jarvis_feature, path: JARVIS_PATH, session: s || null,
+    settings: { model: '', dream_model: '', root: false, ask_first: true, internals: false, daily: false, reuse: true, archive_done: false, brief: '08:00', dream: '03:00', telegram: 'important', compact_tokens: 0 },
+    last_brief: '', last_dream: '', work, open: work.length, asks: 1, conversations: [] }
+}
+R('GET', '/api/jarvis', () => jarvisStatus())
+R('POST', '/api/jarvis/open', () => jarvisStatus())
+R('POST', '/api/jarvis/new', () => { jarvisSid = ''; return jarvisStatus() })
+R('PUT', '/api/jarvis/settings', () => jarvisStatus())
+R('POST', '/api/jarvis/work/:id/close', () => jarvisStatus())
 R('GET', '/api/agents', () => ({ agents: mockAgents(), avatar: {} }))
 R('GET', '/api/agents/layout', () => ({ projects: [], colors: {}, agents: {} }))
 // MOCK_FEATURES=all: three chats (a DM with unread messages, a quiet DM, a group) for the Team bubbles.

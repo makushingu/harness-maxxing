@@ -155,7 +155,7 @@ function fold(st: LogState, evs: SessionEvent[], next: number, sid: string, keyP
         if ((ev.source as string) === 'system') items.push({ kind: 'request', key, ev })
         else {
           items.push({ kind: 'user', key, ev })
-          settle(sid, ev.text)
+          settle(sid, ev.text, ev.client_ids)
         }
         lastUserAt = ev.at
         // A turn starts (a message added to a running turn does not): its `init` says in which process.

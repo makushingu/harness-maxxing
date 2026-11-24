@@ -453,14 +453,16 @@ export const useSessionsUI = create<State>()(
 /* ---------------------------------------------------------------- Local "pending" messages
  * Messages sent from this tab that are not in the log yet: shown as an optimistic bubble (sent while
  * idle) or in the queue stack (sent while running), removed when the matching `user` event arrives. */
-export type Pending = { lid: string; text: string; attachments: string[]; queued: boolean; at: number; /** A voice message being sent. */ voice?: boolean; /** The @ it names (chips until the log has it). */ mentions?: SentMention[] }
+export type Pending = { lid: string; text: string; attachments: string[]; queued: boolean; at: number; /** Its outbox id, sent as `client_id`: found again in the event's `client_ids`. */ cid?: string; /** A voice message being sent. */ voice?: boolean; /** The @ it names (chips until the log has it). */ mentions?: SentMention[] }
 
 type PendingState = {
   bySession: Record<string, Pending[]>
   add: (sid: string, p: Omit<Pending, 'lid' | 'at'>) => string
   remove: (sid: string, lid: string) => void
-  /** A `user` event arrived: drop the first pending with the same text. */
-  settle: (sid: string, text: string) => void
+  /** A `user` event arrived: drop every pending it carries (`ids`: the server merges the messages sent while a turn
+   *  runs, or held behind a summary, into ONE event with all their ids and the texts joined), else the first one with
+   *  the same text. */
+  settle: (sid: string, text: string, ids?: string[]) => void
   clearQueued: (sid: string) => void
   trimQueued: (sid: string, keep: number) => void
 }
@@ -473,10 +475,14 @@ export const usePending = create<PendingState>((set) => ({
     return lid
   },
   remove: (sid, lid) => set((s) => ({ bySession: { ...s.bySession, [sid]: (s.bySession[sid] || []).filter((p) => p.lid !== lid) } })),
-  settle: (sid, text) =>
+  settle: (sid, text, ids) =>
     set((s) => {
       const list = s.bySession[sid]
       if (!list?.length) return s
+      if (ids?.length) {
+        const left = list.filter((p) => !p.cid || !ids.includes(p.cid))
+        if (left.length < list.length) return { bySession: { ...s.bySession, [sid]: left } }
+      }
       const norm = text.trim()
       const i = list.findIndex((p) => p.text.trim() === norm)
       if (i < 0) return s
