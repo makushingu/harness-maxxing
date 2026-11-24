@@ -1503,7 +1503,7 @@ def trash_sessions(ids: list[str], dest: Path) -> None:
 # ---- turn-end watcher ----------------------------------------------------------------------
 _turn_cbs: list[Callable[..., Any]] = []
 _watch_task: asyncio.Task | None = None
-_known: dict[str, tuple[int, int, str, bool]] = {}      # sid -> (mtime_ns, turns, state, unread)
+_known: dict[str, tuple[tuple, int, str, bool]] = {}    # sid -> ((inode, mtime_ns, size), turns, state, unread)
 
 
 def on_turn_end(cb: Callable[[dict, dict | None], Any]) -> None:
@@ -1526,7 +1526,7 @@ RUNNING_RECHECK_S = 1.0
 _checked: dict[str, float] = {}
 
 
-_damaged: dict[str, int] = {}          # session -> mtime of a meta file public() could not read
+_damaged: dict[str, tuple] = {}        # session -> (inode, mtime_ns, size) of a meta file public() could not read
 
 
 _held: dict[str, float] = {}           # continuation with queued messages -> when its hand-off hold expires
@@ -1553,6 +1553,13 @@ def _ended(s: dict, m: dict, died: bool = False) -> dict:
     return {**s, "last_turn": m.get("last_turn") if isinstance(m.get("last_turn"), dict) else {}, "turn_died": died}
 
 
+def _ident(p: Path) -> tuple[int, int, int]:
+    """(inode, mtime_ns, size) of a meta file, as meta_ident: two writes in the same tick of the kernel's coarse
+    clock keep the same mtime_ns, but an atomic write is a new inode (and mostly a new size)."""
+    st = p.stat()
+    return st.st_ino, st.st_mtime_ns, st.st_size
+
+
 def _scan(primed: bool) -> tuple[list[tuple[dict, dict | None]], bool, bool]:
     """One pass over the meta files -> (turn ends, sessions changed, workspace changed)."""
     ends: list[tuple[dict, dict | None]] = []
@@ -1564,7 +1571,7 @@ def _scan(primed: bool) -> tuple[list[tuple[dict, dict | None]], bool, bool]:
     for sid in store.list_ids():
         alive.add(sid)
         try:
-            mt = (d / f"{sid}.json").stat().st_mtime_ns
+            mt = _ident(d / f"{sid}.json")
         except OSError:
             continue
         prev = _known.get(sid)
@@ -1587,7 +1594,7 @@ def _scan(primed: bool) -> tuple[list[tuple[dict, dict | None]], bool, bool]:
             _damaged[sid] = mt                         # logged once: read again only when the file changes
             continue
         try:
-            mt = (d / f"{sid}.json").stat().st_mtime_ns
+            mt = _ident(d / f"{sid}.json")
         except OSError:
             pass
         cur = (mt, s["turns"], s["state"], s["unread"])
