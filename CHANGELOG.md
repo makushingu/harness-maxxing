@@ -6,6 +6,7 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 ## Unreleased
 
 Fixes:
+- **A session change made twice in quick succession is no longer missed.** When a session was written twice within a few milliseconds, the server could take the second change for no change: its new state, a turn's end or a held message showed up late, or only at the next change.
 - **"Let me do it" on a device hands it over.** Asked to let you take over a computer or a phone, Claude pointed to the Watch line above the message box, which is gone once its turn ends. It now hands the device over with a card that opens it.
 - **No more message stuck on "Sending…".** Two messages sent close together (while Harness was summarizing a session, or before a turn starts) arrive as one: the first one stayed below the conversation as "Sending…" forever. Each message is now recognized by its id.
 - **A long message no longer hides the end of the conversation.** As the message box grew line after line, the conversation above it (sessions, Jarvis) let go of the bottom and the last message slipped under the box. It now stays at the bottom while you type.
