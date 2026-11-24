@@ -14,7 +14,7 @@ export const GRID = 16
 export const AVATAR_OPTIONS = {
   color: ['blue', 'clay', 'violet', 'green', 'amber', 'rose'],
   skin: ['light', 'tan', 'brown', 'dark', 'olive'],
-  hair: ['none', 'short', 'spiky', 'long', 'curly', 'bun', 'afro', 'ponytail', 'mohawk', 'buzz', 'bobcut', 'braids', 'pigtails', 'spacebuns', 'swept'],
+  hair: ['none', 'short', 'spiky', 'long', 'curly', 'bun', 'afro', 'ponytail', 'mohawk', 'buzz', 'bobcut', 'braids', 'pigtails', 'spacebuns', 'swept', 'frog', 'bigbrain', 'chad'],
   hair_color: ['black', 'brown', 'blond', 'red', 'white'],
   face: ['smile', 'happy', 'focused', 'sleepy', 'wink', 'surprised', 'grin', 'cheeky', 'calm'],
   accessory: ['none', 'glasses', 'headphones', 'cap', 'crown', 'antenna'],
@@ -77,6 +77,34 @@ const HAIR_DARK: Record<string, [number, number][]> = {
   pigtails: [[2, 4], [13, 4]],
   spacebuns: [[2, 1], [13, 1]],
   swept: [[9, 3], [7, 5]],
+}
+
+// ---- special characters: picked as a hair style, they replace the whole head (hair, face and accessory are not
+// drawn; the outfit, the breath, the blink, the glance and the sleep stay). Never picked at random. ----
+type Special = { body: Layer; bust?: Layer; eyes: Layer; blink: Layer; asleep: Layer }
+export const SPECIALS: Record<string, Special> = {
+  // a round green frog: eyes on top of the head, a wide smile, a light chin
+  frog: {
+    body: L(1, '...fff..', '..fwwwf.', '..fwwwf.', '.fffffff', '.fffffff', '.fbfffff', '.fffffff', '.fkffffF', '..fkkkkk', '...fffff', '....eeee'),
+    eyes: L(3, '....k...'),
+    blink: L(2, '...fff..', '...kkk..'),
+    asleep: L(2, '...fff..', '...kkk..'),
+  },
+  // a huge folded brain over a small, blank face
+  bigbrain: {
+    body: L(0, '...mmmmm', '..mMMmmM', '.mmmmMmm', '.mMMmmMM', '.mmmMmmm', '..mMmmMm', '....ssss', '....ssss', '....ssss', '....sskk', '.....sss', '......ss'),
+    eyes: L(7, '.....k..'),
+    blink: L(7, '....kk..'),
+    asleep: L(7, '....kk..'),
+  },
+  // slicked hair, low brows, a square jaw wider than the neck, stubble, a thick neck
+  chad: {
+    body: L(1, '....hhhh', '...hhhhh', '...hhhhh', '...hssss', '...sssss', '...skkss', '...sssss', '...ssssn', '..ssssss', '..sddkkk', '..dddddd'),
+    bust: L(12, '..cccsss'),
+    eyes: L(7, '.....k..'),
+    blink: L(7, '....kk..'),
+    asleep: L(6, '...sssss', '........', '....kk..'),
+  },
 }
 
 // ---- faces: eyes (rows 6-8, hidden by the blink) and mouth (rows 9-11): a free row between them, and between
@@ -153,6 +181,8 @@ function palette(a: AgentAvatar): Record<string, string> {
     h: HAIR[a.hair_color], j: darken(HAIR[a.hair_color], 0.25),
     c, C: darken(c, 0.28), a: c, A: darken(c, 0.28),
     y: '#f5c518', Y: '#c99a06',
+    // special characters: frog greens, brain pinks, stubble and nose (shades of the skin)
+    f: '#5fb54a', F: '#3f8a33', e: '#a8d98a', m: '#f4a6c0', M: '#c96a8e', d: darken(s, 0.35), n: darken(s, 0.15),
   }
 }
 
@@ -192,23 +222,31 @@ export function pixelsOf(a: AgentAvatar, sleep = false): Pixels {
   if (sleep) for (const k in pal) if (k !== 'o' && k !== 'k') pal[k] = grey(pal[k])
   const blank = (): (string | null)[] => Array(GRID * GRID).fill(null)
   const g = blank()
-  paint(g, SHIRT)
-  paint(g, HAIR_BACK[a.hair])
-  paint(g, HEAD)
-  paint(g, BLUSH)
-  paint(g, HAIR_FRONT[a.hair], COVER[a.accessory] ?? 0)
-  for (const [x, y] of HAIR_DARK[a.hair] || []) if (g[y * GRID + x] === 'h') g[y * GRID + x] = 'j'
-  paint(g, sleep ? MOUTHS.sleepy : MOUTHS[a.face])
-  // The face goes in its own layer (the blink hides it), the glasses over it.
+  const sp = SPECIALS[a.hair]
   const eyes = blank()
-  paint(eyes, sleep ? ASLEEP : EYES[a.face])
-  paint(g, ACCESSORY[a.accessory])
-  // How far the eyes can glance: every open-eye pixel must land on skin (the blink stays in place).
+  if (sp) {
+    paint(g, SHIRT)
+    paint(g, sp.bust)
+    paint(g, sp.body)
+    paint(eyes, sleep ? sp.asleep : sp.eyes)
+  } else {
+    paint(g, SHIRT)
+    paint(g, HAIR_BACK[a.hair])
+    paint(g, HEAD)
+    paint(g, BLUSH)
+    paint(g, HAIR_FRONT[a.hair], COVER[a.accessory] ?? 0)
+    for (const [x, y] of HAIR_DARK[a.hair] || []) if (g[y * GRID + x] === 'h') g[y * GRID + x] = 'j'
+    paint(g, sleep ? MOUTHS.sleepy : MOUTHS[a.face])
+    // The face goes in its own layer (the blink hides it), the glasses over it.
+    paint(eyes, sleep ? ASLEEP : EYES[a.face])
+    paint(g, ACCESSORY[a.accessory])
+  }
+  // How far the eyes can glance: every open-eye pixel must land on skin or an eye white (the blink stays in place).
   const glance = (dx: number) => {
     for (let i = 0; i < eyes.length; i++) {
       if (!eyes[i]) continue
       const x = (i % GRID) + dx
-      if (x < 0 || x >= GRID || (g[i + dx] !== 's' && g[i + dx] !== 'b')) return 0
+      if (x < 0 || x >= GRID || !['s', 'b', 'w', 'f'].includes(g[i + dx] || '') || (g[i] === 'w' && g[i + dx] !== 'w')) return 0
     }
     return 1
   }
@@ -219,9 +257,9 @@ export function pixelsOf(a: AgentAvatar, sleep = false): Pixels {
   for (let y = 0; y < GRID; y++)
     for (let x = 0; x < GRID; x++) if (!filled[y * GRID + x] && (at(x + 1, y) || at(x - 1, y) || at(x, y + 1) || at(x, y - 1))) g[y * GRID + x] = 'o'
   const blink = blank()
-  if (!sleep) paint(blink, BLINK[a.face])
+  if (!sleep) paint(blink, sp ? sp.blink : BLINK[a.face])
   // the outline only fills empty cells: the glasses' cells are the same as before it
-  if (a.accessory === 'glasses') for (let i = 0; i < g.length; i++) if (g[i] === 'g') eyes[i] = blink[i] = null
+  if (!sp && a.accessory === 'glasses') for (let i = 0; i < g.length; i++) if (g[i] === 'g') eyes[i] = blink[i] = null
   const body = runs(g, pal)
   const out = { body, head: body.filter((r) => r.y < NECK), bust: body.filter((r) => r.y >= NECK), eyes: runs(eyes, pal), blink: runs(blink, pal), tile: sleep ? grey(pal.c) : pal.c, look }
   cache.set(key, out)
@@ -259,6 +297,7 @@ export function randomAvatar(color?: string): AgentAvatar {
   const r = <K extends AvatarPart>(k: K): string => AVATAR_OPTIONS[k][Math.floor(Math.random() * AVATAR_OPTIONS[k].length)]
   const out = {} as AgentAvatar
   for (const k of AVATAR_PARTS) out[k] = r(k)
+  while (SPECIALS[out.hair]) out.hair = r('hair')
   const others = AVATAR_OPTIONS.skin.filter((s) => !(MATTE_SKINS as readonly string[]).includes(s))
   const pool: readonly string[] = Math.random() < MATTE_SHARE ? MATTE_SKINS : others
   out.skin = pool[Math.floor(Math.random() * pool.length)]

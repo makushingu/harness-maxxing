@@ -57,11 +57,13 @@ MAX_PER_TOPIC = 20
 AVATAR = {
     "color": ("blue", "clay", "violet", "green", "amber", "rose"),
     "skin": ("light", "tan", "brown", "dark", "olive"),
-    "hair": ("none", "short", "spiky", "long", "curly", "bun", "afro", "ponytail", "mohawk", "buzz", "bobcut", "braids", "pigtails", "spacebuns", "swept"),
+    "hair": ("none", "short", "spiky", "long", "curly", "bun", "afro", "ponytail", "mohawk", "buzz", "bobcut", "braids", "pigtails", "spacebuns", "swept", "frog", "bigbrain", "chad"),
     "hair_color": ("black", "brown", "blond", "red", "white"),
     "face": ("smile", "happy", "focused", "sleepy", "wink", "surprised", "grin", "cheeky", "calm"),
     "accessory": ("none", "glasses", "headphones", "cap", "crown", "antenna"),
 }
+# Special characters, chosen as a hair style (they replace the whole head): never picked at random.
+SPECIAL_HAIR = ("frog", "bigbrain", "chad")
 # Random characters (cmd_agents, the UI's randomAvatar): 4 in 5 have a matte or lightly matte skin.
 MATTE_SKINS = ("olive", "tan")
 MATTE_SHARE = 0.8
@@ -325,6 +327,7 @@ def _clean_avatar(a: Any, seed: str = "") -> dict:
         v = a.get(k) if k in a else old.get(k)
         v = v if v in opts else (_OLD_AVATAR.get(k, {}).get(v) if isinstance(v, str) else None)
         if v is None and seed:
+            opts = tuple(o for o in opts if o not in SPECIAL_HAIR)
             v = opts[int(hashlib.sha1(f"{seed}:{k}".encode()).hexdigest(), 16) % len(opts)]
         out[k] = v or DEFAULT_AVATAR[k]
     return out
