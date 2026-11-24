@@ -47,6 +47,9 @@ def _report(t: dict, warn: list[str]) -> None:
     for m, u in t["wallpaper"].items():
         if u:
             print(f"  wallpaper ({m}): {u.rsplit('/', 1)[1]}")
+    for m, u in t["logo"].items():
+        if u:
+            print(f"  logo ({m}): {u.rsplit('/', 1)[1]}")
     if t.get("css"):
         state = {"on": "on", "stale": "OFF until `maxxing themes verify " + t["id"] + "` (never checked against "
                  "this interface, or an update changed its CSS)"}.get(t["css_state"], t["css_state"])

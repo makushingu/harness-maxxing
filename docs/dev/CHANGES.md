@@ -28,6 +28,11 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   globals.css, fonts / accents = catalog, docs list every token). Upgrade note a169: add the `maxxing themes` row,
   the `maxxing-theme` skill row and the Appearance clause of `templates/workspace/CLAUDE.md`, and the `39-themes.md` row
   of the help topic.
+- Themes, logo: `logo` / `logo_dark` (png/jpg/webp/avif, `MAX_LOGO` 512 KB, one fills the other; svg refused: it
+  could run script when opened at its URL) -> `Theme.logo {light, dark}`, served by `/file/`, copied by `install`. Web:
+  `ThemeLook.logo` (`isThemeFile` check, also on the persisted store), `LogoMark` uses it per mode and falls back to the
+  product logo on error (signed out: theme files need a session); `applyFavicon(accent, logo)` and index.html set the
+  tab icon (manifest / apple-touch icons unchanged).
 - Themes, advanced CSS: one `"css"` field in theme.json (string or list of lines, 16 KB), checked by `themes._css`
   (refused whole: url()/image()/element(), at-rules but @media/@supports/@container, `position: fixed`, `<`, `\`,
   unbalanced braces/quotes, control characters incl. CR/FF, `var()` in `position`; comments stripped). `css_state`

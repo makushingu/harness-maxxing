@@ -23,6 +23,8 @@ export type InstalledTheme = {
   own_accent: boolean
   own_surfaces: boolean
   wallpaper: { light: string | null; dark: string | null }
+  /** A logo shown instead of the Harness one (sidebar, sign-in once signed in, tab icon), per mode. */
+  logo: { light: string | null; dark: string | null }
   preview: string | null
   /** Advanced CSS (one field, checked by the server); applied inside html[data-theme-id] only when `css_state` is on. */
   css: string | null
@@ -34,12 +36,15 @@ export type ThemeList = { themes: InstalledTheme[]; errors: { id: string; error:
 
 /** What the store keeps of the theme in use: enough to paint it before the app loads. `extra` = its advanced CSS
  *  (empty unless the server says it was checked against this interface), dropped while `themeCssOff`. */
-export type ThemeLook = { id: string; base: Material; mode: 'light' | 'dark' | null; css: string; extra: string; cssState: InstalledTheme['css_state']; ownAccent: boolean; ownSurfaces: boolean }
+export type ThemeLook = { id: string; base: Material; mode: 'light' | 'dark' | null; css: string; extra: string; cssState: InstalledTheme['css_state']; ownAccent: boolean; ownSurfaces: boolean; logo: { light: string; dark: string } | null }
 
 export const label = (l: Label, lang: string) => (typeof l === 'string' ? l : l[lang] || l.en || Object.values(l)[0] || '')
 
 const SAFE = /^[^;{}<>\\"'`@!]*$/
 const ID = /^[a-z0-9][a-z0-9-]{1,39}$/
+
+/** A file the server serves for an installed theme (never another URL). */
+export const isThemeFile = (u: unknown): u is string => typeof u === 'string' && /^\/api\/themes\/[a-z0-9-]+\/file\/[A-Za-z0-9._-]+$/.test(u)
 
 function rules(sel: string, vars: Record<string, string>, wall: string | null): string {
   const body = Object.entries(vars)
@@ -55,7 +60,9 @@ export function themeLook(t: InstalledTheme): ThemeLook | null {
   const css = [rules(sel(false), t.light, t.base === 'glass' ? t.wallpaper.light : null), rules(sel(true), t.dark, t.base === 'glass' ? t.wallpaper.dark : null)].join('\n')
   const state = t.css_state ?? 'none'
   const extra = state === 'on' && t.css && ADVANCED_OK(t.css) ? `html[data-theme-id="${t.id}"]{\n${t.css}\n}` : ''
-  return { id: t.id, base: t.base, mode: t.modes.length === 1 ? t.modes[0] : null, css, extra, cssState: state, ownAccent: t.own_accent, ownSurfaces: t.own_surfaces }
+  const lg = t.logo ?? { light: null, dark: null }
+  const logo = isThemeFile(lg.light) && isThemeFile(lg.dark) ? { light: lg.light, dark: lg.dark } : null
+  return { id: t.id, base: t.base, mode: t.modes.length === 1 ? t.modes[0] : null, css, extra, cssState: state, ownAccent: t.own_accent, ownSurfaces: t.own_surfaces, logo }
 }
 
 /** Second line of defense behind the server (themes.py _css): nothing that loads, nothing that leaves the scope. */

@@ -8,6 +8,7 @@ theme can never break the interface nor survive an update badly: the product onl
 
     theme.json   {"schema": 1, "name": "Nord", "base": "solid", "light": {...}, "dark": {...}, "options": {...}}
     wallpaper.*  optional background image (glass base), wallpaper-dark.* for the dark mode
+    logo.*       optional logo shown instead of the Harness one (sidebar, tab icon...), logo-dark.* for the dark mode
     preview.png  optional picture for a listing (Community)
     README.md    optional
 
@@ -39,6 +40,7 @@ MAX_JSON = 64 * 1024
 MAX_IMAGE = 4 * 1024 * 1024
 IMAGE_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp",
                ".avif": "image/avif"}
+MAX_LOGO = 512 * 1024
 MAX_CSS = 16 * 1024
 CSS_STAMP = ".css-check.json"                    # {"ui": fingerprint of the app's CSS when the theme's css was checked}
 FILES = ("theme.json", "README.md", "LICENSE")    # copied by install (+ the images the theme names)
@@ -430,7 +432,7 @@ def _stamp(d: Path, css: str) -> None:
     config.write_json(d / CSS_STAMP, {"ui": ui_fingerprint(), "css": _css_hash(css)})
 
 
-def _image(d: Path, name: Any, what: str, warn: list[str]) -> str | None:
+def _image(d: Path, name: Any, what: str, warn: list[str], cap: int = MAX_IMAGE) -> str | None:
     if name is None:
         return None
     if not isinstance(name, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,80}", name):
@@ -443,8 +445,8 @@ def _image(d: Path, name: Any, what: str, warn: list[str]) -> str | None:
     if not f.is_file() or f.is_symlink():
         warn.append(f"{what}: {name} is missing, ignored")
         return None
-    if f.stat().st_size > MAX_IMAGE:
-        warn.append(f"{what}: {name} is over {MAX_IMAGE // (1024 * 1024)} MB, ignored")
+    if f.stat().st_size > cap:
+        warn.append(f"{what}: {name} is over {cap // 1024} KB, ignored")
         return None
     return name
 
@@ -484,7 +486,7 @@ def load(d: Path) -> tuple[dict | None, list[str], str | None]:
         base = "solid"
     for k in raw:
         if k not in ("schema", "id", "name", "description", "author", "version", "homepage", "base", "light", "dark",
-                     "options", "wallpaper", "wallpaper_dark", "preview", "css"):
+                     "options", "wallpaper", "wallpaper_dark", "logo", "logo_dark", "preview", "css"):
             warn.append(f"{k}: unknown key, ignored")
     modes = {m: _mode_tokens(raw.get(m), m, warn) for m in MODES}
     present = [m for m in MODES if isinstance(raw.get(m), dict)]
@@ -508,6 +510,9 @@ def load(d: Path) -> tuple[dict | None, list[str], str | None]:
     if base != "glass" and (wall["light"] or wall["dark"]):
         warn.append("wallpaper: only a glass theme shows a wallpaper (\"base\": \"glass\"), ignored")
         wall = {"light": None, "dark": None}
+    logo = {"light": _image(d, raw.get("logo"), "logo", warn, MAX_LOGO)}
+    logo["dark"] = _image(d, raw.get("logo_dark"), "logo_dark", warn, MAX_LOGO) or logo["light"]
+    logo["light"] = logo["light"] or logo["dark"]
     css = _css(raw.get("css"), warn)
     preview = _image(d, raw.get("preview"), "preview", warn) if raw.get("preview") is not None else (
         "preview.png" if (d / "preview.png").is_file() and (d / "preview.png").stat().st_size <= MAX_IMAGE else None)
@@ -527,6 +532,7 @@ def load(d: Path) -> tuple[dict | None, list[str], str | None]:
         "own_accent": "primary" in modes["light"] or "primary" in modes["dark"],
         "own_surfaces": any(k in SURFACE for m in MODES for k in modes[m]),
         "wallpaper": {m: (f"/api/themes/{tid}/file/{wall[m]}" if wall[m] else None) for m in MODES},
+        "logo": {m: (f"/api/themes/{tid}/file/{logo[m]}" if logo[m] else None) for m in MODES},
         "preview": f"/api/themes/{tid}/file/{preview}" if preview else None,
         "css": css,
         "css_state": _css_state(d, css),
@@ -563,11 +569,11 @@ def get(tid: str) -> dict | None:
 
 
 def file_path(tid: str, name: str) -> Path | None:
-    """An image a theme names (wallpaper, wallpaper_dark, preview), else None."""
+    """An image a theme names (wallpaper, wallpaper_dark, logo, logo_dark, preview), else None."""
     t = get(tid)
     if not t:
         return None
-    urls = [*t["wallpaper"].values(), t["preview"]]
+    urls = [*t["wallpaper"].values(), *t["logo"].values(), t["preview"]]
     if f"/api/themes/{tid}/file/{name}" not in urls:
         return None
     f = root() / tid / name
@@ -586,7 +592,7 @@ def install(src: Path, force: bool = False) -> tuple[dict, list[str]]:
     if dest.exists() and dest.resolve() != src:
         if not force:
             raise ThemeError(f"a theme {t['id']} is already installed (--force replaces it)")
-    names = set(FILES) | {u.rsplit("/", 1)[1] for u in [*t["wallpaper"].values(), t["preview"]] if u}
+    names = set(FILES) | {u.rsplit("/", 1)[1] for u in [*t["wallpaper"].values(), *t["logo"].values(), t["preview"]] if u}
     if dest.resolve() == src:
         return t, warn
     tmp = root() / f".{t['id']}.tmp"

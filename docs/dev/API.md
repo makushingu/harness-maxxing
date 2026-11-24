@@ -267,7 +267,7 @@ with `maxxing themes install` (never from the UI). Each theme is returned checke
 pairs below their contrast dropped. The web app writes them as CSS rules on `html[data-theme-id]` (`lib/themes.ts`).
 `Theme = {id, name, description, author, version, homepage, base: solid|glass, modes: [light|dark], light: {token: css},
 dark: {...}, options: {mode?, accent?, tint?, font?, mono?, density?}, own_accent, own_surfaces,
-wallpaper: {light: url|null, dark: url|null}, preview: url|null, css: str|null, css_state: none|on|stale, warnings: [str]}`.
+wallpaper: {light: url|null, dark: url|null}, logo: {light: url|null, dark: url|null}, preview: url|null, css: str|null, css_state: none|on|stale, warnings: [str]}`.
 `css` = the theme's one field of advanced CSS, checked by `themes._css` (refused as a whole on `url()`/images, any
 at-rule but `@media|@supports|@container`, `position: fixed`, `<`, `\`, unbalanced braces or quotes; 16 KB); the web
 app nests it in `html[data-theme-id="<id>"]{…}` and applies it only when `css_state` is `on`: `<theme>/.css-check.json`
@@ -278,7 +278,7 @@ the interface's CSS, or an edit of the rules, makes it `stale` (off).
 | Method | Path | Body | Response |
 |---|---|---|---|
 | GET | `/api/themes` | - | `{themes: Theme[], errors: [{id, error}]}` (folders that are not usable, with the reason) |
-| GET | `/api/themes/{id}/file/{name}` | - | an image the theme names (`wallpaper`, `wallpaper_dark`, `preview`), else 404 |
+| GET | `/api/themes/{id}/file/{name}` | - | an image the theme names (`wallpaper`, `wallpaper_dark`, `logo`, `logo_dark`, `preview`), else 404 |
 
 ## Webhooks & events (Settings -> Automate, `maxxing/webhooks.py`)
 Automations without AI: one trigger + one action. Made from the pages' short form (`POST /api/webhooks`, `PATCH`

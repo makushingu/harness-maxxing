@@ -167,3 +167,22 @@ def test_advanced_css_cannot_leave_its_scope_nor_stay_on_after_an_edit(mx, clien
     assert cli.main(["themes", "verify", "edited"]) == 0 and themes.get("edited")["css_state"] == "on"
     assert cli.main(["themes", "install", str(src), "--force"]) == 0
     assert sorted(p.name for p in dest.parent.iterdir()) == ["edited"]                  # no .tmp / .old left
+
+
+def test_a_theme_can_bring_its_own_logo(mx, client, tmp_path):
+    png = b"\x89PNG\r\n\x1a\n" + b"0" * 32
+    src = _theme(tmp_path / "src", "brand", {"name": "Brand", "logo": "logo.png", "logo_dark": "logo-dark.webp",
+                                             "light": {"primary": "#b5651d"}},
+                 {"logo.png": png, "logo-dark.webp": b"RIFF0000WEBP", "logo.svg": b"<svg onload=alert(1)/>"})
+    assert cli.main(["themes", "install", str(src)]) == 0
+    t = client.get("/api/themes").json()["themes"][0]
+    assert t["logo"] == {"light": "/api/themes/brand/file/logo.png", "dark": "/api/themes/brand/file/logo-dark.webp"}
+    assert client.get(t["logo"]["light"]).content == png
+    assert not (mx["ws"] / "themes" / "brand" / "logo.svg").exists()
+    d = _theme(tmp_path, "svg", {"name": "S", "logo": "logo.svg"}, {"logo.svg": b"<svg/>"})
+    t, warn, _ = themes.load(d)
+    assert t["logo"] == {"light": None, "dark": None} and any("logo" in w for w in warn)
+    d = _theme(tmp_path, "big", {"name": "B", "logo": "l.png"}, {"l.png": b"0" * (themes.MAX_LOGO + 1)})
+    assert themes.load(d)[0]["logo"]["light"] is None
+    d = _theme(tmp_path, "one", {"name": "O", "logo_dark": "l.png"}, {"l.png": png})
+    assert themes.load(d)[0]["logo"] == {"light": "/api/themes/one/file/l.png", "dark": "/api/themes/one/file/l.png"}

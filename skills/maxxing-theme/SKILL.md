@@ -1,6 +1,6 @@
 ---
 name: maxxing-theme
-description: Make, check, install, change or remove a Harness Maxxing theme - the look of the whole interface (Settings -> Appearance -> Theme), as a theme.json of values on top of Solid or Glass, plus at most one field of advanced CSS, never code (`maxxing themes`). Use when the user wants a theme, other colors for Harness, "in the colors of my brand", a dark / light / pastel / retro look, a wallpaper behind the glass, rounder or sharper corners, to install a theme from Community or GitHub, to share a theme on Community, a theme looks wrong or is "not usable", or its advanced CSS was switched off by an update.
+description: Make, check, install, change or remove a Harness Maxxing theme - the look of the whole interface (Settings -> Appearance -> Theme), as a theme.json of values on top of Solid or Glass, plus at most one field of advanced CSS, never code (`maxxing themes`). Use when the user wants a theme, other colors for Harness, "in the colors of my brand", a dark / light / pastel / retro look, a wallpaper behind the glass, rounder or sharper corners, their own logo instead of the Harness one, to install a theme from Community or GitHub, to share a theme on Community, a theme looks wrong or is "not usable", or its advanced CSS was switched off by an update.
 ---
 
 # Themes
@@ -50,6 +50,12 @@ Rules that make a theme safe and lasting (the server applies them; build with th
 For a wallpaper (Glass only): an image in the folder (png, jpg, webp, avif, at most 4 MB; about 2560 x 1440, calm,
 no text, little contrast: it sits behind everything), named in `"wallpaper"` (and `"wallpaper_dark"` for a different
 one in dark mode). Images the user did not give you need their OK (paid generation, rights).
+
+For a logo (any base): the user's logo instead of the Harness one (sidebar, phone header, dialogs, browser tab) while
+the theme is in use. An image in the folder named in `"logo"` (and `"logo_dark"` if the dark mode needs another one,
+e.g. a white version): png, jpg, webp or avif (no svg), at most 512 KB, square (crop or pad it with ImageMagick,
+skill `image-edit`), about 256 x 256, readable at 28 px: a mark or an icon, not a wide wordmark. Check it on both
+modes' sidebar colors. Not shown on the sign-in page nor on an installed app's icon (tell the user).
 
 ## Advanced CSS (the `"css"` field)
 

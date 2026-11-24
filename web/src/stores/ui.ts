@@ -5,7 +5,7 @@ import { persist } from 'zustand/middleware'
 import type { Language } from '@/lib/types'
 import { applyFavicon } from '@/lib/accent'
 import { applyFonts, MONO_FONTS, SANS_FONTS, type MonoFont, type SansFont } from '@/lib/fonts'
-import { applyThemeCss, type InstalledTheme, type ThemeLook, themeLook } from '@/lib/themes'
+import { applyThemeCss, isThemeFile, type InstalledTheme, type ThemeLook, themeLook } from '@/lib/themes'
 
 export type Theme = 'dark' | 'light' | 'system'
 export type Density = 'comfortable' | 'compact'
@@ -202,7 +202,7 @@ export const useUI = create<UIState>()(
         if (out.tint !== 'tinted') out.tint = 'neutral'
         if (out.material !== 'glass') out.material = 'solid'
         const ct = out.customTheme as ThemeLook | null | undefined
-        out.customTheme = ct && typeof ct === 'object' && typeof ct.css === 'string' && /^[a-z0-9][a-z0-9-]{1,39}$/.test(ct.id) ? { ...ct, extra: typeof ct.extra === 'string' ? ct.extra : '', cssState: ct.cssState ?? 'none' } : null
+        out.customTheme = ct && typeof ct === 'object' && typeof ct.css === 'string' && /^[a-z0-9][a-z0-9-]{1,39}$/.test(ct.id) ? { ...ct, extra: typeof ct.extra === 'string' ? ct.extra : '', cssState: ct.cssState ?? 'none', logo: ct.logo && isThemeFile(ct.logo.light) && isThemeFile(ct.logo.dark) ? ct.logo : null } : null
         out.themeCssOff = out.themeCssOff === true
         if (!(out.monoFont in MONO_FONTS)) out.monoFont = 'system'
         if (out.layout !== 'touch' && out.layout !== 'desktop') out.layout = 'auto'
@@ -243,7 +243,7 @@ export function bindUIToDocument() {
     else delete r.dataset.themeId
     applyThemeCss(ct, s.themeCssOff)
     r.lang = s.language
-    applyFavicon(s.accent)
+    applyFavicon(s.accent, ct?.logo ? ct.logo[dark ? 'dark' : 'light'] : null)
     applyFonts(s.font, s.monoFont)
     // The app theme may differ from the OS one: every theme-color meta (dark/light media variants) follows it.
     document.querySelectorAll('meta[name="theme-color"]').forEach((m) => m.setAttribute('content', dark ? '#09090b' : '#ffffff'))

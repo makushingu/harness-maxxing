@@ -14,6 +14,6 @@ export function useThemeSync() {
     // gone: back to its base; listed in errors (being edited or reinstalled): keep the last good look
     if (!t) return data.errors.some((e) => e.id === id) ? undefined : useUI.getState().refreshTheme(null)
     const next = themeLook(t)
-    if (!cur || !next || next.css !== cur.css || next.extra !== cur.extra || next.cssState !== cur.cssState || next.base !== cur.base || next.mode !== cur.mode || next.ownAccent !== cur.ownAccent || next.ownSurfaces !== cur.ownSurfaces) useUI.getState().refreshTheme(t)
+    if (!cur || !next || next.css !== cur.css || next.extra !== cur.extra || next.cssState !== cur.cssState || next.base !== cur.base || next.mode !== cur.mode || next.ownAccent !== cur.ownAccent || next.ownSurfaces !== cur.ownSurfaces || JSON.stringify(next.logo) !== JSON.stringify(cur.logo)) useUI.getState().refreshTheme(t)
   }, [id, data])
 }

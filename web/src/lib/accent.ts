@@ -25,14 +25,17 @@ function setLink(rel: string, href: string, type?: string) {
   }
   if (link.getAttribute('href') !== href) {
     if (type) link.type = type
+    else if (type === '') link.removeAttribute('type')
     link.href = href
   }
 }
 
 /** Every icon follows the accent: browser tab, installed app (manifest icons and launch screen), iOS home screen.
  *  index.html does the same before the first paint - change both. */
-export function applyFavicon(accent: Accent) {
-  setLink('icon', logoSrc(accent), 'image/svg+xml')
+export function applyFavicon(accent: Accent, logo?: string | null) {
+  // a theme's own logo (an image of the theme, served by the server) replaces the tab icon; the installed app's icons
+  // (manifest, iOS home screen) stay the product's: they are fixed when the app is installed
+  setLink('icon', logo || logoSrc(accent), logo ? '' : 'image/svg+xml')
   setLink('manifest', `/manifest-${known(accent)}.webmanifest`)
   setLink('apple-touch-icon', `/icons/apple-touch-icon-${known(accent)}.png`)
 }

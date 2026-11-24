@@ -71,6 +71,8 @@ themes/nord/
   theme.json          the theme (required, at most 64 KB)
   wallpaper.webp      optional, a Glass theme's backdrop (png, jpg, webp or avif, at most 4 MB)
   wallpaper-dark.webp optional, the backdrop of the dark mode
+  logo.png            optional, a logo shown instead of the Harness one (png, jpg, webp or avif, at most 512 KB)
+  logo-dark.png       optional, the logo of the dark mode
   preview.png         optional, the picture of its card (and of its Community listing)
   README.md, LICENSE  optional
 ```
@@ -90,6 +92,7 @@ themes/nord/
   "options": { "font": "plex", "mono": "jetbrains" },
   "wallpaper": "wallpaper.webp",
   "wallpaper_dark": "wallpaper-dark.webp",
+  "logo": "logo.png",
   "preview": "preview.png",
   "css": ["& aside { border-right: 2px solid var(--primary) }"]
 }
@@ -98,6 +101,9 @@ themes/nord/
 - `id`: 2-40 lowercase letters, digits and dashes, the name of the folder (not `solid` nor `glass`).
 - `name`, `description`: a text, or one per language (`en`, `fr`...).
 - `base`: `solid` or `glass`. A wallpaper only shows on a Glass theme.
+- `logo`, `logo_dark`: your logo instead of the Harness one, in the sidebar, the phone header, the dialogs and the
+  browser tab, while the theme is in use (one of the two is enough for both modes). Square, about 256 x 256, readable
+  small. Not on the sign-in page (shown before you sign in) nor on the icon of an installed app (fixed at install).
 - `css`: optional, see [Advanced CSS](#advanced-css).
 - `light`, `dark`: the variables below (a missing block = that mode keeps the built-in look; only one block = the theme
   has that mode only).

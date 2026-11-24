@@ -45,7 +45,8 @@
           // Logo in the accent color (copy of src/lib/accent.ts applyAppIcons): tab icon, installed app
           // (manifest icons and launch screen) and the iOS home-screen icon.
           var icon = document.querySelector('link[rel="icon"]');
-          if (icon) icon.href = '/icons/logo-' + a + '.svg';
+          var tl = ct && ct.logo && ct.logo[dark ? 'dark' : 'light'];
+          if (icon) { if (typeof tl === 'string' && /^\/api\/themes\/[a-z0-9-]+\/file\/[A-Za-z0-9._-]+$/.test(tl)) { icon.removeAttribute('type'); icon.href = tl; } else icon.href = '/icons/logo-' + a + '.svg'; }
           var manifest = document.querySelector('link[rel="manifest"]');
           if (manifest) manifest.href = '/manifest-' + a + '.webmanifest';
           var touch = document.querySelector('link[rel="apple-touch-icon"]');
