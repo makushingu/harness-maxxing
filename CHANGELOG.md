@@ -3,6 +3,11 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## Unreleased
+
+Fixed:
+- **A session change made twice in quick succession is no longer missed.** When a session was written twice within a few milliseconds, the server could take the second change for no change: its new state, a turn's end or a held message showed up late, or only at the next change.
+
 ## 2.0.0-alpha.168 - 2026-11-24
 
 New:

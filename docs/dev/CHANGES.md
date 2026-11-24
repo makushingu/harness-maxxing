@@ -5,6 +5,10 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## Unreleased
+
+- Session watcher (`service._scan`): a meta file is identified by `(inode, mtime_ns, size)` (`_ident`, as `meta_ident` and `store._cache`), no longer by `mtime_ns` alone: two atomic writes in one tick of the kernel's coarse clock share the mtime, and the second was skipped (an idle session until its next write, a running one until `RUNNING_RECHECK_S`). `_known` / `_damaged` hold that tuple. `tests/test_agent_turn_bus.py` failed about 2 runs in 3 because of it.
+
 ## 2.0.0-alpha.168 - 2026-11-24
 
 - Devices: `ask_human` description and skill `maxxing-devices` cover taking over ("let me do it"), not only passwords and codes; the session's Watch line exists only during a turn (`SessionDevices.tsx`), so Claude points to `ask_human` or Settings -> Devices.

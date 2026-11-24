@@ -2,6 +2,7 @@
 refetches its thread on every turn of every session (BUS_TURN_KEYS of the web app)."""
 from __future__ import annotations
 
+import os
 import time
 
 from maxxing import bus
@@ -40,6 +41,22 @@ def test_an_agent_turn_start_and_end_name_the_agent(mx):
     assert _pass() == set()                                           # a normal session's turn: no agent page
     store.update(sid, title="renamed")
     assert _pass() == set()                                           # metadata only (no state / unread change)
+    service._known.clear()
+
+
+def test_a_write_in_the_same_clock_tick_is_seen(mx):
+    """Two writes within one tick of the kernel's coarse clock keep the same mtime_ns: the watcher still sees the
+    second one (an atomic write is a new inode), instead of taking the file as unchanged."""
+    service._known.clear()
+    service._agent_turns.clear()
+    sid = _session(AGENT)
+    service._scan(False)                                              # baseline (idle)
+    service._agent_turns.clear()
+    f = store.sessions_dir() / f"{sid}.json"
+    before = f.stat().st_mtime_ns
+    store.update(sid, state="running")
+    os.utime(f, ns=(f.stat().st_atime_ns, before))                    # same tick as the baseline's write
+    assert _pass() == {AGENT}
     service._known.clear()
 
 
