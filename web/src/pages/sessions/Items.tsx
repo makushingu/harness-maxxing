@@ -684,7 +684,6 @@ function ToolCard({ item, live }: { item: Extract<Item, { kind: 'tool' }>; live:
   // A plain-language title ("Runs the tests") and what it runs after it; '' = a tool it does not know (name + summary).
   const label = toolLabel(use.name, input, t, (p) => relPath(p, bases))
   const detail = label.title && label.detail ? (file && FILE_TOOLS.has(use.name) ? label.detail : relPaths(label.detail, bases)) : ''
-  const detailFull = use.name === 'Bash' ? (typeof input.command === 'string' ? input.command : '') : file && FILE_TOOLS.has(use.name) ? file : label.detail
   return (
     <div ref={root} className={cn('min-w-0 overflow-hidden rounded-lg border bg-card text-[13px]', err && 'border-destructive/40')}>
       <button
@@ -704,20 +703,16 @@ function ToolCard({ item, live }: { item: Extract<Item, { kind: 'tool' }>; live:
                 <AlertTriangle className="size-3" /> {t('tl.danger')}
               </span>
             )}
-            <Tooltip content={detail && detailFull ? <Sensitive length={20}><span className="max-w-[min(80vw,640px)] font-mono break-all whitespace-pre-wrap">{detailFull}</span></Sensitive> : null}>
-              <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-muted-foreground/80">
-                <Sensitive length={14}>{detail}</Sensitive>
-              </span>
-            </Tooltip>
+            <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-muted-foreground/80">
+              <Sensitive length={14}>{detail}</Sensitive>
+            </span>
           </>
         ) : (
           <>
             <span className="shrink-0 font-medium">{name}</span>
-            <Tooltip content={summary !== full ? <Sensitive length={20}><span className="max-w-[min(80vw,640px)] font-mono break-all">{full}</span></Sensitive> : null}>
-              <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-muted-foreground">
-                <Sensitive length={14}>{summary}</Sensitive>
-              </span>
-            </Tooltip>
+            <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-muted-foreground">
+              <Sensitive length={14}>{summary}</Sensitive>
+            </span>
           </>
         )}
         {stats && (stats.add > 0 || stats.del > 0) && (
