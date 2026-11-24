@@ -11,7 +11,8 @@ Fixes:
 - **Jarvis continues a recent session instead of always starting a new one.** Its rules asked it to check the topic's recent sessions first, but it never did: every piece of work started from zero. Now `maxxing sessions new` from Jarvis's conversation is refused while the topic has a session that can take the work, with their list; closest to the subject first. Jarvis sends the work there (its context is already there), or for another subject starts one with `--fresh "<reason>"`: the reason shows on its card in the work board.
 
 New:
-- **Jarvis shows what is working.** Its Work list now sits on the left of the conversation, and on a wide screen a column on the right lists every session working right now (its topic, what it is doing, the Jarvis work it belongs to), live; on a smaller screen and on the phone they head the Work list. What is running carries a soft moving light, the Work button a count (orange: work waiting for you), cards appear smoothly and **Close** takes effect at once.
+- **Jarvis shows the sessions at work.** Beside its conversation, a panel with two tabs: **At work**, each session working now as a small animated pictogram in its project's colour (a "!" when its work waits for you, a check once done), and **Work**, the board. The Work button carries a count (orange: work waiting for you).
+- **Agents come more alive.** They look around and nod now and then, three new faces (grin, cheeky, calm), three new hairstyles (afro, ponytail, mohawk) and a lightly matte skin; a random character now has a matte or lightly matte skin four times in five.
 - **Webhooks and events: automations without AI.** Two new pages in Settings -> Automate. **Webhooks** gives your
   server URLs that other services call (Stripe, Shopify, GitHub, Tally, n8n, Zapier, a Shortcut on your phone that
   sends a photo and gets a link back); **Events** acts when something happens in Harness (a notification arrives, an

@@ -10,7 +10,7 @@ import { Archive, CalendarDays, Check, ExternalLink, Eye, Hand, ListTodo, Messag
 import { useLang, useT, type TKey } from '@/i18n'
 import { useCloseJarvisWork, useJarvis, useJarvisBrief, useJarvisDream, useJarvisSettings, useNewJarvisConversation, useOpenJarvis } from '@/lib/queries'
 import type { JarvisSettings, JarvisWork } from '@/lib/types'
-import { Crew, CREW_STYLES, useCrew, type CrewStyle } from './Crew'
+import { Crew, CREW_STYLES, GLYPHS, useCrew, type CrewStyle, type GlyphKind } from './Crew'
 import { cn } from '@/lib/utils'
 import { fmtRelative } from '@/lib/format'
 import { Button, EmptyState, Input, Select, Skeleton, StatusDot, Tooltip } from '@/components/ui'
@@ -154,6 +154,7 @@ function JarvisView() {
 /* ---------------------------------------------------------------- the side panel: at work / the board */
 const TAB_KEY = 'mx.jarvis.tab'
 const LOOK_KEY = 'mx.jarvis.crew'
+const GLYPH_KEY = 'mx.jarvis.glyph'
 
 function Side({ work, crew, busy, asks, onHide }: { work: JarvisWork[]; crew: ReturnType<typeof useCrew>; busy: number; asks: number; onHide: () => void }) {
   const t = useT()
@@ -161,6 +162,10 @@ function Side({ work, crew, busy, asks, onHide }: { work: JarvisWork[]; crew: Re
   const [look, setLook] = React.useState<CrewStyle>(() => {
     const v = localStorage.getItem(LOOK_KEY) as CrewStyle
     return CREW_STYLES.includes(v) ? v : 'desk'
+  })
+  const [glyph, setGlyph] = React.useState<GlyphKind>(() => {
+    const v = localStorage.getItem(GLYPH_KEY) as GlyphKind
+    return GLYPHS.includes(v) ? v : 'orb'
   })
   const pick = (v: 'crew' | 'work') => {
     setTab(v)
@@ -218,7 +223,22 @@ function Side({ work, crew, busy, asks, onHide }: { work: JarvisWork[]; crew: Re
               </button>
             ))}
           </div>
-          <Crew crew={crew} look={look} />
+          <div className="-mt-2 mb-3 flex gap-1" data-testid="jarvis-crew-glyphs">
+            {GLYPHS.map((v) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => {
+                  setGlyph(v)
+                  localStorage.setItem(GLYPH_KEY, v)
+                }}
+                className={cn('rounded-md border px-2 py-0.5 text-xs', glyph === v ? 'border-primary text-primary' : 'text-muted-foreground hover:text-foreground')}
+              >
+                {t(`jarvis.crew.${v}`)}
+              </button>
+            ))}
+          </div>
+          <Crew crew={crew} look={look} glyph={glyph} />
         </div>
       ) : (
         <Board work={work} />

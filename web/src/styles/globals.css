@@ -394,6 +394,16 @@ html[data-material='glass'] :is(.mx-lg-btn, .mx-lg-pill):focus-visible {
 @keyframes mx-sweep { from { transform: scaleX(0); } }
 @keyframes mx-dot-in { from { opacity: 0; transform: scale(0); } 70% { opacity: 1; transform: scale(1.3); } }
 @keyframes mx-draw { from { stroke-dashoffset: 1; } }
+/* Jarvis's side panel pictograms (pages/jarvis/Crew.tsx), coloured by --c: an orb that breathes inside a turning arc,
+   terminal lines that type, sound bars that bounce. */
+.mx-orb-ring { background: conic-gradient(from 0deg, transparent 0 55%, var(--c) 85%, transparent 100%); -webkit-mask: radial-gradient(circle, transparent 62%, #000 64%); mask: radial-gradient(circle, transparent 62%, #000 64%); animation: mx-orb-spin 1.6s linear infinite; }
+@keyframes mx-orb-spin { to { transform: rotate(360deg); } }
+.mx-orb-pulse { animation: mx-orb-pulse 2.2s ease-in-out infinite; }
+@keyframes mx-orb-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(0.86); } }
+.mx-term-type { animation: mx-term-type 2.4s steps(8, end) infinite; transform-origin: left; }
+@keyframes mx-term-type { 0% { transform: scaleX(0); } 70%, 100% { transform: scaleX(1); } }
+.mx-eq { animation: mx-eq 1s ease-in-out infinite; }
+@keyframes mx-eq { 0%, 100% { transform: scaleY(0.35); } 50% { transform: scaleY(1); } }
 /* Jarvis's side panel, "track" look (pages/jarvis/Crew.tsx): a session's character runs back and forth along its
    lane while it works, turning round at each end; stepped like the pixel office. */
 .mx-crew-run { animation: mx-crew-run 7s steps(28, end) infinite; }
@@ -634,6 +644,12 @@ html[data-compact] .mx-sheet[data-state='closed'] { animation: mx-sheet-down 180
 .mx-px-blinker .mx-px-blink { animation: mx-px-shut 5.2s steps(1, end) var(--mx-blink-delay, 0s) infinite; }
 @keyframes mx-px-open { 0%, 100% { opacity: 1; } 94% { opacity: 0; } 97% { opacity: 1; } }
 @keyframes mx-px-shut { 0%, 100% { opacity: 0; } 94% { opacity: 1; } 97% { opacity: 0; } }
+/* ...and, alive (`animate`), looks left then right now and then, and nods (head down one pixel, the bust stays), each
+   face on its own beat (--mx-blink-delay). In grid units: the svg's 16x16 viewBox. */
+.mx-px-blinker .mx-px-look, .mx-px-look { animation: mx-px-look 9s steps(1, end) var(--mx-blink-delay, 0s) infinite; }
+@keyframes mx-px-look { 0%, 100% { transform: translateX(0); } 30% { transform: translateX(-1px); } 38% { transform: translateX(0); } 62% { transform: translateX(1px); } 70% { transform: translateX(0); } }
+.mx-px-nod { animation: mx-px-nod 6.5s steps(1, end) var(--mx-blink-delay, 0s) infinite; }
+@keyframes mx-px-nod { 0%, 100% { transform: translateY(0); } 44% { transform: translateY(1px); } 50% { transform: translateY(0); } 52% { transform: translateY(1px); } 56% { transform: translateY(0); } }
 .mx-px-dots > i { animation: mx-px-dot 1.2s steps(1, end) infinite; }
 .mx-px-dots > i:nth-child(2) { animation-delay: 0.2s; }
 .mx-px-dots > i:nth-child(3) { animation-delay: 0.4s; }

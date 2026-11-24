@@ -56,19 +56,31 @@ MAX_PER_TOPIC = 20
 # `color` = its outfit, one of the UI accent colours; a new agent wears its project's (project_color).
 AVATAR = {
     "color": ("blue", "clay", "violet", "green", "amber", "rose"),
-    "skin": ("light", "tan", "brown", "dark"),
-    "hair": ("none", "short", "spiky", "long", "curly", "bun"),
+    "skin": ("light", "tan", "brown", "dark", "olive"),
+    "hair": ("none", "short", "spiky", "long", "curly", "bun", "afro", "ponytail", "mohawk"),
     "hair_color": ("black", "brown", "blond", "red", "white"),
-    "face": ("smile", "happy", "focused", "sleepy", "wink", "surprised"),
+    "face": ("smile", "happy", "focused", "sleepy", "wink", "surprised", "grin", "cheeky", "calm"),
     "accessory": ("none", "glasses", "headphones", "cap", "crown", "antenna"),
 }
+# Random characters (cmd_agents, the UI's randomAvatar): 4 in 5 have a matte or lightly matte skin.
+MATTE_SKINS = ("olive", "tan")
+MATTE_SHARE = 0.8
+
+
+def random_skin() -> str:
+    import random
+    if random.random() < MATTE_SHARE:
+        return random.choice(MATTE_SKINS)
+    return random.choice([s for s in AVATAR["skin"] if s not in MATTE_SKINS])
+
+
 DEFAULT_AVATAR = {"color": "blue", "skin": "light", "hair": "short", "hair_color": "brown", "face": "smile",
                   "accessory": "none"}
 # Characters saved by the first drawings (before 04/11, never released): what each old value becomes.
 _OLD_AVATAR = {
     "color": {"teal": "green", "orange": "clay", "slate": "blue"},
     "skin": {"fair": "light"},
-    "hair": {"bob": "long", "mohawk": "spiky", "side": "short"},
+    "hair": {"bob": "long", "side": "short"},
     "face": {"dots": "smile", "happy": "happy", "wide": "surprised", "sleepy": "sleepy", "wink": "wink"},
     "accessory": {"antenna": "antenna", "cap": "cap", "beanie": "cap", "crown": "crown", "headphones": "headphones"},
 }

@@ -13,10 +13,10 @@ export const GRID = 16
 /** = agents.AVATAR on the server (same names, same order). */
 export const AVATAR_OPTIONS = {
   color: ['blue', 'clay', 'violet', 'green', 'amber', 'rose'],
-  skin: ['light', 'tan', 'brown', 'dark'],
-  hair: ['none', 'short', 'spiky', 'long', 'curly', 'bun'],
+  skin: ['light', 'tan', 'brown', 'dark', 'olive'],
+  hair: ['none', 'short', 'spiky', 'long', 'curly', 'bun', 'afro', 'ponytail', 'mohawk'],
   hair_color: ['black', 'brown', 'blond', 'red', 'white'],
-  face: ['smile', 'happy', 'focused', 'sleepy', 'wink', 'surprised'],
+  face: ['smile', 'happy', 'focused', 'sleepy', 'wink', 'surprised', 'grin', 'cheeky', 'calm'],
   accessory: ['none', 'glasses', 'headphones', 'cap', 'crown', 'antenna'],
 } as const
 export type AvatarPart = keyof typeof AVATAR_OPTIONS
@@ -25,7 +25,10 @@ export const DEFAULT_AVATAR: AgentAvatar = { color: 'blue', skin: 'light', hair:
 
 /** Outfit = the UI accent colours (lib/accent.ts, bright step), its collar a darker shade of it. */
 export const OUTFIT: Record<string, string> = ACCENT_HEX.dark
-export const SKIN: Record<string, string> = { light: '#ffdcc2', tan: '#e8ad7e', brown: '#b0744a', dark: '#7a4b2e' }
+export const SKIN: Record<string, string> = { light: '#ffdcc2', tan: '#e8ad7e', brown: '#b0744a', dark: '#7a4b2e', olive: '#f2c196' }
+/** Random characters: 4 in 5 have a matte or lightly matte skin, the others any of the rest. */
+export const MATTE_SKINS = ['olive', 'tan'] as const
+export const MATTE_SHARE = 0.8
 export const HAIR: Record<string, string> = { black: '#3a3444', brown: '#7c4a29', blond: '#ecc457', red: '#cc5a32', white: '#e6e6ee' }
 const INK = '#1d1924'
 
@@ -35,7 +38,9 @@ const rep = (n: number, row: string) => Array<string>(n).fill(row)
 
 // ---- the body: one head shape (rows 3-11), a bust (rows 12-15) ----
 const HEAD = L(3, '.....sss', '....ssss', ...rep(5, '...sssss'), '....ssss', '.....sss')
-const SHIRT = L(12, '...cccCs', ...rep(3, '..cccccc'))
+/** First row of the bust: what is above it nods. */
+const NECK = 12
+const SHIRT = L(NECK, '...cccCs', ...rep(3, '..cccccc'))
 const BLUSH = L(9, '....b...')
 
 // ---- hair: front (over the head) and back (behind the head, over the shoulders) ----
@@ -45,15 +50,21 @@ const HAIR_FRONT: Record<string, Layer> = {
   long: L(2, '.....hhh', '....hhhh', '...hhhhh', '...hhhhh', '...hh...', '...h....', '...h....'),
   curly: L(1, '....hh.h', '...hhhhh', '..hhhhhh', '..hhhhhh', '..hhhhhh', '..hhh...', '..hh....', '..hh....'),
   bun: L(0, '......hh', '......hh', '.....hhh', '....hhhh', '...hhhhh', '...hhhhh', '...h....'),
+  afro: L(0, '....hhhh', '..hhhhhh', '.hhhhhhh', '.hhhhhhh', '.hhhhhhh', '.hhhhhhh', '.hh.....', '.hh.....', '..h.....'),
+  ponytail: L(2, '.....hhh', '....hhhh', '...hhhhh', '...hhhhh', '...h....'),
+  mohawk: L(0, '.......h', '.......h', '.......h', '.......h', '......hh'),
 }
 const HAIR_BACK: Record<string, Layer> = {
   long: L(5, ...rep(9, '..hh....')),
   curly: L(9, '..hh....', '..hh....'),
+  ponytail: L(3, '.............hh.', '.............hh.', '..............hh', '..............hh', '.............hh.', '............hh..'),
 }
 /** a few darker pixels: the curls, the knot of the bun */
 const HAIR_DARK: Record<string, [number, number][]> = {
   curly: [[5, 3], [10, 3], [3, 5], [8, 4], [12, 5]],
   bun: [[6, 1], [7, 1], [8, 1], [9, 1]],
+  afro: [[4, 1], [11, 2], [2, 4], [13, 3], [6, 3], [9, 4], [3, 7], [12, 7]],
+  ponytail: [[13, 3], [14, 6]],
 }
 
 // ---- faces: eyes (rows 6-8, hidden by the blink) and mouth (rows 9-10) ----
@@ -64,6 +75,9 @@ const EYES: Record<string, Layer> = {
   sleepy: L(8, '....kk..'),
   wink: L(7, '.....k..........', '.....k....kk....'),
   surprised: L(7, '....wk....wk....', '....kk....kk....'),
+  grin: L(7, '.....k..', '.....k..'),
+  cheeky: L(7, '.....k..', '....k.k.'),
+  calm: L(7, '....k.k.', '.....k..'),
 }
 const MOUTHS: Record<string, Layer> = {
   smile: L(9, '......k.', '.......k'),
@@ -72,6 +86,9 @@ const MOUTHS: Record<string, Layer> = {
   sleepy: L(10, '.......k'),
   wink: L(9, '......k.', '.......k'),
   surprised: L(9, '.......k', '.......k'),
+  grin: L(9, '.....kkk', '.....kww'),
+  cheeky: L(9, '......kkkk......', '........rr......'),
+  calm: L(10, '......kk'),
 }
 /** the eyes closed, for the blink (none for the faces whose eyes are closed already) */
 const BLINK: Record<string, Layer> = {
@@ -79,6 +96,7 @@ const BLINK: Record<string, Layer> = {
   focused: L(6, '....kk..', '........', '....kk..'),
   wink: L(8, '....kk....kk....'),
   surprised: L(8, '....kk..'),
+  grin: L(8, '....kk..'),
 }
 /** the eyes of a character asleep (an agent that is off) */
 const ASLEEP = L(8, '....kk..')
@@ -126,7 +144,8 @@ function palette(a: AgentAvatar): Record<string, string> {
 }
 
 export type Run = { x: number; y: number; w: number; fill: string }
-type Pixels = { body: Run[]; eyes: Run[]; blink: Run[]; tile: string }
+/** `head` + `bust` = `body` split at the neck (the head nods on its own). */
+type Pixels = { body: Run[]; head: Run[]; bust: Run[]; eyes: Run[]; blink: Run[]; tile: string }
 
 function runs(grid: (string | null)[], pal: Record<string, string>): Run[] {
   const out: Run[] = []
@@ -178,7 +197,8 @@ export function pixelsOf(a: AgentAvatar, sleep = false): Pixels {
   if (!sleep) paint(blink, BLINK[a.face])
   // the outline only fills empty cells: the glasses' cells are the same as before it
   if (a.accessory === 'glasses') for (let i = 0; i < g.length; i++) if (g[i] === 'g') eyes[i] = blink[i] = null
-  const out = { body: runs(g, pal), eyes: runs(eyes, pal), blink: runs(blink, pal), tile: sleep ? grey(pal.c) : pal.c }
+  const body = runs(g, pal)
+  const out = { body, head: body.filter((r) => r.y < NECK), bust: body.filter((r) => r.y >= NECK), eyes: runs(eyes, pal), blink: runs(blink, pal), tile: sleep ? grey(pal.c) : pal.c }
   cache.set(key, out)
   return out
 }
@@ -214,6 +234,9 @@ export function randomAvatar(color?: string): AgentAvatar {
   const r = <K extends AvatarPart>(k: K): string => AVATAR_OPTIONS[k][Math.floor(Math.random() * AVATAR_OPTIONS[k].length)]
   const out = {} as AgentAvatar
   for (const k of AVATAR_PARTS) out[k] = r(k)
+  const others = AVATAR_OPTIONS.skin.filter((s) => !(MATTE_SKINS as readonly string[]).includes(s))
+  const pool: readonly string[] = Math.random() < MATTE_SHARE ? MATTE_SKINS : others
+  out.skin = pool[Math.floor(Math.random() * pool.length)]
   if (Math.random() < 0.5) out.accessory = 'none'
   if (color) out.color = color
   return out

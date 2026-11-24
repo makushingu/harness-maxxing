@@ -1,20 +1,22 @@
-// The sessions at work beside Jarvis's conversation, drawn as the Agents page draws its agents: a pixel character per
-// session (a stable face from its id, its outfit the colour of its project) that moves while its turn runs, a "!" that
-// hops when Jarvis's work there waits for the owner, a check once it just finished. Three looks (`CrewStyle`): desks,
-// speech bubbles, a running track. Every animation stops at rest under reduced motion (globals.css).
+// The sessions at work beside Jarvis's conversation: a small animated pictogram per session, in the colour of its
+// project (`Glyph`: a glowing orb, a terminal typing, sound bars) that moves while its turn runs, a "!" that hops when
+// Jarvis's work there waits for the owner, a check once it just finished. Three layouts (`CrewStyle`): cards, speech
+// bubbles, a track. Every animation stops at rest under reduced motion (globals.css).
 import * as React from 'react'
 import { Link } from 'react-router'
 import { Check } from 'lucide-react'
 import { useLang, useT } from '@/i18n'
 import { useSessions } from '@/lib/queries'
-import type { AgentAvatar, JarvisWork, Session } from '@/lib/types'
+import type { JarvisWork, Session } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { fmtRelative } from '@/lib/format'
-import { AgentAvatarIcon, AVATAR_OPTIONS, AVATAR_PARTS, projectColor } from '@/features/agents/Avatar'
+import { OUTFIT, projectColor } from '@/features/agents/pixels'
 import { sessionsUrl } from '@/pages/sessions/util'
 
 export type CrewStyle = 'desk' | 'chat' | 'track'
 export const CREW_STYLES: CrewStyle[] = ['desk', 'chat', 'track']
+export type GlyphKind = 'orb' | 'term' | 'wave'
+export const GLYPHS: GlyphKind[] = ['orb', 'term', 'wave']
 type Mood = 'work' | 'ask' | 'done'
 export type Crewmate = { s: Session; work?: JarvisWork; mood: Mood }
 
@@ -42,33 +44,16 @@ export function useCrew(own: string, work: JarvisWork[] | undefined): Crewmate[]
   }, [data, own, work])
 }
 
-/** A stable character for a session: its id picks each part, its project the outfit. */
-const faces = new Map<string, AgentAvatar>()
-function faceOf(s: Session): AgentAvatar {
-  let a = faces.get(s.id)
-  if (a) return a
-  let h = 0x811c9dc5
-  for (let i = 0; i < s.id.length; i++) h = Math.imul(h ^ s.id.charCodeAt(i), 0x01000193) >>> 0
-  a = {} as AgentAvatar
-  for (const k of AVATAR_PARTS) {
-    const opts = AVATAR_OPTIONS[k]
-    a[k] = opts[h % opts.length]
-    h = Math.imul(h ^ (h >>> 13), 0x5bd1e995) >>> 0
-  }
-  if (h % 2) a.accessory = 'none'
-  a.color = projectColor(s.path.split('/')[1] || s.path)
-  faces.set(s.id, a)
-  return a
-}
+/** A session's colour: its project's (the outfit colour its agents wear). */
+const colorOf = (s: Session) => OUTFIT[projectColor(s.path.split('/')[1] || s.path)]
 const whereOf = (s: Session) => s.path.replace(/^projects\//, '').replace('/topics/', '/')
 
-export function Crew({ crew, look }: { crew: Crewmate[]; look: CrewStyle }) {
+export function Crew({ crew, look, glyph }: { crew: Crewmate[]; look: CrewStyle; glyph: GlyphKind }) {
   const t = useT()
   if (!crew.length)
     return (
       <div className="flex flex-col items-center gap-3 px-4 py-10 text-center">
-        <AgentAvatarIcon avatar={{ color: 'blue', face: 'sleepy', hair: 'short' }} size={48} tile={false} mood="sleep" />
-        <span className="mx-game-zzz text-xs font-semibold text-muted-foreground">z z</span>
+        <Glyph kind={glyph} color="#8b8b99" mood="done" still size={40} i={0} />
         <p className="text-[13px] text-muted-foreground">{t('jarvis.live.empty')}</p>
       </div>
     )
@@ -76,13 +61,13 @@ export function Crew({ crew, look }: { crew: Crewmate[]; look: CrewStyle }) {
     return (
       <div className="grid grid-cols-2 gap-2">
         {crew.map((c, i) => (
-          <Desk key={c.s.id} c={c} i={i} />
+          <Desk key={c.s.id} c={c} i={i} g={glyph} />
         ))}
       </div>
     )
   return (
     <div className={look === 'chat' ? 'space-y-3' : 'space-y-2'}>
-      {crew.map((c, i) => (look === 'chat' ? <Chat key={c.s.id} c={c} i={i} /> : <Track key={c.s.id} c={c} i={i} />))}
+      {crew.map((c, i) => (look === 'chat' ? <Chat key={c.s.id} c={c} i={i} g={glyph} /> : <Track key={c.s.id} c={c} i={i} g={glyph} />))}
     </div>
   )
 }
@@ -106,10 +91,48 @@ function Mark({ mood, className }: { mood: Mood; className?: string }) {
   )
 }
 
-function Person({ c, size, i }: { c: Crewmate; size: number; i: number }) {
+/** The pictogram of a session. `still`: drawn at rest (done, waiting, the empty panel). */
+export function Glyph({ kind, color, mood, size, i, still }: { kind: GlyphKind; color: string; mood: Mood; size: number; i: number; still?: boolean }) {
+  const on = mood === 'work' && !still
+  const d = { animationDelay: `${-(i % 5) * 0.37}s` } as React.CSSProperties
+  const box = { width: size, height: size, '--c': color } as React.CSSProperties
+  if (kind === 'orb')
+    return (
+      <span className="relative inline-flex shrink-0 items-center justify-center" style={box} aria-hidden>
+        {on && <span className="mx-orb-ring absolute inset-0 rounded-full" style={d} />}
+        <span
+          className={cn('rounded-full', on && 'mx-orb-pulse')}
+          style={{ ...d, width: size * 0.62, height: size * 0.62, background: 'radial-gradient(circle at 35% 30%, color-mix(in oklab, var(--c) 35%, white), var(--c) 60%, color-mix(in oklab, var(--c) 70%, black))', boxShadow: on ? '0 0 12px color-mix(in oklab, var(--c) 60%, transparent)' : undefined, opacity: mood === 'done' ? 0.55 : 1 }}
+        />
+      </span>
+    )
+  if (kind === 'term')
+    return (
+      <span className="inline-flex shrink-0 flex-col overflow-hidden rounded-[5px] border bg-[#15141b]" style={{ ...box, height: size * 0.78 }} aria-hidden>
+        <span className="flex h-[18%] shrink-0 items-center gap-[2px] px-[10%]" style={{ background: 'color-mix(in oklab, var(--c) 35%, #15141b)' }}>
+          {[0, 1, 2].map((k) => (
+            <i key={k} className="size-[3px] rounded-full bg-white/50" />
+          ))}
+        </span>
+        <span className="flex flex-1 flex-col justify-center gap-[3px] px-[12%]">
+          {[0.8, 0.55, 0.7].map((w, k) => (
+            <span key={k} className="flex h-[2px] items-center">
+              <span className={cn('h-full rounded-full', on && 'mx-term-type')} style={{ width: `${w * 100}%`, background: k === 1 ? 'var(--c)' : 'rgb(255 255 255 / 0.55)', animationDelay: `${-(i % 5) * 0.37 - k * 0.6}s` }} />
+              {on && k === 2 && <span className="mx-game-blink ml-[2px] h-[5px] w-[2px] bg-white/80" />}
+            </span>
+          ))}
+        </span>
+      </span>
+    )
   return (
-    <span className={cn('block', c.mood === 'work' && 'mx-game-bob')} style={{ '--s': `${Math.max(1, size / 24)}px`, animationDelay: `${-(i % 4) * 0.22}s` } as React.CSSProperties}>
-      <AgentAvatarIcon avatar={faceOf(c.s)} size={size} tile={false} animate mood={c.mood === 'done' ? 'idle' : 'idle'} />
+    <span className="inline-flex shrink-0 items-end justify-center gap-[12%] px-[8%]" style={{ ...box, height: size * 0.7 }} aria-hidden>
+      {[0.55, 0.9, 0.7, 1, 0.6].map((h, k) => (
+        <span
+          key={k}
+          className={cn('w-[11%] origin-bottom rounded-full', on && 'mx-eq')}
+          style={{ height: `${(on ? h : 0.25) * 100}%`, background: 'var(--c)', opacity: mood === 'done' ? 0.5 : 1, animationDelay: `${-(i % 5) * 0.37 - k * 0.23}s`, animationDuration: `${0.9 + (k % 3) * 0.25}s` }}
+        />
+      ))}
     </span>
   )
 }
@@ -121,8 +144,8 @@ function Tag({ c }: { c: Crewmate }) {
   return c.work ? <span className="text-primary">#{c.work.id}</span> : null
 }
 
-/* ---- desks: a little office, one desk per session, its screen glowing while it works */
-function Desk({ c, i }: { c: Crewmate; i: number }) {
+/* ---- cards: a grid, one card per session */
+function Desk({ c, i, g }: { c: Crewmate; i: number; g: GlyphKind }) {
   return (
     <Link
       to={sessionsUrl(c.s)}
@@ -130,14 +153,9 @@ function Desk({ c, i }: { c: Crewmate; i: number }) {
       style={{ '--i': Math.min(i, 8) } as React.CSSProperties}
       data-testid="jarvis-crew"
     >
-      <span className="relative">
-        <Person c={c} size={48} i={i} />
+      <span className="relative flex h-12 items-center">
+        <Glyph kind={g} color={colorOf(c.s)} mood={c.mood} size={44} i={i} />
         <Mark mood={c.mood} className="absolute -top-2 -right-5" />
-      </span>
-      {/* the desk and its screen */}
-      <span className="relative -mt-1 flex h-3 w-16 items-end justify-center">
-        {c.mood === 'work' && <span className="mx-game-glow absolute -top-1.5 h-3 w-10 rounded-full bg-primary" />}
-        <span className="relative h-2 w-16 rounded-sm bg-muted-foreground/30" />
       </span>
       <span className="mt-2 w-full truncate text-xs font-medium">{c.s.title || whereOf(c.s)}</span>
       <span className="w-full truncate text-[11px] text-muted-foreground">
@@ -147,8 +165,8 @@ function Desk({ c, i }: { c: Crewmate; i: number }) {
   )
 }
 
-/* ---- speech bubbles: each character says what it is doing now (its last words), live */
-function Chat({ c, i }: { c: Crewmate; i: number }) {
+/* ---- speech bubbles: each session says what it is doing now (its last words), live */
+function Chat({ c, i, g }: { c: Crewmate; i: number; g: GlyphKind }) {
   const t = useT()
   const lang = useLang()
   return (
@@ -159,7 +177,7 @@ function Chat({ c, i }: { c: Crewmate; i: number }) {
       data-testid="jarvis-crew"
     >
       <span className="relative shrink-0 pb-1">
-        <Person c={c} size={36} i={i} />
+        <Glyph kind={g} color={colorOf(c.s)} mood={c.mood} size={32} i={i} />
       </span>
       <span className="relative min-w-0 flex-1 rounded-xl rounded-bl-sm border bg-card px-3 py-2 transition-colors group-hover:bg-muted">
         <span className="flex items-center gap-2">
@@ -177,8 +195,8 @@ function Chat({ c, i }: { c: Crewmate; i: number }) {
   )
 }
 
-/* ---- running track: the character runs back and forth while it works, waits at the end once done or asking */
-function Track({ c, i }: { c: Crewmate; i: number }) {
+/* ---- track: the pictogram goes back and forth while it works, waits at the end once done or asking */
+function Track({ c, i, g }: { c: Crewmate; i: number; g: GlyphKind }) {
   return (
     <Link
       to={sessionsUrl(c.s)}
@@ -196,12 +214,12 @@ function Track({ c, i }: { c: Crewmate; i: number }) {
       <span className="relative mt-1 block h-8 border-b border-dashed border-muted-foreground/40">
         {c.mood === 'work' ? (
           <span className="mx-crew-run absolute bottom-0" style={{ animationDelay: `${-(i * 1.7) % 7}s` } as React.CSSProperties}>
-            <Person c={c} size={24} i={i} />
+            <Glyph kind={g} color={colorOf(c.s)} mood={c.mood} size={24} i={i} />
           </span>
         ) : (
           <span className="absolute right-0 bottom-0 flex items-end gap-1">
             <Mark mood={c.mood} className="mb-4" />
-            <Person c={c} size={24} i={i} />
+            <Glyph kind={g} color={colorOf(c.s)} mood={c.mood} size={24} i={i} />
           </span>
         )}
       </span>
