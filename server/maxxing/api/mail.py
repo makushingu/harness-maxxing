@@ -301,15 +301,47 @@ def _view_name(name: str) -> str:
     return name or "attachment"
 
 
-def _save_for_view(acc_id: str, folder: str, uid: int, parts: list[tuple[int, str, str, bytes]]) -> dict[int, str]:
-    """Copies of the attachments under <workspace>/mail/attachments/<account>/<folder>-<uid>/<index>/<name> (inside
-    the files root: the file viewer opens them like any file; `attachments` is out of the memory backup). Rewritten at
-    every view (an IMAP uid can be given again to another message), older copies pruned."""
+def _view_base(acc_id: str, folder: str, uid: int) -> Path:
+    tag = hashlib.sha1(folder.encode("utf-8", "replace")).hexdigest()[:10]
+    return _view_root() / re.sub(r"[^A-Za-z0-9_-]", "_", acc_id)[:64] / f"{tag}-{int(uid)}"
+
+
+VIEW_ID = ".message"     # in a message's copies folder: the identity (imap.identity) of the message they came from
+
+
+def _cached_view(acc_id: str, folder: str, uid: int, indexes: list[int], ident: str | None) -> dict[int, str] | None:
+    """The copies of an earlier view when they are all there, under a day old, and of this very message (an IMAP
+    uid can be given again to another one): no new download. None = fetch them."""
+    if not ident:
+        return None
     with _view_lock:
-        return _save_for_view_locked(acc_id, folder, uid, parts)
+        base = _view_base(acc_id, folder, uid)
+        try:
+            if time.time() - base.stat().st_mtime > VIEW_TTL or (base / VIEW_ID).read_text(encoding="utf-8") != ident:
+                return None
+            out: dict[int, str] = {}
+            for idx in dict.fromkeys(indexes):
+                files = [f for f in (base / str(int(idx))).iterdir() if f.is_file() and not f.is_symlink()]
+                if len(files) != 1:
+                    return None
+                out[idx] = str(files[0])
+            return out
+        except (OSError, UnicodeDecodeError):
+            return None
 
 
-def _save_for_view_locked(acc_id: str, folder: str, uid: int, parts: list[tuple[int, str, str, bytes]]) -> dict[int, str]:
+def _save_for_view(acc_id: str, folder: str, uid: int, parts: list[tuple[int, str, str, bytes]],
+                   ident: str | None = None) -> dict[int, str]:
+    """Copies of the attachments under <workspace>/mail/attachments/<account>/<folder>-<uid>/<index>/<name> (inside
+    the files root: the file viewer opens them like any file; `attachments` is out of the memory backup). Kept with
+    the message's identity: a later view of the same message reuses them (_cached_view), copies of another message
+    given the same uid are dropped; older copies pruned."""
+    with _view_lock:
+        return _save_for_view_locked(acc_id, folder, uid, parts, ident)
+
+
+def _save_for_view_locked(acc_id: str, folder: str, uid: int, parts: list[tuple[int, str, str, bytes]],
+                          ident: str | None = None) -> dict[int, str]:
     root = _view_root()
     now = time.time()
     if root.is_dir():
@@ -317,8 +349,14 @@ def _save_for_view_locked(acc_id: str, folder: str, uid: int, parts: list[tuple[
             with contextlib.suppress(OSError):
                 if d.is_dir() and not d.is_symlink() and now - d.stat().st_mtime > VIEW_TTL:
                     shutil.rmtree(d, ignore_errors=True)
-    tag = hashlib.sha1(folder.encode("utf-8", "replace")).hexdigest()[:10]
-    base = root / re.sub(r"[^A-Za-z0-9_-]", "_", acc_id)[:64] / f"{tag}-{int(uid)}"
+    base = _view_base(acc_id, folder, uid)
+    mark = base / VIEW_ID
+    try:
+        old = mark.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        old = None
+    if old != ident and base.is_dir() and not base.is_symlink():
+        shutil.rmtree(base, ignore_errors=True)         # copies of another message (or of unknown origin)
     out: dict[int, str] = {}
     for idx, name, _ctype, data in parts:
         d = base / str(int(idx))
@@ -328,6 +366,9 @@ def _save_for_view_locked(acc_id: str, folder: str, uid: int, parts: list[tuple[
         f = d / _view_name(name)
         f.write_bytes(data)
         out[idx] = str(f)
+    if ident and old != ident:
+        with contextlib.suppress(OSError):
+            mark.write_text(ident, encoding="utf-8")
     with contextlib.suppress(OSError):
         os.utime(base)
     return out
@@ -341,10 +382,14 @@ async def view_attachments(acc_id: str, body: ViewIn):
         config.workspace().resolve().relative_to(config.files_root().resolve())
     except ValueError:
         raise HTTPException(409, detail={"error": "outside", "message": "the workspace is outside the files root"}) from None
-    parts = await _run(imap.attachments_of, _acc(acc_id), body.folder, body.uid, body.indexes)
-    if not parts:
-        raise HTTPException(404, detail={"error": "not_found", "message": "attachment not found"})
-    paths = await asyncio.to_thread(_save_for_view, acc_id, body.folder, body.uid, parts)
+    acc = _acc(acc_id)
+    ident = await _run(imap.identity, acc, body.folder, body.uid)        # headers only: a few hundred bytes
+    paths = await asyncio.to_thread(_cached_view, acc_id, body.folder, body.uid, body.indexes, ident)
+    if paths is None:
+        parts = await _run(imap.attachments_of, acc, body.folder, body.uid, body.indexes)
+        if not parts:
+            raise HTTPException(404, detail={"error": "not_found", "message": "attachment not found"})
+        paths = await asyncio.to_thread(_save_for_view, acc_id, body.folder, body.uid, parts, ident)
     return {"paths": {str(k): v for k, v in paths.items()}}
 
 
