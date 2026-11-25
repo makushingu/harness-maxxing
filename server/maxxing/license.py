@@ -178,7 +178,8 @@ def activate(key: str, version: str | None = None) -> dict:
     the seat later (SEAT), it no longer switches the server to signed archives (TOKEN)."""
     r = _post("/v1/activate", {"key": key.strip(), "machine_id": machine_id(), "hostname": socket.gethostname(),
                                "os": os_name(), "version": version or disk_version()})
-    if not isinstance(r.get("token"), str) or not r["token"]:
+    from . import vault
+    if not isinstance(r.get("token"), str) or not r["token"] or not vault._is_text(r["token"]):   # UTF-8 only
         raise LicenseError("the license server sent no activation token", "bad_answer", r)
     if not isinstance(r.get("license", {}), dict):                      # checked before anything is written
         raise LicenseError("the license server sent an answer this version does not read", "bad_answer")

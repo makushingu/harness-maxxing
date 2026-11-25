@@ -478,3 +478,10 @@ def test_a_damaged_license_section_keeps_the_page_the_removal_and_the_activation
     monkeypatch.setattr(license, "_post", lambda *a, **k: {"ok": True, "token": "tok", "license": {"kind": "paid"}})
     license.activate("HM-ABCD-EFGH-JKMN-PQRS")
     assert config.load_config()["license"]["kind"] == "paid"
+
+
+def test_an_activation_token_that_is_not_utf8_leaves_no_key(mx, monkeypatch):
+    monkeypatch.setattr(license, "_post", lambda *a, **k: {"ok": True, "token": "tok\ud800", "license": {}})
+    with pytest.raises(license.LicenseError):
+        license.activate("HM-ABCD-EFGH-JKMN-PQRS")
+    assert not config.get_secret(license.KEY) and not config.get_secret(license.SEAT)
