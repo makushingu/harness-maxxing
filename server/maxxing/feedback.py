@@ -248,11 +248,11 @@ def _ask(kind: str, message: str, topics: list[dict]) -> str | None:
              "What this installation changed (a bug there is not the team's):", *_local_changes(),
              "Topics where a session can open:"]
     lines += [f"- {t['path']}: {t['description']}" for t in topics] or ["- (none)"]
-    # a lone surrogate cannot be written to the pipe; the closing tag cannot come from the message
-    body = message.replace("</feedback", "< /feedback").encode("utf-8", "replace").decode("utf-8")
-    lines += ["", "<feedback>", body, "</feedback>"]
+    lines += ["", "<feedback>", message.replace("</feedback", "< /feedback"), "</feedback>"]  # the closing tag: ours only
+    # a lone surrogate (the message, a folder name that is not UTF-8) cannot be written to the pipe
+    text = "\n".join(lines).encode("utf-8", "replace").decode("utf-8")
     try:
-        r = subprocess.run(cmd, input="\n".join(lines), capture_output=True, text=True, timeout=CHECK_TIMEOUT_S,
+        r = subprocess.run(cmd, input=text, capture_output=True, text=True, timeout=CHECK_TIMEOUT_S,
                            cwd=cwd, env=spawn.claude_env(None, "default"), start_new_session=True)
     except (OSError, ValueError, subprocess.TimeoutExpired) as e:
         log.info("feedback check failed: %s", e)
