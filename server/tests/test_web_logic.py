@@ -284,3 +284,14 @@ def test_a_voice_call_failure_reads_the_message_the_server_sends(tmp_path):
                 await m.failure(res(422, { detail: { message: 'old shape' } })),
                 await m.failure(new Response('<html>', { status: 502 }))]""")
     assert out == ["audio too long", "old shape", "HTTP 502"]
+
+
+def test_a_remote_picture_without_slashes_still_waits_for_a_click(tmp_path):
+    """`http:evil.com/p.png` is absolute for a browser on an https page: remote, like `https://…` and `//…`."""
+    src = (WEB / "components" / "ui" / "markdown.tsx").read_text(encoding="utf-8")
+    rx = re.search(r"^const EXTERNAL = (/.+/i)$", src, re.M)[1]
+    mod = tmp_path / "ext.ts"
+    mod.write_text(f"export const EXTERNAL = {rx}\n", encoding="utf-8")
+    out = _run_ts(tmp_path, mod, """return ['http:evil.com/?d=1', 'HTTPS:evil.com', 'https://evil.com', '//evil.com',
+        '/\\\\evil.com', '/sessions', '/api/files/raw?p=a.png', 'img/a.png', '#top'].map((u) => m.EXTERNAL.test(u))""")
+    assert out == [True, True, True, True, True, False, False, False, False]

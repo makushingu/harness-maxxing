@@ -76,9 +76,10 @@ function textOf(node: React.ReactNode): string {
 }
 
 const SAFE_URL = /^(https?:|mailto:|\/|#|\.{0,2}\/)/i
-/** Off this site: `https://…` and protocol-relative `//host/…` - browsers also read `/\host` (a backslash, tabs or
+/** Off this site: any `http(s):` URL - `http:host/…` without slashes too, absolute for the browser when its scheme
+ * differs from the page's - and protocol-relative `//host/…` - browsers also read `/\host` (a backslash, tabs or
  * line breaks between the two) as `//host`. */
-const EXTERNAL = /^(https?:)?[\t\n\r]*[\\/][\t\n\r]*[\\/]/i
+const EXTERNAL = /^(https?:|[\t\n\r]*[\\/][\t\n\r]*[\\/])/i
 
 /** A remote picture loads only on a click: an answer that embeds `![](https://host/?d=<secret>)` (a prompt injection
  * in a page Claude read) would otherwise send it the moment the message shows. Pictures of this site load at once. */
