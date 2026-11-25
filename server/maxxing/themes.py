@@ -405,15 +405,28 @@ def _css(v: Any, warn: list[str]) -> str | None:
     return bare.strip() or None
 
 
+_FINGERPRINT: dict[str, Any] = {}
+
+
 def ui_fingerprint() -> str:
-    """Names of the interface's built CSS files (hashed by Vite: they change exactly when its CSS does)."""
+    """Names of the interface's built CSS files (hashed by Vite: they change exactly when its CSS does). Kept while
+    the assets folder is unchanged: every theme image served reads it."""
     import hashlib
     from . import webbuild
+    assets = webbuild.active_dist() / "assets"
     try:
-        names = sorted(f.name for f in (webbuild.active_dist() / "assets").glob("*.css"))
+        key: tuple | None = (str(assets), assets.stat().st_mtime_ns)
+    except OSError:
+        key = None
+    if key and _FINGERPRINT.get("key") == key:
+        return _FINGERPRINT["fp"]
+    try:
+        names = sorted(f.name for f in assets.glob("*.css"))
     except OSError:
         names = []
-    return hashlib.sha256("\n".join(names).encode()).hexdigest()[:16]
+    fp = hashlib.sha256("\n".join(names).encode()).hexdigest()[:16]
+    _FINGERPRINT.update(key=key, fp=fp)
+    return fp
 
 
 def _css_hash(css: str) -> str:
@@ -457,8 +470,39 @@ def _image(d: Path, name: Any, what: str, warn: list[str], cap: int = MAX_IMAGE)
     return name
 
 
+_LOADED: dict[str, tuple[tuple, tuple]] = {}      # folder -> (what it was read from, what load() gave)
+
+
+def _load_key(d: Path) -> tuple | None:
+    """What load() reads: theme.json's bytes, every file's name, size and time (images, the css stamp), the interface."""
+    import hashlib
+    try:
+        files = tuple(sorted((e.name, e.is_symlink(), e.stat(follow_symlinks=False).st_size,
+                              e.stat(follow_symlinks=False).st_mtime_ns) for e in os.scandir(d)))
+        f = d / "theme.json"
+        body = hashlib.sha256(f.read_bytes()).hexdigest() if f.is_file() and not f.is_symlink() else ""
+    except OSError:
+        return None
+    return files, body, ui_fingerprint()
+
+
 def load(d: Path) -> tuple[dict | None, list[str], str | None]:
-    """Reads and sanitizes one theme folder: (theme, warnings, error). An error means the theme is not usable."""
+    """Reads and sanitizes one theme folder: (theme, warnings, error). An error means the theme is not usable.
+    Kept while nothing it reads changed: every theme image served (logo, wallpaper, tab icon) loads its theme."""
+    import copy
+    key = _load_key(d)
+    hit = _LOADED.get(str(d))
+    if key is not None and hit and hit[0] == key:
+        return copy.deepcopy(hit[1])
+    res = _load(d)
+    if key is not None:
+        if len(_LOADED) > 256:
+            _LOADED.clear()
+        _LOADED[str(d)] = (key, copy.deepcopy(res))
+    return res
+
+
+def _load(d: Path) -> tuple[dict | None, list[str], str | None]:
     warn: list[str] = []
     f = d / "theme.json"
     if f.is_symlink():                  # install never copies a link: it would read a file outside the folder

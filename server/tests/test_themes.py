@@ -251,3 +251,18 @@ def test_advanced_css_cannot_cover_the_app(tmp_path):
     for ok in ["& aside { z-index: 2; opacity: .9 }", "& aside { z-index: auto !important }"]:
         t, warn, _ = themes.load(_theme(tmp_path, "fine", {"name": "F", "css": ok}))
         assert t["css"], (ok, warn)
+
+
+def test_serving_a_theme_image_does_not_read_the_theme_again(mx, monkeypatch, tmp_path):
+    png = b"\x89PNG\r\n\x1a\n" + b"0" * 32
+    src = _theme(tmp_path / "src", "cached", {"name": "Cached", "base": "glass", "wallpaper": "wall.png"},
+                 {"wall.png": png})
+    assert cli.main(["themes", "install", str(src)]) == 0
+    calls = []
+    real = themes._load
+    monkeypatch.setattr(themes, "_load", lambda d: calls.append(d) or real(d))
+    assert themes.file_path("cached", "wall.png") and themes.file_path("cached", "wall.png")
+    assert len(calls) <= 1
+    dest = mx["ws"] / "themes" / "cached"
+    _theme(dest.parent, "cached", {"name": "Renamed", "base": "glass", "wallpaper": "wall.png"})
+    assert themes.get("cached")["name"] == "Renamed"                                  # an edit is seen at once
