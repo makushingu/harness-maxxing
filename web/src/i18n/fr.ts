@@ -2025,6 +2025,7 @@ export const fr: Record<keyof typeof en, string> = {
   'files.download': 'Télécharger',
   'files.preparing': 'Préparation du fichier…',
   'files.ready': 'Fichier prêt',
+  'files.downloadFailed': 'Le fichier n’a pas pu être téléchargé',
   'files.save': 'Enregistrer',
   'files.downloadZip': 'Télécharger en zip',
   'files.zipTooLarge': 'Ce dossier est trop gros pour un seul zip (plus de 2 Go ou de 100 000 fichiers).',

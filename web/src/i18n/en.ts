@@ -2043,6 +2043,7 @@ export const en = {
   'files.download': 'Download',
   'files.preparing': 'Preparing the file…',
   'files.ready': 'File ready',
+  'files.downloadFailed': 'The file could not be downloaded',
   'files.save': 'Save',
   'files.downloadZip': 'Download as zip',
   'files.zipTooLarge': 'This folder is too big for one zip (over 2 GB or 100,000 files).',
