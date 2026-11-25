@@ -53,6 +53,15 @@ MEM_WARN, MEM_CRITICAL = 0.85, 0.92    # share of the server's memory (or of a b
 UPLOAD_MAX = 50 * 1024 * 1024          # one file given to a page (by Claude or by the person)
 
 
+def _session_running(sid: str) -> bool:
+    from ..sessions import store
+    try:
+        m = store.read(sid)
+    except Exception:  # noqa: BLE001 - unreadable: not running
+        return False
+    return bool(m and m.get("state") == "running")
+
+
 class Turn:
     """A turn using a profile: its tools (chrome-devtools-mcp) and what it was told."""
 
@@ -355,6 +364,8 @@ class Pool:
             return True
         if not b.watcher or b.control.get(nav) or b.watcher.watched(nav) or any(x.nav == nav for x in b.turns.values()):
             return False
+        if await asyncio.to_thread(_session_running, nav.split(":", 1)[1]):
+            return False                # a new turn that has not used the browser yet: its pages may be in use
         going = b.tabs.awake(nav)
         for tab in going:
             await b.watcher.close_tab(tab["target"], sleep=True)
