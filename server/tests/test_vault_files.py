@@ -397,6 +397,17 @@ def test_cli_get_file_into_a_closed_pipe_is_quiet(mx, monkeypatch, capsys):
         os.close(devnull)
 
 
+def test_cli_buffered_output_into_a_closed_pipe_is_quiet(mx, monkeypatch):
+    class Closed(io.BytesIO):
+        def write(self, b):
+            raise BrokenPipeError(32, "Broken pipe")
+    fake = io.TextIOWrapper(Closed())
+    monkeypatch.setattr("sys.stdout", fake)
+    monkeypatch.setattr(cli, "_stdout_gone", lambda: True)
+    monkeypatch.setitem(cli.COMMANDS, "zz-print", ("print", lambda p: None, lambda a: print("line") or 0))
+    assert cli.main(["zz-print"]) == 141                  # the print is buffered: it fails at the flush
+
+
 def test_cli_get_file_output_leaves_no_partial_file(mx, monkeypatch):
     vault_files.put("PART_FILE", BLOB)
     dest = mx["tmp"] / "out" / "part.bin"
