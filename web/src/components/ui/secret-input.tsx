@@ -29,7 +29,8 @@ export function SecretInput({ className, autoComplete = 'off', onValueChange, ..
   }, [multi])
   const onPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
     const text = e.clipboardData.getData('text').replace(/\r\n?/g, '\n')
-    if (!onValueChange || !text.includes('\n')) return
+    // A line break only at the start or the end (copied from a terminal, a mail): one line, the input drops it.
+    if (!onValueChange || !text.replace(/^\n+|\n+$/g, '').includes('\n')) return
     e.preventDefault()
     const el = e.currentTarget
     switched.current = true
