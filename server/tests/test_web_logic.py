@@ -536,3 +536,31 @@ def test_plain_text_trims_stay_linear_on_long_runs_of_blanks(tmp_path):
         return [r[0].length, r[1].slice(-5), r[2].length, r[3], r[4].trim(), Date.now() - t0 < 3000]""")
     assert out == [100002, "  b c"[-5:], 100002, "100000", "end", True]
 
+
+def _md_light(tmp_path: Path, body: str):
+    src = (WEB / "features" / "files" / "plainText.ts").read_text(encoding="utf-8")
+    part = src[src.index("// Trims written as loops"):src.index("/** Above this size")] + \
+        src[src.index("/** A longer line"):src.index("const mdBlocks")]
+    (tmp_path / "main.ts").write_text(part + f"\nconsole.log(JSON.stringify((() => {{ {body} }})()))\n", encoding="utf-8")
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node not installed")
+    r = subprocess.run([node, "--experimental-strip-types", "--no-warnings", "main.ts"], cwd=tmp_path,
+                       capture_output=True, text=True, timeout=120)
+    if r.returncode and ("strip-types" in r.stderr or "Unknown file extension" in r.stderr):
+        pytest.skip("this node cannot strip types")
+    assert r.returncode == 0, r.stderr
+    return json.loads(r.stdout)
+
+
+def test_a_big_markdown_is_made_plain_without_the_parser(tmp_path):
+    """Over MD_PARSE_MAX characters, « Copy as plain text » takes the marks off line by line: 2 MB in well under a second."""
+    src = (WEB / "features" / "files" / "plainText.ts").read_text(encoding="utf-8")
+    fn = src[src.index("export function markdownToText("):src.index("/** A longer line")]
+    assert "if (md.length > MD_PARSE_MAX) return markdownToTextLight(md)" in fn
+    out = _md_light(tmp_path, """
+        const small = markdownToTextLight('# Title\\r\\n\\n> **bold** and *it* `code` ~~gone~~\\n* item [x](https://a.b) [y](y) ![pic](p.png)\\n```\\n# kept\\n```\\n---\\n')
+        const t0 = Date.now()
+        const big = markdownToTextLight('Hello **world** [x](https://a.b) é\\r\\n\\r\\n'.repeat(50000))
+        return [small, big.split('\\n')[0], Date.now() - t0 < 1500]""")
+    assert out == ["Title\n\nbold and it code gone\n- item x (https://a.b) y pic\n# kept", "Hello world x (https://a.b) é", True]

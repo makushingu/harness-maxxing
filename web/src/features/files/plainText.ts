@@ -51,9 +51,47 @@ function oneLine(s: string): string {
   return kept.filter((x, i) => i === 0 || i === last || x).join(' ')
 }
 
+/** Above this size the Markdown is not parsed (seconds on the page's thread): its marks are taken off line by line. */
+export const MD_PARSE_MAX = 200_000
+
 export function markdownToText(md: string): string {
+  if (md.length > MD_PARSE_MAX) return markdownToTextLight(md)
   const tree = unified().use(remarkParse).use(remarkGfm).parse(md) as Md
   return edges(mdBlocks(tree.children, '\n\n'))
+}
+
+/** A longer line is left as it is (the inline patterns are bounded, they stay fast on the others). */
+const LIGHT_LINE_MAX = 10_000
+/** The words of a big Markdown text without a parser, line by line: headings, quotes, fences, emphasis, code
+ *  and links lose their marks (a link to a web or mail address keeps it in parentheses), lists keep `- `. */
+export function markdownToTextLight(md: string): string {
+  const out: string[] = []
+  let fence = false
+  for (let line of md.split('\n')) {
+    line = cutEnd(line, (c) => c === '\r')
+    if (/^ {0,3}(```|~~~)/.test(line)) {
+      fence = !fence
+      continue
+    }
+    if (fence || line.length > LIGHT_LINE_MAX) {
+      out.push(line)
+      continue
+    }
+    line = line
+      .replace(/^ {0,3}(> ?)+/, '')
+      .replace(/^ {0,3}#{1,6}(\s+|$)/, '')
+      .replace(/^(\s*)[*+](\s+)/, '$1-$2')
+      .replace(/^ {0,3}([-*_] *){3,}$/, '')
+      .replace(/!\[([^\]]{0,300})\]\([^)]{0,2000}\)/g, '$1')
+      .replace(/\[([^\]]{0,300})\]\(([^)\s]{0,2000})[^)]{0,300}\)/g, (_m, text: string, url: string) =>
+        !/^(https?:|mailto:)/i.test(url) || url === text || url === `mailto:${text}` ? text : text ? `${text} (${url})` : url)
+      .replace(/`([^`]{0,300})`/g, '$1')
+      .replace(/(\*\*|__)([^*_]{1,300})\1/g, '$2')
+      .replace(/~~([^~]{1,300})~~/g, '$1')
+      .replace(/\*([^*\s][^*]{0,300})\*/g, '$1')
+    out.push(line)
+  }
+  return edges(out.join('\n'))
 }
 
 const mdBlocks = (nodes: Md[] | undefined, sep: string) => (nodes ?? []).map(mdBlock).filter(Boolean).join(sep)
