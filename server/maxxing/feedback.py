@@ -112,7 +112,9 @@ def defaults() -> dict:
 
 def _name(cfg: dict) -> str:
     """The pseudo of Settings -> Profile, sent along and shown in the Feedback window before sending."""
-    return (((cfg.get("profile") or {}) if isinstance(cfg.get("profile"), dict) else {}).get("name") or "")[:100]
+    p = cfg.get("profile")
+    name = p.get("name") if isinstance(p, dict) else ""
+    return name[:100] if isinstance(name, str) else ""      # a config.json edited by hand: {"name": 42}
 
 
 def image(mime: str, data: str, width: int = 0, height: int = 0) -> dict:

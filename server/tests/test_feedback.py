@@ -308,3 +308,11 @@ def test_a_message_sent_anyway_says_so(client, cloud):
     long = cloud.got[1]["message"]
     assert len(long) == 4000 and long.endswith(feedback.FORCED_NOTE)          # still within the cloud's limit
     assert set(cloud.got[0]) == {"email", "type", "message", "version", "lang", "name", "_ua"}
+
+
+def test_a_profile_name_that_is_not_text_does_not_stop_the_message(client, cloud):
+    config.update_config(profile={"name": 42})
+    assert client.get("/api/settings/feedback").status_code == 200
+    r = client.post("/api/settings/feedback", json={"email": "me@x.io", "type": "bug", "message": "hello there"})
+    assert r.status_code == 200, r.text
+    assert cloud.got[0]["name"] == ""
