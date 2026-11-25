@@ -44,7 +44,7 @@ export function Chart({ kind, series, unit, height = 140 }: { kind: 'bar' | 'lin
   const [ref, width] = useWidth<HTMLDivElement>()
   const [hover, setHover] = React.useState<number | null>(null)
   const id = React.useId().replace(/:/g, '')
-  const xs = series[0]?.points.map((p) => p[0]) || []
+  const xs = series.find((s) => s.points.length)?.points.map((p) => p[0]) || [] // the first series with points
   const n = xs.length
   const max = niceMax(Math.max(0, ...series.flatMap((s) => s.points.map((p) => p[1]))))
   const color = (i: number) => (series.length === 1 ? 'var(--primary)' : COLORS[i % COLORS.length])
@@ -136,8 +136,10 @@ export function Chart({ kind, series, unit, height = 140 }: { kind: 'bar' | 'lin
                 })
               : series.map((s, si) => {
                   const pts = s.points.map((p, i) => [xl(i), y(p[1])] as const)
+                  if (!pts.length) return null // an empty series: nothing to draw (a shorter one stops where it ends)
                   const line = pts.map((p, i) => `${i ? 'L' : 'M'}${p[0]},${p[1]}`).join(' ')
                   const last = pts[pts.length - 1]
+                  const at = hover == null ? undefined : pts[hover]
                   return (
                     <g key={si}>
                       {series.length === 1 && (
@@ -146,7 +148,7 @@ export function Chart({ kind, series, unit, height = 140 }: { kind: 'bar' | 'lin
                       {/* the line draws itself left to right, then its last point pops in */}
                       <path d={line} pathLength={1} fill="none" stroke={color(si)} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" className="mx-draw" />
                       <circle cx={last[0]} cy={last[1]} r={4} fill={color(si)} stroke="var(--color-card)" strokeWidth={2} className="mx-pop [transform-box:fill-box] [transform-origin:center]" />
-                      {hover != null && <circle cx={pts[hover][0]} cy={pts[hover][1]} r={4} fill={color(si)} stroke="var(--color-card)" strokeWidth={2} />}
+                      {at && <circle cx={at[0]} cy={at[1]} r={4} fill={color(si)} stroke="var(--color-card)" strokeWidth={2} />}
                     </g>
                   )
                 })}
