@@ -295,3 +295,18 @@ def test_a_remote_picture_without_slashes_still_waits_for_a_click(tmp_path):
     out = _run_ts(tmp_path, mod, """return ['http:evil.com/?d=1', 'HTTPS:evil.com', 'https://evil.com', '//evil.com',
         '/\\\\evil.com', '/sessions', '/api/files/raw?p=a.png', 'img/a.png', '#top'].map((u) => m.EXTERNAL.test(u))""")
     assert out == [True, True, True, True, True, False, False, False, False]
+
+
+def test_only_the_widget_itself_speaks_to_the_page_that_frames_it(tmp_path):
+    """A link in widget.html can load another site INTO the frame (same window, origin 'null'): without the key of
+    the mount from the fragment, its messages are ignored and it gets no data."""
+    out = _run_ts(tmp_path, WEB / "pages" / "dashboard" / "widgetKey.ts", """const a = m.frameKey(), b = m.frameKey()
+        return [/^[0-9a-f]{32}$/.test(a), a !== b, m.ours({loads: 1, hellos: 1}), m.ours({loads: 0, hellos: 1}),
+                m.ours({loads: 2, hellos: 1}), m.ours({loads: 1, hellos: 0})]""")
+    assert out == [True, True, True, True, False, False]
+    src = (WEB / "pages" / "dashboard" / "HtmlWidget.tsx").read_text(encoding="utf-8")
+    assert "if (m.key !== key) return" in src and "vars: themeVars(), key }" in src
+    assert src.count("ours(seen.current) &&") == 2                 # data and theme
+    from maxxing.api.extensions import WIDGET_BRIDGE
+    assert "K=String(init.key||'')" in WIDGET_BRIDGE and "post({mx:'hello'})" in WIDGET_BRIDGE
+    assert "parent.postMessage(m,'*')" in WIDGET_BRIDGE and WIDGET_BRIDGE.count("parent.postMessage") == 1
