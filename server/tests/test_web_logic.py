@@ -420,3 +420,11 @@ def test_the_source_headings_are_the_ones_the_preview_draws(tmp_path):
              "***\n---\nP\n==="]                                  # rules are no paragraph
     out = _run_ts(run, mod, f"return {json.dumps(cases)}.map((c) => m.sourceHeadings(c))")
     assert out == [[1, 4, 7], [1, 5], [5], [6], [5], [4], [3]]
+
+
+def test_the_team_chat_name_keeps_its_room_next_to_the_header_buttons():
+    chat = (WEB / "features" / "team" / "Chat.tsx").read_text(encoding="utf-8")
+    head = chat[chat.index("function ChatHeader"):]
+    assert head.count("min-w-24 flex-1") == 2                 # a dm and a group: never squashed to 0 px
+    page = (WEB / "features" / "team" / "TeamPage.tsx").read_text(encoding="utf-8")
+    assert "newChat('max-xl:sr-only')" in page and "max-xl:sr-only\">{t('team.toBubble')}" in page

@@ -320,7 +320,7 @@ export function ChatView({ team, chatId, onBack, compact, headerExtra, leading }
         <Tooltip content={t('team.summarizeHint')}>
           <Button size="sm" variant={sel ? 'secondary' : 'outline'} className="gap-1.5" aria-label={t('team.summarize')} disabled={summarize.isPending || pickable.length < 2 || !!chat.left} onClick={() => (sel ? setSel(null) : choose(msgs.some((m) => m.kind === 'summary') ? 'last' : 'all'))}>
             {summarize.isPending ? <Spinner className="size-3.5" /> : <Sparkles className="size-3.5 text-primary" />}
-            {!compact && <span className="max-md:hidden">{t('team.summarize')}</span>}
+            {!compact && <span className={headerExtra ? 'max-xl:hidden' : 'max-md:hidden'}>{t('team.summarize')}</span>}
           </Button>
         </Tooltip>
         {headerExtra}
@@ -448,11 +448,12 @@ function ChatHeader({ team, chat, title, compact, writing }: { team: TeamState |
       </span>
     </>
   )
-  if (chat.kind === 'dm') return <div className="flex min-w-0 flex-1 items-center gap-2.5">{face}</div>
+  // min-w-24: the buttons next to it (Summarize, bubble, new chat) never squash who you talk to down to nothing
+  if (chat.kind === 'dm') return <div className="flex min-w-24 flex-1 items-center gap-2.5">{face}</div>
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button type="button" className="-my-1 flex min-w-0 flex-1 items-center gap-2.5 rounded-lg py-1 pr-2 transition-colors hover:bg-muted">
+        <button type="button" className="-my-1 flex min-w-24 flex-1 items-center gap-2.5 rounded-lg py-1 pr-2 transition-colors hover:bg-muted">
           {face}
         </button>
       </PopoverTrigger>
