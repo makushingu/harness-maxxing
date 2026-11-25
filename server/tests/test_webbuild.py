@@ -207,10 +207,9 @@ def test_no_pathspec_slips_the_shipped_build_into_a_customization(ui):
         with pytest.raises(customs.CustomError, match="web/dist"):
             customs.save("UI tweak", files=files)
     assert customs.list_customs() == []
-    _git("add", "web/dist", cwd=clone)                            # staged earlier, other files saved
-    with pytest.raises(customs.CustomError, match="web/dist"):
-        customs.save("UI tweak", files=["web/src/main.txt"])
-    assert customs.save("UI tweak", files=["web/src/main.txt"])["id"]   # the refusal unstaged it
+    _git("add", "web/dist", cwd=clone)                            # staged earlier, other files saved: left out
+    assert customs.save("UI tweak", files=["web/src/main.txt"])["id"]
+    assert customs.list_customs()[-1]["files"] == ["web/src/main.txt"]
 
 
 def test_the_preflight_never_installs_build_tools(ui):

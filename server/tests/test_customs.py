@@ -395,3 +395,34 @@ def test_a_title_or_reason_with_a_nul_or_lone_surrogate_is_a_clean_error(code, t
         customs.save(title, why)
     assert customs.list_customs() == []
 
+
+def test_two_saves_at_once_keep_their_own_files(code):
+    import threading
+    clone = code["clone"]
+    (clone / "a.py").write_text("a = 9\n")
+    (clone / "b.py").write_text("b = 9\n")
+    errs = []
+
+    def save(title, f):
+        try:
+            customs.save(title, "w", [f])
+        except Exception as e:                            # noqa: BLE001 - reported by the assert
+            errs.append(repr(e))
+    ts = [threading.Thread(target=save, args=("SA", "a.py")), threading.Thread(target=save, args=("SB", "b.py"))]
+    [t.start() for t in ts]
+    [t.join() for t in ts]
+    assert not errs and {c["title"]: c["files"] for c in customs.list_customs()} == {"SA": ["a.py"], "SB": ["b.py"]}
+
+
+def test_a_refused_save_leaves_nothing_staged_for_the_next_one(code):
+    clone = code["clone"]
+    (clone / "web" / "dist").mkdir(parents=True)
+    (clone / "web" / "dist" / "x.js").write_text("x")
+    (clone / "a.py").write_text("a = 5\n")
+    with pytest.raises(customs.CustomError, match="web/dist"):
+        customs.save("UI build")
+    assert customs.git("diff", "--cached", "--name-only")[1].strip() == ""
+    (clone / "web" / "dist" / "x.js").unlink()
+    (clone / "b.py").write_text("b = 5\n")
+    customs.save("Only b", "w", ["b.py"])
+    assert customs.list_customs()[-1]["files"] == ["b.py"]

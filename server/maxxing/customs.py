@@ -19,6 +19,8 @@ conflict -> done; conflict -> nothing changes and the topic system/harness lets 
 from __future__ import annotations
 
 import datetime as dt
+import fcntl
+import functools
 import json
 import os
 import re
@@ -263,6 +265,17 @@ def render_registry(items: list[dict[str, Any]]) -> str:
 
 
 # ---- save / drop / restore -----------------------------------------------------------------
+def _one_at_a_time(fn):
+    """save / drop / restore share git's index and HEAD: two sessions at once would mix their files under one title."""
+    @functools.wraps(fn)
+    def run(*a, **kw):
+        with open(config.state_dir() / "customs.lock", "a") as f:
+            fcntl.flock(f, fcntl.LOCK_EX)
+            return fn(*a, **kw)
+    return run
+
+
+@_one_at_a_time
 def save(title: str, why: str = "", files: list[str] | None = None, check: str = "") -> dict[str, Any]:
     """Commit the uncommitted changes of the code directory as one customization."""
     if not is_git():
@@ -276,14 +289,15 @@ def save(title: str, why: str = "", files: list[str] | None = None, check: str =
         raise CustomError("nothing to save: no uncommitted change in " + str(config.CODE))
     ensure_identity()
     if files:
+        git("reset", "-q")                                # only these files, never a change staged by something else
         git("add", "--", *files, check=True)
     else:
         git("add", "-A", check=True)
-    # what is staged now (a pathspec such as `.` or a change staged earlier included) - never the shipped UI build
+    # what is staged now (a pathspec such as `.` included) - never the shipped UI build
     _, staged = git("diff", "--cached", "--name-only", "-z")
     built = [f for f in staged.split("\0") if f.startswith("web/dist/")]
     if built:
-        git("reset", "-q", "--", "web/dist")
+        git("reset", "-q")                                # nothing left staged for the next save to carry away
         raise CustomError("web/dist is the shipped build of the UI, never a customization: save the sources under "
                           "web/ and build them with `maxxing custom build`; put the shipped build back first: "
                           f"git -C {config.CODE} checkout -- web/dist && git -C {config.CODE} clean -fdq web/dist"
@@ -324,6 +338,7 @@ def _find(cid: str) -> dict[str, Any]:
     raise CustomError(f"no customization {cid!r} (see: maxxing custom list)")
 
 
+@_one_at_a_time
 def drop(cid: str) -> dict[str, Any]:
     """Remove one customization (the later ones are replayed on top)."""
     if dirty_files():
@@ -336,6 +351,7 @@ def drop(cid: str) -> dict[str, Any]:
     return {"dropped": it, **export()}
 
 
+@_one_at_a_time
 def restore(from_dir: Path | None = None) -> dict[str, Any]:
     """Apply the exported patches (e.g. after restoring the memory backup on a new server)."""
     pdir = from_dir or (_workspace() / PATCH_DIR)
