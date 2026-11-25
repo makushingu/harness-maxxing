@@ -38,6 +38,7 @@ import shutil
 import stat
 import threading
 import time
+import unicodedata
 from contextlib import contextmanager, suppress
 from pathlib import Path
 from typing import Any
@@ -519,6 +520,14 @@ def checked_attachments(base: Path, files: list[str] | None) -> list[str]:
     return out
 
 
+def one_line(v: Any, n: int) -> str:
+    """A name shown on pages and written into prompts, from a file that may come from elsewhere (an import): one
+    line, without control or format characters (bidi overrides, NUL, zero-width) - ZWJ and VS16 stay for emoji."""
+    t = "".join(c for c in _utf8(str(v or "")) if c.isspace() or c in "\u200d\ufe0f"
+                or unicodedata.category(c) not in ("Cc", "Cf"))   # a line break still becomes a space
+    return " ".join(t.split())[:n]
+
+
 def _utf8(s: str) -> str:
     """A lone surrogate (\\ud800 is valid JSON) as "?": UTF-8 cannot store it."""
     return s.encode("utf-8", "replace").decode("utf-8")
@@ -547,7 +556,7 @@ def clean(data: Any, strict: bool = False, own: str = "") -> dict:
     triggers = [x for x in (_clean_trigger(t, strict, own) for t in given[:MAX_TRIGGERS]) if x]
     if strict and isinstance(d.get("triggers"), list) and len(d["triggers"]) > MAX_TRIGGERS:
         raise AgentError(400, "too_many_triggers", f"At most {MAX_TRIGGERS} triggers")
-    name = " ".join(_utf8(str(d.get("name") or "")).split())[:60]
+    name = one_line(d.get("name"), 60)
     model, chat_model = _model(d.get("model"), strict), _model(d.get("chat_model"), strict)
     return {"version": 1, "name": name, "avatar": _clean_avatar(d.get("avatar"), name or "agent"),
             "enabled": d.get("enabled") is not False, "model": model, "permission_mode": mode,
