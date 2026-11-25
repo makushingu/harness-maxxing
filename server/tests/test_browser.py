@@ -1760,3 +1760,20 @@ def test_a_reused_command_id_never_lets_the_list_of_tabs_out_unfiltered():
     out, _ = asyncio.run(v.incoming(answer))
     assert [i["targetId"] for i in out["result"]["targetInfos"]] == ["mine"]
     assert v.outgoing({"id": 7, "method": "Target.getTargets"}) is None           # answered: free again
+
+
+def test_network_events_never_carry_the_sites_cookies():
+    from maxxing.browser import relay
+    ev = {"method": "Network.requestWillBeSentExtraInfo", "sessionId": "s1", "params": {
+        "requestId": "1", "headers": {"Cookie": "SID=secret1", "Accept": "*/*"},
+        "associatedCookies": [{"blockedReasons": [], "cookie": {"name": "SID", "value": "secret1", "httpOnly": True}}]}}
+    out = json.loads(relay.no_cookies(json.dumps(ev)))
+    assert "secret1" not in json.dumps(out) and out["params"]["headers"] == {"Accept": "*/*"}
+    ev = {"method": "Network.responseReceivedExtraInfo", "params": {"requestId": "1", "headers": {"set-cookie": "SID=secret2"},
+                                                                     "headersText": "HTTP/1.1 200\r\nSet-Cookie: SID=secret2"}}
+    assert "secret2" not in relay.no_cookies(json.dumps(ev))
+    ev = {"method": "Fetch.requestPaused", "params": {"request": {"headers": {"cookie": "a=secret3"}},
+                                                       "responseHeaders": [{"name": "Set-Cookie", "value": "b=secret4"}]}}
+    assert "secret3" not in (t := relay.no_cookies(json.dumps(ev))) and "secret4" not in t
+    other = json.dumps({"method": "Page.frameNavigated", "params": {"frame": {"url": "https://a/?cookie=1"}}})
+    assert relay.no_cookies(other) == other
