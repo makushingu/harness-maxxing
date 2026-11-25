@@ -5,11 +5,16 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
-## Unreleased
+## 2.0.0-alpha.172 - 2026-11-25
 
 - Themes: `ThemePreview` loses its `image` and `wallpaper` props (no `<img>`, no `url()`): the tile is always the drawn
   window, a glass theme's backdrop = `wall-a`/`wall-b` or the accent mix. `preview` stays in `/api/themes` (Community).
   `/api/themes/{id}/file/{name}`: `stale-while-revalidate=604800` added to `max-age=300`.
+- Audit fixes (FEU, straight to `main` then merged into `beta`): `agents.continue_in_sessions` under `_continue_mu`
+  (check for a copy + creation in one step); `api/system` license loop catches one bad pass, `license.move_due`
+  reads a non-number / non-finite `move_tried_at` as never tried; `feedback` encodes the whole prompt with
+  `errors="replace"` (folder names with lone surrogates); `register.settings()` and `api/onboarding` read a
+  non-dict `register` section as the defaults; `FeedbackDialog` footer `sm:flex-wrap`.
 
 ## 2.0.0-alpha.171 - 2026-11-25
 

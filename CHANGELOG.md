@@ -3,10 +3,13 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
-## Unreleased
+## 2.0.0-alpha.172 - 2026-11-25
 
 Fixed:
 - **Theme cards in Settings show up at once.** Every theme's card is now drawn from its own colors, like Solid and Glass, instead of loading its preview picture or its wallpaper (often several hundred KB each). The picture is still used for its Community listing.
+- **Continue in Sessions opens one copy.** Two clicks at once (a double click, two tabs) no longer open two sessions on the same Claude thread.
+- **Feedback works with a damaged setting or folder name.** A damaged registration section in the settings no longer breaks the Feedback window, a folder name that is not UTF-8 no longer skips the check before sending, and the three answer buttons wrap instead of overflowing the window.
+- **The license background check keeps running** when one of its saved values is damaged.
 
 ## 2.0.0-alpha.171 - 2026-11-25
 

@@ -74,7 +74,7 @@ wheels = [
 
 [[package]]
 name = "claude-maxxing"
-version = "2.0.0a171"
+version = "2.0.0a172"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
