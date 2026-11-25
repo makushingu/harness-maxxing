@@ -63,7 +63,8 @@ def blocked() -> bool:
 
 
 def settings() -> dict:
-    r = config.load_config().get("register") or {}
+    r = config.load_config().get("register")
+    r = r if isinstance(r, dict) else {}            # a damaged section: the defaults
     return {**DEFAULTS, **{k: r[k] for k in DEFAULTS if k in r}}
 
 

@@ -492,3 +492,32 @@ def test_an_activation_token_that_is_not_utf8_leaves_no_key(mx, monkeypatch):
     with pytest.raises(license.LicenseError):
         license.activate("HM-ABCD-EFGH-JKMN-PQRS")
     assert not config.get_secret(license.KEY) and not config.get_secret(license.SEAT)
+
+
+@pytest.mark.parametrize("bad", ["abc", [1], {"a": 1}, "nan", 1e999])
+def test_a_damaged_move_tried_at_does_not_break_the_move_check(mx, bad):
+    config.update_config(license={"move_tried_at": bad})
+    assert license.move_due() is True                                # as if never tried
+
+
+def test_the_ping_loop_survives_a_failing_move_check(mx, monkeypatch):
+    from maxxing import register
+    from maxxing.api import system
+    beats: list = []
+    sleeps: list = []
+
+    async def fake_sleep(s):
+        sleeps.append(s)
+        if len(sleeps) > 3:
+            raise asyncio.CancelledError
+
+    def boom():
+        raise ValueError("bad move_tried_at")
+    monkeypatch.setattr(system.asyncio, "sleep", fake_sleep)
+    monkeypatch.setattr(license, "enabled", lambda: True)
+    monkeypatch.setattr(license, "move_due", boom)
+    monkeypatch.setattr(register, "heartbeat_due", lambda: True)
+    monkeypatch.setattr(register, "heartbeat", lambda: beats.append(1))
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(system._ping_loop())
+    assert len(beats) == 3                                           # one heartbeat per hour, the loop goes on

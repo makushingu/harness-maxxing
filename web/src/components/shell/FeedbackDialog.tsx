@@ -145,7 +145,7 @@ export function FeedbackDialog() {
             )}
             {errText && <p className="text-sm text-destructive" role="alert">{errText}</p>}
             {shotErr && <p className="text-sm text-destructive" role="alert">{t('feedback.zoneFailed')}</p>}
-            <DialogFooter>
+            <DialogFooter className="sm:flex-wrap">
               <Button type="button" variant="ghost" className="sm:mr-auto" onClick={() => { setReply(null); send.reset() }}>{t('feedback.reply.edit')}</Button>
               <Button type="button" variant="outline" disabled={send.isPending} onClick={force}>{send.isPending && <Spinner />}{t('feedback.reply.force')}</Button>
               <Button type="button" disabled={create.isPending} onClick={openSession}>{create.isPending ? <Spinner /> : <MessageSquarePlus />}{t('feedback.reply.open')}</Button>

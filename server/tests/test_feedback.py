@@ -298,6 +298,15 @@ def test_the_message_cannot_close_its_own_tag(client, mx, monkeypatch):
     assert call["prompt"].count("</feedback>") == 1 and call["prompt"].rstrip().endswith("</feedback>")
 
 
+def test_a_folder_name_that_is_not_utf8_does_not_skip_the_check(client, mx, monkeypatch):
+    from maxxing import feedback
+    monkeypatch.setenv("FAKE_CLAUDE_FEEDBACK", '{"verdict": "answer", "answer": "Yes."}')
+    monkeypatch.setattr(feedback, "_local_changes", lambda: ["Extensions installed by the user: caf\udce9"])
+    assert _check(client)["verdict"] == "answer"                               # Claude read the message
+    [call] = _check_calls(mx)
+    assert "installed by the user: caf?" in call["prompt"]
+
+
 def test_a_message_sent_anyway_says_so(client, cloud):
     from maxxing import feedback
     r = client.post("/api/settings/feedback", json={"email": "me@x.io", "type": "idea", "message": "Dark mode", "forced": True})

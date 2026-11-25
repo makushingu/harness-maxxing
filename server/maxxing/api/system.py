@@ -405,8 +405,11 @@ async def _ping_loop() -> None:
     from .. import license
     await asyncio.sleep(60)
     while True:
-        if license.enabled() and license.move_due():
-            await _move_to_git()
+        try:                                        # one bad pass never stops the loop (heartbeat, move to git)
+            if license.enabled() and license.move_due():
+                await _move_to_git()
+        except Exception as e:  # noqa: BLE001 - tried again next hour
+            log.warning("move to git check failed: %s", e)
         try:
             from .. import register
             if register.heartbeat_due():
