@@ -371,3 +371,9 @@ def test_both_sidebars_dragged_wide_still_leave_the_page_its_room(tmp_path):
                     ("PageList.tsx", "secondMax(useViewportWidth(), left, SECOND_W)")):
         src = (WEB / "components" / "shell" / f).read_text(encoding="utf-8")
         assert call in src and "max={maxW}" in src, f
+
+
+def test_a_relative_date_that_is_not_a_number_is_empty_not_a_crash(tmp_path):
+    out = _run_ts(tmp_path, WEB / "lib" / "format.ts", """return [undefined, NaN, 'x', null, Infinity].map((v) => m.fmtRelative(v, 'en', 1000))
+        .concat([m.fmtRelative(1000 - 7200, 'en', 1000)])""")
+    assert out == ["", "", "", "", "", "2 hr. ago"]

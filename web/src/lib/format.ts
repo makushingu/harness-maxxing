@@ -55,6 +55,7 @@ export function fmtDate(at: number, lang: string, tz?: string, opts?: Intl.DateT
 
 /** "3 min ago" / "in 2 h" — `at` in Unix seconds. */
 export function fmtRelative(at: number, lang: string, now = Date.now() / 1000): string {
+  if (typeof at !== 'number' || !Number.isFinite(at)) return ''   // a damaged date: nothing rather than a crash
   const diff = at - now
   const abs = Math.abs(diff)
   const rtf = cached('r', lang, undefined, () => new Intl.RelativeTimeFormat(lang, { numeric: 'auto', style: 'short' }))
