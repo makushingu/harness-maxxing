@@ -206,6 +206,13 @@ def test_activate_without_token_leaves_no_key(mx, monkeypatch):
     assert not (config.load_config().get("license") or {}).get("email")
 
 
+def test_activate_refuses_a_huge_token(mx, monkeypatch):
+    monkeypatch.setattr(license, "_post", lambda *a, **k: {"ok": True, "token": "t" * (1 << 20), "license": {}})
+    with pytest.raises(license.LicenseError):
+        license.activate("HM-ABCD-EFGH-JKMN-PQRS")
+    assert not config.get_secret(license.KEY) and not config.get_secret(license.SEAT)
+
+
 def test_the_key_from_the_api(server, client):
     c = client
     assert c.get("/api/settings/license").json()["has_key"] is False

@@ -76,6 +76,7 @@ def os_name() -> str:
 
 
 ANSWER_MAX = 1 << 20                                   # bytes of a cloud answer: more is not an answer
+TOKEN_MAX = 512                                        # chars of an activation token: kept in secrets.json
 ANSWER_DEADLINE = 30                                   # seconds for a whole answer
 
 
@@ -179,7 +180,8 @@ def activate(key: str, version: str | None = None) -> dict:
     r = _post("/v1/activate", {"key": key.strip(), "machine_id": machine_id(), "hostname": socket.gethostname(),
                                "os": os_name(), "version": version or disk_version()})
     from . import vault
-    if not isinstance(r.get("token"), str) or not r["token"] or not vault._is_text(r["token"]):   # UTF-8 only
+    if (not isinstance(r.get("token"), str) or not r["token"] or len(r["token"]) > TOKEN_MAX
+            or not vault._is_text(r["token"])):                       # UTF-8 only, a token and not a file
         raise LicenseError("the license server sent no activation token", "bad_answer", r)
     if not isinstance(r.get("license", {}), dict):                      # checked before anything is written
         raise LicenseError("the license server sent an answer this version does not read", "bad_answer")
