@@ -135,3 +135,16 @@ def test_a_group_still_answers_its_owner(client, topic):
     client.post(f"{G}/messages", json={"text": "@writer\nREPLY_AS writer: Here"})
     assert [(m["kind"], m["author"]) for m in _idle(client, 1)] == [("message", W)]
 
+
+
+def test_a_damaged_cost_in_a_session_is_ignored(client, topic):
+    _budget(client, 10)
+    _spend(topic, 3.0)
+    for bad in ("nan", "inf", 1e999, 10 ** 400):
+        m = store.new_meta(topic, "damaged")
+        store.add_usage(m, {}, 1.0, time.time())
+        m["days"][store.day_of(time.time())]["cost"] = bad
+        store.create(m)
+    r = client.get("/api/stats/budget")
+    assert r.status_code == 200 and r.json()["spent_today"] == 3.0
+    assert budget.reached() is False

@@ -98,7 +98,8 @@ export function startIdlePrefetch(qc: QueryClient): () => void {
         () => ids.forEach(prefetchTail),
       )
     },
-    () => prefetchPages(pageTops(qc)),
+    // one page after the other, the next step after the last one; stopped or on a slow connection: no more pages
+    () => prefetchPages(pageTops(qc), () => stopped || !canPrefetch()),
     // the file viewer's code: the first file opened shows without waiting for it
     () => import('@/features/files/viewerLoad').then((m) => m.loadFileViewer()),
   ]

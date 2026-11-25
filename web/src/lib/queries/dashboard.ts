@@ -21,25 +21,36 @@ export function useRefreshWidget() {
   })
 }
 
-/** The widgets the dashboard answered without (`pending`, still computing): fetched one by one, patched in. */
+/** The widgets the dashboard answered without (`pending`, still computing): fetched one by one, patched in. Each
+ *  is asked once while its request runs: one arriving (the list changes) neither drops nor asks again the others. */
 export function useFillPendingWidgets(widgets: Widget[] | undefined) {
   const qc = useQueryClient()
+  const asked = React.useRef(new Set<string>())
+  const live = React.useRef(true)
+  React.useEffect(() => {
+    live.current = true
+    return () => {
+      live.current = false
+    }
+  }, [])
   const ids = (widgets || []).filter((w) => w.pending).map((w) => w.id).join('\n')
   React.useEffect(() => {
     if (!ids) return
-    let live = true
-    for (const id of ids.split('\n'))
-      api.get<Widget>(`/api/dashboard/widgets/${seg(id)}`).then(
-        (w) => live && patchWidget(qc, w),
-        (err) => {
-          // A failed request: the error card and its Retry button, never a skeleton forever.
-          if (!live) return
-          const w = qc.getQueryData<DashboardPayload>(qk.dashboard.all)?.widgets.find((x) => x.id === id)
-          if (w) patchWidget(qc, { ...w, pending: false, error: errorMessage(err) })
-        },
-      )
-    return () => {
-      live = false
+    for (const id of ids.split('\n')) {
+      if (asked.current.has(id)) continue
+      asked.current.add(id)
+      api
+        .get<Widget>(`/api/dashboard/widgets/${seg(id)}`)
+        .then(
+          (w) => live.current && patchWidget(qc, w),
+          (err) => {
+            // A failed request: the error card and its Retry button, never a skeleton forever.
+            if (!live.current) return
+            const w = qc.getQueryData<DashboardPayload>(qk.dashboard.all)?.widgets.find((x) => x.id === id)
+            if (w) patchWidget(qc, { ...w, pending: false, error: errorMessage(err) })
+          },
+        )
+        .finally(() => asked.current.delete(id))
     }
   }, [ids, qc])
 }

@@ -160,6 +160,7 @@ const WEEKDAYS: Record<string, number> = {
   sat: 6, saturday: 6, sam: 6, samedi: 6,
 }
 const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+const projectKey = (s: string) => norm(s).replace(/[-_\s]+/g, ' ').trim()
 
 function parseDue(word: string, today: string): string | undefined {
   const w = norm(word)
@@ -194,8 +195,9 @@ export function parseQuickAdd(input: string, projects: TaskProject[], today: str
       continue
     }
     if (/^@\S+$/.test(tok)) {
-      const want = norm(tok.slice(1)).replace(/[-_]+/g, ' ')
-      const p = projects.find((x) => norm(x.name) === want) || projects.find((x) => norm(x.name).startsWith(want))
+      // the same on both sides: "@harness-maxxing", "@harness_maxxing" and "@harness" find "harness-maxxing"
+      const want = projectKey(tok.slice(1))
+      const p = projects.find((x) => projectKey(x.name) === want) || projects.find((x) => projectKey(x.name).startsWith(want))
       if (p) {
         out.project_id = p.id
         out.projectName = p.name

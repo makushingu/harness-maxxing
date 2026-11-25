@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, seg } from '../api'
 import type { Ok, Profile, Session } from '../types'
+import { unlessBus } from './keys'
 import { useMut } from './util'
 
 // Team chats (server/maxxing/team.py): plain chats between people, kept fresh by the bus topic `team`.
@@ -68,7 +69,8 @@ export function useTeamChat(id: string | null) {
   return useQuery({ queryKey: teamKeys.chat(id || ''), queryFn: () => api.get<ChatData>(chatUrl(id!)), enabled: !!id })
 }
 
-const inv = [teamKeys.all] as const
+// The server announces each Team write on the bus (team.py _save): invalidating here too read it all twice.
+const inv = unlessBus([teamKeys.all])
 type SendVars = { cid: string; text: string; reply_to?: string; files?: ({ path: string } & Partial<TeamFile>)[] }
 /** The message shown while each send is on its way (by its variables). */
 const sending = new WeakMap<SendVars, string>()
@@ -146,7 +148,7 @@ export function useTeamMute() {
 /** "This Harness is open" for the contacts (the server sends it at most every 2 min). */
 export const teamPresence = () => api.post<Ok>('/api/team/presence').catch(() => undefined)
 export function useTeamRead() {
-  return useMut((cid: string) => api.post<Ok>(`${chatUrl(cid)}/read`), { invalidate: [teamKeys.state], errorToast: false })
+  return useMut((cid: string) => api.post<Ok>(`${chatUrl(cid)}/read`), { invalidate: unlessBus([teamKeys.state]), errorToast: false })
 }
 export function useTeamCreateChat() {
   return useMut((b: { kind: 'dm' | 'group'; members: string[]; name?: string; emoji?: string }) => api.post<TeamChat>('/api/team/chats', b), { invalidate: inv })

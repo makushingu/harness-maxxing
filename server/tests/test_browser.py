@@ -1745,3 +1745,52 @@ def test_concurrent_journal_writes_lose_no_line_and_stay_small(mx):
     got = {json.loads(ln).get("session") for ln in lines}          # every line whole
     assert not [m for m in marks[-100:] if m not in got]
     assert f.stat().st_size <= 400_000 and not list(f.parent.glob("*.tmp"))
+
+
+def test_a_reused_command_id_never_lets_the_list_of_tabs_out_unfiltered():
+    import asyncio
+    from maxxing.browser.view import View
+    navs = {"mine": "A", "other": "B"}
+    v = View("A", lambda info: navs.get(str(info.get("targetId"))))
+    assert v.outgoing({"id": 7, "method": "Target.getTargets"}) is None
+    assert v.outgoing({"id": 7, "method": "Target.attachToBrowserTarget"})        # refused: 7 still awaited
+    assert v.outgoing({"id": 7, "method": "Runtime.evaluate"})
+    assert v.outgoing({"id": "8", "method": "Target.getTargets"})                 # not a number: refused
+    answer = {"id": 7, "result": {"targetInfos": [{"targetId": "mine", "type": "page"}, {"targetId": "other", "type": "page"}]}}
+    out, _ = asyncio.run(v.incoming(answer))
+    assert [i["targetId"] for i in out["result"]["targetInfos"]] == ["mine"]
+    assert v.outgoing({"id": 7, "method": "Target.getTargets"}) is None           # answered: free again
+
+
+def test_network_events_never_carry_the_sites_cookies():
+    from maxxing.browser import relay
+    ev = {"method": "Network.requestWillBeSentExtraInfo", "sessionId": "s1", "params": {
+        "requestId": "1", "headers": {"Cookie": "SID=secret1", "Accept": "*/*"},
+        "associatedCookies": [{"blockedReasons": [], "cookie": {"name": "SID", "value": "secret1", "httpOnly": True}}]}}
+    out = json.loads(relay.no_cookies(json.dumps(ev)))
+    assert "secret1" not in json.dumps(out) and out["params"]["headers"] == {"Accept": "*/*"}
+    ev = {"method": "Network.responseReceivedExtraInfo", "params": {"requestId": "1", "headers": {"set-cookie": "SID=secret2"},
+                                                                     "headersText": "HTTP/1.1 200\r\nSet-Cookie: SID=secret2"}}
+    assert "secret2" not in relay.no_cookies(json.dumps(ev))
+    ev = {"method": "Fetch.requestPaused", "params": {"request": {"headers": {"cookie": "a=secret3"}},
+                                                       "responseHeaders": [{"name": "Set-Cookie", "value": "b=secret4"}]}}
+    assert "secret3" not in (t := relay.no_cookies(json.dumps(ev))) and "secret4" not in t
+    other = json.dumps({"method": "Page.frameNavigated", "params": {"frame": {"url": "https://a/?cookie=1"}}})
+    assert relay.no_cookies(other) == other
+
+
+def test_a_link_planted_in_place_of_the_uploads_folder_is_never_followed(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from maxxing.browser import pool as pool_mod, unit
+    monkeypatch.delenv("MAXXING_BROWSER_LAUNCH", raising=False)
+    monkeypatch.setattr(unit, "user_ids", lambda: (os.geteuid(), os.getegid()))
+    run = tmp_path / "run" / "main"
+    run.mkdir(parents=True)
+    victim = tmp_path / "victim"
+    victim.mkdir()
+    os.chmod(victim, 0o755)
+    (run / "uploads").symlink_to(victim)                     # what the browser's user could do in its run folder
+    out = pool_mod.stage(SimpleNamespace(run=run), "a.txt", b"hello")
+    assert not list(victim.iterdir()) and (victim.stat().st_mode & 0o777) == 0o755
+    assert not (run / "uploads").is_symlink() and out.startswith("/mxrun/uploads/")
+    assert (run / "uploads" / out.split("/")[3] / "a.txt").read_bytes() == b"hello"

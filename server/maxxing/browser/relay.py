@@ -41,6 +41,33 @@ async def connect(sock: Path, path: str):
                               open_timeout=10)
 
 
+COOKIE_HEADERS = {"cookie", "set-cookie", "set-cookie2"}
+COOKIE_FIELDS = {"associatedCookies", "exemptedCookies", "blockedCookies", "cookiePartitionKey",
+                 "cookiePartitionKeyOpaque", "headersText", "requestHeadersText"}   # headersText: the raw headers
+
+
+def _scrub(v):
+    if isinstance(v, list):
+        return [_scrub(x) for x in v if not (isinstance(x, dict) and str(x.get("name", "")).lower() in COOKIE_HEADERS)]
+    if not isinstance(v, dict):
+        return v
+    return {k: _scrub(x) for k, x in v.items() if k not in COOKIE_FIELDS and k.lower() not in COOKIE_HEADERS}
+
+
+def no_cookies(text: str) -> str:
+    """The sites' cookies never reach the clients through network events (rules.json: cookies cannot be read over
+    DevTools): Cookie / Set-Cookie headers, the raw headers and the cookie lists of Network.* / Fetch.* events go."""
+    try:
+        m = json.loads(text)
+    except ValueError:
+        return text
+    if not isinstance(m, dict) or not str(m.get("method") or "").startswith(("Network.", "Fetch.")):
+        return text
+    if not isinstance(m.get("params"), dict):
+        return text
+    return json.dumps({**m, "params": _scrub(m["params"])})
+
+
 async def pump(sock: Path, path: str, sites: Callable[[], list[str] | None],
                recv: Callable[[], Awaitable[str | None]], send: Callable[[str], Awaitable[None]],
                view=None, wait_tab: Callable[[str], Awaitable[str | None]] | None = None) -> None:
@@ -53,6 +80,8 @@ async def pump(sock: Path, path: str, sites: Callable[[], list[str] | None],
         try:
             async for msg in up:
                 text = msg if isinstance(msg, str) else msg.decode()
+                if "ookie" in text or "headersText" in text:
+                    text = no_cookies(text)
                 if view is not None:
                     try:
                         m = json.loads(text)

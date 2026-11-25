@@ -11,6 +11,7 @@ The day is the one of the Harness time zone (store.day_of), as for the agents' b
 from __future__ import annotations
 
 import logging
+import math
 import os
 import time
 
@@ -55,9 +56,11 @@ def spent_today(now: float | None = None) -> float:
                 d = days.get(day) if isinstance(days, dict) else None
                 if isinstance(d, dict):
                     try:
-                        total += float(d.get("cost") or 0)
-                    except (TypeError, ValueError):
-                        pass
+                        c = float(d.get("cost") or 0)
+                    except (TypeError, ValueError, OverflowError):    # OverflowError: an integer too big for a float
+                        continue
+                    if math.isfinite(c):                # a damaged "nan" / "inf" would break the total for the day
+                        total += c
     except OSError:
         pass
     return round(total, 4)

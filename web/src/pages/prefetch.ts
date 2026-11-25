@@ -21,18 +21,20 @@ const PAGE_LOADERS: Record<string, () => Promise<unknown>> = {
 /** The pages every install has, warmed when no list is given. */
 const ALWAYS = ['sessions', '', 'files', 'tasks', 'settings', 'feed', 'docs']
 
-/** `tops`: the pages to warm, by their first path segment ('' = dashboard, 'x/' = an extension page), in order. */
-export function prefetchPages(tops: string[] = ALWAYS) {
+/** `tops`: the pages to warm, by their first path segment ('' = dashboard, 'x/' = an extension page), in order.
+ *  `stop()` is asked before each page (stopped, a slow connection now): the chain ends there. Resolves at its end. */
+export function prefetchPages(tops: string[] = ALWAYS, stop: () => boolean = () => false): Promise<void> {
   let chain: Promise<void> = Promise.resolve()
   const loads = tops.map((t) => (t === 'x/' ? () => import('./ext') : PAGE_LOADERS[t])).filter((l): l is () => Promise<unknown> => !!l)
   for (const load of loads)
     chain = chain
       .then(() => new Promise<void>((r) => setTimeout(r, 150)))
-      .then(() => load())
+      .then(() => (stop() ? undefined : load()))
       .then(
         () => undefined,
         () => undefined,
       )
+  return chain
 }
 
 /** The chunk of the page at `pathname` (the browser and Vite dedupe repeated imports). */

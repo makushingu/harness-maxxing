@@ -27,6 +27,7 @@ import os
 import re
 import secrets
 import shutil
+import stat
 import time
 from pathlib import Path
 
@@ -1012,22 +1013,53 @@ def trail_text(trail: list[dict]) -> str:
 
 # ---- files given to a page ---------------------------------------------------------------------------------------
 def stage(b: Browser, name: str, data: bytes | None = None, src: Path | None = None) -> str:
-    """Copy a file into the profile's uploads folder (emptied at each start); returns its path as Chromium sees it."""
-    ids = unit.user_ids()
-    root = b.run / "uploads"
-    d = root / secrets.token_hex(6)
-    d.mkdir(parents=True, exist_ok=True)
-    safe = re.sub(r"[^\w.\- ]", "_", Path(name).name).strip(" .")[:120] or "file"
-    f = d / safe
-    if src is not None:
-        shutil.copyfile(src, f)
-    else:
-        f.write_bytes(data or b"")
-    for x, mode in ((root, 0o750), (d, 0o750), (f, 0o640)):
-        os.chmod(x, mode)
-        if ids and not unit._direct():
-            os.chown(x, ids[0], ids[1])
-    return str(f) if unit._direct() else f"/mxrun/uploads/{d.name}/{safe}"
+    """Copy a file into the profile's uploads folder (emptied at each start); returns its path as Chromium sees it.
+    run/<profile> belongs to the browser's user, who could put a link in place of `uploads`: every step goes through
+    folders opened without following links, `uploads` and below belong to the server (the browser's group reads)."""
+    ids = None if unit._direct() else unit.user_ids()
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    b.run.mkdir(parents=True, exist_ok=True)
+    run = os.open(b.run, flags)
+    fds = [run]
+    try:
+        try:
+            st = os.lstat("uploads", dir_fd=run)
+            if not stat.S_ISDIR(st.st_mode) or st.st_uid != os.geteuid():    # a link, a file, a folder of the browser
+                if stat.S_ISDIR(st.st_mode):
+                    shutil.rmtree("uploads", dir_fd=run)
+                else:
+                    os.unlink("uploads", dir_fd=run)
+                raise FileNotFoundError
+        except FileNotFoundError:
+            os.mkdir("uploads", 0o750, dir_fd=run)
+        root = os.open("uploads", flags, dir_fd=run)
+        fds.append(root)
+        if os.fstat(root).st_uid != os.geteuid():         # swapped in between: never written into
+            raise browser.BrowserError(409, "upload", "The uploads folder of this browser changed: try again.")
+        sub = secrets.token_hex(6)
+        os.mkdir(sub, 0o750, dir_fd=root)
+        d = os.open(sub, flags, dir_fd=root)
+        fds.append(d)
+        safe = re.sub(r"[^\w.\- ]", "_", Path(name).name).strip(" .")[:120] or "file"
+        fd = os.open(safe, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o640, dir_fd=d)
+        with os.fdopen(fd, "wb") as out:
+            if src is not None:
+                with open(src, "rb") as f:
+                    shutil.copyfileobj(f, out)
+            else:
+                out.write(data or b"")
+            os.fchmod(out.fileno(), 0o640)
+            if ids:
+                os.fchown(out.fileno(), -1, ids[1])
+        for x in (root, d):
+            os.fchmod(x, 0o750)
+            if ids:
+                os.fchown(x, -1, ids[1])                # the browser's group: it reads, it cannot write
+    finally:
+        for x in fds:
+            os.close(x)
+    f = b.run / "uploads" / sub / safe
+    return str(f) if unit._direct() else f"/mxrun/uploads/{sub}/{safe}"
 
 
 def claude_file(b: Browser, owner_path: str, raw: str) -> str:
