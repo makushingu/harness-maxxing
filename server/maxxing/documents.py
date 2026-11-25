@@ -36,6 +36,7 @@ ROWS_MAX = 5000            # per sheet
 COLS_MAX = 200
 CELLS_MAX = 300_000        # filled cells, all sheets together
 CELL_MAX = 2000            # characters of one cell
+SHEET_CHARS_MAX = 6_000_000  # characters of all the cells together (one long shared text repeated: not 570 MB)
 STRINGS_MAX = 1_000_000    # shared strings of a workbook
 SHEETS_MAX = 40
 SLIDES_MAX = 500
@@ -115,6 +116,7 @@ class _Pack:
         self.deadline = time.monotonic() + TIME_S
         self.left = TEXT_MAX
         self.cells = CELLS_MAX
+        self.chars = SHEET_CHARS_MAX
         self.truncated = False
 
     def close(self) -> None:
@@ -807,7 +809,7 @@ class _Odf:
                     blank += rep
                     continue
                 room = ROWS_MAX - len(rows) - blank
-                if room <= 0 or self.pack.cells <= 0:
+                if room <= 0 or self.pack.cells <= 0 or self.pack.chars <= 0:
                     cut = True
                     break
                 rows.extend([[]] * blank)
@@ -815,6 +817,7 @@ class _Odf:
                 rep = min(rep, room)
                 rows.extend([vals] * rep)
                 self.pack.cells -= len(vals) * rep
+                self.pack.chars -= sum(map(len, vals)) * rep
             out.append({"name": tbl.get("name", ""), "rows": rows, "truncated": cut})
         return out
 
@@ -1010,11 +1013,12 @@ class _Xlsx:
                 (data if data is not None else el).clear()   # the rows read do not pile up in memory
                 if not vals:
                     continue
-                if at >= ROWS_MAX or self.pack.cells <= 0:
+                if at >= ROWS_MAX or self.pack.cells <= 0 or self.pack.chars <= 0:
                     raise _Full
                 rows.extend([[]] * (at - len(rows)))
                 rows.append(vals)
                 self.pack.cells -= len(vals)
+                self.pack.chars -= sum(map(len, vals))
         except _Full:
             cut = True
         return rows, cut

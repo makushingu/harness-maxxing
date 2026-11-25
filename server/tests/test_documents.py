@@ -368,3 +368,12 @@ def test_a_duration_format_shows_total_hours_not_a_date(tmp_path):
     ).replace("</cellXfs>", '<xf numFmtId="166"/><xf numFmtId="46"/><xf numFmtId="167"/></cellXfs>')
     r = documents.read(pack(tmp_path / "t2.xlsx", parts))
     assert r["sheets"][0]["rows"] == [["36:00", "36:00:00", "90:00", "18:00"]]   # D1: a time of day stays one
+
+
+def test_the_cells_of_a_workbook_have_a_total_size(tmp_path, monkeypatch):
+    """One long shared text in every cell: the answer stops at SHEET_CHARS_MAX characters, marked cut."""
+    monkeypatch.setattr(documents, "SHEET_CHARS_MAX", 1000, raising=False)
+    rows = "".join(f'<row r="{i}"><c r="A{i}" t="inlineStr"><is><t>{"x" * 50}</t></is></c></row>' for i in range(1, 200))
+    r = documents.read(xlsx(tmp_path / "wide.xlsx", rows))
+    got = r["sheets"][0]["rows"]
+    assert r["truncated"] and r["sheets"][0]["truncated"] and 1000 <= sum(len(c) for row in got for c in row) <= 1050
