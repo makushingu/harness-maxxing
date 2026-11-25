@@ -355,6 +355,9 @@ _CSS_BANNED = [
     (re.compile(r"expression\s*\(|javascript:|-moz-binding|behavior\s*:", re.I), "nothing that runs code"),
     (re.compile(r"position\s*:\s*(fixed|var\s*\()", re.I), "no position: fixed nor var() (nothing may cover the app)"),
     (re.compile(r"[<\\]"), "no < and no backslash"),
+    (re.compile(r"\b(?:if|attr)\s*\(", re.I), "no if() nor attr()"),
+    (re.compile(r"z-index\s*:(?!\s*(?:-?\d|auto|inherit|initial|unset|revert)\s*(?:!important\s*)?(?:[;}]|$))",
+                re.I | re.M), "z-index: a single digit at most (nothing may cover the app)"),
 ]
 
 

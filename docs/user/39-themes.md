@@ -52,8 +52,8 @@ rules in **one field**, `"css"` of `theme.json`: a string, or a list of lines, a
 - The rules apply only while the theme is in use: they sit inside `html[data-theme-id="<id>"] { … }`, so every rule
   starts with `&` (the page), `&.dark` for the dark mode, `&:not(.dark)` for the light one.
 - Refused as a whole, with a warning (the rest of the theme still works): `url()` and other images, `@import`,
-  `@font-face` and every at-rule except `@media`, `@supports` and `@container`, `position: fixed`, `<`, backslashes,
-  control characters, unbalanced braces or quotes.
+  `@font-face` and every at-rule except `@media`, `@supports` and `@container`, `position: fixed`, `if()`, `attr()`,
+  a `z-index` over 9, `<`, backslashes, control characters, unbalanced braces or quotes.
 - **Unlike the values, these rules may look wrong after an update** (the interface they style changes). So an update
   that changes the interface's CSS **switches them off by itself**: Settings -> Appearance -> Options says "Switched
   off" with a button that asks Harness to check them. Harness looks at the pages with the new version, fixes the

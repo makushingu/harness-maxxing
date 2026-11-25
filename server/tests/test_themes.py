@@ -239,3 +239,15 @@ def test_two_installs_of_the_same_theme_at_once_do_not_collide(mx, tmp_path):
     assert not errors, errors[:3]
     assert themes.get("race")["name"] == "Race"
     assert sorted(p.name for p in (mx["ws"] / "themes").iterdir()) == ["race"]
+
+
+def test_advanced_css_cannot_cover_the_app(tmp_path):
+    for bad in ["& body::after { content: ''; position: absolute; inset: 0; z-index: 2147483647; background: #000 }",
+                "& aside { position: if(media(min-width: 0px): fixed; else: static) }",
+                "& aside::after { content: attr(title) }", "& aside { z-index: 10 }", "& aside { z-index: calc(9 + 1) }",
+                "& aside {\n  z-index: 99\n}"]:
+        t, warn, _ = themes.load(_theme(tmp_path, "cover", {"name": "C", "css": bad}))
+        assert t["css"] is None and any(w.startswith("css:") for w in warn), bad
+    for ok in ["& aside { z-index: 2; opacity: .9 }", "& aside { z-index: auto !important }"]:
+        t, warn, _ = themes.load(_theme(tmp_path, "fine", {"name": "F", "css": ok}))
+        assert t["css"], (ok, warn)
