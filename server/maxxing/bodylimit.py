@@ -33,7 +33,7 @@ ROUTES: tuple[tuple[str, re.Pattern[str], int], ...] = (
 )
 _MUTATING = ("POST", "PUT", "PATCH", "DELETE")
 # The routes that take multipart files (UploadGuard checks them); on any other route a multipart body is capped like JSON.
-UPLOADS = re.compile(r"^/api/(?:uploads|files/upload|import/upload|team/files|browser/profiles/[^/]+/files|mail/[^/]+/(?:send|draft)|ext/.*)$")
+UPLOADS = re.compile(r"^/api/(?:uploads|files/upload|import/upload|team/files|browser/profiles/[^/]+/files|mail/[^/]+/(?:send|draft)|voice/transcribe|voice/call/[^/]+/turn|ext/.*)$")
 
 
 def _public(path: str) -> bool:
