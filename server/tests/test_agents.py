@@ -314,6 +314,31 @@ def test_continue_in_sessions_twice_opens_the_same_copy(client, topic):
             if (s.get("title") or "").startswith("Writer")] == [first["id"]]
 
 
+def test_continue_in_sessions_twice_at_once_opens_one_copy(client, topic, monkeypatch):
+    import threading as th
+    import time
+    from maxxing.sessions import store
+    _on(client)
+    _create(client)
+    run = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL hi"}).json()
+    sid = run["session"]["id"]
+    wait_idle(client, sid)
+    real = store.new_meta
+
+    def slow(*a, **k):                              # a big log to copy: both requests are past the check
+        time.sleep(0.3)
+        return real(*a, **k)
+    monkeypatch.setattr(store, "new_meta", slow)
+    out: list = []
+    ts = [th.Thread(target=lambda: out.append(agents.continue_in_sessions(A, sid)["id"])) for _ in range(2)]
+    for t in ts:
+        t.start()
+    for t in ts:
+        t.join()
+    copies = [i for i in store.list_ids() if ((store.read(i) or {}).get("from_agent") or {}).get("session") == sid]
+    assert len(set(out)) == 1 and copies == [out[0]]
+
+
 def test_the_agents_list_reads_the_sessions_once(client, topic, monkeypatch):
     from maxxing.sessions import store
     _on(client)

@@ -1066,10 +1066,18 @@ def pending_changes(path: str) -> int:
         return 0
 
 
+_continue_mu = threading.Lock()  # two "Continue in Sessions" at once (double click, two tabs) must not make two copies
+
+
 def continue_in_sessions(path: str, sid: str) -> dict:
     """"Continue in Sessions": a copy of one run of the agent as a normal session of its topic - same history and the
     same Claude thread (forked: the run itself is not changed), no agent rules (the user's own permissions). A run
     continued already gives back its copy."""
+    with _continue_mu:                              # the check for a copy and its creation are one step
+        return _continue_in_sessions(path, sid)
+
+
+def _continue_in_sessions(path: str, sid: str) -> dict:
     from . import bus
     from .sessions import service, store
     src = store.read(sid) if store.is_valid_id(sid) else None
