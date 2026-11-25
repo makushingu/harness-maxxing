@@ -564,3 +564,14 @@ def test_a_big_markdown_is_made_plain_without_the_parser(tmp_path):
         const big = markdownToTextLight('Hello **world** [x](https://a.b) é\\r\\n\\r\\n'.repeat(50000))
         return [small, big.split('\\n')[0], Date.now() - t0 < 1500]""")
     assert out == ["Title\n\nbold and it code gone\n- item x (https://a.b) y pic\n# kept", "Hello world x (https://a.b) é", True]
+
+
+def test_a_live_batch_of_text_does_not_copy_the_tool_index_nor_the_hidden_messages():
+    """fold() runs for every live batch: the tool index and the hidden messages are copied only by a batch that
+    changes them (once), not by each batch (its cost grew with the whole history loaded)."""
+    src = (WEB / "pages" / "sessions" / "log.ts").read_text(encoding="utf-8")
+    fold = src[src.index("function fold("):src.index("return { ...st, items, toolIdx")]
+    assert "{ ...st.toolIdx }" not in fold and "hidden = { ...hidden, [" not in fold
+    assert fold.count("if (!ownIdx) {") == 1 and fold.count("if (!ownHidden) {") == 1
+    use = fold[fold.index("case 'tool_use':"):fold.index("case 'tool_result':")]
+    assert use.index("toolIdx = { ...toolIdx }") < use.index("toolIdx[ev.id] = items.length")

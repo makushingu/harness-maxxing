@@ -131,9 +131,13 @@ function subscribe(id: string, fn: () => void) {
 function fold(st: LogState, evs: SessionEvent[], next: number, sid: string, keyPrefix = 'e', settlePending = true): LogState {
   if (!evs.length) return next === st.next ? st : { ...st, next }
   const items = st.items.slice()
-  const toolIdx = { ...st.toolIdx }
+  // the index of the tools and the hidden messages are copied once, when this fold first changes them: a batch of
+  // text or thinking (most live batches) no longer copies them, each batch cost grew with the whole history
+  let toolIdx = st.toolIdx
+  let ownIdx = false
   let orphans = st.orphans
   let hidden = st.hidden
+  let ownHidden = false
   let tasks = st.tasks
   let ownTasks = false // copy st.tasks once, on the first change of this fold
   let { count, lastModel, lastUserAt, turnOpen, cut, headNew } = st
@@ -174,6 +178,10 @@ function fold(st: LogState, evs: SessionEvent[], next: number, sid: string, keyP
         items.push({ kind: 'thinking', key, ev })
         break
       case 'tool_use':
+        if (!ownIdx) {
+          toolIdx = { ...toolIdx }
+          ownIdx = true
+        }
         toolIdx[ev.id] = items.length
         items.push({ kind: 'tool', key, use: ev, result: null, task: taskOfTool(tasks, ev.id) })
         break
@@ -231,7 +239,11 @@ function fold(st: LogState, evs: SessionEvent[], next: number, sid: string, keyP
         break
       }
       case 'hide':
-        hidden = { ...hidden, [String(ev.ref)]: ev.hidden }
+        if (!ownHidden) {
+          hidden = { ...hidden }
+          ownHidden = true
+        }
+        hidden[String(ev.ref)] = ev.hidden
         break
       case 'voice_text': {
         // The transcript belongs to the last voice message (written by the runner right after it).
