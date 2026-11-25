@@ -1777,3 +1777,20 @@ def test_network_events_never_carry_the_sites_cookies():
     assert "secret3" not in (t := relay.no_cookies(json.dumps(ev))) and "secret4" not in t
     other = json.dumps({"method": "Page.frameNavigated", "params": {"frame": {"url": "https://a/?cookie=1"}}})
     assert relay.no_cookies(other) == other
+
+
+def test_a_link_planted_in_place_of_the_uploads_folder_is_never_followed(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from maxxing.browser import pool as pool_mod, unit
+    monkeypatch.delenv("MAXXING_BROWSER_LAUNCH", raising=False)
+    monkeypatch.setattr(unit, "user_ids", lambda: (os.geteuid(), os.getegid()))
+    run = tmp_path / "run" / "main"
+    run.mkdir(parents=True)
+    victim = tmp_path / "victim"
+    victim.mkdir()
+    os.chmod(victim, 0o755)
+    (run / "uploads").symlink_to(victim)                     # what the browser's user could do in its run folder
+    out = pool_mod.stage(SimpleNamespace(run=run), "a.txt", b"hello")
+    assert not list(victim.iterdir()) and (victim.stat().st_mode & 0o777) == 0o755
+    assert not (run / "uploads").is_symlink() and out.startswith("/mxrun/uploads/")
+    assert (run / "uploads" / out.split("/")[3] / "a.txt").read_bytes() == b"hello"
