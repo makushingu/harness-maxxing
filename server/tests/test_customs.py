@@ -318,9 +318,10 @@ def test_a_local_commit_is_never_dropped_for_a_rewritten_history(code, capsys):
 def test_a_customization_merged_upstream_no_longer_blocks_the_update(code, capsys):
     """A customization upstream merged as another commit: hidden from the list (same content), and the update
     drops it with a rebase instead of failing on "cannot fast-forward" at every try."""
-    clone, work = code["clone"], code["work"]
+    clone, work, ws = code["clone"], code["work"], code["ws"]
     (clone / "server" / "maxxing" / "rules.py").write_text("LIMIT = 50\nNAME = 'product'\n")
     customs.save("Raise the limit", "many sessions")
+    assert (ws / "CUSTOMIZATIONS.md").exists()
     _upstream_release(work, "1.1.0", extra="other.txt")       # upstream moved on before merging it
     (work / "server" / "maxxing" / "rules.py").write_text("LIMIT = 50\nNAME = 'product'\n")
     _git("add", "-A", cwd=work)
@@ -333,6 +334,8 @@ def test_a_customization_merged_upstream_no_longer_blocks_the_update(code, capsy
     assert "already included upstream" in capsys.readouterr().out
     assert (clone / "feature.txt").exists() and "LIMIT = 50" in (clone / "server/maxxing/rules.py").read_text()
     assert customs.same_code_upstream() and customs.list_customs() == []
+    # the registry and the patches no longer list it (Claude and the backup read them; a new server would re-apply it)
+    assert not (ws / "CUSTOMIZATIONS.md").exists() and not list(ws.glob("customizations/*.patch"))
 
 
 def test_listing_the_customizations_runs_one_git_log_whatever_their_number(code, monkeypatch):
@@ -391,3 +394,4 @@ def test_a_title_or_reason_with_a_nul_or_lone_surrogate_is_a_clean_error(code, t
     with pytest.raises(customs.CustomError, match="plain text"):
         customs.save(title, why)
     assert customs.list_customs() == []
+
