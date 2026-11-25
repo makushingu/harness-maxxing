@@ -5,7 +5,7 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
-## 2.0.0-alpha.169 - 2026-11-24
+## 2.0.0-alpha.170 - 2026-11-25
 
 - Guide (FEU): `maxxing/guide.py` + `api/guide.py` (`/api/guide`, `/cards`, `/reset`), state in
   `<state>/guide/guide.json`. Cards = one `claude -p --model opus --tools ""` call per step (worker thread, one at a
@@ -19,6 +19,15 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
   `POST /api/sessions` and `PATCH`; `api/push.rings()` is false for a muted session. UI: `useHasPushDevice()` (any device).
 - Backup (#186): `_keep_local_rules` -> `_keep_switched_off`: on a server in use, a local `agent.json` with
   `"enabled": false` stays off, and each local trigger with `"enabled": false` stays off (matched by trigger `id`).
+- Sessions: before `--resume`, the runner frees a dead process's claim in `~/.claude/sessions/<pid>.json` (regular
+  files only, read capped); a `fresh` turn killed after Claude created its thread is resumed (`--resume`) on
+  "already in use" instead of `--session-id` again.
+- Feedback: the filter gets the customizations, uncommitted files, extensions and themes of the install; a bug is sent
+  unless explained for sure; "Send to the team anyway" is a real button.
+- Phone, Tabs view: the tab bar folds only while the message box has focus (folding on scroll looped, dropped).
+
+## 2.0.0-alpha.169 - 2026-11-24
+
 - Browser (FEU): `pool.TURN_END_SLEEP` 15 min; `turn_ended[nav]` set when a session navigator's turn is found dead,
   popped by a new turn; its tabs sleep after the delay (`_sleep_turn_tabs`). Known gap: a turn whose browser tools were
   stopped for idleness (`CHILD_IDLE`) is not recorded, its tabs fall back to the unused-tab rule.
