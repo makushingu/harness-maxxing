@@ -2628,8 +2628,6 @@ export const fr: Record<keyof typeof en, string> = {
   'help.tutorial': 'Tutoriel interactif',
   'help.tutorialDesc': 'Votre première vraie session avec Harness, pas à pas.',
   'guide.intro': "Une visite guidée de Harness, avec des exemples écrits pour vous.",
-  'guide.languageDesc': "Dans quelle langue voulez-vous le guide ? Toute l'interface et les exemples suivent.",
-  'guide.languageCurrent': "Langue actuelle",
   'guide.case.new': "Tout est neuf ici : le guide part de zéro et Opus écrit des exemples pour ce que vous voulez faire.",
   'guide.case.import': "Harness a trouvé votre import : Opus s'appuie sur ce que vous avez apporté (projets, mémoire) pour écrire les exemples.",
   'guide.case.existing': "Vous utilisez déjà Harness : le guide prend vos propres sessions et agents comme exemples, et montre ce que vous n'avez pas encore essayé.",

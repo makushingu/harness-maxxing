@@ -2646,8 +2646,6 @@ export const en = {
   'help.tutorial': 'Interactive tutorial',
   'help.tutorialDesc': 'Your first real session with Harness, step by step.',
   'guide.intro': "A guided tour of Harness, with examples written for you.",
-  'guide.languageDesc': "Which language for the guide? The whole interface and the examples follow it.",
-  'guide.languageCurrent': "Current language",
   'guide.case.new': "Everything is new here: the guide starts from zero and Opus writes examples for what you want to do.",
   'guide.case.import': "Harness found your import: Opus uses what you brought (projects, memory) to write the examples.",
   'guide.case.existing': "You already use Harness: the guide uses your own sessions and agents as examples, and shows what you have not tried yet.",

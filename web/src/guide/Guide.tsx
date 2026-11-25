@@ -8,10 +8,8 @@
 import * as React from 'react'
 import { createPortal } from 'react-dom'
 import { useLocation, useNavigate, useSearchParams } from 'react-router'
-import { ArrowRight, BookOpen, Check, Compass, GraduationCap, Languages, Lightbulb, Pause, Play, RefreshCw, Sparkles, X } from 'lucide-react'
-import { LANGUAGES, useT, type TKey } from '@/i18n'
-import type { Language } from '@/lib/types'
-import { useUI } from '@/stores/ui'
+import { ArrowRight, BookOpen, Check, Compass, GraduationCap, Lightbulb, Pause, Play, RefreshCw, Sparkles, X } from 'lucide-react'
+import { useT, type TKey } from '@/i18n'
 import { useIsMobile } from '@/stores/media'
 import { useTouchNav } from '@/components/shell/TouchNav'
 import { useSaveSettings, useSettings, useWorkspace } from '@/lib/queries'
@@ -61,16 +59,9 @@ function GuideDialog({ state }: { state: GuideState }) {
   const { data: withCtx } = useGuideContext(true)
   const ctx = withCtx?.context
   const resumable = state.steps.length > 0 && state.index < state.steps.length && state.status !== 'done'
-  const [phase, setPhase] = React.useState<'resume' | 'language' | 'level' | 'mode'>(resumable ? 'resume' : 'language')
+  // the guide follows the language of Harness (Settings -> General): no question about it
+  const [phase, setPhase] = React.useState<'resume' | 'level' | 'mode'>(resumable ? 'resume' : 'level')
   const [level, setLevel] = React.useState<'beginner' | 'intermediate'>(state.level ?? 'beginner')
-  const lang = useUI((s) => s.language)
-  const saveSettings = useSaveSettings()
-  const pickLanguage = (l: Language) => {
-    // the whole interface and the examples Opus writes switch to it
-    useUI.getState().setLanguage(l)
-    saveSettings.mutate({ language: l })
-    setPhase('level')
-  }
   const [uses, setUses] = React.useState<Use[] | null>(null)
   const chosen = uses ?? (state.uses.length ? state.uses : (ctx?.recommended ?? []))
   const close = (dismiss: boolean) => {
@@ -95,11 +86,9 @@ function GuideDialog({ state }: { state: GuideState }) {
           <DialogDescription>
             {phase === 'resume'
               ? t('guide.resumeDesc', { n: state.index + 1, total: state.steps.length })
-              : phase === 'language'
-                ? t('guide.languageDesc')
-                : ctx
-                  ? t(caseLine)
-                  : t('guide.intro')}
+              : ctx
+                ? t(caseLine)
+                : t('guide.intro')}
           </DialogDescription>
         </DialogHeader>
 
@@ -114,27 +103,9 @@ function GuideDialog({ state }: { state: GuideState }) {
             >
               <Play /> {t('guide.resume')}
             </Button>
-            <Button variant="ghost" onClick={() => void actions.reset().then(() => setPhase('language'))}>
+            <Button variant="ghost" onClick={() => void actions.reset().then(() => setPhase('level'))}>
               <RefreshCw /> {t('guide.restart')}
             </Button>
-          </div>
-        )}
-
-        {phase === 'language' && (
-          <div className="grid gap-2">
-            {LANGUAGES.map((l) => (
-              <Choice
-                key={l.id}
-                title={l.label}
-                desc={l.id === lang ? t('guide.languageCurrent') : ''}
-                icon={<Languages className="size-4 shrink-0 text-muted-foreground" />}
-                onClick={() => pickLanguage(l.id)}
-                testid={`guide-lang-${l.id}`}
-              />
-            ))}
-            <button type="button" className="justify-self-center py-2 text-[13px] text-muted-foreground hover:text-foreground" onClick={() => close(true)} data-testid="guide-close">
-              {t('guide.notNow')}
-            </button>
           </div>
         )}
 
@@ -152,11 +123,8 @@ function GuideDialog({ state }: { state: GuideState }) {
                 testid={`guide-level-${l}`}
               />
             ))}
-            <div className="flex items-center justify-between pt-1">
-              <Button variant="ghost" size="sm" onClick={() => setPhase('language')}>
-                {t('tour.back')}
-              </Button>
-              <button type="button" className="py-2 text-[13px] text-muted-foreground hover:text-foreground" onClick={() => close(true)}>
+            <div className="flex items-center justify-center pt-1">
+              <button type="button" className="py-2 text-[13px] text-muted-foreground hover:text-foreground" onClick={() => close(true)} data-testid="guide-close">
                 {t('guide.notNow')}
               </button>
             </div>

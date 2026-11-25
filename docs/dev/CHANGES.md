@@ -5,6 +5,11 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## 2.0.0-alpha.171 - 2026-11-25
+
+- Guide: `language` phase removed from `GuideDialog` (starts at `level`); the cards already use `config.language`, which
+  AppShell copies into the UI. Keys `guide.languageDesc` / `guide.languageCurrent` removed.
+
 ## 2.0.0-alpha.170 - 2026-11-25
 
 - Guide (FEU): `maxxing/guide.py` + `api/guide.py` (`/api/guide`, `/cards`, `/reset`), state in

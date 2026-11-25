@@ -40,10 +40,11 @@ Proposed once after the wizard (and once after the update that brought it), and 
 left of the sidebar) -> **Getting started guide**, the palette (⌘K) and Settings -> General. An address ending in
 `?guide` opens it too.
 
-1. **Your language**: the whole interface and the examples follow it.
-2. **Your level**: *Beginner* (step by step, simple examples) or *Intermediate* (what Harness adds, examples that go
+It speaks the language of Harness (Settings -> General), examples included.
+
+1. **Your level**: *Beginner* (step by step, simple examples) or *Intermediate* (what Harness adds, examples that go
    further).
-3. **The tour**: *Full* (about 5 minutes: sessions, Zones and Tabs, memory, agents on their page and in the
+2. **The tour**: *Full* (about 5 minutes: sessions, Zones and Tabs, memory, agents on their page and in the
    sessions, scheduled jobs, tasks, phone, code, sites, e-mail, Team, files, backup, the pages to switch on, server
    health) or *Partial* (about 2 minutes): the essentials plus only the uses you tick - the recommended ones are
    ticked already (from what is set up here). **Close** if you do not need it.

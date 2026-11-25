@@ -3,6 +3,11 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.171 - 2026-11-25
+
+Changed:
+- **The getting started guide no longer asks for your language**: it speaks the language of Harness (Settings -> General), and starts straight at *Beginner* or *Intermediate*.
+
 ## 2.0.0-alpha.170 - 2026-11-25
 
 New:
