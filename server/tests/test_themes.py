@@ -186,3 +186,83 @@ def test_a_theme_can_bring_its_own_logo(mx, client, tmp_path):
     assert themes.load(d)[0]["logo"]["light"] is None
     d = _theme(tmp_path, "one", {"name": "O", "logo_dark": "l.png"}, {"l.png": png})
     assert themes.load(d)[0]["logo"] == {"light": "/api/themes/one/file/l.png", "dark": "/api/themes/one/file/l.png"}
+
+
+def test_a_deeply_nested_theme_json_does_not_break_the_list(mx, client, tmp_path):
+    _theme(mx["ws"] / "themes", "fine", {"name": "Fine"})
+    deep = mx["ws"] / "themes" / "deep"
+    deep.mkdir()
+    (deep / "theme.json").write_text('{"name": "D", "light": ' + "[" * 30000 + "]" * 30000 + "}", encoding="utf-8")
+    t, _, err = themes.load(deep)
+    assert t is None and "JSON" in err
+    data = themes.list_themes()
+    assert [t["id"] for t in data["themes"]] == ["fine"] and data["errors"][0]["id"] == "deep"
+    assert client.get("/api/themes").status_code == 200
+
+
+def test_an_id_ending_with_a_newline_is_refused(mx, tmp_path):
+    t, _, err = themes.load(_theme(tmp_path, "nl", {"name": "N", "id": "evil\n"}))
+    assert t is None and err.startswith("id:")
+    assert themes.get("evil\n") is None and themes.remove("evil\n") is False
+
+
+def test_a_linked_theme_json_never_replaces_an_installed_theme(mx, tmp_path):
+    good = _theme(tmp_path / "src", "good", {"name": "Good"})
+    assert cli.main(["themes", "install", str(good)]) == 0
+    link = tmp_path / "link" / "good"
+    link.mkdir(parents=True)
+    (tmp_path / "elsewhere.json").write_text(json.dumps({"name": "Good v2", "id": "good"}), encoding="utf-8")
+    (link / "theme.json").symlink_to(tmp_path / "elsewhere.json")
+    assert themes.load(link)[2]
+    assert cli.main(["themes", "install", str(link), "--force"]) == 1
+    assert themes.get("good")["name"] == "Good"
+    assert sorted(p.name for p in (mx["ws"] / "themes").iterdir()) == ["good"]
+
+
+def test_two_installs_of_the_same_theme_at_once_do_not_collide(mx, tmp_path):
+    import threading
+    src = _theme(tmp_path / "src", "race", {"name": "Race"}, {"README.md": b"x" * 20000})
+    errors: list[BaseException] = []
+
+    def run():
+        for _ in range(40):
+            try:
+                themes.install(src, force=True)
+            except BaseException as e:      # noqa: BLE001 - the test counts every failure
+                errors.append(e)
+
+    threads = [threading.Thread(target=run) for _ in range(4)]
+    for th in threads:
+        th.start()
+    for th in threads:
+        th.join()
+    assert not errors, errors[:3]
+    assert themes.get("race")["name"] == "Race"
+    assert sorted(p.name for p in (mx["ws"] / "themes").iterdir()) == ["race"]
+
+
+def test_advanced_css_cannot_cover_the_app(tmp_path):
+    for bad in ["& body::after { content: ''; position: absolute; inset: 0; z-index: 2147483647; background: #000 }",
+                "& aside { position: if(media(min-width: 0px): fixed; else: static) }",
+                "& aside::after { content: attr(title) }", "& aside { z-index: 10 }", "& aside { z-index: calc(9 + 1) }",
+                "& aside {\n  z-index: 99\n}"]:
+        t, warn, _ = themes.load(_theme(tmp_path, "cover", {"name": "C", "css": bad}))
+        assert t["css"] is None and any(w.startswith("css:") for w in warn), bad
+    for ok in ["& aside { z-index: 2; opacity: .9 }", "& aside { z-index: auto !important }"]:
+        t, warn, _ = themes.load(_theme(tmp_path, "fine", {"name": "F", "css": ok}))
+        assert t["css"], (ok, warn)
+
+
+def test_serving_a_theme_image_does_not_read_the_theme_again(mx, monkeypatch, tmp_path):
+    png = b"\x89PNG\r\n\x1a\n" + b"0" * 32
+    src = _theme(tmp_path / "src", "cached", {"name": "Cached", "base": "glass", "wallpaper": "wall.png"},
+                 {"wall.png": png})
+    assert cli.main(["themes", "install", str(src)]) == 0
+    calls = []
+    real = themes._load
+    monkeypatch.setattr(themes, "_load", lambda d: calls.append(d) or real(d))
+    assert themes.file_path("cached", "wall.png") and themes.file_path("cached", "wall.png")
+    assert len(calls) <= 1
+    dest = mx["ws"] / "themes" / "cached"
+    _theme(dest.parent, "cached", {"name": "Renamed", "base": "glass", "wallpaper": "wall.png"})
+    assert themes.get("cached")["name"] == "Renamed"                                  # an edit is seen at once

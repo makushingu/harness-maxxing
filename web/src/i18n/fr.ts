@@ -171,6 +171,7 @@ export const fr: Record<keyof typeof en, string> = {
   'shell.menu': 'Menu',
   'shell.navigation': 'Navigation principale',
   'shell.theme': 'Mode',
+  'shell.themeForced': 'imposé par le thème',
   'theme.dark': 'Sombre',
   'theme.light': 'Clair',
   'theme.system': 'Système',

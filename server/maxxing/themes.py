@@ -23,10 +23,13 @@ the web app writes the values as they come (`web/src/lib/themes.ts`).
 """
 from __future__ import annotations
 
+import fcntl
 import json
 import math
+import os
 import re
 import shutil
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -35,7 +38,7 @@ from . import config
 SCHEMA = 1
 BASES = ("solid", "glass")
 MODES = ("light", "dark")
-ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{1,39}$")
+ID_RE = re.compile(r"[a-z0-9][a-z0-9-]{1,39}")     # always fullmatch: $ would let a final newline in
 MAX_JSON = 64 * 1024
 MAX_IMAGE = 4 * 1024 * 1024
 IMAGE_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp",
@@ -352,6 +355,9 @@ _CSS_BANNED = [
     (re.compile(r"expression\s*\(|javascript:|-moz-binding|behavior\s*:", re.I), "nothing that runs code"),
     (re.compile(r"position\s*:\s*(fixed|var\s*\()", re.I), "no position: fixed nor var() (nothing may cover the app)"),
     (re.compile(r"[<\\]"), "no < and no backslash"),
+    (re.compile(r"\b(?:if|attr)\s*\(", re.I), "no if() nor attr()"),
+    (re.compile(r"z-index\s*:(?!\s*(?:-?\d|auto|inherit|initial|unset|revert)\s*(?:!important\s*)?(?:[;}]|$))",
+                re.I | re.M), "z-index: a single digit at most (nothing may cover the app)"),
 ]
 
 
@@ -399,15 +405,28 @@ def _css(v: Any, warn: list[str]) -> str | None:
     return bare.strip() or None
 
 
+_FINGERPRINT: dict[str, Any] = {}
+
+
 def ui_fingerprint() -> str:
-    """Names of the interface's built CSS files (hashed by Vite: they change exactly when its CSS does)."""
+    """Names of the interface's built CSS files (hashed by Vite: they change exactly when its CSS does). Kept while
+    the assets folder is unchanged: every theme image served reads it."""
     import hashlib
     from . import webbuild
+    assets = webbuild.active_dist() / "assets"
     try:
-        names = sorted(f.name for f in (webbuild.active_dist() / "assets").glob("*.css"))
+        key: tuple | None = (str(assets), assets.stat().st_mtime_ns)
+    except OSError:
+        key = None
+    if key and _FINGERPRINT.get("key") == key:
+        return _FINGERPRINT["fp"]
+    try:
+        names = sorted(f.name for f in assets.glob("*.css"))
     except OSError:
         names = []
-    return hashlib.sha256("\n".join(names).encode()).hexdigest()[:16]
+    fp = hashlib.sha256("\n".join(names).encode()).hexdigest()[:16]
+    _FINGERPRINT.update(key=key, fp=fp)
+    return fp
 
 
 def _css_hash(css: str) -> str:
@@ -451,18 +470,51 @@ def _image(d: Path, name: Any, what: str, warn: list[str], cap: int = MAX_IMAGE)
     return name
 
 
+_LOADED: dict[str, tuple[tuple, tuple]] = {}      # folder -> (what it was read from, what load() gave)
+
+
+def _load_key(d: Path) -> tuple | None:
+    """What load() reads: theme.json's bytes, every file's name, size and time (images, the css stamp), the interface."""
+    import hashlib
+    try:
+        files = tuple(sorted((e.name, e.is_symlink(), e.stat(follow_symlinks=False).st_size,
+                              e.stat(follow_symlinks=False).st_mtime_ns) for e in os.scandir(d)))
+        f = d / "theme.json"
+        body = hashlib.sha256(f.read_bytes()).hexdigest() if f.is_file() and not f.is_symlink() else ""
+    except OSError:
+        return None
+    return files, body, ui_fingerprint()
+
+
 def load(d: Path) -> tuple[dict | None, list[str], str | None]:
-    """Reads and sanitizes one theme folder: (theme, warnings, error). An error means the theme is not usable."""
+    """Reads and sanitizes one theme folder: (theme, warnings, error). An error means the theme is not usable.
+    Kept while nothing it reads changed: every theme image served (logo, wallpaper, tab icon) loads its theme."""
+    import copy
+    key = _load_key(d)
+    hit = _LOADED.get(str(d))
+    if key is not None and hit and hit[0] == key:
+        return copy.deepcopy(hit[1])
+    res = _load(d)
+    if key is not None:
+        if len(_LOADED) > 256:
+            _LOADED.clear()
+        _LOADED[str(d)] = (key, copy.deepcopy(res))
+    return res
+
+
+def _load(d: Path) -> tuple[dict | None, list[str], str | None]:
     warn: list[str] = []
     f = d / "theme.json"
+    if f.is_symlink():                  # install never copies a link: it would read a file outside the folder
+        return None, warn, "theme.json must be a file, not a symbolic link"
     if not f.is_file():
         return None, warn, "no theme.json in the folder"
     if f.stat().st_size > MAX_JSON:
         return None, warn, f"theme.json is over {MAX_JSON // 1024} KB"
     try:
         raw = json.loads(f.read_text(encoding="utf-8"))
-    except (ValueError, UnicodeDecodeError) as e:
-        return None, warn, f"theme.json is not valid JSON ({e})"
+    except (ValueError, UnicodeDecodeError, RecursionError) as e:   # RecursionError: nested too deep
+        return None, warn, f"theme.json is not valid JSON ({type(e).__name__ if isinstance(e, RecursionError) else e})"
     if not isinstance(raw, dict):
         return None, warn, "theme.json must be an object"
     schema = raw.get("schema", SCHEMA)
@@ -473,7 +525,7 @@ def load(d: Path) -> tuple[dict | None, list[str], str | None]:
         else:
             return None, warn, f"schema must be {SCHEMA}"
     tid = str(raw.get("id") or d.name)
-    if not ID_RE.match(tid):
+    if not ID_RE.fullmatch(tid):
         return None, warn, "id: 2-40 characters, lowercase letters, digits and dashes"
     if tid in BASES:
         return None, warn, f"id: {tid} is a built-in theme, pick another id"
@@ -550,8 +602,8 @@ def list_themes() -> dict:
             continue
         try:
             t, _, err = load(d)
-        except OSError as e:
-            t, err = None, str(e)
+        except Exception as e:          # one broken folder never hides the others
+            t, err = None, str(e) or type(e).__name__
         if t and t["id"] != d.name:
             t, err = None, f"its id ({t['id']}) differs from its folder name"
         if t:
@@ -563,7 +615,7 @@ def list_themes() -> dict:
 
 
 def get(tid: str) -> dict | None:
-    if not ID_RE.match(tid) or not (root() / tid).is_dir():
+    if not ID_RE.fullmatch(tid) or not (root() / tid).is_dir():
         return None
     t, _, _ = load(root() / tid)
     return t
@@ -596,21 +648,30 @@ def install(src: Path, force: bool = False) -> tuple[dict, list[str]]:
     names = set(FILES) | {u.rsplit("/", 1)[1] for u in [*t["wallpaper"].values(), *t["logo"].values(), t["preview"]] if u}
     if dest.resolve() == src:
         return t, warn
-    tmp = root() / f".{t['id']}.tmp"
-    shutil.rmtree(tmp, ignore_errors=True)
+    root().mkdir(parents=True, exist_ok=True)
+    stage = Path(tempfile.mkdtemp(dir=root(), prefix=f".{t['id']}."))   # one per install: two never share it
+    tmp = stage / t["id"]               # named like the theme: load() falls back on the folder name for the id
     tmp.mkdir(parents=True)
     for n in names:
         f = src / n
         if f.is_file() and not f.is_symlink():
             shutil.copy2(f, tmp / n)
+    _, _, err = load(tmp)               # the copy itself must be usable before it replaces anything
+    if err:
+        shutil.rmtree(stage, ignore_errors=True)
+        raise ThemeError(err)
     if t["css"]:
         _stamp(tmp, t["css"])           # installed by Claude after `check`: checked against this interface
-    old = root() / f".{t['id']}.old"
-    shutil.rmtree(old, ignore_errors=True)
-    if dest.exists():
-        dest.rename(old)                # never a moment without the theme for a browser that lists it
-    tmp.rename(dest)
-    shutil.rmtree(old, ignore_errors=True)
+    fd = os.open(root(), os.O_RDONLY)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)  # two installs of the same theme swap one after the other
+        if dest.exists():
+            dest.rename(stage / "old")  # never a moment without the theme for a browser that lists it
+        tmp.rename(dest)
+    finally:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        os.close(fd)
+        shutil.rmtree(stage, ignore_errors=True)
     t2, warn2, _ = load(dest)
     return t2 or t, warn2
 
@@ -618,7 +679,7 @@ def install(src: Path, force: bool = False) -> tuple[dict, list[str]]:
 def verify(tid: str) -> dict:
     """Records that the theme's css was checked against the interface as it is now (turns it back on)."""
     d = root() / tid
-    if not ID_RE.match(tid) or not d.is_dir():
+    if not ID_RE.fullmatch(tid) or not d.is_dir():
         raise ThemeError(f"no installed theme {tid}")
     t, warn, err = load(d)
     if err or not t:
@@ -631,7 +692,7 @@ def verify(tid: str) -> dict:
 
 def remove(tid: str) -> bool:
     d = root() / tid
-    if not ID_RE.match(tid) or not d.is_dir():
+    if not ID_RE.fullmatch(tid) or not d.is_dir():
         return False
     shutil.rmtree(d)
     return True

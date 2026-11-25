@@ -1687,3 +1687,24 @@ def test_a_sessions_tabs_sleep_when_its_turn_ends(mx):
     asyncio.run(run())
     assert closed == [("t1", True)]
     assert [t["nav"] for t in b.tabs.asleep()] == ["session:s1"]
+
+
+def test_a_sessions_tabs_stay_awake_while_its_next_turn_runs(mx, monkeypatch):
+    """Turn 2 started before TURN_END_SLEEP and has not called the browser yet: its pages may be in use."""
+    from maxxing.sessions import store
+    p, b = _browser()
+    closed = []
+
+    class FakeWatcher:
+        def watched(self, nav=None):
+            return False
+
+        async def close_tab(self, target, sleep=False):
+            closed.append(target)
+    b.watcher = FakeWatcher()
+    b.tabs.resolve({"targetId": "t1", "type": "page", "url": "https://a.example/"})
+    b.tabs.assign("t1", {"kind": "session", "sid": "s1"}, "session:s1")
+    monkeypatch.setattr(store, "read", lambda sid: {"id": sid, "state": "running"} if sid == "s1" else None)
+    assert asyncio.run(p._sleep_turn_tabs(b, "session:s1")) is False and closed == []
+    monkeypatch.setattr(store, "read", lambda sid: {"id": sid, "state": "idle"})
+    assert asyncio.run(p._sleep_turn_tabs(b, "session:s1")) is True and closed == ["t1"]

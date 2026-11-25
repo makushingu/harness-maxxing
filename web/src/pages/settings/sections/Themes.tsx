@@ -5,7 +5,7 @@
 import { AlertTriangle, Check, Paintbrush, Plus, RefreshCw } from 'lucide-react'
 import { Link } from 'react-router'
 import { label, useInstalledThemes } from '@/lib/themes'
-import { resolveTheme, useUI } from '@/stores/ui'
+import { shownMode, useUI } from '@/stores/ui'
 import { useT } from '@/i18n'
 import { Badge, Button, EmptyState, Skeleton } from '@/components/ui'
 import { SettingsCard, SectionStack } from './ui'
@@ -17,7 +17,7 @@ export function ThemesSection() {
   const ui = useUI()
   const { data, isLoading, refetch, isFetching } = useInstalledThemes()
   const ask = useAskHarness()
-  const dark = resolveTheme(ui.theme) === 'dark'
+  const dark = shownMode(ui.theme, ui.customTheme) === 'dark'
   const accent = ACCENT_SWATCH[ui.accent]
   const themes = data?.themes ?? []
   return (

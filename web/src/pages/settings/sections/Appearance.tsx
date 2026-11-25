@@ -7,7 +7,7 @@ import { useNavigate } from 'react-router'
 import { label, useInstalledThemes } from '@/lib/themes'
 import { draftUrl } from '@/features/agents/EditWithClaude'
 import { useHarnessTopic } from './harnessTopic'
-import { ACCENTS, resolveTheme, useUI, type Accent, type Density, type Layout, type Theme, type Tint, type Material, type TouchHome } from '@/stores/ui'
+import { ACCENTS, shownMode, useUI, type Accent, type Density, type Layout, type Theme, type Tint, type Material, type TouchHome } from '@/stores/ui'
 import { cn } from '@/lib/utils'
 import { FONT_GROUPS, loadFontPreview, MONO_FONTS, SANS_FONTS, type FontGroup } from '@/lib/fonts'
 import { useT, type TKey } from '@/i18n'
@@ -173,7 +173,7 @@ function ThemePicker() {
   const setMaterial = useUI((s) => s.setMaterial)
   const pickTheme = useUI((s) => s.pickTheme)
   const accent = ACCENT_SWATCH[useUI((s) => s.accent)]
-  const dark = resolveTheme(useUI((s) => s.theme)) === 'dark'
+  const dark = shownMode(useUI((s) => s.theme), useUI((s) => s.customTheme)) === 'dark'
   const { data } = useInstalledThemes()
   const ask = useAskHarness()
   return (

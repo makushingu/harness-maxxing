@@ -32,7 +32,8 @@ anything, and why it keeps working after an update. The one exception is optiona
   4.5:1 for text, 3:1 for secondary text and buttons). A pair that fails returns to the built-in colors.
 - **Updates add variables, never remove them**: an older theme simply gets the default of a new variable; a renamed
   one keeps working through an alias.
-- A theme with only a dark (or light) part shows that mode only. A theme removed while in use: the browser goes back
+- A theme with only a dark (or light) part shows that mode only: the sun / moon button of the sidebar shows it, greyed
+  out ("set by the theme"), and the command palette drops "Switch to light / dark theme". A theme removed while in use: the browser goes back
   to its base (Solid or Glass).
 - If a theme ever bothers you: Settings -> Appearance -> **Solid**.
 
@@ -52,8 +53,8 @@ rules in **one field**, `"css"` of `theme.json`: a string, or a list of lines, a
 - The rules apply only while the theme is in use: they sit inside `html[data-theme-id="<id>"] { … }`, so every rule
   starts with `&` (the page), `&.dark` for the dark mode, `&:not(.dark)` for the light one.
 - Refused as a whole, with a warning (the rest of the theme still works): `url()` and other images, `@import`,
-  `@font-face` and every at-rule except `@media`, `@supports` and `@container`, `position: fixed`, `<`, backslashes,
-  control characters, unbalanced braces or quotes.
+  `@font-face` and every at-rule except `@media`, `@supports` and `@container`, `position: fixed`, `if()`, `attr()`,
+  a `z-index` over 9, `<`, backslashes, control characters, unbalanced braces or quotes.
 - **Unlike the values, these rules may look wrong after an update** (the interface they style changes). So an update
   that changes the interface's CSS **switches them off by itself**: Settings -> Appearance -> Options says "Switched
   off" with a button that asks Harness to check them. Harness looks at the pages with the new version, fixes the
