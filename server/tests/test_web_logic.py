@@ -318,3 +318,41 @@ def test_a_link_to_a_chat_that_is_gone_keeps_the_team_header():
     src = (WEB / "features" / "team" / "TeamPage.tsx").read_text(encoding="utf-8")
     assert "const known = !chatId || !team || team.chats.some((c) => c.id === chatId)" in src
     assert "{(!chatId || !known || (isError && !team)) && <PageHeader" in src
+
+
+def test_a_dictation_cancelled_then_started_again_while_asking_leaves_no_mic_on(tmp_path):
+    """start(); cancel(); start(); then the permission comes: one recorder only, the first stream is given back."""
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node not installed")
+    src = (WEB / "features" / "voice" / "recorder.ts").read_text(encoding="utf-8")
+    (tmp_path / "rec.ts").write_text(src.replace("from 'react'", "from './react.mjs'").replace("from './mic'", "from './mic.mjs'"))
+    (tmp_path / "react.mjs").write_text(
+        "export const useState = (v) => [v, () => {}]\nexport const useRef = (v) => ({ current: v })\n"
+        "export const useCallback = (f) => f\nexport const useEffect = () => {}\n")
+    (tmp_path / "mic.mjs").write_text(
+        "export const asks = []\nexport const openMic = () => new Promise((res) => asks.push(res))\n")
+    (tmp_path / "main.mjs").write_text("""
+import { useRecorder } from './rec.ts'
+import { asks } from './mic.mjs'
+const recorders = []
+globalThis.window = { isSecureContext: true, setInterval: () => 1, clearInterval() {} }
+Object.defineProperty(globalThis, 'navigator', { value: { mediaDevices: { getUserMedia() {} } }, configurable: true })
+globalThis.MediaRecorder = class { constructor(s) { this.state = 'inactive'; this.stream = s; recorders.push(this) }
+  start() { this.state = 'recording' } stop() { this.state = 'inactive'; this.onstop?.() } requestData() {} }
+globalThis.requestAnimationFrame = () => 0
+globalThis.cancelAnimationFrame = () => {}
+const stream = () => { const s = { on: true, getTracks: () => [{ stop: () => { s.on = false } }] }; return s }
+const r = useRecorder()
+const first = r.start(); r.cancel(); const second = r.start()
+const a = stream(), b = stream()
+asks[0](a); asks[1](b)
+await first; await second
+console.log(JSON.stringify({ recorders: recorders.length, firstOn: a.on, secondOn: b.on, records: recorders[0]?.stream === b }))
+""")
+    r = subprocess.run([node, "--experimental-strip-types", "--no-warnings", "main.mjs"], cwd=tmp_path,
+                       capture_output=True, text=True, timeout=60)
+    if r.returncode and ("strip-types" in r.stderr or "Unknown file extension" in r.stderr):
+        pytest.skip("this node cannot strip types")
+    assert r.returncode == 0, r.stderr
+    assert json.loads(r.stdout) == {"recorders": 1, "firstOn": False, "secondOn": True, "records": True}
