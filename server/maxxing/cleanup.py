@@ -177,8 +177,10 @@ def run(parts: list[str]) -> dict:
         raise ValueError(f"unknown part: {', '.join(u.encode('utf-8', 'replace').decode() for u in unknown)}")
     out = []
     with _lock:
+        # the page's scan (under a minute old) already measured each part: one walk of a big cache, not two
+        fresh = time.time() - _last["at"] < SCAN_TTL and {r["id"]: r["bytes"] for r in _last["parts"] or []} or {}
         for p in dict.fromkeys(parts):
-            before, _ = _measure(p)
+            before = fresh[p] if p in fresh else _measure(p)[0]
             row: dict[str, Any] = {"id": p}
             try:
                 _free_part(p)

@@ -180,6 +180,15 @@ def _utf8(s: str | None) -> str | None:
     return s.encode("utf-8", "replace").decode("utf-8") if isinstance(s, str) else s
 
 
+_CONTROLS = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]")
+
+
+def _no_controls(s: str | None) -> str | None:
+    """Control characters (ESC sequences, BEL, C1) out of what `maxxing feed list` prints in a terminal; tab and
+    newline stay."""
+    return _CONTROLS.sub("", s) if isinstance(s, str) else s
+
+
 def _clean_actions(actions: Any) -> str | None:
     out = []
     for a in (actions or [])[:4]:
@@ -205,7 +214,7 @@ def post(title: str, body: str = "", level: str = "info", source: str = "custom"
     """Add an event. Returns it, or None when `dedupe` says it was already posted. `actions` (buttons), `ref` (what it
     follows) and `agent` (the agent it is about) make it an alert: see act() and update(). `hops`: posted from an agent
     run (agents.scan_feed starts the runs it triggers that many hops deep)."""
-    title, body, url = _utf8(title), _utf8(body), _utf8(url)
+    title, body, url = _no_controls(_utf8(title)), _no_controls(_utf8(body)), _utf8(url)
     acts = _clean_actions(actions)
     ref = (_utf8(str(ref)) or "")[:300] or None if ref else None
     agent = (_utf8(str(agent)) or "")[:300] or None if agent else None

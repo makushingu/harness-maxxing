@@ -172,7 +172,7 @@ def _text(v: Any, n: int) -> str:
 
 def _line(v: Any, n: int) -> str:
     """One line: a name or a role is written in the group's CLAUDE.md title and in the members' prompt."""
-    return " ".join(agents._utf8(str(v or "")).split())[:n]
+    return agents.one_line(v, n)
 
 
 def _created(v: Any) -> float:

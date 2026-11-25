@@ -1181,3 +1181,11 @@ def test_a_thread_line_without_a_valid_date_is_not_the_last_run(client, topic, m
     for bad in ({"kind": "result", "ok": False}, {"kind": "skip", "at": "2026-11-25T07:00:00"}):
         f.write_text(json.dumps(good) + "\n" + json.dumps(bad) + "\n")
         assert agents.status(A)["last_run"]["at"] == 1700000000.0
+
+
+def test_an_imported_name_loses_invisible_and_control_characters():
+    from maxxing import agent_rooms
+    evil = "Pay\u202egnp.exe\x00 bot\u200b"
+    assert agents.clean({"name": evil})["name"] == "Paygnp.exe bot"
+    assert agents.clean({"name": "Team \U0001f469\u200d\U0001f4bb"})["name"] == "Team \U0001f469\u200d\U0001f4bb"   # ZWJ emoji kept
+    assert agent_rooms._line("Room\u2066\x1b[31m", 60) == "Room[31m"

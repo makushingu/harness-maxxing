@@ -39,6 +39,7 @@ PRESSURE_PATH = Path("/proc/pressure/cpu")
 WAITING_PCT = 20.0                            # `some avg10` from which the UI says "waiting"
 ALERT_PCT, ALERT_S = 40.0, 600                # `some avg60` held this long -> a health problem
 CACHE_S = 3.0
+FORCE_S = 0.5                                 # ?force=true still reuses a snapshot this fresh
 TOP_N = 6
 
 
@@ -201,21 +202,29 @@ class _Names:
     """Session titles and job names, looked up once per snapshot."""
 
     def __init__(self) -> None:
-        self._sessions: dict[str, dict] | None = None
+        self._sessions: dict[str, dict | None] | None = None
+        self._ids: list[str] | None = None
         self._jobs: dict[str, str] | None = None
 
     def session(self, sid8: str) -> dict | None:
+        if not sid8:
+            return None
+        key = sid8[:8]
         if self._sessions is None:
             self._sessions = {}
+        if key not in self._sessions:
+            self._sessions[key] = None
             try:
                 from .sessions import store
-                for sid in store.list_ids():
-                    m = store.read_cached(sid)
-                    if m:
-                        self._sessions.setdefault(sid[:8], m)
+                if self._ids is None:
+                    self._ids = store.list_ids()
+                for sid in self._ids:            # only this prefix's metas: not every session's for one name
+                    if sid.startswith(key) and (m := store.read_cached(sid)):
+                        self._sessions[key] = m
+                        break
             except Exception:  # noqa: BLE001 - a name is a nicety
                 pass
-        return self._sessions.get(sid8[:8]) if sid8 else None
+        return self._sessions[key]
 
     def job(self, unit_id: str) -> str | None:
         if self._jobs is None:
@@ -334,7 +343,9 @@ def snapshot(force: bool = False) -> dict:
     """GET /api/system/cpu: {enabled, pressure:{avg10, avg60, avg300}|null, waiting, top:[...], at} (cached CACHE_S).
     Blocking (up to ~0.5 s): call it through asyncio.to_thread."""
     with _lock:
-        if not force and _cache["data"] is not None and time.time() - _cache["at"] < CACHE_S:
+        # force: a fresh sample, but one made under FORCE_S ago is fresh (parallel forced calls queue on this lock and
+        # would each wait another 0.5 s sample)
+        if _cache["data"] is not None and time.time() - _cache["at"] < (FORCE_S if force else CACHE_S):
             return dict(_cache["data"])
         p = pressure()
         data = {"enabled": enabled(), "pressure": p, "waiting": bool(p and p["avg10"] >= WAITING_PCT),

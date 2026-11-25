@@ -63,6 +63,18 @@ def test_strict_grants_refuse_rights_or_trigger_of_the_wrong_type():
     assert g["rights"] == ["read", "draft"] and g["trigger"] is None      # not strict: the old fallback
 
 
+def test_a_star_glued_to_a_domain_never_opens_other_domains():
+    g = access.clean_grants([{"account": "a", "rights": ["read", "send"], "senders": ["*stripe.com"]}])[0]
+    assert g["senders"] == ["*@stripe.com", "*@*.stripe.com"]
+    assert access.sender_ok(g, "billing@stripe.com", True) and access.sender_ok(g, "x@eu.stripe.com", True)
+    assert not access.sender_ok(g, "a@evilstripe.com", True)
+    assert access.recipients_ok(g, ["a@evilstripe.com"]) == ["a@evilstripe.com"]
+    for bad in ("*@stripe.*", "*@str*pe.com", "*@*"):
+        with pytest.raises(access.AccessError):
+            access.clean_grants([{"account": "a", "senders": [bad]}], strict=True)
+        assert access.clean_grants([{"account": "a", "senders": [bad]}])[0]["senders"] == [access.NO_SENDER]
+
+
 def test_hand_written_senders_that_are_all_invalid_do_not_open_the_mailbox():
     for senders in (["jürgen@müller.de"], ["not an address", "x@*"], "client@example.com"):
         g = access.clean_grants([{"account": "a", "rights": ["read", "send"], "senders": senders,

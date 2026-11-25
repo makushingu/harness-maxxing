@@ -175,6 +175,17 @@ def test_unit_names(mx):
     assert cpu.level_of("maxxing-turns.slice") == "normal" and cpu.level_of("system.slice") == "other"
 
 
+def test_a_session_name_reads_only_the_metas_of_its_prefix(mx, monkeypatch):
+    from maxxing.sessions import store
+    ids = [store.create(store.new_meta("projects/acme/topics/blog", f"S{i}"))["id"] for i in range(20)]
+    read, real = [], store.read_cached
+    monkeypatch.setattr(store, "read_cached", lambda sid: (read.append(sid), real(sid))[1])
+    names = cpu._Names()
+    assert names.session(ids[7][:8])["title"] == "S7" and names.session(ids[7][:8])["title"] == "S7"
+    assert names.session("ffffffff") is None
+    assert read == [ids[7]]
+
+
 def test_top_reads_the_cgroups(mx, tmp_path, monkeypatch):
     root = tmp_path / "cg"
     units = {"maxxing.slice/maxxing-live.slice/claude-maxxing.service": [0, 50_000],
@@ -204,6 +215,19 @@ def test_top_never_waits_without_a_readable_cgroup(mx, tmp_path, monkeypatch):
     monkeypatch.setitem(cpu._prev, "usage", {})
     assert [cpu.top() for _ in range(3)] == [[], [], []]
     assert sleeps == []
+
+
+def test_parallel_forced_snapshots_share_one_sample(mx, monkeypatch):
+    calls = []
+    monkeypatch.setattr(cpu, "top", lambda n=cpu.TOP_N: calls.append(1) or [])
+    monkeypatch.setattr(cpu, "_cache", {"at": 0.0, "data": None})
+    for _ in range(4):
+        cpu.snapshot(force=True)
+    assert len(calls) == 1
+    cpu._cache["at"] -= cpu.FORCE_S
+    cpu.snapshot(force=True)
+    assert len(calls) == 2
+
 
 def test_cpu_endpoint_and_setting(client, monkeypatch):
     monkeypatch.setattr(cpu, "top", lambda n=cpu.TOP_N: [])
