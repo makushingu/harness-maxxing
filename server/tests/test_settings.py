@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from _org_helpers import client, org  # noqa: F401
@@ -187,3 +189,14 @@ def test_a_lone_surrogate_in_the_public_url_is_refused(client, org):
     r = client.put("/api/settings", content=b'{"public_url": "https://ui.example.com/\\ud800"}',
                    headers={"content-type": "application/json"})
     assert r.status_code == 400 and r.json()["error"] == "invalid_url", r.text
+
+
+def test_a_damaged_value_shown_cleaned_does_not_block_every_other_setting(client):
+    path = config.config_path()
+    cfg = json.loads(path.read_text()) if path.exists() else {}
+    path.write_text(json.dumps({**cfg, "memory_max_lines": 30.5, "language": "de"}))
+    shown = client.get("/api/settings").json()
+    assert shown["language"] == "en" and shown["memory_max_lines"] == 30
+    r = client.put("/api/settings", json={**shown, "cpu_priorities": not shown["cpu_priorities"]})
+    assert r.status_code == 200, r.text
+    assert config.load_config()["cpu_priorities"] is (not shown["cpu_priorities"])
