@@ -66,11 +66,14 @@ class VoiceError(Exception):
 
 # ---- settings -------------------------------------------------------------------------------
 def settings() -> dict:
-    v = config.load_config().get("voice") or {}
+    v = config.load_config().get("voice")
+    v = v if isinstance(v, dict) else {}            # a hand-edited "voice": true is no setting at all
     out = {**DEFAULTS, **{k: v[k] for k in DEFAULTS if k in v}}
     if out["engine"] not in ENGINES:
         out["engine"] = "off"
-    raw = (config.read_json(config.config_path(), {}) or {}).get("voice") or {}
+    raw = config.read_json(config.config_path(), {})
+    raw = raw.get("voice") if isinstance(raw, dict) else None
+    raw = raw if isinstance(raw, dict) else {}
     if out["model"] not in MODELS or "model" not in raw:
         out["model"] = recommended_model()          # small, or base on machines with < 4 GB RAM
     out["language"] = normalise_language(out.get("language"))

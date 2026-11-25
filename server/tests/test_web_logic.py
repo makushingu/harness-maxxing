@@ -371,3 +371,60 @@ def test_both_sidebars_dragged_wide_still_leave_the_page_its_room(tmp_path):
                     ("PageList.tsx", "secondMax(useViewportWidth(), left, SECOND_W)")):
         src = (WEB / "components" / "shell" / f).read_text(encoding="utf-8")
         assert call in src and "max={maxW}" in src, f
+
+
+def test_a_relative_date_that_is_not_a_number_is_empty_not_a_crash(tmp_path):
+    out = _run_ts(tmp_path, WEB / "lib" / "format.ts", """return [undefined, NaN, 'x', null, Infinity].map((v) => m.fmtRelative(v, 'en', 1000))
+        .concat([m.fmtRelative(1000 - 7200, 'en', 1000)])""")
+    assert out == ["", "", "", "", "", "2 hr. ago"]
+
+
+def test_a_member_stopped_in_a_group_message_is_not_shown_as_a_recipient(tmp_path):
+    src = (WEB / "features" / "agents" / "mentions.tsx").read_text(encoding="utf-8")
+    mod = tmp_path / "named.ts"
+    mod.write_text(src[src.index("const ALL_WORDS"):src.index("/** A member (null = @all) as a chip")]
+                   .replace("export function useMentionMap", "function useMentionMap_")
+                   .replace("export type MentionMap = Map<string, AgentGroupMember | null>", "type MentionMap = Map<string, any>")
+                   .replace("AgentGroupMember", "any"), encoding="utf-8")
+    run = tmp_path / "run"
+    run.mkdir()
+    out = _run_ts(run, mod, """const bob = { handle: 'bob' }, ann = { handle: 'ann' }
+        const map = new Map([['all', null], ['bob', bob], ['ann', ann]])
+        return ['stop @Bob', 'stop @bob and @ann, go', '@bob please', 'nonstop @bob'].map((t) => m.namedIn(t, map, [bob, ann]).map((x) => x.handle))""")
+    assert out == [[], ["ann"], ["bob"], ["bob"]]
+
+
+def test_a_quick_add_made_only_of_tokens_is_refused_before_the_server(tmp_path):
+    out = _run_ts(tmp_path, WEB / "features" / "tasks" / "model.ts", "return m.parseQuickAdd('#bug ^fri', [], '2026-11-25').title")
+    assert out.strip() == ""                               # nothing left for a title
+    page = (WEB / "pages" / "tasks" / "index.tsx").read_text(encoding="utf-8")
+    add = page[page.index("const addParsed"):page.index("const endOf")]
+    assert add.index("if (!p.title.trim())") < add.index("create.mutateAsync") and "tasks.titleRequired" in add
+    for form in ("Board.tsx", "Calendar.tsx"):              # a refused add keeps the text, no unhandled rejection
+        src = (WEB / "features" / "tasks" / form).read_text(encoding="utf-8")
+        assert "await onAdd(text)\n" in src and "} catch {" in src[src.index("await onAdd(text)"):][:200]
+
+
+def test_the_source_headings_are_the_ones_the_preview_draws(tmp_path):
+    src = (WEB / "features" / "files" / "readPos.ts").read_text(encoding="utf-8")
+    mod = tmp_path / "headings.ts"
+    mod.write_text(src[src.index("export function sourceHeadings"):src.index("/** Heading index + progress")], encoding="utf-8")
+    run = tmp_path / "run"
+    run.mkdir()
+    cases = ["# A\ntext\n\nTitle\n=====\n\n## B",                 # setext headings count
+             "Para\nmore\n---\n\n# C",                            # ... on the first line of their paragraph
+             "````\n```\n# no\n````\n# yes",                      # a shorter fence does not close a longer one
+             "```js\n# no\n```js\n# still no\n```\n# yes",        # nor one with an info text
+             "~~~\n# no\n```\n~~~\n# yes",                        # nor one of the other character
+             "- a\nb\n---\n# H",                                  # a list's line underlined: a rule
+             "***\n---\nP\n==="]                                  # rules are no paragraph
+    out = _run_ts(run, mod, f"return {json.dumps(cases)}.map((c) => m.sourceHeadings(c))")
+    assert out == [[1, 4, 7], [1, 5], [5], [6], [5], [4], [3]]
+
+
+def test_the_team_chat_name_keeps_its_room_next_to_the_header_buttons():
+    chat = (WEB / "features" / "team" / "Chat.tsx").read_text(encoding="utf-8")
+    head = chat[chat.index("function ChatHeader"):]
+    assert head.count("min-w-24 flex-1") == 2                 # a dm and a group: never squashed to 0 px
+    page = (WEB / "features" / "team" / "TeamPage.tsx").read_text(encoding="utf-8")
+    assert "newChat('max-xl:sr-only')" in page and "max-xl:sr-only\">{t('team.toBubble')}" in page

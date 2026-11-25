@@ -201,6 +201,14 @@ def test_documents_that_cannot_or_must_not_be_read(tmp_path, monkeypatch):
     assert code(pack(tmp_path / "dtd2.xlsx", {"xl/workbook.xml": f'<workbook {S}><sheets><sheet name="s" r:id="rId1"/></sheets></workbook>',
                                               "xl/_rels/workbook.xml.rels": rels(("rId1", "worksheet", "worksheets/s.xml", False)),
                                               "xl/worksheets/s.xml": f"{bomb}<worksheet {S}><sheetData/></worksheet>"})) == "unsupported"
+    # ... whatever its encoding (UTF-16 hides the bytes "<!DOCTYPE") and wherever it is (after a long comment)
+    tiny = '<!DOCTYPE d [<!ENTITY s "SECRET">]>'
+    utf16 = f'<?xml version="1.0" encoding="UTF-16"?>{tiny}<w:document {W}><w:body><w:p><w:r><w:t>&s;</w:t></w:r></w:p></w:body></w:document>'
+    assert code(pack(tmp_path / "utf16.docx", {"word/document.xml": utf16.encode("utf-16")})) == "unsupported"
+    late = f"<!--{'x' * 40000}-->{tiny}<worksheet {S}><sheetData><row r=\"1\"><c r=\"A1\" t=\"inlineStr\"><is><t>&s;</t></is></c></row></sheetData></worksheet>"
+    assert code(pack(tmp_path / "late.xlsx", {"xl/workbook.xml": f'<workbook {S}><sheets><sheet name="s" r:id="rId1"/></sheets></workbook>',
+                                              "xl/_rels/workbook.xml.rels": rels(("rId1", "worksheet", "worksheets/s.xml", False)),
+                                              "xl/worksheets/s.xml": late})) == "unsupported"
     # a part that inflates past the limit is not read
     monkeypatch.setattr(documents, "PART_MAX", 4096)
     assert code(docx(tmp_path / "huge.docx", "<w:p><w:r><w:t>" + "a" * 5000 + "</w:t></w:r></w:p>")) == "too_large"

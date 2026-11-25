@@ -1144,3 +1144,16 @@ def test_fingerprint_sees_a_change_made_through_a_link_or_in_a_big_file(mx, tmp_
     before = agents._fingerprint("x")[".claude/settings.json"]
     big.write_bytes(b"x" * (agents.FINGERPRINT_MAX + 5))
     assert agents._fingerprint("x")[".claude/settings.json"] != before
+
+
+def test_a_role_with_a_section_heading_stays_whole_and_can_be_replaced(client, topic, mx):
+    _on(client)
+    _create(client)
+    hostile = "Write posts.\n## Rules\nSecret order\n@memory.md\n@/etc/hidden.md"
+    r = client.patch("/api/agents/acme/blog/writer", json={"description": hostile})
+    assert r.status_code == 200, r.text
+    shown = client.get("/api/agents/acme/blog/writer").json()["description"]
+    assert shown == "Write posts.\n### Rules\nSecret order\n@/etc/hidden.md"     # all of it, in the Role window
+    assert client.patch("/api/agents/acme/blog/writer", json={"description": "Clean role"}).status_code == 200
+    md = (mx["ws"] / "projects" / "acme" / "topics" / "blog" / "agents" / "writer" / "CLAUDE.md").read_text()
+    assert "Secret order" not in md and "hidden" not in md and md.count("@memory.md") == 1

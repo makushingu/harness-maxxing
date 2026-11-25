@@ -140,8 +140,16 @@ def _heading(kind: str, name: str) -> str:
     return "# Workspace" if kind == "workspace" else f"# {kind.capitalize()} {name}"
 
 
+def _section_safe(description: str) -> str:
+    """A description stays one section: a `## ` line would end it when read back (the rest hidden in CLAUDE.md, out
+    of reach of the Role window, and kept by every later save), so it becomes `### `; a `@memory.md` line (an end of
+    the section too) is dropped. Project and topic descriptions are refused before (check_description)."""
+    return "\n".join("#" + ln if ln.startswith("## ") else ln
+                     for ln in description.splitlines() if ln.strip() != "@memory.md")
+
+
 def _render_claude_md(kind: str, name: str, description: str) -> str:
-    desc = description.strip()
+    desc = _section_safe(description).strip()
     return _heading(kind, name) + "\n\n" + (desc + "\n\n" if desc else "") + "@memory.md\n"
 
 
@@ -188,6 +196,8 @@ def _parse_description(f: Path) -> str:
 def _write_claude_md(folder: Path, kind: str, name: str, description: str | None) -> None:
     """Rewrite heading (+ description when given) keeping whatever the user added after it."""
     f = folder / "CLAUDE.md"
+    if description is not None:
+        description = _section_safe(description)
     try:       # bytes that are not UTF-8 (café in latin-1) go back as they came: surrogateescape, never U+FFFD
         lines = f.read_bytes().decode("utf-8", errors="surrogateescape").splitlines()
     except OSError:

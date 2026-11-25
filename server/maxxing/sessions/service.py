@@ -959,8 +959,10 @@ def read_raw(sid: str, offset: int = 0, max_bytes: int = READ_CHUNK) -> tuple[li
                 return [], offset
             chunk += rest
             cut = len(chunk) - 1
-    chunk = chunk[: cut + 1]
-    return chunk.decode("utf-8", "replace").splitlines(), offset + len(chunk)
+    # cut on b"\n" only: str.splitlines() also cuts on U+2028 / U+2029 / U+0085, which json.dumps(ensure_ascii=False)
+    # leaves raw in a line, and the whole event (a tool call, its result) would vanish from the thread
+    lines = [ln.decode("utf-8", "replace").removesuffix("\r") for ln in chunk[:cut].split(b"\n")]
+    return lines, offset + cut + 1
 
 
 def read_events(sid: str, offset: int = 0) -> tuple[list[dict], int]:

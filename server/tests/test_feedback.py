@@ -57,7 +57,8 @@ def cloud(mx, monkeypatch):
 
 def test_feedback_is_sent_with_the_version_and_the_email_is_remembered(client, cloud):
     config.update_config(language="fr", profile={"name": "Romi"})
-    assert client.get("/api/settings/feedback").json()["email"] == ""
+    shown = client.get("/api/settings/feedback").json()
+    assert shown["email"] == "" and shown["name"] == "Romi"      # the window says the pseudo goes along
     r = client.post("/api/settings/feedback", json={"email": " me@x.io ", "type": "bug", "message": "The sidebar flickers"})
     assert r.status_code == 200, r.text
     sent = cloud.got[0]

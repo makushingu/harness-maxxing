@@ -66,7 +66,7 @@ def current() -> dict:
     cfg = config.load_config()
     hidden = cfg.get("result_line_hidden")
     hidden = hidden if isinstance(hidden, list) else []       # a hand-edited value of another type: nothing hidden
-    return {"timezone": cfg.get("timezone") or "UTC", "language": cfg.get("language") or "en",
+    return {"timezone": cfg.get("timezone") or "UTC", "language": cfg.get("language") if cfg.get("language") in ("en", "fr") else "en",
             "public_url": cfg.get("public_url") or "", "files_root": cfg.get("files_root") or "/root",
             **{k: bool(cfg.get(k)) for k in FLAGS},
             "daily_budget_usd": budget.limit(),
@@ -341,7 +341,8 @@ def get_settings():
 def put_settings(body: SettingsIn):
     changes = body.model_dump(exclude_none=True)
     cfg = config.load_config()      # the UI sends back every setting: the unchanged ones are neither checked nor applied
-    changes = {k: v for k, v in changes.items() if k not in cfg or cfg[k] != v}
+    shown = current()               # ... nor a damaged value it was shown cleaned (memory_max_lines 30.5 shown as 30)
+    changes = {k: v for k, v in changes.items() if (k not in cfg or cfg[k] != v) and (k not in shown or shown[k] != v)}
     if "timezone" in changes:
         try:
             if changes["timezone"] in config.PSEUDO_ZONES:

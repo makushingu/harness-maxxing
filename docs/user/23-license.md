@@ -67,7 +67,7 @@ and left it unchecked keeps it off. An update never turns on the email or the ne
 team: pick **Bug**, **Idea** or **Other**, write your message and give your email. The email is required: it keeps
 spam away and lets us answer you (a confirmation is sent there). The server sends to `api.harness-maxxing.com`
 your email, your message, its type, the Harness Maxxing version, the interface language and your pseudo (Settings →
-Profile) - nothing else: no logs, no files, no session content. The last email used is filled in next time (the first
+Profile, written under the message before you send it) - nothing else: no logs, no files, no session content. The last email used is filled in next time (the first
 time: the one of Settings → Profile → Stay in touch, if any).
 
 **Your Harness reads the message first.** When you press **Send**, the Claude of this server (your own Claude

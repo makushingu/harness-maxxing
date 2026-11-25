@@ -551,3 +551,15 @@ def test_an_engine_answer_with_a_lone_surrogate_still_encodes(mx, tmp_path, monk
     out["text"].encode("utf-8")
     assert out["language"] in (None, "auto") or str(out["language"]).encode("utf-8")
     assert out["text"].startswith("ab") and out["text"].endswith("c")
+
+
+def test_a_voice_section_that_is_not_an_object_is_no_setting(client):
+    from maxxing import config
+    path = config.config_path()
+    cfg = json.loads(path.read_text()) if path.exists() else {}
+    path.write_text(json.dumps({**cfg, "voice": True}))
+    r = client.get("/api/voice")
+    assert r.status_code == 200, r.text
+    assert r.json()["settings"]["engine"] == "off"
+    assert voice.update_settings(auto_send=True)["auto_send"] is True
+    assert json.loads(path.read_text())["voice"]["auto_send"] is True

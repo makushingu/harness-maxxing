@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'
 import { Page } from '@/components/shell/Page'
 import { PageList } from '@/components/shell/PageList'
 import { useLang, useT } from '@/i18n'
+import { toast } from '@/components/ui/toast'
 import { isApiError } from '@/lib/api'
 import { useBulkTasks, useCreateTask, useDeleteTask, usePatchTask, useSettings, useTasks, useWorkspace } from '@/lib/queries'
 import type { Task, TaskProject, TaskStatus } from '@/lib/types'
@@ -179,16 +180,22 @@ export default function TasksPage() {
 
   const scopeProjectId = project ? project.id : null
   const addParsed = React.useCallback(
-    (p: QuickParse, extra: { status?: TaskStatus; due?: string | null; project_id?: string | null } = {}) =>
-      create.mutateAsync({
+    (p: QuickParse, extra: { status?: TaskStatus; due?: string | null; project_id?: string | null } = {}) => {
+      if (!p.title.trim()) {
+        // "#bug ^fri" alone: only tokens, no title (the server would refuse it); the text stays in the box
+        toast.error(t('tasks.titleRequired'))
+        return Promise.reject(new Error('title required'))
+      }
+      return create.mutateAsync({
         title: p.title.trim(),
         status: extra.status ?? 'todo',
         labels: p.labels,
         priority: p.priority ?? 0,
         due: p.due ?? extra.due ?? null,
         project_id: p.project_id ?? (extra.project_id !== undefined ? extra.project_id : scopeProjectId),
-      }),
-    [create, scopeProjectId],
+      })
+    },
+    [create, scopeProjectId, t],
   )
 
   const endOf = (status: TaskStatus, done = status === 'done') => {

@@ -166,3 +166,12 @@ def test_setting_through_the_api(client):
     assert client.get("/api/system/version").json()["auto_update"]["enabled"] is False
     assert client.put("/api/system/auto-update", json={"enabled": True}).json()["enabled"] is True
     assert client.get("/api/system/version").json()["auto_update"]["enabled"] is True
+
+
+@pytest.mark.parametrize("tried", ["x", ["abc123"], {"target": "abc123", "at": "soon"}, {"target": "abc123", "at": float("nan")}])
+def test_a_damaged_state_file_does_not_block_the_update(fake, tried):
+    config.write_json(au.state_file(), {"tried": tried, "last": {"at": "yesterday", "result": "busy"}, "last_check": 7})
+    pub = au.public()                                   # the Version card formats these dates: never a bad one
+    assert pub["tried"] is None and pub["last"] is None and pub["last_check"] is None
+    assert au.tick(fake["spawn"], now=1000.0) == "started" and fake["spawned"] == 1
+    assert au.public()["last"]["result"] == "started"

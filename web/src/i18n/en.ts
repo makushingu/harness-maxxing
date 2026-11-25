@@ -104,6 +104,7 @@ export const en = {
   'feedback.emailHint': "Required, so we can answer you (and to keep spam away). Used for nothing else.",
   'feedback.send': "Send",
   'feedback.sentWith': "Sent with the version ({version})",
+  'feedback.sentWithName': "Sent with the version ({version}) and your pseudo ({name})",
   'feedback.sentTitle': "Thank you!",
   'feedback.sentBody': "Your message reached the team. A confirmation is on its way to {email}.",
   'feedback.err.email': "Enter a valid email address",

@@ -7,7 +7,7 @@ The page layout is not kept: this is the content, readable on any screen. The ol
 
 These files are zip archives of XML written by anyone: nothing in them is executed or fetched, every part is
 read up to a size, the whole reading has a deadline and the answer a size (`truncated` says it was cut). A DTD
-is refused (these formats have none), and expat (>= 2.4.1) bounds entity expansion by itself.
+is refused wherever it is and however the part is encoded (these formats have none), and expat (>= 2.4.1) bounds entity expansion by itself.
 """
 from __future__ import annotations
 
@@ -21,6 +21,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from urllib.parse import quote
 from xml.etree import ElementTree as ET
+from xml.parsers import expat
 
 KINDS = {".docx": "text", ".docm": "text", ".odt": "text",
          ".xlsx": "sheets", ".xlsm": "sheets", ".ods": "sheets",
@@ -79,24 +80,65 @@ def _strip(root: ET.Element) -> ET.Element:
     return root
 
 
-def _no_dtd(data: bytes) -> None:
-    if b"<!DOCTYPE" in data or b"<!ENTITY" in data:
+class _Prolog(Exception):
+    pass
+
+
+class _NoDtd:
+    """Refuses a DTD wherever it is and however the part is encoded (UTF-16, a long comment first...): the
+    prolog is read by expat itself, up to the root element (a DTD cannot come after it)."""
+
+    def __init__(self, broken: Exception | None = None):
+        self.done, self.broken = False, broken     # `broken`: raised when the prolog itself cannot be parsed
+        self.p = expat.ParserCreate()
+        self.p.StartDoctypeDeclHandler = self.p.EntityDeclHandler = self._refuse
+        self.p.StartElementHandler = self._root
+        if hasattr(self.p, "SetReparseDeferralEnabled"):   # expat >= 2.6 would wait for more data before a DTD
+            self.p.SetReparseDeferralEnabled(False)
+
+    @staticmethod
+    def _refuse(*_a) -> None:
         raise Unreadable("unsupported", "This document cannot be read")
+
+    @staticmethod
+    def _root(*_a) -> None:
+        raise _Prolog
+
+    def feed(self, data: bytes) -> None:
+        """`data` empty: the end of the part."""
+        if self.done:
+            return
+        try:
+            self.p.Parse(data, not data)
+        except _Prolog:
+            self.done = True
+        except (expat.ExpatError, LookupError):          # LookupError: an encoding Python does not know
+            raise self.broken or Unreadable("unsupported", "This document cannot be read") from None
+        if self.done:
+            self.p = None
+
+
+def _no_dtd(data: bytes) -> None:
+    guard = _NoDtd()
+    for i in range(0, len(data), 1 << 16):
+        guard.feed(data[i:i + (1 << 16)])
+        if guard.done:
+            return
+    guard.feed(b"")
 
 
 class _Capped:
     """A part read as a stream: stops (truncated) past STREAM_MAX bytes or the deadline."""
 
     def __init__(self, f, pack: "_Pack"):
-        self.f, self.pack, self.n = f, pack, 0
+        self.f, self.pack, self.n, self.guard = f, pack, 0, _NoDtd(_Full())
 
     def read(self, size: int = -1) -> bytes:
         self.pack.tick()
         if self.n > STREAM_MAX:
             raise _Full
         data = self.f.read(size if size and size > 0 else 1 << 16)
-        if not self.n:
-            _no_dtd(data)
+        self.guard.feed(data)
         self.n += len(data)
         return data
 

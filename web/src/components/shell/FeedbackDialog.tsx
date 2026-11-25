@@ -204,7 +204,7 @@ export function FeedbackDialog() {
             {errText && <p className="text-sm text-destructive" role="alert">{errText}</p>}
             {check.isPending && <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status"><Spinner />{t('feedback.checking')}</p>}
             <DialogFooter className="items-center">
-              <span className="mr-auto text-xs text-muted-foreground">{defaults.data?.version ? t('feedback.sentWith', { version: defaults.data.version }) : ''}</span>
+              <span className="mr-auto text-xs text-muted-foreground">{defaults.data?.version ? (defaults.data.name ? t('feedback.sentWithName', { version: defaults.data.version, name: defaults.data.name }) : t('feedback.sentWith', { version: defaults.data.version })) : ''}</span>
               <Button type="button" variant="ghost" onClick={() => setOpen(false)}>{t('common.cancel')}</Button>
               <Button type="submit" disabled={busy}>{busy && <Spinner />}{t('feedback.send')}</Button>
             </DialogFooter>

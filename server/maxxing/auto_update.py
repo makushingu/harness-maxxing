@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import os
 import subprocess
 import time
@@ -52,9 +53,18 @@ def load() -> dict:
     return d if isinstance(d, dict) else {}
 
 
+def _entry(v) -> dict | None:
+    """One record of the state (`tried`, `last_check`, `last`), or None when the file was damaged by hand."""
+    if not isinstance(v, dict):
+        return None
+    at = v.get("at")
+    return v if isinstance(at, (int, float)) and not isinstance(at, bool) and math.isfinite(at) else None
+
+
 def public() -> dict:
     d = load()
-    return {"enabled": enabled(), "tried": d.get("tried"), "last_check": d.get("last_check"), "last": d.get("last")}
+    return {"enabled": enabled(), "tried": _entry(d.get("tried")), "last_check": _entry(d.get("last_check")),
+            "last": _entry(d.get("last"))}
 
 
 def browsers() -> int:
@@ -132,8 +142,8 @@ def _decide(spawn, now: float, d: dict) -> tuple[str, str | None]:
                     "Update with Harness from Settings -> Updates.", "info", "system", "/settings/updates",
                     dedupe=f"auto-update-review:{version}")
         return "needs_review", None
-    tried = d.get("tried") or {}
-    if tried.get("target") == target and now - float(tried.get("at") or 0) < RETRY_TARGET_S:
+    tried = _entry(d.get("tried")) or {}
+    if tried.get("target") == target and now - tried["at"] < RETRY_TARGET_S:
         return "tried_recently", None
     why = busy_reason(now)                              # the preflight takes a while: somebody may have come
     if why:
