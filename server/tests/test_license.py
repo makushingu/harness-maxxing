@@ -458,3 +458,9 @@ def test_activate_answers_without_license_or_with_odd_servers_end_cleanly(server
     assert run_cli("license", "activate", "HM-ABCD-EFGH-JKMN-PQRS") == 1
     out = capsys.readouterr().out
     assert "already on 1 server" in out and "old-vps" in out
+
+
+def test_a_license_key_that_is_not_text_does_not_break_the_page(mx, client):
+    config.set_secrets({license.KEY: 12345})
+    r = client.get("/api/settings/license")
+    assert r.status_code == 200 and r.json()["has_key"] is False and r.json()["key_hint"] == ""

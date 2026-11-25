@@ -148,6 +148,7 @@ def status() -> dict:
     is recorded (fair source: the key is a right of use, it changes nothing in how the server runs)."""
     info = {k: _field(v) for k, v in (config.load_config().get("license") or {}).items()}   # stored before _field
     key = config.get_secret(KEY)
+    key = key if isinstance(key, str) else ""            # a secrets.json edited by hand: a number is no key
     info.update(enabled=enabled(), has_key=bool(key), key_hint=("HM-…" + key[-4:]) if key else "", api=API)
     return info
 
