@@ -1159,11 +1159,12 @@ def _keep_switched_off(out: dict, local: dict) -> None:
     its triggers switched off here (same id), stay off."""
     if local.get("enabled") is False:
         out["enabled"] = False
-    off = {t.get("id") for t in local.get("triggers") or [] if isinstance(t, dict) and t.get("enabled") is False} \
-        if isinstance(local.get("triggers"), list) else set()
+    # only text ids: a list or a dict in a hand-edited agent.json is not hashable (the product gives it a new id)
+    off = {t["id"] for t in local.get("triggers") or [] if isinstance(t, dict) and isinstance(t.get("id"), str)
+           and t.get("enabled") is False} if isinstance(local.get("triggers"), list) else set()
     if off and isinstance(out.get("triggers"), list):
-        out["triggers"] = [{**t, "enabled": False} if isinstance(t, dict) and t.get("id") in off else t
-                           for t in out["triggers"]]
+        out["triggers"] = [{**t, "enabled": False} if isinstance(t, dict) and isinstance(t.get("id"), str)
+                           and t["id"] in off else t for t in out["triggers"]]
 
 
 def _fresh_server() -> bool:

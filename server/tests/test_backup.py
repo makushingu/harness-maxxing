@@ -833,3 +833,11 @@ def test_restore_on_a_server_in_use_never_turns_a_job_or_an_extension_back_on(ws
                        f"{backup.META_DIR}/config.json": json.dumps({"extensions": {"disabled": []}}).encode()})
     assert not crons.list_jobs()[0]["enabled"] and r["held"]["crons"] == ["Blog"]
     assert "evil" in config.load_config()["extensions"]["disabled"]
+
+
+def test_keep_switched_off_ignores_trigger_ids_that_are_not_text():
+    """A hand-edited agent.json may hold a list or a dict as a trigger id: the restore goes on instead of stopping."""
+    out = {"triggers": [{"id": {"x": 1}, "enabled": True}, {"id": "t1", "enabled": True}]}
+    local = {"triggers": [{"id": [1], "enabled": False}, {"id": "t1", "enabled": False}]}
+    backup._keep_switched_off(out, local)
+    assert out["triggers"] == [{"id": {"x": 1}, "enabled": True}, {"id": "t1", "enabled": False}]
