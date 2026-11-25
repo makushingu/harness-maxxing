@@ -490,3 +490,16 @@ def test_a_row_back_before_its_exit_ends_is_shown_again(tmp_path):
                           prelude="globalThis.window = { matchMedia: () => ({ matches: false }) }\n")
     assert out == [{"inert": True, "position": "absolute"}, False, "relative", "", "", True]
 
+
+def test_media_positions_of_two_tabs_are_merged_not_erased(tmp_path):
+    out = _run_ts_stubbed(tmp_path, WEB / "features/files/mediaMemory.ts", """
+      const b = await load('?tab-b')
+      m.resumePos('x', 100); b.resumePos('y', 100)            // each tab reads the (empty) key once
+      m.setMediaPos('a', 40); await new Promise((r) => setTimeout(r, 1100))
+      b.setMediaPos('b', 50); await new Promise((r) => setTimeout(r, 1100))
+      m.clearMediaPos('a'); await new Promise((r) => setTimeout(r, 1100))
+      return Object.keys(JSON.parse(globalThis.S.get('mx-media-pos'))).sort()""",
+                          prelude="const s = new Map()\nglobalThis.S = { get: (k) => s.get(k) ?? null, "
+                                  "set: (k, v) => s.set(k, v) }\n",
+                          swap={"import { store } from '@/lib/utils'": "const store = globalThis.S"})
+    assert out == ["b"]                                   # b's position kept, the one cleared in a stays cleared

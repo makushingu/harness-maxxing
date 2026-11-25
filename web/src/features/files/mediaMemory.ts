@@ -1,6 +1,8 @@
 // What the players remember in this browser: volume, mute and speed (one set for every player, `mx-media-prefs`),
 // and where each audio / video file was left (`mx-media-pos`: path + version -> seconds, the 100 most recent, written
 // at most once a second). Opening a file again resumes there, unless it was in the first 3 s or the last 5 s.
+// Several tabs share the key: a write merges what is stored (the newest of each file wins), never erases another
+// tab's positions.
 // No React here.
 import { store } from '@/lib/utils'
 
@@ -35,25 +37,42 @@ export function savePrefs(change: Partial<MediaPrefs>) {
 type Pos = { t: number; at: number }
 let cache: Map<string, Pos> | null = null
 let timer: ReturnType<typeof setTimeout> | null = null
+/** Positions cleared in this tab since the last write: an older copy from another tab must not bring them back. */
+const cleared = new Map<string, number>()
 
-function load() {
-  if (cache) return cache
-  cache = new Map()
+function stored(): [string, Pos][] {
   try {
     const raw = JSON.parse(store.get(POS) || '{}') as Record<string, Pos>
-    const rows = Object.entries(raw).filter(([, v]) => v && num(v.t) && v.t >= 0 && num(v.at))
-    rows.sort((a, b) => a[1].at - b[1].at) // oldest first: the Map's order is the eviction order
-    for (const [k, v] of rows) cache.set(k, { t: v.t, at: v.at })
+    return Object.entries(raw)
+      .filter(([, v]) => v && num(v.t) && v.t >= 0 && num(v.at))
+      .map(([k, v]) => [k, { t: v.t, at: v.at }])
   } catch {
-    /* unreadable: start empty */
+    return [] // unreadable: start empty
   }
+}
+
+/** Oldest first: the Map's order is the eviction order. */
+const byAge = (rows: [string, Pos][]) => new Map(rows.sort((a, b) => a[1].at - b[1].at).slice(-MAX))
+
+function load() {
+  cache ??= byAge(stored())
   return cache
 }
 
 function write() {
   if (timer) clearTimeout(timer)
   timer = null
-  if (cache) store.set(POS, JSON.stringify(Object.fromEntries(cache)))
+  if (!cache) return
+  const merged = new Map(cache)
+  for (const [k, v] of stored()) {
+    const gone = cleared.get(k)
+    if (gone !== undefined && v.at <= gone) continue
+    const mine = merged.get(k)
+    if (!mine || v.at > mine.at) merged.set(k, v)
+  }
+  cleared.clear()
+  cache = byAge([...merged])
+  store.set(POS, JSON.stringify(Object.fromEntries(cache)))
 }
 
 function schedule() {
@@ -76,10 +95,13 @@ export function setMediaPos(key: string, t: number) {
   const m = load()
   m.delete(key)
   m.set(key, { t: Math.round(t * 10) / 10, at: Date.now() })
+  cleared.delete(key)
   while (m.size > MAX) m.delete(m.keys().next().value!)
   schedule()
 }
 
 export function clearMediaPos(key: string) {
-  if (load().delete(key)) schedule()
+  load().delete(key)
+  cleared.set(key, Date.now())
+  schedule()
 }
