@@ -11,7 +11,7 @@ blocks):
 
 | Block | Section | What you find |
 |---|---|---|
-| **General** | **General** | language (English/French), time zone, **App** (install it on this computer or phone, below), the guided tour and the tutorial |
+| **General** | **General** | language (English/French), time zone, **App** (install it on this computer or phone, below), the getting started guide and the tutorial |
 | | **Appearance** | saved in this browser, in three cards. **Theme**: *Solid* (the default: plain colors) or *Glass* (the bars, menus and dialogs become see-through over a soft backdrop in your accent color; off when your system asks for less transparency), and the themes Harness installed for you next to them ([Themes](39-themes.md); **Ask Harness** for a new one), each shown as a small preview. **Options of the theme**: mode (dark, light or system), accent color (the logo takes it too), background (neutral or tinted with the accent), interface font (23, grouped by style: modern, with character, rounded, serif, easy to read, monospace) and code font (11; a font other than the default loads the first time you pick it) - the last mode, accent and background you pick also color the sign-in page and any browser that never chose one (new phone, private window). **Layout**: density, **layout** of this device (*Auto*: the touch layout on phones and tablets, the sidebar on computers; *Touch*; *Desktop* when the screen is wide enough), the first screen of the touch layout (*Last session* or *Dashboard*) |
 | | **Profile** | your pseudo, a **photo** (kept on this server, shown instead of the color and emoji, also to your Team contacts), color and emoji (picked from a searchable list) for messages, notifications and Team, with a preview; **Stay in touch**: the optional e-mail, news and anonymous counter (see [License](license)) |
 | | **Security** | change the password, two-step sign-in with Telegram (see [Telegram](telegram#two-step-sign-in)), **Privacy**: the presentation mode by default (new browsers start with your data masked), sign out everywhere |
@@ -153,7 +153,7 @@ bar at the bottom, the conversation fills the screen. Two buttons sit at the top
 On a computer the bottom of the sidebar holds the same status block, with the keyboard shortcuts next to the docs.
 The pages with a list (Sessions, Agents, Team, Tasks, Infra, Files, E-mail, Notifications) show it in a second bar
 next to the sidebar (see [Sessions](04-sessions.md#layout)); the touch layout opens the same list from ☰.
-The guided tour and the interactive tutorial are in **Settings -> General**; **Sign out** is in **Settings ->
+The getting started guide (also in Help, **?** at the bottom left) and the interactive tutorial are in **Settings -> General**; **Sign out** is in **Settings ->
 Security**.
 
 Also:

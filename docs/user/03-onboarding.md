@@ -31,8 +31,36 @@ every step also exists in Settings.
    [Telegram](telegram).
 8. **Memory backup** (optional, recommended) – a private GitHub repository receiving your memory
    every day. See [Backup](backup).
-9. **Ready** – a short tour of the interface, and **Tell me when a session finishes** (a browser notification when
+9. **Ready** – then the **getting started guide** is proposed (below), and **Tell me when a session finishes** (a browser notification when
    Claude is done and the tab is not in front; also in Settings → Features).
+
+## The getting started guide
+
+Proposed once after the wizard (and once after the update that brought it), and always in Help (**?** at the bottom
+left of the sidebar) -> **Getting started guide**, the palette (⌘K) and Settings -> General. An address ending in
+`?guide` opens it too.
+
+1. **Your language**: the whole interface and the examples follow it.
+2. **What you mostly do**: e-commerce, SEO blogs (PBN), affiliate marketing, YouTube video editing, or in your own
+   words (**Skip** is fine): the examples start from it.
+3. **Your level**: *Beginner* (step by step, simple examples) or *Intermediate* (what Harness adds, examples that go
+   further).
+4. **The tour**: *Full* (about 5 minutes: sessions, Zones and Tabs, memory, agents on their page and in the
+   sessions, scheduled jobs, tasks, phone, code, sites, e-mail, Team, files, backup, the pages to switch on, server
+   health) or *Partial* (about 2 minutes): the essentials plus only the uses you tick - the recommended ones are
+   ticked already (from what is set up here). **Close** if you do not need it.
+
+Each step lights up the part of the screen it explains, with a one-line explanation and a tip. On the steps where
+you do something, **Opus writes for you, as you go**, one example (two for *Intermediate*: a simple one, then a more
+ambitious one) about your own projects - what you imported from another agent, or your sessions and agents if you
+already use Harness - each one following on from what you did at the step before. The examples are written when
+you get near the step (a few seconds each, on your Claude plan); if Opus cannot write one, the step keeps its
+explanation.
+
+**Try it** opens a new session with the example in its message box: read it, change it, send it - nothing is sent
+by itself. The guide then waits in a small pill on the right edge of the screen (**Continue**). A step about a page that is
+off (Agents, Tasks, Git...) switches it on in one click. **Esc** or **Pause** puts the guide aside; it picks up where
+you left off, on any of your devices, from Help -> Getting started guide (**Resume** or **Start again**).
 
 ## After the wizard: the tutorial
 

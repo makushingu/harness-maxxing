@@ -62,8 +62,6 @@ type UIState = {
   /** Presentation mode turned on only for a Feedback screenshot: a page reloaded or closed during the shot turns it
    *  back off on the next load. */
   presentationShot: boolean
-  /** The guided tour was completed or skipped (it starts automatically once, after onboarding). */
-  tourDone: boolean
   /** Desktop notification when a Claude session finishes its turn (this browser). */
   notifyDone: boolean
   /** Notifications panel next to the dashboard widgets (wide screens). */
@@ -100,7 +98,6 @@ type UIState = {
   setLayout: (l: Layout) => void
   setTouchHome: (h: TouchHome) => void
   setPresentation: (on: boolean) => void
-  setTourDone: (done: boolean) => void
   setNotify: (p: Partial<Pick<UIState, 'notifyDone' | 'notifyTeam' | 'teamBubbles' | 'agentPreview' | 'notifySound' | 'badgePulse'>>) => void
   setFeedPanel: (v: boolean) => void
   adoptLook: (look: Look) => void
@@ -135,7 +132,6 @@ export const useUI = create<UIState>()(
       touchHome: 'session',
       presentation: false,
       presentationShot: false,
-      tourDone: false,
       notifyDone: false,
       notifyTeam: true,
       teamBubbles: true,
@@ -178,7 +174,6 @@ export const useUI = create<UIState>()(
       setLayout: (layout) => set({ layout }),
       setTouchHome: (touchHome) => set({ touchHome }),
       setPresentation: (presentation) => set({ presentation }),
-      setTourDone: (tourDone) => set({ tourDone }),
       setNotify: (p) => set(p),
       setFeedPanel: (feedPanel) => set({ feedPanel }),
       adoptLook: ({ theme, accent, tint }) => set({ theme, accent, tint }),

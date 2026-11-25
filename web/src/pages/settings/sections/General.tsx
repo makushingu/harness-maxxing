@@ -12,7 +12,7 @@ import { RegionFields } from '@/features/general/RegionFields'
 import { SettingRow } from '@/features/common'
 import { SettingsCard, SectionStack } from './ui'
 import { useNavigate } from 'react-router'
-import { startTour, useTutorialHref } from '@/tour/store'
+import { startGuide, useTutorialHref } from '@/tour/store'
 import { installApp, isStandalone, useInstallMode, usePWA } from '@/pwa'
 import { InstallGuide, InstallSteps } from '@/pwa/InstallSteps'
 
@@ -24,7 +24,7 @@ function HelpCard() {
     <SettingsCard title={t('help.settingsTitle')} description={t('help.settingsDesc')}>
       <div className="divide-y">
         <SettingRow label={t('help.tour')} description={t('help.tourDesc')}>
-          <Button variant="outline" size="sm" onClick={startTour}>
+          <Button variant="outline" size="sm" onClick={startGuide}>
             <Compass /> {t('help.tour')}
           </Button>
         </SettingRow>

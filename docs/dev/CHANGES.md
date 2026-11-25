@@ -7,6 +7,14 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## 2.0.0-alpha.169 - 2026-11-24
 
+- Guide (FEU): `maxxing/guide.py` + `api/guide.py` (`/api/guide`, `/cards`, `/reset`), state in
+  `<state>/guide/guide.json`. Cards = one `claude -p --model opus --tools ""` call per step (worker thread, one at a
+  time, queue lost on restart -> shown `failed`, asked again by the UI); output checked (`_clean_card`: known topic or
+  `default_topic`, `_BANNED` commands, 1 prompt beginner / 2 intermediate / 3 final). Facts sent: topics, 12 recent
+  session titles, agents, pages on, global memory.md (3 KB) and the last IMPORT_REPORT.md (2 KB), both through
+  `backup.LEAKS` redaction. UI: `web/src/guide/` (steps.ts ids = `guide.STEPS`, checked by test_guide), spotlight
+  helpers moved to `tour/spot.ts`; the old 8-step tour (`tour/steps.ts` STEPS, FinalCard, `tourDone`,
+  `mx-tour-pending`) removed, `tour/Tour.tsx` plays showcases only. `data-tour="view-switch"` on the Tabs/Zones switch.
 - Push (#185): session meta `push` (absent = on; `false` = muted, kept by a hand-off), `Session.push`, accepted by
   `POST /api/sessions` and `PATCH`; `api/push.rings()` is false for a muted session. UI: `useHasPushDevice()` (any device).
 - Backup (#186): `_keep_local_rules` -> `_keep_switched_off`: on a server in use, a local `agent.json` with

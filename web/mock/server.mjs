@@ -1198,6 +1198,39 @@ const MOCK_THEMES = [
     css: '& .rounded-xl { box-shadow: 0 0 0 1px oklch(0.75 0.17 55 / 0.25) }', css_state: 'stale', warnings: [] },
 ]
 R('GET', '/api/themes', () => ({ themes: MOCK_THEMES, errors: [] }))
+/* ---- getting-started guide (guide.py): cards "written" 1.5 s after they are asked */
+const GUIDE = { file: null }
+const GUIDE_WRITES = new Set(['welcome', 'first-prompt', 'memory', 'agents', 'agents-sessions', 'crons', 'tasks', 'code', 'sites', 'mail', 'content', 'final'])
+const guideState = () => {
+  const d = GUIDE.file || {}
+  return { offer: !GUIDE.file, status: d.status ?? null, level: d.level ?? null, activity: d.activity || '', mode: d.mode ?? null, uses: d.uses || [], steps: d.steps || [], index: d.index || 0, done: d.done || [], tried: d.tried || {}, cards: d.cards || {} }
+}
+R('GET', '/api/guide', ({ q }) => ({ ...guideState(), ...(q.get('context') ? { context: { case: 'new', imported: false, topics: 2, sessions: 3, agents: 0, crons: 1, telegram: false, backup: false, pages: {}, recommended: ['automate', 'phone', 'content'], default_topic: 'projects/general/topics/inbox' } } : {}) }))
+R('PUT', '/api/guide', ({ body }) => {
+  const d = (GUIDE.file ||= {})
+  for (const k of ['status', 'level', 'activity', 'mode', 'uses', 'steps', 'index', 'done']) if (body[k] !== undefined) d[k] = body[k]
+  if (body.tried) (d.tried ||= {})[body.tried.step] = { label: body.tried.label, topic: body.tried.topic }
+  d.status ||= 'dismissed'
+  return guideState()
+})
+R('POST', '/api/guide/cards', ({ body }) => {
+  const d = (GUIDE.file ||= { status: 'dismissed' })
+  const cards = (d.cards ||= {})
+  for (const s of body.steps || []) {
+    if (!GUIDE_WRITES.has(s) || (!body.force && cards[s] && cards[s].status !== 'failed')) continue
+    cards[s] = { status: 'pending', at: Date.now() }
+    setTimeout(() => {
+      cards[s] = s === 'welcome'
+        ? { status: 'ready', intro: 'Bonjour ! Votre installation est toute neuve : on part de zéro, avec vos premiers projets.', prompts: [], at: Date.now() }
+        : { status: 'ready', intro: `Après l'étape précédente, voici ${s} appliqué à votre projet Blog.`, prompts: [
+            { label: 'Un premier fichier utile', text: `Écris dans ce sujet un fichier plan-${s}.md : 5 idées d'articles pour mon blog, une ligne chacune.`, topic: 'projects/general/topics/inbox' },
+            ...(d.level === 'intermediate' ? [{ label: 'Plus loin', text: 'Puis propose un calendrier de publication sur 4 semaines.', topic: 'projects/general/topics/inbox' }] : []),
+          ], at: Date.now() }
+    }, 1500)
+  }
+  return guideState()
+})
+R('POST', '/api/guide/reset', () => { GUIDE.file = { status: 'dismissed' }; return guideState() })
 R('POST', '/api/onboarding/complete', () => { S.onboarding_completed = true; return { ok: true } })
 
 /* ---- claude */

@@ -23,7 +23,6 @@ import { TelegramSetup } from '@/features/telegram/TelegramSetup'
 import { BackupSetup, BackupWhy } from '@/features/backup/BackupSetup'
 import { Callout, SettingRow } from '@/features/common'
 import { VoiceQuickSetup } from '@/features/voice/VoiceSetup'
-import { requestTourAfterOnboarding } from '@/tour/store'
 import { ImportWizard } from '@/features/import/ImportWizard'
 import { PackChooser } from '@/features/packs/PackPicker'
 import { FeaturePages } from '@/features/settings/FeaturePages'
@@ -479,7 +478,6 @@ function DoneStep({ onBack, onboarding }: { onBack: () => void; onboarding: Onbo
           complete.mutate(undefined, {
             onSuccess: () => {
               lsStore.remove(LS_KEY)
-              requestTourAfterOnboarding()
               navigate('/sessions', { replace: true })
             },
           })

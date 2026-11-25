@@ -16,7 +16,7 @@ import { CountBadge, CountDot } from '@/components/ui'
 import { useSessionBadge } from './nav'
 import { Drawer, DrawerContent, DrawerTitle } from '@/components/ui/drawer'
 import { isStandalone, installApp, useInstallMode } from '@/pwa'
-import { useTour } from '@/tour/store'
+import { useGuideOn, useTour } from '@/tour/store'
 import { ListSlot, pageListId } from './PageList'
 import { healthTone } from './HealthIndicator'
 import { usePendingUpdate } from './UpdateIndicator'
@@ -96,8 +96,10 @@ export function TouchDrawers() {
   const location = useLocation()
   const navType = useNavigationType()
   const install = useInstallMode()
-  // During the guided tour its cards sit above the drawer: no focus trap, a tap on a card does not close it.
-  const tour = useTour((s) => s.active)
+  // During a showcase or the guide their cards sit above the drawer: no focus trap, a tap on a card does not close it.
+  const showing = useTour((s) => s.active)
+  const guiding = useGuideOn((s) => s.on)
+  const tour = showing || guiding
   const keep = (e: Event) => tour && e.preventDefault()
   // After a page picked in the menu: its list when it has one, else closed. Any other navigation closes the drawer (a
   // session picked in the list), but a step inside the page's list (a folder of Files, a mailbox: keepPageListOpen)

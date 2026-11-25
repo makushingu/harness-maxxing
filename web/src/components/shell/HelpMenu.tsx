@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router'
 import { BookOpen, CircleHelp, Compass, Keyboard, MessageSquareText, type LucideIcon } from 'lucide-react'
 import { useT } from '@/i18n'
 import { cn } from '@/lib/utils'
-import { startTour } from '@/tour/store'
+import { startGuide } from '@/tour/store'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Tooltip } from '@/components/ui'
 import { iconBtn, navRow } from './nav'
 import { useFeedbackDialog, useShortcutsDialog } from './dialog-stores'
@@ -19,7 +19,7 @@ function useHelpActions(): HelpAction[] {
   return [
     { id: 'docs', label: t('nav.docs'), icon: BookOpen, run: () => navigate('/docs') },
     ...(keyboard ? [{ id: 'shortcuts', label: t('shortcuts.title'), icon: Keyboard, run: () => useShortcutsDialog.getState().setOpen(true) }] : []),
-    { id: 'tour', label: t('shell.replayTour'), icon: Compass, run: startTour },
+    { id: 'tour', label: t('help.tour'), icon: Compass, run: startGuide },
     { id: 'feedback', label: t('shell.feedback'), icon: MessageSquareText, run: () => useFeedbackDialog.getState().setOpen(true) },
   ]
 }

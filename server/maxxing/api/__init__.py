@@ -8,6 +8,7 @@ except the public auth endpoints.
 ROUTERS = [
     "auth",
     "onboarding",
+    "guide",
     "claude",
     "workspace",
     "sessions",

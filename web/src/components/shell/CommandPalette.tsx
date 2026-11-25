@@ -16,7 +16,7 @@ import { Kbd, Spinner, usePresentation } from '@/components/ui'
 import { useNav } from './nav'
 import { useShortcutsDialog } from './dialog-stores'
 import { SETTINGS_SECTIONS } from '@/pages/settings/sections'
-import { startTour, TUTORIAL_PATHS, tutorialHref } from '@/tour/store'
+import { startGuide, TUTORIAL_PATHS, tutorialHref } from '@/tour/store'
 import { installApp, useInstallMode } from '@/pwa'
 
 function useDebounced<T>(v: T, ms: number) {
@@ -223,7 +223,7 @@ export function CommandPalette() {
       },
       // keyboard shortcuts need a keyboard: not on a phone (same rule as the Help menu)
       ...(window.matchMedia('(any-pointer: fine)').matches ? [{ id: 'act:shortcuts', title: t('shortcuts.title'), group: actions, icon: Keyboard, shortcut: ['?'], perform: () => openShortcuts(true) }] : []),
-      { id: 'help:tour', title: t('help.tour'), group: t('help.title'), icon: Compass, keywords: ['tour', 'help', 'guide', 'onboarding', 'visite', 'aide'], perform: () => startTour() },
+      { id: 'help:tour', title: t('help.tour'), group: t('help.title'), icon: Compass, keywords: ['tour', 'help', 'guide', 'onboarding', 'visite', 'aide', 'démarrage', 'getting started'], perform: () => startGuide() },
       ...(tutorialPath
         ? [{ id: 'help:tutorial', title: t('help.tutorial'), group: t('help.title'), icon: GraduationCap, keywords: ['tutorial', 'learn', 'tutoriel'], perform: ({ navigate }) => navigate(tutorialHref(tutorialPath)) } satisfies Command]
         : []),

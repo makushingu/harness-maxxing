@@ -34,6 +34,7 @@ export function ViewSwitch({ className }: { className?: string } = {}) {
         onClick={() => useSessionsUI.getState().setTabs(!tabs)}
         className={cn('inline-flex size-8 shrink-0 items-center justify-center rounded-md transition-colors outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring', className)}
         data-testid="tabs-toggle"
+        data-tour="view-switch"
         data-mode={tabs ? 'tabs' : 'zones'}
       >
         <span aria-hidden className="mx-view-glyph" data-kind={tabs ? 'tabs' : 'zones'}>
