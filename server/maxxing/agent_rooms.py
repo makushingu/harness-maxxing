@@ -58,7 +58,7 @@ TEXT_MAX = 4000                 # characters of a message kept in the room
 DELTA_MAX = 12000               # characters of "what was said since your last turn" sent to a member
 PASS_WORDS = ("PASS", "[PASS]")
 ALL_WORDS = ("all", "everyone", "tous")
-MENTION_RE = re.compile(r"(?<![\w@./-])@([a-z0-9][a-z0-9-]{0,47})\b", re.I)
+MENTION_RE = re.compile(r"(?<![\w@./-])@([a-z0-9][a-z0-9-]{0,47})\b", re.I | re.ASCII)   # ASCII \w and \b, like the same pattern in the web UI (mentions.tsx)
 STOP_RE = re.compile(r"(?<![\w-])stop\s+@([a-z0-9][a-z0-9-]{0,47})\b", re.I)
 
 _lock = config.ProcessLock("agent-rooms")

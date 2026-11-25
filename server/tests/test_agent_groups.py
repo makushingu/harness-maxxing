@@ -437,3 +437,11 @@ def test_two_edits_at_once_both_land(client, topic, monkeypatch):
     b.join(5)
     g = real(path)
     assert g["emoji"] == "🚀" and not g["shared_files"]
+
+
+def test_mentions_read_like_the_web_ui_next_to_other_scripts():
+    from maxxing import agent_rooms
+    got = {t: [m.group(1) for m in agent_rooms.MENTION_RE.finditer(t)]
+           for t in ("@bobさん", "こんにちは@bob", "andré@bob", "@bobé", "a@bob", "x @bob.")}
+    # the same as /(?<![\w@./-])@([a-z0-9][a-z0-9-]{0,47})\b/gi in mentions.tsx (JavaScript: ASCII \w and \b)
+    assert got == {"@bobさん": ["bob"], "こんにちは@bob": ["bob"], "andré@bob": ["bob"], "@bobé": ["bob"], "a@bob": [], "x @bob.": ["bob"]}
