@@ -516,3 +516,11 @@ def test_a_long_pasted_quick_add_normalizes_each_project_name_once(tmp_path):
         const r = m.parseQuickAdd('@ab '.repeat(25000) + '@project-7 x', projects, '2026-11-25')
         return [reads, r.project_id, r.title.length]""")
     assert out[0] <= 60 and out[1] == "p7" and out[2] == len("@ab " * 25000 + "x")
+
+
+def test_the_spreadsheet_filter_follows_a_deferred_query_on_precomputed_rows():
+    """The Filter field of a sheet: rows lowered once per sheet, the table filtered on a deferred value (not at each key)."""
+    src = (WEB / "features" / "files" / "docs.tsx").read_text(encoding="utf-8")
+    view = src[src.index("function SheetsView"):src.index("const open = (i: number)")]
+    assert "React.useDeferredValue(q)" in view and "[rows, query])" in view
+    assert "lows.current?.rows !== rows" in view and "c.toLowerCase()" not in view
