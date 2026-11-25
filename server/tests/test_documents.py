@@ -346,3 +346,13 @@ def test_an_unknown_xml_encoding_is_unreadable_not_a_crash(tmp_path):
     parts["xl/workbook.xml"] = '<?xml version="1.0" encoding="x-nope"?><workbook/>'
     with pytest.raises(documents.Unreadable):
         documents.read(pack(tmp_path / "book.xlsx", parts))
+
+
+def test_a_part_of_millions_of_tiny_tags_is_cut_not_built_whole(tmp_path, monkeypatch):
+    """16 MB of <a/> zip to 16 KB but make ~4 million elements (~1 GB): the part stops at ELEMENTS_MAX."""
+    monkeypatch.setattr(documents, "ELEMENTS_MAX", 1000, raising=False)
+    body = "<w:p><w:r><w:t>first</w:t></w:r></w:p>" + "<a/>" * 50_000 + "<w:p><w:r><w:t>last</w:t></w:r></w:p>"
+    r = documents.read(docx(tmp_path / "bomb.docx", body))
+    assert r["truncated"] and "first" in r["markdown"] and "last" not in r["markdown"]
+    r = documents.read(docx(tmp_path / "ok.docx", "<w:p><w:r><w:t>whole</w:t></w:r></w:p>"))
+    assert not r["truncated"] and "whole" in r["markdown"]

@@ -29,6 +29,7 @@ IMAGE_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
                ".webp": "image/webp", ".bmp": "image/bmp"}
 
 PART_MAX = 16 << 20        # an XML part read whole (decompressed)
+ELEMENTS_MAX = 500_000     # elements of one part read whole (~110 MB in memory)
 STREAM_MAX = 256 << 20     # a sheet or the shared strings, read as a stream and left as soon as enough is known
 TEXT_MAX = 1_500_000       # characters of Markdown
 ROWS_MAX = 5000            # per sheet
@@ -144,10 +145,25 @@ class _Pack:
         if data is None:
             return None
         _no_dtd(data)
+        # built piece by piece and counted: 16 MB of tiny tags (<a/>, 16 KB zipped) would be ~4 million elements,
+        # about 1 GB of memory; past ELEMENTS_MAX or the deadline, what was built so far is the answer (truncated)
+        parser, root, n = ET.XMLPullParser(events=("start",)), None, 0
         try:
-            return _strip(ET.fromstring(data))
+            for i in range(0, len(data), 1 << 16):
+                parser.feed(data[i:i + (1 << 16)])
+                for _, el in parser.read_events():
+                    root = el if root is None else root
+                    n += 1
+                if n > ELEMENTS_MAX or time.monotonic() > self.deadline:
+                    self.truncated = True
+                    break
+            else:
+                parser.close()
         except (ET.ParseError, LookupError):             # LookupError: an encoding Python does not know
             raise Unreadable("unsupported", "This document cannot be read") from None
+        if root is None:
+            raise Unreadable("unsupported", "This document cannot be read")
+        return _strip(root)
 
     def stream(self, name: str):
         """(event, element) of a large part, `start` and `end`; nothing when the part is missing."""
