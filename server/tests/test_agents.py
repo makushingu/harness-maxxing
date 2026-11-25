@@ -1108,6 +1108,19 @@ def test_continue_in_sessions_keeps_the_pending_compaction_summary(client, topic
     assert store.read(copy["id"])["seed"] == "SUMMARY OF THE EARLIER TURNS"
 
 
+def test_continue_in_sessions_keeps_the_run_muted_on_the_phones_and_favorite(client, topic):
+    from maxxing.sessions import store
+    _on(client)
+    _create(client)
+    run = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL hi"}).json()
+    sid = run["session"]["id"]
+    wait_idle(client, sid)
+    assert client.patch(f"/api/sessions/{sid}", json={"push": False, "favorite": True}).status_code == 200
+    copy = client.post(f"/api/agents/acme/blog/writer/runs/{sid}/continue").json()["session"]
+    assert copy["push"] is False and copy["favorite"] is True
+    assert store.read(copy["id"])["push"] is False
+
+
 def test_fingerprint_ignores_a_link_to_a_device_or_a_pipe(mx, tmp_path, monkeypatch):
     import os, time
     from pathlib import Path

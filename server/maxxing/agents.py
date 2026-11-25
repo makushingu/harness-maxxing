@@ -1087,6 +1087,10 @@ def continue_in_sessions(path: str, sid: str) -> dict:
         meta["thread_cost"] = dict(src["thread_cost"])
     if src.get("seed"):                             # the compaction summary still waiting for the next message
         meta["seed"] = src["seed"]
+    if src.get("push") is False:                    # a run muted on the phones stays muted (as a handoff does)
+        meta["push"] = False
+    if src.get("favorite"):
+        meta["favorite"] = True
     with suppress(OSError):
         shutil.copyfile(store.log_path(sid), store.log_path(meta["id"]))
     root = config.workspace()
