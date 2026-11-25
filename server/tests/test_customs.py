@@ -318,9 +318,10 @@ def test_a_local_commit_is_never_dropped_for_a_rewritten_history(code, capsys):
 def test_a_customization_merged_upstream_no_longer_blocks_the_update(code, capsys):
     """A customization upstream merged as another commit: hidden from the list (same content), and the update
     drops it with a rebase instead of failing on "cannot fast-forward" at every try."""
-    clone, work = code["clone"], code["work"]
+    clone, work, ws = code["clone"], code["work"], code["ws"]
     (clone / "server" / "maxxing" / "rules.py").write_text("LIMIT = 50\nNAME = 'product'\n")
     customs.save("Raise the limit", "many sessions")
+    assert (ws / "CUSTOMIZATIONS.md").exists()
     _upstream_release(work, "1.1.0", extra="other.txt")       # upstream moved on before merging it
     (work / "server" / "maxxing" / "rules.py").write_text("LIMIT = 50\nNAME = 'product'\n")
     _git("add", "-A", cwd=work)
@@ -333,6 +334,8 @@ def test_a_customization_merged_upstream_no_longer_blocks_the_update(code, capsy
     assert "already included upstream" in capsys.readouterr().out
     assert (clone / "feature.txt").exists() and "LIMIT = 50" in (clone / "server/maxxing/rules.py").read_text()
     assert customs.same_code_upstream() and customs.list_customs() == []
+    # the registry and the patches no longer list it (Claude and the backup read them; a new server would re-apply it)
+    assert not (ws / "CUSTOMIZATIONS.md").exists() and not list(ws.glob("customizations/*.patch"))
 
 
 def test_listing_the_customizations_runs_one_git_log_whatever_their_number(code, monkeypatch):
@@ -391,3 +394,35 @@ def test_a_title_or_reason_with_a_nul_or_lone_surrogate_is_a_clean_error(code, t
     with pytest.raises(customs.CustomError, match="plain text"):
         customs.save(title, why)
     assert customs.list_customs() == []
+
+
+def test_two_saves_at_once_keep_their_own_files(code):
+    import threading
+    clone = code["clone"]
+    (clone / "a.py").write_text("a = 9\n")
+    (clone / "b.py").write_text("b = 9\n")
+    errs = []
+
+    def save(title, f):
+        try:
+            customs.save(title, "w", [f])
+        except Exception as e:                            # noqa: BLE001 - reported by the assert
+            errs.append(repr(e))
+    ts = [threading.Thread(target=save, args=("SA", "a.py")), threading.Thread(target=save, args=("SB", "b.py"))]
+    [t.start() for t in ts]
+    [t.join() for t in ts]
+    assert not errs and {c["title"]: c["files"] for c in customs.list_customs()} == {"SA": ["a.py"], "SB": ["b.py"]}
+
+
+def test_a_refused_save_leaves_nothing_staged_for_the_next_one(code):
+    clone = code["clone"]
+    (clone / "web" / "dist").mkdir(parents=True)
+    (clone / "web" / "dist" / "x.js").write_text("x")
+    (clone / "a.py").write_text("a = 5\n")
+    with pytest.raises(customs.CustomError, match="web/dist"):
+        customs.save("UI build")
+    assert customs.git("diff", "--cached", "--name-only")[1].strip() == ""
+    (clone / "web" / "dist" / "x.js").unlink()
+    (clone / "b.py").write_text("b = 5\n")
+    customs.save("Only b", "w", ["b.py"])
+    assert customs.list_customs()[-1]["files"] == ["b.py"]

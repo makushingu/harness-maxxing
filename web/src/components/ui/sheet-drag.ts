@@ -9,13 +9,15 @@ import { isCompact } from '@/stores/media'
 
 export const NO_DRAG = 'input, textarea, select, [contenteditable=""], [contenteditable="true"], [data-no-drag], [role="slider"]'
 
-function scrollerAbove(target: Element, root: HTMLElement): HTMLElement | null {
+/** The containers that scroll between the finger and the sheet (a list inside, the sheet itself on phones). */
+function scrollersAbove(target: Element, root: HTMLElement): HTMLElement[] {
+  const out: HTMLElement[] = []
   for (let el: Element | null = target; el && el !== root.parentElement; el = el.parentElement) {
     if (!(el instanceof HTMLElement)) continue
     const oy = getComputedStyle(el).overflowY
-    if ((oy === 'auto' || oy === 'scroll') && el.scrollHeight > el.clientHeight + 1) return el
+    if ((oy === 'auto' || oy === 'scroll') && el.scrollHeight > el.clientHeight + 1) out.push(el)
   }
-  return null
+  return out
 }
 
 /** `active()` tells whether the content is a bottom sheet right now (phones, or side="bottom" everywhere). */
@@ -31,7 +33,7 @@ export function useSheetDrag(onDismiss: () => void, active: () => boolean, overl
       let dy = 0
       let trail: { y: number; t: number }[] = [] // last positions, for the release speed
       let state: 'idle' | 'maybe' | 'drag' | 'off' = 'idle'
-      let scroller: HTMLElement | null = null
+      let scrollers: HTMLElement[] = []
       const set = (y: number, animate: boolean) => {
         const ease = animate ? 'transform 260ms cubic-bezier(0.32, 0.72, 0, 1)' : 'none'
         node.style.transition = ease
@@ -48,7 +50,7 @@ export function useSheetDrag(onDismiss: () => void, active: () => boolean, overl
         if (e.touches.length !== 1 || !active()) return
         const target = e.target as Element
         if (target.closest(NO_DRAG)) return
-        scroller = scrollerAbove(target, node)
+        scrollers = scrollersAbove(target, node)
         y0 = e.touches[0].clientY
         x0 = e.touches[0].clientX
         dy = 0
@@ -60,8 +62,9 @@ export function useSheetDrag(onDismiss: () => void, active: () => boolean, overl
         const x = e.touches[0].clientX - x0
         if (state === 'maybe') {
           if (Math.abs(x) < 4 && Math.abs(y) < 4) return
-          // Down, mostly vertical, and nothing above to scroll back to: the sheet takes the gesture.
-          if (y <= 0 || Math.abs(x) > Math.abs(y) || (scroller && scroller.scrollTop > 0)) {
+          // Down, mostly vertical, and nothing above to scroll back to (the list under the finger nor the sheet
+          // itself): the sheet takes the gesture.
+          if (y <= 0 || Math.abs(x) > Math.abs(y) || scrollers.some((el) => el.scrollTop > 0)) {
             state = 'off'
             return
           }
@@ -99,15 +102,30 @@ export function useSheetDrag(onDismiss: () => void, active: () => boolean, overl
           }, 50)
         } else set(0, true)
       }
+      // The system took the touch over (a call, a system gesture): never a close, the sheet goes back in place.
+      const cancel = () => {
+        if (state === 'drag') set(0, true)
+        state = 'idle'
+      }
+      // Closed by a swipe then opened again during the closing animation: Radix keeps the same node, which must
+      // not keep the offset the finger left on it (half off the screen until the next close).
+      const reopened = new MutationObserver(() => {
+        if (node.getAttribute('data-state') !== 'open' || state === 'drag') return
+        node.style.transition = node.style.transform = ''
+        const o = overlay?.current
+        if (o) o.style.transition = o.style.opacity = ''
+      })
+      reopened.observe(node, { attributes: true, attributeFilter: ['data-state'] })
       node.addEventListener('touchstart', start, { passive: true })
       node.addEventListener('touchmove', move, { passive: false })
       node.addEventListener('touchend', end)
-      node.addEventListener('touchcancel', end)
+      node.addEventListener('touchcancel', cancel)
       return () => {
+        reopened.disconnect()
         node.removeEventListener('touchstart', start)
         node.removeEventListener('touchmove', move)
         node.removeEventListener('touchend', end)
-        node.removeEventListener('touchcancel', end)
+        node.removeEventListener('touchcancel', cancel)
       }
     },
     [active, overlay],

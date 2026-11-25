@@ -120,6 +120,8 @@ export function PdfPages({
   const [width, setWidth] = React.useState(() => Math.min(window.innerWidth, PAGE_MAX))
   const anchor = React.useRef<{ px: number; py: number; fx: number; fy: number } | null>(null)
   const from = React.useRef(1)
+  /** The zoom of the last pinch move (pinchEnd may run before React renders it). */
+  const pinched = React.useRef(1)
 
   /** Called before any zoom change: the point under the fingers (default: the centre) stays where it is. */
   const capture = React.useCallback((p?: Pt) => {
@@ -151,13 +153,18 @@ export function PdfPages({
   now.current = zoom
 
   useTouchZoom(box, {
-    pinchStart: () => void (from.current = zoom),
+    pinchStart: () => void (from.current = pinched.current = zoom),
     pinch: (scale, mid) => {
       capture(mid)
-      setZoom(clamp(from.current * scale))
+      pinched.current = clamp(from.current * scale)
+      setZoom(pinched.current)
     },
-    // back to the full page when at or just above it, else the nearest step when close (98 % -> 100 %)
-    pinchEnd: (mid) => set(zoom < 1.05 ? 1 : (ZOOMS.find((s) => Math.abs(s - zoom) / s < 0.04) ?? Math.round(zoom * 100) / 100), mid),
+    // back to the full page when at or just above it, else the nearest step when close (98 % -> 100 %); the last
+    // move of the fingers comes in the same frame as their release: read from the ref, not from this render
+    pinchEnd: (mid) => {
+      const z = pinched.current
+      set(z < 1.05 ? 1 : (ZOOMS.find((s) => Math.abs(s - z) / s < 0.04) ?? Math.round(z * 100) / 100), mid)
+    },
     doubleTap: (p) => set(zoom > 1.01 ? 1 : 2, p),
   })
 

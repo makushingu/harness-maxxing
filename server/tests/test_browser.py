@@ -1708,3 +1708,40 @@ def test_a_sessions_tabs_stay_awake_while_its_next_turn_runs(mx, monkeypatch):
     assert asyncio.run(p._sleep_turn_tabs(b, "session:s1")) is False and closed == []
     monkeypatch.setattr(store, "read", lambda sid: {"id": sid, "state": "idle"})
     assert asyncio.run(p._sleep_turn_tabs(b, "session:s1")) is True and closed == ["t1"]
+
+
+def test_a_damaged_journal_line_never_breaks_the_profile_page(mx):
+    from maxxing import browser
+    from maxxing.browser import replays
+    d = browser.actions_dir()
+    d.mkdir(parents=True, exist_ok=True)
+    ok = json.dumps({"at": 1, "tool": "click", "session": "sess01", "nav": "session:sess01", "args": [1]})
+    (d / "main.jsonl").write_bytes(ok.encode() + b'\n{"at": 2, "tool": "x\xc3\n[1, 2]\n"text"\n')   # a torn character, not objects
+    assert [e["at"] for e in replays.actions("main", 30)] == [1]
+    assert [r["session"] for r in replays.sessions("main")] == ["sess01"]
+    (d / "main.jsonl").write_bytes(b'{"at": 0, "tool": "x\xc3\n' + (ok + "\n").encode() * 3000)    # big: compacted
+    replays.log_action("main", {"at": 3, "tool": "click"})                                       # never raises
+    assert replays.actions("main", 1)[0]["at"] == 3
+
+
+def test_concurrent_journal_writes_lose_no_line_and_stay_small(mx):
+    import threading
+    from maxxing import browser
+    from maxxing.browser import replays
+    pad = "u" * 900                                     # long lines: 500 of them stay above the size limit
+    for i in range(700):
+        replays.log_action("main", {"at": i, "tool": "click", "page": pad})
+    marks: list[str] = []
+
+    def write(k):
+        for j in range(150):
+            marks.append(f"m{k}x{j}")
+            replays.log_action("main", {"at": j, "tool": "click", "session": marks[-1], "page": pad})
+    ts = [threading.Thread(target=write, args=(k,)) for k in range(4)]
+    [t.start() for t in ts]
+    [t.join() for t in ts]
+    f = browser.actions_dir() / "main.jsonl"
+    lines = f.read_text().splitlines()
+    got = {json.loads(ln).get("session") for ln in lines}          # every line whole
+    assert not [m for m in marks[-100:] if m not in got]
+    assert f.stat().st_size <= 400_000 and not list(f.parent.glob("*.tmp"))

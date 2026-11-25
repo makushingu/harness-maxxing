@@ -2,12 +2,18 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+import tempfile
+import threading
 from urllib.parse import urlsplit
 
 from .. import browser
 
 MAX_ACTIONS = 500
+MAX_BYTES = 400_000          # past this the journal is cut down to KEEP_BYTES (whole lines, the newest)
+KEEP_BYTES = 200_000
+_lock = threading.Lock()     # appends and the compaction: a line written during a compaction is never lost
 SECRET_ARGS = ("value", "text", "values", "key", "keys", "function", "script", "expression", "elements")
 SID_RE = re.compile(r"^[A-Za-z0-9_-]{6,80}\Z")
 
@@ -41,31 +47,50 @@ def log_action(slug: str, entry: dict) -> None:
     try:
         d.mkdir(parents=True, exist_ok=True)
         line = json.dumps(entry, ensure_ascii=False).encode("utf-8", "replace").decode("utf-8")
-        with f.open("a", encoding="utf-8") as fh:
-            fh.write(line + "\n")
+        with _lock:
+            with f.open("a", encoding="utf-8") as fh:
+                fh.write(line + "\n")
+            if f.stat().st_size > MAX_BYTES:
+                _compact(f)
     except (OSError, ValueError):
         return
+
+
+def _compact(f) -> None:
+    """Keep the newest lines, at most MAX_ACTIONS and KEEP_BYTES (long lines would otherwise keep the file above
+    MAX_BYTES and rewrite it at every call), through a temporary file of its own."""
+    lines = f.read_bytes().splitlines()[-MAX_ACTIONS:]
+    keep, size = [], 0
+    for ln in reversed(lines):
+        size += len(ln) + 1
+        if size > KEEP_BYTES:
+            break
+        keep.append(ln)
+    fd, tmp = tempfile.mkstemp(dir=f.parent, prefix=f".{f.stem}.", suffix=".tmp")
     try:
-        if f.stat().st_size > 400_000:
-            lines = f.read_text().splitlines()[-MAX_ACTIONS:]
-            tmp = f.with_suffix(".tmp")
-            tmp.write_text("\n".join(lines) + "\n")
-            tmp.replace(f)
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(b"".join(ln + b"\n" for ln in reversed(keep)))
+        os.replace(tmp, f)
+    except BaseException:
+        os.unlink(tmp)
+        raise
+
+
+def _read(slug: str) -> list[str]:
+    try:   # a byte cut in the middle of a character must not break the profile's page
+        return (browser.actions_dir() / f"{slug}.jsonl").read_bytes().decode("utf-8", "replace").splitlines()
     except OSError:
-        pass
+        return []
 
 
 def actions(slug: str, n: int = 50, session: str | None = None) -> list[dict]:
-    f = browser.actions_dir() / f"{slug}.jsonl"
-    try:
-        lines = f.read_text().splitlines()
-    except OSError:
-        return []
     out = []
-    for ln in reversed(lines):
+    for ln in reversed(_read(slug)):
         try:
             e = json.loads(ln)
         except ValueError:
+            continue
+        if not isinstance(e, dict):
             continue
         if session and e.get("session") != session:
             continue
@@ -93,7 +118,8 @@ def sessions(slug: str, n: int = 30) -> list[dict]:
         r["actions"] += 1
         at = e.get("at") or 0
         r["first"], r["last"] = min(r["first"], at), max(r["last"], at)
-        for u in ((e.get("args") or {}).get("url"), e.get("page")):
+        args = e.get("args") if isinstance(e.get("args"), dict) else {}
+        for u in (args.get("url"), e.get("page")):
             try:
                 host = urlsplit(str(u or "")).hostname or ""
             except ValueError:

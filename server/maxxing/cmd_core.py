@@ -2278,8 +2278,7 @@ def _update_finish(a, old: str) -> int:
             print(f"\nWorkspace upgrade notes {_from_version()} -> {new_version} (for Claude, topic {update_topic()}):")
             for f in ups:
                 print(f"  {f}")
-    if customs.list_customs():
-        customs.export()
+    if customs.export()["customs"]:      # always: the last customization included upstream leaves no stale registry
         line(OK, f"customizations recorded in {customs._workspace() / customs.REGISTRY}")
     no_unit = not a.no_restart and (systemctl("is-enabled", SERVICE, timeout=10)[0] == 127 or not UNIT_PATH.exists())
     if no_unit:

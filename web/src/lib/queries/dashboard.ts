@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
-import { api, seg } from '../api'
+import { api, errorMessage, seg } from '../api'
 import type { DashboardLayout, DashboardPayload, Ok, Widget } from '../types'
 import { qk } from './keys'
 import { useMut } from './util'
@@ -31,7 +31,12 @@ export function useFillPendingWidgets(widgets: Widget[] | undefined) {
     for (const id of ids.split('\n'))
       api.get<Widget>(`/api/dashboard/widgets/${seg(id)}`).then(
         (w) => live && patchWidget(qc, w),
-        () => undefined,
+        (err) => {
+          // A failed request: the error card and its Retry button, never a skeleton forever.
+          if (!live) return
+          const w = qc.getQueryData<DashboardPayload>(qk.dashboard.all)?.widgets.find((x) => x.id === id)
+          if (w) patchWidget(qc, { ...w, pending: false, error: errorMessage(err) })
+        },
       )
     return () => {
       live = false

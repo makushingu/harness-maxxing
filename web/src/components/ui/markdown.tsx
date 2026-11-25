@@ -215,8 +215,10 @@ export const Markdown = React.memo(function Markdown({ children, className, onLi
     }),
     [onLink, components, localImage],
   )
-  // Parsing is one blocking pass: a huge text (a 2 MB .md, a giant table) would freeze the page for seconds.
-  if (children.length > MAX_MARKDOWN)
+  const deep = React.useMemo(() => tooDeep(children), [children])
+  // Parsing is one blocking pass: a huge text (a 2 MB .md, a giant table) would freeze the page for seconds; a very
+  // deep nesting (2 000 "> ") overflows the stack of the renderer, which is recursive.
+  if (children.length > MAX_MARKDOWN || deep)
     return <pre className={cn('prose-mx font-sans text-sm whitespace-pre-wrap [overflow-wrap:anywhere]', className)}>{children}</pre>
   return (
     <div className={cn('prose-mx', className)}>
@@ -229,3 +231,18 @@ export const Markdown = React.memo(function Markdown({ children, className, onLi
 
 /** Above this size (characters) a text is shown as plain text instead of formatted. */
 const MAX_MARKDOWN = 300_000
+/** Above this nesting (quotes, lists) too: far beyond any real text, far below what overflows the stack. */
+const MAX_DEPTH = 100
+
+/** A line opening more than MAX_DEPTH quotes / lists (its markers, or its indentation for nested lists). */
+function tooDeep(text: string): boolean {
+  if (text.length < MAX_DEPTH) return false
+  for (const line of text.split('\n')) {
+    const lead = /^[\s>*+\-\d.)]*/.exec(line)![0]
+    if (lead.length <= MAX_DEPTH) continue
+    const marks = lead.match(/>|[-*+](?=\s)|\d{1,9}[.)](?=\s)/g)?.length ?? 0
+    const indent = /^\s*/.exec(lead)![0].length / 2
+    if (marks + indent > MAX_DEPTH) return true
+  }
+  return false
+}

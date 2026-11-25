@@ -32,6 +32,7 @@ function useSwipeClose(side: Side, onDismiss: () => void, overlay: React.RefObje
         }
       }
       const start = (e: TouchEvent) => {
+        if (state === 'drag') set(0, true) // a second finger mid-drag: the drawer springs back, the gesture ends
         state = 'idle'
         if (e.touches.length !== 1 || (e.target as Element).closest(NO_DRAG)) return
         x0 = e.touches[0].clientX
@@ -73,15 +74,30 @@ function useSwipeClose(side: Side, onDismiss: () => void, overlay: React.RefObje
           dismiss.current()
         } else set(0, true)
       }
+      // The system took the touch over (a call, a system gesture): never a close, the drawer goes back in place.
+      const cancel = () => {
+        if (state === 'drag') set(0, true)
+        state = 'idle'
+      }
+      // Closed by a swipe then opened again during the closing animation: Radix keeps the same node, which must
+      // not keep the offset the finger left on it (half off the screen until the next close).
+      const reopened = new MutationObserver(() => {
+        if (node.getAttribute('data-state') !== 'open' || state === 'drag') return
+        node.style.transition = node.style.transform = ''
+        const o = overlay.current
+        if (o) o.style.transition = o.style.opacity = ''
+      })
+      reopened.observe(node, { attributes: true, attributeFilter: ['data-state'] })
       node.addEventListener('touchstart', start, { passive: true })
       node.addEventListener('touchmove', move, { passive: false })
       node.addEventListener('touchend', end)
-      node.addEventListener('touchcancel', end)
+      node.addEventListener('touchcancel', cancel)
       return () => {
+        reopened.disconnect()
         node.removeEventListener('touchstart', start)
         node.removeEventListener('touchmove', move)
         node.removeEventListener('touchend', end)
-        node.removeEventListener('touchcancel', end)
+        node.removeEventListener('touchcancel', cancel)
       }
     },
     [side, overlay],
