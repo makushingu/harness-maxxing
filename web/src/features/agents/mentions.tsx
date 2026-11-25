@@ -9,6 +9,8 @@ import { Chip, withChips, type ChipData, type ChipSpan, type ChipTone } from '@/
 
 const ALL_WORDS = ['all', 'everyone', 'tous']
 const MENTION_RE = /(?<![\w@./-])@([a-z0-9][a-z0-9-]{0,47})\b/gi
+// "stop @bob" pauses Bob: the server (STOP_RE of agent_rooms.py) takes these out before reading who is named
+const STOP_RE = /(?<![\w-])stop\s+@([a-z0-9][a-z0-9-]{0,47})\b/gi
 
 /** handle -> member; `null` = @all. */
 export type MentionMap = Map<string, AgentGroupMember | null>
@@ -21,10 +23,10 @@ export function useMentionMap(members: AgentGroupMember[]): MentionMap {
   }, [members])
 }
 
-/** The members named in a text, in order (@all = every member), without repeats. */
+/** The members named in a text, in order (@all = every member), without repeats; not those it stops ("stop @bob"). */
 export function namedIn(text: string, map: MentionMap, members: AgentGroupMember[]): AgentGroupMember[] {
   const out: AgentGroupMember[] = []
-  for (const m of text.matchAll(MENTION_RE)) {
+  for (const m of text.replace(STOP_RE, ' ').matchAll(MENTION_RE)) {
     const h = m[1].toLowerCase()
     if (!map.has(h)) continue
     const who = map.get(h)

@@ -377,3 +377,18 @@ def test_a_relative_date_that_is_not_a_number_is_empty_not_a_crash(tmp_path):
     out = _run_ts(tmp_path, WEB / "lib" / "format.ts", """return [undefined, NaN, 'x', null, Infinity].map((v) => m.fmtRelative(v, 'en', 1000))
         .concat([m.fmtRelative(1000 - 7200, 'en', 1000)])""")
     assert out == ["", "", "", "", "", "2 hr. ago"]
+
+
+def test_a_member_stopped_in_a_group_message_is_not_shown_as_a_recipient(tmp_path):
+    src = (WEB / "features" / "agents" / "mentions.tsx").read_text(encoding="utf-8")
+    mod = tmp_path / "named.ts"
+    mod.write_text(src[src.index("const ALL_WORDS"):src.index("/** A member (null = @all) as a chip")]
+                   .replace("export function useMentionMap", "function useMentionMap_")
+                   .replace("export type MentionMap = Map<string, AgentGroupMember | null>", "type MentionMap = Map<string, any>")
+                   .replace("AgentGroupMember", "any"), encoding="utf-8")
+    run = tmp_path / "run"
+    run.mkdir()
+    out = _run_ts(run, mod, """const bob = { handle: 'bob' }, ann = { handle: 'ann' }
+        const map = new Map([['all', null], ['bob', bob], ['ann', ann]])
+        return ['stop @Bob', 'stop @bob and @ann, go', '@bob please', 'nonstop @bob'].map((t) => m.namedIn(t, map, [bob, ann]).map((x) => x.handle))""")
+    assert out == [[], ["ann"], ["bob"], ["bob"]]
