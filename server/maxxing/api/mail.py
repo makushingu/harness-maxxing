@@ -284,6 +284,7 @@ class ViewIn(BaseModel):
 
 
 VIEW_TTL = 24 * 3600     # copies made for the viewer are removed a day later (at the next view)
+_view_lock = threading.Lock()   # two views at once (a double click, two tabs) would remove each other's copies
 _CTRL = re.compile(r"[\x00-\x1f\x7f]")
 
 
@@ -304,6 +305,11 @@ def _save_for_view(acc_id: str, folder: str, uid: int, parts: list[tuple[int, st
     """Copies of the attachments under <workspace>/mail/attachments/<account>/<folder>-<uid>/<index>/<name> (inside
     the files root: the file viewer opens them like any file; `attachments` is out of the memory backup). Rewritten at
     every view (an IMAP uid can be given again to another message), older copies pruned."""
+    with _view_lock:
+        return _save_for_view_locked(acc_id, folder, uid, parts)
+
+
+def _save_for_view_locked(acc_id: str, folder: str, uid: int, parts: list[tuple[int, str, str, bytes]]) -> dict[int, str]:
     root = _view_root()
     now = time.time()
     if root.is_dir():
