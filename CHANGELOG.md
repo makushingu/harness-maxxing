@@ -10,6 +10,7 @@ New:
 - **Settings -> Extensions in the same four parts as Community.** Widgets, Pages, and now **Agents views** (the views of the Overview of the Agents page, until now mixed with the pages) and **Themes** (the installed themes, their state, and a button to ask Harness for a new one).
 
 Fixed:
+- **Restoring a backup no longer switches an agent back on.** On a server in use, an agent switched off here, or one of its triggers switched off here, stays off after a restore, like scheduled jobs and extensions already did.
 - **The Harness Browser no longer keeps a session's pages running after its turn.** 15 minutes after the turn ends, if no new turn uses them, the tabs it opened sleep (a 3D render left open kept the CPU busy). They are still listed and open again at the next turn.
 - **Changing a mailbox's port now changes its security too.** In the mailbox dialog of the E-mail page, typing 465 or 993 picks SSL/TLS and 587, 25 or 143 picks STARTTLS (a security picked afterwards is kept). SSL/TLS on a port that expects STARTTLS now fails with "this port expects STARTTLS" instead of a bare TLS error.
 - **A session change made twice in quick succession is no longer missed.** When a session was written twice within a few milliseconds, the server could take the second change for no change: its new state, a turn's end or a held message showed up late, or only at the next change.

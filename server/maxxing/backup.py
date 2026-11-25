@@ -1119,7 +1119,8 @@ _FOLDER_RULES = ("permission_mode", "allowed_tools", "browser", "devices")
 
 def _keep_local_rules(rel: str, data: bytes, dest: Path) -> tuple[bytes, bool]:
     """agent.json / .maxxing.json restored on a server in use: their security settings stay the ones of this server
-    (a new agent comes back switched off, a new folder with the default rules). -> (data to write, changed)."""
+    (a new agent comes back switched off, a new folder with the default rules; an agent or a trigger switched off here
+    stays off). -> (data to write, changed)."""
     agent = bool(_AGENT_FILE.match(rel))
     if not agent and not _FOLDER_FILE.match(rel):
         return data, False
@@ -1141,6 +1142,8 @@ def _keep_local_rules(rel: str, data: bytes, dest: Path) -> tuple[bytes, bool]:
             out.pop(k, None)
             if k in local:
                 out[k] = local[k]
+        if agent:
+            _keep_switched_off(out, local)
     else:
         for k in keys if not agent else ():
             out.pop(k, None)
@@ -1149,6 +1152,18 @@ def _keep_local_rules(rel: str, data: bytes, dest: Path) -> tuple[bytes, bool]:
     if out == d:
         return data, False
     return (json.dumps(out, indent=2, ensure_ascii=False) + "\n").encode(), True
+
+
+def _keep_switched_off(out: dict, local: dict) -> None:
+    """A backup never turns an agent back on (like a job or an extension): switched off here, the agent, and each of
+    its triggers switched off here (same id), stay off."""
+    if local.get("enabled") is False:
+        out["enabled"] = False
+    off = {t.get("id") for t in local.get("triggers") or [] if isinstance(t, dict) and t.get("enabled") is False} \
+        if isinstance(local.get("triggers"), list) else set()
+    if off and isinstance(out.get("triggers"), list):
+        out["triggers"] = [{**t, "enabled": False} if isinstance(t, dict) and t.get("id") in off else t
+                           for t in out["triggers"]]
 
 
 def _fresh_server() -> bool:

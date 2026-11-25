@@ -7,6 +7,8 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## 2.0.0-alpha.169 - 2026-11-24
 
+- Backup (#186): `_keep_local_rules` -> `_keep_switched_off`: on a server in use, a local `agent.json` with
+  `"enabled": false` stays off, and each local trigger with `"enabled": false` stays off (matched by trigger `id`).
 - Browser (FEU): `pool.TURN_END_SLEEP` 15 min; `turn_ended[nav]` set when a session navigator's turn is found dead,
   popped by a new turn; its tabs sleep after the delay (`_sleep_turn_tabs`). Known gap: a turn whose browser tools were
   stopped for idleness (`CHILD_IDLE`) is not recorded, its tabs fall back to the unused-tab rule.

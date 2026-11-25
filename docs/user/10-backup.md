@@ -80,7 +80,8 @@ Settings -> Backup.
   not added back - they are saved in `mcp-held.json` in the restore's trash folder, add the ones you trust again in
   **Settings → MCP** (remote servers, an URL, are restored). Restored skills and customizations are listed to review
   before use. Agents and topics keep this server's security settings (sandbox, permission mode, allowed tools,
-  budget...; an agent the server does not have comes back switched off), and extensions turned off here stay off.
+  budget...; an agent the server does not have comes back switched off), and agents, triggers and extensions turned off
+  here stay off.
   A notification lists all of it; check them, then turn them on in Crons and Extensions. Anyone able to push to the backup repository could otherwise
   get their code run here. The memory backup job itself stays on.
 - One old version of one file: browse its history on GitHub and copy it back.
