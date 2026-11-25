@@ -18,7 +18,7 @@ SESSIONS = 60                             # most recent sessions offered
 
 
 def _plain(name: str) -> str:
-    """A name chosen elsewhere (a Team contact's, set by their server) as it goes into the prompt: one line, no
+    """A name chosen elsewhere (a Team contact's, set by their server; a session title, an agent name) as it goes into the prompt: one line, no
     brackets or backticks that could pass for Harness's own notes or for a command."""
     return " ".join(str(name or "").replace("`", "'").replace("[", "(").replace("]", ")").split())[:64]
 
@@ -85,12 +85,12 @@ def resolve(items: list[dict] | None, sender: str = "") -> list[dict]:
         elif kind == "session":
             s = service.get_session(ref) if ref != sender else None
             if s and not agents.is_agent_path(s["path"]):
-                out.append({"kind": kind, "ref": ref, "label": s["title"], "where": _topic(s["path"]),
+                out.append({"kind": kind, "ref": ref, "label": _plain(s["title"]), "where": _topic(s["path"]),
                             "command": f"maxxing sessions send {ref[:8]}"})
         elif kind == "agent":
             if agents.is_agent_path(ref) and agents.exists(ref):
                 a = agents.load(ref)
-                out.append({"kind": kind, "ref": ref, "label": a["name"] or agents.parse(ref)[2],
+                out.append({"kind": kind, "ref": ref, "label": _plain(a["name"] or agents.parse(ref)[2]),
                             "where": _topic(ref), "command": f"maxxing agents send {ref}",
                             **({"avatar": a["avatar"]} if a.get("avatar") else {})})
         else:
