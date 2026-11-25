@@ -1,10 +1,17 @@
 // Web Push of this browser (Settings -> Notifications -> Mobile notifications): the server wakes the service worker
 // with an empty push, which asks /api/push/pending what to show (see sw/sw.js and server/maxxing/webpush.py).
+import { useQuery } from '@tanstack/react-query'
 import { api, seg } from '@/lib/api'
 
 export type PushDevice = { id: string; label: string; at: number }
 
 export const pushDevicesKey = ['push', 'devices'] as const
+
+/** A phone or a browser of this server gets Mobile notifications (any device, not only this browser). */
+export function useHasPushDevice(): boolean {
+  const { data } = useQuery({ queryKey: pushDevicesKey, queryFn: () => api.get<PushDevice[]>('/api/push/devices'), staleTime: 60_000 })
+  return !!data?.length
+}
 
 export function pushSupported(): boolean {
   return typeof window !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window

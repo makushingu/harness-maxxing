@@ -130,7 +130,7 @@ def test_a_session_of_a_person_rings_and_a_job_does_not(sent, client):
     item = client.post("/api/push/pending", json={"device": webpush.device_id(FCM)}).json()["items"][0]
     assert item["tag"] == "mx-session-s1" and "Blog" in item["body"] and "Done" in item["body"]
     assert item["url"] == "/sessions?path=projects/acme/topics/blog&session=s1"
-    for other in ({"source": "cron"}, {"source": "agent"}, {"last_turn": {"kind": "user", "source": "telegram"}}, {"last_turn": {"kind": "system"}}):
+    for other in ({"source": "cron"}, {"source": "agent"}, {"last_turn": {"kind": "user", "source": "telegram"}}, {"last_turn": {"kind": "system"}}, {"push": False}):
         asyncio.run(api_push._turn_end({**mine, **other}, None))
     assert len(sent) == 1
 

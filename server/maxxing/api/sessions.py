@@ -66,6 +66,7 @@ class CreateIn(_Text):
     effort: str | None = None         # low | medium | high | xhigh | max ("" = Claude Code's default)
     attachments: list[str] = Field(default_factory=list)
     plan_mode: bool = False
+    push: bool = True                 # False: this session never rings the phones (Mobile notifications)
     voice: str | None = None          # absolute path of a voice message sent directly (transcribed afterwards)
     client_id: str | None = Field(None, pattern=CLIENT_ID_RE)   # the sender's id for the first message (see MessageIn)
     worktree: WorktreeIn | None = None                    # work on a separate copy (Code mode, worktrees.py)
@@ -77,6 +78,7 @@ class PatchIn(_Text):
     effort: str | None = None
     archived: bool | None = None
     notify: bool | None = None
+    push: bool | None = None          # Mobile notifications of this session (False = muted)
     favorite: bool | None = None
     path: str | None = None           # move to another topic (idle sessions only)
     plan_mode: bool | None = None
@@ -160,7 +162,8 @@ async def create_session(body: CreateIn):
             await asyncio.to_thread(_remember_copy, body.worktree)
     return await _call(service.create_session, body.path, message=body.message, title=body.title,
                        model=body.model, effort=body.effort, attachments=body.attachments, source="web",
-                       plan_mode=body.plan_mode, voice_path=body.voice, client_id=body.client_id, worktree=wt)
+                       plan_mode=body.plan_mode, voice_path=body.voice, client_id=body.client_id, worktree=wt,
+                       push=body.push)
 
 
 def _remember_copy(w: WorktreeIn) -> None:
@@ -207,7 +210,7 @@ async def get_session(sid: str):
 async def patch_session(sid: str, body: PatchIn):
     return await _call(service.update_session, sid, title=body.title, model=body.model, effort=body.effort,
                        archived=body.archived, notify=body.notify, plan_mode=body.plan_mode,
-                       favorite=body.favorite, path=body.path)
+                       favorite=body.favorite, path=body.path, push=body.push)
 
 
 @router.post("/sessions/{sid}/ask")

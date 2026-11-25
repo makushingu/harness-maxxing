@@ -2,13 +2,14 @@
 // (a bottom sheet on a phone). Switches apply at once and keep it open; an action runs and closes it.
 import * as React from 'react'
 import { Link } from 'react-router'
-import { Archive, ArchiveRestore, Bell, FolderOpen, ListChecks, Minimize2, Sparkles, SquareTerminal, Trash2, type LucideIcon } from 'lucide-react'
+import { Archive, ArchiveRestore, Bell, Smartphone, FolderOpen, ListChecks, Minimize2, Sparkles, SquareTerminal, Trash2, type LucideIcon } from 'lucide-react'
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
 import type { Session } from '@/lib/types'
+import { useHasPushDevice } from '@/features/notify/push'
 
 export type OptionAction = { key: string; label: string; icon: LucideIcon; disabled?: boolean; run: () => void }
 
@@ -21,6 +22,7 @@ export function SessionOptions({
   agentRun,
   onPlan,
   onNotify,
+  onPush,
   onCompact,
   onHandoff,
   onFolder,
@@ -39,6 +41,8 @@ export function SessionOptions({
   agentRun?: boolean
   onPlan: () => void
   onNotify: () => void
+  /** Mobile notifications of this session on / off (shown once a device gets them). */
+  onPush: () => void
   onCompact: () => void
   onHandoff: () => void
   onFolder?: () => void
@@ -57,6 +61,7 @@ export function SessionOptions({
     f()
   }
   const idle = !running && !!session.turns
+  const phones = useHasPushDevice()
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="gap-0 p-0 sm:max-w-sm" onCloseAutoFocus={(e) => keepFocus?.() && e.preventDefault()} data-testid="session-options">
@@ -80,6 +85,9 @@ export function SessionOptions({
                 <Link to="/settings/telegram">{t('sessions.options.linkTelegram')}</Link>
               </Button>
             </div>
+          )}
+          {phones && (
+            <Toggle icon={Smartphone} label={t('sessions.options.push')} hint={t('sessions.options.pushHint')} checked={session.push !== false} onChange={onPush} />
           )}
         </div>
 

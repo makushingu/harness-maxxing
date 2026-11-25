@@ -74,7 +74,9 @@ async def pending(body: Pending):
 
 def rings(session: dict) -> bool:
     """The same rule as the Telegram bell, for every session: a turn of a person that ended, not a job's or an
-    agent's, and not one answered on Telegram already."""
+    agent's, not one answered on Telegram already, and not a session muted on the phones (`push` False)."""
+    if session.get("push") is False:
+        return False
     last = session.get("last_turn") if isinstance(session.get("last_turn"), dict) else {}
     return session.get("source") not in ("cron", "agent") and not session.get("cron") \
         and (last.get("kind") or "user") == "user" and (last.get("source") or "web") not in ("telegram", "cron", "system", "agent")

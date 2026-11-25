@@ -101,6 +101,7 @@ import type { TermPlace } from '@/features/terminal/TermDrawer'
 import { absTopicDir, fileQuote, findAgent, fmtCost, placeOptions, topicLabel, topicPathOf } from './util'
 import { AgentAvatarIcon } from '@/features/agents/Avatar'
 import { CONTENT_MIME, contentDragLeave, contentDragOver, contentDrop, useContentDrag, type Dropped } from './contentDrag'
+import { useHasPushDevice } from '@/features/notify/push'
 
 export type ColumnVariant = 'column' | 'solo' | 'mobile'
 export { MIN_W }
@@ -751,6 +752,7 @@ export function SessionColumn({ col, sid, variant, index, count, place, agentRun
       agentRun={agentRun}
       onPlan={() => patch.mutate({ id: sid, plan_mode: !session.plan_mode })}
       onNotify={actions.notify}
+      onPush={() => patch.mutate({ id: sid, push: session.push === false })}
       onCompact={actions.compact}
       onHandoff={actions.handoff}
       onFolder={dir ? () => navigate(`/files?path=${encodeURIComponent(dir)}`) : undefined}
@@ -1272,6 +1274,8 @@ export function NewSessionColumn({ col, variant, index, count, place }: { col: E
   const [model, setModel] = React.useState('')
   const [effort, setEffort] = React.useState<Effort | ''>('')
   const [planMode, setPlanMode] = React.useState(false)
+  const [push, setPush] = React.useState(true)
+  const phones = useHasPushDevice()
   const copy = useNewCopy(col.path)
   const newCommands = useSlashCommands(col.path, { model, onModel: setModel, effort, onEffort: setEffort, plan: planMode, onPlan: () => setPlanMode((p) => !p) })
   const composer = React.useRef<ComposerHandle>(null)
@@ -1303,7 +1307,7 @@ export function NewSessionColumn({ col, variant, index, count, place }: { col: E
   // The first message (or voice note) creates the session, which then takes the column.
   const start = async (body: { message?: string; client_id?: string; attachments?: string[]; voice?: string }, pending: Parameters<ReturnType<typeof usePending.getState>['add']>[1]) => {
     try {
-      const s = await create.mutateAsync({ path: col.path, title: title.trim() || undefined, model: model || undefined, effort: effort || undefined, plan_mode: planMode || undefined, worktree: copy.value, ...body })
+      const s = await create.mutateAsync({ path: col.path, title: title.trim() || undefined, model: model || undefined, effort: effort || undefined, plan_mode: planMode || undefined, push: push ? undefined : false, worktree: copy.value, ...body })
       made.current = s.id
       seedEmptyLog(s.id)
       usePending.getState().add(s.id, pending)
@@ -1415,6 +1419,12 @@ export function NewSessionColumn({ col, variant, index, count, place }: { col: E
                 <span className="text-xs text-muted-foreground">{t('plan.newHint')}</span>
               </span>
             </label>
+            {phones && (
+              <label htmlFor={`push-${col.key}`} className="flex cursor-pointer items-center gap-2.5 px-1 text-sm">
+                <Checkbox id={`push-${col.key}`} checked={push} onCheckedChange={(v) => setPush(v === true)} />
+                {t('sessions.options.push')}
+              </label>
+            )}
             <NewCopy c={copy} title={title} id={`copy-${col.key}`} />
             <p className="text-[13px] text-muted-foreground">{t('sessions.new.hint')}</p>
           </div>

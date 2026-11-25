@@ -163,7 +163,7 @@ def public(meta: dict, exits_waiting: dict[str, dict] | None = None) -> dict:
             "model": m.get("model") or "", "effort": m.get("effort") or "", "real_model": m.get("real_model") or None,
             "context_tokens": m.get("context_tokens"), "context_window": _context_window(m),
             "archived": bool(m.get("archived")), "favorite": bool(m.get("favorite")),
-            "notify": bool(m.get("notify")), "source": m.get("source") or "web", "cron": bool(m.get("cron")),
+            "notify": bool(m.get("notify")), "push": m.get("push") is not False, "source": m.get("source") or "web", "cron": bool(m.get("cron")),
             "unread": (bool(finished) and finished > seen or bool(m.get("marked_unread"))) and m.get("state") != "running",
             "last_text": m.get("last_text") or "", "error": m.get("error") or None,
             "plan_mode": bool(m.get("plan_mode")), "plan_ready": bool(m.get("plan_ready")),
@@ -376,8 +376,9 @@ def create_session(path: str, message: str | None = None, title: str | None = No
                    permission_mode: str = "", auto_title: bool = False, voice_path: str | None = None,
                    client_id: str | None = None, silent_ok: bool = False, ref: str | None = None,
                    effort: str | None = None, worktree: dict | None = None, call: str | None = None,
-                   sender: dict | None = None, shown: str | None = None) -> dict:
-    """`worktree` = {repo, base?, prepare?, copy_env?, pr?}: the session works on a separate copy (worktrees.py),
+                   sender: dict | None = None, shown: str | None = None, push: bool = True) -> dict:
+    """`push`: False = this session never rings the phones (Mobile notifications, api/push.py).
+    `worktree` = {repo, base?, prepare?, copy_env?, pr?}: the session works on a separate copy (worktrees.py),
     made before its first turn.
     `sender`, `shown`: as send_message's, for the first message.
     `auto_title`: `title` was made from the first message by the caller (Telegram) - still worth a short title.
@@ -396,6 +397,8 @@ def create_session(path: str, message: str | None = None, title: str | None = No
     meta = store.new_meta(p, given or _default_title(p, message), model=model or "",
                           source=source, notify=notify, cron=cron, env=env, timeout_s=timeout_s, plan_mode=plan_mode,
                           permission_mode=permission_mode)
+    if not push:
+        meta["push"] = False
     automatic, has_text = auto_title or not given, bool((message or "").strip())
     if effort:
         meta["effort"] = effort
@@ -823,7 +826,7 @@ def _signal(pid: int, sig: int) -> None:
 def update_session(sid: str, title: str | None = None, model: str | None = None,
                    archived: bool | None = None, notify: bool | None = None,
                    plan_mode: bool | None = None, favorite: bool | None = None,
-                   path: str | None = None, effort: str | None = None) -> dict:
+                   path: str | None = None, effort: str | None = None, push: bool | None = None) -> dict:
     cur = _require(sid)
     if model is not None:
         model = _check_model(model)
@@ -844,6 +847,8 @@ def update_session(sid: str, title: str | None = None, model: str | None = None,
             m["archived"] = bool(archived)
         if notify is not None:
             m["notify"] = bool(notify)
+        if push is not None:
+            m["push"] = bool(push)
         if favorite is not None:
             m["favorite"] = bool(favorite)
         if plan_mode is not None:
@@ -920,6 +925,8 @@ def handoff(sid: str) -> dict:
                          env=meta.get("env"), timeout_s=meta.get("timeout_s"))
     if meta.get("favorite"):                 # the continuation stays in the user's favorites
         new["favorite"] = True
+    if meta.get("push") is False:            # and muted on the phones
+        new["push"] = False
     if meta.get("effort"):
         new["effort"] = meta["effort"]
     new["handoff_pending"] = time.time()     # messages sent to it wait for the summary seed (runner._handoff)

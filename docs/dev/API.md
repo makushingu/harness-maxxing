@@ -95,7 +95,7 @@ Session = {
   real_model: string|null,            // model that actually answered last turn (from the log)
   context_tokens: int|null,           // last turn input+cache tokens
   context_window: int|null,           // context window of the model of the last turn (Claude Code `modelUsage[..].contextWindow`, e.g. 1000000); null = unknown
-  archived: bool, favorite: bool, notify: bool,
+  archived: bool, favorite: bool, notify: bool, push: bool,
   source: "web"|"telegram"|"cron",
   cron: bool,                         // started by a scheduled job (not mirrored on Telegram)
   unread: bool,                       // finished after the last /seen, or marked unread by hand (`{seen:false}`)
@@ -111,9 +111,9 @@ Session = {
 }
 ```
 | GET | `/api/sessions?path=&archived=0\|1` | – | `[Session]` sorted by `updated` desc (no path = all) |
-| POST | `/api/sessions` | `{path, message?, title?, model?, effort?, attachments?:[filepath], plan_mode?:bool, voice?:filepath, client_id?}` (`client_id`: as for `/messages`, for the first message) | `Session` (starts the first turn if message or voice) |
+| POST | `/api/sessions` | `{path, message?, title?, model?, effort?, attachments?:[filepath], plan_mode?:bool, push?:bool, voice?:filepath, client_id?}` (`client_id`: as for `/messages`, for the first message) | `Session` (starts the first turn if message or voice) |
 | GET | `/api/sessions/{id}` | – | `Session` |
-| PATCH | `/api/sessions/{id}` | `{title?, model?, effort?, archived?, notify?, plan_mode?, favorite?, path?}` | `Session` (`plan_mode:false` also clears `plan_ready`; `favorite` is carried over by a hand-off; `path` moves the session to another topic and its Claude transcript with it - `400 bad_path`, `409 busy` while a turn runs or messages wait; `model`: an id of letters, digits and `._:@/[]-`, 100 characters at most, not starting with `-`, else `400 bad_model`, also on create; `effort`: `low|medium|high|xhigh|max` or `""` (Claude Code's default) -> `claude --effort`, else `400 bad_effort`, kept by a hand-off) |
+| PATCH | `/api/sessions/{id}` | `{title?, model?, effort?, archived?, notify?, push?, plan_mode?, favorite?, path?}` | `Session` (`plan_mode:false` also clears `plan_ready`; `favorite` is carried over by a hand-off; `path` moves the session to another topic and its Claude transcript with it - `400 bad_path`, `409 busy` while a turn runs or messages wait; `model`: an id of letters, digits and `._:@/[]-`, 100 characters at most, not starting with `-`, else `400 bad_model`, also on create; `effort`: `low|medium|high|xhigh|max` or `""` (Claude Code's default) -> `claude --effort`, else `400 bad_effort`, kept by a hand-off) |
 | POST | `/api/sessions/{id}/plan/approve` | `{text?}` (shown in the thread as the user's message) | `{queued:bool, session:Session}` — plan mode off, then a turn that tells Claude to implement its latest plan (queue item flag `plan_approved`, kept by steer) |
 | DELETE | `/api/sessions/{id}` | – | `{ok}` (stops a running turn, moves the session to the trash) |
 | POST | `/api/sessions/{id}/messages` | `{text, attachments?:[filepath], voice?:filepath, client_id?, mentions?:[{kind: jarvis|session|agent|team, ref}]}` (`mentions`: the @ of the composer, refs from `/mentions` below; the server resolves them (unknown ones and the session itself dropped, at most 8) and adds to the prompt, not to the displayed message, the command that writes to each (`maxxing sessions send` / `agents send` / `team send`); its `user` event keeps `mentions: [{kind, ref, label, group?, avatar?}]` (never the command), drawn as chips; `client_id`: the sender's own id for the message, `[A-Za-z0-9_-]{1,64}`, kept in `client_ids` of its queue item (`queue_items`) and of its `user` event, so a page reloaded mid-send can tell whether it arrived; `voice`: a voice message sent directly - uploaded first with `/api/uploads`, queued at once, transcribed by the server, then its transcript is the prompt) | `{queued:bool, session:Session}` · `409 voice_off` (transcription not ready) |

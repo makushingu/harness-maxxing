@@ -151,6 +151,13 @@ def test_attachments_and_uploads(client, topic, mx):
     assert bad.status_code == 400
 
 
+def test_a_session_created_muted_never_rings_the_phones(client, topic):
+    s = client.post("/api/sessions", json={"path": topic, "message": "hi NOTOOL", "push": False}).json()
+    assert s["push"] is False
+    wait_idle(client, s["id"])
+    assert client.get(f"/api/sessions/{s['id']}").json()["push"] is False
+
+
 def test_search_patch_delete(client, topic):
     s = client.post("/api/sessions", json={"path": topic, "message": "find the zebra NOTOOL"}).json()
     wait_idle(client, s["id"])
@@ -166,6 +173,9 @@ def test_search_patch_delete(client, topic):
     assert fav["favorite"] is True and fav["title"] == "Renamed"          # other fields untouched
     assert client.get(f"/api/sessions/{s['id']}").json()["favorite"] is True
     assert client.patch(f"/api/sessions/{s['id']}", json={"favorite": False}).json()["favorite"] is False
+    assert p["push"] is True                                         # rings the phones unless muted
+    assert client.patch(f"/api/sessions/{s['id']}", json={"push": False}).json()["push"] is False
+    assert client.get(f"/api/sessions/{s['id']}").json()["push"] is False
     assert client.get("/api/sessions", params={"archived": 0}).json() == []
     assert len(client.get("/api/sessions", params={"archived": 1}).json()) == 1
     tp = next(t for p in client.get("/api/workspace/tree").json()["projects"] for t in p["topics"] if t["path"] == topic)

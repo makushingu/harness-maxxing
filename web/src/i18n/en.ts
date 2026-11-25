@@ -271,6 +271,8 @@ export const en = {
   'sessions.options.notify': 'Notify me on Telegram',
   'sessions.options.notifyHint': 'Every reply of this session rings on Telegram',
   'sessions.options.notifyOff': 'Telegram is not linked yet',
+  'sessions.options.push': 'Mobile notifications',
+  'sessions.options.pushHint': 'The end of each turn of this session rings your phones',
   'sessions.options.linkTelegram': 'Link Telegram',
   'sessions.options.detach': 'Detach',
   'sessions.options.stack': 'Stack',

@@ -269,6 +269,8 @@ export const fr: Record<keyof typeof en, string> = {
   'sessions.options.notify': 'Me prévenir sur Telegram',
   'sessions.options.notifyHint': 'Chaque réponse de cette session sonne sur Telegram',
   'sessions.options.notifyOff': 'Telegram n’est pas encore relié',
+  'sessions.options.push': 'Notifications mobiles',
+  'sessions.options.pushHint': 'La fin de chaque tour de cette session sonne sur vos téléphones',
   'sessions.options.linkTelegram': 'Relier Telegram',
   'sessions.options.detach': 'Détacher',
   'sessions.options.stack': 'Empiler',
