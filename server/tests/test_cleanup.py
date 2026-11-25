@@ -137,3 +137,27 @@ def test_no_clean_while_an_update_runs(capsys):
         assert cmd_deps.cmd_deps(argparse.Namespace(action="clean", names=[], dry_run=False, caches=False, quiet=True)) == 0
         assert "skipped" in capsys.readouterr().out
     assert deps.clean(dry=True) is not None                     # measuring never waits
+
+
+def test_the_trash_part_reuses_the_per_item_size_cache(client, monkeypatch):
+    """Scanning the disk space must not walk every trash item again: unchanged items come from trash.py's cache."""
+    import os
+    from maxxing import trash
+    t = trash.trash_dir()
+    for i in range(3):
+        d = t / f"item{i}"
+        d.mkdir(parents=True, exist_ok=True)
+        for j in range(4):
+            (d / f"f{j}").write_bytes(b"x" * 10)
+    (t / "stray.bin").write_bytes(b"y" * 7)
+    expected = deps._size(t)
+    assert cleanup._measure("trash")[0] == expected
+    walks = {"n": 0}
+    real = os.walk
+
+    def counting(*a, **k):
+        walks["n"] += 1
+        return real(*a, **k)
+    monkeypatch.setattr(os, "walk", counting)
+    assert cleanup._measure("trash")[0] == expected
+    assert walks["n"] == 0

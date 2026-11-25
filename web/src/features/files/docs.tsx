@@ -60,10 +60,16 @@ function SheetsView({ sheets, truncated, className }: { sheets: FileSheet[]; tru
   const sheet: FileSheet | undefined = sheets[Math.min(at, sheets.length - 1)]
   const rows = React.useMemo(() => (sheet?.rows ?? []).map((cells, i) => ({ i, cells })), [sheet])
   const cols = React.useMemo(() => rows.reduce((n, r) => Math.max(n, r.cells.length), 0), [rows])
+  // the text of each row in lower case, made once per sheet (on the first search), not at every key
+  const lows = React.useRef<{ rows: typeof rows; low: string[] } | null>(null)
+  const query = React.useDeferredValue(q)     // typing stays fluid: the table follows when React has time
   const view = React.useMemo(() => {
-    const needle = q.trim().toLowerCase()
-    return needle ? rows.filter((r) => r.cells.some((c) => c.toLowerCase().includes(needle))) : rows
-  }, [rows, q])
+    const needle = query.trim().toLowerCase()
+    if (!needle) return rows
+    if (lows.current?.rows !== rows) lows.current = { rows, low: rows.map((r) => r.cells.join('\u0000').toLowerCase()) }
+    const low = lows.current.low
+    return rows.filter((_, k) => low[k].includes(needle))
+  }, [rows, query])
   const open = (i: number) => {
     setAt(i)
     setShown(ROWS_STEP)

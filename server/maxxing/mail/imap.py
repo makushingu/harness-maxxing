@@ -18,6 +18,7 @@ import email.parser
 import email.policy
 import email.utils
 import imaplib
+import json
 import re
 import socket
 import ssl
@@ -785,6 +786,18 @@ def summaries(acc: dict, folder: str, uids: list[int]) -> list[dict]:
         _select(m, folder, readonly=True)
         rows = _fetch_summaries(m, [int(u) for u in uids])
     return with_trust(acc, rows)
+
+
+def identity(acc: dict, folder: str, uid: int) -> str | None:
+    """What tells this message from another one given the same uid later (size, arrival, Message-ID), from a
+    headers-only FETCH; None when the message is gone."""
+    with session(acc) as m:
+        _select(m, folder, readonly=True)
+        rows = _fetch_summaries(m, [int(uid)])
+    if not rows:
+        return None
+    r = rows[0]
+    return json.dumps([r.get("size"), r.get("received"), r.get("message_id") or ""])
 
 
 def new_since(acc: dict, folder: str, last_uid: int | None, limit: int = 50) -> dict:

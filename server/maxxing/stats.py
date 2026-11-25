@@ -15,8 +15,10 @@ import time
 from .sessions import store
 
 _lock = threading.Lock()
-_cache: dict = {"at": 0.0, "data": None}
+_cache: dict = {"at": 0.0, "data": None, "inflight": None}
 CACHE_S = 20.0
+FORCE_MIN_S = 3.0          # a forced refresh younger than this returns the cache
+COMPUTE_WAIT_S = 120.0     # a call sharing a running computation waits at most this long
 
 
 def _scan_log(sid: str) -> dict:
@@ -176,8 +178,37 @@ def compute() -> dict:
     }
 
 
-def tokens(force: bool = False) -> dict:
+def invalidate() -> None:
     with _lock:
-        if force or _cache["data"] is None or time.time() - _cache["at"] > CACHE_S:
-            _cache["data"], _cache["at"] = compute(), time.time()
-        return _cache["data"]
+        _cache["at"], _cache["data"] = 0.0, None
+
+
+def tokens(force: bool = False) -> dict:
+    """The usage payload, cached CACHE_S seconds. `force` (the Refresh button) recomputes unless the cache is
+    under FORCE_MIN_S old. The computation runs outside `_lock`: readers of a cached payload never wait for it,
+    and calls that arrive while it runs share its result instead of starting another one."""
+    with _lock:
+        age = time.time() - _cache["at"]
+        if _cache["data"] is not None and age < (FORCE_MIN_S if force else CACHE_S):
+            return _cache["data"]
+        inflight = _cache.get("inflight")
+        mine = inflight is None
+        if mine:
+            inflight = _cache["inflight"] = threading.Event()
+        elif _cache["data"] is not None and not force:
+            return _cache["data"]                      # stale, a recompute is already on its way
+    if not mine:
+        inflight.wait(COMPUTE_WAIT_S)
+        with _lock:
+            if _cache["data"] is not None:
+                return _cache["data"]
+    try:
+        data = compute()
+        with _lock:
+            _cache["data"], _cache["at"] = data, time.time()
+    finally:
+        if mine:
+            with _lock:
+                _cache["inflight"] = None
+            inflight.set()
+    return data

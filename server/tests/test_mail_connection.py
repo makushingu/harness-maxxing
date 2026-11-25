@@ -334,6 +334,36 @@ def test_attachments_open_in_the_file_viewer(client, acc, srv, mx):
     assert gone.status_code == 404
 
 
+def test_a_second_view_of_an_attachment_reuses_its_copies(client, acc, srv, mx, monkeypatch):
+    """A click on an attachment already opened: no new download of the whole message, the same files; copies of
+    another message given the same uid are not reused."""
+    from pathlib import Path
+
+    from maxxing import config
+    from maxxing.api import mail as mail_api
+    from maxxing.mail import imap
+    config.save_config({**config.load_config(), "files_root": str(mx["tmp"])})
+    uid = srv.add("INBOX", b"From: a@b.co\r\nTo: me@example.com\r\nSubject: x\r\nMessage-ID: <m1@b.co>\r\n"
+                  b"Content-Type: multipart/mixed; boundary=B\r\n\r\n--B\r\nContent-Type: text/plain\r\n\r\nhi\r\n"
+                  b"--B\r\nContent-Type: text/csv\r\nContent-Disposition: attachment; filename=\"a.csv\"\r\n\r\na,b\r\n"
+                  b"--B--\r\n")
+    idx = [a["index"] for a in client.get(f"/api/mail/{acc['id']}/message", params={"uid": uid}).json()["attachments"]]
+    calls = {"n": 0}
+    real = imap.attachments_of
+
+    def counting(*a, **k):
+        calls["n"] += 1
+        return real(*a, **k)
+    monkeypatch.setattr(imap, "attachments_of", counting)
+    first = client.post(f"/api/mail/{acc['id']}/attachments/view", json={"uid": uid, "indexes": idx}).json()["paths"]
+    again = client.post(f"/api/mail/{acc['id']}/attachments/view", json={"uid": uid, "indexes": idx}).json()["paths"]
+    assert calls["n"] == 1 and again == first and Path(first[str(idx[0])]).is_file()
+    base = mail_api._view_base(acc["id"], "INBOX", uid)
+    (base / mail_api.VIEW_ID).write_text('[1, 2, "<another@b.co>"]')     # the uid now names another message
+    client.post(f"/api/mail/{acc['id']}/attachments/view", json={"uid": uid, "indexes": idx})
+    assert calls["n"] == 2
+
+
 def test_ssl_on_a_starttls_port_says_to_pick_starttls():
     # a port that answers in clear text (587, 25, 143) reached with SSL/TLS: the error names the fix
     srv = socket.socket()

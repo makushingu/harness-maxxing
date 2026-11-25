@@ -30,7 +30,8 @@ LABELS = {"claude-maxxing": "Harness Maxxing", "caddy": "Caddy (HTTPS)", "tailsc
 WATCHED = ("claude-maxxing", "caddy", "cron")       # inactive while enabled -> issue
 
 _lock = threading.Lock()
-_cache: dict[str, Any] = {"at": 0.0, "data": None}
+_cache: dict[str, Any] = {"at": 0.0, "data": None, "inflight": None}
+COLLECT_WAIT_S = 60.0              # a request that shares a running collect waits at most this long
 _cpu_prev: tuple[float, int, int] | None = None     # (time, busy, total)
 _cpu_last: float | None = None
 
@@ -241,9 +242,24 @@ def collect(force: bool = False) -> dict:
     with _lock:
         if not force and _cache["data"] is not None and time.time() - _cache["at"] < CACHE_S:
             return dict(_cache["data"])
-    data = _collect()
-    with _lock:
-        _cache.update(at=time.time(), data=data)
+        inflight = _cache.get("inflight")
+        mine = force or inflight is None
+        if mine and not force:
+            inflight = _cache["inflight"] = threading.Event()
+    if not mine:                                      # a collect is already running: share its result
+        inflight.wait(COLLECT_WAIT_S)
+        with _lock:
+            if _cache["data"] is not None:
+                return dict(_cache["data"])
+    try:
+        data = _collect()
+        with _lock:
+            _cache.update(at=time.time(), data=data)
+    finally:
+        if mine and not force:
+            with _lock:
+                _cache["inflight"] = None
+            inflight.set()                            # after the cache update: waiters read the fresh values
     return dict(data)
 
 

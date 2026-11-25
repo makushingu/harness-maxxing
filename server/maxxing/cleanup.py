@@ -118,9 +118,28 @@ def _measure(part: str) -> tuple[int, list[dict]]:
     if part == "previews":
         return _previews(), []
     if part == "trash":
-        d = trash.trash_dir()
-        return (deps._size(d) if d.is_dir() else 0), []
+        return _trash_bytes(), []
     raise ValueError(part)
+
+
+def _trash_bytes() -> int:
+    """The trash's size from the per-item size cache of trash.py (an unchanged item is not walked again);
+    only what is not an item (sidecars, strays) is measured here."""
+    d = trash.trash_dir()
+    if not d.is_dir():
+        return 0
+    items = trash.list_items(purge=False)
+    ids = {i["id"] for i in items}
+    total = sum(int(i.get("size") or 0) for i in items)
+    try:
+        names = [e.name for e in d.iterdir()]
+    except OSError:
+        return total
+    for name in names:
+        if name in ids or (name.endswith(".sessions") and name[: -len(".sessions")] in ids):
+            continue
+        total += deps._size(d / name)
+    return total
 
 
 def scan(force: bool = False) -> list[dict]:

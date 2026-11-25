@@ -385,3 +385,46 @@ def test_the_cells_of_a_workbook_have_a_total_size(tmp_path, monkeypatch):
     r = documents.read(xlsx(tmp_path / "wide.xlsx", rows))
     got = r["sheets"][0]["rows"]
     assert r["truncated"] and r["sheets"][0]["truncated"] and 1000 <= sum(len(c) for row in got for c in row) <= 1050
+
+
+def test_reopening_an_unchanged_document_does_not_parse_it_again(client, tree, monkeypatch):  # noqa: F811
+    f = docx(tree / "again.docx", "<w:p><w:r><w:t>One</w:t></w:r></w:p>")
+    calls = {"n": 0}
+    real = documents.read
+
+    def counting(p, *a, **k):
+        calls["n"] += 1
+        return real(p, *a, **k)
+    monkeypatch.setattr(documents, "read", counting)
+    for _ in range(3):
+        r = client.get("/api/files/doc", params={"path": str(f)})
+        assert r.status_code == 200 and r.json()["markdown"] == "One\n"
+    assert calls["n"] == 1
+    docx(f, "<w:p><w:r><w:t>Two, changed</w:t></w:r></w:p>")   # rewritten: read again
+    assert client.get("/api/files/doc", params={"path": str(f)}).json()["markdown"] == "Two, changed\n"
+    assert calls["n"] == 2
+    with files_api._doc_cache_lock:
+        assert len([k for k in files_api._doc_cache if k[0] == str(f.resolve())]) <= 1   # the old version is dropped
+
+
+def test_a_workbook_reads_only_the_shared_strings_its_cells_use(tmp_path, monkeypatch):
+    """Many shared strings and 2 cells: the part is left after the last string used, nothing is cut."""
+    many = "".join(f"<si><t>s{i}</t></si>" for i in range(50_000))
+    f = pack(tmp_path / "sst.xlsx", {
+        "_rels/.rels": rels(("rId1", "officeDocument", "xl/workbook.xml", False)),
+        "xl/workbook.xml": f'<workbook {S}><sheets><sheet name="A" sheetId="1" r:id="rId1"/></sheets></workbook>',
+        "xl/_rels/workbook.xml.rels": rels(("rId1", "worksheet", "worksheets/sheet1.xml", False),
+                                           ("rId3", "sharedStrings", "sharedStrings.xml", False)),
+        "xl/sharedStrings.xml": f"<sst {S}>{many}</sst>",
+        "xl/worksheets/sheet1.xml": f'<worksheet {S}><sheetData><row r="1"><c r="A1" t="s"><v>7</v></c>'
+                                    f'<c r="B1" t="s"><v>2</v></c></row></sheetData></worksheet>'})
+    ticks = {"n": 0}
+    real = documents._Pack.tick
+
+    def counting(self):
+        ticks["n"] += 1
+        return real(self)
+    monkeypatch.setattr(documents._Pack, "tick", counting)
+    r = documents.read(f)
+    assert r["sheets"][0]["rows"] == [["s7", "s2"]] and not r["truncated"]
+    assert ticks["n"] < 100                                     # not one per shared string of the workbook

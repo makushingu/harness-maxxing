@@ -175,7 +175,8 @@ def _html_to_text(tmp_path: Path, tree: str, body: str):
     """Run htmlToText (plainText.ts imports remark: only its HTML part is taken) on a small fake DOM built by `tree`
     (node has no DOMParser), then `body` (`run()` gives the text)."""
     src = (WEB / "features" / "files" / "plainText.ts").read_text(encoding="utf-8")
-    part = src[src.index("const HTML_SKIP"):src.index("/** Cells separated by tabs")]
+    part = src[src.index("// Trims written as loops"):src.index("export function markdownToText(")] + \
+        src[src.index("const HTML_SKIP"):src.index("/** Cells separated by tabs")]
     dom = """
 class T { constructor(v) { this.nodeType = 3; this.nodeValue = v; this.childNodes = [] } }
 class E {
@@ -190,7 +191,6 @@ class E {
 const h = (tag, attrs, ...kids) => new E(tag, attrs, kids)
 let BODY
 globalThis.DOMParser = class { parseFromString() { return { body: BODY } } }
-const edges = (s: string) => s.replace(/^\\n+|\\s+$/g, '')
 """
     (tmp_path / "main.ts").write_text(dom + part + f"\nBODY = (() => {{ {tree} }})()\nconst run = () => htmlToText('')\n"
                                       f"console.log(JSON.stringify((() => {{ {body} }})()))\n", encoding="utf-8")
@@ -503,3 +503,88 @@ def test_media_positions_of_two_tabs_are_merged_not_erased(tmp_path):
                                   "set: (k, v) => s.set(k, v) }\n",
                           swap={"import { store } from '@/lib/utils'": "const store = globalThis.S"})
     assert out == ["b"]                                   # b's position kept, the one cleared in a stays cleared
+
+
+def test_a_long_pasted_quick_add_normalizes_each_project_name_once(tmp_path):
+    """The quick add is parsed at every key: the project names are normalized once per parse, not per @word."""
+    out = _run_ts(tmp_path, WEB / "features" / "tasks" / "model.ts", """let reads = 0
+        const projects = Array.from({ length: 30 }, (_, i) => {
+          const p = { id: 'p' + i }
+          Object.defineProperty(p, 'name', { get: () => { reads++; return 'Project ' + i } })
+          return p
+        })
+        const r = m.parseQuickAdd('@ab '.repeat(25000) + '@project-7 x', projects, '2026-11-25')
+        return [reads, r.project_id, r.title.length]""")
+    assert out[0] <= 60 and out[1] == "p7" and out[2] == len("@ab " * 25000 + "x")
+
+
+def test_the_spreadsheet_filter_follows_a_deferred_query_on_precomputed_rows():
+    """The Filter field of a sheet: rows lowered once per sheet, the table filtered on a deferred value (not at each key)."""
+    src = (WEB / "features" / "files" / "docs.tsx").read_text(encoding="utf-8")
+    view = src[src.index("function SheetsView"):src.index("const open = (i: number)")]
+    assert "React.useDeferredValue(q)" in view and "[rows, query])" in view
+    assert "lows.current?.rows !== rows" in view and "c.toLowerCase()" not in view
+
+
+def test_plain_text_trims_stay_linear_on_long_runs_of_blanks(tmp_path):
+    """« Copy as plain text » on a file with a long run of spaces or empty lines that is not at its end: no freeze."""
+    out = _html_to_text(tmp_path, "return h('body', {}, h('pre', {}, ' '.repeat(100000)), h('p', {}, 'end'))", """
+        const t0 = Date.now()
+        const blanks = ' '.repeat(100000), lines = '\\n'.repeat(100000)
+        const r = [edges('a' + blanks + 'b  '), oneLine('a' + blanks + 'b\\n  \\n c'), cutEnd('x' + blanks + 'y' + blanks, (c) => c === ' '),
+                   endBreaks('a' + lines + 'b' + lines).toString(), run()]
+        return [r[0].length, r[1].slice(-5), r[2].length, r[3], r[4].trim(), Date.now() - t0 < 3000]""")
+    assert out == [100002, "  b c"[-5:], 100002, "100000", "end", True]
+
+
+def _md_light(tmp_path: Path, body: str):
+    src = (WEB / "features" / "files" / "plainText.ts").read_text(encoding="utf-8")
+    part = src[src.index("// Trims written as loops"):src.index("/** Above this size")] + \
+        src[src.index("/** A longer line"):src.index("const mdBlocks")]
+    (tmp_path / "main.ts").write_text(part + f"\nconsole.log(JSON.stringify((() => {{ {body} }})()))\n", encoding="utf-8")
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node not installed")
+    r = subprocess.run([node, "--experimental-strip-types", "--no-warnings", "main.ts"], cwd=tmp_path,
+                       capture_output=True, text=True, timeout=120)
+    if r.returncode and ("strip-types" in r.stderr or "Unknown file extension" in r.stderr):
+        pytest.skip("this node cannot strip types")
+    assert r.returncode == 0, r.stderr
+    return json.loads(r.stdout)
+
+
+def test_a_big_markdown_is_made_plain_without_the_parser(tmp_path):
+    """Over MD_PARSE_MAX characters, « Copy as plain text » takes the marks off line by line: 2 MB in well under a second."""
+    src = (WEB / "features" / "files" / "plainText.ts").read_text(encoding="utf-8")
+    fn = src[src.index("export function markdownToText("):src.index("/** A longer line")]
+    assert "if (md.length > MD_PARSE_MAX) return markdownToTextLight(md)" in fn
+    out = _md_light(tmp_path, """
+        const small = markdownToTextLight('# Title\\r\\n\\n> **bold** and *it* `code` ~~gone~~\\n* item [x](https://a.b) [y](y) ![pic](p.png)\\n```\\n# kept\\n```\\n---\\n')
+        const t0 = Date.now()
+        const big = markdownToTextLight('Hello **world** [x](https://a.b) é\\r\\n\\r\\n'.repeat(50000))
+        return [small, big.split('\\n')[0], Date.now() - t0 < 1500]""")
+    assert out == ["Title\n\nbold and it code gone\n- item x (https://a.b) y pic\n# kept", "Hello world x (https://a.b) é", True]
+
+
+def test_a_live_batch_of_text_does_not_copy_the_tool_index_nor_the_hidden_messages():
+    """fold() runs for every live batch: the tool index and the hidden messages are copied only by a batch that
+    changes them (once), not by each batch (its cost grew with the whole history loaded)."""
+    src = (WEB / "pages" / "sessions" / "log.ts").read_text(encoding="utf-8")
+    fold = src[src.index("function fold("):src.index("return { ...st, items, toolIdx")]
+    assert "{ ...st.toolIdx }" not in fold and "hidden = { ...hidden, [" not in fold
+    assert fold.count("if (!ownIdx) {") == 1 and fold.count("if (!ownHidden) {") == 1
+    use = fold[fold.index("case 'tool_use':"):fold.index("case 'tool_result':")]
+    assert use.index("toolIdx = { ...toolIdx }") < use.index("toolIdx[ev.id] = items.length")
+
+
+def test_the_space_office_pauses_what_cannot_be_seen():
+    """Each desk runs about ten endless animations: a bay far from the screen pauses them, and past CALM_ABOVE agents
+    only the desks of agents at work or waiting keep theirs."""
+    src = (WEB / "features" / "agents" / "OfficeFuture.tsx").read_text(encoding="utf-8")
+    bay = src[src.index("function Bay("):src.index("<DropBar side={dnd.side} vertical={false} />")]
+    assert "const away = useAway(ref)" in bay and "ref={ref}" in bay and "away && 'mx-wait'" in bay
+    desk = src[src.index("function Console("):src.index('data-testid="office-desk"')]
+    assert "calm && !working && st.id !== 'waiting' && 'mx-wait'" in desk
+    assert "> CALM_ABOVE" in src and "calm={calm}" in src
+    css = (WEB / "styles" / "globals.css").read_text(encoding="utf-8")
+    assert ".mx-wait, .mx-wait * { animation-play-state: paused !important; }" in css

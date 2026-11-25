@@ -54,9 +54,26 @@ const station = (s: number): React.CSSProperties => ({
   imageRendering: 'pixelated',
 })
 
+/** Above this many agents, only the desks of agents at work or waiting keep their animations. */
+const CALM_ABOVE = 30
+
+/** True while the element is far from the screen: its animations are paused (mx-wait), they cost nothing there. */
+function useAway(ref: React.RefObject<HTMLElement | null>) {
+  const [away, setAway] = React.useState(false)
+  React.useEffect(() => {
+    const el = ref.current
+    if (!el || typeof IntersectionObserver === 'undefined') return
+    const io = new IntersectionObserver(([e]) => setAway(!e.isIntersecting), { rootMargin: '200px 0px' })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [ref])
+  return away
+}
+
 export function OfficeFuture({ groups, layout, onStart }: { groups: ProjectGroup[]; layout: AgentsLayoutApi; onStart: (s: CreateStart) => void }) {
   const phone = useMediaQuery('(max-width: 639px)')
   const s = phone ? 3 : 4
+  const calm = groups.reduce((n, g) => n + g.agents.length, 0) > CALM_ABOVE
   // Every loop of every LED, glow and hologram fires an `animationiteration` event that bubbles up to React's root
   // listener (a hundred a second on a full office): stop them here, nothing in the office listens to them.
   const root = React.useRef<HTMLDivElement>(null)
@@ -74,7 +91,7 @@ export function OfficeFuture({ groups, layout, onStart }: { groups: ProjectGroup
       data-testid="agents-office-future"
     >
       {groups.map(({ project: p, agents: list }, i) => (
-        <Bay key={p} project={p} agents={list} index={i} layout={layout} s={s} phone={phone} onStart={onStart} />
+        <Bay key={p} project={p} agents={list} index={i} layout={layout} s={s} phone={phone} onStart={onStart} calm={calm} />
       ))}
     </div>
   )
@@ -92,8 +109,10 @@ export function OfficeRoom({ project, agents, focus, layout }: { project: string
   )
 }
 
-function Bay({ project, agents, index, layout, s, phone, onStart, focus }: { project: string; agents: Agent[]; index: number; layout: AgentsLayoutApi; s: number; phone: boolean; onStart: (s: CreateStart) => void; focus?: string }) {
+function Bay({ project, agents, index, layout, s, phone, onStart, focus, calm }: { project: string; agents: Agent[]; index: number; layout: AgentsLayoutApi; s: number; phone: boolean; onStart: (s: CreateStart) => void; focus?: string; calm?: boolean }) {
   const t = useT()
+  const ref = React.useRef<HTMLElement>(null)
+  const away = useAway(ref)
   const mask = useMask()
   const room = useRoom(project, agents, index, layout, phone, onStart)
   const { dnd, emoji, color: c, create } = room
@@ -114,8 +133,9 @@ function Bay({ project, agents, index, layout, s, phone, onStart, focus }: { pro
   return (
     <section
       {...dnd.target}
+      ref={ref}
       aria-label={mask(project, 8)}
-      className={cn('relative w-fit max-w-full border-2', dnd.dragging && 'opacity-50')}
+      className={cn('relative w-fit max-w-full border-2', dnd.dragging && 'opacity-50', away && 'mx-wait')}
       style={style}
       data-testid="office-room"
       data-project={project}
@@ -168,7 +188,7 @@ function Bay({ project, agents, index, layout, s, phone, onStart, focus }: { pro
         }}
       >
         {agents.map((a, i) => (
-          <Console key={a.path} agent={a} index={i} layout={layout} s={s} color={c} active={a.path === focus} />
+          <Console key={a.path} agent={a} index={i} layout={layout} s={s} color={c} active={a.path === focus} calm={calm} />
         ))}
         {free && <FreeConsole s={s} color={c} label={t('agents.office.freeDesk')} onClick={create} />}
         {Array.from({ length: fillers }, (_, i) => (
@@ -228,13 +248,13 @@ function Leds({ s, color, seed }: { s: number; color: string; seed: number }) {
 }
 
 /** One agent at its console; the whole cell opens it. */
-function Console({ agent: a, index, layout, s, color, active }: { agent: Agent; index: number; layout: AgentsLayoutApi; s: number; color: string; active?: boolean }) {
+function Console({ agent: a, index, layout, s, color, active, calm }: { agent: Agent; index: number; layout: AgentsLayoutApi; s: number; color: string; active?: boolean; calm?: boolean }) {
   const { st, dnd, props, menu } = useDesk(a, index, layout)
   const working = st.id === 'running'
   const off = st.id === 'off'
   return (
     <Tooltip content={`${a.display_name} · ${st.text}`}>
-      <div {...props} className={cn('group/desk relative grid cursor-pointer justify-items-center outline-none', dnd.dragging && 'opacity-50')} data-testid="office-desk">
+      <div {...props} className={cn('group/desk relative grid cursor-pointer justify-items-center outline-none', dnd.dragging && 'opacity-50', calm && !working && st.id !== 'waiting' && 'mx-wait')} data-testid="office-desk">
         <DropBar side={dnd.side} vertical={false} />
         {menu}
         <Cursor className={cn('border-[#5ee7ff] drop-shadow-[0_0_4px_#5ee7ff]', active && 'opacity-100')} />

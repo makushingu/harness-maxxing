@@ -20,12 +20,78 @@ type Md = {
   label?: string | null
 }
 
+// Trims written as loops: an anchored regex (/\s+$/) is quadratic on a long run of blanks that is not at the end.
+const isBlank = (c: string) => c === ' ' || c === '\t' || c === '\n' || c === '\r' || c === '\f' || c === '\v' || /\s/.test(c)
+/** `s` without the characters `drop` accepts at its end. */
+function cutEnd(s: string, drop: (c: string) => boolean): string {
+  let b = s.length
+  while (b > 0 && drop(s[b - 1])) b--
+  return b === s.length ? s : s.slice(0, b)
+}
 /** No empty line around the text; a first row that starts with an empty cell keeps its tab. */
-const edges = (s: string) => s.replace(/^\n+|\s+$/g, '')
+function edges(s: string): string {
+  let a = 0
+  while (a < s.length && s[a] === '\n') a++
+  return cutEnd(s.slice(a), isBlank)
+}
+const isSpace = (c: string) => c === ' ' || c === '\t'
+/** Line breaks at the end of `s`. */
+function endBreaks(s: string): number {
+  let n = 0
+  while (n < s.length && s[s.length - 1 - n] === '\n') n++
+  return n
+}
+/** The lines of a text cut in the source joined into one sentence: each line break and the blanks around it
+ *  become one space, in linear time (a regex for it is quadratic on a long run of blanks). */
+function oneLine(s: string): string {
+  if (!s.includes('\n')) return s
+  const parts = s.split('\n')
+  const last = parts.length - 1
+  const kept = parts.map((x, i) => (i > 0 ? x.trimStart() : x)).map((x, i) => (i < last ? x.trimEnd() : x))
+  return kept.filter((x, i) => i === 0 || i === last || x).join(' ')
+}
+
+/** Above this size the Markdown is not parsed (seconds on the page's thread): its marks are taken off line by line. */
+export const MD_PARSE_MAX = 200_000
 
 export function markdownToText(md: string): string {
+  if (md.length > MD_PARSE_MAX) return markdownToTextLight(md)
   const tree = unified().use(remarkParse).use(remarkGfm).parse(md) as Md
   return edges(mdBlocks(tree.children, '\n\n'))
+}
+
+/** A longer line is left as it is (the inline patterns are bounded, they stay fast on the others). */
+const LIGHT_LINE_MAX = 10_000
+/** The words of a big Markdown text without a parser, line by line: headings, quotes, fences, emphasis, code
+ *  and links lose their marks (a link to a web or mail address keeps it in parentheses), lists keep `- `. */
+export function markdownToTextLight(md: string): string {
+  const out: string[] = []
+  let fence = false
+  for (let line of md.split('\n')) {
+    line = cutEnd(line, (c) => c === '\r')
+    if (/^ {0,3}(```|~~~)/.test(line)) {
+      fence = !fence
+      continue
+    }
+    if (fence || line.length > LIGHT_LINE_MAX) {
+      out.push(line)
+      continue
+    }
+    line = line
+      .replace(/^ {0,3}(> ?)+/, '')
+      .replace(/^ {0,3}#{1,6}(\s+|$)/, '')
+      .replace(/^(\s*)[*+](\s+)/, '$1-$2')
+      .replace(/^ {0,3}([-*_] *){3,}$/, '')
+      .replace(/!\[([^\]]{0,300})\]\([^)]{0,2000}\)/g, '$1')
+      .replace(/\[([^\]]{0,300})\]\(([^)\s]{0,2000})[^)]{0,300}\)/g, (_m, text: string, url: string) =>
+        !/^(https?:|mailto:)/i.test(url) || url === text || url === `mailto:${text}` ? text : text ? `${text} (${url})` : url)
+      .replace(/`([^`]{0,300})`/g, '$1')
+      .replace(/(\*\*|__)([^*_]{1,300})\1/g, '$2')
+      .replace(/~~([^~]{1,300})~~/g, '$1')
+      .replace(/\*([^*\s][^*]{0,300})\*/g, '$1')
+    out.push(line)
+  }
+  return edges(out.join('\n'))
 }
 
 const mdBlocks = (nodes: Md[] | undefined, sep: string) => (nodes ?? []).map(mdBlock).filter(Boolean).join(sep)
@@ -64,7 +130,7 @@ function mdBlock(n: Md): string {
 function mdInline(n: Md): string {
   switch (n.type) {
     case 'text':
-      return (n.value ?? '').replace(/\s*\n\s*/g, ' ') // a line cut in the source is one sentence for the reader
+      return oneLine(n.value ?? '') // a line cut in the source is one sentence for the reader
     case 'inlineCode':
       return n.value ?? ''
     case 'break':
@@ -115,8 +181,8 @@ export function htmlToText(html: string): string {
   /** At least `n` line breaks at the end (none before the first word, none between a list mark and its text). */
   const brk = (n: number, closing = false) => {
     if (!closing && /(^|\n) *(- |\d+\. )$/.test(out)) return
-    out = out.replace(/[ \t]+$/, '')
-    const have = /\n*$/.exec(out)![0].length
+    out = cutEnd(out, isSpace)
+    const have = endBreaks(out)
     if (!empty() && have < n) out += '\n'.repeat(n - have)
   }
   const items = new Map<Element, number>() // a list -> its items so far (counting the earlier ones each time: n²)
@@ -137,7 +203,7 @@ export function htmlToText(html: string): string {
       const tag = el.tagName.toUpperCase()
       if (HTML_SKIP.has(tag)) continue
       if (tag === 'BR') {
-        out = out.replace(/[ \t]+$/, '') + '\n'
+        out = cutEnd(out, isSpace) + '\n'
         continue
       }
       if (tag === 'IMG') {
@@ -156,7 +222,7 @@ export function htmlToText(html: string): string {
           items.set(list, i)
           out += `${i}. `
         } else out += '- '
-      } else if ((tag === 'TD' || tag === 'TH') && el.previousElementSibling) out = out.replace(/ +$/, '') + '\t'
+      } else if ((tag === 'TD' || tag === 'TH') && el.previousElementSibling) out = cutEnd(out, (ch) => ch === ' ') + '\t'
       walk(el, pre || tag === 'PRE')
       if (lines) brk(lines, true)
     }
@@ -169,8 +235,10 @@ export function htmlToText(html: string): string {
 /** Cells separated by tabs, one row a line; several sheets: each under its name. */
 export function sheetsToText(sheets: FileSheet[]): string {
   const cell = (c: string) => String(c ?? '').replace(/[\t\r\n]+/g, ' ')
-  return sheets
+  const text = sheets
     .map((s) => (sheets.length > 1 ? `${s.name}\n` : '') + s.rows.map((r) => r.map(cell).join('\t')).join('\n'))
     .join('\n\n')
-    .replace(/^\n+|\n+$/g, '')
+  let a = 0
+  while (a < text.length && text[a] === '\n') a++
+  return cutEnd(text.slice(a), (c) => c === '\n')
 }
