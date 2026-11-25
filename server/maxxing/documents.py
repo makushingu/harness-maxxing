@@ -822,12 +822,19 @@ class _Odf:
 # ---- Excel ---------------------------------------------------------------------------------
 _BUILTIN = {1: "0", 2: "0.00", 3: "#,##0", 4: "#,##0.00", 9: "0%", 10: "0.00%", 37: "#,##0", 38: "#,##0",
             39: "#,##0.00", 40: "#,##0.00", 41: "#,##0", 42: "#,##0", 43: "#,##0.00", 44: "#,##0.00"}
+_ELAPSED = (("h", False), ("h", True), ("m", False), ("m", True), ("s", False))   # total unit, seconds shown
 _DATE_IDS = {*range(14, 23), *range(27, 37), *range(45, 48), *range(50, 59)}
 _EPOCH, _EPOCH_1904 = datetime(1899, 12, 30), datetime(1904, 1, 1)
 
 
 def _number_kind(fid: int, code: str) -> tuple[str, int] | None:
-    """How a number format shows a number: ('date', 0), ('percent', decimals), ('fixed', decimals), None = as it is."""
+    """How a number format shows a number: ('date', 0), ('percent', decimals), ('fixed', decimals), ('elapsed',
+    _ELAPSED index), None = as it is."""
+    raw = re.sub(r'"[^"]*"|\\.', "", (code or ("[h]:mm:ss" if fid == 46 else "")).split(";")[0]).lower()
+    total = re.search(r"\[(h+|m+|s+)\]", raw)            # a duration ([h]:mm, [mm]:ss): not a time of day
+    if total:
+        unit = total[1][0]
+        return ("elapsed", _ELAPSED.index((unit, unit != "s" and "s" in raw[total.end():])))
     if fid in _DATE_IDS:
         return ("date", 0)
     code = re.sub(r'"[^"]*"|\[[^\]]*\]|\\.|_.|\*.', "", (code or _BUILTIN.get(fid, "")).split(";")[0])
@@ -852,6 +859,15 @@ def _number(v: str | None, kind: tuple[str, int] | None, date1904: bool) -> str:
         return v
     if not math.isfinite(f):
         return v
+    if kind and kind[0] == "elapsed" and abs(f) < 2958466:
+        unit, secs = _ELAPSED[kind[1]]
+        t = round(abs(f) * 86400)
+        sign = "-" if f < 0 and t else ""
+        if unit == "h":
+            return f"{sign}{t // 3600}:{t % 3600 // 60:02d}" + (f":{t % 60:02d}" if secs else "")
+        if unit == "m":
+            return f"{sign}{t // 60}" + (f":{t % 60:02d}" if secs else "")
+        return f"{sign}{t}"
     if kind and kind[0] == "date" and 0 <= f < 2958466:
         try:
             at = (_EPOCH_1904 if date1904 else _EPOCH) + timedelta(seconds=round(f * 86400))

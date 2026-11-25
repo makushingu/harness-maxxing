@@ -356,3 +356,15 @@ def test_a_part_of_millions_of_tiny_tags_is_cut_not_built_whole(tmp_path, monkey
     assert r["truncated"] and "first" in r["markdown"] and "last" not in r["markdown"]
     r = documents.read(docx(tmp_path / "ok.docx", "<w:p><w:r><w:t>whole</w:t></w:r></w:p>"))
     assert not r["truncated"] and "whole" in r["markdown"]
+
+
+def test_a_duration_format_shows_total_hours_not_a_date(tmp_path):
+    f = xlsx(tmp_path / "t.xlsx", '<row r="1"><c r="A1" s="5"><v>1.5</v></c><c r="B1" s="6"><v>1.5</v></c>'
+             '<c r="C1" s="7"><v>0.0625</v></c><c r="D1" s="4"><v>0.75</v></c></row>')
+    with zipfile.ZipFile(f) as z:
+        parts = {n: z.read(n).decode() for n in z.namelist()}
+    parts["xl/styles.xml"] = parts["xl/styles.xml"].replace(
+        "</numFmts>", '<numFmt numFmtId="166" formatCode="[h]:mm"/><numFmt numFmtId="167" formatCode="[mm]:ss"/></numFmts>'
+    ).replace("</cellXfs>", '<xf numFmtId="166"/><xf numFmtId="46"/><xf numFmtId="167"/></cellXfs>')
+    r = documents.read(pack(tmp_path / "t2.xlsx", parts))
+    assert r["sheets"][0]["rows"] == [["36:00", "36:00:00", "90:00", "18:00"]]   # D1: a time of day stays one
