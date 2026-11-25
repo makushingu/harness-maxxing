@@ -11,6 +11,7 @@ New:
 
 Fixed:
 - **Mute one session on your phones.** Once a phone gets Mobile notifications, a session's **…** window has a *Mobile notifications* switch, and the new-session form a checkbox: off, that session never rings your phones; the others still do. (#185, suggested by bristouflex)
+- **On a phone, the session tabs fold away while you type.** In the Tabs view, the tab bar under the session header stays on screen while you read and scroll, folds away when you tap the message box, and comes back when you leave it.
 - **On a small phone, the message box stays two rows high during a turn.** Stop, microphone and Send are a little smaller on narrow screens, so they fit on the same row as the other buttons instead of a third row.
 - **Restoring a backup no longer switches an agent back on.** On a server in use, an agent switched off here, or one of its triggers switched off here, stays off after a restore, like scheduled jobs and extensions already did.
 - **The Harness Browser no longer keeps a session's pages running after its turn.** 15 minutes after the turn ends, if no new turn uses them, the tabs it opened sleep (a 3D render left open kept the CPU busy). They are still listed and open again at the next turn.
