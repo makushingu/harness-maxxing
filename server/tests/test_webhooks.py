@@ -115,6 +115,10 @@ def test_phone_hooks_take_get_files_and_a_key(client, mx):
     client.post(f"/api/webhooks/{h['id']}/secret", json={"secret": "k3y"})
     assert client.get(f"/api/hooks/{_tok(h)}").status_code == 401
     assert client.get(f"/api/hooks/{_tok(h)}", headers={"Authorization": "Bearer k3y"}).status_code == 200
+    r = client.get(f"/api/hooks/{_tok(h)}?key=k3y&city=Lyon")       # the key in the URL: checked, then dropped
+    assert r.status_code == 200 and "Lyon" in r.text and "k3y" not in r.text
+    detail = client.get(f"/api/webhooks/{h['id']}/calls/{webhooks.calls(h['id'])[0]['id']}").json()
+    assert detail["request"]["query"] == {"city": "Lyon"} and "k3y" not in json.dumps(detail)
 
 
 def test_method_size_disabled_and_unknown(client):

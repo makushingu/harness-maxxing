@@ -774,6 +774,8 @@ def receive(token: str, method: str, headers: dict, query: dict, body: bytes,
     bad = _check_auth(h, s, headers, query, body)
     if bad:
         return {"status": bad[0], "json": bad[1]}
+    if t["source"] == "phone" and s.get("secret"):       # the access key of ?key= is not data: never stored nor passed on
+        query = {k: v for k, v in query.items() if k != "key"}
     if s.get("secret") and _limited(h["id"]):
         return {"status": 429, "json": {"error": "rate_limited"}, "retry_after": 60}
     from . import feed, feedhooks
