@@ -476,3 +476,17 @@ def test_a_toggle_shortcut_held_down_runs_once(tmp_path):
                                          "removeEventListener() {} }\n")
     assert out == [1, 2]                                  # zoom keys still repeat
 
+
+def test_a_row_back_before_its_exit_ends_is_shown_again(tmp_path):
+    out = _run_ts_stubbed(tmp_path, WEB / "lib/presence.ts", """
+      let cancelled = false
+      const el = { inert: false, offsetLeft: 1, offsetTop: 2, offsetWidth: 3, offsetHeight: 4,
+        style: { pointerEvents: '', position: 'relative', left: '', top: '', width: '', height: '', margin: '', zIndex: '' },
+        animate: () => ({ cancel: () => { cancelled = true } }) }
+      m.animateOut(el, 'y')
+      const out = { inert: el.inert, position: el.style.position }
+      m.animateBack(el)
+      return [out, el.inert, el.style.position, el.style.pointerEvents, el.style.width, cancelled]""",
+                          prelude="globalThis.window = { matchMedia: () => ({ matches: false }) }\n")
+    assert out == [{"inert": True, "position": "absolute"}, False, "relative", "", "", True]
+

@@ -50,7 +50,7 @@ import {
 import { cn } from '@/lib/utils'
 import { useLongPress } from '@/lib/long-press'
 import { useCompact } from '@/stores/media'
-import { animateIn, animateOut, PRESENCE_MS, useFlip, usePresence } from '@/lib/presence'
+import { animateBack, animateIn, animateOut, PRESENCE_MS, useFlip, usePresence } from '@/lib/presence'
 import { useT, useLang } from '@/i18n'
 import { fmtRelative } from '@/lib/format'
 import { isApiError, errorMessage } from '@/lib/api'
@@ -1108,7 +1108,9 @@ function RowPresence({ id, leaving, appear, rise, children }: { id: string; leav
     if (appear && ref.current) animateIn(ref.current, 'y')
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
   React.useLayoutEffect(() => {
-    if (leaving && ref.current) animateOut(ref.current, 'y')
+    if (!ref.current) return
+    if (leaving) animateOut(ref.current, 'y')
+    else animateBack(ref.current)
   }, [leaving])
   return (
     <div ref={ref} data-row={id} data-leaving={leaving || undefined} className={stagger != null ? 'mx-rise' : undefined} style={stagger != null ? ({ '--i': stagger } as React.CSSProperties) : undefined}>
