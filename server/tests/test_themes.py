@@ -217,3 +217,25 @@ def test_a_linked_theme_json_never_replaces_an_installed_theme(mx, tmp_path):
     assert cli.main(["themes", "install", str(link), "--force"]) == 1
     assert themes.get("good")["name"] == "Good"
     assert sorted(p.name for p in (mx["ws"] / "themes").iterdir()) == ["good"]
+
+
+def test_two_installs_of_the_same_theme_at_once_do_not_collide(mx, tmp_path):
+    import threading
+    src = _theme(tmp_path / "src", "race", {"name": "Race"}, {"README.md": b"x" * 20000})
+    errors: list[BaseException] = []
+
+    def run():
+        for _ in range(40):
+            try:
+                themes.install(src, force=True)
+            except BaseException as e:      # noqa: BLE001 - the test counts every failure
+                errors.append(e)
+
+    threads = [threading.Thread(target=run) for _ in range(4)]
+    for th in threads:
+        th.start()
+    for th in threads:
+        th.join()
+    assert not errors, errors[:3]
+    assert themes.get("race")["name"] == "Race"
+    assert sorted(p.name for p in (mx["ws"] / "themes").iterdir()) == ["race"]

@@ -23,10 +23,13 @@ the web app writes the values as they come (`web/src/lib/themes.ts`).
 """
 from __future__ import annotations
 
+import fcntl
 import json
 import math
+import os
 import re
 import shutil
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -598,8 +601,8 @@ def install(src: Path, force: bool = False) -> tuple[dict, list[str]]:
     names = set(FILES) | {u.rsplit("/", 1)[1] for u in [*t["wallpaper"].values(), *t["logo"].values(), t["preview"]] if u}
     if dest.resolve() == src:
         return t, warn
-    stage = root() / f".{t['id']}.tmp"
-    shutil.rmtree(stage, ignore_errors=True)
+    root().mkdir(parents=True, exist_ok=True)
+    stage = Path(tempfile.mkdtemp(dir=root(), prefix=f".{t['id']}."))   # one per install: two never share it
     tmp = stage / t["id"]               # named like the theme: load() falls back on the folder name for the id
     tmp.mkdir(parents=True)
     for n in names:
@@ -612,13 +615,16 @@ def install(src: Path, force: bool = False) -> tuple[dict, list[str]]:
         raise ThemeError(err)
     if t["css"]:
         _stamp(tmp, t["css"])           # installed by Claude after `check`: checked against this interface
-    old = root() / f".{t['id']}.old"
-    shutil.rmtree(old, ignore_errors=True)
-    if dest.exists():
-        dest.rename(old)                # never a moment without the theme for a browser that lists it
-    tmp.rename(dest)
-    shutil.rmtree(old, ignore_errors=True)
-    shutil.rmtree(stage, ignore_errors=True)
+    fd = os.open(root(), os.O_RDONLY)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)  # two installs of the same theme swap one after the other
+        if dest.exists():
+            dest.rename(stage / "old")  # never a moment without the theme for a browser that lists it
+        tmp.rename(dest)
+    finally:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        os.close(fd)
+        shutil.rmtree(stage, ignore_errors=True)
     t2, warn2, _ = load(dest)
     return t2 or t, warn2
 
