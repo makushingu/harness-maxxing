@@ -216,6 +216,19 @@ def test_top_never_waits_without_a_readable_cgroup(mx, tmp_path, monkeypatch):
     assert [cpu.top() for _ in range(3)] == [[], [], []]
     assert sleeps == []
 
+
+def test_parallel_forced_snapshots_share_one_sample(mx, monkeypatch):
+    calls = []
+    monkeypatch.setattr(cpu, "top", lambda n=cpu.TOP_N: calls.append(1) or [])
+    monkeypatch.setattr(cpu, "_cache", {"at": 0.0, "data": None})
+    for _ in range(4):
+        cpu.snapshot(force=True)
+    assert len(calls) == 1
+    cpu._cache["at"] -= cpu.FORCE_S
+    cpu.snapshot(force=True)
+    assert len(calls) == 2
+
+
 def test_cpu_endpoint_and_setting(client, monkeypatch):
     monkeypatch.setattr(cpu, "top", lambda n=cpu.TOP_N: [])
     r = client.get("/api/system/cpu", params={"force": 1}).json()

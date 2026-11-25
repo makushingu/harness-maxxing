@@ -39,6 +39,7 @@ PRESSURE_PATH = Path("/proc/pressure/cpu")
 WAITING_PCT = 20.0                            # `some avg10` from which the UI says "waiting"
 ALERT_PCT, ALERT_S = 40.0, 600                # `some avg60` held this long -> a health problem
 CACHE_S = 3.0
+FORCE_S = 0.5                                 # ?force=true still reuses a snapshot this fresh
 TOP_N = 6
 
 
@@ -342,7 +343,9 @@ def snapshot(force: bool = False) -> dict:
     """GET /api/system/cpu: {enabled, pressure:{avg10, avg60, avg300}|null, waiting, top:[...], at} (cached CACHE_S).
     Blocking (up to ~0.5 s): call it through asyncio.to_thread."""
     with _lock:
-        if not force and _cache["data"] is not None and time.time() - _cache["at"] < CACHE_S:
+        # force: a fresh sample, but one made under FORCE_S ago is fresh (parallel forced calls queue on this lock and
+        # would each wait another 0.5 s sample)
+        if _cache["data"] is not None and time.time() - _cache["at"] < (FORCE_S if force else CACHE_S):
             return dict(_cache["data"])
         p = pressure()
         data = {"enabled": enabled(), "pressure": p, "waiting": bool(p and p["avg10"] >= WAITING_PCT),
