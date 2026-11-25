@@ -503,3 +503,16 @@ def test_media_positions_of_two_tabs_are_merged_not_erased(tmp_path):
                                   "set: (k, v) => s.set(k, v) }\n",
                           swap={"import { store } from '@/lib/utils'": "const store = globalThis.S"})
     assert out == ["b"]                                   # b's position kept, the one cleared in a stays cleared
+
+
+def test_a_long_pasted_quick_add_normalizes_each_project_name_once(tmp_path):
+    """The quick add is parsed at every key: the project names are normalized once per parse, not per @word."""
+    out = _run_ts(tmp_path, WEB / "features" / "tasks" / "model.ts", """let reads = 0
+        const projects = Array.from({ length: 30 }, (_, i) => {
+          const p = { id: 'p' + i }
+          Object.defineProperty(p, 'name', { get: () => { reads++; return 'Project ' + i } })
+          return p
+        })
+        const r = m.parseQuickAdd('@ab '.repeat(25000) + '@project-7 x', projects, '2026-11-25')
+        return [reads, r.project_id, r.title.length]""")
+    assert out[0] <= 60 and out[1] == "p7" and out[2] == len("@ab " * 25000 + "x")
