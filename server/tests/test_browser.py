@@ -1745,3 +1745,18 @@ def test_concurrent_journal_writes_lose_no_line_and_stay_small(mx):
     got = {json.loads(ln).get("session") for ln in lines}          # every line whole
     assert not [m for m in marks[-100:] if m not in got]
     assert f.stat().st_size <= 400_000 and not list(f.parent.glob("*.tmp"))
+
+
+def test_a_reused_command_id_never_lets_the_list_of_tabs_out_unfiltered():
+    import asyncio
+    from maxxing.browser.view import View
+    navs = {"mine": "A", "other": "B"}
+    v = View("A", lambda info: navs.get(str(info.get("targetId"))))
+    assert v.outgoing({"id": 7, "method": "Target.getTargets"}) is None
+    assert v.outgoing({"id": 7, "method": "Target.attachToBrowserTarget"})        # refused: 7 still awaited
+    assert v.outgoing({"id": 7, "method": "Runtime.evaluate"})
+    assert v.outgoing({"id": "8", "method": "Target.getTargets"})                 # not a number: refused
+    answer = {"id": 7, "result": {"targetInfos": [{"targetId": "mine", "type": "page"}, {"targetId": "other", "type": "page"}]}}
+    out, _ = asyncio.run(v.incoming(answer))
+    assert [i["targetId"] for i in out["result"]["targetInfos"]] == ["mine"]
+    assert v.outgoing({"id": 7, "method": "Target.getTargets"}) is None           # answered: free again
