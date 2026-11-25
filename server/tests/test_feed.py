@@ -469,3 +469,10 @@ def test_clean_url_refuses_whitespace_that_browsers_strip_into_another_site():
     assert feed._clean_url("/\t/evil.com") == ""
     assert feed._clean_url("/\n/evil.com") == "" and feed._clean_url("//evil.com") == ""
     assert feed._clean_url("/sessions?x=1") == "/sessions?x=1" and feed._clean_url("https://a.b/c") == "https://a.b/c"
+
+
+def test_terminal_escapes_never_reach_the_stored_event(mx):
+    e = feed.post("hi \x1b]0;PWNED\x07\x1b[2J x\x9b", body="line\n\tnext\x1b[31m red\x00")
+    assert "\x1b" not in e["title"] and "\x07" not in e["title"] and "\x9b" not in e["title"]
+    assert e["title"] == "hi ]0;PWNED[2J x"
+    assert e["body"] == "line\n\tnext[31m red"
