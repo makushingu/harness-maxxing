@@ -47,7 +47,7 @@ def log_action(slug: str, entry: dict) -> None:
         return
     try:
         if f.stat().st_size > 400_000:
-            lines = f.read_text().splitlines()[-MAX_ACTIONS:]
+            lines = f.read_bytes().decode("utf-8", "replace").splitlines()[-MAX_ACTIONS:]
             tmp = f.with_suffix(".tmp")
             tmp.write_text("\n".join(lines) + "\n")
             tmp.replace(f)
@@ -55,17 +55,21 @@ def log_action(slug: str, entry: dict) -> None:
         pass
 
 
-def actions(slug: str, n: int = 50, session: str | None = None) -> list[dict]:
-    f = browser.actions_dir() / f"{slug}.jsonl"
-    try:
-        lines = f.read_text().splitlines()
+def _read(slug: str) -> list[str]:
+    try:   # a byte cut in the middle of a character must not break the profile's page
+        return (browser.actions_dir() / f"{slug}.jsonl").read_bytes().decode("utf-8", "replace").splitlines()
     except OSError:
         return []
+
+
+def actions(slug: str, n: int = 50, session: str | None = None) -> list[dict]:
     out = []
-    for ln in reversed(lines):
+    for ln in reversed(_read(slug)):
         try:
             e = json.loads(ln)
         except ValueError:
+            continue
+        if not isinstance(e, dict):
             continue
         if session and e.get("session") != session:
             continue
@@ -93,7 +97,8 @@ def sessions(slug: str, n: int = 30) -> list[dict]:
         r["actions"] += 1
         at = e.get("at") or 0
         r["first"], r["last"] = min(r["first"], at), max(r["last"], at)
-        for u in ((e.get("args") or {}).get("url"), e.get("page")):
+        args = e.get("args") if isinstance(e.get("args"), dict) else {}
+        for u in (args.get("url"), e.get("page")):
             try:
                 host = urlsplit(str(u or "")).hostname or ""
             except ValueError:

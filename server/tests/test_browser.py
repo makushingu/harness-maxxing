@@ -1708,3 +1708,17 @@ def test_a_sessions_tabs_stay_awake_while_its_next_turn_runs(mx, monkeypatch):
     assert asyncio.run(p._sleep_turn_tabs(b, "session:s1")) is False and closed == []
     monkeypatch.setattr(store, "read", lambda sid: {"id": sid, "state": "idle"})
     assert asyncio.run(p._sleep_turn_tabs(b, "session:s1")) is True and closed == ["t1"]
+
+
+def test_a_damaged_journal_line_never_breaks_the_profile_page(mx):
+    from maxxing import browser
+    from maxxing.browser import replays
+    d = browser.actions_dir()
+    d.mkdir(parents=True, exist_ok=True)
+    ok = json.dumps({"at": 1, "tool": "click", "session": "sess01", "nav": "session:sess01", "args": [1]})
+    (d / "main.jsonl").write_bytes(ok.encode() + b'\n{"at": 2, "tool": "x\xc3\n[1, 2]\n"text"\n')   # a torn character, not objects
+    assert [e["at"] for e in replays.actions("main", 30)] == [1]
+    assert [r["session"] for r in replays.sessions("main")] == ["sess01"]
+    (d / "main.jsonl").write_bytes(b'{"at": 0, "tool": "x\xc3\n' + (ok + "\n").encode() * 3000)    # big: compacted
+    replays.log_action("main", {"at": 3, "tool": "click"})                                       # never raises
+    assert replays.actions("main", 1)[0]["at"] == 3
