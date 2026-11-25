@@ -971,3 +971,15 @@ def test_the_mode_and_the_session_in_front_follow_the_last_device(client):
     assert client.post("/api/sessions/open", json={"open": ["c"]}).json()["tabs"] is False  # kept by other changes
     assert client.post("/api/sessions/open", json={"tabs": True, "front": "bad id!"}).json()["front"] == "b"
     assert client.get("/api/sessions/open").json() == {"ids": ["a", "b", "c"], "rev": 4, "tabs": True, "front": "b"}
+
+
+def test_a_damaged_or_removed_open_sessions_file_never_takes_the_rev_back(client):
+    from maxxing.sessions import opened
+    for x in "abcde":
+        r = client.post("/api/sessions/open", json={"open": [x]}).json()
+    assert r["rev"] == 5
+    opened._file().write_text('{"ids": ["a", ')                 # truncated
+    r = client.post("/api/sessions/open", json={"open": ["f"]}).json()
+    assert r["ids"] == ["f"] and r["rev"] > 5
+    opened._file().unlink()
+    assert client.post("/api/sessions/open", json={"open": ["g"]}).json()["rev"] > r["rev"]

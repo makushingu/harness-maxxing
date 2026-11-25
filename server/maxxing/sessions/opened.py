@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import re
 import threading
+import time
 from pathlib import Path
 
 from .. import bus, config
@@ -49,6 +50,20 @@ def _view(out: dict, tabs, front) -> None:
         out["front"] = front
 
 
+_high: dict[str, int] = {}     # file -> the last rev written by this process
+
+
+def _next_rev(rev: int) -> int:
+    """Never back: a browser ignores an answer older than its own. A damaged file (or one removed while the server
+    runs) reads as rev 0, but the browsers still hold the old rev."""
+    f = _file()
+    new = max(rev, _high.get(str(f), 0)) + 1
+    if not rev and f.exists():                        # damaged: the old rev is unknown, a clock value passes it
+        new = max(new, int(time.time() * 1000))
+    _high[str(f)] = new
+    return new
+
+
 def update(add: list | None = None, remove: list | None = None, order: list | None = None,
            tabs: bool | None = None, front: str | None = None) -> dict:
     """Open (`add`) and close (`remove`) sessions, then put them in `order` (the ones it does not name keep their
@@ -67,7 +82,7 @@ def update(add: list | None = None, remove: list | None = None, order: list | No
         _view(new, tabs, front)
         if cur["ids"] is not None and new == cur:
             return cur
-        new["rev"] = cur["rev"] + 1
+        new["rev"] = _next_rev(cur["rev"])
         config.write_json(_file(), new)
     bus.invalidate("open_sessions")
     return new
