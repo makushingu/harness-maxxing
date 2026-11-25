@@ -64,6 +64,8 @@ def _clean_senders(v: Any, strict: bool) -> list[str]:
 
 def _clean_trigger(t: Any, strict: bool) -> dict | None:
     if not isinstance(t, dict):
+        if strict and t is not None:
+            raise AccessError("trigger: an object or null")
         return None
     folder = " ".join(str(t.get("folder") or "INBOX").split())[:200] or "INBOX"
     if any(c in folder for c in "\r\n\0"):
@@ -89,6 +91,8 @@ def clean_grants(v: Any, strict: bool = False) -> list[dict]:
             if strict:
                 raise AccessError(f"The mailbox {acc} is listed twice")
             continue
+        if strict and g.get("rights") is not None and not isinstance(g.get("rights"), list):
+            raise AccessError(f"rights: a list (rights: {', '.join(RIGHTS)})")
         rights = g.get("rights") if isinstance(g.get("rights"), list) else DEFAULT_RIGHTS
         bad = [r for r in rights if r not in RIGHTS]
         if bad and strict:
