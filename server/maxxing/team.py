@@ -641,7 +641,7 @@ def summarize(cid: str, ids: list[str] | None = None, since: float | None = None
         if cid in _summarizing:              # another tab or device asked already: Claude is not paid twice
             raise TeamError(409, "busy", "A summary of this chat is already being written")
         doc = _load()
-        chat = _chat(doc, cid)
+        chat = _writable(doc, cid)           # a group left: refused before Claude is paid (the summary could not be posted)
         msgs = [m for m in chat["messages"] if m.get("kind") != "summary"]
         if ids:
             want = set(ids)

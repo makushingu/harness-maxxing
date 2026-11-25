@@ -671,3 +671,16 @@ def test_one_summary_of_a_chat_at_a_time(client, sent, monkeypatch):
     gate.set()
     first.join(10)
     assert team.summarize(cid, since=0)["kind"] == "summary" and len(seen) == 2
+
+
+def test_summary_of_a_left_group_is_refused_before_claude_runs(monkeypatch):
+    now = time.time()
+    msgs = [{"id": f"m{i}", "author": "me", "at": now - 100 + i, "text": f"hello {i}", "kind": "text"} for i in range(3)]
+    config.write_json(team._path(), {"me": "me", "chats": [{"id": "g_1", "kind": "group", "name": "G", "emoji": "", "members": ["p1"],
+                                                            "created": now - 200, "read_at": now, "messages": msgs,
+                                                            "remote": False, "admin": "p1", "left": "removed"}]})
+    calls = []
+    monkeypatch.setattr(team.subprocess, "run", lambda cmd, **kw: calls.append(cmd))
+    with pytest.raises(team.TeamError) as e:
+        team.summarize("g_1", ids=["m0", "m1", "m2"])
+    assert (e.value.status, e.value.code) == (409, "left") and calls == []   # Claude is not paid for a summary thrown away
