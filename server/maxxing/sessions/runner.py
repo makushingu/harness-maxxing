@@ -557,6 +557,8 @@ class Runner:
         else:
             self._end_proc()
             self.proc_launch, self.proc_core, self.proc_plan = launch, core, mcp_plan
+            if not fresh:
+                _free_stale_claim(csid, env)
             a = self.attempt(base + (["--session-id", csid] if fresh else ["--resume", csid]),
                              prompt, cwd, env, timeout_s, hold=not fresh, csid=csid,
                              prev_total=0.0 if fresh else store.thread_prev_cost(meta, csid),
@@ -1613,6 +1615,33 @@ def _auth_error(a: Attempt, ok: bool) -> str | None:
     else:
         return None
     return claude_auth.detect("\n".join(p for p in parts if p))
+
+
+def _free_stale_claim(csid: str, env: dict) -> int:
+    """Claude Code records each running conversation in <config>/sessions/<pid>.json and refuses `--resume` of a thread
+    that file claims ("Session ID ... is already in use"), even when that process is gone: a turn killed with the
+    server (reboot, OOM, a stray kill) then made every later message of the session fail. Removes the claims on this
+    thread left by a process that no longer runs (same pid reused by another process: also stale)."""
+    root = Path(env.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude") / "sessions"
+    n = 0
+    for p in root.glob("*.json"):
+        if not p.stem.isdigit():
+            continue
+        try:
+            claim = json.loads(p.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if not isinstance(claim, dict) or claim.get("sessionId") != csid:
+            continue
+        try:
+            start = Path(f"/proc/{p.stem}/stat").read_text().rsplit(")", 1)[1].split()[19]
+        except (OSError, IndexError):
+            start = None                                # no such process
+        if start is not None and str(claim.get("procStart") or start) == start:
+            continue                                    # still running: really in use
+        p.unlink(missing_ok=True)
+        n += 1
+    return n
 
 
 def _resume_lost(a: Attempt) -> bool:

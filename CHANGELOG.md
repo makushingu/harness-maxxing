@@ -10,6 +10,7 @@ New:
 - **Settings -> Extensions in the same four parts as Community.** Widgets, Pages, and now **Agents views** (the views of the Overview of the Agents page, until now mixed with the pages) and **Themes** (the installed themes, their state, and a button to ask Harness for a new one).
 
 Fixed:
+- **A session no longer stays stuck in "Session ID … is already in use" after a server restart.** When a turn was killed with the server, every later message of that session failed; the stale claim left by the dead process is now cleared before the thread resumes.
 - **Mute one session on your phones.** Once a phone gets Mobile notifications, a session's **…** window has a *Mobile notifications* switch, and the new-session form a checkbox: off, that session never rings your phones; the others still do. (#185, suggested by bristouflex)
 - **On a phone, the session tabs fold away while you type.** In the Tabs view, the tab bar under the session header stays on screen while you read and scroll, folds away when you tap the message box, and comes back when you leave it.
 - **On a small phone, the message box stays two rows high during a turn.** Stop, microphone and Send are a little smaller on narrow screens, so they fit on the same row as the other buttons instead of a third row.
