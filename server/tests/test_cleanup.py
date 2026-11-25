@@ -161,3 +161,14 @@ def test_the_trash_part_reuses_the_per_item_size_cache(client, monkeypatch):
     monkeypatch.setattr(os, "walk", counting)
     assert cleanup._measure("trash")[0] == expected
     assert walks["n"] == 0
+
+
+def test_run_reuses_a_fresh_scan_instead_of_measuring_twice(monkeypatch):
+    calls = []
+    monkeypatch.setattr(cleanup, "_measure", lambda p: (calls.append(p), (100 if len(calls) == 1 else 40, []))[1])
+    monkeypatch.setattr(cleanup, "_free_part", lambda p: None)
+    monkeypatch.setattr(cleanup, "PARTS", ("caches",))
+    cleanup.scan(force=True)
+    assert calls == ["caches"]
+    assert cleanup.run(["caches"]) == {"freed": 60, "parts": [{"id": "caches", "freed": 60}]}
+    assert calls == ["caches", "caches"]                   # the scan's measure + after, no second walk before
