@@ -1,7 +1,9 @@
 import * as React from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router'
 import { Blocks, ChevronRight, PanelLeftClose, PanelLeftOpen, Search } from 'lucide-react'
-import { SIDEBAR_W, useUI } from '@/stores/ui'
+import { SECOND_W, SIDEBAR_W, useUI } from '@/stores/ui'
+import { sideMax } from './barWidths'
+import { useViewportWidth } from './useViewportWidth'
 import { useIsTablet } from '@/stores/media'
 import { useAgentsAttention, useFeed, useOrderPins, useSaveSettings, useTeam } from '@/lib/queries'
 import { cn } from '@/lib/utils'
@@ -185,7 +187,9 @@ export const Sidebar = React.memo(function Sidebar({ drawer }: { /** touch layou
   const collapsed = !pinned
   const badge = useSessionBadge()
   const showSessions = useShowSessions()
-  const width = useUI((s) => s.sidebarWidth) ?? SIDEBAR_W.default
+  // the width dragged, narrower when the window is too small to leave the page its room (barWidths.ts)
+  const maxW = sideMax(useViewportWidth(), SIDEBAR_W, SECOND_W)
+  const width = Math.min(useUI((s) => s.sidebarWidth) ?? SIDEBAR_W.default, maxW)
   const setWidth = useUI((s) => s.setSidebarWidth)
   const barW = pinned ? width : FOLDED_W
   const slot = React.useRef<HTMLDivElement>(null)
@@ -366,7 +370,7 @@ export const Sidebar = React.memo(function Sidebar({ drawer }: { /** touch layou
             />
           </KeepTooltipShape.Provider>
         </aside>
-        {pinned && !drawer && <ResizeEdge side={slot} min={SIDEBAR_W.min} max={SIDEBAR_W.max} onWidth={setWidth} />}
+        {pinned && !drawer && <ResizeEdge side={slot} min={SIDEBAR_W.min} max={maxW} onWidth={setWidth} />}
       </div>
       {/* the second-level sidebar: the list of the page open (components/shell/PageList.tsx) */}
       {!drawer && <SecondBar left={barW} />}

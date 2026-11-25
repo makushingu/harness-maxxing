@@ -213,17 +213,19 @@ async def page_js(eid: str):
 # not a class: the parser drops the attributes of the widget's own <html> that the bridge already set).
 WIDGET_BRIDGE = """<!doctype html><meta charset="utf-8"><script>(function(){
 var init={};try{init=JSON.parse(decodeURIComponent(location.hash.slice(1))||'{}')}catch(_){}
-var seq=0,pending={},cbs=[],dcbs=[],root=document.documentElement;
+var seq=0,pending={},cbs=[],dcbs=[],root=document.documentElement,K=String(init.key||'');
+function post(m){m.key=K;parent.postMessage(m,'*')}
 root.setAttribute('data-mx-kit','');
+post({mx:'hello'});
 function apply(v,mat){for(var k in v||{})root.style.setProperty(k,v[k]);root.dataset.theme=window.maxxing.theme;root.dataset.material=mat||'solid';root.style.colorScheme=window.maxxing.theme}
 window.maxxing={theme:init.theme||'dark',
  api:function(path,o){o=o||{};return ask({mx:'api',path:String(path||''),method:o.method||'GET',body:o.body,query:o.query})},
  app:function(path,o){o=o||{};return ask({mx:'app',path:String(path||''),query:o.query})},
- navigate:function(route){parent.postMessage({mx:'navigate',route:String(route||'')},'*')},
- resize:function(h){parent.postMessage({mx:'resize',height:Number(h)||0},'*')},
+ navigate:function(route){post({mx:'navigate',route:String(route||'')})},
+ resize:function(h){post({mx:'resize',height:Number(h)||0})},
  data:null,onData:function(f){dcbs.push(f);if(window.maxxing.data!==null)try{f(window.maxxing.data)}catch(_){}},
  onTheme:function(f){cbs.push(f)}};
-function ask(m){return new Promise(function(res,rej){var s=++seq;pending[s]=[res,rej];m.seq=s;parent.postMessage(m,'*')})}
+function ask(m){return new Promise(function(res,rej){var s=++seq;pending[s]=[res,rej];m.seq=s;post(m)})}
 addEventListener('message',function(e){if(e.source!==parent)return;var m=e.data||{};
  if(m.mx==='reply'){var p=pending[m.seq];if(p){delete pending[m.seq];m.ok?p[0](m.data):p[1](new Error(m.error||'request failed'))}}
  if(m.mx==='theme'){window.maxxing.theme=m.theme;apply(m.vars,m.material);cbs.forEach(function(f){try{f(m.theme)}catch(_){}})}

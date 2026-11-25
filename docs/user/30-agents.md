@@ -466,7 +466,8 @@ Harness agents speak Claude Code's own format (`.claude/agents/<name>.md`: a `--
   (`maxxing agents import FILE --topic P/T`); its `tools` become the agent's **tools allowed without asking**: read
   them before you import a file someone else wrote; fields Harness has no equivalent for (`mcpServers`, `hooks`, `memory`…)
   are listed as not imported, and a file that asks for `permissionMode: bypassPermissions` is imported in **accept
-  edits** (said in the same list): you set bypass yourself on its page if you want it;
+  edits** (said in the same list): you set bypass yourself on its page if you want it; an `@path` in its text is kept
+  as text between backticks (in a `CLAUDE.md` it would load that file into every run), also said in that list;
 - **Callable from the topic's sessions** (settings): Claude can then hand a task to this agent inside your normal
   sessions of its topic, as a Claude Code subagent. It works there with the session's permissions and cost (not the
   agent's limits) and reads / writes the agent's memory, as notes only: an order written in that memory (its runs

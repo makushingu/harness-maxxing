@@ -124,3 +124,13 @@ def test_a_mail_attachment_is_not_capped_like_json(client, mx):
     assert not bodylimit.UPLOADS.match("/api/mail/acc1/actions")
     r = client.post("/api/mail/x/send", data={"data": "{}"}, files={"files": ("a.bin", b"x" * 2 * 1024 * 1024)})
     assert r.status_code != 413, r.text
+
+
+def test_a_long_voice_recording_is_not_capped_like_json(client):
+    assert bodylimit.UPLOADS.match("/api/voice/transcribe") and bodylimit.UPLOADS.match("/api/voice/call/c1/turn")
+    assert not bodylimit.UPLOADS.match("/api/voice/call/start")
+    audio = b"\x1aE\xdf\xa3" + b"x" * (2 * MB)                     # ~ 8 min of 32 kbit/s opus
+    r = client.post("/api/voice/transcribe", files={"audio": ("a.webm", audio, "audio/webm")})
+    assert r.status_code != 413, r.text
+    r = client.post("/api/voice/call/nope/turn", files={"audio": ("a.webm", audio, "audio/webm")})
+    assert r.status_code != 413, r.text

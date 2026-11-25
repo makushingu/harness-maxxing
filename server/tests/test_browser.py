@@ -95,6 +95,39 @@ def test_the_proxy_refuses_local_answers_and_raw_addresses(tmp_path, monkeypatch
     asyncio.run(go())
 
 
+def test_a_one_way_stream_is_not_closed_as_idle(tmp_path, monkeypatch):
+    """A download (or a server-sent stream) where only the site talks: the tunnel stays open while bytes flow
+    one way, and closes only once nothing moved either way for IDLE_TIMEOUT."""
+    import socket
+    from maxxing.browser import proxy
+
+    monkeypatch.setattr(proxy, "IDLE_TIMEOUT", 0.4)
+
+    async def go():
+        px = proxy.Proxy(tmp_path / "p.sock")
+        a1, a2 = socket.socketpair()                  # browser side: a1 = the browser, a2 = the proxy's end
+        b1, b2 = socket.socketpair()                  # site side: b1 = the site, b2 = the proxy's end
+        br, bw = await asyncio.open_connection(sock=a1)
+        pr, pw = await asyncio.open_connection(sock=a2)
+        ur, uw = await asyncio.open_connection(sock=b2)
+        sr, sw = await asyncio.open_connection(sock=b1)
+        last = [time.monotonic()]
+        tunnel = asyncio.gather(px._pipe(pr, uw, True, last), px._pipe(ur, pw, False, last))
+        for _ in range(6):                            # 1.2 s of the site talking, the browser silent
+            sw.write(b"x")
+            await sw.drain()
+            await asyncio.sleep(0.2)
+        got = b""
+        while len(got) < 6:
+            got += await asyncio.wait_for(br.read(10), 1)
+        assert got == b"xxxxxx"
+        await asyncio.wait_for(tunnel, 2)            # then quiet both ways: closed
+        assert await asyncio.wait_for(br.read(10), 1) == b""
+        for w in (bw, sw):
+            w.close()
+    asyncio.run(go())
+
+
 def test_the_proxy_tries_ipv4_first_then_the_next_address(tmp_path, monkeypatch):
     """A site with an IPv6 address first (Wikipedia) opened through a phone exit with no IPv6 way out: IPv4 is tried
     first, and an address that fails gives way to the next one instead of failing the page."""

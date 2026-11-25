@@ -19,6 +19,7 @@ import { useUI, resolveTheme } from '@/stores/ui'
 import { useT } from '@/i18n'
 import { Skeleton } from '@/components/ui'
 import { cn } from '@/lib/utils'
+import { frameKey, ours } from './widgetKey'
 
 const VARS: [string, string][] = [
   ['--mx-bg', '--background'],
@@ -115,9 +116,14 @@ export function HtmlWidget({
   const [loaded, setLoaded] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   const [h, setH] = React.useState(height)
+  // A secret of this mount, in the frame's fragment: the bridge adds it to every message. A page loaded into the frame
+  // later (a link of the widget) has the same window but not the fragment, so it cannot call the extension's API.
+  const [key] = React.useState(frameKey)
+  // Documents loaded in the frame / greeted with the key: fewer greetings = a page that is not the widget, it gets no data.
+  const seen = React.useRef({ loads: 0, hellos: 0 })
   // The frame URL is fixed at mount (theme changes go by message): a new fragment would not reload it anyway.
   const [frameSrc] = React.useState(
-    () => `${frameUrl || src.replace(/widget\.html$/, 'widget-frame')}#${encodeURIComponent(JSON.stringify({ theme: resolveTheme(useUI.getState().theme), material: useUI.getState().material, vars: themeVars() }))}`,
+    () => `${frameUrl || src.replace(/widget\.html$/, 'widget-frame')}#${encodeURIComponent(JSON.stringify({ theme: resolveTheme(useUI.getState().theme), material: useUI.getState().material, vars: themeVars(), key }))}`,
   )
 
   // A missing or disabled widget: say so instead of an empty frame (HEAD: the frame downloads the page itself).
@@ -137,7 +143,12 @@ export function HtmlWidget({
     const onMsg = async (e: MessageEvent) => {
       const win = frame.current?.contentWindow
       if (!win || e.source !== win) return
-      const m = (e.data || {}) as { mx?: string; seq?: number; path?: string; method?: string; body?: unknown; query?: Record<string, string>; height?: number }
+      const m = (e.data || {}) as { mx?: string; key?: string; seq?: number; path?: string; method?: string; body?: unknown; query?: Record<string, string>; height?: number }
+      if (m.key !== key) return
+      if (m.mx === 'hello') {
+        seen.current.hellos++
+        pushRef.current()
+      }
       if (m.mx === 'resize' && typeof m.height === 'number') setH(Math.min(maxHeight, Math.max(80, Math.round(m.height))))
       if (m.mx === 'navigate') {
         const r = (m as { route?: unknown }).route
@@ -173,18 +184,20 @@ export function HtmlWidget({
     }
     window.addEventListener('message', onMsg)
     return () => window.removeEventListener('message', onMsg)
-  }, [id, maxHeight, navigate])
+  }, [id, key, maxHeight, navigate])
 
   // The host's data: at load (a message sent before would reach the blank document) and at every change.
   const data = host?.data
-  const push = React.useCallback(() => data !== undefined && frame.current?.contentWindow?.postMessage({ mx: 'data', data }, '*'), [data])
+  const push = React.useCallback(() => data !== undefined && ours(seen.current) && frame.current?.contentWindow?.postMessage({ mx: 'data', data }, '*'), [data])
+  const pushRef = React.useRef(push)
+  pushRef.current = push
   React.useEffect(() => {
     if (loaded) push()
   }, [loaded, push])
 
   React.useEffect(() => {
     // after the <html> attributes changed (accent, tint, density set them in an effect too)
-    const r = requestAnimationFrame(() => frame.current?.contentWindow?.postMessage({ mx: 'theme', theme, material: useUI.getState().material, vars: themeVars() }, '*'))
+    const r = requestAnimationFrame(() => ours(seen.current) && frame.current?.contentWindow?.postMessage({ mx: 'theme', theme, material: useUI.getState().material, vars: themeVars() }, '*'))
     return () => cancelAnimationFrame(r)
   }, [theme, look])
 
@@ -205,6 +218,7 @@ export function HtmlWidget({
         title={title}
         src={frameSrc}
         onLoad={() => {
+          seen.current.loads++
           setLoaded(true)
           push()
         }}

@@ -29,12 +29,14 @@ IMAGE_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
                ".webp": "image/webp", ".bmp": "image/bmp"}
 
 PART_MAX = 16 << 20        # an XML part read whole (decompressed)
+ELEMENTS_MAX = 500_000     # elements of one part read whole (~110 MB in memory)
 STREAM_MAX = 256 << 20     # a sheet or the shared strings, read as a stream and left as soon as enough is known
 TEXT_MAX = 1_500_000       # characters of Markdown
 ROWS_MAX = 5000            # per sheet
 COLS_MAX = 200
 CELLS_MAX = 300_000        # filled cells, all sheets together
 CELL_MAX = 2000            # characters of one cell
+SHEET_CHARS_MAX = 6_000_000  # characters of all the cells together (one long shared text repeated: not 570 MB)
 STRINGS_MAX = 1_000_000    # shared strings of a workbook
 SHEETS_MAX = 40
 SLIDES_MAX = 500
@@ -114,6 +116,7 @@ class _Pack:
         self.deadline = time.monotonic() + TIME_S
         self.left = TEXT_MAX
         self.cells = CELLS_MAX
+        self.chars = SHEET_CHARS_MAX
         self.truncated = False
 
     def close(self) -> None:
@@ -144,10 +147,25 @@ class _Pack:
         if data is None:
             return None
         _no_dtd(data)
+        # built piece by piece and counted: 16 MB of tiny tags (<a/>, 16 KB zipped) would be ~4 million elements,
+        # about 1 GB of memory; past ELEMENTS_MAX or the deadline, what was built so far is the answer (truncated)
+        parser, root, n = ET.XMLPullParser(events=("start",)), None, 0
         try:
-            return _strip(ET.fromstring(data))
+            for i in range(0, len(data), 1 << 16):
+                parser.feed(data[i:i + (1 << 16)])
+                for _, el in parser.read_events():
+                    root = el if root is None else root
+                    n += 1
+                if n > ELEMENTS_MAX or time.monotonic() > self.deadline:
+                    self.truncated = True
+                    break
+            else:
+                parser.close()
         except (ET.ParseError, LookupError):             # LookupError: an encoding Python does not know
             raise Unreadable("unsupported", "This document cannot be read") from None
+        if root is None:
+            raise Unreadable("unsupported", "This document cannot be read")
+        return _strip(root)
 
     def stream(self, name: str):
         """(event, element) of a large part, `start` and `end`; nothing when the part is missing."""
@@ -791,7 +809,7 @@ class _Odf:
                     blank += rep
                     continue
                 room = ROWS_MAX - len(rows) - blank
-                if room <= 0 or self.pack.cells <= 0:
+                if room <= 0 or self.pack.cells <= 0 or self.pack.chars <= 0:
                     cut = True
                     break
                 rows.extend([[]] * blank)
@@ -799,6 +817,7 @@ class _Odf:
                 rep = min(rep, room)
                 rows.extend([vals] * rep)
                 self.pack.cells -= len(vals) * rep
+                self.pack.chars -= sum(map(len, vals)) * rep
             out.append({"name": tbl.get("name", ""), "rows": rows, "truncated": cut})
         return out
 
@@ -806,12 +825,19 @@ class _Odf:
 # ---- Excel ---------------------------------------------------------------------------------
 _BUILTIN = {1: "0", 2: "0.00", 3: "#,##0", 4: "#,##0.00", 9: "0%", 10: "0.00%", 37: "#,##0", 38: "#,##0",
             39: "#,##0.00", 40: "#,##0.00", 41: "#,##0", 42: "#,##0", 43: "#,##0.00", 44: "#,##0.00"}
+_ELAPSED = (("h", False), ("h", True), ("m", False), ("m", True), ("s", False))   # total unit, seconds shown
 _DATE_IDS = {*range(14, 23), *range(27, 37), *range(45, 48), *range(50, 59)}
 _EPOCH, _EPOCH_1904 = datetime(1899, 12, 30), datetime(1904, 1, 1)
 
 
 def _number_kind(fid: int, code: str) -> tuple[str, int] | None:
-    """How a number format shows a number: ('date', 0), ('percent', decimals), ('fixed', decimals), None = as it is."""
+    """How a number format shows a number: ('date', 0), ('percent', decimals), ('fixed', decimals), ('elapsed',
+    _ELAPSED index), None = as it is."""
+    raw = re.sub(r'"[^"]*"|\\.', "", (code or ("[h]:mm:ss" if fid == 46 else "")).split(";")[0]).lower()
+    total = re.search(r"\[(h+|m+|s+)\]", raw)            # a duration ([h]:mm, [mm]:ss): not a time of day
+    if total:
+        unit = total[1][0]
+        return ("elapsed", _ELAPSED.index((unit, unit != "s" and "s" in raw[total.end():])))
     if fid in _DATE_IDS:
         return ("date", 0)
     code = re.sub(r'"[^"]*"|\[[^\]]*\]|\\.|_.|\*.', "", (code or _BUILTIN.get(fid, "")).split(";")[0])
@@ -836,6 +862,15 @@ def _number(v: str | None, kind: tuple[str, int] | None, date1904: bool) -> str:
         return v
     if not math.isfinite(f):
         return v
+    if kind and kind[0] == "elapsed" and abs(f) < 2958466:
+        unit, secs = _ELAPSED[kind[1]]
+        t = round(abs(f) * 86400)
+        sign = "-" if f < 0 and t else ""
+        if unit == "h":
+            return f"{sign}{t // 3600}:{t % 3600 // 60:02d}" + (f":{t % 60:02d}" if secs else "")
+        if unit == "m":
+            return f"{sign}{t // 60}" + (f":{t % 60:02d}" if secs else "")
+        return f"{sign}{t}"
     if kind and kind[0] == "date" and 0 <= f < 2958466:
         try:
             at = (_EPOCH_1904 if date1904 else _EPOCH) + timedelta(seconds=round(f * 86400))
@@ -978,11 +1013,12 @@ class _Xlsx:
                 (data if data is not None else el).clear()   # the rows read do not pile up in memory
                 if not vals:
                     continue
-                if at >= ROWS_MAX or self.pack.cells <= 0:
+                if at >= ROWS_MAX or self.pack.cells <= 0 or self.pack.chars <= 0:
                     raise _Full
                 rows.extend([[]] * (at - len(rows)))
                 rows.append(vals)
                 self.pack.cells -= len(vals)
+                self.pack.chars -= sum(map(len, vals))
         except _Full:
             cut = True
         return rows, cut

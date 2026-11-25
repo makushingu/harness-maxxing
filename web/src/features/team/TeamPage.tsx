@@ -34,6 +34,8 @@ export default function TeamPage() {
     const step = compact && !!id && !params.get('chat')
     setParams(id ? { chat: id } : {}, { replace: !step })
   }
+  // A chat that is not in the loaded list (left, deleted, an old link): the page keeps its header, title and menu
+  const known = !chatId || !team || team.chats.some((c) => c.id === chatId)
   const unread = unreadOf(team)
   const [query, setQuery] = React.useState('')
   const [newOpen, setNewOpen] = React.useState(false)
@@ -65,7 +67,7 @@ export default function TeamPage() {
   )
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {(!chatId || (isError && !team)) && <PageHeader title={t('team.title')} description={unread ? t('team.unread', { count: unread }) : t('team.desc')} actions={newChat} />}
+      {(!chatId || !known || (isError && !team)) && <PageHeader title={t('team.title')} description={unread ? t('team.unread', { count: unread }) : t('team.desc')} actions={newChat} />}
       {isError && !team ? (
         <div className="flex min-h-0 flex-1 items-center justify-center p-6">
           <LoadError title={t('team.loadError')} busy={isFetching} onRetry={() => refetch()} />

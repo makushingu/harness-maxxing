@@ -284,3 +284,90 @@ def test_a_voice_call_failure_reads_the_message_the_server_sends(tmp_path):
                 await m.failure(res(422, { detail: { message: 'old shape' } })),
                 await m.failure(new Response('<html>', { status: 502 }))]""")
     assert out == ["audio too long", "old shape", "HTTP 502"]
+
+
+def test_a_remote_picture_without_slashes_still_waits_for_a_click(tmp_path):
+    """`http:evil.com/p.png` is absolute for a browser on an https page: remote, like `https://…` and `//…`."""
+    src = (WEB / "components" / "ui" / "markdown.tsx").read_text(encoding="utf-8")
+    rx = re.search(r"^const EXTERNAL = (/.+/i)$", src, re.M)[1]
+    mod = tmp_path / "ext.ts"
+    mod.write_text(f"export const EXTERNAL = {rx}\n", encoding="utf-8")
+    out = _run_ts(tmp_path, mod, """return ['http:evil.com/?d=1', 'HTTPS:evil.com', 'https://evil.com', '//evil.com',
+        '/\\\\evil.com', '/sessions', '/api/files/raw?p=a.png', 'img/a.png', '#top'].map((u) => m.EXTERNAL.test(u))""")
+    assert out == [True, True, True, True, True, False, False, False, False]
+
+
+def test_only_the_widget_itself_speaks_to_the_page_that_frames_it(tmp_path):
+    """A link in widget.html can load another site INTO the frame (same window, origin 'null'): without the key of
+    the mount from the fragment, its messages are ignored and it gets no data."""
+    out = _run_ts(tmp_path, WEB / "pages" / "dashboard" / "widgetKey.ts", """const a = m.frameKey(), b = m.frameKey()
+        return [/^[0-9a-f]{32}$/.test(a), a !== b, m.ours({loads: 1, hellos: 1}), m.ours({loads: 0, hellos: 1}),
+                m.ours({loads: 2, hellos: 1}), m.ours({loads: 1, hellos: 0})]""")
+    assert out == [True, True, True, True, False, False]
+    src = (WEB / "pages" / "dashboard" / "HtmlWidget.tsx").read_text(encoding="utf-8")
+    assert "if (m.key !== key) return" in src and "vars: themeVars(), key }" in src
+    assert src.count("ours(seen.current) &&") == 2                 # data and theme
+    from maxxing.api.extensions import WIDGET_BRIDGE
+    assert "K=String(init.key||'')" in WIDGET_BRIDGE and "post({mx:'hello'})" in WIDGET_BRIDGE
+    assert "parent.postMessage(m,'*')" in WIDGET_BRIDGE and WIDGET_BRIDGE.count("parent.postMessage") == 1
+
+
+def test_a_link_to_a_chat_that_is_gone_keeps_the_team_header():
+    """?chat=<gone> (a group left, an old notification): the chat cannot load, the page still has its header (title,
+    New chat, and on a phone the button to the list and the menu)."""
+    src = (WEB / "features" / "team" / "TeamPage.tsx").read_text(encoding="utf-8")
+    assert "const known = !chatId || !team || team.chats.some((c) => c.id === chatId)" in src
+    assert "{(!chatId || !known || (isError && !team)) && <PageHeader" in src
+
+
+def test_a_dictation_cancelled_then_started_again_while_asking_leaves_no_mic_on(tmp_path):
+    """start(); cancel(); start(); then the permission comes: one recorder only, the first stream is given back."""
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node not installed")
+    src = (WEB / "features" / "voice" / "recorder.ts").read_text(encoding="utf-8")
+    (tmp_path / "rec.ts").write_text(src.replace("from 'react'", "from './react.mjs'").replace("from './mic'", "from './mic.mjs'"))
+    (tmp_path / "react.mjs").write_text(
+        "export const useState = (v) => [v, () => {}]\nexport const useRef = (v) => ({ current: v })\n"
+        "export const useCallback = (f) => f\nexport const useEffect = () => {}\n")
+    (tmp_path / "mic.mjs").write_text(
+        "export const asks = []\nexport const openMic = () => new Promise((res) => asks.push(res))\n")
+    (tmp_path / "main.mjs").write_text("""
+import { useRecorder } from './rec.ts'
+import { asks } from './mic.mjs'
+const recorders = []
+globalThis.window = { isSecureContext: true, setInterval: () => 1, clearInterval() {} }
+Object.defineProperty(globalThis, 'navigator', { value: { mediaDevices: { getUserMedia() {} } }, configurable: true })
+globalThis.MediaRecorder = class { constructor(s) { this.state = 'inactive'; this.stream = s; recorders.push(this) }
+  start() { this.state = 'recording' } stop() { this.state = 'inactive'; this.onstop?.() } requestData() {} }
+globalThis.requestAnimationFrame = () => 0
+globalThis.cancelAnimationFrame = () => {}
+const stream = () => { const s = { on: true, getTracks: () => [{ stop: () => { s.on = false } }] }; return s }
+const r = useRecorder()
+const first = r.start(); r.cancel(); const second = r.start()
+const a = stream(), b = stream()
+asks[0](a); asks[1](b)
+await first; await second
+console.log(JSON.stringify({ recorders: recorders.length, firstOn: a.on, secondOn: b.on, records: recorders[0]?.stream === b }))
+""")
+    r = subprocess.run([node, "--experimental-strip-types", "--no-warnings", "main.mjs"], cwd=tmp_path,
+                       capture_output=True, text=True, timeout=60)
+    if r.returncode and ("strip-types" in r.stderr or "Unknown file extension" in r.stderr):
+        pytest.skip("this node cannot strip types")
+    assert r.returncode == 0, r.stderr
+    assert json.loads(r.stdout) == {"recorders": 1, "firstOn": False, "secondOn": True, "records": True}
+
+
+def test_both_sidebars_dragged_wide_still_leave_the_page_its_room(tmp_path):
+    """Sidebars dragged to 440 + 520 px: on a 1024 px window the page kept 48 px. Now it keeps MAIN_MIN (480)."""
+    out = _run_ts(tmp_path, WEB / "components" / "shell" / "barWidths.ts", """
+        const S = {min: 220, max: 440}, T = {min: 220, max: 520}
+        return [1024, 1100, 1280, 1920, 700].map((vw) => {
+          const side = Math.min(440, m.sideMax(vw, S, T)), second = Math.min(520, m.secondMax(vw, side, T))
+          return [side, second, vw - side - second]
+        })""")
+    assert out == [[324, 220, 480], [400, 220, 480], [440, 360, 480], [440, 520, 960], [220, 220, 260]]
+    for f, call in (("Sidebar.tsx", "sideMax(useViewportWidth(), SIDEBAR_W, SECOND_W)"),
+                    ("PageList.tsx", "secondMax(useViewportWidth(), left, SECOND_W)")):
+        src = (WEB / "components" / "shell" / f).read_text(encoding="utf-8")
+        assert call in src and "max={maxW}" in src, f

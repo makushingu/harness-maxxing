@@ -132,7 +132,8 @@ class Proxy:
             else:
                 uw.write(rest)
                 await uw.drain()
-            await asyncio.gather(self._pipe(r, uw, True), self._pipe(ur, w, False))
+            last = [time.monotonic()]                 # the last byte either way: shared, a one-way stream stays open
+            await asyncio.gather(self._pipe(r, uw, True, last), self._pipe(ur, w, False, last))
         finally:
             _close(uw)
 
@@ -156,12 +157,20 @@ class Proxy:
         ips.sort(key=lambda a: ":" in a)             # stable: the resolver's order inside each family
         return ips or None
 
-    async def _pipe(self, r: asyncio.StreamReader, w: asyncio.StreamWriter, out: bool) -> None:
+    async def _pipe(self, r: asyncio.StreamReader, w: asyncio.StreamWriter, out: bool,
+                    last: list[float] | None = None) -> None:
+        last = last if last is not None else [time.monotonic()]
         try:
             while True:
-                data = await asyncio.wait_for(r.read(65536), IDLE_TIMEOUT)
+                try:
+                    data = await asyncio.wait_for(r.read(65536), max(0.0, last[0] + IDLE_TIMEOUT - time.monotonic()))
+                except asyncio.TimeoutError:
+                    if time.monotonic() - last[0] < IDLE_TIMEOUT:
+                        continue                     # the other way moved meanwhile: not idle
+                    raise
                 if not data:
                     break
+                last[0] = time.monotonic()
                 if out:
                     self.bytes_out += len(data)
                 else:

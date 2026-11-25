@@ -61,6 +61,8 @@ export function useRecorder({ maxSeconds = 900, onLimit, onUnmount }: { maxSecon
   onUnmountRef.current = onUnmount
   const stopResolve = React.useRef<((b: Blob | null) => void) | null>(null)
   const cancelled = React.useRef(false)
+  // each start() has a number: one still waiting for the permission when a newer one began gives its mic back
+  const runs = React.useRef(0)
 
   const cleanup = React.useCallback(() => {
     cancelAnimationFrame(raf.current)
@@ -106,14 +108,20 @@ export function useRecorder({ maxSeconds = 900, onLimit, onUnmount }: { maxSecon
     const problem = micUnavailable()
     if (problem) throw new MicError(problem)
     if (rec.current) return
+    const run = ++runs.current
     setState('starting')
     cancelled.current = false
     let s: MediaStream
     try {
       s = await openMic()
     } catch (e) {
+      if (run !== runs.current) return // a newer start() owns the state
       setState('idle')
       throw toMicError(e)
+    }
+    if (run !== runs.current) {
+      s.getTracks().forEach((tr) => tr.stop()) // cancelled then started again: the newer one records, not this one
+      return
     }
     if (cancelled.current) {
       s.getTracks().forEach((tr) => tr.stop())

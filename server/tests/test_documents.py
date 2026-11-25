@@ -346,3 +346,34 @@ def test_an_unknown_xml_encoding_is_unreadable_not_a_crash(tmp_path):
     parts["xl/workbook.xml"] = '<?xml version="1.0" encoding="x-nope"?><workbook/>'
     with pytest.raises(documents.Unreadable):
         documents.read(pack(tmp_path / "book.xlsx", parts))
+
+
+def test_a_part_of_millions_of_tiny_tags_is_cut_not_built_whole(tmp_path, monkeypatch):
+    """16 MB of <a/> zip to 16 KB but make ~4 million elements (~1 GB): the part stops at ELEMENTS_MAX."""
+    monkeypatch.setattr(documents, "ELEMENTS_MAX", 1000, raising=False)
+    body = "<w:p><w:r><w:t>first</w:t></w:r></w:p>" + "<a/>" * 50_000 + "<w:p><w:r><w:t>last</w:t></w:r></w:p>"
+    r = documents.read(docx(tmp_path / "bomb.docx", body))
+    assert r["truncated"] and "first" in r["markdown"] and "last" not in r["markdown"]
+    r = documents.read(docx(tmp_path / "ok.docx", "<w:p><w:r><w:t>whole</w:t></w:r></w:p>"))
+    assert not r["truncated"] and "whole" in r["markdown"]
+
+
+def test_a_duration_format_shows_total_hours_not_a_date(tmp_path):
+    f = xlsx(tmp_path / "t.xlsx", '<row r="1"><c r="A1" s="5"><v>1.5</v></c><c r="B1" s="6"><v>1.5</v></c>'
+             '<c r="C1" s="7"><v>0.0625</v></c><c r="D1" s="4"><v>0.75</v></c></row>')
+    with zipfile.ZipFile(f) as z:
+        parts = {n: z.read(n).decode() for n in z.namelist()}
+    parts["xl/styles.xml"] = parts["xl/styles.xml"].replace(
+        "</numFmts>", '<numFmt numFmtId="166" formatCode="[h]:mm"/><numFmt numFmtId="167" formatCode="[mm]:ss"/></numFmts>'
+    ).replace("</cellXfs>", '<xf numFmtId="166"/><xf numFmtId="46"/><xf numFmtId="167"/></cellXfs>')
+    r = documents.read(pack(tmp_path / "t2.xlsx", parts))
+    assert r["sheets"][0]["rows"] == [["36:00", "36:00:00", "90:00", "18:00"]]   # D1: a time of day stays one
+
+
+def test_the_cells_of_a_workbook_have_a_total_size(tmp_path, monkeypatch):
+    """One long shared text in every cell: the answer stops at SHEET_CHARS_MAX characters, marked cut."""
+    monkeypatch.setattr(documents, "SHEET_CHARS_MAX", 1000, raising=False)
+    rows = "".join(f'<row r="{i}"><c r="A{i}" t="inlineStr"><is><t>{"x" * 50}</t></is></c></row>' for i in range(1, 200))
+    r = documents.read(xlsx(tmp_path / "wide.xlsx", rows))
+    got = r["sheets"][0]["rows"]
+    assert r["truncated"] and r["sheets"][0]["truncated"] and 1000 <= sum(len(c) for row in got for c in row) <= 1050
