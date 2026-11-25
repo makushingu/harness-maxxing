@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -588,3 +589,41 @@ def test_the_space_office_pauses_what_cannot_be_seen():
     assert "> CALM_ABOVE" in src and "calm={calm}" in src
     css = (WEB / "styles" / "globals.css").read_text(encoding="utf-8")
     assert ".mx-wait, .mx-wait * { animation-play-state: paused !important; }" in css
+def test_the_demo_server_knows_the_phone_notifications(tmp_path):
+    """The demo server (screenshots, UI checks): a phone registered, `push` kept at creation and by PATCH (with
+    favorite and effort), so the per-session switch shows as on the real server."""
+    import socket
+    import time
+    import urllib.request
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node not installed")
+    with socket.socket() as so:
+        so.bind(("127.0.0.1", 0))
+        port = so.getsockname()[1]
+    env = {**os.environ, "MOCK_PORT": str(port), "MOCK_DIST": str(tmp_path)}
+    proc = subprocess.Popen([node, str(WEB.parent / "mock" / "server.mjs")], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    def call(method, path, body=None):
+        req = urllib.request.Request(f"http://127.0.0.1:{port}{path}", method=method, data=None if body is None else json.dumps(body).encode(),
+                                     headers={"Content-Type": "application/json", "X-Maxxing": "1"})
+        with urllib.request.urlopen(req, timeout=5) as r:
+            return json.loads(r.read())
+    try:
+        for _ in range(100):
+            try:
+                devices = call("GET", "/api/push/devices")
+                break
+            except OSError:
+                time.sleep(0.1)
+        else:
+            pytest.fail("the demo server did not start")
+        assert len(devices) == 1
+        topic = call("GET", "/api/sessions")[0]["path"]
+        s = call("POST", "/api/sessions", {"path": topic, "push": False})
+        assert s["push"] is False
+        s = call("PATCH", f"/api/sessions/{s['id']}", {"push": True, "favorite": True, "effort": "high"})
+        assert s["push"] is True and s["favorite"] is True and s["effort"] == "high"
+    finally:
+        proc.terminate()
+        proc.wait(5)

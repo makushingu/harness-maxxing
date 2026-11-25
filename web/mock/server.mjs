@@ -1390,6 +1390,9 @@ R('POST', '/api/sessions/open', ({ body }) => {
   bus('open_sessions')
   return openShared
 })
+// the phones that get the notifications (webpush.py): one, so the per-session switch shows
+const PUSH_DEVICES = [{ id: 'demo-phone', label: 'Chrome · Android', at: Date.now() / 1000 - 86400 }]
+R('GET', '/api/push/devices', () => PUSH_DEVICES)
 R('GET', '/api/sessions', ({ q }) => {
   const pth = q.get('path')
   const arch = q.get('archived') === '1'
@@ -1400,7 +1403,8 @@ R('POST', '/api/sessions', ({ body }) => {
   const t = now()
   const msg = (body.message || '').trim()
   const s = { id: uuid(), title: body.title || (msg ? msg.slice(0, 60) : 'New session'), path: body.path, state: 'idle', queue: 0, created: t, updated: t, turns: 0, cost_usd: 0,
-    model: body.model || '', real_model: null, context_tokens: null, context_window: null, archived: false, notify: false, source: 'web', unread: false, last_text: '', error: null }
+    model: body.model || '', real_model: null, context_tokens: null, context_window: null, archived: false, notify: false, source: 'web', unread: false, last_text: '', error: null,
+    push: body.push !== false, favorite: false }
   S.sessions.push(s); S.events[s.id] = []
   if (msg) startTurn(s, msg, body.attachments || [])
   bus('sessions', 'workspace')
@@ -1409,7 +1413,7 @@ R('POST', '/api/sessions', ({ body }) => {
 R('GET', '/api/sessions/:id', ({ params }) => findSession(params.id))
 R('PATCH', '/api/sessions/:id', ({ params, body }) => {
   const s = findSession(params.id)
-  for (const k of ['title', 'model', 'archived', 'notify', 'plan_mode']) if (body[k] !== undefined) s[k] = body[k]
+  for (const k of ['title', 'model', 'archived', 'notify', 'plan_mode', 'push', 'favorite', 'effort']) if (body[k] !== undefined && body[k] !== null) s[k] = body[k]
   if (body.plan_mode === false) s.plan_ready = false
   if (body.archived === true) addEvents(s, { type: 'note', text: 'Session archived.', level: 'info', at: now() })
   bus('sessions', 'workspace')
