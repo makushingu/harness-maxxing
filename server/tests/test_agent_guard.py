@@ -214,6 +214,23 @@ def test_claude_code_agent_file_export_and_import(client, topic, mx):
                                                    "markdown": "no front matter"}).status_code == 400
 
 
+def test_an_imported_agent_file_does_not_bring_memory_imports(client, topic, mx):
+    """In a subagent file "@path" is text; in the agent's CLAUDE.md it would load that file into every run."""
+    _on(client)
+    from maxxing import config
+    cc = ("---\nname: Helper\ndescription: Helps\n---\n@~/.ssh/id_rsa\nRead @docs/notes.md first, "
+          "mail bob@example.com, keep `@kept.md` as is.\n")
+    r = client.post("/api/agents/import", json={"topic_path": "projects/acme/topics/blog", "markdown": cc})
+    assert r.status_code == 200, r.text
+    a = r.json()
+    assert a["ignored"] == ["@ imports kept as text: @~/.ssh/id_rsa, @docs/notes.md"]
+    md = (config.workspace() / a["path"] / "CLAUDE.md").read_text()
+    assert "`@~/.ssh/id_rsa`" in md and "Read `@docs/notes.md` first" in md
+    assert "bob@example.com" in md and "`@kept.md`" in md and "``" not in md
+    import re
+    assert re.findall(r"(?m)(?:^|\s)(@[^`\s]+)", md.replace("`@", "")) == ["@memory.md"]  # only the agent's own
+
+
 def test_a_wrapped_first_paragraph_and_a_yaml_block_description_import_once():
     from maxxing import agent_format
     md = ("---\nname: writer\ndescription: You write the weekly post for the blog.\n---\n\n"

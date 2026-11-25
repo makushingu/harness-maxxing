@@ -72,6 +72,9 @@ def _unquote(v: str) -> str:
     return v
 
 
+IMPORT_RE = re.compile(r"(?<![^\s])@[^\s`]+")   # Claude Code's memory import: "@path" at a line start or after a space
+
+
 def parse_md(text: str) -> dict:
     """{name, description, fields, ignored} of a Claude Code subagent file. ValueError when it is not one."""
     if len(text or "") > MD_MAX:
@@ -140,6 +143,12 @@ def parse_md(text: str) -> dict:
             fields["permission_mode"] = "acceptEdits"   # owner sets it on the agent page
             lowered = [f"permissionMode: {mode} (set to acceptEdits)"]
     role = body if not desc or " ".join(desc.split()) in " ".join(body.split()) else f"{desc}\n\n{body}".strip()
+    # The role becomes the agent's CLAUDE.md, where "@path" imports a file into every run: in a subagent file it is
+    # only text. Each one is put in backticks (a code span is never imported) and listed for the import preview.
+    imports = IMPORT_RE.findall(role)
+    role = IMPORT_RE.sub(lambda m: f"`{m.group(0)}`", role)
+    if imports:
+        lowered.append(f"@ imports kept as text: {', '.join(dict.fromkeys(imports))[:300]}")
     return {"name": slug, "description": role or desc, "fields": fields,
             "ignored": sorted(k for k in head if k not in KNOWN) + lowered}
 
