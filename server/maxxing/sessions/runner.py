@@ -1625,6 +1625,9 @@ def _auth_error(a: Attempt, ok: bool) -> str | None:
     return claude_auth.detect("\n".join(p for p in parts if p))
 
 
+CLAIM_MAX = 64 * 1024                                 # bytes of a claim file read (a few hundred in practice)
+
+
 def _free_stale_claim(csid: str, env: dict) -> int:
     """Claude Code records each running conversation in <config>/sessions/<pid>.json and refuses `--resume` of a thread
     that file claims ("Session ID ... is already in use"), even when that process is gone: a turn killed with the
@@ -1633,12 +1636,13 @@ def _free_stale_claim(csid: str, env: dict) -> int:
     root = Path(env.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude") / "sessions"
     n = 0
     for p in root.glob("*.json"):
-        if not p.stem.isdigit():
-            continue
+        if not p.stem.isdigit() or p.is_symlink() or not p.is_file():
+            continue                                    # a FIFO or a link there would hang or lead the turn elsewhere
         try:
-            claim = json.loads(p.read_text(encoding="utf-8"))
+            with p.open("rb") as f:
+                claim = json.loads(f.read(CLAIM_MAX + 1))
         except (OSError, ValueError):
-            continue
+            continue                                    # unreadable, or over CLAIM_MAX (cut: not JSON)
         if not isinstance(claim, dict) or claim.get("sessionId") != csid:
             continue
         try:
