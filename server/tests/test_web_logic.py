@@ -356,3 +356,18 @@ console.log(JSON.stringify({ recorders: recorders.length, firstOn: a.on, secondO
         pytest.skip("this node cannot strip types")
     assert r.returncode == 0, r.stderr
     assert json.loads(r.stdout) == {"recorders": 1, "firstOn": False, "secondOn": True, "records": True}
+
+
+def test_both_sidebars_dragged_wide_still_leave_the_page_its_room(tmp_path):
+    """Sidebars dragged to 440 + 520 px: on a 1024 px window the page kept 48 px. Now it keeps MAIN_MIN (480)."""
+    out = _run_ts(tmp_path, WEB / "components" / "shell" / "barWidths.ts", """
+        const S = {min: 220, max: 440}, T = {min: 220, max: 520}
+        return [1024, 1100, 1280, 1920, 700].map((vw) => {
+          const side = Math.min(440, m.sideMax(vw, S, T)), second = Math.min(520, m.secondMax(vw, side, T))
+          return [side, second, vw - side - second]
+        })""")
+    assert out == [[324, 220, 480], [400, 220, 480], [440, 360, 480], [440, 520, 960], [220, 220, 260]]
+    for f, call in (("Sidebar.tsx", "sideMax(useViewportWidth(), SIDEBAR_W, SECOND_W)"),
+                    ("PageList.tsx", "secondMax(useViewportWidth(), left, SECOND_W)")):
+        src = (WEB / "components" / "shell" / f).read_text(encoding="utf-8")
+        assert call in src and "max={maxW}" in src, f

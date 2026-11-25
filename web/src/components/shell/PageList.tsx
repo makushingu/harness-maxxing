@@ -13,6 +13,8 @@ import { Link } from 'react-router'
 import { create } from 'zustand'
 import { ChevronLeft, PanelLeftClose, PanelLeftOpen, Search, X } from 'lucide-react'
 import { SECOND_W, useUI } from '@/stores/ui'
+import { secondMax } from './barWidths'
+import { useViewportWidth } from './useViewportWidth'
 import { useCompact } from '@/stores/media'
 import { ResizeEdge } from './ResizeEdge'
 import { searchNow, useTouchNav } from './TouchNav'
@@ -102,7 +104,8 @@ export function SecondBar({ left }: { left: number }) {
   const list = useLists((s) => s.list)
   const peek = useLists((s) => s.peek)
   const open = useUI((s) => s.secondBarOpen)
-  const width = useUI((s) => s.secondBarWidth) ?? SECOND_W.default
+  const maxW = secondMax(useViewportWidth(), left, SECOND_W)
+  const width = Math.min(useUI((s) => s.secondBarWidth) ?? SECOND_W.default, maxW)
   const setWidth = useUI((s) => s.setSecondBarWidth)
   const ref = React.useRef<HTMLDivElement>(null)
   const box = React.useRef<HTMLDivElement>(null)
@@ -166,7 +169,7 @@ export function SecondBar({ left }: { left: number }) {
     >
       {/* the page's list comes in here (PageList) */}
       <div ref={box} className="flex h-full min-h-0 flex-col" />
-      {list && <ResizeEdge side={ref} min={SECOND_W.min} max={SECOND_W.max} onWidth={setWidth} />}
+      {list && <ResizeEdge side={ref} min={SECOND_W.min} max={maxW} onWidth={setWidth} />}
     </div>
   )
 }
