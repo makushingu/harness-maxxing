@@ -102,6 +102,7 @@ export const fr: Record<keyof typeof en, string> = {
   'feedback.emailHint': "Obligatoire, pour pouvoir vous répondre (et éviter les abus). Il ne sert à rien d’autre.",
   'feedback.send': "Envoyer",
   'feedback.sentWith': "Envoyé avec la version ({version})",
+  'feedback.sentWithName': "Envoyé avec la version ({version}) et votre pseudo ({name})",
   'feedback.sentTitle': "Merci !",
   'feedback.sentBody': "Votre message est bien arrivé à l’équipe. Une confirmation part vers {email}.",
   'feedback.err.email': "Entrez une adresse e-mail valide",

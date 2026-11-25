@@ -1,6 +1,7 @@
 """Feedback to the authors: the Feedback button at the bottom of the sidebar (bug report, idea, anything).
 
-Sent to api.harness-maxxing.com/v1/feedback with the version of this server and the language. The email address is
+Sent to api.harness-maxxing.com/v1/feedback with the version of this server, the language and the pseudo of
+Settings -> Profile (shown in the window before sending). The email address is
 required (against abuse, and so the authors can answer); the last one used is remembered in config.json
 "feedback_email" (first time: the email of Settings -> Profile -> Harness Maxxing team, if any). Optionally one
 screenshot of the zone of the screen the user selected (taken in their browser, shown to them before sending).
@@ -105,7 +106,13 @@ class FeedbackError(Exception):
 
 def defaults() -> dict:
     cfg = config.load_config()
-    return {"email": cfg.get("feedback_email") or register.settings().get("email") or "", "version": license.disk_version()}
+    return {"email": cfg.get("feedback_email") or register.settings().get("email") or "", "version": license.disk_version(),
+            "name": _name(cfg)}
+
+
+def _name(cfg: dict) -> str:
+    """The pseudo of Settings -> Profile, sent along and shown in the Feedback window before sending."""
+    return (((cfg.get("profile") or {}) if isinstance(cfg.get("profile"), dict) else {}).get("name") or "")[:100]
 
 
 def image(mime: str, data: str, width: int = 0, height: int = 0) -> dict:
@@ -256,7 +263,7 @@ def send(email: str, kind: str, message: str, shot: dict | None = None, forced: 
     cfg = config.load_config()
     lang = cfg.get("language") or "en"
     body = {"email": email, "type": kind if kind in TYPES else "other", "message": message, "version": license.disk_version(),
-            "lang": lang if lang in LANGS else "en", "name": ((cfg.get("profile") or {}).get("name") or "")[:100]}
+            "lang": lang if lang in LANGS else "en", "name": _name(cfg)}
     if shot:
         body["image"] = shot
     try:
