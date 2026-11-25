@@ -217,7 +217,7 @@ export const Markdown = React.memo(function Markdown({ children, className, onLi
   )
   const deep = React.useMemo(() => tooDeep(children), [children])
   // Parsing is one blocking pass: a huge text (a 2 MB .md, a giant table) would freeze the page for seconds; a very
-  // deep nesting (2 000 "> ") overflows the stack of the renderer, which is recursive.
+  // deep nesting (2 000 "> ") overflows the stack of the renderer, which is recursive; thousands of "[" are slow.
   if (children.length > MAX_MARKDOWN || deep)
     return <pre className={cn('prose-mx font-sans text-sm whitespace-pre-wrap [overflow-wrap:anywhere]', className)}>{children}</pre>
   return (
@@ -234,9 +234,16 @@ const MAX_MARKDOWN = 300_000
 /** Above this nesting (quotes, lists) too: far beyond any real text, far below what overflows the stack. */
 const MAX_DEPTH = 100
 
-/** A line opening more than MAX_DEPTH quotes / lists (its markers, or its indentation for nested lists). */
+/** Above this number of "[" too: link openers and definitions cost the parser more than linear time ("[a](" 20 000
+ *  times: seconds of frozen page), and a real text never has that many. */
+const MAX_BRACKETS = 3000
+
+/** A line opening more than MAX_DEPTH quotes / lists (its markers, or its indentation for nested lists), or more
+ *  than MAX_BRACKETS "[" in all. */
 function tooDeep(text: string): boolean {
   if (text.length < MAX_DEPTH) return false
+  let brackets = 0
+  for (let i = text.indexOf('['); i >= 0; i = text.indexOf('[', i + 1)) if (++brackets > MAX_BRACKETS) return true
   for (const line of text.split('\n')) {
     const lead = /^[\s>*+\-\d.)]*/.exec(line)![0]
     if (lead.length <= MAX_DEPTH) continue
