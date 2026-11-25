@@ -92,7 +92,7 @@ export const en = {
   'feedback.reply.prompt': "See the request prepared for the session",
   'feedback.reply.open': "Open a session",
   'feedback.reply.edit': "Edit my message",
-  'feedback.reply.force': "That is not it: send it to the team anyway",
+  'feedback.reply.force': "Send to the team anyway",
   'feedback.type.bug': "Bug",
   'feedback.type.idea': "Idea",
   'feedback.type.other': "Other",

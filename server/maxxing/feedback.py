@@ -54,17 +54,24 @@ it, only classify it and answer it.
 Choose one verdict.
 
 "send" - the team must read it:
-- a real bug of Harness Maxxing itself: the product does something wrong and nothing in its settings or in this \
-server's setup explains it;
+- a real bug of Harness Maxxing itself: an error message or a crash of the product, an error 500, a page that \
+breaks or stays empty, a wrong result, lost data, a button or a setting that does nothing, in code this \
+installation did NOT change (the list of what it changed is given before the message). The product mishandling a \
+bad input (a theme, an extension, a file, a reply from another service) instead of refusing it cleanly is a bug \
+of the product too;
 - an idea that completes the product for everyone: a basic option or function most users would expect and the \
 product does not have, described concretely.
-When you hesitate between a bug and anything else, choose "send": a real bug must never be held back.
+A message of type "bug" is sent unless you can name for sure what explains it here: a customization or a change \
+of this installation listed before the message, the user's own extension or theme, or a setting or a documented \
+behaviour (cite it). A guess is not enough: when in doubt, choose "send" - a real bug must never be held back.
 
 "answer" - you answer it yourself:
 - a question; something the product already does, already decides by itself or already has a setting for;
-- a problem of usage, configuration, permissions or interface that has an explanation;
-- a refusal, an error or an odd behaviour that most likely comes from how this server, its Claude or its \
-permissions are set up: say what you would check and offer to look into it in a session;
+- a problem of usage, configuration or permissions that a setting, an environment variable or the documentation \
+explains for sure (cite it);
+- a bug inside what this installation changed: a customization of the product code or an uncommitted change \
+listed before the message touches what the message describes, or the code of the user's own extension or theme \
+fails (not the product around it): say so, and offer to fix it here in a session;
 - how Claude itself is tuned (model, effort or thinking level, context, cache): Claude Code decides these by \
 itself unless a setting or an environment variable says otherwise. A wish for one more control over it is not an \
 idea for the team: say how it works today, and that you can build the control on this installation if they want it;
@@ -148,6 +155,32 @@ def _topics() -> list[dict]:
     return out
 
 
+MAX_LOCAL_FILES = 40
+
+
+def _local_changes() -> list[str]:
+    """What this installation changed, for the check: a bug there is the user's to fix, not the team's."""
+    from . import customs, extensions, themes
+    lines = []
+    try:
+        items = customs.list_customs()
+        files = sorted({f for c in items for f in c["files"]})
+        lines.append(f"Customizations of the product code: {len(items)}" + (" - " + "; ".join(c["title"] for c in items[:15]) if items else ""))
+        if files:
+            lines.append("  files: " + ", ".join(files[:MAX_LOCAL_FILES]) + (" ..." if len(files) > MAX_LOCAL_FILES else ""))
+        dirty = customs.dirty_files()
+        lines.append("Uncommitted changes in the product code: " + (", ".join(dirty[:MAX_LOCAL_FILES]) if dirty else "none"))
+    except Exception:                                   # noqa: BLE001 - not a git install, git missing...
+        lines.append("Customizations of the product code: unknown")
+    for label, root in (("Extensions installed by the user", extensions.root), ("Themes installed", themes.root)):
+        try:
+            names = sorted(d.name for d in root().iterdir() if d.is_dir() and not d.name.startswith((".", "_")))
+        except OSError:
+            names = []
+        lines.append(f"{label}: " + (", ".join(names[:MAX_LOCAL_FILES]) if names else "none"))
+    return lines
+
+
 def _default_topic(topics: list[dict]) -> str:
     """system/help, else the inbox, else the first topic of the workspace ("" = none)."""
     from . import workspace
@@ -203,6 +236,7 @@ def _ask(kind: str, message: str, topics: list[dict]) -> str | None:
            *spawn.settings_args(cfg), "--append-system-prompt", system] + (["--model", model] if model else [])
     lines = [f"Type chosen by the user: {kind if kind in TYPES else 'other'}",
              f"Harness Maxxing version: {license.disk_version()}",
+             "What this installation changed (a bug there is not the team's):", *_local_changes(),
              "Topics where a session can open:"]
     lines += [f"- {t['path']}: {t['description']}" for t in topics] or ["- (none)"]
     # a lone surrogate cannot be written to the pipe; the closing tag cannot come from the message

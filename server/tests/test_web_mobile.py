@@ -77,7 +77,7 @@ def test_the_send_button_wraps_under_the_tools_instead_of_leaving_the_screen():
     # right group shrank to nothing and Send was cut by the right edge; the bar wraps so every button stays in sight
     src = (WEB / "features" / "composer" / "MessageBox.tsx").read_text()
     assert '<div className="@container flex min-w-0 flex-wrap items-center gap-1 px-1.5 pb-1.5">' in src
-    assert '<div className="ml-auto flex min-w-0 items-center gap-1.5">' in src
+    assert '<div className="ml-auto flex min-w-0 items-center gap-1.5 max-md:@max-md:gap-1">' in src
 
 
 def test_a_diff_keeps_its_line_numbers_and_hunk_heads_in_sight_when_scrolled_sideways():

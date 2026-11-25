@@ -90,7 +90,7 @@ export const fr: Record<keyof typeof en, string> = {
   'feedback.reply.prompt': "Voir la demande préparée pour la session",
   'feedback.reply.open': "Ouvrir une session",
   'feedback.reply.edit': "Modifier mon message",
-  'feedback.reply.force': "Ce n’est pas ça : envoyer quand même à l’équipe",
+  'feedback.reply.force': "Envoyer quand même à l’équipe",
   'feedback.type.bug': "Bug",
   'feedback.type.idea': "Idée",
   'feedback.type.other': "Autre",

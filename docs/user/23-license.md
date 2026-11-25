@@ -74,14 +74,17 @@ time: the one of Settings → Profile → Stay in touch, if any).
 account, a few seconds, read-only: it looks things up in the installed documentation and can change or run nothing)
 checks what the message is:
 
-- a real bug, or an idea that would serve every user: it is sent to the team as before;
+- a real bug, or an idea that would serve every user: it is sent to the team as before. A bug report is sent
+  unless your Harness can point to what explains it for sure;
 - a question, a setting, something that already exists: the answer is shown in the window and **nothing is sent**;
+- a bug in what your installation changed (a customization of the product, your own extension or theme): your
+  Harness says so and offers to fix it here - the team cannot fix what only exists on your server;
 - a change that concerns your installation only (another model, a local model or a custom endpoint, another API or
   account, a tool of yours to connect, a personal layout): Harness Maxxing is yours to change, so your Harness can do
   it here. The window says so, shows the request it prepared, and **Open a session** starts a session with it.
 
-**Open a session** is also there after an answer, to go further. If the answer misses the point, **That is not it:
-send it to the team anyway** sends your message as written (the team sees that your Harness had answered it), and
+**Open a session** is also there after an answer, to go further. If the answer misses the point, **Send to the team
+anyway** sends your message as written (the team sees that your Harness had answered it), and
 **Edit my message** goes back to the form. The check never blocks a message: when Claude is not signed in, is busy
 or gives no clear verdict, the message is sent. The screenshot is never part of the check.
 
