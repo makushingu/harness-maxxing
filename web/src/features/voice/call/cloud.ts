@@ -11,6 +11,8 @@ export class Relay {
   private muteNext = false
   private pending: string[] = [] // what the user said since the last hand-over
   private recent: string[] = [] // the last lines of the call, given back to a new connection
+  private heardSeq = 0 // sentences heard, in order
+  private languageSeq = 0 // the sentence whose sorting set the language: an older one sorted later never undoes it
 
   constructor(
     private brain: Brain,
@@ -41,8 +43,12 @@ export class Relay {
     this.remember('User', text)
     this.pending.push(text) // at once: the model may call ask_session before the sorting comes back
     this.pending = this.pending.slice(-MAX_PENDING)
+    const seq = ++this.heardSeq
     const s = await sortSentence(text, this.language, this.expecting).catch(() => ({ kind: 'ask' as const, language: this.language }))
-    this.language = s.language
+    if (seq > this.languageSeq) {
+      this.languageSeq = seq
+      this.language = s.language
+    }
     if (s.kind === 'empty' || s.kind === 'stop') this.pending = this.pending.filter((t) => t !== text)
     if (s.kind === 'stop') {
       if (this.brain.busy()) this.muteNext = true
