@@ -37,7 +37,7 @@ function JarvisView() {
   const fresh = useNewJarvisConversation()
   const [board, setBoard] = React.useState(false) // phone / tablet: the Work list in place of the conversation
   const [workOpen, setWorkOpen] = React.useState(() => localStorage.getItem(WORK_OPEN_KEY) !== '0') // desktop
-  const [workW, setWorkW] = React.useState(() => Number(localStorage.getItem(WORK_W_KEY)) || WORK_W.def)
+  const [workW, setWorkW] = React.useState(() => fitWorkW(Number(localStorage.getItem(WORK_W_KEY))))
   const [settingsOpen, setSettingsOpen] = React.useState(false)
   const aside = React.useRef<HTMLElement>(null)
   const toggleWork = () => {
@@ -48,7 +48,7 @@ function JarvisView() {
     } else setBoard((b) => !b)
   }
   const saveWorkW = (w: number | null) => {
-    const v = w == null ? WORK_W.def : Math.round(w)
+    const v = w == null ? WORK_W.def : fitWorkW(Math.round(w))
     setWorkW(v)
     if (w == null) localStorage.removeItem(WORK_W_KEY)
     else localStorage.setItem(WORK_W_KEY, String(v))
@@ -127,7 +127,7 @@ function JarvisView() {
           style={{ width: workW }}
           data-testid="jarvis-board"
         >
-          <ResizeEdge side={aside} edge="left" min={WORK_W.min} max={WORK_W.max} onWidth={saveWorkW} />
+          <ResizeEdge side={aside} edge="left" min={WORK_W.min} max={WORK_W.max} onWidth={saveWorkW} className="max-lg:hidden" />
           <Board work={st.work} onHide={toggleWork} />
         </aside>
       </div>
@@ -250,6 +250,8 @@ const COMPACT_AT = [100_000, 150_000, 200_000, 300_000, 0]
 const WORK_OPEN_KEY = 'mx.jarvis.workOpen'
 const WORK_W_KEY = 'mx.jarvis.workWidth'
 const WORK_W = { min: 260, def: 320, max: 640 }
+/** A saved width within the limits (an old or hand-edited value never squeezes the conversation). */
+const fitWorkW = (n: number) => (Number.isFinite(n) && n > 0 ? Math.max(WORK_W.min, Math.min(WORK_W.max, n)) : WORK_W.def)
 
 /** Its settings: a window like a session's options (a sheet from the bottom on a phone, centered on a computer). */
 function JarvisSettingsDialog({ open, onOpenChange, settings, onNew, renewing }: { open: boolean; onOpenChange: (v: boolean) => void; settings: JarvisSettings; onNew: () => void; renewing: boolean }) {
