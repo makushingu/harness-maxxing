@@ -837,7 +837,10 @@ def _number(v: str | None, kind: tuple[str, int] | None, date1904: bool) -> str:
     if not math.isfinite(f):
         return v
     if kind and kind[0] == "date" and 0 <= f < 2958466:
-        at = (_EPOCH_1904 if date1904 else _EPOCH) + timedelta(seconds=round(f * 86400))
+        try:
+            at = (_EPOCH_1904 if date1904 else _EPOCH) + timedelta(seconds=round(f * 86400))
+        except OverflowError:                            # a 1904 workbook: 4 years later, past the year 9999
+            return v
         if f < 1:
             return at.strftime("%H:%M:%S" if at.second else "%H:%M")
         return at.strftime("%Y-%m-%d" if f == int(f) else "%Y-%m-%d %H:%M")

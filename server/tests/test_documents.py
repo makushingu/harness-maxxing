@@ -328,6 +328,15 @@ def test_the_time_limit_is_checked_while_nothing_is_written(tmp_path, monkeypatc
     assert r["truncated"]
 
 
+def test_a_far_date_of_a_1904_workbook_stays_a_number(tmp_path):
+    f = xlsx(tmp_path / "d.xlsx", '<row r="1"><c r="A1" s="1"><v>2958000</v></c></row>')
+    with zipfile.ZipFile(f) as z:
+        parts = {n: z.read(n).decode() for n in z.namelist()}
+    parts["xl/workbook.xml"] = parts["xl/workbook.xml"].replace("<sheets>", '<workbookPr date1904="1"/><sheets>')
+    r = documents.read(pack(tmp_path / "d1904.xlsx", parts))               # past the year 9999: no OverflowError
+    assert r["sheets"][0]["rows"][0][0] == "2958000"
+
+
 def test_an_unknown_xml_encoding_is_unreadable_not_a_crash(tmp_path):
     f = xlsx(tmp_path / "e.xlsx", "")
     with zipfile.ZipFile(f) as z:
