@@ -1722,3 +1722,26 @@ def test_a_damaged_journal_line_never_breaks_the_profile_page(mx):
     (d / "main.jsonl").write_bytes(b'{"at": 0, "tool": "x\xc3\n' + (ok + "\n").encode() * 3000)    # big: compacted
     replays.log_action("main", {"at": 3, "tool": "click"})                                       # never raises
     assert replays.actions("main", 1)[0]["at"] == 3
+
+
+def test_concurrent_journal_writes_lose_no_line_and_stay_small(mx):
+    import threading
+    from maxxing import browser
+    from maxxing.browser import replays
+    pad = "u" * 900                                     # long lines: 500 of them stay above the size limit
+    for i in range(700):
+        replays.log_action("main", {"at": i, "tool": "click", "page": pad})
+    marks: list[str] = []
+
+    def write(k):
+        for j in range(150):
+            marks.append(f"m{k}x{j}")
+            replays.log_action("main", {"at": j, "tool": "click", "session": marks[-1], "page": pad})
+    ts = [threading.Thread(target=write, args=(k,)) for k in range(4)]
+    [t.start() for t in ts]
+    [t.join() for t in ts]
+    f = browser.actions_dir() / "main.jsonl"
+    lines = f.read_text().splitlines()
+    got = {json.loads(ln).get("session") for ln in lines}          # every line whole
+    assert not [m for m in marks[-100:] if m not in got]
+    assert f.stat().st_size <= 400_000 and not list(f.parent.glob("*.tmp"))
