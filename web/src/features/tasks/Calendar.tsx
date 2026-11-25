@@ -264,6 +264,8 @@ function DayPanel({
               try {
                 await onAdd(text)
                 setText('')
+              } catch {
+                // refused (no title, or the server said no: already shown): the text stays to be fixed
               } finally {
                 setBusy(false)
               }

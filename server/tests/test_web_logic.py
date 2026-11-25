@@ -392,3 +392,14 @@ def test_a_member_stopped_in_a_group_message_is_not_shown_as_a_recipient(tmp_pat
         const map = new Map([['all', null], ['bob', bob], ['ann', ann]])
         return ['stop @Bob', 'stop @bob and @ann, go', '@bob please', 'nonstop @bob'].map((t) => m.namedIn(t, map, [bob, ann]).map((x) => x.handle))""")
     assert out == [[], ["ann"], ["bob"], ["bob"]]
+
+
+def test_a_quick_add_made_only_of_tokens_is_refused_before_the_server(tmp_path):
+    out = _run_ts(tmp_path, WEB / "features" / "tasks" / "model.ts", "return m.parseQuickAdd('#bug ^fri', [], '2026-11-25').title")
+    assert out.strip() == ""                               # nothing left for a title
+    page = (WEB / "pages" / "tasks" / "index.tsx").read_text(encoding="utf-8")
+    add = page[page.index("const addParsed"):page.index("const endOf")]
+    assert add.index("if (!p.title.trim())") < add.index("create.mutateAsync") and "tasks.titleRequired" in add
+    for form in ("Board.tsx", "Calendar.tsx"):              # a refused add keeps the text, no unhandled rejection
+        src = (WEB / "features" / "tasks" / form).read_text(encoding="utf-8")
+        assert "await onAdd(text)\n" in src and "} catch {" in src[src.index("await onAdd(text)"):][:200]
