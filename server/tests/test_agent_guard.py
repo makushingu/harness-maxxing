@@ -628,3 +628,12 @@ def test_agent_export_never_writes_a_file_in_an_agent_turn(client, topic, mx, mo
     assert cli.main(["agents", "export", A]) == 0
     monkeypatch.setattr(cmd_agents, "_turn", lambda: {"path": "", "depth": 0})
     assert cli.main(["agents", "export", A, "--output", str(out)]) == 0 and out.is_file()
+
+
+def test_a_tool_with_a_unicode_line_separator_survives_export_and_import(client, topic, mx):
+    _on(client)
+    tools = ["Read", "Bash(echo a\u2028b)", "Bash(echo c\x85d)", "Bash(x\x0cy)"]
+    assert _create(client, allowed_tools=tools)["allowed_tools"] == tools
+    from maxxing import agent_format
+    md = client.get("/api/agents/acme/blog/writer/export").text
+    assert agent_format.parse_md(md)["fields"]["allowed_tools"] == tools

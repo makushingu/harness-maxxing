@@ -44,8 +44,11 @@ def _one_line(text: str, limit: int = 300) -> str:
 
 def _yaml_str(v: str) -> str:
     """A YAML plain scalar when it is one ("Bash(git log:*)"), else a JSON (= YAML) quoted string."""
-    plain = not re.search(r": |\s#|:$|^[\s\-?:,\[\]{}#&*!|>'\"%@`]|\s$|\n", v)
-    return v if plain and v else json.dumps(v, ensure_ascii=False)
+    plain = not re.search(r": |\s#|:$|^[\s\-?:,\[\]{}#&*!|>'\"%@`]|\s$|\n", v) and v.splitlines() == [v]
+    if plain and v:
+        return v
+    # parse_md cuts the header with splitlines(): the line breaks json.dumps leaves as they are get escaped
+    return re.sub("[\x85\u2028\u2029]", lambda c: f"\\u{ord(c.group()):04x}", json.dumps(v, ensure_ascii=False))
 
 
 def export_md(path: str) -> str:
