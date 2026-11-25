@@ -455,6 +455,8 @@ def load(d: Path) -> tuple[dict | None, list[str], str | None]:
     """Reads and sanitizes one theme folder: (theme, warnings, error). An error means the theme is not usable."""
     warn: list[str] = []
     f = d / "theme.json"
+    if f.is_symlink():                  # install never copies a link: it would read a file outside the folder
+        return None, warn, "theme.json must be a file, not a symbolic link"
     if not f.is_file():
         return None, warn, "no theme.json in the folder"
     if f.stat().st_size > MAX_JSON:
@@ -596,13 +598,18 @@ def install(src: Path, force: bool = False) -> tuple[dict, list[str]]:
     names = set(FILES) | {u.rsplit("/", 1)[1] for u in [*t["wallpaper"].values(), *t["logo"].values(), t["preview"]] if u}
     if dest.resolve() == src:
         return t, warn
-    tmp = root() / f".{t['id']}.tmp"
-    shutil.rmtree(tmp, ignore_errors=True)
+    stage = root() / f".{t['id']}.tmp"
+    shutil.rmtree(stage, ignore_errors=True)
+    tmp = stage / t["id"]               # named like the theme: load() falls back on the folder name for the id
     tmp.mkdir(parents=True)
     for n in names:
         f = src / n
         if f.is_file() and not f.is_symlink():
             shutil.copy2(f, tmp / n)
+    _, _, err = load(tmp)               # the copy itself must be usable before it replaces anything
+    if err:
+        shutil.rmtree(stage, ignore_errors=True)
+        raise ThemeError(err)
     if t["css"]:
         _stamp(tmp, t["css"])           # installed by Claude after `check`: checked against this interface
     old = root() / f".{t['id']}.old"
@@ -611,6 +618,7 @@ def install(src: Path, force: bool = False) -> tuple[dict, list[str]]:
         dest.rename(old)                # never a moment without the theme for a browser that lists it
     tmp.rename(dest)
     shutil.rmtree(old, ignore_errors=True)
+    shutil.rmtree(stage, ignore_errors=True)
     t2, warn2, _ = load(dest)
     return t2 or t, warn2
 

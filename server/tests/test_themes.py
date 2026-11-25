@@ -204,3 +204,16 @@ def test_an_id_ending_with_a_newline_is_refused(mx, tmp_path):
     t, _, err = themes.load(_theme(tmp_path, "nl", {"name": "N", "id": "evil\n"}))
     assert t is None and err.startswith("id:")
     assert themes.get("evil\n") is None and themes.remove("evil\n") is False
+
+
+def test_a_linked_theme_json_never_replaces_an_installed_theme(mx, tmp_path):
+    good = _theme(tmp_path / "src", "good", {"name": "Good"})
+    assert cli.main(["themes", "install", str(good)]) == 0
+    link = tmp_path / "link" / "good"
+    link.mkdir(parents=True)
+    (tmp_path / "elsewhere.json").write_text(json.dumps({"name": "Good v2", "id": "good"}), encoding="utf-8")
+    (link / "theme.json").symlink_to(tmp_path / "elsewhere.json")
+    assert themes.load(link)[2]
+    assert cli.main(["themes", "install", str(link), "--force"]) == 1
+    assert themes.get("good")["name"] == "Good"
+    assert sorted(p.name for p in (mx["ws"] / "themes").iterdir()) == ["good"]
