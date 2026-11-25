@@ -1,1 +1,0 @@
-import"./rolldown-runtime-XKyaHtl9.js";import{i as e,t}from"./vendor-react-BNCMh3YF.js";import{n}from"./utils-BtPbbl_M.js";e();var r=t();function i({className:e,...t}){return(0,r.jsx)(`div`,{className:n(`mx-lg flex flex-col rounded-xl border bg-card text-card-foreground shadow-xs`,e),...t})}export{i as t};
