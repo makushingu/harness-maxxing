@@ -170,7 +170,8 @@ def _new(a) -> int:
         s = service.create_session(path, title=a.title or (titles.provisional(text) if text else None),
                                    model=a.model or None, effort=a.effort or None,
                                    source="session" if meta else "cli", auto_title=not a.title and bool(text),
-                                   permission_mode="bypass" if root else "")
+                                   permission_mode="bypass" if root else "",
+                                   push=not meta or meta.get("push") is not False)   # a muted session's start stays muted
         _register(meta, report, s, text, hops, a.fresh.strip())
         if report[0] and not report[1]:                # started for Jarvis's work board: archivable once done
             from .sessions import store

@@ -177,6 +177,22 @@ def test_sessions_new_starts_a_session_in_a_topic_and_says_who_started_it(client
     assert cli.main(["sessions", "new", topic, "again"]) == 1 and len(service.list_sessions()) == n   # nothing made
 
 
+def test_sessions_new_from_a_session_muted_on_the_phones_starts_a_muted_one(client, topic, mx, monkeypatch, capsys):
+    a = _session(client, topic, "Quiet")
+    store.update(a["id"], push=False)
+    meta = store.read(a["id"])
+    monkeypatch.setattr(agent_guard, "turn_meta", lambda: {**meta, "turn_hops": 0})
+    assert cli.main(["sessions", "new", topic, "Check", "--json"]) == 0
+    sid = json.loads(capsys.readouterr().out)["session"]
+    wait_idle(client, sid)
+    assert store.read(sid).get("push") is False
+    monkeypatch.setattr(agent_guard, "turn_meta", lambda: None)                  # the owner's shell: rings as before
+    assert cli.main(["sessions", "new", topic, "Again", "--json"]) == 0
+    sid = json.loads(capsys.readouterr().out)["session"]
+    wait_idle(client, sid)
+    assert store.read(sid).get("push") is not False
+
+
 def test_sessions_new_with_a_missing_file_makes_nothing(client, topic, monkeypatch, capsys):
     monkeypatch.setattr(agent_guard, "turn_meta", lambda: None)
     n = len(service.list_sessions())
