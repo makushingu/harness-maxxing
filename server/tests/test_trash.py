@@ -840,3 +840,29 @@ def test_a_move_to_the_trash_that_fails_after_the_copy_leaves_no_duplicate(clien
         workspace.move_to_trash(f)
     assert f.read_text() == "a"
     assert list(trash.trash_dir().iterdir()) == []
+
+
+def test_an_edit_under_way_does_not_bring_a_trashed_session_back(mx):
+    import threading
+    from maxxing.sessions import store
+    sid = store.create(store.new_meta("", "Ghost"))["id"]
+    store.append_log(sid, {"type": "user", "text": "hi"})
+    inside, go, out = threading.Event(), threading.Event(), {}
+
+    def end_of_turn():                                  # e.g. the runner saving its end of turn
+        with store.edit(sid) as m:
+            inside.set()
+            go.wait(5)
+            m["state"] = "idle"
+    t = threading.Thread(target=end_of_turn)
+    t.start()
+    assert inside.wait(5)
+    d = threading.Thread(target=lambda: out.setdefault("dest", trash.trash_session(sid)))
+    d.start()
+    time.sleep(0.3)
+    go.set()
+    t.join(5)
+    d.join(5)
+    assert store.read(sid) is None and sid not in store.list_ids()
+    assert sorted(p.name for p in out["dest"].iterdir()) == [f"{sid}.json", f"{sid}.log"]
+    assert json.loads((out["dest"] / f"{sid}.json").read_text())["state"] == "idle"   # the edit was kept
