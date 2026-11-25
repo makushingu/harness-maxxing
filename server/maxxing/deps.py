@@ -964,6 +964,16 @@ def _up_chromium(c: dict, explicit: bool = False) -> tuple[str, str]:
     return ("installed" if done else "ok"), ", ".join(sorted(set(revs.values())))
 
 
+def _libc_ok(want: list, libc: str) -> bool:
+    """npm's rule for `libc` (like `os`/`cpu`): a list of only `!x` entries means "any but x"."""
+    names = [str(x) for x in want]
+    if f"!{libc}" in names:
+        return False
+    if all(x.startswith("!") for x in names):
+        return True
+    return libc in names
+
+
 def drop_other_libc(modules: Path, libc: str | None = None) -> list[str]:
     """Remove the native packages built for another C library than this host's (glibc only).
 
@@ -977,10 +987,11 @@ def drop_other_libc(modules: Path, libc: str | None = None) -> list[str]:
     gone = []
     for pkg in sorted([*modules.glob("*/package.json"), *modules.glob("@*/*/package.json")]):
         try:
-            want = json.loads(pkg.read_text()).get("libc")
+            data = json.loads(pkg.read_text())
         except (OSError, ValueError):
             continue
-        if isinstance(want, list) and want and libc not in want:
+        want = data.get("libc") if isinstance(data, dict) else None
+        if isinstance(want, list) and want and not _libc_ok(want, libc):
             shutil.rmtree(pkg.parent, ignore_errors=True)
             gone.append(pkg.parent.relative_to(modules).as_posix())
     return gone
