@@ -32,6 +32,7 @@ function useSwipeClose(side: Side, onDismiss: () => void, overlay: React.RefObje
         }
       }
       const start = (e: TouchEvent) => {
+        if (state === 'drag') set(0, true) // a second finger mid-drag: the drawer springs back, the gesture ends
         state = 'idle'
         if (e.touches.length !== 1 || (e.target as Element).closest(NO_DRAG)) return
         x0 = e.touches[0].clientX
