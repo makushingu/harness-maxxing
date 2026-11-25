@@ -454,3 +454,22 @@ def test_a_damaged_state_file_does_not_block_opening_or_deleting(client, topic):
     assert client.get(G).status_code == 200
     assert client.delete(G).status_code == 200
     assert not (Path(client.get("/api/workspace/tree").json()["root"]) / g["path"]).exists()
+
+
+@pytest.mark.parametrize("patch", [{"created": "yesterday"}, {"members": 5}, {"limits": {"replies": 1e999}},
+                                   {"created": float("nan")}])
+def test_a_damaged_value_in_group_json_keeps_the_group(client, topic, patch):
+    g = _setup(client)
+    f = Path(client.get("/api/workspace/tree").json()["root"]) / g["path"] / "group.json"
+    f.write_text(json.dumps({**json.loads(f.read_text()), **patch}))
+    assert [x["path"] for x in client.get("/api/agent-groups").json()["groups"]] == [g["path"]]
+    assert client.get(G).status_code == 200
+    assert client.patch(G, json={"emoji": "🧪"}).status_code == 200
+    assert client.delete(G).status_code == 200
+
+
+def test_a_group_json_nested_too_deep_keeps_the_group_openable(client, topic):
+    g = _setup(client)
+    f = Path(client.get("/api/workspace/tree").json()["root"]) / g["path"] / "group.json"
+    f.write_text("[" * 100000 + "]" * 100000)
+    assert client.get(G).status_code == 200

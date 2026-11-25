@@ -161,7 +161,7 @@ def _at(g: dict, p: str) -> str:
 def _num(v: Any, default: int, lo: int, hi: int) -> int:
     try:
         n = int(v)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):   # OverflowError: an infinite number (1e999)
         return default
     return max(lo, min(hi, n))
 
@@ -170,12 +170,21 @@ def _text(v: Any, n: int) -> str:
     return agents._utf8(str(v or "")).strip()[:n]
 
 
+
+def _created(v: Any) -> float:
+    try:
+        t = float(v or 0)
+    except (TypeError, ValueError, OverflowError):
+        return time.time()
+    return t if math.isfinite(t) and t > 0 else time.time()
+
+
 def clean(data: Any, project: str, strict: bool = False) -> dict:
     """group.json with defaults; strict: refuse what cannot be kept (members of another project, unknown agents...)."""
     d = data if isinstance(data, dict) else {}
     members: list[dict] = []
     seen: set[str] = set()
-    for m in d.get("members") or []:
+    for m in d.get("members") if isinstance(d.get("members"), list) else []:
         if isinstance(m, str):
             m = {"path": m}
         if not isinstance(m, dict):
@@ -205,7 +214,7 @@ def clean(data: Any, project: str, strict: bool = False) -> dict:
            "shared_files": d.get("shared_files", True) is not False,
            "trust_members": d.get("trust_members", True) is not False,
            "limits": {k: _num(lim.get(k), *v) for k, v in LIMITS.items()},
-           "created": float(d.get("created") or 0) or time.time()}
+           "created": _created(d.get("created"))}
     for k, v in d.items():                              # unknown fields of a newer version are kept
         if k not in out:
             out[k] = v
@@ -216,7 +225,7 @@ def load(path: str) -> dict:
     project = _key(path).split("__")[0]                # a bad path: GroupError 400
     try:
         data = json.loads((folder(path) / GROUP_FILE).read_text())
-    except (OSError, ValueError):
+    except (OSError, ValueError, RecursionError):       # RecursionError: nested too deep
         data = {}
     return clean(data, project)
 
