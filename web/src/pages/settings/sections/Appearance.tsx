@@ -99,10 +99,11 @@ function AccentPicker() {
   )
 }
 
-/** The look of a theme card: a tiny window drawn with the theme's own colors (sidebar, card, a button in the accent).
- *  `vars` = an installed theme's values for this mode (what it leaves out keeps the built-in look). */
-export function ThemePreview({ glass, accent, dark, vars, wallpaper, image }: { glass: boolean; accent: string; dark: boolean; vars?: Record<string, string>; wallpaper?: string | null; image?: string | null }) {
-  if (image) return <img src={image} alt="" className="h-20 w-full rounded-md border object-cover" />
+/** The look of a theme card: a tiny window drawn with the theme's own colors (sidebar, card, a button in the accent),
+ *  the same drawing for every theme. `vars` = an installed theme's values for this mode (what it leaves out keeps the
+ *  built-in look). No picture: a theme's preview.png is for its Community listing, its wallpaper (often 1 MB) would be
+ *  downloaded for an 80 px tile, so a glass theme shows its two wallpaper colors instead. */
+export function ThemePreview({ glass, accent, dark, vars }: { glass: boolean; accent: string; dark: boolean; vars?: Record<string, string> }) {
   const v = vars ?? {}
   const base = v.background || (dark ? 'oklch(0.2 0.006 286)' : 'oklch(0.98 0 0)')
   const side = v.sidebar || base
@@ -113,9 +114,7 @@ export function ThemePreview({ glass, accent, dark, vars, wallpaper, image }: { 
   const radius = v.radius ? `min(${v.radius}, 0.5rem)` : undefined
   const soft = `color-mix(in oklch, ${btn} ${dark ? 45 : 35}%, transparent)`
   const wall = glass
-    ? wallpaper
-      ? `url("${wallpaper}") center / cover no-repeat, ${side}`
-      : `radial-gradient(120% 90% at 15% 10%, ${v['wall-a'] || soft} 0%, transparent 60%), radial-gradient(90% 80% at 95% 100%, ${v['wall-b'] || soft} 0%, transparent 55%), ${side}`
+    ? `radial-gradient(120% 90% at 15% 10%, ${v['wall-a'] || soft} 0%, transparent 60%), radial-gradient(90% 80% at 95% 100%, ${v['wall-b'] || soft} 0%, transparent 55%), ${side}`
     : side
   const pane = (c: string) => (glass ? `color-mix(in oklch, ${c} 55%, transparent)` : c)
   const blur = glass ? 'blur(6px)' : undefined
@@ -198,7 +197,7 @@ function ThemePicker() {
               key={th.id}
               active={custom === th.id}
               onClick={() => pickTheme(th)}
-              preview={<ThemePreview glass={th.base === 'glass'} accent={accent} dark={mode} vars={mode ? th.dark : th.light} wallpaper={th.wallpaper[mode ? 'dark' : 'light']} image={th.preview} />}
+              preview={<ThemePreview glass={th.base === 'glass'} accent={accent} dark={mode} vars={mode ? th.dark : th.light} />}
               name={label(th.name, lang)}
               note={by}
               desc={label(th.description, lang) || t('appearance.installedDesc')}

@@ -74,7 +74,7 @@ themes/nord/
   wallpaper-dark.webp optional, the backdrop of the dark mode
   logo.png            optional, a logo shown instead of the Harness one (png, jpg, webp or avif, at most 512 KB)
   logo-dark.png       optional, the logo of the dark mode
-  preview.png         optional, the picture of its card (and of its Community listing)
+  preview.png         optional, the picture of its Community listing (the card in Settings is drawn from its colors)
   README.md, LICENSE  optional
 ```
 
