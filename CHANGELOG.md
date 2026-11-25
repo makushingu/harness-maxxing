@@ -3,6 +3,11 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## Unreleased
+
+Fixed:
+- **Theme cards in Settings show up at once.** Every theme's card is now drawn from its own colors, like Solid and Glass, instead of loading its preview picture or its wallpaper (often several hundred KB each). The picture is still used for its Community listing.
+
 ## 2.0.0-alpha.171 - 2026-11-25
 
 Changed:

@@ -54,7 +54,7 @@ export function ThemesSection() {
               return (
                 <li key={th.id} className="flex items-start gap-3 px-4 py-3.5">
                   <div className="w-28 shrink-0 max-sm:w-20">
-                    <ThemePreview glass={th.base === 'glass'} accent={accent} dark={mode} vars={mode ? th.dark : th.light} wallpaper={th.wallpaper[mode ? 'dark' : 'light']} image={th.preview} />
+                    <ThemePreview glass={th.base === 'glass'} accent={accent} dark={mode} vars={mode ? th.dark : th.light} />
                   </div>
                   <div className="grid min-w-0 flex-1 gap-1">
                     <div className="flex flex-wrap items-center gap-2">

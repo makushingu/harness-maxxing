@@ -5,6 +5,12 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## Unreleased
+
+- Themes: `ThemePreview` loses its `image` and `wallpaper` props (no `<img>`, no `url()`): the tile is always the drawn
+  window, a glass theme's backdrop = `wall-a`/`wall-b` or the accent mix. `preview` stays in `/api/themes` (Community).
+  `/api/themes/{id}/file/{name}`: `stale-while-revalidate=604800` added to `max-age=300`.
+
 ## 2.0.0-alpha.171 - 2026-11-25
 
 - Guide: `language` phase removed from `GuideDialog` (starts at `level`); the cards already use `config.language`, which

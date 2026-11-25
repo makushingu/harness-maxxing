@@ -24,4 +24,4 @@ async def theme_file(tid: str, name: str):
     if not f:
         raise HTTPException(404, "no such file in this theme")
     return FileResponse(f, media_type=themes.IMAGE_TYPES[f.suffix.lower()],
-                        headers={"Cache-Control": "private, max-age=300", "X-Content-Type-Options": "nosniff"})
+                        headers={"Cache-Control": "private, max-age=300, stale-while-revalidate=604800", "X-Content-Type-Options": "nosniff"})

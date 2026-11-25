@@ -9,7 +9,7 @@ theme can never break the interface nor survive an update badly: the product onl
     theme.json   {"schema": 1, "name": "Nord", "base": "solid", "light": {...}, "dark": {...}, "options": {...}}
     wallpaper.*  optional background image (glass base), wallpaper-dark.* for the dark mode
     logo.*       optional logo shown instead of the Harness one (sidebar, tab icon...), logo-dark.* for the dark mode
-    preview.png  optional picture for a listing (Community)
+    preview.png  optional picture for a listing (Community); the cards in Settings are drawn from the colors
     README.md    optional
 
 One escape hatch: `"css"`, a single field of advanced CSS for what no variable reaches. It is checked (no url(),
