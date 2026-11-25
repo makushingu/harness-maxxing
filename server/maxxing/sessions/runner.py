@@ -566,6 +566,13 @@ class Runner:
         a.fresh = fresh
         if a.handover:
             self.keep_proc = True
+        if fresh and a.rc != 0 and not a.saw_init and not a.stopped and not a.handover and _thread_exists(a):
+            # the thread was created by an earlier turn killed before Harness recorded it: resume it
+            store.update(self.sid, fresh=False)
+            fresh = False
+            a = self.attempt(base + ["--resume", csid], prompt, cwd, env, timeout_s, hold=True, csid=csid,
+                             prev_total=store.thread_prev_cost(meta, csid), prev_est=store.thread_estimated(meta, csid))
+            a.fresh = False
         if not fresh and a.rc != 0 and not a.saw_init and not a.stopped and not a.handover and _resume_lost(a):
             csid = str(uuid.uuid4())
             store.update(self.sid, csid=csid, fresh=True)
@@ -1642,6 +1649,11 @@ def _free_stale_claim(csid: str, env: dict) -> int:
         p.unlink(missing_ok=True)
         n += 1
     return n
+
+
+def _thread_exists(a: Attempt) -> bool:
+    """`--session-id` refused because that thread already exists."""
+    return bool(re.search(r"session id .{0,80} is already in use", a.stderr, re.I))
 
 
 def _resume_lost(a: Attempt) -> bool:

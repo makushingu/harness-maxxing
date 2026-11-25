@@ -133,6 +133,21 @@ def test_resume_failure_falls_back_to_new_thread(client, topic, mx):
     assert argv[argv.index("--session-id") + 1] == meta["csid"]
 
 
+def test_a_thread_created_by_a_killed_turn_is_resumed(client, topic, mx):
+    """A turn killed (server restart) after Claude created its new thread but before Harness recorded it: the next
+    message resumes that thread instead of failing on "Session ID ... is already in use" forever."""
+    s = client.post("/api/sessions", json={"path": topic, "message": "start NOTOOL"}).json()
+    wait_idle(client, s["id"])
+    store.update(s["id"], fresh=True)              # what the killed turn left: the thread exists, still "fresh"
+    client.post(f"/api/sessions/{s['id']}/messages", json={"text": "again NOTOOL"})
+    s2 = wait_idle(client, s["id"])
+    assert s2["state"] == "idle" and s2["error"] is None and s2["last_text"] == "Echo: again NOTOOL"
+    meta = store.read(s["id"])
+    assert meta["csid"] == s["id"] and meta["fresh"] is False
+    argv = calls(mx)[-1]["argv"]
+    assert argv[argv.index("--resume") + 1] == s["id"]
+
+
 def test_attachments_and_uploads(client, topic, mx):
     r = client.post("/api/uploads", params={"path": topic},
                     files=[("file", ("a b.txt", b"hello", "text/plain")), ("file", ("a b.txt", b"x", "text/plain"))])
