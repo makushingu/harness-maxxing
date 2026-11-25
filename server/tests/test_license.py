@@ -464,3 +464,17 @@ def test_a_license_key_that_is_not_text_does_not_break_the_page(mx, client):
     config.set_secrets({license.KEY: 12345})
     r = client.get("/api/settings/license")
     assert r.status_code == 200 and r.json()["has_key"] is False and r.json()["key_hint"] == ""
+
+
+@pytest.mark.parametrize("section", ["x", [], 3])
+def test_a_damaged_license_section_keeps_the_page_the_removal_and_the_activation(mx, client, monkeypatch, capsys,
+                                                                                 section):
+    config.update_config(license=section)
+    assert config.load_config()["license"] == section
+    assert client.get("/api/settings/license").status_code == 200
+    assert run_cli("license", "status") == 0
+    assert client.delete("/api/settings/license").status_code == 200
+    config.update_config(license=section)
+    monkeypatch.setattr(license, "_post", lambda *a, **k: {"ok": True, "token": "tok", "license": {"kind": "paid"}})
+    license.activate("HM-ABCD-EFGH-JKMN-PQRS")
+    assert config.load_config()["license"]["kind"] == "paid"

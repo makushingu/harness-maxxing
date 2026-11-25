@@ -133,8 +133,14 @@ def _field(v):
     return None
 
 
+def _section(cfg: dict) -> dict:
+    """The `license` section of config.json; {} when a hand edit made it something else than an object."""
+    v = cfg.get("license")
+    return v if isinstance(v, dict) else {}
+
+
 def _save_info(lic: dict | None = None, **extra) -> dict:
-    cur = config.load_config().get("license") or {}
+    cur = dict(_section(config.load_config()))
     if lic:
         cur.update({k: _field(lic.get(k)) for k in ("email", "kind", "status", "max_servers", "updates_until",
                                                     "expires_at", "channel")})
@@ -146,7 +152,7 @@ def _save_info(lic: dict | None = None, **extra) -> dict:
 def status() -> dict:
     """What the UI / doctor show (no secret). `enabled` = still on signed archives; `has_key` = an Enterprise key
     is recorded (fair source: the key is a right of use, it changes nothing in how the server runs)."""
-    info = {k: _field(v) for k, v in (config.load_config().get("license") or {}).items()}   # stored before _field
+    info = {k: _field(v) for k, v in _section(config.load_config()).items()}   # stored before _field
     key = config.get_secret(KEY)
     key = key if isinstance(key, str) else ""            # a secrets.json edited by hand: a number is no key
     info.update(enabled=enabled(), has_key=bool(key), key_hint=("HM-…" + key[-4:]) if key else "", api=API)
@@ -194,7 +200,7 @@ def remove_key() -> dict:
     config.set_secrets({KEY: None, SEAT: None})
     with config._lock:                     # replaced, not merged: update_config would keep the old info
         cfg = config.load_config()
-        cfg["license"] = {k: v for k, v in (cfg.get("license") or {}).items() if k in ("moved_to_git",)}
+        cfg["license"] = {k: v for k, v in _section(cfg).items() if k in ("moved_to_git",)}
         config.save_config(cfg)
     return {"ok": True, "freed": freed}
 
@@ -317,5 +323,5 @@ def try_move_to_git() -> dict:
 
 
 def move_due() -> bool:
-    last = (config.load_config().get("license") or {}).get("move_tried_at") or 0
+    last = _section(config.load_config()).get("move_tried_at") or 0
     return time.time() - float(last) > 6 * 3600
