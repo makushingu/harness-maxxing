@@ -175,7 +175,8 @@ def _html_to_text(tmp_path: Path, tree: str, body: str):
     """Run htmlToText (plainText.ts imports remark: only its HTML part is taken) on a small fake DOM built by `tree`
     (node has no DOMParser), then `body` (`run()` gives the text)."""
     src = (WEB / "features" / "files" / "plainText.ts").read_text(encoding="utf-8")
-    part = src[src.index("const HTML_SKIP"):src.index("/** Cells separated by tabs")]
+    part = src[src.index("// Trims written as loops"):src.index("export function markdownToText(")] + \
+        src[src.index("const HTML_SKIP"):src.index("/** Cells separated by tabs")]
     dom = """
 class T { constructor(v) { this.nodeType = 3; this.nodeValue = v; this.childNodes = [] } }
 class E {
@@ -190,7 +191,6 @@ class E {
 const h = (tag, attrs, ...kids) => new E(tag, attrs, kids)
 let BODY
 globalThis.DOMParser = class { parseFromString() { return { body: BODY } } }
-const edges = (s: string) => s.replace(/^\\n+|\\s+$/g, '')
 """
     (tmp_path / "main.ts").write_text(dom + part + f"\nBODY = (() => {{ {tree} }})()\nconst run = () => htmlToText('')\n"
                                       f"console.log(JSON.stringify((() => {{ {body} }})()))\n", encoding="utf-8")
@@ -524,3 +524,15 @@ def test_the_spreadsheet_filter_follows_a_deferred_query_on_precomputed_rows():
     view = src[src.index("function SheetsView"):src.index("const open = (i: number)")]
     assert "React.useDeferredValue(q)" in view and "[rows, query])" in view
     assert "lows.current?.rows !== rows" in view and "c.toLowerCase()" not in view
+
+
+def test_plain_text_trims_stay_linear_on_long_runs_of_blanks(tmp_path):
+    """« Copy as plain text » on a file with a long run of spaces or empty lines that is not at its end: no freeze."""
+    out = _html_to_text(tmp_path, "return h('body', {}, h('pre', {}, ' '.repeat(100000)), h('p', {}, 'end'))", """
+        const t0 = Date.now()
+        const blanks = ' '.repeat(100000), lines = '\\n'.repeat(100000)
+        const r = [edges('a' + blanks + 'b  '), oneLine('a' + blanks + 'b\\n  \\n c'), cutEnd('x' + blanks + 'y' + blanks, (c) => c === ' '),
+                   endBreaks('a' + lines + 'b' + lines).toString(), run()]
+        return [r[0].length, r[1].slice(-5), r[2].length, r[3], r[4].trim(), Date.now() - t0 < 3000]""")
+    assert out == [100002, "  b c"[-5:], 100002, "100000", "end", True]
+
