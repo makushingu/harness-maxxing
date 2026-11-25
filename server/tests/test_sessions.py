@@ -148,6 +148,25 @@ def test_a_thread_created_by_a_killed_turn_is_resumed(client, topic, mx):
     assert argv[argv.index("--resume") + 1] == s["id"]
 
 
+def test_resuming_a_thread_of_a_killed_turn_frees_its_dead_process_claim(client, topic, mx, monkeypatch, tmp_path):
+    """The killed turn's process left its claim on the thread: it is freed before that resume, as on every resume."""
+    import json as _json
+    import subprocess as _sp
+    import sys as _sys
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "cc"))
+    s = client.post("/api/sessions", json={"path": topic, "message": "start NOTOOL"}).json()
+    wait_idle(client, s["id"])
+    dead = _sp.Popen([_sys.executable, "-c", "pass"])
+    dead.wait()
+    claim = tmp_path / "cc" / "sessions" / f"{dead.pid}.json"
+    claim.parent.mkdir(parents=True, exist_ok=True)
+    claim.write_text(_json.dumps({"pid": dead.pid, "sessionId": s["id"], "procStart": "1"}))
+    store.update(s["id"], fresh=True)
+    client.post(f"/api/sessions/{s['id']}/messages", json={"text": "again NOTOOL"})
+    assert wait_idle(client, s["id"])["error"] is None
+    assert not claim.exists()
+
+
 def test_attachments_and_uploads(client, topic, mx):
     r = client.post("/api/uploads", params={"path": topic},
                     files=[("file", ("a b.txt", b"hello", "text/plain")), ("file", ("a b.txt", b"x", "text/plain"))])

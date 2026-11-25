@@ -570,6 +570,7 @@ class Runner:
             # the thread was created by an earlier turn killed before Harness recorded it: resume it
             store.update(self.sid, fresh=False)
             fresh = False
+            _free_stale_claim(csid, env)               # that killed turn's process may still claim the thread
             a = self.attempt(base + ["--resume", csid], prompt, cwd, env, timeout_s, hold=True, csid=csid,
                              prev_total=store.thread_prev_cost(meta, csid), prev_est=store.thread_estimated(meta, csid))
             a.fresh = False
