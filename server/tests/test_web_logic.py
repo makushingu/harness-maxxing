@@ -575,3 +575,16 @@ def test_a_live_batch_of_text_does_not_copy_the_tool_index_nor_the_hidden_messag
     assert fold.count("if (!ownIdx) {") == 1 and fold.count("if (!ownHidden) {") == 1
     use = fold[fold.index("case 'tool_use':"):fold.index("case 'tool_result':")]
     assert use.index("toolIdx = { ...toolIdx }") < use.index("toolIdx[ev.id] = items.length")
+
+
+def test_the_space_office_pauses_what_cannot_be_seen():
+    """Each desk runs about ten endless animations: a bay far from the screen pauses them, and past CALM_ABOVE agents
+    only the desks of agents at work or waiting keep theirs."""
+    src = (WEB / "features" / "agents" / "OfficeFuture.tsx").read_text(encoding="utf-8")
+    bay = src[src.index("function Bay("):src.index("<DropBar side={dnd.side} vertical={false} />")]
+    assert "const away = useAway(ref)" in bay and "ref={ref}" in bay and "away && 'mx-wait'" in bay
+    desk = src[src.index("function Console("):src.index('data-testid="office-desk"')]
+    assert "calm && !working && st.id !== 'waiting' && 'mx-wait'" in desk
+    assert "> CALM_ABOVE" in src and "calm={calm}" in src
+    css = (WEB / "styles" / "globals.css").read_text(encoding="utf-8")
+    assert ".mx-wait, .mx-wait * { animation-play-state: paused !important; }" in css
