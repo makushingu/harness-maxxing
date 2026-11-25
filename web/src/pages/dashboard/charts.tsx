@@ -46,7 +46,10 @@ export function Chart({ kind, series, unit, height = 140 }: { kind: 'bar' | 'lin
   const id = React.useId().replace(/:/g, '')
   const xs = series.find((s) => s.points.length)?.points.map((p) => p[0]) || [] // the first series with points
   const n = xs.length
-  const max = niceMax(Math.max(0, ...series.flatMap((s) => s.points.map((p) => p[1]))))
+  const values = series.flatMap((s) => s.points.map((p) => p[1]))
+  const max = niceMax(Math.max(0, ...values))
+  const lo = Math.min(0, ...values)
+  const min = lo < 0 ? -niceMax(-lo) : 0 // negative values: the scale goes below 0, the bars hang under it
   const color = (i: number) => (series.length === 1 ? 'var(--primary)' : COLORS[i % COLORS.length])
   const padL = 34
   const padB = 18
@@ -55,11 +58,11 @@ export function Chart({ kind, series, unit, height = 140 }: { kind: 'bar' | 'lin
   const H = height
   const plotW = W - padL - 4
   const plotH = H - padB - padT
-  const y = (v: number) => padT + plotH - (v / max) * plotH
+  const y = (v: number) => padT + plotH - ((v - min) / (max - min)) * plotH
   const band = n ? plotW / n : plotW
   const xc = (i: number) => padL + band * i + band / 2
   const xl = (i: number) => (n <= 1 ? padL + plotW / 2 : padL + (plotW * i) / (n - 1))
-  const ticks = [0, max / 2, max]
+  const ticks = min < 0 ? [min, 0, max] : [0, max / 2, max]
   const labelEvery = Math.max(1, Math.ceil(n / Math.max(1, Math.floor(plotW / 56))))
   const fmtV = (v: number) => `${compact(v, lang)}${unit ? ` ${unit}` : ''}`
 
@@ -120,12 +123,13 @@ export function Chart({ kind, series, unit, height = 140 }: { kind: 'bar' | 'lin
                   const bw = Math.max(2, (groupW - 2 * (series.length - 1)) / series.length)
                   return s.points.map((p, i) => {
                     const x0 = xc(i) - groupW / 2 + si * (bw + 2)
-                    const h = Math.max(0, y(0) - y(p[1]))
+                    const h = Math.abs(y(0) - y(p[1]))
                     const r = Math.min(4, bw / 2, h)
+                    const up = p[1] >= 0 ? -1 : 1 // a negative bar goes down from 0, its rounded end at the bottom
                     return (
                       <path
                         key={`${si}-${i}`}
-                        d={`M${x0},${y(0)} v${-(h - r)} q0,${-r} ${r},${-r} h${bw - 2 * r} q${r},0 ${r},${r} v${h - r} z`}
+                        d={`M${x0},${y(0)} v${up * (h - r)} q0,${up * r} ${r},${up * r} h${bw - 2 * r} q${r},0 ${r},${-up * r} v${-up * (h - r)} z`}
                         fill={color(si)}
                         opacity={hover == null || hover === i ? 1 : 0.45}
                         className="mx-grow-y transition-opacity"
@@ -152,7 +156,7 @@ export function Chart({ kind, series, unit, height = 140 }: { kind: 'bar' | 'lin
                     </g>
                   )
                 })}
-            {hover != null && kind === 'line' && <line x1={hx} x2={hx} y1={padT} y2={y(0)} stroke="var(--color-muted-foreground)" strokeOpacity={0.35} strokeWidth={1} />}
+            {hover != null && kind === 'line' && <line x1={hx} x2={hx} y1={padT} y2={padT + plotH} stroke="var(--color-muted-foreground)" strokeOpacity={0.35} strokeWidth={1} />}
           </svg>
         )}
         {hover != null && width > 0 && (
