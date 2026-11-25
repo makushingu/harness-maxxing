@@ -54,7 +54,7 @@ def list_files() -> list[dict]:
     return [{"name": k, "filename": e.get("filename") or k, "size": e.get("size"),
              "sha256": e["sha256"][:SHA_SHOWN] if isinstance(e.get("sha256"), str) else None,
              "note": e.get("note", ""), "expose": bool(e.get("expose")), "updated": e.get("updated")}
-            for k, e in sorted(_meta().items())]
+            for k, e in sorted(_meta().items()) if path_of(k)]   # an entry without its file (a crash): not listed
 
 
 def path_of(name: str) -> Path | None:
@@ -66,11 +66,17 @@ def path_of(name: str) -> Path | None:
 
 
 def read(name: str) -> bytes | None:
+    """The content, or None - also when the bytes are not the ones of the entry (a put killed between saving the
+    metadata and renaming the new file leaves the old bytes behind)."""
     p = path_of(name)
     try:
-        return p.read_bytes() if p else None
+        data = p.read_bytes() if p else None
     except OSError:
         return None
+    want = _meta().get(name, {}).get("sha256")
+    if data is not None and isinstance(want, str) and hashlib.sha256(data).hexdigest() != want:
+        return None
+    return data
 
 
 def _stage(name: str, data: bytes) -> Path:
@@ -96,13 +102,16 @@ def _sweep(files: dict, s: dict) -> None:
     """Under config._lock: remove what a crash left in the folder - temp files older than STALE_TMP_S and files with
     no metadata entry. A file that has an entry is never touched; folders are left alone. Never raises.
     Nothing when the entries could not be read (secrets.json damaged, vault_files not an object): every file would
-    look orphaned."""
+    look orphaned. An entry whose file is gone (a put killed before the rename) is dropped from `files`."""
     if not isinstance(s.get("vault_files"), dict):
         return
     try:
         entries = list(files_dir().iterdir())
     except OSError:
         return
+    present = {p.name for p in entries}
+    for k in [k for k in files if k not in present]:
+        files.pop(k)
     now = time.time()
     for p in entries:
         try:
@@ -127,6 +136,7 @@ def put(name: str, data: bytes | None = None, filename: str | None = None, note:
         if isinstance(s.get("vault"), dict) and name in s["vault"]:
             raise VaultError(f"{name} is already a text key", "name_taken")
         files = s.get("vault_files") if isinstance(s.get("vault_files"), dict) else {}
+        _sweep(files, s)
         if create and name in files:
             raise VaultError(f"a file named {name} already exists", "exists")
         cur: dict[str, Any] = dict(files.get(name) or {})
@@ -135,7 +145,6 @@ def put(name: str, data: bytes | None = None, filename: str | None = None, note:
         set_note_expose(cur, note, expose)
         if filename is not None or "filename" not in cur:
             cur["filename"] = clean_filename(filename, cur.get("filename") or name)
-        _sweep(files, s)
         tmp = None
         if data is not None:
             cur["size"] = len(data)

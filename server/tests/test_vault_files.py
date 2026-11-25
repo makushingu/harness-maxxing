@@ -397,6 +397,17 @@ def test_cli_get_file_into_a_closed_pipe_is_quiet(mx, monkeypatch, capsys):
         os.close(devnull)
 
 
+def test_cli_buffered_output_into_a_closed_pipe_is_quiet(mx, monkeypatch):
+    class Closed(io.BytesIO):
+        def write(self, b):
+            raise BrokenPipeError(32, "Broken pipe")
+    fake = io.TextIOWrapper(Closed())
+    monkeypatch.setattr("sys.stdout", fake)
+    monkeypatch.setattr(cli, "_stdout_gone", lambda: True)
+    monkeypatch.setitem(cli.COMMANDS, "zz-print", ("print", lambda p: None, lambda a: print("line") or 0))
+    assert cli.main(["zz-print"]) == 141                  # the print is buffered: it fails at the flush
+
+
 def test_cli_get_file_output_leaves_no_partial_file(mx, monkeypatch):
     vault_files.put("PART_FILE", BLOB)
     dest = mx["tmp"] / "out" / "part.bin"
@@ -514,3 +525,16 @@ def test_a_damaged_secrets_json_never_makes_a_put_or_delete_erase_the_other_file
     config._forget_secrets()
     vault_files.delete("NOPE")
     assert (d / "KEYSTORE_A").exists() and (d / "KEYSTORE_B").exists()
+
+
+def test_a_put_killed_between_metadata_and_rename_never_serves_stale_or_phantom_files(mx):
+    vault_files.put("OLD_FILE", BLOB)
+    files = config.load_secrets()["vault_files"]
+    files["OLD_FILE"] = {**files["OLD_FILE"], "sha256": hashlib.sha256(b"new").hexdigest(), "size": 3}
+    files["NEW_FILE"] = {"filename": "NEW_FILE", "size": 3, "sha256": hashlib.sha256(b"new").hexdigest()}
+    config.set_secret("vault_files", files)                 # the state a kill right after the metadata save leaves
+    assert vault_files.read("OLD_FILE") is None              # the old bytes are not the entry's: not served
+    assert vault_files.read("NEW_FILE") is None
+    assert [f["name"] for f in vault_files.list_files()] == ["OLD_FILE"]
+    vault_files.put("NEW_FILE", b"again", create=True)       # the phantom entry does not block the name
+    assert vault_files.read("NEW_FILE") == b"again"

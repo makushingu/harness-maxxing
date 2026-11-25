@@ -428,3 +428,78 @@ def test_the_team_chat_name_keeps_its_room_next_to_the_header_buttons():
     assert head.count("min-w-24 flex-1") == 2                 # a dm and a group: never squashed to 0 px
     page = (WEB / "features" / "team" / "TeamPage.tsx").read_text(encoding="utf-8")
     assert "newChat('max-xl:sr-only')" in page and "max-xl:sr-only\">{t('team.toBubble')}" in page
+
+
+REACT_STUB = """export function useRef(v) { return { current: v } }
+export function useEffect(f) { f() }
+export function useLayoutEffect(f) { f() }
+"""
+
+
+def _run_ts_stubbed(tmp_path: Path, source: Path, script: str, prelude: str = "", swap: dict | None = None):
+    """_run_ts for a module that imports React (a stub running effects at once) or an `@/` module (`swap`: its
+    import line -> a replacement); `prelude` runs before the import (globals such as window, localStorage)."""
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node not installed")
+    text = source.read_text(encoding="utf-8")
+    for old, new in (swap or {}).items():
+        assert old in text, old
+        text = text.replace(old, new)
+    (tmp_path / "node_modules/react").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "node_modules/react/package.json").write_text('{"name": "react", "type": "module", "main": "index.js"}')
+    (tmp_path / "node_modules/react/index.js").write_text(REACT_STUB)
+    (tmp_path / "mod.ts").write_text(text, encoding="utf-8")
+    (tmp_path / "pre.mjs").write_text(prelude, encoding="utf-8")
+    (tmp_path / "main.mjs").write_text(
+        "import './pre.mjs'\nconst load = (q = '') => import('./mod.ts' + q)\nconst m = await load()\n"
+        f"console.log(JSON.stringify(await (async () => {{ {script} }})()))\n", encoding="utf-8")
+    r = subprocess.run([node, "--experimental-strip-types", "--no-warnings", "main.mjs"], cwd=tmp_path,
+                       capture_output=True, text=True, timeout=60)
+    if r.returncode and ("strip-types" in r.stderr or "Unknown file extension" in r.stderr):
+        pytest.skip("this node cannot strip types")
+    assert r.returncode == 0, r.stderr
+    return json.loads(r.stdout)
+
+
+def test_a_toggle_shortcut_held_down_runs_once(tmp_path):
+    out = _run_ts_stubbed(tmp_path, WEB / "commands/shortcuts.ts", """
+      const ev = (o) => ({ key: 'p', shiftKey: true, ctrlKey: false, metaKey: false, altKey: false, isComposing: false,
+        defaultPrevented: false, repeat: false, target: { tagName: 'BODY', closest: () => null }, preventDefault() {}, ...o })
+      let toggled = 0, zoom = 0
+      m.useHotkey('shift+p', () => toggled++, { repeat: false })
+      m.useHotkey('+', () => zoom++)
+      const fire = (e) => globalThis.L.forEach((f) => f(e))
+      fire(ev({})); for (let i = 0; i < 7; i++) fire(ev({ repeat: true }))
+      fire(ev({ key: '+' })); fire(ev({ key: '+', repeat: true }))
+      return [toggled, zoom]""", prelude="globalThis.L = []\nglobalThis.window = { addEventListener: (_, f) => L.push(f), "
+                                         "removeEventListener() {} }\n")
+    assert out == [1, 2]                                  # zoom keys still repeat
+
+
+def test_a_row_back_before_its_exit_ends_is_shown_again(tmp_path):
+    out = _run_ts_stubbed(tmp_path, WEB / "lib/presence.ts", """
+      let cancelled = false
+      const el = { inert: false, offsetLeft: 1, offsetTop: 2, offsetWidth: 3, offsetHeight: 4,
+        style: { pointerEvents: '', position: 'relative', left: '', top: '', width: '', height: '', margin: '', zIndex: '' },
+        animate: () => ({ cancel: () => { cancelled = true } }) }
+      m.animateOut(el, 'y')
+      const out = { inert: el.inert, position: el.style.position }
+      m.animateBack(el)
+      return [out, el.inert, el.style.position, el.style.pointerEvents, el.style.width, cancelled]""",
+                          prelude="globalThis.window = { matchMedia: () => ({ matches: false }) }\n")
+    assert out == [{"inert": True, "position": "absolute"}, False, "relative", "", "", True]
+
+
+def test_media_positions_of_two_tabs_are_merged_not_erased(tmp_path):
+    out = _run_ts_stubbed(tmp_path, WEB / "features/files/mediaMemory.ts", """
+      const b = await load('?tab-b')
+      m.resumePos('x', 100); b.resumePos('y', 100)            // each tab reads the (empty) key once
+      m.setMediaPos('a', 40); await new Promise((r) => setTimeout(r, 1100))
+      b.setMediaPos('b', 50); await new Promise((r) => setTimeout(r, 1100))
+      m.clearMediaPos('a'); await new Promise((r) => setTimeout(r, 1100))
+      return Object.keys(JSON.parse(globalThis.S.get('mx-media-pos'))).sort()""",
+                          prelude="const s = new Map()\nglobalThis.S = { get: (k) => s.get(k) ?? null, "
+                                  "set: (k, v) => s.set(k, v) }\n",
+                          swap={"import { store } from '@/lib/utils'": "const store = globalThis.S"})
+    assert out == ["b"]                                   # b's position kept, the one cleared in a stays cleared

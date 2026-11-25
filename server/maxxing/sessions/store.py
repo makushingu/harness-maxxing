@@ -487,7 +487,11 @@ def hold_run_lock(sid: str, wait_s: float = 0.0) -> int | None:
 def runner_alive(sid: str, meta: dict | None = None) -> bool:
     """True when a runner holds the run lock, or was spawned less than SPAWN_GRACE_S ago."""
     meta = meta if meta is not None else read(sid)
-    if meta and meta.get("spawned_at") and time.time() - float(meta["spawned_at"]) < SPAWN_GRACE_S:
+    try:
+        spawned = float(meta["spawned_at"]) if meta and meta.get("spawned_at") else 0.0
+    except (TypeError, ValueError):                     # a hand-edited or damaged meta: no grace, look at the lock
+        spawned = 0.0
+    if spawned and time.time() - spawned < SPAWN_GRACE_S:
         return True
     try:
         fd = os.open(_path(sid, ".run"), os.O_RDWR)    # no file: nobody holds it (not created just to look)

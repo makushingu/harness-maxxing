@@ -112,7 +112,9 @@ def main(argv: list[str] | None = None) -> int:
         s.set_defaults(fn=handler)
     a = p.parse_args(argv)
     try:
-        return a.fn(a) or 0
+        rc = a.fn(a) or 0
+        sys.stdout.flush()                          # a buffered print fails here, not in the flush at exit
+        return rc
     except BrokenPipeError:
         if not _stdout_gone():
             raise                                   # a pipe of the command itself (a socket, a child): a real error

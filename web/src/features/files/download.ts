@@ -35,8 +35,15 @@ function save(href: string, name: string) {
   a.remove()
 }
 
+/** The server answered with an error (a deleted file, a refused path): said, never followed to the raw URL. */
+class DownloadStatusError extends Error {
+  constructor(readonly status: number) {
+    super(`HTTP ${status}`)
+  }
+}
+
 /** The body of `url` as a Blob, or null when it is larger than `max` (seen from Content-Length or while reading)
- * or not read within `waitMs`. */
+ * or not read within `waitMs`. DownloadStatusError when the server answers with an error. */
 async function fetchUpTo(url: string, max: number, waitMs: number): Promise<Blob | null> {
   const ctrl = new AbortController()
   let late = false
@@ -56,7 +63,11 @@ async function fetchUpTo(url: string, max: number, waitMs: number): Promise<Blob
 async function readUpTo(url: string, max: number, ctrl: AbortController): Promise<Blob | null> {
   const res = await fetch(url, { credentials: 'same-origin', signal: ctrl.signal })
   const len = Number(res.headers.get('content-length') || 0)
-  if (!res.ok || len > max) {
+  if (!res.ok) {
+    ctrl.abort()
+    throw new DownloadStatusError(res.status)
+  }
+  if (len > max) {
     ctrl.abort()
     return null
   }
@@ -92,7 +103,12 @@ async function shareOrOpen(path: string, version: number | null | undefined, siz
     try {
       const blob = await fetchUpTo(url, SHARE_MAX, SHARE_READ_MS)
       if (blob) file = new File([blob], basename(path), { type: blob.type || 'application/octet-stream' })
-    } catch {
+    } catch (e) {
+      if (e instanceof DownloadStatusError) {
+        // opening the raw URL would leave the app for a bare error page with no way back
+        toast.error(tr('files.downloadFailed'), `${basename(path)} (${e.message})`)
+        return
+      }
       /* network: opened below */
     } finally {
       window.clearTimeout(wait)

@@ -473,3 +473,8 @@ def test_a_line_separator_inside_an_event_does_not_hide_it(mx):
     assert [json.loads(r) for r in raw if r] and len(raw) == 3 and nxt == store.log_path(sid).stat().st_size
     blob = json.dumps(service.read_events(sid, 0)[0], ensure_ascii=False)
     assert "echo a\u2028b\u2029c" in blob and "x\u0085y" in blob
+
+
+def test_runner_alive_with_a_damaged_spawned_at_looks_at_the_lock(mx):
+    for bad in ("soon", ["x"], {"a": 1}):
+        assert store.runner_alive("nope", {"spawned_at": bad}) is False

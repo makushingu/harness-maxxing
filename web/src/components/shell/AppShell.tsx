@@ -187,10 +187,10 @@ function GlobalHotkeys() {
   const toggleSidebar = useUI((s) => s.toggleSidebar)
   const setShortcuts = useShortcutsDialog((s) => s.setOpen)
   const nav = useNav()
-  useHotkey('mod+k', () => setPalette(!useCommandStore.getState().open), { allowInInput: true })
-  useHotkey('mod+\\', toggleSidebar, { allowInInput: true })
+  useHotkey('mod+k', () => setPalette(!useCommandStore.getState().open), { allowInInput: true, repeat: false })
+  useHotkey('mod+\\', toggleSidebar, { allowInInput: true, repeat: false })
   useHotkey('?', () => setShortcuts(true))
-  useHotkey('shift+p', () => useUI.getState().setPresentation(!useUI.getState().presentation))
+  useHotkey('shift+p', () => useUI.getState().setPresentation(!useUI.getState().presentation), { repeat: false })
   return (
     <>
       {nav.map((n) => (

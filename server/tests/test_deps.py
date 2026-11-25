@@ -244,6 +244,16 @@ def test_drop_other_libc_keeps_only_this_hosts_native_builds(tmp_path):
     assert left == {"@rspack/binding-linux-x64-gnu", "@rspack/core", "any-libc", "broken"}
 
 
+def test_drop_other_libc_follows_npm_negations_and_skips_non_objects(tmp_path):
+    nm = tmp_path / "node_modules"
+    pkgs = {"not-musl": {"libc": ["!musl"]}, "not-glibc": {"libc": ["!glibc"]}, "a-list": ["x"]}
+    for name, data in pkgs.items():
+        (nm / name).mkdir(parents=True)
+        (nm / name / "package.json").write_text(json.dumps(data))
+    assert deps.drop_other_libc(nm, "glibc") == ["not-glibc"]
+    assert {p.parent.name for p in nm.glob("*/package.json")} == {"not-musl", "a-list"}
+
+
 def test_clean_drops_old_versions_orphans_caches_and_big_logs(st, monkeypatch):
     home = deps.root_home()
     (home / ".cache/uv/x").mkdir(parents=True)

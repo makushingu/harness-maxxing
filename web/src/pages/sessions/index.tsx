@@ -9,7 +9,7 @@ import { Navigate, Route, Routes, useLocation, useNavigate, useParams, useSearch
 import { Columns2, Keyboard, LayoutGrid, MessageSquarePlus, MessagesSquare, PanelLeftOpen } from 'lucide-react'
 import { useT } from '@/i18n'
 import { cn } from '@/lib/utils'
-import { animateIn, animateOut, EASE_OUT, reducedMotion, usePresence } from '@/lib/presence'
+import { animateBack, animateIn, animateOut, EASE_OUT, reducedMotion, usePresence } from '@/lib/presence'
 import { useModeMotion, useTabSwitchMotion } from './tabMotion'
 import { useOpenSync, useShared } from './openSync'
 import { useRegisterCommands } from '@/commands/registry'
@@ -482,6 +482,9 @@ function Workspace() {
       if (p.leaving && !el.dataset.leaving) {
         el.dataset.leaving = '1'
         animateOut(el, 'x')
+      } else if (!p.leaving && el.dataset.leaving) {
+        delete el.dataset.leaving // back before it was removed
+        animateBack(el)
       } else if (p.appear && !p.leaving && !el.dataset.appeared) {
         el.dataset.appeared = '1'
         animateIn(el, places.places.get(p.key)?.row === 'bottom' ? 'y' : 'x')

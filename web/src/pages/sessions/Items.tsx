@@ -655,10 +655,27 @@ function Thinking({ text }: { text: string }) {
 const OUT_PREVIEW = 1600
 const FILE_TOOLS = new Set(['Read', 'Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'NotebookRead'])
 
+/** Tool cards the user opened (by call id), outside the card: a 3rd read in a row turns the row into a ToolGroup and
+ *  mounts its cards again - the open one, and the group around it, open again. */
+const openCards = new Set<string>()
+const OPEN_CARDS_MAX = 200
+
+function useCardOpen(id: string): [boolean, React.Dispatch<React.SetStateAction<boolean>>] {
+  const [open, setOpenState] = React.useState(() => openCards.has(id))
+  const setOpen = React.useCallback((v: React.SetStateAction<boolean>) => setOpenState((o) => {
+    const next = typeof v === 'function' ? v(o) : v
+    openCards.delete(id)
+    if (next) openCards.add(id)
+    if (openCards.size > OPEN_CARDS_MAX) openCards.delete(openCards.values().next().value!)
+    return next
+  }), [id])
+  return [open, setOpen]
+}
+
 function ToolCard({ item, live }: { item: Extract<Item, { kind: 'tool' }>; live: boolean }) {
   const t = useT()
-  const [open, setOpen] = React.useState(false)
   const { use, result } = item
+  const [open, setOpen] = useCardOpen(use.id)
   const Icon = toolIcon(use.name)
   const { running } = React.useContext(ItemContext)
   // A sub-agent or a background command: its own state, not its tool result ("launched" comes back at once).
@@ -756,7 +773,7 @@ export function groupable(it: Item): boolean {
 /** "Explored 4 files · 2 searches": the read-only calls of a row as one line, their cards inside. */
 export function ToolGroup({ items, live }: { items: Extract<Item, { kind: 'tool' }>[]; live: boolean[] }) {
   const t = useT()
-  const [open, setOpen] = React.useState(false)
+  const [open, setOpen] = React.useState(() => items.some((it) => openCards.has(it.use.id)))
   const n = { read: 0, search: 0, list: 0, look: 0 }
   let pending = false
   let failed = false

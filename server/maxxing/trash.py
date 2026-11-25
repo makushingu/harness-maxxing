@@ -532,25 +532,28 @@ def trash_session(sid: str) -> Path:
                 pass
         n += 1
         dest = trash_dir() / f"{base}-{n}"
-    moved: list[tuple[Path, Path]] = []
-    try:
-        config.write_json(sidecar, {"original": sid, "at": time.time(), "kind": "session",
-                                    "title": meta.get("title") or "Session", "path": meta.get("path") or ""})
-        dest.mkdir(parents=True)
-        for ext in (".json", ".log"):
-            src = store._path(sid, ext)                 # noqa: SLF001 - same package family
-            if src.exists():
-                shutil.move(str(src), str(dest / f"{sid}{ext}"))
-                moved.append((dest / f"{sid}{ext}", src))
-    except BaseException:
-        for done, src in moved:                         # the session stays in the store, not half in the trash
-            try:
-                shutil.move(str(done), str(src))
-            except OSError:
-                log.exception("putting back %s failed", src)
-        shutil.rmtree(dest, ignore_errors=True)
-        sidecar.unlink(missing_ok=True)
-        raise
+    # under the meta lock: an edit already under way (end of a turn, a rename) finishes before the move, and one
+    # waiting for the lock then finds no meta (KeyError) instead of writing it back next to the trashed copy
+    with store._flock(sid):                             # noqa: SLF001
+        moved: list[tuple[Path, Path]] = []
+        try:
+            config.write_json(sidecar, {"original": sid, "at": time.time(), "kind": "session",
+                                        "title": meta.get("title") or "Session", "path": meta.get("path") or ""})
+            dest.mkdir(parents=True)
+            for ext in (".json", ".log"):
+                src = store._path(sid, ext)                 # noqa: SLF001 - same package family
+                if src.exists():
+                    shutil.move(str(src), str(dest / f"{sid}{ext}"))
+                    moved.append((dest / f"{sid}{ext}", src))
+        except BaseException:
+            for done, src in moved:                         # the session stays in the store, not half in the trash
+                try:
+                    shutil.move(str(done), str(src))
+                except OSError:
+                    log.exception("putting back %s failed", src)
+            shutil.rmtree(dest, ignore_errors=True)
+            sidecar.unlink(missing_ok=True)
+            raise
     store.remove(sid)                                   # locks and run markers
     bus.invalidate("trash")
     return dest

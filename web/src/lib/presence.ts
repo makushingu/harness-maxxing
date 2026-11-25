@@ -85,19 +85,35 @@ export function animateIn(el: HTMLElement, axis: 'x' | 'y', ms = PRESENCE_MS) {
   })
 }
 
+const OUT_STYLES = ['pointerEvents', 'position', 'left', 'top', 'width', 'height', 'margin', 'zIndex'] as const
+/** What animateOut changed on an element, to put back if the item comes back before it unmounts. */
+const leftStyles = new WeakMap<HTMLElement, { inert: boolean; style: Record<string, string>; anim?: Animation }>()
+
 /** Exit: the element leaves the layout at once (absolute, where it was - its parent must be `relative`) so
- * the others slide over it (useFlip), and fades out; it stays inert until it unmounts. */
+ * the others slide over it (useFlip), and fades out; it stays inert until it unmounts, or until animateBack. */
 export function animateOut(el: HTMLElement, axis: 'x' | 'y', ms = PRESENCE_MS) {
+  if (!leftStyles.has(el)) leftStyles.set(el, { inert: el.inert, style: Object.fromEntries(OUT_STYLES.map((k) => [k, el.style[k]])) })
   el.inert = true
   el.style.pointerEvents = 'none'
   if (reducedMotion()) return
   const { offsetLeft: left, offsetTop: top, offsetWidth: w, offsetHeight: h } = el
   Object.assign(el.style, { position: 'absolute', left: `${left}px`, top: `${top}px`, width: `${w}px`, height: `${h}px`, margin: '0', zIndex: '0' })
-  el.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: axis === 'x' ? 'scale(0.97)' : 'translateX(-8px)' }], {
+  leftStyles.get(el)!.anim = el.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: axis === 'x' ? 'scale(0.97)' : 'translateX(-8px)' }], {
     duration: ms * 0.8,
     easing: EASE_IN_OUT,
     fill: 'forwards',
   })
+}
+
+/** The item came back while it was leaving (usePresence keeps its key, React keeps the element): undo animateOut,
+ * or the row stays invisible, out of the flow and inert. Nothing when the element was not leaving. */
+export function animateBack(el: HTMLElement) {
+  const was = leftStyles.get(el)
+  if (!was) return
+  leftStyles.delete(el)
+  was.anim?.cancel()
+  el.inert = was.inert
+  Object.assign(el.style, was.style)
 }
 
 /** Elements that moved since the last layout (reorder, or the others arriving / leaving) slide from where

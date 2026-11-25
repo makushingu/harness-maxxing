@@ -55,6 +55,14 @@ def test_grants_are_cleaned_and_strict_refuses_bad_values():
     assert agents.clean({})["mail"] == []                      # nothing by default
 
 
+def test_strict_grants_refuse_rights_or_trigger_of_the_wrong_type():
+    for bad in ([{"account": "a", "rights": "read,move"}], [{"account": "a", "trigger": True}]):
+        with pytest.raises(access.AccessError):
+            access.clean_grants(bad, strict=True)
+    g = access.clean_grants([{"account": "a", "rights": "read,move", "trigger": True}])[0]
+    assert g["rights"] == ["read", "draft"] and g["trigger"] is None      # not strict: the old fallback
+
+
 def test_hand_written_senders_that_are_all_invalid_do_not_open_the_mailbox():
     for senders in (["jürgen@müller.de"], ["not an address", "x@*"], "client@example.com"):
         g = access.clean_grants([{"account": "a", "rights": ["read", "send"], "senders": senders,
