@@ -461,8 +461,8 @@ def load(d: Path) -> tuple[dict | None, list[str], str | None]:
         return None, warn, f"theme.json is over {MAX_JSON // 1024} KB"
     try:
         raw = json.loads(f.read_text(encoding="utf-8"))
-    except (ValueError, UnicodeDecodeError) as e:
-        return None, warn, f"theme.json is not valid JSON ({e})"
+    except (ValueError, UnicodeDecodeError, RecursionError) as e:   # RecursionError: nested too deep
+        return None, warn, f"theme.json is not valid JSON ({type(e).__name__ if isinstance(e, RecursionError) else e})"
     if not isinstance(raw, dict):
         return None, warn, "theme.json must be an object"
     schema = raw.get("schema", SCHEMA)
@@ -550,8 +550,8 @@ def list_themes() -> dict:
             continue
         try:
             t, _, err = load(d)
-        except OSError as e:
-            t, err = None, str(e)
+        except Exception as e:          # one broken folder never hides the others
+            t, err = None, str(e) or type(e).__name__
         if t and t["id"] != d.name:
             t, err = None, f"its id ({t['id']}) differs from its folder name"
         if t:

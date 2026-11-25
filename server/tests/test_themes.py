@@ -186,3 +186,15 @@ def test_a_theme_can_bring_its_own_logo(mx, client, tmp_path):
     assert themes.load(d)[0]["logo"]["light"] is None
     d = _theme(tmp_path, "one", {"name": "O", "logo_dark": "l.png"}, {"l.png": png})
     assert themes.load(d)[0]["logo"] == {"light": "/api/themes/one/file/l.png", "dark": "/api/themes/one/file/l.png"}
+
+
+def test_a_deeply_nested_theme_json_does_not_break_the_list(mx, client, tmp_path):
+    _theme(mx["ws"] / "themes", "fine", {"name": "Fine"})
+    deep = mx["ws"] / "themes" / "deep"
+    deep.mkdir()
+    (deep / "theme.json").write_text('{"name": "D", "light": ' + "[" * 30000 + "]" * 30000 + "}", encoding="utf-8")
+    t, _, err = themes.load(deep)
+    assert t is None and "JSON" in err
+    data = themes.list_themes()
+    assert [t["id"] for t in data["themes"]] == ["fine"] and data["errors"][0]["id"] == "deep"
+    assert client.get("/api/themes").status_code == 200
