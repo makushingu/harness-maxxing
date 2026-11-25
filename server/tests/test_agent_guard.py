@@ -243,6 +243,11 @@ def test_a_wrapped_first_paragraph_and_a_yaml_block_description_import_once():
         assert p["description"] == f"{want}\n\nYou are a senior reviewer." and p["fields"]["allowed_tools"] == ["Read"]
     md = "---\nname: last\ndescription: >\n  At the end\n  of the block.\n---\nBody.\n"
     assert agent_format.parse_md(md)["description"] == "At the end of the block.\n\nBody."
+    md = ("---\nname: x\ndescription: Use this agent to write\n  the weekly post every Monday\ntools: Read\n---\n"
+          "Body\n")
+    p = agent_format.parse_md(md)
+    assert p["description"] == "Use this agent to write the weekly post every Monday\n\nBody"
+    assert p["fields"]["allowed_tools"] == ["Read"] and p["ignored"] == []
 
 
 def test_agents_as_subagents_of_their_topic(client, topic, mx):

@@ -107,6 +107,9 @@ def parse_md(text: str) -> dict:
             cur = head.get(key)
             head[key] = (cur if isinstance(cur, list) else []) + [_unquote(item.group(1))]
             continue
+        if key and ln[:1] in (" ", "\t") and isinstance(head.get(key), str) and head[key]:
+            head[key] = f"{head[key]} {ln.strip()}"     # a plain YAML value wrapped on the indented lines below
+            continue
         kv = re.match(r"^([A-Za-z][A-Za-z0-9_-]*)\s*:\s*(.*)$", ln)
         if not kv:
             key = None
