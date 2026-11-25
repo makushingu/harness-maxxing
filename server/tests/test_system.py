@@ -543,3 +543,26 @@ def test_parallel_forced_usage_makes_one_upstream_call(org, monkeypatch):
         t.join()
     assert len(calls) == 1
     assert len(out) == 5 and all(u["available"] and u["five_hour"]["pct"] == 10.0 for u in out)
+
+
+def test_concurrent_health_requests_share_one_collect(mx, monkeypatch):
+    """When the cache has expired, simultaneous requests (dashboard card, health page) share the first collect."""
+    import threading
+    import time as _t
+    from maxxing import health
+    calls = {"n": 0}
+
+    def slow():
+        calls["n"] += 1
+        _t.sleep(0.3)
+        return {"issues": [], "n": calls["n"]}
+    monkeypatch.setattr(health, "_collect", slow)
+    health.invalidate_cache()
+    out: list = []
+    threads = [threading.Thread(target=lambda: out.append(health.collect())) for _ in range(4)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(5)
+    assert calls["n"] == 1 and len(out) == 4 and all(o["n"] == 1 for o in out)
+    assert health.collect(force=True)["n"] == 2                 # a forced collect still runs its own
