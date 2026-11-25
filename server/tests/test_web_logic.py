@@ -310,3 +310,11 @@ def test_only_the_widget_itself_speaks_to_the_page_that_frames_it(tmp_path):
     from maxxing.api.extensions import WIDGET_BRIDGE
     assert "K=String(init.key||'')" in WIDGET_BRIDGE and "post({mx:'hello'})" in WIDGET_BRIDGE
     assert "parent.postMessage(m,'*')" in WIDGET_BRIDGE and WIDGET_BRIDGE.count("parent.postMessage") == 1
+
+
+def test_a_link_to_a_chat_that_is_gone_keeps_the_team_header():
+    """?chat=<gone> (a group left, an old notification): the chat cannot load, the page still has its header (title,
+    New chat, and on a phone the button to the list and the menu)."""
+    src = (WEB / "features" / "team" / "TeamPage.tsx").read_text(encoding="utf-8")
+    assert "const known = !chatId || !team || team.chats.some((c) => c.id === chatId)" in src
+    assert "{(!chatId || !known || (isError && !team)) && <PageHeader" in src
