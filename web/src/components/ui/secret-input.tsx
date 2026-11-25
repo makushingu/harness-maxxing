@@ -27,6 +27,11 @@ export function SecretInput({ className, autoComplete = 'off', onValueChange, ..
     el?.focus()
     if (el) el.selectionStart = el.selectionEnd = el.value.length
   }, [multi])
+  // What FormField puts on the field (id for the label, aria-* for the help and the error) and focus handlers:
+  // the text area keeps them too.
+  const kept = Object.fromEntries(
+    Object.entries(props).filter(([k]) => /^(aria-|data-)/.test(k) || ['id', 'name', 'required', 'readOnly', 'onBlur', 'onFocus'].includes(k)),
+  ) as React.ComponentProps<'textarea'>
   const onPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
     const text = e.clipboardData.getData('text').replace(/\r\n?/g, '\n')
     // A line break only at the start or the end (copied from a terminal, a mail): one line, the input drops it.
@@ -40,6 +45,7 @@ export function SecretInput({ className, autoComplete = 'off', onValueChange, ..
     <div className={cn('relative', className)}>
       {multi ? (
         <Textarea
+          {...kept}
           ref={area}
           value={props.value as string}
           onChange={(e) => {
