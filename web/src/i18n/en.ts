@@ -173,6 +173,7 @@ export const en = {
   'shell.menu': 'Menu',
   'shell.navigation': 'Main navigation',
   'shell.theme': 'Mode',
+  'shell.themeForced': 'set by the theme',
   'theme.dark': 'Dark',
   'theme.light': 'Light',
   'theme.system': 'System',

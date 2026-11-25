@@ -227,13 +227,18 @@ export function resolveTheme(t: Theme): 'dark' | 'light' {
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
 }
 
+/** Light or dark as on screen: a theme made for one mode only imposes it over the Mode setting. */
+export function shownMode(theme: Theme, ct: { mode: 'light' | 'dark' | null } | null | undefined): 'dark' | 'light' {
+  return ct?.mode ?? resolveTheme(theme)
+}
+
 /** Applies theme/accent/density/lang to <html>. Called once from main.tsx (subscribes). */
 export function bindUIToDocument() {
   const apply = () => {
     const s = useUI.getState()
     const r = document.documentElement
     const ct = s.customTheme
-    const dark = ct?.mode ? ct.mode === 'dark' : resolveTheme(s.theme) === 'dark'
+    const dark = shownMode(s.theme, ct) === 'dark'
     r.classList.toggle('dark', dark)
     r.dataset.accent = s.accent
     r.dataset.density = s.density

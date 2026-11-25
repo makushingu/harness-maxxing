@@ -32,7 +32,8 @@ anything, and why it keeps working after an update. The one exception is optiona
   4.5:1 for text, 3:1 for secondary text and buttons). A pair that fails returns to the built-in colors.
 - **Updates add variables, never remove them**: an older theme simply gets the default of a new variable; a renamed
   one keeps working through an alias.
-- A theme with only a dark (or light) part shows that mode only. A theme removed while in use: the browser goes back
+- A theme with only a dark (or light) part shows that mode only: the sun / moon button of the sidebar shows it, greyed
+  out ("set by the theme"), and the command palette drops "Switch to light / dark theme". A theme removed while in use: the browser goes back
   to its base (Solid or Glass).
 - If a theme ever bothers you: Settings -> Appearance -> **Solid**.
 

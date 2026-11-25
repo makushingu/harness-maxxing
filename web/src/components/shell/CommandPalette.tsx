@@ -43,6 +43,7 @@ export function CommandPalette() {
   const chip: Chip = q.trim() ? picked : 'all'
   const logout = useLogout()
   const theme = useUI((s) => s.theme)
+  const forcedMode = useUI((s) => s.customTheme?.mode ?? null)
   const setTheme = useUI((s) => s.setTheme)
   const setPresentation = useUI((s) => s.setPresentation)
   const openShortcuts = useShortcutsDialog((s) => s.setOpen)
@@ -200,14 +201,17 @@ export function CommandPalette() {
         ? [{ id: 'act:browser', title: t('browser.mine.open') || t('nav.browser'), group: actions, icon: Globe, keywords: ['browser', 'chromium', 'navigateur', 'web'], perform: () => openMyBrowser() } satisfies Command]
         : []),
       { id: 'nav:x', title: t('ext.hubTitle'), group: nav, icon: Blocks, keywords: ['extensions', 'pages', 'plugins'], perform: ({ navigate }) => navigate('/settings/pages') },
-      {
-        id: 'act:theme',
-        title: resolveTheme(theme) === 'dark' ? t('palette.lightTheme') : t('palette.darkTheme'),
-        group: actions,
-        icon: resolveTheme(theme) === 'dark' ? Sun : Moon,
-        keywords: ['theme', 'dark', 'light'],
-        perform: () => setTheme(resolveTheme(theme) === 'dark' ? 'light' : 'dark'),
-      },
+      // a theme made for one mode imposes it: switching the Mode setting would change nothing on screen
+      ...(forcedMode
+        ? []
+        : [{
+            id: 'act:theme',
+            title: resolveTheme(theme) === 'dark' ? t('palette.lightTheme') : t('palette.darkTheme'),
+            group: actions,
+            icon: resolveTheme(theme) === 'dark' ? Sun : Moon,
+            keywords: ['theme', 'dark', 'light'],
+            perform: () => setTheme(resolveTheme(theme) === 'dark' ? 'light' : 'dark'),
+          } satisfies Command]),
       {
         id: 'act:presentation',
         title: presentation ? t('presentation.off') : t('presentation.on'),
@@ -283,7 +287,7 @@ export function CommandPalette() {
     for (const d of docs || [])
       list.push({ id: `doc:${d.slug}`, title: d.title, hint: d.section, group: docsG, icon: BookOpen, perform: ({ navigate }) => navigate(`/docs/${d.slug}`) })
     return list
-  }, [t, theme, presentation, ws, docs, setTheme, setPresentation, openShortcuts, logout, install, tutorialPath, navItems, agentsOn, agentList, groupList, open, browserOn])
+  }, [t, theme, forcedMode, presentation, ws, docs, setTheme, setPresentation, openShortcuts, logout, install, tutorialPath, navItems, agentsOn, agentList, groupList, open, browserOn])
 
   const pageCmds = Object.values(sources).flat()
   const all = [...pageCmds, ...staticCmds]

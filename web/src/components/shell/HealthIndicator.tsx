@@ -6,7 +6,7 @@ import { fmtBytes, fmtDuration } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useLang, useT, type TKey } from '@/i18n'
 import type { CpuSnapshot, Health, HealthIssue } from '@/lib/types'
-import { resolveTheme, useUI } from '@/stores/ui'
+import { shownMode, useUI } from '@/stores/ui'
 import { Badge, Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, Popover, PopoverContent, PopoverTrigger, ProgressBar, Sensitive, Skeleton, Tooltip } from '@/components/ui'
 import { iconBtn } from './nav'
 import { MeterBar, MeterIcon, MeterValue, MiniMeter, type MeterTone } from './Meter'
@@ -308,14 +308,15 @@ function SidebarLook({ collapsed, lead, tail }: { collapsed?: boolean; lead?: Re
   const setTheme = useUI((s) => s.setTheme)
   const presentation = useUI((s) => s.presentation)
   const setPresentation = useUI((s) => s.setPresentation)
-  const dark = resolveTheme(theme) === 'dark'
-  const themeLabel = `${t('shell.theme')} · ${t(dark ? 'theme.dark' : 'theme.light')}`
+  const forced = useUI((s) => s.customTheme?.mode ?? null)
+  const dark = shownMode(theme, { mode: forced }) === 'dark'
+  const themeLabel = `${t('shell.theme')} · ${t(dark ? 'theme.dark' : 'theme.light')}${forced ? ` · ${t('shell.themeForced')}` : ''}`
   const presLabel = presentation ? t('presentation.off') : t('presentation.on')
   const side = collapsed ? 'right' : 'top'
   const buttons = (
     <>
       <Tooltip content={themeLabel} side={side}>
-        <button type="button" className={iconBtn()} aria-label={themeLabel} onClick={() => setTheme(dark ? 'light' : 'dark')}>
+        <button type="button" className={cn(iconBtn(), forced && 'cursor-default opacity-50')} aria-label={themeLabel} aria-disabled={!!forced || undefined} onClick={() => !forced && setTheme(dark ? 'light' : 'dark')}>
           {dark ? <Moon /> : <Sun />}
         </button>
       </Tooltip>
