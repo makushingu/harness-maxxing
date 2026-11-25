@@ -170,6 +170,10 @@ def _text(v: Any, n: int) -> str:
     return agents._utf8(str(v or "")).strip()[:n]
 
 
+def _line(v: Any, n: int) -> str:
+    """One line: a name or a role is written in the group's CLAUDE.md title and in the members' prompt."""
+    return " ".join(agents._utf8(str(v or "")).split())[:n]
+
 
 def _created(v: Any) -> float:
     try:
@@ -200,7 +204,7 @@ def clean(data: Any, project: str, strict: bool = False) -> dict:
         if p in seen:
             continue
         seen.add(p)
-        members.append({"path": p, "role": _text(m.get("role"), ROLE_MAX), "handle": str(m.get("handle") or "")})
+        members.append({"path": p, "role": _line(m.get("role"), ROLE_MAX), "handle": str(m.get("handle") or "")})
     if strict and not MIN_MEMBERS <= len(members) <= MAX_MEMBERS:
         raise GroupError(400, "members", f"A group has {MIN_MEMBERS} to {MAX_MEMBERS} members")
     members = members[:MAX_MEMBERS]
@@ -209,7 +213,7 @@ def clean(data: Any, project: str, strict: bool = False) -> dict:
     if lead not in [m["path"] for m in members]:
         lead = ""
     lim = d.get("limits") if isinstance(d.get("limits"), dict) else {}
-    out = {"version": 1, "name": _text(d.get("name"), NAME_MAX), "emoji": _text(d.get("emoji"), 8),
+    out = {"version": 1, "name": _line(d.get("name"), NAME_MAX), "emoji": _line(d.get("emoji"), 8),
            "members": members, "lead": lead,
            "shared_files": d.get("shared_files", True) is not False,
            "trust_members": d.get("trust_members", True) is not False,
