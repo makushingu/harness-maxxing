@@ -226,3 +226,12 @@ def test_a_token_the_cloud_sends_is_checked_before_it_is_stored(mx, monkeypatch,
     st = register.save(email="a@b.co")
     assert not config.get_secret(register.TOKEN) and st["error"] == "bad_token_answer" and not st["registered"]
 
+
+
+@pytest.mark.parametrize("bad", [5, ["email"], "x"])
+def test_a_damaged_register_section_falls_back_to_the_defaults(client, bad):
+    config.update_config(register=bad)
+    assert register.settings() == register.DEFAULTS
+    assert client.get("/api/settings/feedback").status_code == 200
+    r = client.get("/api/onboarding")
+    assert r.status_code == 200 and r.json()["steps"]["profile"] is False

@@ -8,7 +8,7 @@ import asyncio
 
 from fastapi import APIRouter, Depends
 
-from .. import bus, config, security, workspace
+from .. import bus, config, register, security, workspace
 from ..security import require_auth
 from .claude import auth_status
 
@@ -26,7 +26,7 @@ def steps() -> dict:
             "workspace": has_topic,
             "telegram": bool((cfg.get("telegram") or {}).get("chat_id")),
             "backup": bool((cfg.get("backup") or {}).get("repo")),
-            "profile": bool((cfg.get("register") or {}).get("asked"))}
+            "profile": bool(register.settings()["asked"])}
 
 
 @router.get("")
