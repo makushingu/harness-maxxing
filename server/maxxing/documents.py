@@ -146,7 +146,7 @@ class _Pack:
         _no_dtd(data)
         try:
             return _strip(ET.fromstring(data))
-        except ET.ParseError:
+        except (ET.ParseError, LookupError):             # LookupError: an encoding Python does not know
             raise Unreadable("unsupported", "This document cannot be read") from None
 
     def stream(self, name: str):
@@ -157,7 +157,7 @@ class _Pack:
         try:
             with self.zf.open(info) as f:
                 yield from ET.iterparse(_Capped(f, self), events=("start", "end"))
-        except ET.ParseError:
+        except (ET.ParseError, LookupError):
             raise _Full from None
         except _ZIP_ERRORS:
             raise Unreadable("unsupported", "This document cannot be read") from None

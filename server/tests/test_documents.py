@@ -326,3 +326,14 @@ def test_the_time_limit_is_checked_while_nothing_is_written(tmp_path, monkeypatc
     assert r["truncated"]
     r = documents.read(xlsx(tmp_path / "empty.xlsx", '<row r="1">' + "<c/>" * 500 + "</row>"))
     assert r["truncated"]
+
+
+def test_an_unknown_xml_encoding_is_unreadable_not_a_crash(tmp_path):
+    f = xlsx(tmp_path / "e.xlsx", "")
+    with zipfile.ZipFile(f) as z:
+        parts = {n: z.read(n).decode() for n in z.namelist()}
+    parts["xl/worksheets/sheet1.xml"] = '<?xml version="1.0" encoding="x-nope"?><worksheet/>'
+    assert documents.read(pack(tmp_path / "sheet.xlsx", parts))["type"] == "sheets"   # the sheet is cut, the rest shown
+    parts["xl/workbook.xml"] = '<?xml version="1.0" encoding="x-nope"?><workbook/>'
+    with pytest.raises(documents.Unreadable):
+        documents.read(pack(tmp_path / "book.xlsx", parts))
