@@ -458,3 +458,18 @@ def test_a_scan_of_a_folder_still_changing_is_not_kept(mx, monkeypatch):
     monkeypatch.setattr(store, "IDS_RACY_S", 0.0)
     store.list_ids()
     assert store._ids["key"] is not None
+
+
+def test_a_line_separator_inside_an_event_does_not_hide_it(mx):
+    meta = store.new_meta("", "separators")
+    store.create(meta)
+    sid = meta["id"]
+    lines = [json.dumps({"type": "assistant", "message": {"content": [{"type": "tool_use", "id": "t1", "name": "Bash",
+                                                                        "input": {"command": "echo a\u2028b\u2029c"}}]}}, ensure_ascii=False),
+             json.dumps({"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": "t1",
+                                                                   "content": "x\u0085y"}]}}, ensure_ascii=False)]
+    store.log_path(sid).write_text("\n".join(lines) + "\r\n\n", encoding="utf-8")   # as the runner writes them
+    raw, nxt = service.read_raw(sid, 0)
+    assert [json.loads(r) for r in raw if r] and len(raw) == 3 and nxt == store.log_path(sid).stat().st_size
+    blob = json.dumps(service.read_events(sid, 0)[0], ensure_ascii=False)
+    assert "echo a\u2028b\u2029c" in blob and "x\u0085y" in blob
