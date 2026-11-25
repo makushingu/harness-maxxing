@@ -284,6 +284,28 @@ def test_a_strangers_pull_request_runs_nothing_before_it_is_read(client, code, m
     assert store.read(s["id"])["plan_mode"] if who.get("outside") else True
 
 
+def test_reopening_a_forks_pull_request_keeps_the_local_commits(client, code, mx):
+    """pr/<n> is kept when its copy is removed (its commits cannot go back to the fork): opening the pull request
+    again moves it forward only, never back over those commits."""
+    topic, clone = code
+    _with_pull(clone, Path(mx["tmp"]))
+    pr = {"number": 7, "fork": True}
+    assert worktrees._pr_branch(clone, pr) == ("pr/7", None)
+    def rev(r: str) -> str:
+        return _git(clone, "rev-parse", r).strip()
+    theirs = rev("pr/7")
+    mine = _git(clone, "commit-tree", "-p", theirs, "-m", "mine", rev("pr/7^{tree}")).strip()
+    _git(clone, "update-ref", "refs/heads/pr/7", mine)          # a local commit, its copy since removed
+    assert worktrees._pr_branch(clone, pr) == ("pr/7", None)
+    assert rev("pr/7") == mine                                  # not reset to the fork's head
+    _git(clone, "update-ref", "refs/heads/pr/7", theirs)
+    _git(clone, "push", "-q", "origin", f"{mine}:refs/pull/7/head")   # the author pushed: moved forward
+    worktrees._pr_branch(clone, pr)
+    assert rev("pr/7") == mine
+    assert subprocess.run(["git", "-C", str(clone), "config", "branch.pr/7.remote"], capture_output=True,
+                          env={**ENV, "HOME": str(clone)}).returncode != 0   # tracks nothing: no push to origin
+
+
 def test_a_copy_that_fails_halfway_leaves_no_folder_nor_branch(client, code, monkeypatch):
     from maxxing.sessions import service
     topic, clone = code

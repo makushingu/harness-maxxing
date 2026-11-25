@@ -292,25 +292,26 @@ def _pr_branch(repo: Path, pr: dict) -> tuple[str, str | None]:
     """Fetch a pull request's head into a local branch. Same repository: the branch itself (tracking origin);
     a fork: `pr/<n>` from refs/pull/<n>/head (pushing back is not possible). -> (branch, upstream to track)."""
     n = int(pr["number"])
-    if pr.get("fork") or not pr.get("ref"):
-        local = f"pr/{n}"
-        codediff._git(repo, "fetch", "origin", f"+refs/pull/{n}/head:refs/heads/{local}", write=True,
-                      timeout=codediff.WRITE_TIMEOUT)
-        return local, None
-    ref = str(pr["ref"])
-    if not _valid_branch(repo, ref):
-        raise GitError(400, "bad_branch", "the pull request's branch name is not valid here")
-    codediff._git(repo, "fetch", "origin", f"+refs/heads/{ref}:refs/remotes/origin/{ref}", write=True,
+    fork = bool(pr.get("fork") or not pr.get("ref"))
+    if fork:                                        # the local pr/<n> may hold commits kept when its copy was removed
+        ref, src = f"pr/{n}", f"refs/pull/{n}/head"
+    else:
+        ref = src = str(pr["ref"])
+        if not _valid_branch(repo, ref):
+            raise GitError(400, "bad_branch", "the pull request's branch name is not valid here")
+        src = f"refs/heads/{ref}"
+    no_track = ["--no-track"] if fork else []       # a fork's branch tracks nothing: pushing back is not possible
+    codediff._git(repo, "fetch", "origin", f"+{src}:refs/remotes/origin/{ref}", write=True,
                   timeout=codediff.WRITE_TIMEOUT)
     if _branch_exists(repo, ref):
         if _checked_out(repo, ref) is not None:
             raise GitError(409, "branch_in_use", f"the branch {ref} is already open in another folder")
         # only moved forward: a local branch with commits of its own is never reset
         if codediff._run(repo, "merge-base", "--is-ancestor", ref, f"origin/{ref}", check=False).returncode == 0:
-            codediff._run(repo, "branch", "-f", ref, f"origin/{ref}", check=False, write=True)
+            codediff._run(repo, "branch", "-f", *no_track, ref, f"origin/{ref}", check=False, write=True)
     else:
-        codediff._git(repo, "branch", ref, f"origin/{ref}", write=True)
-    return ref, f"origin/{ref}"
+        codediff._git(repo, "branch", *no_track, ref, f"origin/{ref}", write=True)
+    return ref, None if fork else f"origin/{ref}"
 
 
 def _copy_env(repo: Path, folder: Path) -> list[str]:
