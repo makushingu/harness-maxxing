@@ -258,7 +258,7 @@ export function VoiceCall({ sid, callKey, stream, running, queueCount, onSend, o
   if (phase === 'off')
     return (
       <Tooltip content={t('vmode.on')}>
-        <Button variant="ghost" size="icon-sm" aria-label={t('vmode.on')} onClick={() => void start()} data-voice-call className="max-md:size-11 max-md:rounded-full">
+        <Button variant="ghost" size="icon-sm" aria-label={t('vmode.on')} onClick={() => void start()} data-voice-call className="max-md:size-11 max-md:rounded-full max-md:@max-md:size-9!">
           <AudioLines />
         </Button>
       </Tooltip>

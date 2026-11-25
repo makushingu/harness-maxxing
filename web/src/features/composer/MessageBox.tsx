@@ -195,7 +195,7 @@ export function MessageBox(p: MessageBoxProps) {
                   </>
                 )}
                 {p.toolbar}
-                <div className="ml-auto flex min-w-0 items-center gap-1.5">
+                <div className="ml-auto flex min-w-0 items-center gap-1.5 max-md:@max-md:gap-1">
                   {p.reason && <span className="truncate text-[11px] text-muted-foreground max-sm:hidden">{p.reason}</span>}
                   {p.actions}
                   {p.voice}
@@ -206,7 +206,7 @@ export function MessageBox(p: MessageBoxProps) {
                       disabled={p.send.disabled}
                       onClick={p.send.onClick}
                       data-testid={p.send.testId}
-                      className="rounded-lg max-md:size-11 max-md:rounded-full max-md:[&_svg]:size-5"
+                      className="rounded-lg max-md:size-11 max-md:rounded-full max-md:[&_svg]:size-5 max-md:@max-md:size-10!"
                     >
                       {p.send.busy ? <Spinner className="size-4" /> : p.send.icon || <ArrowUp />}
                     </Button>
@@ -226,7 +226,7 @@ export function MessageBox(p: MessageBoxProps) {
 export function StopButton({ onClick, busy, label }: { onClick: () => void; busy?: boolean; label: string }) {
   return (
     <Tooltip content={label}>
-      <Button variant="outline" size="icon-sm" aria-label={label} onClick={onClick} loading={busy} className="max-md:size-11 max-md:rounded-full">
+      <Button variant="outline" size="icon-sm" aria-label={label} onClick={onClick} loading={busy} className="max-md:size-11 max-md:rounded-full max-md:@max-md:size-10!">
         <Square className="fill-current" />
       </Button>
     </Tooltip>

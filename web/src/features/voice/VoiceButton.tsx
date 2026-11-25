@@ -211,7 +211,7 @@ export function VoiceButton({
             aria-pressed={rec.state === 'recording'}
             disabled={disabled}
             data-voice-button
-            className={cn('touch-none select-none [-webkit-touch-callout:none] max-md:size-11 max-md:rounded-full max-md:bg-accent max-md:[&_svg]:size-5', rec.state === 'recording' && 'text-destructive')}
+            className={cn('touch-none select-none [-webkit-touch-callout:none] max-md:size-11 max-md:rounded-full max-md:bg-accent max-md:[&_svg]:size-5 max-md:@max-md:size-10!', rec.state === 'recording' && 'text-destructive')}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
