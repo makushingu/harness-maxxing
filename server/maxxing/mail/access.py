@@ -57,6 +57,8 @@ def _clean_senders(v: Any, strict: bool) -> list[str]:
             out.append(s)
     if not out and any(str(s).strip() for s in v or []):
         return [NO_SENDER]                                # every entry invalid: no sender at all, not "anyone"
+    if strict and len(out) > MAX_SENDERS:                 # a save: say it, never drop senders 51+ in silence
+        raise AccessError(f"At most {MAX_SENDERS} senders per list")
     return out[:MAX_SENDERS]
 
 

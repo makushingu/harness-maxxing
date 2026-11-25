@@ -68,6 +68,17 @@ def test_hand_written_senders_that_are_all_invalid_do_not_open_the_mailbox():
         access.clean_grants([{"account": "a", "senders": "client@example.com"}], strict=True)
 
 
+def test_a_save_with_too_many_senders_is_refused_not_cut():
+    many = [f"user{i}@example.com" for i in range(access.MAX_SENDERS + 10)]
+    for grant in ({"account": "a", "senders": many}, {"account": "a", "trigger": {"senders": many}}):
+        with pytest.raises(access.AccessError):
+            access.clean_grants([grant], strict=True)
+    g = access.clean_grants([{"account": "a", "senders": many}])[0]  # a damaged file is still read
+    assert len(g["senders"]) == access.MAX_SENDERS
+    ok = access.clean_grants([{"account": "a", "senders": many[:access.MAX_SENDERS]}], strict=True)[0]
+    assert len(ok["senders"]) == access.MAX_SENDERS
+
+
 def test_only_the_providers_top_header_proves_the_sender():
     trusted = access.trusted_servers({"imap_host": "imap.example.net", "smtp_host": "smtp.example.net"})
     ok = _msg("billing@stripe.com", ar=[AR_OK])
