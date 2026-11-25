@@ -1,1 +1,0 @@
-import{y as e}from"./index-Bo-9y87C.js";var t=e=>e.mobile||e.pathname===`/sessions`?null:`/sessions`,n=t=>n=>{n.mobile&&e.getState().setPanel(t)};export{t as n,n as t};
