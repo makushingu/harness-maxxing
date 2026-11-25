@@ -32,14 +32,26 @@ function setLink(rel: string, href: string, type?: string) {
 
 /** Every icon follows the accent: browser tab, installed app (manifest icons and launch screen), iOS home screen.
  *  index.html does the same before the first paint - change both. */
+let wantedLogo: string | null = null     // the theme logo on the tab, or loading for it: asked again, nothing to do
+
 export function applyFavicon(accent: Accent, logo?: string | null) {
   // a theme's own logo (an image of the theme, served by the server) replaces the tab icon; the installed app's icons
-  // (manifest, iOS home screen) stay the product's: they are fixed when the app is installed
-  setLink('icon', logoSrc(accent), 'image/svg+xml')
-  if (logo) {
-    // only once it loads: signed out, theme files need a session and the tab keeps the product logo
+  // (manifest, iOS home screen) stay the product's: they are fixed when the app is installed. Called on every change
+  // of the UI store: the same logo is neither loaded again nor swapped with the product's in between.
+  if (!logo) {
+    wantedLogo = null
+    setLink('icon', logoSrc(accent), 'image/svg+xml')
+  } else if (logo !== wantedLogo) {
+    wantedLogo = logo
+    // only once it loads: signed out, theme files need a session and the tab keeps the product logo (tried again
+    // on the next change)
     const img = new Image()
-    img.onload = () => setLink('icon', logo, '')
+    img.onload = () => wantedLogo === logo && setLink('icon', logo, '')
+    img.onerror = () => {
+      if (wantedLogo !== logo) return
+      wantedLogo = null
+      setLink('icon', logoSrc(accent), 'image/svg+xml')
+    }
     img.src = logo
   }
   setLink('manifest', `/manifest-${known(accent)}.webmanifest`)
