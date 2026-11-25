@@ -32,6 +32,7 @@ from __future__ import annotations
 import contextlib
 import json
 import logging
+import math
 import re
 import secrets as _secrets
 import shutil
@@ -160,7 +161,7 @@ def _at(g: dict, p: str) -> str:
 def _num(v: Any, default: int, lo: int, hi: int) -> int:
     try:
         n = int(v)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):   # OverflowError: an infinite number (1e999)
         return default
     return max(lo, min(hi, n))
 
@@ -169,12 +170,25 @@ def _text(v: Any, n: int) -> str:
     return agents._utf8(str(v or "")).strip()[:n]
 
 
+def _line(v: Any, n: int) -> str:
+    """One line: a name or a role is written in the group's CLAUDE.md title and in the members' prompt."""
+    return " ".join(agents._utf8(str(v or "")).split())[:n]
+
+
+def _created(v: Any) -> float:
+    try:
+        t = float(v or 0)
+    except (TypeError, ValueError, OverflowError):
+        return time.time()
+    return t if math.isfinite(t) and t > 0 else time.time()
+
+
 def clean(data: Any, project: str, strict: bool = False) -> dict:
     """group.json with defaults; strict: refuse what cannot be kept (members of another project, unknown agents...)."""
     d = data if isinstance(data, dict) else {}
     members: list[dict] = []
     seen: set[str] = set()
-    for m in d.get("members") or []:
+    for m in d.get("members") if isinstance(d.get("members"), list) else []:
         if isinstance(m, str):
             m = {"path": m}
         if not isinstance(m, dict):
@@ -190,7 +204,7 @@ def clean(data: Any, project: str, strict: bool = False) -> dict:
         if p in seen:
             continue
         seen.add(p)
-        members.append({"path": p, "role": _text(m.get("role"), ROLE_MAX), "handle": str(m.get("handle") or "")})
+        members.append({"path": p, "role": _line(m.get("role"), ROLE_MAX), "handle": str(m.get("handle") or "")})
     if strict and not MIN_MEMBERS <= len(members) <= MAX_MEMBERS:
         raise GroupError(400, "members", f"A group has {MIN_MEMBERS} to {MAX_MEMBERS} members")
     members = members[:MAX_MEMBERS]
@@ -199,12 +213,12 @@ def clean(data: Any, project: str, strict: bool = False) -> dict:
     if lead not in [m["path"] for m in members]:
         lead = ""
     lim = d.get("limits") if isinstance(d.get("limits"), dict) else {}
-    out = {"version": 1, "name": _text(d.get("name"), NAME_MAX), "emoji": _text(d.get("emoji"), 8),
+    out = {"version": 1, "name": _line(d.get("name"), NAME_MAX), "emoji": _line(d.get("emoji"), 8),
            "members": members, "lead": lead,
            "shared_files": d.get("shared_files", True) is not False,
            "trust_members": d.get("trust_members", True) is not False,
            "limits": {k: _num(lim.get(k), *v) for k, v in LIMITS.items()},
-           "created": float(d.get("created") or 0) or time.time()}
+           "created": _created(d.get("created"))}
     for k, v in d.items():                              # unknown fields of a newer version are kept
         if k not in out:
             out[k] = v
@@ -215,7 +229,7 @@ def load(path: str) -> dict:
     project = _key(path).split("__")[0]                # a bad path: GroupError 400
     try:
         data = json.loads((folder(path) / GROUP_FILE).read_text())
-    except (OSError, ValueError):
+    except (OSError, ValueError, RecursionError):       # RecursionError: nested too deep
         data = {}
     return clean(data, project)
 
@@ -483,7 +497,23 @@ def room(path: str, limit: int = 200, before: float | None = None, after: float 
 
 
 def _read_state(path: str) -> dict:
-    return config.read_json(_state_file(path, "json"), {}) or {}
+    """The room state, each field of the expected type (a damaged file must not block opening or deleting)."""
+    st = config.read_json(_state_file(path, "json"), {})
+    st = st if isinstance(st, dict) else {}
+    if not isinstance(st.get("current"), dict):
+        st["current"] = None
+    for k in ("queue", "paused"):
+        v = st.get(k)
+        st[k] = [x for x in v if isinstance(x, dict if k == "queue" else str)] if isinstance(v, list) else []
+    for k in ("sessions", "since", "turns"):
+        if k in st and not isinstance(st[k], dict):
+            st[k] = {}
+    try:
+        seen = float(st.get("seen_at") or 0)
+    except (TypeError, ValueError, OverflowError):
+        seen = 0.0
+    st["seen_at"] = seen if math.isfinite(seen) else 0.0
+    return st
 
 
 def _write_state(path: str, st: dict) -> None:

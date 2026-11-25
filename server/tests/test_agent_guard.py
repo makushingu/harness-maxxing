@@ -243,6 +243,11 @@ def test_a_wrapped_first_paragraph_and_a_yaml_block_description_import_once():
         assert p["description"] == f"{want}\n\nYou are a senior reviewer." and p["fields"]["allowed_tools"] == ["Read"]
     md = "---\nname: last\ndescription: >\n  At the end\n  of the block.\n---\nBody.\n"
     assert agent_format.parse_md(md)["description"] == "At the end of the block.\n\nBody."
+    md = ("---\nname: x\ndescription: Use this agent to write\n  the weekly post every Monday\ntools: Read\n---\n"
+          "Body\n")
+    p = agent_format.parse_md(md)
+    assert p["description"] == "Use this agent to write the weekly post every Monday\n\nBody"
+    assert p["fields"]["allowed_tools"] == ["Read"] and p["ignored"] == []
 
 
 def test_agents_as_subagents_of_their_topic(client, topic, mx):
@@ -628,3 +633,12 @@ def test_agent_export_never_writes_a_file_in_an_agent_turn(client, topic, mx, mo
     assert cli.main(["agents", "export", A]) == 0
     monkeypatch.setattr(cmd_agents, "_turn", lambda: {"path": "", "depth": 0})
     assert cli.main(["agents", "export", A, "--output", str(out)]) == 0 and out.is_file()
+
+
+def test_a_tool_with_a_unicode_line_separator_survives_export_and_import(client, topic, mx):
+    _on(client)
+    tools = ["Read", "Bash(echo a\u2028b)", "Bash(echo c\x85d)", "Bash(x\x0cy)"]
+    assert _create(client, allowed_tools=tools)["allowed_tools"] == tools
+    from maxxing import agent_format
+    md = client.get("/api/agents/acme/blog/writer/export").text
+    assert agent_format.parse_md(md)["fields"]["allowed_tools"] == tools

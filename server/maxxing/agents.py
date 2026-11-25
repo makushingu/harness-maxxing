@@ -1829,7 +1829,8 @@ def status(path: str, metas: list[dict] | None = None) -> dict:
     metas: the agent's session metas when the caller has them (list_agents: one pass for every agent)."""
     metas = _metas(path) if metas is None else metas
     msgs = thread(path, 500)
-    last = next((m for m in reversed(msgs) if m.get("kind") in ("result", "skip")), None)
+    last = next((m for m in reversed(msgs) if m.get("kind") in ("result", "skip")          # a line without a
+                 and isinstance(m.get("at"), (int, float)) and math.isfinite(m["at"])), None)  # valid date: skipped
     running = [m for m in metas if m.get("state") == "running"]
     seen = float(_read_state(path).get("seen_at") or 0)
     waiting = 0

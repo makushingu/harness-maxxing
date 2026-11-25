@@ -17,6 +17,7 @@ const WEBHOOK_KINDS: AgentWebhookKind[] = ['generic', 'stripe', 'shopify', 'gith
 /** When something happened, to fill "Ran {when}": "just now" under a minute (Intl alone says a bare "now", which
  *  reads oddly after a verb), otherwise the relative date ("5 min ago"). For past moments only. */
 export function agoText(at: number, lang: string, t: TFn): string {
+  if (!Number.isFinite(at)) return ''   // a damaged thread line: no date rather than a RangeError for the whole page
   const age = Date.now() / 1000 - at
   return age > -60 && age < 60 ? t('agents.justNow') : fmtRelative(at, lang)
 }

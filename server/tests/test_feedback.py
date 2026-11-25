@@ -334,3 +334,11 @@ def test_a_broken_customization_list_never_stops_the_check(client, mx, monkeypat
     assert client.post("/api/settings/feedback/check", json={"type": "bug", "message": "it breaks"}).status_code == 200
     [call] = _check_calls(mx)
     assert "Customizations of the product code: unknown" in call["prompt"]
+
+
+def test_a_profile_name_that_is_not_text_does_not_stop_the_message(client, cloud):
+    config.update_config(profile={"name": 42})
+    assert client.get("/api/settings/feedback").status_code == 200
+    r = client.post("/api/settings/feedback", json={"email": "me@x.io", "type": "bug", "message": "hello there"})
+    assert r.status_code == 200, r.text
+    assert cloud.got[0]["name"] == ""

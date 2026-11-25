@@ -2601,6 +2601,7 @@ export const fr: Record<keyof typeof en, string> = {
   'voice.tooShort': 'Enregistrement trop court',
   'voice.noSpeech': 'Aucune parole détectée',
   'voice.failed': 'La transcription a échoué',
+  'voice.draftNotSaved': 'Le stockage du navigateur est plein : votre dictée n’a pas été ajoutée au brouillon',
   'voice.micError': 'Micro indisponible',
   'voice.offHint': 'Messages vocaux désactivés : configurez-les dans Réglages → Voix',
   'voice.notReadyHint': 'Les messages vocaux demandent une dernière étape dans Réglages → Voix',

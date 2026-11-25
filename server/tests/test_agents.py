@@ -1157,3 +1157,14 @@ def test_a_role_with_a_section_heading_stays_whole_and_can_be_replaced(client, t
     assert client.patch("/api/agents/acme/blog/writer", json={"description": "Clean role"}).status_code == 200
     md = (mx["ws"] / "projects" / "acme" / "topics" / "blog" / "agents" / "writer" / "CLAUDE.md").read_text()
     assert "Secret order" not in md and "hidden" not in md and md.count("@memory.md") == 1
+
+
+def test_a_thread_line_without_a_valid_date_is_not_the_last_run(client, topic, mx):
+    _on(client)
+    _create(client)
+    f = agents._state_file(A, "jsonl")
+    f.parent.mkdir(parents=True, exist_ok=True)
+    good = {"kind": "result", "ok": True, "at": 1700000000.0, "text": "done"}
+    for bad in ({"kind": "result", "ok": False}, {"kind": "skip", "at": "2026-11-25T07:00:00"}):
+        f.write_text(json.dumps(good) + "\n" + json.dumps(bad) + "\n")
+        assert agents.status(A)["last_run"]["at"] == 1700000000.0

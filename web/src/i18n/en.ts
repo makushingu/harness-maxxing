@@ -2619,6 +2619,7 @@ export const en = {
   'voice.tooShort': 'Recording too short',
   'voice.noSpeech': 'No speech detected',
   'voice.failed': 'Transcription failed',
+  'voice.draftNotSaved': 'The browser storage is full: your dictation was not added to the draft',
   'voice.micError': 'Microphone unavailable',
   'voice.offHint': 'Voice messages are off - set them up in Settings → Voice',
   'voice.notReadyHint': 'Voice messages need a last step in Settings → Voice',

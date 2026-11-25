@@ -215,7 +215,10 @@ def update_settings(**kw: Any) -> dict:
     for k in ("openai_key", "gemini_key"):
         if k in changes and changes[k] is not None:
             from . import vault
-            vault.check_name(str(changes[k]))
+            try:
+                vault.check_name(str(changes[k]))
+            except vault.VaultError as e:
+                raise VoiceError(400, "invalid_key_name", str(e)) from None
     if changes:
         config.update_config(voice_call=changes)
     return settings()

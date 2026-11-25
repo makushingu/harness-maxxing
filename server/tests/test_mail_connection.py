@@ -354,3 +354,15 @@ def test_ssl_on_a_starttls_port_says_to_pick_starttls():
     srv.close()
     assert e.value.code == "tls"
     assert "expects STARTTLS" in e.value.message
+
+
+def test_two_views_of_the_same_attachments_at_once_both_get_their_files(mx):
+    """A double click or two tabs: the copies of one view are never removed while the other writes them."""
+    from pathlib import Path
+
+    from maxxing.api import mail as mail_api
+    parts = [(i, f"f{i}.bin", "application/octet-stream", bytes([i]) * 200_000) for i in range(5)]
+    for _ in range(30):
+        with cf.ThreadPoolExecutor(4) as ex:
+            outs = list(ex.map(lambda _: mail_api._save_for_view("acc1", "INBOX", 7, parts), range(4)))
+        assert all(Path(p).stat().st_size == 200_000 for out in outs for p in out.values())

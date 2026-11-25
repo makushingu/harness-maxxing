@@ -48,6 +48,9 @@ def test_bad_settings_are_refused(state):
         voicecall.update_settings(mode="phone")
     with pytest.raises(voicecall.VoiceError):
         voicecall.update_settings(openai_voice="robot")
+    with pytest.raises(voicecall.VoiceError) as e:
+        voicecall.update_settings(openai_key="../../etc")   # a 400 for the API, not a 500
+    assert e.value.code == "invalid_key_name"
 
 
 def test_gemini_token_locks_the_setup(state):
