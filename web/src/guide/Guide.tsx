@@ -16,12 +16,12 @@ import { useIsMobile } from '@/stores/media'
 import { useTouchNav } from '@/components/shell/TouchNav'
 import { useSaveSettings, useSettings, useWorkspace } from '@/lib/queries'
 import { cn } from '@/lib/utils'
-import { Badge, Button, Checkbox, Input, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Spinner } from '@/components/ui'
+import { Badge, Button, Checkbox, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Spinner } from '@/components/ui'
 import type { StepCtx } from '@/tour/steps'
 import { clampHole, firstEl, measure, sameRect, useCardPosition, type Rect } from '@/tour/spot'
 import { useGuideOn, useGuideOpen, useTutorialHref } from '@/tour/store'
 import { useGuide, useGuideActions, useGuideContext, type GuidePrompt, type GuideState } from './api'
-import { ACTIVITIES, activityLabel, plan, STEP_BY_ID, stepBody, stepTip, stepTitle, useLabel, USES, type Use } from './steps'
+import { plan, STEP_BY_ID, stepBody, stepTip, stepTitle, useLabel, USES, type Use } from './steps'
 
 export function GuideHost() {
   const { data } = useGuide()
@@ -61,21 +61,14 @@ function GuideDialog({ state }: { state: GuideState }) {
   const { data: withCtx } = useGuideContext(true)
   const ctx = withCtx?.context
   const resumable = state.steps.length > 0 && state.index < state.steps.length && state.status !== 'done'
-  const [phase, setPhase] = React.useState<'resume' | 'language' | 'activity' | 'level' | 'mode'>(resumable ? 'resume' : 'language')
+  const [phase, setPhase] = React.useState<'resume' | 'language' | 'level' | 'mode'>(resumable ? 'resume' : 'language')
   const [level, setLevel] = React.useState<'beginner' | 'intermediate'>(state.level ?? 'beginner')
-  const [activity, setActivity] = React.useState(state.activity || '')
-  const known = (ACTIVITIES as readonly string[]).includes(activity)
-  const [other, setOther] = React.useState(known ? '' : activity)
   const lang = useUI((s) => s.language)
   const saveSettings = useSaveSettings()
   const pickLanguage = (l: Language) => {
     // the whole interface and the examples Opus writes switch to it
     useUI.getState().setLanguage(l)
     saveSettings.mutate({ language: l })
-    setPhase('activity')
-  }
-  const pickActivity = (a: string) => {
-    setActivity(a)
     setPhase('level')
   }
   const [uses, setUses] = React.useState<Use[] | null>(null)
@@ -87,7 +80,7 @@ function GuideDialog({ state }: { state: GuideState }) {
   }
   const start = (mode: 'full' | 'partial') => {
     const steps = plan(mode, chosen, ctx?.case === 'existing')
-    void actions.patch({ status: 'running', level, activity, mode, uses: chosen, steps, index: 0, done: [] }).then(() => actions.cards(steps.slice(0, 4)))
+    void actions.patch({ status: 'running', level, mode, uses: chosen, steps, index: 0, done: [] }).then(() => actions.cards(steps.slice(0, 4)))
     useGuideOpen.getState().setOpen(false)
   }
   const caseLine: TKey = ctx?.case === 'import' ? 'guide.case.import' : ctx?.case === 'existing' ? 'guide.case.existing' : 'guide.case.new'
@@ -104,11 +97,9 @@ function GuideDialog({ state }: { state: GuideState }) {
               ? t('guide.resumeDesc', { n: state.index + 1, total: state.steps.length })
               : phase === 'language'
                 ? t('guide.languageDesc')
-                : phase === 'activity'
-                  ? t('guide.activityDesc')
-                  : ctx
-                    ? t(caseLine)
-                    : t('guide.intro')}
+                : ctx
+                  ? t(caseLine)
+                  : t('guide.intro')}
           </DialogDescription>
         </DialogHeader>
 
@@ -147,51 +138,6 @@ function GuideDialog({ state }: { state: GuideState }) {
           </div>
         )}
 
-        {phase === 'activity' && (
-          <div className="grid gap-2">
-            <div className="grid gap-2 sm:grid-cols-2">
-              {ACTIVITIES.map((a) => (
-                <Choice
-                  key={a}
-                  title={t(activityLabel(a))}
-                  desc={t(`guide.activity.${a}Desc` as TKey)}
-                  selected={activity === a}
-                  onClick={() => pickActivity(a)}
-                  testid={`guide-activity-${a}`}
-                />
-              ))}
-            </div>
-            <form
-              className="flex items-center gap-2 rounded-lg border p-2 pl-3"
-              onSubmit={(e) => {
-                e.preventDefault()
-                if (other.trim()) pickActivity(other.trim())
-              }}
-            >
-              <Input
-                value={other}
-                onChange={(e) => setOther(e.target.value)}
-                maxLength={200}
-                placeholder={t('guide.activity.otherPlaceholder')}
-                aria-label={t('guide.activity.other')}
-                className="h-8 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
-                data-testid="guide-activity-other"
-              />
-              <Button size="sm" type="submit" disabled={!other.trim()}>
-                {t('tour.next')}
-              </Button>
-            </form>
-            <div className="flex items-center justify-between pt-1">
-              <Button variant="ghost" size="sm" onClick={() => setPhase('language')}>
-                {t('tour.back')}
-              </Button>
-              <button type="button" className="py-2 text-[13px] text-muted-foreground hover:text-foreground" onClick={() => pickActivity('')} data-testid="guide-activity-skip">
-                {t('guide.activity.skip')}
-              </button>
-            </div>
-          </div>
-        )}
-
         {phase === 'level' && (
           <div className="grid gap-2">
             {(['beginner', 'intermediate'] as const).map((l) => (
@@ -207,7 +153,7 @@ function GuideDialog({ state }: { state: GuideState }) {
               />
             ))}
             <div className="flex items-center justify-between pt-1">
-              <Button variant="ghost" size="sm" onClick={() => setPhase('activity')}>
+              <Button variant="ghost" size="sm" onClick={() => setPhase('language')}>
                 {t('tour.back')}
               </Button>
               <button type="button" className="py-2 text-[13px] text-muted-foreground hover:text-foreground" onClick={() => close(true)}>
@@ -261,17 +207,13 @@ function GuideDialog({ state }: { state: GuideState }) {
   )
 }
 
-function Choice({ title, desc, onClick, testid, icon, selected }: { title: string; desc: string; onClick: () => void; testid: string; icon?: React.ReactNode; selected?: boolean }) {
+function Choice({ title, desc, onClick, testid, icon }: { title: string; desc: string; onClick: () => void; testid: string; icon?: React.ReactNode }) {
   return (
     <button
       type="button"
       onClick={onClick}
       data-testid={testid}
-      aria-pressed={selected}
-      className={cn(
-        'group flex items-center gap-3 rounded-lg border p-3 text-left transition-colors outline-none hover:border-primary/60 hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring',
-        selected && 'border-primary/60',
-      )}
+      className="group flex items-center gap-3 rounded-lg border p-3 text-left transition-colors outline-none hover:border-primary/60 hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
     >
       {icon}
       <span className="grid min-w-0 flex-1 gap-0.5">

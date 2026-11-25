@@ -41,11 +41,9 @@ left of the sidebar) -> **Getting started guide**, the palette (⌘K) and Settin
 `?guide` opens it too.
 
 1. **Your language**: the whole interface and the examples follow it.
-2. **What you mostly do**: e-commerce, SEO blogs (PBN), affiliate marketing, YouTube video editing, or in your own
-   words (**Skip** is fine): the examples start from it.
-3. **Your level**: *Beginner* (step by step, simple examples) or *Intermediate* (what Harness adds, examples that go
+2. **Your level**: *Beginner* (step by step, simple examples) or *Intermediate* (what Harness adds, examples that go
    further).
-4. **The tour**: *Full* (about 5 minutes: sessions, Zones and Tabs, memory, agents on their page and in the
+3. **The tour**: *Full* (about 5 minutes: sessions, Zones and Tabs, memory, agents on their page and in the
    sessions, scheduled jobs, tasks, phone, code, sites, e-mail, Team, files, backup, the pages to switch on, server
    health) or *Partial* (about 2 minutes): the essentials plus only the uses you tick - the recommended ones are
    ticked already (from what is set up here). **Close** if you do not need it.

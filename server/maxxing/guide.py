@@ -82,8 +82,6 @@ Claude Code on the user's own server: projects split into topics (folders with a
 in topics, agents, scheduled jobs, files, tasks, Telegram.
 Answer with ONE JSON object, nothing else: {"intro": "...", "prompts": [{"label": "...", "text": "...", "topic": "..."}]}
 - Write in the language given in "language" (fr = French, informal "vous"), plain words, no jargon.
-- "activity" = what the user said they mostly do (chosen at the start, may be free text or empty): shape the prompts
-  around it (an e-commerce shop, a network of SEO blogs, affiliate sites, YouTube videos...) with their own projects.
 - "intro": 1 or 2 short sentences (max 240 characters). After the first steps, start by linking to what the user did
   just before ("guide.tried") and why this step comes next, so the guide reads as one story.
 - "prompts": what the user will send from a new session. Level "beginner": exactly 1 prompt, simple, explained by its
@@ -210,7 +208,6 @@ def _facts(d: dict) -> dict:
     return {
         "language": config.load_config().get("language") or "en",
         "level": d.get("level") or "beginner",
-        "activity": d.get("activity") or "",
         "case": ctx["case"],
         "default_topic": ctx["default_topic"],
         "topics": [{"path": t["path"], "description": (t.get("description") or "")[:120]} for t in topics][:40],
@@ -355,7 +352,7 @@ def state() -> dict:
             c["status"] = "failed"
     cfg = config.load_config()
     return {"offer": not d and bool(cfg.get("onboarding_completed")),
-            "status": d.get("status"), "level": d.get("level"), "activity": d.get("activity") or "", "mode": d.get("mode"), "uses": d.get("uses") or [],
+            "status": d.get("status"), "level": d.get("level"), "mode": d.get("mode"), "uses": d.get("uses") or [],
             "steps": d.get("steps") or [], "index": int(d.get("index") or 0), "done": d.get("done") or [],
             "tried": d.get("tried") or {}, "cards": cards}
 
@@ -374,8 +371,6 @@ def update(changes: dict) -> dict:
             if d.get("level") and d["level"] != changes["level"]:
                 d["cards"] = _pending(d)
             d["level"] = changes["level"]
-        if isinstance(changes.get("activity"), str):
-            d["activity"] = " ".join(changes["activity"].split())[:200]
         if changes.get("mode") in MODES:
             d["mode"] = changes["mode"]
         if isinstance(changes.get("uses"), list):

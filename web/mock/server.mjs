@@ -1203,12 +1203,12 @@ const GUIDE = { file: null }
 const GUIDE_WRITES = new Set(['welcome', 'first-prompt', 'memory', 'agents', 'agents-sessions', 'crons', 'tasks', 'code', 'sites', 'mail', 'content', 'final'])
 const guideState = () => {
   const d = GUIDE.file || {}
-  return { offer: !GUIDE.file, status: d.status ?? null, level: d.level ?? null, activity: d.activity || '', mode: d.mode ?? null, uses: d.uses || [], steps: d.steps || [], index: d.index || 0, done: d.done || [], tried: d.tried || {}, cards: d.cards || {} }
+  return { offer: !GUIDE.file, status: d.status ?? null, level: d.level ?? null, mode: d.mode ?? null, uses: d.uses || [], steps: d.steps || [], index: d.index || 0, done: d.done || [], tried: d.tried || {}, cards: d.cards || {} }
 }
 R('GET', '/api/guide', ({ q }) => ({ ...guideState(), ...(q.get('context') ? { context: { case: 'new', imported: false, topics: 2, sessions: 3, agents: 0, crons: 1, telegram: false, backup: false, pages: {}, recommended: ['automate', 'phone', 'content'], default_topic: 'projects/general/topics/inbox' } } : {}) }))
 R('PUT', '/api/guide', ({ body }) => {
   const d = (GUIDE.file ||= {})
-  for (const k of ['status', 'level', 'activity', 'mode', 'uses', 'steps', 'index', 'done']) if (body[k] !== undefined) d[k] = body[k]
+  for (const k of ['status', 'level', 'mode', 'uses', 'steps', 'index', 'done']) if (body[k] !== undefined) d[k] = body[k]
   if (body.tried) (d.tried ||= {})[body.tried.step] = { label: body.tried.label, topic: body.tried.topic }
   d.status ||= 'dismissed'
   return guideState()

@@ -66,7 +66,3 @@ export const stepTitle = (id: string) => `guide.${id}.title` as TKey
 export const stepBody = (id: string) => `guide.${id}.body` as TKey
 export const stepTip = (id: string) => `guide.${id}.tip` as TKey
 export const useLabel = (u: Use) => `guide.use.${u}` as TKey
-
-/** What the user mostly does, asked at the start (the examples start from it; "other" = their own words). */
-export const ACTIVITIES = ['ecommerce', 'seo', 'affiliate', 'youtube'] as const
-export const activityLabel = (a: string) => `guide.activity.${a}` as TKey

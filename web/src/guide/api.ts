@@ -22,8 +22,6 @@ export type GuideState = {
   offer: boolean
   status: 'running' | 'paused' | 'done' | 'dismissed' | null
   level: 'beginner' | 'intermediate' | null
-  /** What the user mostly does: one of ACTIVITIES, free text, or '' (skipped). */
-  activity: string
   mode: 'full' | 'partial' | null
   uses: Use[]
   steps: string[]
@@ -33,7 +31,7 @@ export type GuideState = {
   cards: Record<string, GuideCard>
   context?: GuideContext
 }
-export type GuidePatch = Partial<Pick<GuideState, 'status' | 'level' | 'activity' | 'mode' | 'uses' | 'steps' | 'index' | 'done'>> & {
+export type GuidePatch = Partial<Pick<GuideState, 'status' | 'level' | 'mode' | 'uses' | 'steps' | 'index' | 'done'>> & {
   tried?: { step: string; label: string; topic: string }
 }
 

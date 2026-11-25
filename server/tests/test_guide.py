@@ -106,13 +106,3 @@ def test_a_new_tour_starts_with_fresh_cards(client, topic, monkeypatch):
     assert st["cards"] == {} and st["tried"] == {}                          # a new tour: no intro about the old one
     st = client.put("/api/guide", json={"index": True}).json()
     assert st["index"] == 0                                                 # a boolean is not an index
-
-
-def test_the_activity_is_kept_and_given_to_opus(client, topic, monkeypatch):
-    seen = []
-    monkeypatch.setattr(guide, "ask_opus", lambda step, facts: seen.append(facts["activity"]) or None)
-    st = client.put("/api/guide", json={"status": "running", "activity": "  YouTube\n" + "x" * 300, "steps": ["first-prompt"]}).json()
-    assert st["activity"].startswith("YouTube x") and len(st["activity"]) == 200
-    client.post("/api/guide/cards", json={"steps": ["first-prompt"]})
-    wait_for(lambda: seen)
-    assert seen[0] == st["activity"]
