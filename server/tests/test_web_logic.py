@@ -428,3 +428,51 @@ def test_the_team_chat_name_keeps_its_room_next_to_the_header_buttons():
     assert head.count("min-w-24 flex-1") == 2                 # a dm and a group: never squashed to 0 px
     page = (WEB / "features" / "team" / "TeamPage.tsx").read_text(encoding="utf-8")
     assert "newChat('max-xl:sr-only')" in page and "max-xl:sr-only\">{t('team.toBubble')}" in page
+
+
+REACT_STUB = """export function useRef(v) { return { current: v } }
+export function useEffect(f) { f() }
+export function useLayoutEffect(f) { f() }
+"""
+
+
+def _run_ts_stubbed(tmp_path: Path, source: Path, script: str, prelude: str = "", swap: dict | None = None):
+    """_run_ts for a module that imports React (a stub running effects at once) or an `@/` module (`swap`: its
+    import line -> a replacement); `prelude` runs before the import (globals such as window, localStorage)."""
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node not installed")
+    text = source.read_text(encoding="utf-8")
+    for old, new in (swap or {}).items():
+        assert old in text, old
+        text = text.replace(old, new)
+    (tmp_path / "node_modules/react").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "node_modules/react/package.json").write_text('{"name": "react", "type": "module", "main": "index.js"}')
+    (tmp_path / "node_modules/react/index.js").write_text(REACT_STUB)
+    (tmp_path / "mod.ts").write_text(text, encoding="utf-8")
+    (tmp_path / "pre.mjs").write_text(prelude, encoding="utf-8")
+    (tmp_path / "main.mjs").write_text(
+        "import './pre.mjs'\nconst load = (q = '') => import('./mod.ts' + q)\nconst m = await load()\n"
+        f"console.log(JSON.stringify(await (async () => {{ {script} }})()))\n", encoding="utf-8")
+    r = subprocess.run([node, "--experimental-strip-types", "--no-warnings", "main.mjs"], cwd=tmp_path,
+                       capture_output=True, text=True, timeout=60)
+    if r.returncode and ("strip-types" in r.stderr or "Unknown file extension" in r.stderr):
+        pytest.skip("this node cannot strip types")
+    assert r.returncode == 0, r.stderr
+    return json.loads(r.stdout)
+
+
+def test_a_toggle_shortcut_held_down_runs_once(tmp_path):
+    out = _run_ts_stubbed(tmp_path, WEB / "commands/shortcuts.ts", """
+      const ev = (o) => ({ key: 'p', shiftKey: true, ctrlKey: false, metaKey: false, altKey: false, isComposing: false,
+        defaultPrevented: false, repeat: false, target: { tagName: 'BODY', closest: () => null }, preventDefault() {}, ...o })
+      let toggled = 0, zoom = 0
+      m.useHotkey('shift+p', () => toggled++, { repeat: false })
+      m.useHotkey('+', () => zoom++)
+      const fire = (e) => globalThis.L.forEach((f) => f(e))
+      fire(ev({})); for (let i = 0; i < 7; i++) fire(ev({ repeat: true }))
+      fire(ev({ key: '+' })); fire(ev({ key: '+', repeat: true }))
+      return [toggled, zoom]""", prelude="globalThis.L = []\nglobalThis.window = { addEventListener: (_, f) => L.push(f), "
+                                         "removeEventListener() {} }\n")
+    assert out == [1, 2]                                  # zoom keys still repeat
+
