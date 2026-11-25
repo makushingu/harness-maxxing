@@ -177,6 +177,7 @@ def test_models_scan_only_new_bytes(client, mx, monkeypatch):
 
 
 def test_stats_do_not_reparse_unchanged_sessions(client, mx, monkeypatch):
+    monkeypatch.setattr(stats, "FORCE_MIN_S", 0.0)              # every forced call recomputes here
     ids = [_session("projects/acme/topics/blog", f"S{i}") for i in range(5)]
     assert client.get("/api/stats/tokens?force=1").json()["totals"]["sessions"] == 5
     loads = {"n": 0}
@@ -267,3 +268,35 @@ def test_an_unchanged_memory_file_is_not_read_again(client, mx, monkeypatch):
     assert not [f for f in opened if f.endswith("memory.md")]
     (ws / "memory.md").write_text("- x\n" * 7)
     assert memory.files()[0]["lines"] == 7
+
+
+def test_a_forced_refresh_never_blocks_cached_reads_and_is_shared(client, mx, monkeypatch):
+    """Refresh on the Usage page: a fresh cache is returned, the recomputation runs outside the lock (cached reads
+    do not wait for it) and concurrent calls share it instead of starting another one."""
+    import threading
+    import time as _t
+    _session("projects/acme/topics/blog", "A")
+    first = stats.tokens(force=True)
+    assert stats.tokens(force=True) is first                    # a forced refresh younger than FORCE_MIN_S: cache
+    calls, started, release = {"n": 0}, threading.Event(), threading.Event()
+    real = stats.compute
+
+    def slow():
+        calls["n"] += 1
+        started.set()
+        release.wait(5)
+        return real()
+    monkeypatch.setattr(stats, "compute", slow)
+    monkeypatch.setattr(stats, "FORCE_MIN_S", 0.0)
+    out: list = []
+    threads = [threading.Thread(target=lambda: out.append(stats.tokens(force=True))) for _ in range(3)]
+    for t in threads:
+        t.start()
+    assert started.wait(5)
+    t0 = _t.monotonic()
+    assert stats.tokens() is first                              # a cached read while the refresh runs: no wait
+    assert _t.monotonic() - t0 < 0.5
+    release.set()
+    for t in threads:
+        t.join(5)
+    assert calls["n"] == 1 and len(out) == 3 and out[0] is out[1] is out[2] and out[0] is not first
