@@ -104,11 +104,21 @@ export function useSheetDrag(onDismiss: () => void, active: () => boolean, overl
         if (state === 'drag') set(0, true)
         state = 'idle'
       }
+      // Closed by a swipe then opened again during the closing animation: Radix keeps the same node, which must
+      // not keep the offset the finger left on it (half off the screen until the next close).
+      const reopened = new MutationObserver(() => {
+        if (node.getAttribute('data-state') !== 'open' || state === 'drag') return
+        node.style.transition = node.style.transform = ''
+        const o = overlay?.current
+        if (o) o.style.transition = o.style.opacity = ''
+      })
+      reopened.observe(node, { attributes: true, attributeFilter: ['data-state'] })
       node.addEventListener('touchstart', start, { passive: true })
       node.addEventListener('touchmove', move, { passive: false })
       node.addEventListener('touchend', end)
       node.addEventListener('touchcancel', cancel)
       return () => {
+        reopened.disconnect()
         node.removeEventListener('touchstart', start)
         node.removeEventListener('touchmove', move)
         node.removeEventListener('touchend', end)
