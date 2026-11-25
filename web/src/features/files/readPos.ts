@@ -84,20 +84,47 @@ export function setReadPos(path: string, pos: ReadPos) {
   }, 400)
 }
 
-/** 1-based line numbers of the markdown headings (ATX `#`, outside fenced code), in order. */
+/** 1-based line numbers of the markdown headings (ATX `#` and setext, outside fenced code), in order. */
 export function sourceHeadings(text: string): number[] {
+  // the headings the preview draws (CommonMark): ATX "# x" and setext (a paragraph underlined with === or ---), never
+  // inside a code block, which only a fence of the same character, at least as long and without info text closes
   const out: number[] = []
-  let fence: string | null = null
+  let fence: { c: string; n: number } | null = null
+  let para = -1 // first line of the paragraph being read (-1: none), the line a setext heading starts on
+  let other = false // in a list, a quote, a table...: its lines (even lazy ones) never make a setext heading
   const lines = text.split('\n')
   for (let i = 0; i < lines.length; i++) {
-    const l = lines[i]
-    const f = /^ {0,3}(`{3,}|~{3,})/.exec(l)
-    if (f) {
-      if (!fence) fence = f[1][0]
-      else if (f[1][0] === fence) fence = null
+    const l = lines[i].replace(/\r$/, '')
+    if (fence) {
+      const close = /^ {0,3}(`{3,}|~{3,})[ \t]*$/.exec(l)
+      if (close && close[1][0] === fence.c && close[1].length >= fence.n) fence = null
       continue
     }
-    if (!fence && /^ {0,3}#{1,6}(\s|$)/.test(l)) out.push(i + 1)
+    const open = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(l)
+    if (open && !(open[1][0] === '`' && open[2].includes('`'))) {
+      fence = { c: open[1][0], n: open[1].length }
+      para = -1
+      other = false
+      continue
+    }
+    if (/^ {0,3}#{1,6}(\s|$)/.test(l)) {
+      out.push(i + 1)
+      para = -1
+      other = false
+      continue
+    }
+    if (para >= 0 && /^ {0,3}(=+|-+)[ \t]*$/.test(l)) {
+      out.push(para + 1)
+      para = -1
+      continue
+    }
+    if (!l.trim()) {
+      para = -1
+      other = false
+    } else if (para < 0 && !other) {
+      if (/^( {4}|\t| {0,3}(([-+*]|\d{1,9}[.)])(\s|$)|[>|]|<[a-zA-Z/!?]))/.test(l)) other = true
+      else if (!/^ {0,3}([-*_])( *\1){2,} *$/.test(l)) para = i
+    }
   }
   return out
 }

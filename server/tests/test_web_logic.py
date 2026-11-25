@@ -403,3 +403,20 @@ def test_a_quick_add_made_only_of_tokens_is_refused_before_the_server(tmp_path):
     for form in ("Board.tsx", "Calendar.tsx"):              # a refused add keeps the text, no unhandled rejection
         src = (WEB / "features" / "tasks" / form).read_text(encoding="utf-8")
         assert "await onAdd(text)\n" in src and "} catch {" in src[src.index("await onAdd(text)"):][:200]
+
+
+def test_the_source_headings_are_the_ones_the_preview_draws(tmp_path):
+    src = (WEB / "features" / "files" / "readPos.ts").read_text(encoding="utf-8")
+    mod = tmp_path / "headings.ts"
+    mod.write_text(src[src.index("export function sourceHeadings"):src.index("/** Heading index + progress")], encoding="utf-8")
+    run = tmp_path / "run"
+    run.mkdir()
+    cases = ["# A\ntext\n\nTitle\n=====\n\n## B",                 # setext headings count
+             "Para\nmore\n---\n\n# C",                            # ... on the first line of their paragraph
+             "````\n```\n# no\n````\n# yes",                      # a shorter fence does not close a longer one
+             "```js\n# no\n```js\n# still no\n```\n# yes",        # nor one with an info text
+             "~~~\n# no\n```\n~~~\n# yes",                        # nor one of the other character
+             "- a\nb\n---\n# H",                                  # a list's line underlined: a rule
+             "***\n---\nP\n==="]                                  # rules are no paragraph
+    out = _run_ts(run, mod, f"return {json.dumps(cases)}.map((c) => m.sourceHeadings(c))")
+    assert out == [[1, 4, 7], [1, 5], [5], [6], [5], [4], [3]]
