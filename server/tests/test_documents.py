@@ -385,3 +385,23 @@ def test_the_cells_of_a_workbook_have_a_total_size(tmp_path, monkeypatch):
     r = documents.read(xlsx(tmp_path / "wide.xlsx", rows))
     got = r["sheets"][0]["rows"]
     assert r["truncated"] and r["sheets"][0]["truncated"] and 1000 <= sum(len(c) for row in got for c in row) <= 1050
+
+
+def test_reopening_an_unchanged_document_does_not_parse_it_again(client, tree, monkeypatch):  # noqa: F811
+    f = docx(tree / "again.docx", "<w:p><w:r><w:t>One</w:t></w:r></w:p>")
+    calls = {"n": 0}
+    real = documents.read
+
+    def counting(p, *a, **k):
+        calls["n"] += 1
+        return real(p, *a, **k)
+    monkeypatch.setattr(documents, "read", counting)
+    for _ in range(3):
+        r = client.get("/api/files/doc", params={"path": str(f)})
+        assert r.status_code == 200 and r.json()["markdown"] == "One\n"
+    assert calls["n"] == 1
+    docx(f, "<w:p><w:r><w:t>Two, changed</w:t></w:r></w:p>")   # rewritten: read again
+    assert client.get("/api/files/doc", params={"path": str(f)}).json()["markdown"] == "Two, changed\n"
+    assert calls["n"] == 2
+    with files_api._doc_cache_lock:
+        assert len([k for k in files_api._doc_cache if k[0] == str(f.resolve())]) <= 1   # the old version is dropped

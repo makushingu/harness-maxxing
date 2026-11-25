@@ -20,6 +20,7 @@ import struct
 import subprocess
 import tarfile
 import tempfile
+import threading
 import time
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
@@ -854,14 +855,48 @@ async def pdf_text(path: str):
     return await _pooled((str(p), "pdf-text"), _pdf_text, p)
 
 
+# the last documents read, by (path, mtime_ns, size): reopening an unchanged file does not parse it again
+DOC_CACHE_ENTRIES = 8
+DOC_CACHE_CHARS = 8_000_000            # characters of all the cached results together (a bigger one is not kept)
+_doc_cache: dict[tuple, tuple[dict, int]] = {}
+_doc_cache_lock = threading.Lock()
+
+
+def _weight(v: Any) -> int:
+    """Rough size of a document result in characters (its strings), to bound the cache."""
+    if isinstance(v, str):
+        return len(v)
+    if isinstance(v, dict):
+        return sum(_weight(x) for x in v.values()) + len(v)
+    if isinstance(v, (list, tuple)):
+        return sum(_weight(x) for x in v) + len(v)
+    return 1
+
+
 def _doc(p: Path) -> dict:
     if not p.is_file():
         raise _err(404, "not_found", "File not found")
     st = p.stat()
-    try:
-        out = documents.read(p)
-    except documents.Unreadable as e:
-        raise _err(413 if e.code == "too_large" else 415, e.code, str(e)) from None
+    key = (str(p), st.st_mtime_ns, st.st_size)
+    with _doc_cache_lock:
+        hit = _doc_cache.pop(key, None)
+        if hit is not None:
+            _doc_cache[key] = hit                  # most recently used last
+    if hit is not None:
+        out = hit[0]
+    else:
+        try:
+            out = documents.read(p)
+        except documents.Unreadable as e:
+            raise _err(413 if e.code == "too_large" else 415, e.code, str(e)) from None
+        w = _weight(out)
+        if w <= DOC_CACHE_CHARS:
+            with _doc_cache_lock:
+                for k in [k for k in _doc_cache if k[0] == key[0]]:
+                    del _doc_cache[k]          # an older version of the same file
+                _doc_cache[key] = (out, w)
+                while len(_doc_cache) > DOC_CACHE_ENTRIES or sum(x[1] for x in _doc_cache.values()) > DOC_CACHE_CHARS:
+                    del _doc_cache[next(iter(_doc_cache))]
     return {"path": _shown(str(p)), "mtime": st.st_mtime, "size": st.st_size, **out}
 
 
