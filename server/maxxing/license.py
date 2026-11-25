@@ -326,5 +326,10 @@ def try_move_to_git() -> dict:
 
 
 def move_due() -> bool:
-    last = _section(config.load_config()).get("move_tried_at") or 0
-    return time.time() - float(last) > 6 * 3600
+    try:                                            # a hand-edited or damaged value: as if never tried
+        last = float(_section(config.load_config()).get("move_tried_at") or 0)
+    except (TypeError, ValueError):
+        last = 0.0
+    if not math.isfinite(last):
+        last = 0.0
+    return time.time() - last > 6 * 3600
