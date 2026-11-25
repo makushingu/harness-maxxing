@@ -74,15 +74,20 @@ function useSwipeClose(side: Side, onDismiss: () => void, overlay: React.RefObje
           dismiss.current()
         } else set(0, true)
       }
+      // The system took the touch over (a call, a system gesture): never a close, the drawer goes back in place.
+      const cancel = () => {
+        if (state === 'drag') set(0, true)
+        state = 'idle'
+      }
       node.addEventListener('touchstart', start, { passive: true })
       node.addEventListener('touchmove', move, { passive: false })
       node.addEventListener('touchend', end)
-      node.addEventListener('touchcancel', end)
+      node.addEventListener('touchcancel', cancel)
       return () => {
         node.removeEventListener('touchstart', start)
         node.removeEventListener('touchmove', move)
         node.removeEventListener('touchend', end)
-        node.removeEventListener('touchcancel', end)
+        node.removeEventListener('touchcancel', cancel)
       }
     },
     [side, overlay],
