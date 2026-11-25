@@ -32,6 +32,7 @@ from __future__ import annotations
 import contextlib
 import json
 import logging
+import math
 import re
 import secrets as _secrets
 import shutil
@@ -483,7 +484,23 @@ def room(path: str, limit: int = 200, before: float | None = None, after: float 
 
 
 def _read_state(path: str) -> dict:
-    return config.read_json(_state_file(path, "json"), {}) or {}
+    """The room state, each field of the expected type (a damaged file must not block opening or deleting)."""
+    st = config.read_json(_state_file(path, "json"), {})
+    st = st if isinstance(st, dict) else {}
+    if not isinstance(st.get("current"), dict):
+        st["current"] = None
+    for k in ("queue", "paused"):
+        v = st.get(k)
+        st[k] = [x for x in v if isinstance(x, dict if k == "queue" else str)] if isinstance(v, list) else []
+    for k in ("sessions", "since", "turns"):
+        if k in st and not isinstance(st[k], dict):
+            st[k] = {}
+    try:
+        seen = float(st.get("seen_at") or 0)
+    except (TypeError, ValueError, OverflowError):
+        seen = 0.0
+    st["seen_at"] = seen if math.isfinite(seen) else 0.0
+    return st
 
 
 def _write_state(path: str, st: dict) -> None:

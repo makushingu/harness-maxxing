@@ -445,3 +445,12 @@ def test_mentions_read_like_the_web_ui_next_to_other_scripts():
            for t in ("@bobさん", "こんにちは@bob", "andré@bob", "@bobé", "a@bob", "x @bob.")}
     # the same as /(?<![\w@./-])@([a-z0-9][a-z0-9-]{0,47})\b/gi in mentions.tsx (JavaScript: ASCII \w and \b)
     assert got == {"@bobさん": ["bob"], "こんにちは@bob": ["bob"], "andré@bob": ["bob"], "@bobé": ["bob"], "a@bob": [], "x @bob.": ["bob"]}
+
+
+def test_a_damaged_state_file_does_not_block_opening_or_deleting(client, topic):
+    g = _setup(client)
+    agent_rooms._write_state(g["path"], {"current": "x", "queue": "abc", "paused": 3, "sessions": [],
+                                         "seen_at": "soon"})
+    assert client.get(G).status_code == 200
+    assert client.delete(G).status_code == 200
+    assert not (Path(client.get("/api/workspace/tree").json()["root"]) / g["path"]).exists()
