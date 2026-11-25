@@ -525,3 +525,16 @@ def test_a_damaged_secrets_json_never_makes_a_put_or_delete_erase_the_other_file
     config._forget_secrets()
     vault_files.delete("NOPE")
     assert (d / "KEYSTORE_A").exists() and (d / "KEYSTORE_B").exists()
+
+
+def test_a_put_killed_between_metadata_and_rename_never_serves_stale_or_phantom_files(mx):
+    vault_files.put("OLD_FILE", BLOB)
+    files = config.load_secrets()["vault_files"]
+    files["OLD_FILE"] = {**files["OLD_FILE"], "sha256": hashlib.sha256(b"new").hexdigest(), "size": 3}
+    files["NEW_FILE"] = {"filename": "NEW_FILE", "size": 3, "sha256": hashlib.sha256(b"new").hexdigest()}
+    config.set_secret("vault_files", files)                 # the state a kill right after the metadata save leaves
+    assert vault_files.read("OLD_FILE") is None              # the old bytes are not the entry's: not served
+    assert vault_files.read("NEW_FILE") is None
+    assert [f["name"] for f in vault_files.list_files()] == ["OLD_FILE"]
+    vault_files.put("NEW_FILE", b"again", create=True)       # the phantom entry does not block the name
+    assert vault_files.read("NEW_FILE") == b"again"
