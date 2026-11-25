@@ -35,7 +35,7 @@ from . import config
 SCHEMA = 1
 BASES = ("solid", "glass")
 MODES = ("light", "dark")
-ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{1,39}$")
+ID_RE = re.compile(r"[a-z0-9][a-z0-9-]{1,39}")     # always fullmatch: $ would let a final newline in
 MAX_JSON = 64 * 1024
 MAX_IMAGE = 4 * 1024 * 1024
 IMAGE_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp",
@@ -473,7 +473,7 @@ def load(d: Path) -> tuple[dict | None, list[str], str | None]:
         else:
             return None, warn, f"schema must be {SCHEMA}"
     tid = str(raw.get("id") or d.name)
-    if not ID_RE.match(tid):
+    if not ID_RE.fullmatch(tid):
         return None, warn, "id: 2-40 characters, lowercase letters, digits and dashes"
     if tid in BASES:
         return None, warn, f"id: {tid} is a built-in theme, pick another id"
@@ -563,7 +563,7 @@ def list_themes() -> dict:
 
 
 def get(tid: str) -> dict | None:
-    if not ID_RE.match(tid) or not (root() / tid).is_dir():
+    if not ID_RE.fullmatch(tid) or not (root() / tid).is_dir():
         return None
     t, _, _ = load(root() / tid)
     return t
@@ -618,7 +618,7 @@ def install(src: Path, force: bool = False) -> tuple[dict, list[str]]:
 def verify(tid: str) -> dict:
     """Records that the theme's css was checked against the interface as it is now (turns it back on)."""
     d = root() / tid
-    if not ID_RE.match(tid) or not d.is_dir():
+    if not ID_RE.fullmatch(tid) or not d.is_dir():
         raise ThemeError(f"no installed theme {tid}")
     t, warn, err = load(d)
     if err or not t:
@@ -631,7 +631,7 @@ def verify(tid: str) -> dict:
 
 def remove(tid: str) -> bool:
     d = root() / tid
-    if not ID_RE.match(tid) or not d.is_dir():
+    if not ID_RE.fullmatch(tid) or not d.is_dir():
         return False
     shutil.rmtree(d)
     return True

@@ -198,3 +198,9 @@ def test_a_deeply_nested_theme_json_does_not_break_the_list(mx, client, tmp_path
     data = themes.list_themes()
     assert [t["id"] for t in data["themes"]] == ["fine"] and data["errors"][0]["id"] == "deep"
     assert client.get("/api/themes").status_code == 200
+
+
+def test_an_id_ending_with_a_newline_is_refused(mx, tmp_path):
+    t, _, err = themes.load(_theme(tmp_path, "nl", {"name": "N", "id": "evil\n"}))
+    assert t is None and err.startswith("id:")
+    assert themes.get("evil\n") is None and themes.remove("evil\n") is False
