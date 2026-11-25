@@ -405,3 +405,26 @@ def test_reopening_an_unchanged_document_does_not_parse_it_again(client, tree, m
     assert calls["n"] == 2
     with files_api._doc_cache_lock:
         assert len([k for k in files_api._doc_cache if k[0] == str(f.resolve())]) <= 1   # the old version is dropped
+
+
+def test_a_workbook_reads_only_the_shared_strings_its_cells_use(tmp_path, monkeypatch):
+    """Many shared strings and 2 cells: the part is left after the last string used, nothing is cut."""
+    many = "".join(f"<si><t>s{i}</t></si>" for i in range(50_000))
+    f = pack(tmp_path / "sst.xlsx", {
+        "_rels/.rels": rels(("rId1", "officeDocument", "xl/workbook.xml", False)),
+        "xl/workbook.xml": f'<workbook {S}><sheets><sheet name="A" sheetId="1" r:id="rId1"/></sheets></workbook>',
+        "xl/_rels/workbook.xml.rels": rels(("rId1", "worksheet", "worksheets/sheet1.xml", False),
+                                           ("rId3", "sharedStrings", "sharedStrings.xml", False)),
+        "xl/sharedStrings.xml": f"<sst {S}>{many}</sst>",
+        "xl/worksheets/sheet1.xml": f'<worksheet {S}><sheetData><row r="1"><c r="A1" t="s"><v>7</v></c>'
+                                    f'<c r="B1" t="s"><v>2</v></c></row></sheetData></worksheet>'})
+    ticks = {"n": 0}
+    real = documents._Pack.tick
+
+    def counting(self):
+        ticks["n"] += 1
+        return real(self)
+    monkeypatch.setattr(documents._Pack, "tick", counting)
+    r = documents.read(f)
+    assert r["sheets"][0]["rows"] == [["s7", "s2"]] and not r["truncated"]
+    assert ticks["n"] < 100                                     # not one per shared string of the workbook

@@ -39,6 +39,7 @@ CELLS_MAX = 300_000        # filled cells, all sheets together
 CELL_MAX = 2000            # characters of one cell
 SHEET_CHARS_MAX = 6_000_000  # characters of all the cells together (one long shared text repeated: not 570 MB)
 STRINGS_MAX = 1_000_000    # shared strings of a workbook
+STRINGS_GRACE_S = 2.0      # time left to fill in the shared strings of the cells read, even past TIME_S
 SHEETS_MAX = 40
 SLIDES_MAX = 500
 MEDIA_MAX = 24 << 20       # one picture of a document
@@ -939,17 +940,34 @@ def _col(ref: str) -> int:
     return n - 1
 
 
+class _Shared:
+    """A cell that shows a shared string, filled in once the sheets are read (_Xlsx.resolve). Counts as one
+    character for the budgets while the sheet is read."""
+    __slots__ = ("i",)
+
+    def __init__(self, i: int):
+        self.i = i
+
+    def __len__(self) -> int:
+        return 1
+
+
 class _Xlsx:
     def __init__(self, pack: _Pack):
         self.pack = pack
         self.part = pack.main("xl/workbook.xml")
         self.rels = pack.rels(self.part)
-        self.shared: list[str] = []
         self.kinds: list[tuple[str, int] | None] = []
         self.date1904 = False
 
-    def strings(self) -> None:
-        root = None
+    def strings(self, needed: set[int]) -> dict[int, str]:
+        """The shared strings the sheets use, by index: the part is read as a stream, only the needed ones are
+        kept, and it is left after the last one (a workbook of a million strings showing 50 cells reads 50)."""
+        found: dict[int, str] = {}
+        if not needed:
+            return found
+        last = min(max(needed), STRINGS_MAX - 1)
+        root, i = None, -1
         try:
             for ev, el in self.pack.stream(self.pack.typed(self.rels, "sharedStrings", "xl/sharedStrings.xml")):
                 if ev == "start":
@@ -957,20 +975,26 @@ class _Xlsx:
                     continue
                 if _local(el.tag) != "si":
                     continue
-                parts = []
-                for c in el:
+                i += 1
+                if i in needed:
+                    parts = []
+                    for c in el:
+                        self.pack.tick()
+                        tag = _local(c.tag)
+                        if tag == "t":
+                            parts.append(c.text or "")
+                        elif tag == "r":
+                            parts.extend(t.text or "" for t in c if _local(t.tag) == "t")
+                    found[i] = "".join(parts)[:CELL_MAX]
+                else:
                     self.pack.tick()
-                    tag = _local(c.tag)
-                    if tag == "t":
-                        parts.append(c.text or "")
-                    elif tag == "r":
-                        parts.extend(t.text or "" for t in c if _local(t.tag) == "t")
-                self.shared.append("".join(parts)[:CELL_MAX])
                 root.clear()
-                if len(self.shared) >= STRINGS_MAX:
-                    raise _Full
-        except _Full:
-            self.pack.truncated = True
+                if i >= last:
+                    break
+        except _Full:                      # out of time or the part is too big: the strings not reached stay empty
+            if needed - found.keys():
+                self.pack.truncated = True
+        return found
 
     def styles(self) -> None:
         root = self.pack.xml(self.pack.typed(self.rels, "styles", "xl/styles.xml"))
@@ -989,7 +1013,6 @@ class _Xlsx:
             raise Unreadable("unsupported", "This document cannot be read")
         props = book.find("workbookPr")
         self.date1904 = props is not None and props.get("date1904") in ("1", "true")
-        self.strings()
         self.styles()
         out = []
         for sh in listed:
@@ -1001,7 +1024,30 @@ class _Xlsx:
                 break
             rows, cut = self.sheet(target)
             out.append({"name": sh.get("name", ""), "rows": rows, "truncated": cut})
+        self.resolve(out)
         return out
+
+    def resolve(self, sheets: list[dict]) -> None:
+        """Put the shared strings in the cells that point to them (_Shared), within the characters budget."""
+        needed = {v.i for sh in sheets for row in sh["rows"] for v in row if isinstance(v, _Shared)}
+        self.pack.deadline = max(self.pack.deadline, time.monotonic() + STRINGS_GRACE_S)
+        found = self.strings(needed)
+        chars = SHEET_CHARS_MAX
+        for sh in sheets:
+            rows = sh["rows"]
+            for n, row in enumerate(rows):
+                for j, v in enumerate(row):
+                    if isinstance(v, _Shared):
+                        row[j] = found.get(v.i, "")
+                chars -= sum(map(len, row))
+                if chars < 0:
+                    del rows[n:]
+                    sh["truncated"] = True
+                    break
+            if chars < 0:
+                del sheets[sheets.index(sh) + 1:]
+                self.pack.truncated = True
+                break
 
     def value(self, c: ET.Element) -> str:
         kind, v, inline = c.get("t", "n"), None, ""
@@ -1013,7 +1059,9 @@ class _Xlsx:
                 inline = "".join(t.text or "" for t in ch.iter() if _local(t.tag) == "t")
         if kind == "s":
             i = _int(v, -1)
-            return self.shared[i] if 0 <= i < len(self.shared) else ""
+            if i >= STRINGS_MAX:
+                self.pack.truncated = True
+            return _Shared(i) if 0 <= i < STRINGS_MAX else ""
         if kind == "inlineStr":
             return inline[:CELL_MAX]
         if kind == "b":
