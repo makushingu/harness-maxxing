@@ -173,3 +173,16 @@ def test_an_unusable_key_or_device_list_is_replaced_and_kept(mx, bad):
     webpush.add_device(FCM)
     assert list(f.parent.glob("webpush.json.damaged-*"))
     assert len(webpush.devices()) == 1
+
+
+def test_a_hand_edited_registration_time_does_not_break_the_devices(client):
+    """A device whose `at` is text (webpush.json edited by hand) must not stop the list nor the phone notifications."""
+    a = webpush.add_device("https://fcm.googleapis.com/fcm/send/a", "Phone")
+    webpush.add_device("https://fcm.googleapis.com/fcm/send/b", "Tablet")
+    f = Path(webpush._path())
+    st = json.loads(f.read_text())
+    st["devices"][a["id"]]["at"] = "x"
+    f.write_text(json.dumps(st))
+    assert [d["label"] for d in webpush.devices()] == ["Phone", "Tablet"]
+    r = client.get("/api/push/devices")
+    assert r.status_code == 200 and len(r.json()) == 2

@@ -15,6 +15,7 @@ import hashlib
 import hmac
 import json
 import logging
+import math
 import os
 import secrets
 import shutil
@@ -225,10 +226,16 @@ def allowed_endpoint(endpoint: object) -> bool:
 
 
 # ---- devices ---------------------------------------------------------------------------------------------
+def _at(d: dict) -> float:
+    """A device's registration time; anything but a finite number (a hand-edited file) counts as 0."""
+    v = d.get("at")
+    return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) else 0
+
+
 def devices() -> list[dict]:
     with _lock:
-        return [{"id": i, "label": d.get("label") or "", "at": d.get("at") or 0}
-                for i, d in sorted(_load()["devices"].items(), key=lambda kv: kv[1].get("at") or 0)]
+        return [{"id": i, "label": d.get("label") if isinstance(d.get("label"), str) else "", "at": _at(d)}
+                for i, d in sorted(_load()["devices"].items(), key=lambda kv: _at(kv[1]))]
 
 
 def add_device(endpoint: str, label: str = "") -> dict:
