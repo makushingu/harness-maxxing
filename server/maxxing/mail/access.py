@@ -37,6 +37,22 @@ class AccessError(ValueError):
     pass
 
 
+def _domain_forms(s: str) -> list[str]:
+    """ "*stripe.com" means stripe.com and its subdomains, never "evilstripe.com": the two patterns it stands for."""
+    local, _, dom = s.rpartition("@")
+    rest = dom.lstrip("*")
+    if dom.startswith("*") and rest and not rest.startswith(".") and "*" not in rest and "?" not in rest:
+        return [f"{local}@{rest}", f"{local}@*.{rest}"]
+    return [s]
+
+
+def _domain_ok(dom: str) -> bool:
+    """A wildcard in the domain only as its whole first label ("*.stripe.com"): "stripe.*" or "*" would match
+    domains anyone can register."""
+    rest = dom[2:] if dom.startswith("*.") else dom
+    return bool(rest) and "*" not in rest and "?" not in rest and (rest == dom or "." in rest)
+
+
 def _clean_senders(v: Any, strict: bool) -> list[str]:
     if v not in (None, "") and not isinstance(v, list):
         if strict:
@@ -49,12 +65,14 @@ def _clean_senders(v: Any, strict: bool) -> list[str]:
             s = "*@" + s                                  # "stripe.com": the whole domain
         if s.startswith("@"):
             s = "*" + s
-        if not s or not SENDER_RE.match(s) or len(s) > 254 or s.endswith("@*"):
-            if strict:
-                raise AccessError(f"Not an address or a domain: {s!r} (examples: client@example.com, *@stripe.com)")
-            continue
-        if s not in out:
-            out.append(s)
+        for p in _domain_forms(s):
+            if not p or not SENDER_RE.match(p) or len(p) > 254 or not _domain_ok(p.rsplit("@", 1)[1]):
+                if strict:
+                    raise AccessError(f"Not an address or a domain: {s!r} (examples: client@example.com, *@stripe.com, "
+                                      "*@*.stripe.com)")
+                continue
+            if p not in out:
+                out.append(p)
     if not out and any(str(s).strip() for s in v or []):
         return [NO_SENDER]                                # every entry invalid: no sender at all, not "anyone"
     if strict and len(out) > MAX_SENDERS:                 # a save: say it, never drop senders 51+ in silence
