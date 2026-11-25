@@ -986,6 +986,9 @@ def drop_other_libc(modules: Path, libc: str | None = None) -> list[str]:
         return []
     gone = []
     for pkg in sorted([*modules.glob("*/package.json"), *modules.glob("@*/*/package.json")]):
+        # a linked package or scope (npm link, a workspace) points outside node_modules: never delete through it
+        if pkg.parent.is_symlink() or pkg.parent.parent.is_symlink():
+            continue
         try:
             data = json.loads(pkg.read_text())
         except (OSError, ValueError):
@@ -993,7 +996,8 @@ def drop_other_libc(modules: Path, libc: str | None = None) -> list[str]:
         want = data.get("libc") if isinstance(data, dict) else None
         if isinstance(want, list) and want and not _libc_ok(want, libc):
             shutil.rmtree(pkg.parent, ignore_errors=True)
-            gone.append(pkg.parent.relative_to(modules).as_posix())
+            if not pkg.parent.exists():
+                gone.append(pkg.parent.relative_to(modules).as_posix())
     return gone
 
 

@@ -244,6 +244,20 @@ def test_drop_other_libc_keeps_only_this_hosts_native_builds(tmp_path):
     assert left == {"@rspack/binding-linux-x64-gnu", "@rspack/core", "any-libc", "broken"}
 
 
+def test_drop_other_libc_never_deletes_through_a_link(tmp_path):
+    mods = tmp_path / "node_modules"
+    mods.mkdir()
+    for name in ("scope/pkg", "linked"):
+        d = tmp_path / "outside" / name
+        d.mkdir(parents=True)
+        (d / "package.json").write_text(json.dumps({"libc": ["musl"]}))
+    (mods / "@evil").symlink_to(tmp_path / "outside" / "scope")
+    (mods / "linked").symlink_to(tmp_path / "outside" / "linked")
+    assert deps.drop_other_libc(mods, libc="glibc") == []
+    assert (tmp_path / "outside" / "scope" / "pkg" / "package.json").exists()
+    assert (tmp_path / "outside" / "linked" / "package.json").exists()
+
+
 def test_drop_other_libc_follows_npm_negations_and_skips_non_objects(tmp_path):
     nm = tmp_path / "node_modules"
     pkgs = {"not-musl": {"libc": ["!musl"]}, "not-glibc": {"libc": ["!glibc"]}, "a-list": ["x"]}
