@@ -175,6 +175,17 @@ def test_unit_names(mx):
     assert cpu.level_of("maxxing-turns.slice") == "normal" and cpu.level_of("system.slice") == "other"
 
 
+def test_a_session_name_reads_only_the_metas_of_its_prefix(mx, monkeypatch):
+    from maxxing.sessions import store
+    ids = [store.create(store.new_meta("projects/acme/topics/blog", f"S{i}"))["id"] for i in range(20)]
+    read, real = [], store.read_cached
+    monkeypatch.setattr(store, "read_cached", lambda sid: (read.append(sid), real(sid))[1])
+    names = cpu._Names()
+    assert names.session(ids[7][:8])["title"] == "S7" and names.session(ids[7][:8])["title"] == "S7"
+    assert names.session("ffffffff") is None
+    assert read == [ids[7]]
+
+
 def test_top_reads_the_cgroups(mx, tmp_path, monkeypatch):
     root = tmp_path / "cg"
     units = {"maxxing.slice/maxxing-live.slice/claude-maxxing.service": [0, 50_000],
