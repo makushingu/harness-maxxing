@@ -1,6 +1,8 @@
 """claude_models: newest model of each family read from Anthropic, default model follows its family."""
 from __future__ import annotations
 
+import json
+
 from maxxing import claude_models, config
 from maxxing.sessions import service
 
@@ -77,3 +79,10 @@ def test_a_variant_suffix_is_not_a_newer_model(mx, monkeypatch):
     monkeypatch.setattr(claude_models, "fetch_ids", lambda: ["claude-opus-6-preview", "claude-opus-5-5"])
     assert claude_models.refresh(force=True).get("default_moved_to") is None
     assert config.load_config()["default_model"] == "claude-opus-5-5"
+
+
+def test_a_damaged_checked_at_does_not_raise(mx, monkeypatch):
+    monkeypatch.setattr(claude_models, "fetch_ids", lambda: IDS)
+    for bad in ("yesterday", ["x"], {"a": 1}):
+        claude_models.state_file().write_text(json.dumps({"checked_at": bad}))
+        assert claude_models.refresh(now=T)["checked_at"] == T                # read again and rewritten

@@ -141,7 +141,9 @@ def refresh(now: float | None = None, force: bool = False) -> dict:
     with _lock:
         d = load()
         wait = RETRY_S if d.get("error") else CHECK_EVERY_S
-        if not force and now - float(d.get("checked_at") or 0) < wait:
+        checked = d.get("checked_at")
+        checked = checked if isinstance(checked, (int, float)) and not isinstance(checked, bool) else 0
+        if not force and now - checked < wait:
             return d
         old = latest()
         try:
