@@ -82,13 +82,15 @@ export function pruneAgentDrafts(kind: 'agent' | 'group', paths: string[]) {
 export const DRAFT_EVENT = 'mx-draft'
 
 /** Adds `text` after the draft of `key` (a dictation that came back once its box was gone: another page) and tells
- *  a box of that key opened again meanwhile. */
-export function appendDraft(key: string, text: string) {
+ *  a box of that key opened again meanwhile. false when the browser could not keep it (storage full, private mode):
+ *  the caller shows the text rather than losing it. */
+export function appendDraft(key: string, text: string): boolean {
   try {
     const cur = localStorage.getItem(`mx-draft:${key}`) || ''
     localStorage.setItem(`mx-draft:${key}`, [cur.trimEnd(), text].filter(Boolean).join(cur.trim() ? '\n\n' : ''))
   } catch {
-    /* quota / private mode */
+    return false
   }
   window.dispatchEvent(new CustomEvent(DRAFT_EVENT, { detail: key }))
+  return true
 }
