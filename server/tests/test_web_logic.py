@@ -692,3 +692,14 @@ def test_a_cpu_the_server_could_not_read_is_shown_as_a_dash_not_zero():
     assert "value={h.cpu_pct == null ? '–' :" in src and "pct: h.cpu_pct ?? null" in src
     assert "(n: number | null) => (n == null ? '–' :" in src
     assert "Math.round(h.cpu_pct ?? 0)" in (WEB / "components" / "shell" / "mood.ts").read_text(encoding="utf-8")
+
+
+def test_the_sidebar_mark_glides_from_where_the_old_row_is_when_it_leaves():
+    # Measured only when mounted: a row moved since (page switched on above it, reordered, shorter rows) made the
+    # next glide start from a stale place.
+    src = (WEB / "components" / "shell" / "ActiveMark.tsx").read_text(encoding="utf-8")
+    effect = src[src.index("React.useLayoutEffect("):src.index("}, [collapsed])")]
+    leave = re.search(r"const leave = \(\) => \{(.*?)\n    \}", effect, re.S)
+    assert leave and "getBoundingClientRect()" in leave[1] and "last = {" in leave[1]
+    returns = re.findall(r"\breturn\b[^\n]*", effect)
+    assert returns and all(r.strip() == "return leave" for r in returns[1:]), returns
