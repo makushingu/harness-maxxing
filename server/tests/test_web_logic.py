@@ -649,3 +649,11 @@ def test_a_tooltip_switched_off_while_open_does_not_reopen_by_itself():
     body = src[src.index("export function Tooltip("):]
     assert re.search(r"React\.useEffect\(\(\) => \{\s*if \(off\) setOpen\(false\)\s*\}, \[off\]\)", body)
     assert body.index("setOpen(false)") < body.index("if (off && !keep) return")      # a hook before the early return
+
+
+def test_the_cpu_panel_hides_unit_names_in_presentation_mode():
+    src = (WEB / "components" / "shell" / "HealthIndicator.tsx").read_text(encoding="utf-8")
+    panel = src[src.index("function CpuPanel("):]
+    panel = panel[:panel.index("\n}\n")]
+    assert "const present = useUI((u) => u.presentation)" in panel
+    assert "title={u.unit}" not in panel and "title={present ? undefined : u.unit}" in panel

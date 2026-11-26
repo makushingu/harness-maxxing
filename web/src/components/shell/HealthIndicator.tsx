@@ -402,6 +402,7 @@ function CpuPanel({ onClose }: { onClose: () => void }) {
   const t = useT()
   const lang = useLang()
   const { data: c } = useCpu(true)
+  const present = useUI((u) => u.presentation)
   const pct = (n: number) => (lang === 'en' ? `${Math.round(n)}%` : `${Math.round(n)} %`)
   const name = (u: CpuSnapshot['top'][number]) => {
     if (u.kind === 'other') return u.name || u.unit
@@ -423,7 +424,7 @@ function CpuPanel({ onClose }: { onClose: () => void }) {
           {c.top.map((u) => (
             <li key={u.unit} className="grid gap-1">
               <div className="flex min-w-0 items-center gap-2 text-[13px]">
-                <span className="min-w-0 flex-1 truncate" title={u.unit}>
+                <span className="min-w-0 flex-1 truncate" title={present ? undefined : u.unit}>
                   <Sensitive length={10}>{name(u)}</Sensitive>
                 </span>
                 {u.level !== 'other' && <Badge variant={LEVEL_BADGE[u.level]}>{t(`cpuwho.level.${u.level}` as TKey)}</Badge>}
