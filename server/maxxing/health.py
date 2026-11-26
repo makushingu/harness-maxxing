@@ -268,8 +268,9 @@ def invalidate_cache() -> None:
         _cache["at"] = 0.0
 
 
-def _issue(level: str, code: str, text: str) -> dict:
-    return {"level": level, "code": code, "text": text}
+def _issue(level: str, code: str, text: str, ref: str = "") -> dict:
+    """`ref` tells apart two issues whose texts match once the numbers are left out (two jobs with the same name)."""
+    return {"level": level, "code": code, "text": text, **({"ref": ref} if ref else {})}
 
 
 # ---- issues marked as seen ------------------------------------------------------------------
@@ -286,7 +287,7 @@ def issue_id(issue: dict) -> str:
     "30 h old"; another job failing is another issue). Quoted names keep their digits ("Backup 1" / "Backup 2")."""
     text = "".join(part if i % 2 else "".join(c for c in part if not c.isdigit())
                    for i, part in enumerate(re.split(r'("[^"]*")', issue["text"])))
-    key = issue["code"] + ":" + text
+    key = issue["code"] + ":" + text + (f":{issue['ref']}" if issue.get("ref") else "")
     return hashlib.sha1(key.encode()).hexdigest()[:12]
 
 
@@ -385,7 +386,7 @@ def _collect() -> dict:
             issues.append(_issue("error", "service_down", f"Service {st['label']} is {st['state'] or 'inactive'}"))
     for r in failed_crons():
         issues.append(_issue("warn", "cron_failed", f"Scheduled job \"{r.get('name', r.get('cron_id'))}\" failed "
-                                                     f"(code {r.get('code')})"))
+                                                     f"(code {r.get('code')})", str(r.get("cron_id") or "")))
     from . import security                        # imports FastAPI: not at module level (CLI `maxxing status`)
     fails = security.failures_last_hour()
     if fails >= security.FAIL_MAX:
