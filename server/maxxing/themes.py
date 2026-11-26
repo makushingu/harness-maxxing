@@ -30,6 +30,7 @@ import os
 import re
 import shutil
 import tempfile
+import time
 from pathlib import Path
 from typing import Any
 
@@ -568,7 +569,8 @@ def _load(d: Path) -> tuple[dict | None, list[str], str | None]:
     logo["light"] = logo["light"] or logo["dark"]
     css = _css(raw.get("css"), warn)
     preview = _image(d, raw.get("preview"), "preview", warn) if raw.get("preview") is not None else (
-        "preview.png" if (d / "preview.png").is_file() and (d / "preview.png").stat().st_size <= MAX_IMAGE else None)
+        "preview.png" if (d / "preview.png").is_file() and not (d / "preview.png").is_symlink()
+        and (d / "preview.png").stat().st_size <= MAX_IMAGE else None)
     return {
         "id": tid,
         "schema": SCHEMA,
@@ -633,6 +635,20 @@ def file_path(tid: str, name: str) -> Path | None:
     return f if f.is_file() and not f.is_symlink() else None
 
 
+STALE_STAGE_S = 600                    # an install takes seconds: an older work folder was left by a killed one
+
+
+def _drop_stale_stages(tid: str, keep: Path) -> None:
+    """Removes the work folders (.<id>.XXXX) that an install killed midway left in themes/."""
+    now = time.time()
+    for d in root().glob(f".{tid}.*"):
+        try:
+            if d != keep and d.is_dir() and not d.is_symlink() and now - d.stat().st_mtime > STALE_STAGE_S:
+                shutil.rmtree(d, ignore_errors=True)
+        except OSError:
+            pass
+
+
 def install(src: Path, force: bool = False) -> tuple[dict, list[str]]:
     """Copies a checked theme folder into <workspace>/themes/<id>/: theme.json, its images, README and LICENSE only."""
     src = src.expanduser().resolve()
@@ -665,9 +681,18 @@ def install(src: Path, force: bool = False) -> tuple[dict, list[str]]:
     fd = os.open(root(), os.O_RDONLY)
     try:
         fcntl.flock(fd, fcntl.LOCK_EX)  # two installs of the same theme swap one after the other
+        _drop_stale_stages(t["id"], stage)
+        if dest.exists() and not force:     # another install may have finished since the check above
+            raise ThemeError(f"a theme {t['id']} is already installed (--force replaces it)")
+        old = stage / "old"
         if dest.exists():
-            dest.rename(stage / "old")  # never a moment without the theme for a browser that lists it
-        tmp.rename(dest)
+            dest.rename(old)            # never a moment without the theme for a browser that lists it
+        try:
+            tmp.rename(dest)
+        except BaseException:
+            if old.exists() and not dest.exists():
+                old.rename(dest)        # the finally empties the stage: put the installed theme back first
+            raise
     finally:
         fcntl.flock(fd, fcntl.LOCK_UN)
         os.close(fd)

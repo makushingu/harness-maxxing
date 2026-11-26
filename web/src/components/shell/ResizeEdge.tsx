@@ -32,6 +32,7 @@ export function ResizeEdge({ side, min, max, onWidth, edge = 'right', className 
           target.removeEventListener('pointermove', onMove)
           target.removeEventListener('pointerup', onUp)
           target.removeEventListener('pointercancel', onUp)
+          target.removeEventListener('lostpointercapture', onUp)
           document.body.style.cursor = ''
           document.body.style.userSelect = ''
           if (moved) onWidth(w)
@@ -41,6 +42,8 @@ export function ResizeEdge({ side, min, max, onWidth, edge = 'right', className 
         target.addEventListener('pointermove', onMove)
         target.addEventListener('pointerup', onUp)
         target.addEventListener('pointercancel', onUp)
+        // the handle removed mid-drag (sidebar closed) gets no pointerup: losing the capture also ends the drag
+        target.addEventListener('lostpointercapture', onUp)
       }}
       className={`absolute inset-y-0 ${edge === 'left' ? '-left-1' : '-right-1'} z-40 w-2 cursor-col-resize touch-none after:absolute after:inset-y-0 after:left-[3px] after:w-[3px] after:transition-colors hover:after:bg-primary/40 active:after:bg-primary/60 ${className}`}
     />

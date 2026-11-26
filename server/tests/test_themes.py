@@ -6,6 +6,8 @@ import json
 import re
 from pathlib import Path
 
+import pytest
+
 from maxxing import cli, themes
 
 WEB = Path(__file__).resolve().parents[2] / "web" / "src"
@@ -266,3 +268,66 @@ def test_serving_a_theme_image_does_not_read_the_theme_again(mx, monkeypatch, tm
     dest = mx["ws"] / "themes" / "cached"
     _theme(dest.parent, "cached", {"name": "Renamed", "base": "glass", "wallpaper": "wall.png"})
     assert themes.get("cached")["name"] == "Renamed"                                  # an edit is seen at once
+
+
+def test_a_failed_replace_keeps_the_installed_theme(mx, monkeypatch, tmp_path):
+    import errno
+    v1 = _theme(tmp_path / "v1", "keep", {"name": "Keep v1"})
+    v2 = _theme(tmp_path / "v2", "keep", {"name": "Keep v2"})
+    themes.install(v1)
+    real, calls = Path.rename, []
+
+    def rename(self, target):
+        calls.append(self)
+        if len(calls) == 2:             # the new copy taking the place of the old one
+            raise OSError(errno.ENOSPC, "No space left on device")
+        return real(self, target)
+
+    with monkeypatch.context() as m:
+        m.setattr(Path, "rename", rename)
+        with pytest.raises(OSError):
+            themes.install(v2, force=True)
+    assert themes.get("keep")["name"] == "Keep v1"
+    assert sorted(p.name for p in (mx["ws"] / "themes").iterdir()) == ["keep"]
+
+
+def test_an_install_finished_meanwhile_is_not_replaced_without_force(mx, monkeypatch, tmp_path):
+    first = _theme(tmp_path / "a", "twice", {"name": "First"})
+    second = _theme(tmp_path / "b", "twice", {"name": "Second"})
+    real = themes.tempfile.mkdtemp
+
+    def mkdtemp(*a, **k):               # the other install completes after this one checked dest
+        monkeypatch.setattr(themes.tempfile, "mkdtemp", real)
+        themes.install(first)
+        return real(*a, **k)
+
+    monkeypatch.setattr(themes.tempfile, "mkdtemp", mkdtemp)
+    with pytest.raises(themes.ThemeError):
+        themes.install(second)
+    assert themes.get("twice")["name"] == "First"
+    assert sorted(p.name for p in (mx["ws"] / "themes").iterdir()) == ["twice"]
+
+
+def test_work_folders_left_by_a_killed_install_are_removed(mx, tmp_path):
+    import os
+    import time
+    src = _theme(tmp_path / "src", "left", {"name": "Left"})
+    r = mx["ws"] / "themes"
+    stale, recent = r / ".left.dead0001", r / ".left.busy0002"
+    for d in (stale / "left", recent / "left"):
+        d.mkdir(parents=True)
+    old = time.time() - 3600
+    os.utime(stale, (old, old))
+    themes.install(src)
+    assert sorted(p.name for p in r.iterdir()) == [".left.busy0002", "left"]   # a running install keeps its own
+
+
+def test_a_linked_preview_png_is_not_announced(tmp_path):
+    png = b"\x89PNG\r\n\x1a\n" + b"0" * 32
+    (tmp_path / "elsewhere.png").write_bytes(png)
+    d = _theme(tmp_path, "linked", {"name": "Linked"})
+    (d / "preview.png").symlink_to(tmp_path / "elsewhere.png")
+    assert themes.load(d)[0]["preview"] is None          # file_path() refuses links: it would be a 404
+    (d / "preview.png").unlink()
+    (d / "preview.png").write_bytes(png)
+    assert themes.load(d)[0]["preview"] == "/api/themes/linked/file/preview.png"
