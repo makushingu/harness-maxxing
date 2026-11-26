@@ -63,6 +63,16 @@ def test_strict_grants_refuse_rights_or_trigger_of_the_wrong_type():
     assert g["rights"] == ["read", "draft"] and g["trigger"] is None      # not strict: the old fallback
 
 
+def test_a_trigger_switched_off_with_a_wrong_type_stays_off():
+    for off in ("false", 0, "", []):
+        with pytest.raises(access.AccessError):
+            access.clean_grants([{"account": "a", "trigger": {"enabled": off}}], strict=True)
+        assert access.clean_grants([{"account": "a", "trigger": {"enabled": off}}])[0]["trigger"]["enabled"] is False
+    for on, want in ((None, True), (True, True), (False, False)):
+        g = access.clean_grants([{"account": "a", "trigger": {"enabled": on}}], strict=True)[0]
+        assert g["trigger"]["enabled"] is want
+
+
 def test_a_star_glued_to_a_domain_never_opens_other_domains():
     g = access.clean_grants([{"account": "a", "rights": ["read", "send"], "senders": ["*stripe.com"]}])[0]
     assert g["senders"] == ["*@stripe.com", "*@*.stripe.com"]

@@ -100,7 +100,12 @@ def _clean_trigger(t: Any, strict: bool) -> dict | None:
     folder = " ".join(str(t.get("folder") or "INBOX").split())[:200] or "INBOX"
     if any(c in folder for c in "\r\n\0"):
         folder = "INBOX"
-    return {"enabled": t.get("enabled") is not False, "folder": folder,
+    enabled = t.get("enabled")
+    if enabled is not None and not isinstance(enabled, bool):
+        if strict:
+            raise AccessError("trigger.enabled: true or false")
+        enabled = False                                   # "false", 0 written by hand: off, never on
+    return {"enabled": enabled is not False, "folder": folder,
             "subject": " ".join(str(t.get("subject") or "").split())[:200],
             "senders": _clean_senders(t.get("senders"), strict),
             "prompt": str(t.get("prompt") or "").strip()[:4000]}
