@@ -51,6 +51,10 @@ export function Tooltip({ content, side, align, children, disabled }: { content:
   const keep = React.useContext(KeepTooltipShape)
   const [open, setOpen] = React.useState(false)
   const off = disabled || content == null || content === ''
+  // switched off while open (the bar pinned under the pointer): forget it, or it shows again by itself once back on
+  React.useEffect(() => {
+    if (off) setOpen(false)
+  }, [off])
   if (off && !keep) return <>{children}</>
   return (
     // While off, Radix still asks to open on hover/focus but never asks to close (the controlled value is already

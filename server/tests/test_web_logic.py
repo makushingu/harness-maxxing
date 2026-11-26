@@ -641,3 +641,11 @@ def test_a_resize_handle_removed_mid_drag_gives_back_the_cursor_and_text_selecti
     src = (WEB / "components" / "shell" / "ResizeEdge.tsx").read_text(encoding="utf-8")
     assert "addEventListener('lostpointercapture', onUp)" in src
     assert "removeEventListener('lostpointercapture', onUp)" in src
+
+
+def test_a_tooltip_switched_off_while_open_does_not_reopen_by_itself():
+    # Radix never asks to close a tooltip whose controlled value is already false: `open` stayed true while off.
+    src = (WEB / "components" / "ui" / "tooltip.tsx").read_text(encoding="utf-8")
+    body = src[src.index("export function Tooltip("):]
+    assert re.search(r"React\.useEffect\(\(\) => \{\s*if \(off\) setOpen\(false\)\s*\}, \[off\]\)", body)
+    assert body.index("setOpen(false)") < body.index("if (off && !keep) return")      # a hook before the early return
