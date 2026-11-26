@@ -3,10 +3,20 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
-## Unreleased
+## 2.0.0-alpha.173 - 2026-11-26
 
 Improved:
 - **Agents, Jarvis, Team and Tasks open as smoothly as Sessions.** On the first visit, their lists rise in row by row like the Sessions list. Their data and Jarvis's page start loading as soon as the pointer is over the link, so the page shows up complete sooner.
+- **The sidebar's active mark glides from the row you leave.**
+
+Fixed:
+- **Themes install safely.** A failed `--force` install puts the installed theme back, a killed install leaves no work folders, and theme cards are drawn in the mode they get once picked.
+- **The getting-started guide survives a damaged `guide.json`** and ignores values of the wrong type.
+- **Health:** two failing jobs with the same name are two issues, a CPU that could not be read shows a dash, and the sign-in-ending-soon issue opens Settings > Claude.
+- **Mail:** wildcard senders over a public suffix are refused, a non-boolean trigger value is read as off, and a port corrected in the account dialog keeps its security.
+- **Tasks quick add:** an `@` with no letters no longer picks the first project.
+- **Security:** the browser relay strips cookies from more events and refuses odd DevTools ids; Team accepts only real group ids from other servers; HTML widgets never answer a foreign page.
+- Smaller fixes: the resize handle, tooltips, dashboard charts near zero, agent group `stop @name`, the Extensions folder mark.
 
 ## 2.0.0-alpha.172 - 2026-11-25
 
