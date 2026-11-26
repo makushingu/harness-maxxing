@@ -667,3 +667,13 @@ def test_every_health_issue_has_an_open_button():
     keys = set(re.findall(r"^\s+([a-z_]+): '/", table[:table.index("\n}\n")], re.M))
     assert "claude_login_ends" in codes and "disk_full" in codes
     assert codes <= keys, codes - keys
+
+
+def test_pages_shown_while_the_settings_load_are_the_ones_a_new_install_has_on():
+    core = (WEB.parents[1] / "server" / "maxxing" / "cmd_core.py").read_text(encoding="utf-8")
+    new_on = set(re.findall(r'\("(\w+_page)", not older\)', core))
+    nav = (WEB / "components" / "shell" / "nav.ts").read_text(encoding="utf-8")
+    shown = set(re.findall(r"setting: '(\w+_page)', defaultOn: true", nav))
+    assert new_on == {"agents_page"} and shown == new_on
+    warm = (WEB / "lib" / "prefetchIdle.ts").read_text(encoding="utf-8")
+    assert "s.tasks_page !== false" not in warm and "if (!s || s.agents_page !== false) tops.push('agents')" in warm
