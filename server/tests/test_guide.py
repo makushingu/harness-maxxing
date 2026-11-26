@@ -121,3 +121,11 @@ def test_a_damaged_guide_file_does_not_break_the_guide(client, monkeypatch):
         assert client.post("/api/guide/cards", json={"steps": ["final"]}).status_code == 200
         guide.context()
     wait_for(lambda: not guide._ACTIVE)
+
+
+def test_values_of_the_wrong_type_are_dropped_not_a_500(client):
+    for body in ({"steps": [["x"], "welcome"]}, {"done": [{}, "welcome"]}, {"uses": [["mail"], "mail"]},
+                 {"tried": {"step": ["welcome"]}}, {"status": ["running"], "level": {}, "mode": []}):
+        assert client.put("/api/guide", json=body).status_code == 200, body
+    st = client.get("/api/guide").json()
+    assert st["steps"] == ["welcome"] and st["done"] == ["welcome"] and st["uses"] == ["mail"] and st["tried"] == {}
