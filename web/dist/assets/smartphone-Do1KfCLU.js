@@ -1,0 +1,1 @@
+import{t as e}from"./createLucideIcon-Bu283v16.js";var t={name:`smartphone`,size:24,node:[[`rect`,{x:`6`,y:`2`,width:`12`,height:`20`,rx:`2`,ry:`2`,key:`681lq1`}],[`path`,{d:`M12 18h.01`,key:`mhygvu`}]]};t.node;var n=e(t);export{n as t};
