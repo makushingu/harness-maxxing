@@ -46,11 +46,23 @@ def _domain_forms(s: str) -> list[str]:
     return [s]
 
 
+# second-level labels that registries sell under a country code (co.uk, com.au, ac.jp...): "*.co.uk" would be public
+PUBLIC_SLD = frozenset("co com net org gov edu ac ne or go gob gouv ltd plc sch mil nic nom info biz".split())
+
+
+def _public_suffix(rest: str) -> bool:
+    """A top-level domain ("com"), a country's public second level ("co.uk") or a host where anyone gets a name
+    ("github.io", the agents' sandbox list): names anyone can register under."""
+    from ..agents import _wildcard_too_wide
+    labels = rest.split(".")
+    return _wildcard_too_wide(rest) or (len(labels) == 2 and len(labels[1]) == 2 and labels[0] in PUBLIC_SLD)
+
+
 def _domain_ok(dom: str) -> bool:
-    """A wildcard in the domain only as its whole first label ("*.stripe.com"): "stripe.*" or "*" would match
-    domains anyone can register."""
+    """A wildcard in the domain only as its whole first label ("*.stripe.com"): "stripe.*", "*", "*.com" or
+    "*.co.uk" would match domains anyone can register."""
     rest = dom[2:] if dom.startswith("*.") else dom
-    return bool(rest) and "*" not in rest and "?" not in rest and (rest == dom or "." in rest)
+    return bool(rest) and "*" not in rest and "?" not in rest and (rest == dom or not _public_suffix(rest))
 
 
 def _clean_senders(v: Any, strict: bool) -> list[str]:

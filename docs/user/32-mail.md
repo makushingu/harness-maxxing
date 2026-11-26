@@ -95,7 +95,7 @@ An agent (Settings -> Features -> Agents) sees **no mailbox** until you give it 
   senders, and only when your mail provider checked the sender (DKIM, SPF or DMARC passed): a forged sender stays
   invisible to it. It also only writes to these addresses. See [Who checks the senders](#who-checks-the-senders).
   `*@*.stripe.com` adds the subdomains; `*stripe.com` means `stripe.com` and its subdomains (never `evilstripe.com`);
-  a `*` elsewhere in a domain (`stripe.*`) is refused.
+  a `*` elsewhere in a domain (`stripe.*`), or over a whole extension or shared host (`*@*.co.uk`, `*@*.github.io`), is refused.
   A list edited by hand in `agent.json` where no entry is a valid address or domain (accents, a typo, a plain text
   instead of a list) closes the mailbox (shown as `nobody@invalid.invalid`) rather than opening it to everyone.
 - **Sending** (with the Send right): **every message waits for my OK** (default), **only someone I never wrote to waits

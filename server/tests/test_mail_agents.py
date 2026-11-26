@@ -75,6 +75,16 @@ def test_a_star_glued_to_a_domain_never_opens_other_domains():
         assert access.clean_grants([{"account": "a", "senders": [bad]}])[0]["senders"] == [access.NO_SENDER]
 
 
+def test_a_wildcard_over_a_public_suffix_is_refused():
+    for bad in (["*co.uk"], ["*@*.co.uk"], ["*@*.com.au"], ["*.com"], ["*@*.github.io"]):
+        with pytest.raises(access.AccessError):
+            access.clean_grants([{"account": "a", "senders": bad}], strict=True)
+    g = access.clean_grants([{"account": "a", "rights": ["read"], "senders": ["*@*.co.uk"]}])[0]
+    assert g["senders"] == [access.NO_SENDER] and not access.sender_ok(g, "x@evil.co.uk", True)
+    ok = access.clean_grants([{"account": "a", "senders": ["*bbc.co.uk", "*@*.stripe.com"]}], strict=True)[0]
+    assert ok["senders"] == ["*@bbc.co.uk", "*@*.bbc.co.uk", "*@*.stripe.com"]
+
+
 def test_hand_written_senders_that_are_all_invalid_do_not_open_the_mailbox():
     for senders in (["jürgen@müller.de"], ["not an address", "x@*"], "client@example.com"):
         g = access.clean_grants([{"account": "a", "rights": ["read", "send"], "senders": senders,
