@@ -54,6 +54,8 @@ export const GROUPS = {
   // "Copy the text" of a file (features/files/copyText.tsx): with the Files page, else on the first file shown in the viewer
   ctext: ['ctext'],
   sel: ['sel'],
+  // the `sandbox` permission mode (Settings -> Claude, a topic's Permissions, a job): on its first text asked
+  pbox: ['pbox'],
   // "Mark as read / unread" of a session's menu (pages/sessions/Tree.tsx): on its first text asked
   rmark: ['rmark'],
   // Office documents and the page-by-page PDF reader (features/files/docs.tsx, pdfPages.tsx): on the first one opened

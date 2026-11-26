@@ -31,7 +31,7 @@ export function ClaudeDefaults() {
   if (s.default_model && !models.some((m) => m.id === s.default_model)) models.unshift({ id: s.default_model, label: s.default_model })
   const modes: { id: PermissionMode; icon: typeof ShieldAlert; title: string; desc: string; badge?: string }[] = [
     { id: 'bypass', icon: ShieldAlert, title: t('claude.mode.bypass'), desc: t('claude.mode.bypassDesc'), badge: t('claude.mode.recommendedVps') },
-    { id: 'sandbox', icon: Box, title: t('cdef.mode.sandbox'), desc: t('cdef.mode.sandboxDesc') },
+    { id: 'sandbox', icon: Box, title: t('pbox.mode'), desc: t('pbox.modeDesc') },
     { id: 'acceptEdits', icon: ShieldHalf, title: t('claude.mode.acceptEdits'), desc: t('claude.mode.acceptEditsDesc') },
     { id: 'ask', icon: ShieldQuestion, title: t('claude.mode.ask'), desc: t('claude.mode.askDesc') },
     { id: 'default', icon: ShieldCheck, title: t('claude.mode.default'), desc: t('claude.mode.defaultDesc') },
