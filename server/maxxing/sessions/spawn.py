@@ -103,9 +103,11 @@ def auth_env(secrets: dict | None = None, keys: list[str] | None = None) -> dict
 
 
 def permission_args(mode: str) -> tuple[list[str], dict[str, str]]:
-    """CLI flags + env for a permission mode (bypass | acceptEdits | default | ask). `ask` = default + the approval
-    tool (runner.approval_args): what is not pre-allowed waits for the user's Allow / Deny instead of being refused."""
-    if mode == "acceptEdits":
+    """CLI flags + env for a permission mode (bypass | sandbox | acceptEdits | default | ask). `ask` = default + the
+    approval tool (runner.approval_args): what is not pre-allowed waits for the user's Allow / Deny instead of being
+    refused. `sandbox` = acceptEdits + Claude Code's sandbox around the topic (agent_guard.topic_settings) + the
+    approval tool for what leaves it."""
+    if mode in ("acceptEdits", "sandbox"):
         return ["--permission-mode", "acceptEdits"], {}
     if mode in ("default", "ask"):
         return ["--permission-mode", "default"], {}

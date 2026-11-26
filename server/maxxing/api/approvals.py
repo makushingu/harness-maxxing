@@ -1,7 +1,7 @@
 """Approvals API: the tool calls an agent waits on (Allow / Deny), and the watcher that notices new requests.
 
 GET  /api/approvals?session=<sid>    pending requests (of one session), oldest first
-POST /api/approvals/{id}             {decision: "allow"|"deny", message?, always?} -> the request as decided
+POST /api/approvals/{id}             {decision: "allow"|"deny", message?, always?, full?} -> the request as decided
 
 The requests are written by another process (approval_mcp.py, under Claude Code): the watcher looks at the folder
 every 2 s (like api/crons.py does for runs) and invalidates the bus topics "approvals" and "sessions".
@@ -28,6 +28,7 @@ class DecisionIn(BaseModel):
     decision: Literal["allow", "deny"]
     message: Optional[str] = Field(default=None, max_length=approvals.MESSAGE_MAX)
     always: bool = False          # allow + add the request's rule to its topic (approvals.always_rule)
+    full: bool = False            # allow + the topic of a sandboxed session gets full access (mode bypass)
 
 
 @router.get("")
@@ -39,7 +40,7 @@ async def list_pending(session: Optional[str] = Query(default=None, max_length=6
 async def decide(rid: str, body: DecisionIn) -> dict:
     try:
         return await asyncio.to_thread(approvals.decide, rid, body.decision, body.message or "", "web",
-                                       body.always)
+                                       body.always, body.full)
     except approvals.ApprovalError as e:
         raise HTTPException(e.status, detail={"error": e.code, "message": e.message}) from None
 

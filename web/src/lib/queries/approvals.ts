@@ -32,8 +32,8 @@ export function usePendingApprovals(enabled = true) {
 
 export function useDecideApproval() {
   return useMut(
-    ({ id, decision, message, always }: { id: string; decision: 'allow' | 'deny'; message?: string; always?: boolean }) =>
-      api.post<Approval>(`/api/approvals/${seg(id)}`, { decision, ...(message ? { message } : {}), ...(always ? { always } : {}) }),
+    ({ id, decision, message, always, full }: { id: string; decision: 'allow' | 'deny'; message?: string; always?: boolean; full?: boolean }) =>
+      api.post<Approval>(`/api/approvals/${seg(id)}`, { decision, ...(message ? { message } : {}), ...(always ? { always } : {}), ...(full ? { full } : {}) }),
     { invalidate: [approvalKeys.all, ['agents'], ['workspace', 'tree']] },
   )
 }

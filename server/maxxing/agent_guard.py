@@ -544,6 +544,36 @@ def settings(path: str, a: dict, approvals: bool = False, chat: bool = False) ->
     return out
 
 
+TOPIC_CLI = ("status", "tasks", "feed", "pdf", "video", "mcp load", "cron list", "sessions list", "infra status",
+             "infra list", "team list", "memory")      # `maxxing` sub-commands a sandboxed topic runs without asking
+TOPIC_OWNED = (".maxxing.json", ".mcp.json", ".claude/settings.json", ".claude/settings.local.json", "agents")
+
+
+def topic_settings(path: str, cwd: str = "") -> dict:
+    """The `--settings` part of a session of a topic in mode `sandbox`: shell commands write in the topic folder only
+    (`cwd`: its separate copy, when it has one), read neither the server's secrets nor the home folder (as an
+    agent's sandbox: `home_wall`, `read_back`), reach any site. What cannot work there is tried again outside by
+    Claude Code (`allowUnsandboxedCommands`), and that retry is asked to the owner (the turn runs in acceptEdits
+    with the approval tool; never bypass, where the retry would pass without a question). `maxxing` runs outside
+    (the server state is hidden inside): a short list passes, the rest is asked. The files that decide what the
+    topic may do (its mode, its MCP servers, its agents) are not writable from inside."""
+    ws = config.workspace()
+    folder = ws / path.strip("/")
+    secrets = secret_paths()
+    owned = [str(folder / p) for p in TOPIC_OWNED]
+    write = [str(folder)] + ([cwd] if cwd and Path(cwd) != folder else [])
+    memory = [str(ws / "memory.md"), str(folder.parent.parent / "memory.md")]     # the levels above: the memory skill
+    deny = _deny_secrets(secrets) + [f"Edit(/{folder}/{p})" for p in TOPIC_OWNED[:4]] \
+        + [f"Edit(/{folder}/agents/**/agent.json)"]
+    return {"sandbox": {"enabled": True, "allowUnsandboxedCommands": True, "failIfUnavailable": True,
+                        "autoAllowBashIfSandboxed": True, "excludedCommands": ["maxxing:*"],
+                        "filesystem": {"denyRead": secrets + [p for p in home_wall() if p not in secrets],
+                                       "allowRead": read_back(), "allowWrite": write, "denyWrite": owned}},
+            "permissions": {"deny": deny,
+                            "allow": ["WebFetch(domain:*)", "WebSearch"] + [f"Bash(maxxing {c}:*)" for c in TOPIC_CLI]
+                            + [f"Edit(/{m})" for m in memory]}}
+
+
 def _deny_secrets(paths: list[str]) -> list[str]:
     """Read and Edit deny rules of secret / private paths (a folder: all it holds)."""
     out: list[str] = []

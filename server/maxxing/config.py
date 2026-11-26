@@ -55,7 +55,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "claude_dir": "",
     "language": "en",
     "default_model": "",
-    "permission_mode": "bypass",          # bypass | acceptEdits | default | ask
+    "permission_mode": "bypass",          # bypass | sandbox | acceptEdits | default | ask
     # A turn that ends above this context (tokens) is followed by a summary turn and a fresh thread seeded with it
     # (the same as "Compact"): long sessions stop re-sending their whole history. 0 = off. This threshold and the two
     # below follow the model: never above its context window - 70k (sessions/resume.fit), 130k on a 200k model.

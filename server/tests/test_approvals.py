@@ -605,3 +605,45 @@ def test_a_request_file_with_a_time_that_is_not_a_number_does_not_break_the_list
     assert len(approvals.pending()) == 2
     approvals.scan(force=True)
     assert client.get("/api/approvals").status_code == 200
+
+
+def test_a_topic_in_mode_sandbox_runs_in_claude_codes_sandbox_and_full_access_leaves_it(client, topic, mx):
+    from maxxing import approvals, config
+    assert client.patch("/api/workspace/projects/acme/topics/blog", json={"permission_mode": "sandbox"}).status_code == 200
+    sid = client.post("/api/sessions", json={"path": topic, "message": "APPROVE push"}).json()["id"]
+    p = wait_for(lambda: client.get(f"/api/approvals?session={sid}").json()["approvals"], timeout=15)[0]
+    argv = _calls()[-1]["argv"]
+    assert argv[argv.index("--permission-mode") + 1] == "acceptEdits" and "--dangerously-skip-permissions" not in argv
+    assert "--permission-prompt-tool" in argv
+    st = json.loads(argv[argv.index("--settings") + 1])
+    folder = str(config.workspace() / topic)
+    box = st["sandbox"]
+    assert box["enabled"] and box["allowUnsandboxedCommands"] and box["autoAllowBashIfSandboxed"] and box["failIfUnavailable"]
+    assert box["filesystem"]["allowWrite"] == [folder] and str(config.STATE) in box["filesystem"]["denyRead"]
+    assert {folder + "/.maxxing.json", folder + "/.mcp.json", folder + "/agents"} <= set(box["filesystem"]["denyWrite"])
+    assert "network" not in box and "WebFetch(domain:*)" in st["permissions"]["allow"]      # any site
+    assert "Bash(maxxing tasks:*)" in st["permissions"]["allow"] and "Bash(maxxing:*)" not in st["permissions"]["allow"]
+    assert f"Edit(/{config.workspace()}/memory.md)" in st["permissions"]["allow"]
+    assert p["full_access"] is True
+    assert client.post(f"/api/approvals/{p['id']}", json={"decision": "deny", "full": True}).status_code == 400
+    r = client.post(f"/api/approvals/{p['id']}", json={"decision": "allow", "full": True})
+    assert r.status_code == 200 and r.json()["status"] == "allow"
+    wait_idle(client, sid)
+    t = client.get("/api/workspace/tree").json()
+    assert next(x for pr in t["projects"] for x in pr["topics"] if x["path"] == topic)["permission_mode"] == "bypass"
+    client.post(f"/api/sessions/{sid}/messages", json={"text": "NOTOOL again"})      # the next message: full access
+    wait_idle(client, sid)
+    argv = _calls()[-1]["argv"]
+    assert "--dangerously-skip-permissions" in argv and "sandbox" not in json.loads(argv[argv.index("--settings") + 1])
+    assert approvals.short("Bash", {"command": "apt install x", "dangerouslyDisableSandbox": True}) == "Bash outside the sandbox: apt install x"
+
+
+def test_full_access_is_refused_outside_a_sandboxed_topic(client, topic, mx):
+    assert client.patch("/api/workspace/projects/acme/topics/blog", json={"permission_mode": "ask"}).status_code == 200
+    sid = client.post("/api/sessions", json={"path": topic, "message": "APPROVE push"}).json()["id"]
+    p = wait_for(lambda: client.get(f"/api/approvals?session={sid}").json()["approvals"], timeout=15)[0]
+    assert p["full_access"] is False
+    r = client.post(f"/api/approvals/{p['id']}", json={"decision": "allow", "full": True})
+    assert r.status_code == 400 and "not_sandboxed" in r.text
+    client.post(f"/api/approvals/{p['id']}", json={"decision": "deny"})
+    wait_idle(client, sid)

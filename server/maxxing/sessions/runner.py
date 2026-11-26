@@ -76,6 +76,8 @@ STDERR_TAIL = 4000
 CGROUP_FS = Path("/sys/fs/cgroup")
 OOM_ERROR = ("Claude was killed by the kernel: the turn ran out of memory (a command used too much RAM; "
              "`journalctl -k | grep -i oom` shows which).")
+TOPIC_SANDBOX_ERROR = ("The sandbox of this topic cannot run on this server: run `maxxing agents sandbox-setup` as root, or "
+                       "choose another permission mode for the topic (missing: ")
 SANDBOX_ERROR = ("The agent's sandbox cannot run on this server: run `maxxing agents sandbox-setup` as root, or turn the "
                  "sandbox off in the agent settings (missing: ")
 BUDGET_ERROR = "Daily budget of the agent reached: turn stopped (Agent settings -> Limits)."
@@ -471,6 +473,20 @@ class Runner:
         ask = mode == "ask"                             # the topic's mode `ask`: the same, for any session
         if ask:
             mode = "default"
+        box = mode == "sandbox" and (not agent or bool(agent.get("manager"))) and not plan
+        if mode == "sandbox" and not box:               # an agent's run has its own walls (its sandbox, its rules)
+            mode = "acceptEdits"
+        extra = agent.get("settings")
+        if box:                                         # the topic's sandbox: what leaves it is asked to the owner
+            from maxxing import agent_guard
+            if not agent_guard.available()["ok"]:
+                err = TOPIC_SANDBOX_ERROR + ", ".join(agent_guard.available()["missing"]) + ")."
+                self.note(err, "error")
+                self._record(Attempt(rc=1, stderr=err), item)
+                return err
+            topic = agents.topic_of(meta.get("path") or "") if agent else str(meta.get("path") or "")
+            extra = agent_guard.merge(extra or {}, agent_guard.topic_settings(topic, cwd))
+            approval = approval_args(self.sid, "", cfg.get("approval_timeout_s"))
         if agent.get("sandbox"):                        # Claude Code's sandbox; never bypass (domains not enforced)
             from maxxing import agent_guard
             if not agent_guard.available()["ok"]:
@@ -494,7 +510,7 @@ class Runner:
         web = browser_args(self.sid, str(meta.get("path") or ""), agent) if not plan else []
         dev = devices_args(self.sid, str(meta.get("path") or ""), agent, web) if not plan else []
         memory = spawn.upper_memory(cwd, cfg.get("workspace") or "")   # the levels above: never loaded otherwise
-        allow = [] if agent or mode != "default" else workspace_allowed(meta.get("path") or "")
+        allow = workspace_allowed(meta.get("path") or "") if not agent and (mode == "default" or box) else []
         # a report read by Jarvis may carry its own effort (jarvis.settings report_effort): this turn only
         effort = str((item.get("relay") or {}).get("effort") or meta.get("effort") or "").strip()
 
@@ -502,7 +518,7 @@ class Runner:
             hint = "\n\n".join(x for x in (mcp.hint, spawn.CRON_SILENT if item.get("silent_ok") else "", copy,
                                            memory) if x)
             b = [spawn.claude_bin(), "-p", "--output-format", "stream-json", "--verbose"]
-            b += spawn.permission_args(mode)[0] + spawn.settings_args(cfg, agent.get("settings"), allow)
+            b += spawn.permission_args(mode)[0] + spawn.settings_args(cfg, extra, allow)
             b += spawn.agents_args(cfg, "\n\n".join(x for x in (agent.get("system_note"), hint,
                                                                   BROWSER_NOTE if web else "",
                                                                   DEVICES_NOTE if dev else "") if x))

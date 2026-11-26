@@ -284,6 +284,7 @@ function EditorForm({ seed, onCancel, onSaved }: { seed: EditorSeed; onCancel: (
               options={[
                 { value: '__inherit', label: t('crons.permissionInherit') },
                 { value: 'bypass', label: t('claude.mode.bypass') },
+                { value: 'sandbox', label: t('cdef.mode.sandbox') },
                 { value: 'acceptEdits', label: t('claude.mode.acceptEdits') },
                 { value: 'ask', label: t('claude.mode.ask') },
                 { value: 'default', label: t('claude.mode.default') },

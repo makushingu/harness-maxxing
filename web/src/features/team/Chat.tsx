@@ -702,7 +702,7 @@ function MessageRow({
               <div
                 className={cn(
                   'max-w-full rounded-2xl px-3.5 py-2 text-[14px] leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]',
-                  mine ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground',
+                  mine ? 'bg-primary text-primary-foreground selection:bg-primary-foreground/35' : 'bg-muted text-foreground',
                   mine ? (tight ? 'rounded-tr-md' : '') : tight ? 'rounded-tl-md' : '',
                 )}
               >

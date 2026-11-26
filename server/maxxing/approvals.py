@@ -75,6 +75,8 @@ def summary(tool: str, inp: Any) -> tuple[str, bool]:
     text = logs.redact(text)
     whole = len(text) <= SHORT_MAX and not rest
     text = text if len(text) <= SHORT_MAX else text[:SHORT_MAX - 1] + "…"
+    if tool == "Bash" and inp.get("dangerouslyDisableSandbox") is True:
+        tool = "Bash outside the sandbox"            # the retry of a command the topic's sandbox refused
     return (f"{tool}: {text}" if text else tool), whole
 
 
@@ -141,9 +143,19 @@ def topic_of_session(sid: str) -> str:
     return "" if not path or agents.is_agent_path(path) else path
 
 
+def sandboxed_topic(sid: str) -> str:
+    """The topic of a session that runs in its topic's sandbox ("" otherwise): its requests offer "Full access"."""
+    topic = topic_of_session(sid)
+    if not topic:
+        return ""
+    from . import workspace
+    mode = workspace.topic_permission_mode(topic) or config.load_config().get("permission_mode") or "bypass"
+    return topic if mode == "sandbox" else ""
+
+
 def public(d: dict) -> dict:
     return {"id": d.get("id"), "session": d.get("session") or "", "agent_path": d.get("agent_path") or "",
-            "always_rule": always_rule(d),
+            "always_rule": always_rule(d), "full_access": bool(sandboxed_topic(str(d.get("session") or ""))),
             "tool": d.get("tool") or "", "input": _redact(d.get("input") if isinstance(d.get("input"), dict) else {}),
             "summary": short(str(d.get("tool") or ""), d.get("input")), "at": d.get("at"),
             "expires": d.get("expires"), "status": d.get("status"), "message": d.get("message") or "",
@@ -203,14 +215,20 @@ def get(rid: str) -> dict:
 _lock = config.ProcessLock("approvals")     # read-check-write of a request (decide, the watcher's expiry)
 
 
-def decide(rid: str, decision: str, message: str = "", by: str = "web", always: bool = False) -> dict:
+def decide(rid: str, decision: str, message: str = "", by: str = "web", always: bool = False,
+           full: bool = False) -> dict:
     """The user's answer. 409 when the request is no longer waiting (answered, timed out, session stopped).
     `always` (with allow): the request's rule (always_rule) is added to its topic once the request is known to wait, so the next turns of the
     topic's sessions run it without asking (the running turn still asks for other calls of it)."""
     if decision not in DECISIONS:
         raise ApprovalError(400, "bad_decision", "decision: allow or deny")
-    if always and decision != "allow":
-        raise ApprovalError(400, "bad_decision", "always: only with allow")
+    if (always or full) and decision != "allow":
+        raise ApprovalError(400, "bad_decision", "always, full: only with allow")
+    box = ""                                    # `full` (with allow): the topic of a sandboxed session leaves its
+    if full:                                    # sandbox for good (mode bypass), from its next message on
+        box = sandboxed_topic(str(get(rid).get("session") or ""))
+        if not box:
+            raise ApprovalError(400, "not_sandboxed", "This session does not run in its topic's sandbox")
     # an agent's settings change that can no longer be applied as its card shows it (agent gone, a value changed
     # since): the Allow is refused with the reason and the request closed (denied, `stale`), nothing applied
     problem = ""
@@ -238,6 +256,12 @@ def decide(rid: str, decision: str, message: str = "", by: str = "web", always: 
                 from . import workspace
                 try:
                     workspace.add_topic_allowed_tool(topic, rule)
+                except workspace.WorkspaceError as e:
+                    raise ApprovalError(e.status, e.code, e.message) from None
+            if box:
+                from . import workspace
+                try:
+                    workspace.set_topic_permission_mode(box, "bypass")
                 except workspace.WorkspaceError as e:
                     raise ApprovalError(e.status, e.code, e.message) from None
             d.update(status=decision, message=" ".join(str(message or "").split())[:MESSAGE_MAX], decided_at=time.time(),

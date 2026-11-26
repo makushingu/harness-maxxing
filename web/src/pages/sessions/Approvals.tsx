@@ -3,7 +3,7 @@
 // waiting request, above the composer of the session (like the plan-ready notice): the tool, its input as the thread
 // shows it (the command, the file and its diff), Allow / Deny with an optional message. Server: api/approvals.py.
 import * as React from 'react'
-import { Check, CheckCheck, ShieldQuestion, X } from 'lucide-react'
+import { Check, CheckCheck, ShieldAlert, ShieldQuestion, X } from 'lucide-react'
 import { useDecideApproval, useSessionApprovals } from '@/lib/queries'
 import type { Approval, Session } from '@/lib/types'
 import { fmtDuration } from '@/lib/format'
@@ -54,15 +54,15 @@ export function ApprovalCard({ approval: a, className, plain }: { approval: Appr
   const t = useT()
   const decide = useDecideApproval()
   const [message, setMessage] = React.useState('')
-  const [choice, setChoice] = React.useState<'allow' | 'deny' | 'always' | null>(null)
+  const [choice, setChoice] = React.useState<'allow' | 'deny' | 'always' | 'full' | null>(null)
   const Icon = toolIcon(a.tool)
   const change = a.kind === 'agent_change'          // an agent's own safety settings: one line per change
   const name = change ? t('approval.agentChange') : a.tool.startsWith('mcp__') ? a.tool.split('__').slice(2).join('__') || a.tool : a.tool
   const diff = React.useMemo(() => toolDiff(a.tool, a.input), [a.tool, a.input])
   const left = useSecondsLeft(a.expires)
-  const send = (decision: 'allow' | 'deny', always = false) => {
-    setChoice(always ? 'always' : decision)
-    decide.mutate({ id: a.id, decision, message: message.trim() || undefined, always }, { onSettled: () => setChoice(null) })
+  const send = (decision: 'allow' | 'deny', always = false, full = false) => {
+    setChoice(full ? 'full' : always ? 'always' : decision)
+    decide.mutate({ id: a.id, decision, message: message.trim() || undefined, always, full }, { onSettled: () => setChoice(null) })
   }
   return (
     <div role="group" aria-label={t('approval.title')} className={cn('min-w-0 text-[13px]', !plain && 'mx-rise overflow-hidden rounded-lg border border-primary/40 bg-card shadow-xs', className)}>
@@ -107,6 +107,11 @@ export function ApprovalCard({ approval: a, className, plain }: { approval: Appr
             <Button size="sm" variant="outline" onClick={() => send('deny')} loading={choice === 'deny'} disabled={decide.isPending}>
               <X className="size-3.5" /> {t('approval.deny')}
             </Button>
+            {a.full_access && !a.clipped && (
+              <Button size="sm" variant="outline" onClick={() => send('allow', false, true)} loading={choice === 'full'} disabled={decide.isPending} title={t('approval.fullTitle')}>
+                <ShieldAlert className="size-3.5" /> {t('approval.full')}
+              </Button>
+            )}
             {!!a.always_rule && !a.clipped && (
               <Button size="sm" variant="outline" onClick={() => send('allow', true)} loading={choice === 'always'} disabled={decide.isPending} title={t('approval.alwaysTitle', { rule: a.always_rule })}>
                 <CheckCheck className="size-3.5" /> {t('approval.always')}

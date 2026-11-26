@@ -46,6 +46,7 @@ import {
   X,
   GitBranch,
   CheckCheck,
+  Box,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useLongPress } from '@/lib/long-press'
@@ -1973,6 +1974,7 @@ function PermissionDialog({ topic, onClose, onSelect, onRules }: { topic: Topic;
   const modes: { id: '' | PermissionMode; icon: typeof ShieldAlert; title: string; desc: string }[] = [
     { id: '', icon: SlidersHorizontal, title: t('sessions.permission.inherit'), desc: t('sessions.permission.inheritDesc') },
     { id: 'bypass', icon: ShieldAlert, title: t('claude.mode.bypass'), desc: t('claude.mode.bypassDesc') },
+    { id: 'sandbox', icon: Box, title: t('cdef.mode.sandbox'), desc: t('cdef.mode.sandboxDesc') },
     { id: 'acceptEdits', icon: ShieldHalf, title: t('claude.mode.acceptEdits'), desc: t('claude.mode.acceptEditsDesc') },
     { id: 'ask', icon: ShieldQuestion, title: t('claude.mode.ask'), desc: t('claude.mode.askDesc') },
     { id: 'default', icon: ShieldCheck, title: t('claude.mode.default'), desc: t('claude.mode.defaultDesc') },

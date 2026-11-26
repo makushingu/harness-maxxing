@@ -698,7 +698,7 @@ Approval { id: string (16 hex), session: string, agent_path: string, tool: strin
 | Method | Path | Body | Response |
 |---|---|---|---|
 | GET | `/api/approvals?session=<sid>` | – | `{approvals: [Approval]}` waiting ones, oldest first |
-| POST | `/api/approvals/{id}` | `{decision: "allow"\|"deny", message?}` | `Approval` (`404 not_found`, `409 not_pending` when answered, timed out or expired) |
+| POST | `/api/approvals/{id}` | `{decision: "allow"\|"deny", message?, always?, full?}` (`full`: the topic of a sandboxed session gets mode `bypass`; `400 not_sandboxed`) | `Approval` (`404 not_found`, `409 not_pending` when answered, timed out or expired) |
 
 ## Harness Browser
 

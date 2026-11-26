@@ -352,7 +352,7 @@ def _rename_in_order(names: list, old: str, new: str) -> list:
 
 # ---- folder settings: project emoji, topic permission mode (<folder>/.maxxing.json: moves with the folder) ----
 META_FILE = ".maxxing.json"
-PERMISSION_MODES = ("bypass", "acceptEdits", "default", "ask")
+PERMISSION_MODES = ("bypass", "sandbox", "acceptEdits", "default", "ask")
 
 
 def _parse_meta(f: Path) -> dict:
@@ -457,6 +457,16 @@ def add_topic_allowed_tool(path: str, rule: str) -> list[str]:
     return rules
 
 
+def set_topic_permission_mode(path: str, mode: str) -> None:
+    """One topic's permission mode ("" = the global setting): "Full access" of a request of a sandboxed session."""
+    d = topic_dir(path)
+    if not d.is_dir():
+        raise WorkspaceError(404, "not_found", f"Topic {path} not found")
+    with _meta_lock:
+        _set_folder_meta(d, "permission_mode", check_permission_mode(mode))
+    _changed("updated", "topic", path)
+
+
 def folder_browser(path: str) -> dict:
     """The `browser` block {enabled?, profile?} of a project's or a topic's .maxxing.json ({} when none)."""
     try:
@@ -474,7 +484,7 @@ def set_folder_browser(path: str, block: dict | None) -> None:
 def check_permission_mode(value: str) -> str:
     v = (value or "").strip()
     if v and v not in PERMISSION_MODES:
-        raise WorkspaceError(400, "bad_permission_mode", "permission_mode: bypass, acceptEdits, default, ask or empty")
+        raise WorkspaceError(400, "bad_permission_mode", "permission_mode: bypass, sandbox, acceptEdits, default, ask or empty")
     return v
 
 

@@ -31,7 +31,7 @@ export type OnboardingState = { completed: boolean; steps: Record<OnboardingStep
 /* ---------------------------------------------------------------- Claude */
 export type ClaudeAuthMethod = 'oauth_token' | 'credentials' | 'api_key' | null
 /** `ask`: what is not pre-allowed waits for the user's Allow / Deny (topics, global setting, jobs; not agents). */
-export type PermissionMode = 'bypass' | 'acceptEdits' | 'default' | 'ask'
+export type PermissionMode = 'bypass' | 'sandbox' | 'acceptEdits' | 'default' | 'ask'
 export type ClaudeModel = { id: string; label: string; /** Last context window Claude Code reported for this model here. */ context_window?: number | null }
 export type ClaudeStatus = {
   installed: boolean
@@ -421,6 +421,8 @@ export type Approval = {
   clipped?: boolean
   /** The rule "Always allow" would add to the session's topic ("" = not offered: agents, multi-line commands...). */
   always_rule?: string
+  /** the session runs in its topic's sandbox: the request offers "Full access for this topic" */
+  full_access?: boolean
 }
 export const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const
 export type Effort = (typeof EFFORTS)[number]

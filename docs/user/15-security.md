@@ -26,8 +26,8 @@ the only extra place a member may write is the group's shared folder (turn off "
 that read outside content: a hand-over then asks for your OK before risky actions).
 
 **What limits it:**
-- **Permission modes, per topic and per job** (the real limit): `bypass` (default, no questions), `acceptEdits`
-  (edits files, refuses commands), `ask` (asks you before anything but reading: **Allow** / **Deny** in the
+- **Permission modes, per topic and per job** (the real limit): `bypass` (default, no questions), `sandbox`
+  (free inside the topic folder, see below), `acceptEdits` (edits files, refuses commands), `ask` (asks you before anything but reading: **Allow** / **Deny** in the
   session, the notifications or Telegram), `default` (refuses edits and commands), `plan` (reads only, proposes a
   plan). Set them for the whole server (Settings -> Claude), a topic (topic menu -> **Permissions**) or a
   scheduled job. Put every topic and job that reads untrusted content in a stricter mode.
@@ -36,6 +36,18 @@ that read outside content: a hand-over then asks for your OK before risky action
   realtime scheduling (config `unit_hardening`, on for installations made from 2.0.0-alpha.70, off on older ones). These do not make root less than root.
 
 A stricter mode costs refused actions in web sessions. See [Settings and keys](settings-and-keys).
+
+**The `sandbox` mode** keeps the comfort of full access for the work of one topic, without giving the server
+away. Claude asks nothing while it stays in the topic: commands write in the topic folder only (and the separate
+copy of a session), cannot read the server's keys, the SSH keys nor the rest of the home folder, and reach any
+website. The files that decide what the topic may do (its permission mode, its MCP servers, its agents) cannot be
+changed from inside. What has to leave the topic - install a package, restart a service, write in another
+folder, most `maxxing` commands - is asked to you first (**Allow** / **Deny**, in the session, the notifications
+or Telegram). **Full access** on that request allows it and switches the topic to `bypass` from its next
+message: one click for the topics that administer the server. It uses the same sandbox as the agents (bubblewrap;
+`maxxing agents sandbox-setup` installs what is missing). Limits to know: the keys of Settings -> Keys are still
+given to the session as environment variables, so a script of the topic can use them; and a scheduled job in this
+mode waits for an answer nobody may give, so choose it for jobs that stay inside their topic.
 
 Treat anything you paste into a session (documents, web pages, emails) as instructions Claude may
 follow: do not feed it untrusted content with the bypass mode on. Topics and jobs that read the web, e-mails or
