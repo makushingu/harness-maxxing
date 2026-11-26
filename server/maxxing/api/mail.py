@@ -325,6 +325,7 @@ def _cached_view(acc_id: str, folder: str, uid: int, indexes: list[int], ident: 
                 if len(files) != 1:
                     return None
                 out[idx] = str(files[0])
+            os.utime(base)                              # reused: a day again before the next view's prune removes them
             return out
         except (OSError, UnicodeDecodeError):
             return None
