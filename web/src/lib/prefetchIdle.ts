@@ -74,6 +74,7 @@ function pageTops(qc: QueryClient): string[] {
   const s = qc.getQueryData<Settings>(settingsQuery().queryKey)
   const tops = ['sessions', '', 'files', 'settings']
   // same defaults as a new install while the settings load: Agents on, Tasks off (cmd_core)
+  if (s?.jarvis_feature) tops.push('jarvis')
   if (!s || s.agents_page !== false) tops.push('agents')
   for (const k of ['tasks', 'team', 'mail', 'infra', 'git'] as const) if (s?.[`${k}_page`]) tops.push(k)
   const ext = qc.getQueryData<Extension[]>(extensionsQuery().queryKey)

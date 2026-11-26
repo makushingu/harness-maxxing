@@ -27,9 +27,12 @@ export const groupRoute = (g: Pick<AgentGroup, 'project' | 'name'>) => `/agents/
 /** Route of the creation form (`project` prefilled). */
 export const newGroupRoute = (project?: string) => `/agents/groups/new${project ? `?project=${encodeURIComponent(project)}` : ''}`
 
+export const agentGroupsQuery = () => ({
+  queryKey: groupKeys.list,
+  queryFn: () => api.get<{ groups: AgentGroup[] }>('/api/agent-groups').then((r) => (pruneAgentDrafts('group', r.groups.map((x) => x.path)), r.groups)),
+})
 export function useAgentGroups(enabled = true) {
-  const queryFn = () => api.get<{ groups: AgentGroup[] }>('/api/agent-groups').then((r) => (pruneAgentDrafts('group', r.groups.map((x) => x.path)), r.groups))
-  return useQuery({ queryKey: groupKeys.list, queryFn, enabled })
+  return useQuery({ ...agentGroupsQuery(), enabled })
 }
 export function useAgentGroup(path: string | null) {
   return useQuery({ queryKey: groupKeys.one(path || ''), queryFn: () => api.get<AgentGroup>(groupUrl(path!)), enabled: !!path })

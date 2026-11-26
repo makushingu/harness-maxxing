@@ -7,6 +7,25 @@
 //   Nothing runs under prefers-reduced-motion.
 import * as React from 'react'
 
+/** The lists whose intro already played in this tab (useListIntro). */
+const introPlayed = new Set<string>()
+/** The entrance of a page's list, as on the Sessions tree: true for ~0.9 s once `ready` (its data is there), on the
+ *  first visit of the list `id` in this tab: the rows mounted then rise in, staggered (rise); coming back shows them
+ *  at once. */
+export function useListIntro(id: string, ready: boolean): boolean {
+  const [intro, setIntro] = React.useState(() => !introPlayed.has(id))
+  React.useEffect(() => {
+    if (!ready || !intro) return
+    introPlayed.add(id)
+    const h = setTimeout(() => setIntro(false), 900)
+    return () => clearTimeout(h)
+  }, [id, ready, intro])
+  return intro
+}
+/** Class and style of row `i` of a list during its intro (`.mx-rise`, 28 ms apart, --i capped at 10); `{}` after. */
+export const rise = (intro: boolean, i: number): { className?: string; style?: React.CSSProperties } =>
+  intro ? { className: 'mx-rise', style: { '--i': Math.min(i, 10) } as React.CSSProperties } : {}
+
 export const PRESENCE_MS = 220
 export const EASE_OUT = 'cubic-bezier(0.22, 1, 0.36, 1)'
 const EASE_IN_OUT = 'cubic-bezier(0.4, 0, 0.2, 1)'

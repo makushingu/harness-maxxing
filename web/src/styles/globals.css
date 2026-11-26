@@ -452,6 +452,7 @@ html[data-material='glass'] :is(.mx-lg-btn, .mx-lg-pill):focus-visible {
  * Motion. Light, short, transform/opacity only (compositor-friendly on every GPU), and switched
  * off by prefers-reduced-motion (rule above). Documented in docs/dev/DESIGN.md.
  *  .mx-rise / .mx-unfold  entrance of a list item; --i (0..10) staggers siblings by 28 ms
+ *  .mx-rise-kids          the same on every child of a flat list, --i from its place (a list's intro: useListIntro)
  *  #main > *              page content fades in when a route mounts; on a computer it also rises 6 px (a transform
  *                         makes the page the containing block of its fixed layers for 200 ms: none on a computer)
  *  .mx-card-in             dashboard cards; at most ~0.5 s for the whole grid (--i capped at 6)
@@ -473,6 +474,8 @@ html[data-material='glass'] :is(.mx-lg-btn, .mx-lg-pill):focus-visible {
  *  .mx-wait               a card below the fold: its animations (and theirs) wait until it scrolls into view
  * ---------------------------------------------------------------------------------------- */
 .mx-rise { animation: mx-rise 300ms cubic-bezier(0.22, 1, 0.36, 1) backwards; animation-delay: calc(var(--i, 0) * 28ms); }
+.mx-rise-kids > * { animation: mx-rise 300ms cubic-bezier(0.22, 1, 0.36, 1) backwards; animation-delay: calc(var(--i, 10) * 28ms); }
+.mx-rise-kids > :nth-child(1) { --i: 0; } .mx-rise-kids > :nth-child(2) { --i: 1; } .mx-rise-kids > :nth-child(3) { --i: 2; } .mx-rise-kids > :nth-child(4) { --i: 3; } .mx-rise-kids > :nth-child(5) { --i: 4; } .mx-rise-kids > :nth-child(6) { --i: 5; } .mx-rise-kids > :nth-child(7) { --i: 6; } .mx-rise-kids > :nth-child(8) { --i: 7; } .mx-rise-kids > :nth-child(9) { --i: 8; } .mx-rise-kids > :nth-child(10) { --i: 9; }
 .mx-unfold { animation: mx-unfold 200ms cubic-bezier(0.22, 1, 0.36, 1) backwards; animation-delay: calc(var(--i, 0) * 22ms); }
 .mx-card-in { --cd: calc(20ms + var(--i, 0) * 32ms); animation: mx-card-in 320ms cubic-bezier(0.22, 1, 0.36, 1) backwards; animation-delay: var(--cd); }
 /* a card's own rows wait for the card (--cd: its delay, inherited already resolved), so they never play hidden under it */
@@ -500,7 +503,7 @@ html[data-boot] .mx-card-in .mx-pop { animation-delay: calc(var(--bd, 0ms) + 108
    these elements are (the restyle lands during the logo's merge). --bdm (not inherited, for the same reason) holds
    the flight's start for #main and the sidebar. */
 @property --bdm { syntax: '<time>'; inherits: false; initial-value: 0ms; }
-html[data-boot='load'] #main, html[data-boot='load'] .mx-rise, html[data-boot='load'] .mx-unfold, html[data-boot='load'] .mx-card-in,
+html[data-boot='load'] #main, html[data-boot='load'] .mx-rise, html[data-boot='load'] .mx-rise-kids > *, html[data-boot='load'] .mx-unfold, html[data-boot='load'] .mx-card-in,
 html[data-boot='load'] .mx-fade, html[data-boot='load'] .mx-pop, html[data-boot='load'] .mx-grow-y, html[data-boot='load'] .mx-draw,
 html[data-boot='load'] .mx-sweep, html[data-boot='load'] .mx-dot-in { animation-play-state: paused !important; }
 html[data-boot='reveal'] .mx-boot-side { animation: mx-fade 320ms ease-out backwards; animation-delay: var(--bdm); }
@@ -511,7 +514,7 @@ html[data-boot='reveal'] [data-boot-rv] [role='progressbar'] > span { transform-
 html[data-boot] #main { animation: mx-fade 300ms ease-out backwards; animation-delay: calc(var(--bdm) + 40ms); }
 html[data-boot] .mx-card-in { animation-duration: 460ms; animation-delay: var(--bd, calc(20ms + var(--i, 0) * 32ms)); }
 /* every list entrance too: its own --bd (its height on screen), so the whole interface opens top to bottom */
-html[data-boot] :is(.mx-rise, .mx-unfold, .mx-fade) { animation-delay: var(--bd, calc(var(--i, 0) * 28ms)); }
+html[data-boot] :is(.mx-rise, .mx-unfold, .mx-fade, .mx-rise-kids > *) { animation-delay: var(--bd, calc(var(--i, 0) * 28ms)); }
 html[data-boot] .mx-grow-y { animation-delay: calc(var(--bd, 0ms) + 140ms + var(--i, 0) * 24ms); }
 html[data-boot] .mx-draw { animation-duration: 900ms; animation-delay: calc(var(--bd, 0ms) + 200ms); }
 html[data-boot] .mx-sweep { animation-delay: calc(var(--bd, 0ms) + 120ms + var(--i, 0) * 40ms); }

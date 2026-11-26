@@ -14,6 +14,7 @@ const PAGE_LOADERS: Record<string, () => Promise<unknown>> = {
   // optional pages (Settings -> Features): warmed only when switched on (see lib/prefetchIdle.ts)
   agents: withGroups(['agents', 'tasks', 'files'], () => import('../features/agents/AgentsLayout')),
   team: withGroups(['team'], () => import('../features/team/TeamPage')),
+  jarvis: withGroups(['jarvis', 'files'], () => import('./jarvis')),
   infra: withGroups(['infra'], () => import('../features/infra/InfraPage')),
   mail: withGroups(['mail'], () => import('../features/mail/MailPage')),
   git: withGroups(['git'], () => import('../features/git/GitPage')),

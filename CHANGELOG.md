@@ -3,6 +3,11 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## Unreleased
+
+Improved:
+- **Agents, Jarvis, Team and Tasks open as smoothly as Sessions.** On the first visit, their lists rise in row by row like the Sessions list. Their data and Jarvis's page start loading as soon as the pointer is over the link, so the page shows up complete sooner.
+
 ## 2.0.0-alpha.172 - 2026-11-25
 
 Fixed:

@@ -61,9 +61,10 @@ const chatUrl = (cid: string) => `/api/team/chats/${seg(cid)}`
 const msgUrl = (cid: string, mid: string, action: string) => `${chatUrl(cid)}/messages/${seg(mid)}/${action}`
 type ChatData = { chat: TeamChat; messages: TeamMessage[] }
 
+export const teamQuery = () => ({ queryKey: teamKeys.state, queryFn: () => api.get<TeamState>('/api/team') })
 export function useTeam(enabled = true) {
   // every minute too: presence (online / seen 5 min ago) ages without any event
-  return useQuery({ queryKey: teamKeys.state, queryFn: () => api.get<TeamState>('/api/team'), enabled, refetchInterval: 60_000 })
+  return useQuery({ ...teamQuery(), enabled, refetchInterval: 60_000 })
 }
 export function useTeamChat(id: string | null) {
   return useQuery({ queryKey: teamKeys.chat(id || ''), queryFn: () => api.get<ChatData>(chatUrl(id!)), enabled: !!id })

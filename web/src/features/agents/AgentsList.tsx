@@ -12,6 +12,7 @@ import { agentRoute, groupRoute, useAgentGroups, useAgents, useMarkAllSeen, useW
 import type { Agent, AgentGroup } from '@/lib/types'
 import { errorMessage } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import { rise, useListIntro } from '@/lib/presence'
 import { Button, CountBadge, EmptyState, Sensitive, Skeleton, StatusDot, useMask, type DotTone } from '@/components/ui'
 import { useCompact } from '@/stores/media'
 import { AgentAvatarIcon, OUTFIT } from './Avatar'
@@ -116,6 +117,9 @@ export function AgentsList({ empty, nav, query = '', className }: { empty?: Reac
   }
 
   const layout = useAgentsLayout()
+  // first visit: the projects and their rows rise in, staggered (as the Sessions tree)
+  const intro = useListIntro('agents', !!data)
+  let n = 0
   const groups = React.useMemo(() => {
     const byProject = layout.group(shown)
     // A project whose agents are all filtered out still shows its groups (in the layout order, else at the end).
@@ -205,6 +209,7 @@ export function AgentsList({ empty, nav, query = '', className }: { empty?: Reac
           groups.map((g, i) => (
             <Group
               key={g.id}
+              rise={rise(intro, n++)}
               project={g.id}
               label={g.label}
               index={i}
@@ -219,10 +224,10 @@ export function AgentsList({ empty, nav, query = '', className }: { empty?: Reac
               }
             >
               {g.rooms.map((r) => (
-                <GroupRow key={r.path} group={r} />
+                <GroupRow key={r.path} group={r} rise={rise(intro, n++)} />
               ))}
               {g.agents.map((a, j) => (
-                <AgentRow key={a.path} agent={a} index={j} layout={layout} />
+                <AgentRow key={a.path} agent={a} index={j} layout={layout} rise={rise(intro, n++)} />
               ))}
             </Group>
           ))
@@ -232,12 +237,14 @@ export function AgentsList({ empty, nav, query = '', className }: { empty?: Reac
   )
 }
 
+type Rise = ReturnType<typeof rise>
+
 /** A project: its header (colour, name and count, "..." menu; dragged to move the project), then its agents. */
-function Group({ project, label, index, layout, among, head, children }: { project: string; label: string; index: number; layout: AgentsLayoutApi; among: string[]; head: React.ReactNode; children: React.ReactNode }) {
+function Group({ project, label, index, layout, among, head, children, rise: r }: { project: string; label: string; index: number; layout: AgentsLayoutApi; among: string[]; head: React.ReactNode; children: React.ReactNode; rise: Rise }) {
   const t = useT()
   const dnd = useReorder({ kind: 'project', id: project, project, index }, (p) => layout.moveProject(p, project))
   return (
-    <section {...dnd.target} aria-label={label} className={cn('relative mt-2 first:mt-0', dnd.dragging && 'opacity-50')}>
+    <section {...dnd.target} aria-label={label} className={cn('relative mt-2 first:mt-0', dnd.dragging && 'opacity-50', r.className)} style={r.style}>
       <DropBar side={dnd.side} />
       <h3
         {...dnd.source}
@@ -267,7 +274,7 @@ const useRowTo = (pathname: string) => {
 }
 
 /** A group of the project: its emoji, its name, its members' faces (stacked), "X is writing…" while one speaks. */
-function GroupRow({ group: g }: { group: AgentGroup }) {
+function GroupRow({ group: g, rise: r }: { group: AgentGroup; rise: Rise }) {
   const t = useT()
   const to = groupRoute(g)
   const link = useRowTo(to)
@@ -279,7 +286,8 @@ function GroupRow({ group: g }: { group: AgentGroup }) {
       role="listitem"
       to={link}
       aria-current={active ? 'page' : undefined}
-      className={cn(ROW, active && 'bg-accent hover:bg-accent')}
+      className={cn(ROW, active && 'bg-accent hover:bg-accent', r.className)}
+      style={r.style}
       data-testid="groups-row"
       data-path={g.path}
     >
@@ -333,7 +341,7 @@ function MemberStack({ members, size = 16 }: { members: AgentGroup['members']; s
   )
 }
 
-function AgentRow({ agent: a, index, layout }: { agent: Agent; index: number; layout: AgentsLayoutApi }) {
+function AgentRow({ agent: a, index, layout, rise: r }: { agent: Agent; index: number; layout: AgentsLayoutApi; rise: Rise }) {
   const t = useT()
   const dnd = useReorder({ kind: 'agent', id: a.path, project: a.project, index }, (path) => layout.moveAgent(path, a))
   const to = agentRoute(a)
@@ -351,7 +359,8 @@ function AgentRow({ agent: a, index, layout }: { agent: Agent; index: number; la
       aria-current={active ? 'page' : undefined}
       {...dnd.props}
       {...ctx.props}
-      className={cn(ROW, active && 'bg-accent hover:bg-accent', dnd.dragging && 'opacity-50')}
+      className={cn(ROW, active && 'bg-accent hover:bg-accent', dnd.dragging && 'opacity-50', r.className)}
+      style={r.style}
       data-testid="agents-row"
       data-rail-agent
       data-state={state}

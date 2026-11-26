@@ -5,6 +5,10 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## Unreleased
+
+- Page lists intro: `useListIntro(id, ready)` + `rise(intro, i)` (lib/presence.ts, `.mx-rise` with --i, first visit per tab like the Sessions tree) and `.mx-rise-kids` (globals.css, --i from :nth-child, flat lists); used by AgentsList, team ChatList, tasks ProjectNav, Jarvis board. Prefetch: `agentsQuery`, `agentGroupsQuery`, `teamQuery`, `jarvisQuery` factories (same keys as the hooks) in pageData (`jarvis` also warms its session + tail); `jarvis` chunk in PAGE_LOADERS, warmed when `jarvis_feature`.
+
 ## 2.0.0-alpha.172 - 2026-11-25
 
 - Themes: `ThemePreview` loses its `image` and `wallpaper` props (no `<img>`, no `url()`): the tile is always the drawn

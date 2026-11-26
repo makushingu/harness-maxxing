@@ -7,8 +7,9 @@ import { useMut } from './util'
 // The bus topic "jarvis" refreshes it (a report came, the board moved, a new conversation).
 const jarvisKey = ['jarvis'] as const
 
+export const jarvisQuery = () => ({ queryKey: jarvisKey, queryFn: () => api.get<JarvisStatus>('/api/jarvis') })
 export function useJarvis(enabled = true) {
-  return useQuery({ queryKey: jarvisKey, queryFn: () => api.get<JarvisStatus>('/api/jarvis'), enabled, refetchInterval: 60_000 })
+  return useQuery({ ...jarvisQuery(), enabled, refetchInterval: 60_000 })
 }
 
 /** The page opens: its conversation (made the first time). */

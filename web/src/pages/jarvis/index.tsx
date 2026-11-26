@@ -9,6 +9,7 @@ import { useLang, useT, type TKey } from '@/i18n'
 import { useCloseJarvisWork, useJarvis, useJarvisBrief, useJarvisDream, useJarvisSettings, useNewJarvisConversation, useOpenJarvis } from '@/lib/queries'
 import type { JarvisSettings, JarvisWork } from '@/lib/types'
 import { cn } from '@/lib/utils'
+import { useListIntro } from '@/lib/presence'
 import { fmtRelative } from '@/lib/format'
 import { Button, EmptyState, Input, Select, Skeleton, StatusDot, Tooltip } from '@/components/ui'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
@@ -141,6 +142,8 @@ type Group = { key: string; title: TKey; items: JarvisWork[] }
 function Board({ work, onHide }: { work: JarvisWork[]; onHide: () => void }) {
   const t = useT()
   const [closed, setClosed] = React.useState(false)
+  // first visit: the groups rise in, staggered (as the Sessions tree)
+  const intro = useListIntro('jarvis', true)
   const groups: Group[] = [
     { key: 'asks', title: 'jarvis.board.asks', items: work.filter((w) => w.state === 'replied' && w.question) },
     { key: 'running', title: 'jarvis.board.running', items: work.filter((w) => w.state === 'running') },
@@ -164,7 +167,7 @@ function Board({ work, onHide }: { work: JarvisWork[]; onHide: () => void }) {
           </Button>
         </Tooltip>
       </div>
-      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-3">
+      <div className={cn('min-h-0 flex-1 space-y-5 overflow-y-auto p-3', intro && 'mx-rise-kids')}>
         {empty && !closed && <p className="px-1 py-6 text-center text-[13px] text-muted-foreground">{t('jarvis.board.empty')}</p>}
         {groups
           .filter((g) => g.items.length)

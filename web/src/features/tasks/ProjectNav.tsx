@@ -3,6 +3,7 @@
 import * as React from 'react'
 import { Eye, EyeOff, FolderKanban, Inbox, LayoutGrid, ListChecks, MoreHorizontal, Settings2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useListIntro } from '@/lib/presence'
 import { useT } from '@/i18n'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Sensitive , useContextMenu } from '@/components/ui'
 import { usePatchTaskProject } from '@/lib/queries'
@@ -40,9 +41,11 @@ export function ProjectNav({ scope, onScope, projects, stats, emojis, onManage, 
     : projects.filter((p) => !p.hidden || showHidden || p.id === scope)
   const empty = q ? [] : visible.filter((p) => statsOf(stats, p.id).open === 0 && p.id !== scope)
   const shown = showEmpty || empty.length < 3 ? visible : visible.filter((p) => !empty.includes(p))
+  // first visit: the entries rise in, staggered (as the Sessions tree)
+  const intro = useListIntro('tasks', true)
 
   return (
-      <nav aria-label={t('tasks.nav.label')} className="grid min-h-0 flex-1 content-start gap-0.5 overflow-y-auto p-2" data-testid="task-nav" data-tour="tasks-projects">
+      <nav aria-label={t('tasks.nav.label')} className={cn('grid min-h-0 flex-1 content-start gap-0.5 overflow-y-auto p-2', intro && 'mx-rise-kids')} data-testid="task-nav" data-tour="tasks-projects">
         <ListEntry active={scope === 'overview'} onClick={() => onScope('overview')} icon={LayoutGrid} label={t('tasks.nav.overview')} />
         <ListEntry active={scope === 'all'} onClick={() => onScope('all')} icon={ListChecks} count={all} label={t('tasks.nav.all')} />
         {(q ? !!matched?.has('') : none.total > 0 || scope === 'none') && (

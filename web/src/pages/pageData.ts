@@ -5,6 +5,8 @@
 // this often is cheap.
 import { useQueryClient, type QueryClient } from '@tanstack/react-query'
 import {
+  agentGroupsQuery,
+  agentsQuery,
   backupQuery,
   claudeStatusQuery,
   cronRunsQuery,
@@ -18,6 +20,7 @@ import {
   feedQuery,
   fileKindQuery,
   healthQuery,
+  jarvisQuery,
   prefetchTail,
   secretsQuery,
   servicesQuery,
@@ -25,6 +28,7 @@ import {
   sessionsQuery,
   settingsQuery,
   tasksQuery,
+  teamQuery,
   telegramQuery,
   tokenStatsQuery,
   trashQuery,
@@ -76,6 +80,21 @@ export function prefetchPageData(qc: QueryClient, pathname: string, search = '')
       break
     case 'tasks':
       queries.push(tasksQuery())
+      break
+    case 'agents':
+      queries.push(agentsQuery(), agentGroupsQuery())
+      break
+    case 'team':
+      queries.push(teamQuery())
+      break
+    case 'jarvis':
+      // its conversation once the status says which session it is (the column reads it with its thread)
+      void qc.ensureQueryData(jarvisQuery()).then((st) => {
+        const id = st.session?.id
+        if (!id) return
+        void qc.prefetchQuery(sessionQuery(id))
+        prefetchTail(id)
+      }, () => undefined)
       break
     case 'feed':
       void qc.prefetchInfiniteQuery(feedPagesQuery(null, false))

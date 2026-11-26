@@ -39,9 +39,12 @@ export function agentRunRoute(path: string, sid: string): string {
   return m ? `/agents/${m[1]}/${m[2]}/${m[3]}/runs/${sid}` : `/agents`
 }
 
+export const agentsQuery = () => ({
+  queryKey: agentKeys.list,
+  queryFn: () => api.get<AgentsPayload>('/api/agents').then((r) => (pruneAgentDrafts('agent', r.agents.map((x) => x.path)), r)),
+})
 export function useAgents(enabled = true) {
-  const queryFn = () => api.get<AgentsPayload>('/api/agents').then((r) => (pruneAgentDrafts('agent', r.agents.map((x) => x.path)), r))
-  return useQuery({ queryKey: agentKeys.list, queryFn, enabled })
+  return useQuery({ ...agentsQuery(), enabled })
 }
 /** The gallery of ready-made agents (texts in `lang`; `keys_present` = its suggested keys found in the vault). */
 export function useAgentTemplates(lang: string, enabled = true) {
