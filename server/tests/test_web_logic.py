@@ -627,3 +627,10 @@ def test_the_demo_server_knows_the_phone_notifications(tmp_path):
     finally:
         proc.terminate()
         proc.wait(5)
+
+
+def test_theme_cards_are_drawn_in_the_mode_they_get_once_picked():
+    # With a dark-only theme in use and Mode = light, Solid and Glass were drawn dark although picking them gives light.
+    src = (WEB / "pages" / "settings" / "sections" / "Appearance.tsx").read_text(encoding="utf-8")
+    picker = re.search(r"function ThemePicker\(\).*?\n}\n", src, re.S)
+    assert picker and "shownMode(" not in picker[0] and "resolveTheme(useUI((s) => s.theme))" in picker[0]
