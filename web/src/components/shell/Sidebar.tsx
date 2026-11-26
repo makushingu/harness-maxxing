@@ -103,7 +103,7 @@ function ExtFolder({ pins, collapsed, drawer, idx }: { pins: PinnedPage[]; colla
   const prefetchLink = usePrefetchLink()
   const open = useUI((s) => s.extFolderOpen)
   const setOpen = useUI((s) => s.setExtFolderOpen)
-  const onExt = useLocation().pathname.startsWith('/x/')
+  const onExt = useLocation().pathname.toLowerCase().startsWith('/x/')       // routes ignore the case: /X/foo too
   const orderPins = useOrderPins()
   const drag = useDragOrder(pins.map((p) => p.id), (ids) => orderPins.mutate(ids), 'ext')
   const label = t('ext.hubTitle')

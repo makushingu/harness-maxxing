@@ -677,3 +677,8 @@ def test_pages_shown_while_the_settings_load_are_the_ones_a_new_install_has_on()
     assert new_on == {"agents_page"} and shown == new_on
     warm = (WEB / "lib" / "prefetchIdle.ts").read_text(encoding="utf-8")
     assert "s.tasks_page !== false" not in warm and "if (!s || s.agents_page !== false) tops.push('agents')" in warm
+
+
+def test_the_extensions_folder_is_marked_on_an_extension_page_typed_in_capitals():
+    src = (WEB / "components" / "shell" / "Sidebar.tsx").read_text(encoding="utf-8")
+    assert "const onExt = useLocation().pathname.toLowerCase().startsWith('/x/')" in src
