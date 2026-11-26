@@ -5,6 +5,10 @@ Private, technical counterpart of `CHANGELOG.md`. `CHANGELOG.md` is **public**: 
 `maxxing update`. This file is for us: API, data formats, migrations, internals, gotchas. It is never
 shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
+## Unreleased
+
+- Memory review (`memory_review.py`, `cmd_memory_review.py`, loop + turn-end listener in `api/memory.py`): one Haiku call without tools (`claude -p --tools ""`) after each agent run (`after_run`: transcript with [DID] / [FAILED] / [GOT] lines, at most one proposal a run, none while `PENDING_MAX` = 3 wait for that agent) and once a day for the topics with >= 3 owner sessions in 14 days and a new one since the last look (`daily`, 10 topics at most: one skill + two rules a topic). Proposals in `<state>/memory_proposals.json` (`proposals`, `learned`, `learned_at`), announced with `feed.post(..., ref="memory:<id>", actions=[accept, refuse])` (source `agents` for an agent, `sessions` for a topic; `feed.HANDLERS["memory"]`). Accept = `apply` (bullet into the level's memory.md, or `<topic>/.claude/skills/<name>/SKILL.md`). Waiting and refused texts are sent back to the model as "already proposed". `config.json` `memory_review: false` = off (no UI yet). Not charged to the agent's budget. Tests: `conftest` replaces `memory_review._ask` for every test.
+
 ## 2.0.0-alpha.173 - 2026-11-26
 
 - Page lists intro: `useListIntro(id, ready)` + `rise(intro, i)` (lib/presence.ts, `.mx-rise` with --i, first visit per tab like the Sessions tree) and `.mx-rise-kids` (globals.css, --i from :nth-child, flat lists); used by AgentsList, team ChatList, tasks ProjectNav, Jarvis board. Prefetch: `agentsQuery`, `agentGroupsQuery`, `teamQuery`, `jarvisQuery` factories (same keys as the hooks) in pageData (`jarvis` also warms its session + tail); `jarvis` chunk in PAGE_LOADERS, warmed when `jarvis_feature`.

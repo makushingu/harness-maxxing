@@ -56,6 +56,8 @@ def _never_the_real_tools(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> No
     monkeypatch.setattr(cmd_core, "F2B_JAIL", fake / "fail2ban" / "harness-maxxing.local")
     monkeypatch.setattr(cmd_core, "CADDY_ADMIN_DROPIN", fake / "caddy.service.d" / "harness-maxxing-admin.conf")
     monkeypatch.setattr(cmd_core, "FSTAB", fake / "fstab")
+    from maxxing import memory_review       # no model call for a memory review after the agent runs of other tests
+    monkeypatch.setattr(memory_review, "_ask", lambda system, payload, model: ({}, 0.0, "off in tests"))
 
 
 @pytest.fixture(autouse=True)
