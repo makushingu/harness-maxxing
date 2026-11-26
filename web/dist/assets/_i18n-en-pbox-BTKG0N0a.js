@@ -1,0 +1,1 @@
+var e={"pbox.mode":`Sandbox (this topic only)`,"pbox.modeDesc":`Claude works freely inside the topic folder, without asking: its commands write there only and cannot read the server's keys nor the home folder. What has to leave it (install a package, restart a service, another folder) asks you first, with a button that gives the topic full access.`};export{e as default};
