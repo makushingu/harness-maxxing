@@ -306,3 +306,17 @@ def test_an_install_finished_meanwhile_is_not_replaced_without_force(mx, monkeyp
         themes.install(second)
     assert themes.get("twice")["name"] == "First"
     assert sorted(p.name for p in (mx["ws"] / "themes").iterdir()) == ["twice"]
+
+
+def test_work_folders_left_by_a_killed_install_are_removed(mx, tmp_path):
+    import os
+    import time
+    src = _theme(tmp_path / "src", "left", {"name": "Left"})
+    r = mx["ws"] / "themes"
+    stale, recent = r / ".left.dead0001", r / ".left.busy0002"
+    for d in (stale / "left", recent / "left"):
+        d.mkdir(parents=True)
+    old = time.time() - 3600
+    os.utime(stale, (old, old))
+    themes.install(src)
+    assert sorted(p.name for p in r.iterdir()) == [".left.busy0002", "left"]   # a running install keeps its own

@@ -30,6 +30,7 @@ import os
 import re
 import shutil
 import tempfile
+import time
 from pathlib import Path
 from typing import Any
 
@@ -633,6 +634,20 @@ def file_path(tid: str, name: str) -> Path | None:
     return f if f.is_file() and not f.is_symlink() else None
 
 
+STALE_STAGE_S = 600                    # an install takes seconds: an older work folder was left by a killed one
+
+
+def _drop_stale_stages(tid: str, keep: Path) -> None:
+    """Removes the work folders (.<id>.XXXX) that an install killed midway left in themes/."""
+    now = time.time()
+    for d in root().glob(f".{tid}.*"):
+        try:
+            if d != keep and d.is_dir() and not d.is_symlink() and now - d.stat().st_mtime > STALE_STAGE_S:
+                shutil.rmtree(d, ignore_errors=True)
+        except OSError:
+            pass
+
+
 def install(src: Path, force: bool = False) -> tuple[dict, list[str]]:
     """Copies a checked theme folder into <workspace>/themes/<id>/: theme.json, its images, README and LICENSE only."""
     src = src.expanduser().resolve()
@@ -665,6 +680,7 @@ def install(src: Path, force: bool = False) -> tuple[dict, list[str]]:
     fd = os.open(root(), os.O_RDONLY)
     try:
         fcntl.flock(fd, fcntl.LOCK_EX)  # two installs of the same theme swap one after the other
+        _drop_stale_stages(t["id"], stage)
         if dest.exists() and not force:     # another install may have finished since the check above
             raise ThemeError(f"a theme {t['id']} is already installed (--force replaces it)")
         old = stage / "old"
