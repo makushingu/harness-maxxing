@@ -682,3 +682,13 @@ def test_pages_shown_while_the_settings_load_are_the_ones_a_new_install_has_on()
 def test_the_extensions_folder_is_marked_on_an_extension_page_typed_in_capitals():
     src = (WEB / "components" / "shell" / "Sidebar.tsx").read_text(encoding="utf-8")
     assert "const onExt = useLocation().pathname.toLowerCase().startsWith('/x/')" in src
+
+
+def test_a_cpu_the_server_could_not_read_is_shown_as_a_dash_not_zero():
+    # health.cpu_pct() is None when /proc/stat cannot be read: Math.round(null) showed "0 %".
+    types = (WEB / "lib" / "types.ts").read_text(encoding="utf-8")
+    assert re.search(r"\n  cpu_pct: number \| null\n", types)
+    src = (WEB / "components" / "shell" / "HealthIndicator.tsx").read_text(encoding="utf-8")
+    assert "value={h.cpu_pct == null ? '–' :" in src and "pct: h.cpu_pct ?? null" in src
+    assert "(n: number | null) => (n == null ? '–' :" in src
+    assert "Math.round(h.cpu_pct ?? 0)" in (WEB / "components" / "shell" / "mood.ts").read_text(encoding="utf-8")
