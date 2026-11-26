@@ -106,3 +106,18 @@ def test_a_new_tour_starts_with_fresh_cards(client, topic, monkeypatch):
     assert st["cards"] == {} and st["tried"] == {}                          # a new tour: no intro about the old one
     st = client.put("/api/guide", json={"index": True}).json()
     assert st["index"] == 0                                                 # a boolean is not an index
+
+
+def test_a_damaged_guide_file_does_not_break_the_guide(client, monkeypatch):
+    monkeypatch.setattr(guide, "ask_opus", lambda step, facts: {"intro": "x", "prompts": []})
+    damaged = [{"cards": [], "tried": []}, {"cards": {"final": "x"}, "tried": {"welcome": "x"}},
+               {"steps": "welcome", "done": [["x"]], "uses": 1, "index": "two"}, {"index": True, "tried": None}]
+    for d in damaged:
+        guide._save(d)
+        st = client.get("/api/guide").json()
+        assert isinstance(st["cards"], dict) and isinstance(st["tried"], dict) and st["index"] == 0
+        assert client.put("/api/guide", json={"tried": {"step": "welcome", "label": "x"}}).status_code == 200
+        guide._save(d)
+        assert client.post("/api/guide/cards", json={"steps": ["final"]}).status_code == 200
+        guide.context()
+    wait_for(lambda: not guide._ACTIVE)

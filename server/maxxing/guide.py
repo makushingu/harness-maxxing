@@ -105,8 +105,19 @@ def _path() -> Path:
 
 
 def load() -> dict:
+    """guide.json, its damaged parts (a hand edit, another version) dropped instead of breaking the guide."""
     d = config.read_json(_path(), {})
-    return d if isinstance(d, dict) else {}
+    if not isinstance(d, dict):
+        return {}
+    for k in ("cards", "tried"):
+        if k in d:
+            d[k] = {s: v for s, v in d[k].items() if isinstance(v, dict)} if isinstance(d[k], dict) else {}
+    for k in ("steps", "done", "uses"):
+        if k in d:
+            d[k] = [s for s in d[k] if isinstance(s, str)] if isinstance(d[k], list) else []
+    if "index" in d and (not isinstance(d["index"], int) or isinstance(d["index"], bool)):
+        d["index"] = 0
+    return d
 
 
 def _save(d: dict) -> None:
