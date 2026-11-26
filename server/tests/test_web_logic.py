@@ -641,3 +641,65 @@ def test_a_resize_handle_removed_mid_drag_gives_back_the_cursor_and_text_selecti
     src = (WEB / "components" / "shell" / "ResizeEdge.tsx").read_text(encoding="utf-8")
     assert "addEventListener('lostpointercapture', onUp)" in src
     assert "removeEventListener('lostpointercapture', onUp)" in src
+
+
+def test_a_tooltip_switched_off_while_open_does_not_reopen_by_itself():
+    # Radix never asks to close a tooltip whose controlled value is already false: `open` stayed true while off.
+    src = (WEB / "components" / "ui" / "tooltip.tsx").read_text(encoding="utf-8")
+    body = src[src.index("export function Tooltip("):]
+    assert re.search(r"React\.useEffect\(\(\) => \{\s*if \(off\) setOpen\(false\)\s*\}, \[off\]\)", body)
+    assert body.index("setOpen(false)") < body.index("if (off && !keep) return")      # a hook before the early return
+
+
+def test_the_cpu_panel_hides_unit_names_in_presentation_mode():
+    src = (WEB / "components" / "shell" / "HealthIndicator.tsx").read_text(encoding="utf-8")
+    panel = src[src.index("function CpuPanel("):]
+    panel = panel[:panel.index("\n}\n")]
+    assert "const present = useUI((u) => u.presentation)" in panel
+    assert "title={u.unit}" not in panel and "title={present ? undefined : u.unit}" in panel
+
+
+def test_every_health_issue_has_an_open_button():
+    health = (WEB.parents[1] / "server" / "maxxing" / "health.py").read_text(encoding="utf-8")
+    codes = set(re.findall(r'_issue\("[^,]*, "([a-z_]+)"', health))
+    src = (WEB / "components" / "shell" / "HealthIndicator.tsx").read_text(encoding="utf-8")
+    table = src[src.index("const ISSUE_TO"):]
+    keys = set(re.findall(r"^\s+([a-z_]+): '/", table[:table.index("\n}\n")], re.M))
+    assert "claude_login_ends" in codes and "disk_full" in codes
+    assert codes <= keys, codes - keys
+
+
+def test_pages_shown_while_the_settings_load_are_the_ones_a_new_install_has_on():
+    core = (WEB.parents[1] / "server" / "maxxing" / "cmd_core.py").read_text(encoding="utf-8")
+    new_on = set(re.findall(r'\("(\w+_page)", not older\)', core))
+    nav = (WEB / "components" / "shell" / "nav.ts").read_text(encoding="utf-8")
+    shown = set(re.findall(r"setting: '(\w+_page)', defaultOn: true", nav))
+    assert new_on == {"agents_page"} and shown == new_on
+    warm = (WEB / "lib" / "prefetchIdle.ts").read_text(encoding="utf-8")
+    assert "s.tasks_page !== false" not in warm and "if (!s || s.agents_page !== false) tops.push('agents')" in warm
+
+
+def test_the_extensions_folder_is_marked_on_an_extension_page_typed_in_capitals():
+    src = (WEB / "components" / "shell" / "Sidebar.tsx").read_text(encoding="utf-8")
+    assert "const onExt = useLocation().pathname.toLowerCase().startsWith('/x/')" in src
+
+
+def test_a_cpu_the_server_could_not_read_is_shown_as_a_dash_not_zero():
+    # health.cpu_pct() is None when /proc/stat cannot be read: Math.round(null) showed "0 %".
+    types = (WEB / "lib" / "types.ts").read_text(encoding="utf-8")
+    assert re.search(r"\n  cpu_pct: number \| null\n", types)
+    src = (WEB / "components" / "shell" / "HealthIndicator.tsx").read_text(encoding="utf-8")
+    assert "value={h.cpu_pct == null ? '–' :" in src and "pct: h.cpu_pct ?? null" in src
+    assert "(n: number | null) => (n == null ? '–' :" in src
+    assert "Math.round(h.cpu_pct ?? 0)" in (WEB / "components" / "shell" / "mood.ts").read_text(encoding="utf-8")
+
+
+def test_the_sidebar_mark_glides_from_where_the_old_row_is_when_it_leaves():
+    # Measured only when mounted: a row moved since (page switched on above it, reordered, shorter rows) made the
+    # next glide start from a stale place.
+    src = (WEB / "components" / "shell" / "ActiveMark.tsx").read_text(encoding="utf-8")
+    effect = src[src.index("React.useLayoutEffect("):src.index("}, [collapsed])")]
+    leave = re.search(r"const leave = \(\) => \{(.*?)\n    \}", effect, re.S)
+    assert leave and "getBoundingClientRect()" in leave[1] and "last = {" in leave[1]
+    returns = re.findall(r"\breturn\b[^\n]*", effect)
+    assert returns and all(r.strip() == "return leave" for r in returns[1:]), returns

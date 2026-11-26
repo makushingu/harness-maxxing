@@ -53,7 +53,7 @@ export function HealthSummary({ compact, metrics = true }: { compact?: boolean; 
       <div className={cn('grid gap-2.5 border-t pt-3', compact && 'text-[13px]')}>
         {metrics && (
           <>
-            <Metric label={t('health.cpu')} value={`${Math.round(h.cpu_pct)}%`} pct={h.cpu_pct} />
+            <Metric label={t('health.cpu')} value={h.cpu_pct == null ? '–' : `${Math.round(h.cpu_pct)}%`} pct={h.cpu_pct ?? 0} />
             <Metric label={t('health.memory')} value={`${fmtBytes(memUsed)} / ${fmtBytes(h.mem.total)}`} pct={memPct} />
             <Metric label={t('health.disk')} value={`${fmtBytes(h.disk.total - h.disk.free)} / ${fmtBytes(h.disk.total)}`} pct={h.disk.pct} />
           </>
@@ -122,7 +122,8 @@ function useStatusLine() {
   return { tone, health: m.text, alert: m.level === 'error' || m.level === 'warn' ? m.level : null, issues: !!m.issues, to: m.to, figures: !!(m.vars || m.when) } as const
 }
 
-/** CPU / RAM / disk as the meters need them (null while the health loads). The CPU is amber at least while programs
+/** CPU / RAM / disk as the meters need them (null while the health loads; the CPU's `pct` null when the server could
+ *  not read it: shown as "–", no colour). The CPU is amber at least while programs
  *  wait for the processor (`waiting`: pressure, not the figure - 99 % with nothing waiting is fine). */
 function useHealthRows() {
   const t = useT()
@@ -130,11 +131,12 @@ function useHealthRows() {
   if (!h) return null
   const mem = h.mem.total ? ((h.mem.total - h.mem.avail) / h.mem.total) * 100 : 0
   const waiting = !!h.cpu_waiting
-  return [
-    { key: 'cpu', label: t('health.cpu'), pct: h.cpu_pct, icon: Cpu, waiting },
+  const rows: { key: string; label: string; pct: number | null; icon: typeof Cpu; waiting: boolean }[] = [
+    { key: 'cpu', label: t('health.cpu'), pct: h.cpu_pct ?? null, icon: Cpu, waiting },
     { key: 'mem', label: t('health.ram'), pct: mem, icon: MemoryStick, waiting: false },
     { key: 'disk', label: t('health.disk'), pct: h.disk.pct, icon: HardDrive, waiting: false },
-  ].map((r) => ({ ...r, tone: meterTone(r.pct) ?? (r.waiting ? ('warn' as const) : undefined) }))
+  ]
+  return rows.map((r) => ({ ...r, tone: (r.pct == null ? undefined : meterTone(r.pct)) ?? (r.waiting ? ('warn' as const) : undefined) }))
 }
 
 const alertBg = { error: 'bg-destructive/10 text-destructive', warn: 'bg-warning/10 text-warning' } as const
@@ -165,7 +167,7 @@ export function StatusBlock({ collapsed, lead, tail }: { collapsed?: boolean; /*
   const [open, setOpen] = React.useState(false)
   const present = useUI((u) => u.presentation)
   const lang = useLang()
-  const pct = (n: number) => (lang === 'en' ? `${Math.round(n)}%` : `${Math.round(n)} %`)
+  const pct = (n: number | null) => (n == null ? '–' : lang === 'en' ? `${Math.round(n)}%` : `${Math.round(n)} %`)
   const metersLabel = [t('health.details'), ...(rows || []).map((r) => `${r.label} ${pct(r.pct)}`)].join(' · ')
   const tip = (
     <span className="grid gap-0.5 text-xs">
@@ -194,12 +196,12 @@ export function StatusBlock({ collapsed, lead, tail }: { collapsed?: boolean; /*
                   r.key === 'cpu' ? (
                     <CpuWho key={r.key} side="right">
                       <button type="button" aria-label={`${r.label} ${pct(r.pct)} · ${t('health.cpuOpen')}`} data-testid="status-cpu" className={cn(link, 'flex w-11 justify-center rounded-md py-0.5 hover:bg-accent data-[state=open]:bg-accent')}>
-                        <MiniMeter icon={r.icon} pct={r.pct} tone={r.tone} label={r.label} />
+                        <MiniMeter icon={r.icon} pct={r.pct ?? 0} tone={r.tone} label={r.label} />
                       </button>
                     </CpuWho>
                   ) : (
                     <Link key={r.key} to="/settings/system" aria-label={`${r.label} ${pct(r.pct)}`} className={cn(link, 'flex w-11 justify-center rounded-md py-0.5 hover:bg-accent')}>
-                      <MiniMeter icon={r.icon} pct={r.pct} tone={r.tone} label={r.label} />
+                      <MiniMeter icon={r.icon} pct={r.pct ?? 0} tone={r.tone} label={r.label} />
                     </Link>
                   ),
                 )}
@@ -265,12 +267,12 @@ export function StatusBlock({ collapsed, lead, tail }: { collapsed?: boolean; /*
                         <>
                           <MeterIcon icon={r.icon} tone={r.tone} />
                           <Sensitive length={3}>
-                            <MeterValue pct={r.pct} tone={r.tone} render={pct} className="text-xs" />
+                            {r.pct == null ? <span className="text-xs text-muted-foreground">–</span> : <MeterValue pct={r.pct} tone={r.tone} render={pct} className="text-xs" />}
                           </Sensitive>
                         </>
                       )}
                     </span>
-                    <MeterBar pct={r.pct} tone={r.tone} label={r.label} className="h-1" />
+                    <MeterBar pct={r.pct ?? 0} tone={r.tone} label={r.label} className="h-1" />
                   </>
                 )
                 const cell = cn(link, 'grid min-w-0 gap-1 rounded-md px-1.5 py-1.5 text-left hover:bg-accent')
@@ -402,6 +404,7 @@ function CpuPanel({ onClose }: { onClose: () => void }) {
   const t = useT()
   const lang = useLang()
   const { data: c } = useCpu(true)
+  const present = useUI((u) => u.presentation)
   const pct = (n: number) => (lang === 'en' ? `${Math.round(n)}%` : `${Math.round(n)} %`)
   const name = (u: CpuSnapshot['top'][number]) => {
     if (u.kind === 'other') return u.name || u.unit
@@ -423,7 +426,7 @@ function CpuPanel({ onClose }: { onClose: () => void }) {
           {c.top.map((u) => (
             <li key={u.unit} className="grid gap-1">
               <div className="flex min-w-0 items-center gap-2 text-[13px]">
-                <span className="min-w-0 flex-1 truncate" title={u.unit}>
+                <span className="min-w-0 flex-1 truncate" title={present ? undefined : u.unit}>
                   <Sensitive length={10}>{name(u)}</Sensitive>
                 </span>
                 {u.level !== 'other' && <Badge variant={LEVEL_BADGE[u.level]}>{t(`cpuwho.level.${u.level}` as TKey)}</Badge>}
@@ -463,6 +466,7 @@ const ISSUE_TO: Record<string, string> = {
   cron_failed: '/settings/crons',
   login_failures: '/settings/security',
   claude_auth: '/settings/claude',
+  claude_login_ends: '/settings/claude',
   backup_never: '/settings/backup',
   backup_old: '/settings/backup',
   backup_failed: '/settings/backup',

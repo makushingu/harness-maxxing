@@ -85,7 +85,7 @@ function pickMood(f: MoodFacts): Mood {
   if (week && week.pct >= 99.5) return week.reset ? { key: 'mood.quotaWeekOut', when: { reset: week.reset }, level: 'warn', to: usage } : { key: 'mood.quotaOut', level: 'warn', to: usage }
 
   const system = '/settings/system'
-  const cpu = Math.round(h.cpu_pct)
+  const cpu = Math.round(h.cpu_pct ?? 0)                // null: the server could not read it
   // programs waiting for the processor (pressure), not a high figure alone: 99 % with nothing waiting is fine
   if (h.cpu_waiting) return { key: 'mood.cpuWaiting', level: 'note', to: system }
   if (cpu >= 85) return { key: 'mood.cpuHot', vars: { pct: cpu }, level: 'note', to: system }

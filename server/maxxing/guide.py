@@ -105,8 +105,19 @@ def _path() -> Path:
 
 
 def load() -> dict:
+    """guide.json, its damaged parts (a hand edit, another version) dropped instead of breaking the guide."""
     d = config.read_json(_path(), {})
-    return d if isinstance(d, dict) else {}
+    if not isinstance(d, dict):
+        return {}
+    for k in ("cards", "tried"):
+        if k in d:
+            d[k] = {s: v for s, v in d[k].items() if isinstance(v, dict)} if isinstance(d[k], dict) else {}
+    for k in ("steps", "done", "uses"):
+        if k in d:
+            d[k] = [s for s in d[k] if isinstance(s, str)] if isinstance(d[k], list) else []
+    if "index" in d and (not isinstance(d["index"], int) or isinstance(d["index"], bool)):
+        d["index"] = 0
+    return d
 
 
 def _save(d: dict) -> None:
@@ -365,26 +376,26 @@ def update(changes: dict) -> dict:
     """Merge a progress change from the UI (unknown values are dropped)."""
     with _lock:
         d = load()
-        if changes.get("status") in STATUSES:
+        if isinstance(changes.get("status"), str) and changes["status"] in STATUSES:
             d["status"] = changes["status"]
-        if changes.get("level") in LEVELS:
+        if isinstance(changes.get("level"), str) and changes["level"] in LEVELS:
             if d.get("level") and d["level"] != changes["level"]:
                 d["cards"] = _pending(d)
             d["level"] = changes["level"]
-        if changes.get("mode") in MODES:
+        if isinstance(changes.get("mode"), str) and changes["mode"] in MODES:
             d["mode"] = changes["mode"]
         if isinstance(changes.get("uses"), list):
-            d["uses"] = [u for u in USES if u in changes["uses"]]
+            d["uses"] = [u for u in USES if u in {x for x in changes["uses"] if isinstance(x, str)}]
         if isinstance(changes.get("steps"), list):
-            d["steps"] = [s for s in changes["steps"] if s in STEPS][:40]
+            d["steps"] = [s for s in changes["steps"] if isinstance(s, str) and s in STEPS][:40]
             # a new tour (again after the end): fresh cards, they speak of what the user does now
             d["cards"], d["tried"] = _pending(d), {}
         if isinstance(changes.get("index"), int) and not isinstance(changes.get("index"), bool):
             d["index"] = max(0, min(changes["index"], len(d.get("steps") or [])))
         if isinstance(changes.get("done"), list):
-            d["done"] = [s for s in changes["done"] if s in STEPS][:40]
+            d["done"] = [s for s in changes["done"] if isinstance(s, str) and s in STEPS][:40]
         t = changes.get("tried")
-        if isinstance(t, dict) and t.get("step") in STEPS:
+        if isinstance(t, dict) and isinstance(t.get("step"), str) and t["step"] in STEPS:
             d.setdefault("tried", {})[t["step"]] = {"label": str(t.get("label") or "")[:80],
                                                     "topic": str(t.get("topic") or "")[:200]}
         d.setdefault("status", "dismissed")

@@ -17,11 +17,18 @@ export function ActiveMark({ className, collapsed }: { className: string; collap
     const r = el.getBoundingClientRect()
     const from = last
     last = { top: r.top, height: r.height, collapsed }
-    if (!from || from.collapsed !== collapsed || reducedMotion() || !r.height) return
+    // measured again on the way out (still in the page): the row may have moved since it got the mark (a page
+    // switched on above it, the pages reordered, shorter rows on a low window), the next mark glides from there
+    const leave = () => {
+      const o = el.getBoundingClientRect()
+      if (el.isConnected && o.height) last = { top: o.top, height: o.height, collapsed }
+    }
+    if (!from || from.collapsed !== collapsed || reducedMotion() || !r.height) return leave
     const dy = from.top - r.top
-    if (Math.abs(dy) < 2 || Math.abs(dy) > 800) return
+    if (Math.abs(dy) < 2 || Math.abs(dy) > 800) return leave
     el.animate([{ transform: `translateY(${dy}px) scaleY(${from.height / r.height})` }, { transform: 'none' }], { duration: 260, easing: EASE_OUT })
     pill.current?.animate([{ transform: `translateY(${dy}px)` }, { transform: 'none' }], { duration: 260, easing: EASE_OUT })
+    return leave
   }, [collapsed])
   return (
     <>

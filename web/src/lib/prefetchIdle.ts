@@ -73,8 +73,9 @@ export function openSessionIds(max = 3): string[] {
 function pageTops(qc: QueryClient): string[] {
   const s = qc.getQueryData<Settings>(settingsQuery().queryKey)
   const tops = ['sessions', '', 'files', 'settings']
-  if (!s || s.tasks_page !== false) tops.push('tasks')
-  for (const k of ['agents', 'team', 'mail', 'infra', 'git'] as const) if (s?.[`${k}_page`]) tops.push(k)
+  // same defaults as a new install while the settings load: Agents on, Tasks off (cmd_core)
+  if (!s || s.agents_page !== false) tops.push('agents')
+  for (const k of ['tasks', 'team', 'mail', 'infra', 'git'] as const) if (s?.[`${k}_page`]) tops.push(k)
   const ext = qc.getQueryData<Extension[]>(extensionsQuery().queryKey)
   if (ext?.some((e) => e.type === 'page' && e.enabled && e.pinned)) tops.push('x/')
   return tops.concat('feed', 'docs', 'x')

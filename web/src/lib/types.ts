@@ -989,7 +989,8 @@ export type HealthIssue = { level: 'info' | 'warn' | 'error'; code: string; text
 export type Health = {
   ok: boolean
   issues: HealthIssue[]
-  cpu_pct: number
+  /** null when the server could not read /proc/stat */
+  cpu_pct: number | null
   /** `some` line of /proc/pressure/cpu: share of time programs waited for the processor (null without PSI) */
   cpu_pressure?: CpuPressure | null
   /** pressure avg10 >= 20 %: the CPU meter says "waiting" */
