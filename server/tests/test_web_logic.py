@@ -713,3 +713,14 @@ def test_many_quick_add_labels_are_deduplicated_in_linear_time(tmp_path):
         const r = m.parseQuickAdd(text, [], '2026-11-25')
         return [performance.now() - t0, r.labels.length, r.labels[1], r.title]""")
     assert out[1:] == [20000, "l1", "x"] and out[0] < 100
+
+
+def test_a_quick_add_at_token_with_no_letters_names_no_project(tmp_path):
+    out = _run_ts(tmp_path, WEB / "features" / "tasks" / "model.ts", """
+        const ps = [{ id: 'p1', name: 'Alpha' }, { id: 'p2', name: 'harness-maxxing' }]
+        return ['Buy milk @-', 'Buy milk @_', 'Buy milk @--', 'Buy milk @\\u0301', 'Buy milk @alp'].map((t) => {
+          const r = m.parseQuickAdd(t, ps, '2026-11-25')
+          return [r.project_id ?? null, r.title]
+        })""")
+    assert out == [[None, "Buy milk @-"], [None, "Buy milk @_"], [None, "Buy milk @--"], [None, "Buy milk @́"],
+                   ["p1", "Buy milk"]]

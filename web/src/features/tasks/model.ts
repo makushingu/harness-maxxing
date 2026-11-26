@@ -204,11 +204,12 @@ export function parseQuickAdd(input: string, projects: TaskProject[], today: str
     if (/^@\S+$/.test(tok)) {
       // the same on both sides: "@harness-maxxing", "@harness_maxxing" and "@harness" find "harness-maxxing"
       const want = projectKey(tok.slice(1))
-      if (!found.has(want)) {
+      // "@-" or "@_" keeps nothing to look for: every name starts with "", it stays in the title
+      if (want && !found.has(want)) {
         keys ??= projects.map((x) => [x, projectKey(x.name)])
         found.set(want, (keys.find(([, k]) => k === want) || keys.find(([, k]) => k.startsWith(want)))?.[0])
       }
-      const p = found.get(want)
+      const p = want ? found.get(want) : undefined
       if (p) {
         out.project_id = p.id
         out.projectName = p.name
