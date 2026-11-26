@@ -4,6 +4,7 @@
 import * as React from 'react'
 import { cn } from '@/lib/utils'
 import { useLang } from '@/i18n'
+import { chartScale } from './chartScale'
 
 type Series = { name: string; points: [number | string, number][] }
 
@@ -21,12 +22,6 @@ function useWidth<T extends HTMLElement>() {
   return [ref, w] as const
 }
 
-function niceMax(v: number) {
-  if (v <= 0) return 1
-  const p = 10 ** Math.floor(Math.log10(v))
-  const n = v / p
-  return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * p
-}
 
 export function compact(v: number, lang: string) {
   return new Intl.NumberFormat(lang, { notation: Math.abs(v) >= 10000 ? 'compact' : 'standard', maximumFractionDigits: Math.abs(v) < 10 ? 2 : 1 }).format(v)
@@ -47,9 +42,7 @@ export function Chart({ kind, series, unit, height = 140 }: { kind: 'bar' | 'lin
   const xs = series.find((s) => s.points.length)?.points.map((p) => p[0]) || [] // the first series with points
   const n = xs.length
   const values = series.flatMap((s) => s.points.map((p) => p[1]))
-  const max = niceMax(Math.max(0, ...values))
-  const lo = Math.min(0, ...values)
-  const min = lo < 0 ? -niceMax(-lo) : 0 // negative values: the scale goes below 0, the bars hang under it
+  const { min, max, ticks } = chartScale(values)
   const color = (i: number) => (series.length === 1 ? 'var(--primary)' : COLORS[i % COLORS.length])
   const padL = 34
   const padB = 18
@@ -62,7 +55,6 @@ export function Chart({ kind, series, unit, height = 140 }: { kind: 'bar' | 'lin
   const band = n ? plotW / n : plotW
   const xc = (i: number) => padL + band * i + band / 2
   const xl = (i: number) => (n <= 1 ? padL + plotW / 2 : padL + (plotW * i) / (n - 1))
-  const ticks = min < 0 ? [min, 0, max] : [0, max / 2, max]
   const labelEvery = Math.max(1, Math.ceil(n / Math.max(1, Math.floor(plotW / 56))))
   const fmtV = (v: number) => `${compact(v, lang)}${unit ? ` ${unit}` : ''}`
 

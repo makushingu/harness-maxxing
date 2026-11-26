@@ -741,3 +741,9 @@ def test_a_quick_add_at_token_with_no_letters_names_no_project(tmp_path):
         })""")
     assert out == [[None, "Buy milk @-"], [None, "Buy milk @_"], [None, "Buy milk @--"], [None, "Buy milk @́"],
                    ["p1", "Buy milk"]]
+
+
+def test_a_value_just_under_zero_keeps_the_chart_scale_at_zero(tmp_path):
+    out = _run_ts(tmp_path, WEB / "pages" / "dashboard" / "chartScale.ts",
+                  "return [[-0.001, 50], [-1e-17, 3], [-10, 50], [-3, -1], [0, 8]].map((v) => m.chartScale(v).ticks)")
+    assert out == [[0, 25, 50], [0, 2.5, 5], [-10, 0, 50], [-5, 0, 1], [0, 5, 10]]
