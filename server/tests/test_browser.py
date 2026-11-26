@@ -830,6 +830,8 @@ def test_a_turn_sees_only_the_tabs_of_its_own_browser(mx):
         assert v.outgoing({"id": 8, "method": "Page.navigate", "sessionId": "S2", "params": {"url": "https://a.example"}}) is None
         assert used == ["page1"] and v.page("S2") == "page1"
         assert v.outgoing({"id": 9, "method": "Target.getTargets", "params": {}}) is None
+        for twin in (9, 9.0, True, "9", None, -1, 10**10):         # never one the browser could read as the awaited 9
+            assert v.outgoing({"id": twin, "method": "Runtime.evaluate", "params": {}}), twin
         listed, _ = await v.incoming({"id": 9, "result": {"targetInfos": [
             {"targetId": "page1", "type": "page"}, {"targetId": "page2", "type": "page"},
             {"targetId": "tab2", "type": "tab"}, {"targetId": "b", "type": "browser"}]}})
