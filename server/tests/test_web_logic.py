@@ -747,3 +747,19 @@ def test_a_value_just_under_zero_keeps_the_chart_scale_at_zero(tmp_path):
     out = _run_ts(tmp_path, WEB / "pages" / "dashboard" / "chartScale.ts",
                   "return [[-0.001, 50], [-1e-17, 3], [-10, 50], [-3, -1], [0, 8]].map((v) => m.chartScale(v).ticks)")
     assert out == [[0, 25, 50], [0, 2.5, 5], [-10, 0, 50], [-5, 0, 1], [0, 5, 10]]
+
+
+def test_a_mail_port_corrected_after_a_known_one_keeps_its_security(tmp_path):
+    """465/ssl -> 587 (starttls) -> 58 -> 588: the user stopped on 587, the security stays starttls; typing on through
+    a known port ("25" on the way to "2525") gives the earlier one back."""
+    out = _run_ts(tmp_path, WEB / "features" / "mail" / "portTls.ts", """
+        const known = { '25': 'none', '465': 'ssl', '587': 'starttls', '143': 'starttls', '993': 'ssl' }
+        const walk = (start, ports) => {
+          let tls = start, kept
+          for (const p of ports) ({ tls, kept } = m.portTls(p, tls, kept, known))
+          return tls
+        }
+        return [walk('ssl', ['465', '46', '5', '58', '587', '58', '588']), walk('ssl', ['587', '58', '2525']),
+                walk('starttls', ['143', '14', '1', '19', '199', '1993']), walk('ssl', ['2', '25', '252', '2525']),
+                walk('ssl', ['587']), walk('ssl', ['constructor'])]""")
+    assert out == ["starttls", "starttls", "starttls", "ssl", "starttls", "ssl"]

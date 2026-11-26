@@ -14,6 +14,7 @@ import { AGENT_PATH_RE, useMailAddAccount, useMailDeleteAccount, useMailDetect, 
 import { AgentAvatarIcon } from '@/features/agents/Avatar'
 import { useT } from '@/i18n'
 import { rightsText } from './agents'
+import { portTls, type KeptTls } from './portTls'
 
 type Form = {
   address: string
@@ -83,8 +84,8 @@ export function AccountDialog({ open, onOpenChange, account, onSaved, address }:
   const update = useMailUpdateAccount()
   const del = useMailDeleteAccount()
   const [confirmDel, setConfirmDel] = React.useState(false)
-  // the security a well-known port replaced, given back when the port moves on to another number
-  const portTls = React.useRef<Partial<Record<'imap' | 'smtp', MailTls>>>({})
+  // the security a well-known port replaced, given back when the user types on through it (portTls.ts)
+  const keptTls = React.useRef<Partial<Record<'imap' | 'smtp', KeptTls<MailTls>>>>({})
 
   React.useEffect(() => {
     if (!open) return
@@ -93,7 +94,7 @@ export function AccountDialog({ open, onOpenChange, account, onSaved, address }:
     setTrust(!!account?.auth_servers?.length)
     setDetected(null)
     setConfirmDel(false)
-    portTls.current = {}
+    keptTls.current = {}
     add.reset()
     update.reset()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -102,20 +103,12 @@ export function AccountDialog({ open, onOpenChange, account, onSaved, address }:
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setF((x) => ({ ...x, [k]: v }))
   const setPort = (kind: 'imap' | 'smtp', v: string) => {
     const key = `${kind}_tls` as const
-    const known = PORT_TLS[kind][v.trim()]
-    const before = portTls.current[kind]
-    let tls = f[key]
-    if (known) {
-      if (before === undefined) portTls.current[kind] = f[key]
-      tls = known
-    } else if (before !== undefined) {
-      tls = before
-      delete portTls.current[kind]
-    }
+    const { tls, kept } = portTls(v, f[key], keptTls.current[kind], PORT_TLS[kind])
+    keptTls.current[kind] = kept
     setF((x) => ({ ...x, [`${kind}_port`]: v, [key]: tls }))
   }
   const setTls = (kind: 'imap' | 'smtp', v: MailTls) => {
-    delete portTls.current[kind]                     // picked by hand: kept
+    delete keptTls.current[kind]                     // picked by hand: kept
     set(`${kind}_tls`, v)
   }
 
@@ -124,7 +117,7 @@ export function AccountDialog({ open, onOpenChange, account, onSaved, address }:
     detect.mutate(f.address.trim(), {
       onSuccess: (d) => {
         setDetected(d)
-        portTls.current = {}
+        keptTls.current = {}
         setF((x) => ({
           ...x, imap_host: d.imap_host, imap_port: String(d.imap_port), imap_tls: d.imap_tls,
           smtp_host: d.smtp_host, smtp_port: String(d.smtp_port), smtp_tls: d.smtp_tls,
