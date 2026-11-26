@@ -302,15 +302,32 @@ def test_only_the_widget_itself_speaks_to_the_page_that_frames_it(tmp_path):
     """A link in widget.html can load another site INTO the frame (same window, origin 'null'): without the key of
     the mount from the fragment, its messages are ignored and it gets no data."""
     out = _run_ts(tmp_path, WEB / "pages" / "dashboard" / "widgetKey.ts", """const a = m.frameKey(), b = m.frameKey()
-        return [/^[0-9a-f]{32}$/.test(a), a !== b, m.ours({loads: 1, hellos: 1}), m.ours({loads: 0, hellos: 1}),
-                m.ours({loads: 2, hellos: 1}), m.ours({loads: 1, hellos: 0})]""")
-    assert out == [True, True, True, True, False, False]
+        const s = m.newFrame(), seen = []
+        m.frameLoaded(s); seen.push(m.ours(s)); m.frameHello(s); seen.push(m.ours(s))      // load, then the ping's hello
+        m.frameBye(s); seen.push(m.ours(s)); m.frameLoaded(s); seen.push(m.ours(s))         // a link: a foreign page
+        m.frameHello(s); m.frameLoaded(s); seen.push(m.ours(s)); m.frameHello(s); seen.push(m.ours(s))   // Back
+        return [/^[0-9a-f]{32}$/.test(a), a !== b, seen]""")
+    assert out == [True, True, [False, True, False, False, False, True]]
     src = (WEB / "pages" / "dashboard" / "HtmlWidget.tsx").read_text(encoding="utf-8")
     assert "if (m.key !== key) return" in src and "vars: themeVars(), key }" in src
     assert src.count("ours(seen.current) &&") == 2                 # data and theme
+    assert "postMessage({ mx: 'ping' }, '*')" in src and src.count("win.postMessage(") == 2   # replies only via mayReply
     from maxxing.api.extensions import WIDGET_BRIDGE
     assert "K=String(init.key||'')" in WIDGET_BRIDGE and "post({mx:'hello'})" in WIDGET_BRIDGE
+    assert "if(m.mx==='ping')post({mx:'hello'})" in WIDGET_BRIDGE and "post({mx:'bye'})" in WIDGET_BRIDGE
     assert "parent.postMessage(m,'*')" in WIDGET_BRIDGE and WIDGET_BRIDGE.count("parent.postMessage") == 1
+
+
+def test_a_widget_answer_never_reaches_a_page_that_replaced_the_widget(tmp_path):
+    """An api / app answer comes back after an await: only the document that asked gets it."""
+    out = _run_ts(tmp_path, WEB / "pages" / "dashboard" / "widgetKey.ts", """const r = []
+        let s = m.newFrame(); m.frameLoaded(s); m.frameHello(s)
+        const asked = s.gen; m.frameBye(s); r.push(m.mayReply(s, asked)); m.frameLoaded(s); r.push(m.mayReply(s, asked))
+        m.frameHello(s); m.frameLoaded(s); m.frameHello(s); r.push(m.mayReply(s, asked))     // Back: a new widget document
+        s = m.newFrame(); m.frameHello(s); const early = s.gen          // the widget asks before its own load event
+        m.frameLoaded(s); r.push(m.mayReply(s, early)); m.frameHello(s); r.push(m.mayReply(s, early))
+        return r""")
+    assert out == [False, False, False, False, True]
 
 
 def test_a_link_to_a_chat_that_is_gone_keeps_the_team_header():

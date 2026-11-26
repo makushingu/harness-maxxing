@@ -216,7 +216,7 @@ var init={};try{init=JSON.parse(decodeURIComponent(location.hash.slice(1))||'{}'
 var seq=0,pending={},cbs=[],dcbs=[],root=document.documentElement,K=String(init.key||'');
 function post(m){m.key=K;parent.postMessage(m,'*')}
 root.setAttribute('data-mx-kit','');
-post({mx:'hello'});
+post({mx:'hello'});addEventListener('pagehide',function(){post({mx:'bye'})});
 function apply(v,mat){for(var k in v||{})root.style.setProperty(k,v[k]);root.dataset.theme=window.maxxing.theme;root.dataset.material=mat||'solid';root.style.colorScheme=window.maxxing.theme}
 window.maxxing={theme:init.theme||'dark',
  api:function(path,o){o=o||{};return ask({mx:'api',path:String(path||''),method:o.method||'GET',body:o.body,query:o.query})},
@@ -227,6 +227,7 @@ window.maxxing={theme:init.theme||'dark',
  onTheme:function(f){cbs.push(f)}};
 function ask(m){return new Promise(function(res,rej){var s=++seq;pending[s]=[res,rej];m.seq=s;post(m)})}
 addEventListener('message',function(e){if(e.source!==parent)return;var m=e.data||{};
+ if(m.mx==='ping')post({mx:'hello'});
  if(m.mx==='reply'){var p=pending[m.seq];if(p){delete pending[m.seq];m.ok?p[0](m.data):p[1](new Error(m.error||'request failed'))}}
  if(m.mx==='theme'){window.maxxing.theme=m.theme;apply(m.vars,m.material);cbs.forEach(function(f){try{f(m.theme)}catch(_){}})}
  if(m.mx==='data'){window.maxxing.data=m.data;dcbs.forEach(function(f){try{f(m.data)}catch(_){}})}});
