@@ -6,6 +6,8 @@ import json
 import re
 from pathlib import Path
 
+import pytest
+
 from maxxing import cli, themes
 
 WEB = Path(__file__).resolve().parents[2] / "web" / "src"
@@ -266,3 +268,24 @@ def test_serving_a_theme_image_does_not_read_the_theme_again(mx, monkeypatch, tm
     dest = mx["ws"] / "themes" / "cached"
     _theme(dest.parent, "cached", {"name": "Renamed", "base": "glass", "wallpaper": "wall.png"})
     assert themes.get("cached")["name"] == "Renamed"                                  # an edit is seen at once
+
+
+def test_a_failed_replace_keeps_the_installed_theme(mx, monkeypatch, tmp_path):
+    import errno
+    v1 = _theme(tmp_path / "v1", "keep", {"name": "Keep v1"})
+    v2 = _theme(tmp_path / "v2", "keep", {"name": "Keep v2"})
+    themes.install(v1)
+    real, calls = Path.rename, []
+
+    def rename(self, target):
+        calls.append(self)
+        if len(calls) == 2:             # the new copy taking the place of the old one
+            raise OSError(errno.ENOSPC, "No space left on device")
+        return real(self, target)
+
+    with monkeypatch.context() as m:
+        m.setattr(Path, "rename", rename)
+        with pytest.raises(OSError):
+            themes.install(v2, force=True)
+    assert themes.get("keep")["name"] == "Keep v1"
+    assert sorted(p.name for p in (mx["ws"] / "themes").iterdir()) == ["keep"]

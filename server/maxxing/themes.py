@@ -665,9 +665,15 @@ def install(src: Path, force: bool = False) -> tuple[dict, list[str]]:
     fd = os.open(root(), os.O_RDONLY)
     try:
         fcntl.flock(fd, fcntl.LOCK_EX)  # two installs of the same theme swap one after the other
+        old = stage / "old"
         if dest.exists():
-            dest.rename(stage / "old")  # never a moment without the theme for a browser that lists it
-        tmp.rename(dest)
+            dest.rename(old)            # never a moment without the theme for a browser that lists it
+        try:
+            tmp.rename(dest)
+        except BaseException:
+            if old.exists() and not dest.exists():
+                old.rename(dest)        # the finally empties the stage: put the installed theme back first
+            raise
     finally:
         fcntl.flock(fd, fcntl.LOCK_UN)
         os.close(fd)
