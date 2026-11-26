@@ -657,3 +657,13 @@ def test_the_cpu_panel_hides_unit_names_in_presentation_mode():
     panel = panel[:panel.index("\n}\n")]
     assert "const present = useUI((u) => u.presentation)" in panel
     assert "title={u.unit}" not in panel and "title={present ? undefined : u.unit}" in panel
+
+
+def test_every_health_issue_has_an_open_button():
+    health = (WEB.parents[1] / "server" / "maxxing" / "health.py").read_text(encoding="utf-8")
+    codes = set(re.findall(r'_issue\("[^,]*, "([a-z_]+)"', health))
+    src = (WEB / "components" / "shell" / "HealthIndicator.tsx").read_text(encoding="utf-8")
+    table = src[src.index("const ISSUE_TO"):]
+    keys = set(re.findall(r"^\s+([a-z_]+): '/", table[:table.index("\n}\n")], re.M))
+    assert "claude_login_ends" in codes and "disk_full" in codes
+    assert codes <= keys, codes - keys

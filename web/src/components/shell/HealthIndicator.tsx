@@ -464,6 +464,7 @@ const ISSUE_TO: Record<string, string> = {
   cron_failed: '/settings/crons',
   login_failures: '/settings/security',
   claude_auth: '/settings/claude',
+  claude_login_ends: '/settings/claude',
   backup_never: '/settings/backup',
   backup_old: '/settings/backup',
   backup_failed: '/settings/backup',
