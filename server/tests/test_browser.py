@@ -1810,6 +1810,15 @@ def test_network_events_never_carry_the_sites_cookies():
     ev = {"method": "Fetch.requestPaused", "params": {"request": {"headers": {"cookie": "a=secret3"}},
                                                        "responseHeaders": [{"name": "Set-Cookie", "value": "b=secret4"}]}}
     assert "secret3" not in (t := relay.no_cookies(json.dumps(ev))) and "secret4" not in t
+    ev = {"method": "Audits.issueAdded", "sessionId": "s1", "params": {"issue": {"code": "CookieIssue", "details": {
+        "cookieIssueDetails": {"rawCookieLine": "sid=secret5; SameSite=None", "cookie": {"name": "sid", "domain": "bank.example",
+                                                                                          "path": "/"},
+                               "cookieWarningReasons": [], "cookieExclusionReasons": ["ExcludeSameSiteNoneInsecure"],
+                               "operation": "SetCookie"}}}}}
+    out = json.loads(relay.no_cookies(json.dumps(ev)))
+    issue = out["params"]["issue"]["details"]["cookieIssueDetails"]
+    assert "secret5" not in json.dumps(out) and "bank.example" not in json.dumps(out)
+    assert issue["cookieExclusionReasons"] == ["ExcludeSameSiteNoneInsecure"]     # the issue itself still reaches the tools
     other = json.dumps({"method": "Page.frameNavigated", "params": {"frame": {"url": "https://a/?cookie=1"}}})
     assert relay.no_cookies(other) == other
 
