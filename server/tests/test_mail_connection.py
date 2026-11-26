@@ -396,3 +396,22 @@ def test_two_views_of_the_same_attachments_at_once_both_get_their_files(mx):
         with cf.ThreadPoolExecutor(4) as ex:
             outs = list(ex.map(lambda _: mail_api._save_for_view("acc1", "INBOX", 7, parts), range(4)))
         assert all(Path(p).stat().st_size == 200_000 for out in outs for p in out.values())
+
+
+def test_copies_reused_from_the_cache_are_not_pruned_right_after(mx, monkeypatch):
+    """A message opened again just before its copies turn a day old: the paths it got must survive the prune of the
+    next view (of another message)."""
+    import os
+    import time
+    from pathlib import Path
+
+    from maxxing.api import mail as mail_api
+    out = mail_api._save_for_view("acc1", "INBOX", 8, [(1, "a.pdf", "application/pdf", b"pdf")], "<m8@b.co>")
+    base = mail_api._view_base("acc1", "INBOX", 8)
+    old = time.time() - mail_api.VIEW_TTL + 5
+    os.utime(base, (old, old))
+    assert mail_api._cached_view("acc1", "INBOX", 8, [1], "<m8@b.co>") == out
+    later = time.time() + 10
+    monkeypatch.setattr(mail_api.time, "time", lambda: later)
+    mail_api._save_for_view("acc1", "INBOX", 9, [(1, "b.pdf", "application/pdf", b"pdf")], "<m9@b.co>")
+    assert Path(out[1]).is_file()

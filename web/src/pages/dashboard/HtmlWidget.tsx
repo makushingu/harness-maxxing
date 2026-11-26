@@ -19,7 +19,7 @@ import { useUI, resolveTheme } from '@/stores/ui'
 import { useT } from '@/i18n'
 import { Skeleton } from '@/components/ui'
 import { cn } from '@/lib/utils'
-import { frameKey, ours } from './widgetKey'
+import { frameBye, frameHello, frameKey, frameLoaded, mayReply, newFrame, ours } from './widgetKey'
 
 const VARS: [string, string][] = [
   ['--mx-bg', '--background'],
@@ -119,8 +119,10 @@ export function HtmlWidget({
   // A secret of this mount, in the frame's fragment: the bridge adds it to every message. A page loaded into the frame
   // later (a link of the widget) has the same window but not the fragment, so it cannot call the extension's API.
   const [key] = React.useState(frameKey)
-  // Documents loaded in the frame / greeted with the key: fewer greetings = a page that is not the widget, it gets no data.
-  const seen = React.useRef({ loads: 0, hellos: 0 })
+  // Which document is in the frame (widgetKey.ts): a page that is not the widget gets no data, theme nor answer.
+  const seen = React.useRef(newFrame())
+  // answers that came back while the frame was not known to be the widget: sent once it greets, dropped if it never does
+  const held = React.useRef<{ asked: number; msg: unknown }[]>([])
   // The frame URL is fixed at mount (theme changes go by message): a new fragment would not reload it anyway.
   const [frameSrc] = React.useState(
     () => `${frameUrl || src.replace(/widget\.html$/, 'widget-frame')}#${encodeURIComponent(JSON.stringify({ theme: resolveTheme(useUI.getState().theme), material: useUI.getState().material, vars: themeVars(), key }))}`,
@@ -145,9 +147,23 @@ export function HtmlWidget({
       if (!win || e.source !== win) return
       const m = (e.data || {}) as { mx?: string; key?: string; seq?: number; path?: string; method?: string; body?: unknown; query?: Record<string, string>; height?: number }
       if (m.key !== key) return
+      if (m.mx === 'bye') {
+        frameBye(seen.current)
+        return
+      }
+      frameHello(seen.current)
+      const asked = seen.current.gen
       if (m.mx === 'hello') {
-        seen.current.hellos++
         pushRef.current()
+        themeRef.current()
+      }
+      const wait = held.current
+      held.current = []
+      for (const r of wait) if (mayReply(seen.current, r.asked)) win.postMessage(r.msg, '*')
+      // the answer only to the document that asked: if a link replaced it meanwhile, it waits for the widget or is dropped
+      const reply = (msg: unknown) => {
+        if (mayReply(seen.current, asked)) win.postMessage(msg, '*')
+        else if (seen.current.gen - asked < 2) held.current.push({ asked, msg })
       }
       if (m.mx === 'resize' && typeof m.height === 'number') setH(Math.min(maxHeight, Math.max(80, Math.round(m.height))))
       if (m.mx === 'navigate') {
@@ -157,14 +173,14 @@ export function HtmlWidget({
       if (m.mx === 'app') {
         const path = String(m.path || '')
         if (!(hostRef.current?.reads || []).includes(path)) {
-          win.postMessage({ mx: 'reply', seq: m.seq, ok: false, error: `${path || 'this path'} is not readable from here` }, '*')
+          reply({ mx: 'reply', seq: m.seq, ok: false, error: `${path || 'this path'} is not readable from here` })
           return
         }
         try {
           const data = await request(path, { method: 'GET', query: m.query })
-          win.postMessage({ mx: 'reply', seq: m.seq, ok: true, data }, '*')
+          reply({ mx: 'reply', seq: m.seq, ok: true, data })
         } catch (err) {
-          win.postMessage({ mx: 'reply', seq: m.seq, ok: false, error: err instanceof Error ? err.message : String(err) }, '*')
+          reply({ mx: 'reply', seq: m.seq, ok: false, error: err instanceof Error ? err.message : String(err) })
         }
       }
       if (m.mx === 'api') {
@@ -176,9 +192,9 @@ export function HtmlWidget({
             body: method === 'GET' ? undefined : (m.body ?? {}),
             query: m.query,
           })
-          win.postMessage({ mx: 'reply', seq: m.seq, ok: true, data }, '*')
+          reply({ mx: 'reply', seq: m.seq, ok: true, data })
         } catch (err) {
-          win.postMessage({ mx: 'reply', seq: m.seq, ok: false, error: err instanceof Error ? err.message : String(err) }, '*')
+          reply({ mx: 'reply', seq: m.seq, ok: false, error: err instanceof Error ? err.message : String(err) })
         }
       }
     }
@@ -195,11 +211,15 @@ export function HtmlWidget({
     if (loaded) push()
   }, [loaded, push])
 
+  // the theme of now: also when the widget greets again (Back reloads it with the theme of its first load)
+  const sendTheme = React.useCallback(() => ours(seen.current) && frame.current?.contentWindow?.postMessage({ mx: 'theme', theme, material: useUI.getState().material, vars: themeVars() }, '*'), [theme])
+  const themeRef = React.useRef(sendTheme)
+  themeRef.current = sendTheme
   React.useEffect(() => {
     // after the <html> attributes changed (accent, tint, density set them in an effect too)
-    const r = requestAnimationFrame(() => ours(seen.current) && frame.current?.contentWindow?.postMessage({ mx: 'theme', theme, material: useUI.getState().material, vars: themeVars() }, '*'))
+    const r = requestAnimationFrame(sendTheme)
     return () => cancelAnimationFrame(r)
-  }, [theme, look])
+  }, [sendTheme, look])
 
   if (error)
     return (
@@ -218,9 +238,10 @@ export function HtmlWidget({
         title={title}
         src={frameSrc}
         onLoad={() => {
-          seen.current.loads++
+          frameLoaded(seen.current)
+          held.current = held.current.filter((r) => seen.current.gen - r.asked < 2)
           setLoaded(true)
-          push()
+          frame.current?.contentWindow?.postMessage({ mx: 'ping' }, '*') // "who is there?": only the widget greets back
         }}
         sandbox="allow-scripts allow-pointer-lock"
         referrerPolicy="no-referrer"

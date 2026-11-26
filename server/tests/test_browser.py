@@ -830,6 +830,8 @@ def test_a_turn_sees_only_the_tabs_of_its_own_browser(mx):
         assert v.outgoing({"id": 8, "method": "Page.navigate", "sessionId": "S2", "params": {"url": "https://a.example"}}) is None
         assert used == ["page1"] and v.page("S2") == "page1"
         assert v.outgoing({"id": 9, "method": "Target.getTargets", "params": {}}) is None
+        for twin in (9, 9.0, True, "9", None, -1, 10**10):         # never one the browser could read as the awaited 9
+            assert v.outgoing({"id": twin, "method": "Runtime.evaluate", "params": {}}), twin
         listed, _ = await v.incoming({"id": 9, "result": {"targetInfos": [
             {"targetId": "page1", "type": "page"}, {"targetId": "page2", "type": "page"},
             {"targetId": "tab2", "type": "tab"}, {"targetId": "b", "type": "browser"}]}})
@@ -1808,6 +1810,15 @@ def test_network_events_never_carry_the_sites_cookies():
     ev = {"method": "Fetch.requestPaused", "params": {"request": {"headers": {"cookie": "a=secret3"}},
                                                        "responseHeaders": [{"name": "Set-Cookie", "value": "b=secret4"}]}}
     assert "secret3" not in (t := relay.no_cookies(json.dumps(ev))) and "secret4" not in t
+    ev = {"method": "Audits.issueAdded", "sessionId": "s1", "params": {"issue": {"code": "CookieIssue", "details": {
+        "cookieIssueDetails": {"rawCookieLine": "sid=secret5; SameSite=None", "cookie": {"name": "sid", "domain": "bank.example",
+                                                                                          "path": "/"},
+                               "cookieWarningReasons": [], "cookieExclusionReasons": ["ExcludeSameSiteNoneInsecure"],
+                               "operation": "SetCookie"}}}}}
+    out = json.loads(relay.no_cookies(json.dumps(ev)))
+    issue = out["params"]["issue"]["details"]["cookieIssueDetails"]
+    assert "secret5" not in json.dumps(out) and "bank.example" not in json.dumps(out)
+    assert issue["cookieExclusionReasons"] == ["ExcludeSameSiteNoneInsecure"]     # the issue itself still reaches the tools
     other = json.dumps({"method": "Page.frameNavigated", "params": {"frame": {"url": "https://a/?cookie=1"}}})
     assert relay.no_cookies(other) == other
 

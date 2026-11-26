@@ -144,12 +144,12 @@ class View:
             if page:
                 self.on_use(page)
         mid = cmd.get("id")
-        if isinstance(mid, int) and mid in self.asked:
+        if type(mid) is not int or not 0 <= mid < OWN_IDS:    # 5.0 or true would pass for 5 or 1 in the browser
+            return "A command id must be a whole number."
+        if mid in self.asked:
             # its answer would take the place of the one awaited (a list of targets would then go out unfiltered)
             return "A command with this id is still waiting for its answer."
         if method in ("Target.attachToTarget", "Target.attachToBrowserTarget", "Target.getTargets"):
-            if not isinstance(mid, int) or isinstance(mid, bool) or not 0 <= mid < OWN_IDS:
-                return "A command id must be a whole number."
             self.asked[mid] = {"method": method, "params": params}
         return None
 

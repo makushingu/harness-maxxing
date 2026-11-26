@@ -187,6 +187,7 @@ export function parseQuickAdd(input: string, projects: TaskProject[], today: str
   // the project names normalized once per call, and each @word looked up once: a long pasted text stays fast
   let keys: [TaskProject, string][] | null = null
   const found = new Map<string, TaskProject | undefined>()
+  const seen = new Set<string>() // labels already taken: a Set, a long pasted list of #tags stays linear
   for (const tok of input.split(/\s+/).filter(Boolean)) {
     if (/^!{1,3}$/.test(tok)) {
       out.priority = tok.length as TaskPriority
@@ -194,17 +195,21 @@ export function parseQuickAdd(input: string, projects: TaskProject[], today: str
     }
     if (/^#[^\s#]{1,40}$/.test(tok)) {
       const l = tok.slice(1)
-      if (!out.labels.includes(l)) out.labels.push(l)
+      if (!seen.has(l)) {
+        seen.add(l)
+        out.labels.push(l)
+      }
       continue
     }
     if (/^@\S+$/.test(tok)) {
       // the same on both sides: "@harness-maxxing", "@harness_maxxing" and "@harness" find "harness-maxxing"
       const want = projectKey(tok.slice(1))
-      if (!found.has(want)) {
+      // "@-" or "@_" keeps nothing to look for: every name starts with "", it stays in the title
+      if (want && !found.has(want)) {
         keys ??= projects.map((x) => [x, projectKey(x.name)])
         found.set(want, (keys.find(([, k]) => k === want) || keys.find(([, k]) => k.startsWith(want)))?.[0])
       }
-      const p = found.get(want)
+      const p = want ? found.get(want) : undefined
       if (p) {
         out.project_id = p.id
         out.projectName = p.name

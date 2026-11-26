@@ -60,7 +60,8 @@ DELTA_MAX = 12000               # characters of "what was said since your last t
 PASS_WORDS = ("PASS", "[PASS]")
 ALL_WORDS = ("all", "everyone", "tous")
 MENTION_RE = re.compile(r"(?<![\w@./-])@([a-z0-9][a-z0-9-]{0,47})\b", re.I | re.ASCII)   # ASCII \w and \b, like the same pattern in the web UI (mentions.tsx)
-STOP_RE = re.compile(r"(?<![\w-])stop\s+@([a-z0-9][a-z0-9-]{0,47})\b", re.I)
+JS_SPACE = "\t\n\v\f\r \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff"   # what \s matches in JavaScript
+STOP_RE = re.compile(r"(?<![\w-])stop[" + JS_SPACE + r"]+@([a-z0-9][a-z0-9-]{0,47})\b", re.I | re.ASCII)   # same as mentions.tsx: ASCII \w, \b and case folding, Unicode \s
 
 _lock = config.ProcessLock("agent-rooms")
 

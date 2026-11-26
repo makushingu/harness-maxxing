@@ -43,7 +43,8 @@ async def connect(sock: Path, path: str):
 
 COOKIE_HEADERS = {"cookie", "set-cookie", "set-cookie2"}
 COOKIE_FIELDS = {"associatedCookies", "exemptedCookies", "blockedCookies", "cookiePartitionKey",
-                 "cookiePartitionKeyOpaque", "headersText", "requestHeadersText"}   # headersText: the raw headers
+                 "cookiePartitionKeyOpaque", "headersText", "requestHeadersText",   # headersText: the raw headers
+                 "rawCookieLine"}                                    # Audits issues: a Set-Cookie line, value included
 
 
 def _scrub(v):
@@ -56,12 +57,13 @@ def _scrub(v):
 
 def no_cookies(text: str) -> str:
     """The sites' cookies never reach the clients through network events (rules.json: cookies cannot be read over
-    DevTools): Cookie / Set-Cookie headers, the raw headers and the cookie lists of Network.* / Fetch.* events go."""
+    DevTools): Cookie / Set-Cookie headers, the raw headers and the cookie lists of Network.* / Fetch.* events go, and
+    the cookie and raw cookie line of the issues of Audits.* events."""
     try:
         m = json.loads(text)
     except ValueError:
         return text
-    if not isinstance(m, dict) or not str(m.get("method") or "").startswith(("Network.", "Fetch.")):
+    if not isinstance(m, dict) or not str(m.get("method") or "").startswith(("Network.", "Fetch.", "Audits.")):
         return text
     if not isinstance(m.get("params"), dict):
         return text

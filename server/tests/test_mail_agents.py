@@ -63,6 +63,16 @@ def test_strict_grants_refuse_rights_or_trigger_of_the_wrong_type():
     assert g["rights"] == ["read", "draft"] and g["trigger"] is None      # not strict: the old fallback
 
 
+def test_a_trigger_switched_off_with_a_wrong_type_stays_off():
+    for off in ("false", 0, "", []):
+        with pytest.raises(access.AccessError):
+            access.clean_grants([{"account": "a", "trigger": {"enabled": off}}], strict=True)
+        assert access.clean_grants([{"account": "a", "trigger": {"enabled": off}}])[0]["trigger"]["enabled"] is False
+    for on, want in ((None, True), (True, True), (False, False)):
+        g = access.clean_grants([{"account": "a", "trigger": {"enabled": on}}], strict=True)[0]
+        assert g["trigger"]["enabled"] is want
+
+
 def test_a_star_glued_to_a_domain_never_opens_other_domains():
     g = access.clean_grants([{"account": "a", "rights": ["read", "send"], "senders": ["*stripe.com"]}])[0]
     assert g["senders"] == ["*@stripe.com", "*@*.stripe.com"]
@@ -73,6 +83,16 @@ def test_a_star_glued_to_a_domain_never_opens_other_domains():
         with pytest.raises(access.AccessError):
             access.clean_grants([{"account": "a", "senders": [bad]}], strict=True)
         assert access.clean_grants([{"account": "a", "senders": [bad]}])[0]["senders"] == [access.NO_SENDER]
+
+
+def test_a_wildcard_over_a_public_suffix_is_refused():
+    for bad in (["*co.uk"], ["*@*.co.uk"], ["*@*.com.au"], ["*.com"], ["*@*.github.io"]):
+        with pytest.raises(access.AccessError):
+            access.clean_grants([{"account": "a", "senders": bad}], strict=True)
+    g = access.clean_grants([{"account": "a", "rights": ["read"], "senders": ["*@*.co.uk"]}])[0]
+    assert g["senders"] == [access.NO_SENDER] and not access.sender_ok(g, "x@evil.co.uk", True)
+    ok = access.clean_grants([{"account": "a", "senders": ["*bbc.co.uk", "*@*.stripe.com"]}], strict=True)[0]
+    assert ok["senders"] == ["*@bbc.co.uk", "*@*.bbc.co.uk", "*@*.stripe.com"]
 
 
 def test_hand_written_senders_that_are_all_invalid_do_not_open_the_mailbox():

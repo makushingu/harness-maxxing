@@ -485,3 +485,12 @@ def test_a_damaged_state_file_does_not_block_opening_or_deleting(client, topic):
     assert client.get(G).status_code == 200
     assert client.delete(G).status_code == 200
     assert not (Path(client.get("/api/workspace/tree").json()["root"]) / g["path"]).exists()
+
+
+def test_stop_reads_like_the_web_ui():
+    from maxxing import agent_rooms
+    got = {t: [m.group(1) for m in agent_rooms.STOP_RE.finditer(t)]
+           for t in ("stop @bobé", "éstop @bob", "ſtop @bob", "STOP @bob", "stop\u00a0@bob", "x-stop @bob")}
+    # the same as /(?<![\w-])stop\s+@([a-z0-9][a-z0-9-]{0,47})\b/gi in mentions.tsx (JavaScript: ASCII \w, \b and /i, Unicode \s)
+    assert got == {"stop @bobé": ["bob"], "éstop @bob": ["bob"], "ſtop @bob": [], "STOP @bob": ["bob"],
+                   "stop\u00a0@bob": ["bob"], "x-stop @bob": []}
