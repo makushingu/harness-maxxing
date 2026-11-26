@@ -703,3 +703,13 @@ def test_the_sidebar_mark_glides_from_where_the_old_row_is_when_it_leaves():
     assert leave and "getBoundingClientRect()" in leave[1] and "last = {" in leave[1]
     returns = re.findall(r"\breturn\b[^\n]*", effect)
     assert returns and all(r.strip() == "return leave" for r in returns[1:]), returns
+
+
+def test_many_quick_add_labels_are_deduplicated_in_linear_time(tmp_path):
+    """Each #label checked against the ones already taken through a Set: a long pasted list of tags stays fast."""
+    out = _run_ts(tmp_path, WEB / "features" / "tasks" / "model.ts", """
+        const text = Array.from({ length: 20000 }, (_, i) => '#l' + i).join(' ') + ' #l1 x'
+        const t0 = performance.now()
+        const r = m.parseQuickAdd(text, [], '2026-11-25')
+        return [performance.now() - t0, r.labels.length, r.labels[1], r.title]""")
+    assert out[1:] == [20000, "l1", "x"] and out[0] < 100

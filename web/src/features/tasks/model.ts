@@ -187,6 +187,7 @@ export function parseQuickAdd(input: string, projects: TaskProject[], today: str
   // the project names normalized once per call, and each @word looked up once: a long pasted text stays fast
   let keys: [TaskProject, string][] | null = null
   const found = new Map<string, TaskProject | undefined>()
+  const seen = new Set<string>() // labels already taken: a Set, a long pasted list of #tags stays linear
   for (const tok of input.split(/\s+/).filter(Boolean)) {
     if (/^!{1,3}$/.test(tok)) {
       out.priority = tok.length as TaskPriority
@@ -194,7 +195,10 @@ export function parseQuickAdd(input: string, projects: TaskProject[], today: str
     }
     if (/^#[^\s#]{1,40}$/.test(tok)) {
       const l = tok.slice(1)
-      if (!out.labels.includes(l)) out.labels.push(l)
+      if (!seen.has(l)) {
+        seen.add(l)
+        out.labels.push(l)
+      }
       continue
     }
     if (/^@\S+$/.test(tok)) {
