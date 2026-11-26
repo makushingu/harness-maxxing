@@ -665,6 +665,8 @@ def install(src: Path, force: bool = False) -> tuple[dict, list[str]]:
     fd = os.open(root(), os.O_RDONLY)
     try:
         fcntl.flock(fd, fcntl.LOCK_EX)  # two installs of the same theme swap one after the other
+        if dest.exists() and not force:     # another install may have finished since the check above
+            raise ThemeError(f"a theme {t['id']} is already installed (--force replaces it)")
         old = stage / "old"
         if dest.exists():
             dest.rename(old)            # never a moment without the theme for a browser that lists it

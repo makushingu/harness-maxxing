@@ -289,3 +289,20 @@ def test_a_failed_replace_keeps_the_installed_theme(mx, monkeypatch, tmp_path):
             themes.install(v2, force=True)
     assert themes.get("keep")["name"] == "Keep v1"
     assert sorted(p.name for p in (mx["ws"] / "themes").iterdir()) == ["keep"]
+
+
+def test_an_install_finished_meanwhile_is_not_replaced_without_force(mx, monkeypatch, tmp_path):
+    first = _theme(tmp_path / "a", "twice", {"name": "First"})
+    second = _theme(tmp_path / "b", "twice", {"name": "Second"})
+    real = themes.tempfile.mkdtemp
+
+    def mkdtemp(*a, **k):               # the other install completes after this one checked dest
+        monkeypatch.setattr(themes.tempfile, "mkdtemp", real)
+        themes.install(first)
+        return real(*a, **k)
+
+    monkeypatch.setattr(themes.tempfile, "mkdtemp", mkdtemp)
+    with pytest.raises(themes.ThemeError):
+        themes.install(second)
+    assert themes.get("twice")["name"] == "First"
+    assert sorted(p.name for p in (mx["ws"] / "themes").iterdir()) == ["twice"]
