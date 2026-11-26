@@ -634,3 +634,10 @@ def test_theme_cards_are_drawn_in_the_mode_they_get_once_picked():
     src = (WEB / "pages" / "settings" / "sections" / "Appearance.tsx").read_text(encoding="utf-8")
     picker = re.search(r"function ThemePicker\(\).*?\n}\n", src, re.S)
     assert picker and "shownMode(" not in picker[0] and "resolveTheme(useUI((s) => s.theme))" in picker[0]
+
+
+def test_a_resize_handle_removed_mid_drag_gives_back_the_cursor_and_text_selection():
+    # The sidebar closed during a drag: no pointerup reached the handle, body kept col-resize and user-select: none.
+    src = (WEB / "components" / "shell" / "ResizeEdge.tsx").read_text(encoding="utf-8")
+    assert "addEventListener('lostpointercapture', onUp)" in src
+    assert "removeEventListener('lostpointercapture', onUp)" in src
