@@ -72,22 +72,25 @@ Settings -> Keys and mention only the key name).
   at every edit, until the session is summarized (automatic compaction) - sometimes after almost every message.
 - From a shell: `maxxing memory` prints the same list.
 
-## Proposals: what agents and topics learned
+## Learning by itself: what agents and topics learned
 
-Harness also looks at the work itself, and proposes what is worth keeping. It never writes alone: each proposal
-arrives in [Notifications](feed) (and on Telegram) with **Accept** and **Refuse**.
+Harness also looks at the work itself, and keeps what is worth keeping. It writes it at once and tells you in
+[Notifications](feed) (and on Telegram), with an **Undo** button that takes it back.
 
 - **After an agent's run**: at most one line for the agent's own `memory.md` - the way that worked after a failure,
-  a faster option a tool pointed to, something not to try again. A run with nothing new proposes nothing.
+  a faster option a tool pointed to, something not to try again. A run with nothing new writes nothing.
 - **Once a day, for the topics you work in**: when you asked for the same procedure in three sessions, a
-  [skill](skills) written from them (its steps say which ones come from your corrections); when you gave the same
-  correction twice, a rule for the topic's `memory.md`. Accepting a skill writes it into the topic's
-  `.claude/skills/`.
+  [skill](skills) written from them into the topic's `.claude/skills/` (its steps say which ones come from your
+  corrections); when you gave the same correction twice, a rule in the topic's `memory.md`. A skill of yours with
+  the same name is never replaced.
 
 A small model reads the conversation (Haiku: a fraction of a cent per look), with no tools and no access to
-anything else. What you refuse is not proposed again; while three proposals wait for one agent or topic, it is not
-read again. From a shell: `maxxing memory-review list`, `apply ID`, `reject ID`. To turn it off, set
-`"memory_review": false` in `config.json`.
+anything else. What you undo is not written again; at most three things are written in 24 hours for one agent or
+topic. From a shell: `maxxing memory-review undo ID`.
+
+To decide each one yourself, set `"memory_review": "ask"` in `config.json`: nothing is written, each one arrives
+with **Accept** and **Refuse** (`maxxing memory-review list`, `apply ID`, `reject ID`), and while three wait for one
+agent or topic, it is not read again. `"memory_review": false` turns it off.
 
 ## Editing memory yourself
 

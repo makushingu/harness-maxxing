@@ -6,7 +6,7 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 ## Unreleased
 
 New:
-- **Agents and topics propose what they learned.** After a run, an agent can propose one line for its own memory (a faster way a tool pointed to, what worked after a failure). Once a day, a topic where you asked for the same procedure three times gets a proposed skill, and a correction you gave twice a proposed rule. Each proposal is a notification with **Accept** and **Refuse**: nothing is written until you accept. `maxxing memory-review list` shows what waits; `"memory_review": false` in `config.json` turns it off.
+- **Agents and topics learn by themselves.** After a run, an agent adds one line to its own memory when the run taught something (a faster way a tool pointed to, what worked after a failure). Once a day, a topic where you asked for the same procedure three times gets a skill written from those sessions, and a correction you gave twice becomes a rule in its memory. Each one is written at once and shown in Notifications with **Undo**; at most three in 24 hours for one agent or topic, and a skill of yours is never replaced. `"memory_review": "ask"` in `config.json` makes each one wait for **Accept** / **Refuse** instead; `false` turns it off.
 
 ## 2.0.0-alpha.173 - 2026-11-26
 

@@ -1,4 +1,4 @@
-"""`maxxing memory-review list | apply ID|all | reject ID | run SESSION | learn PATH | daily`: the memory proposals
+"""`maxxing memory-review list | apply ID|all | reject ID | undo ID | run SESSION | learn PATH | daily`: the memory proposals
 (memory_review.py)."""
 from __future__ import annotations
 
@@ -17,6 +17,7 @@ def _configure(p) -> None:
     sub.add_parser("list", help="the proposals waiting").add_argument("--json", action="store_true")
     sub.add_parser("apply", help="write a proposal into its memory.md").add_argument("id")
     sub.add_parser("reject").add_argument("id")
+    sub.add_parser("undo", help="take back a bullet or a skill that was written").add_argument("id")
     sub.add_parser("daily", help="the daily look at the busy topics, now (proposals go to the notifications)")
     le = sub.add_parser("learn", help="skills and rules the recent sessions of a folder repeat (printed, nothing kept)")
     le.add_argument("path", help="workspace path: projects/<p>/topics/<t>")
@@ -51,7 +52,7 @@ def _handler(a) -> int:
         return 0
     if a.action == "daily":
         new = mr.daily(force=True)
-        print("\n".join(map(_show, new)) or "nothing to propose")
+        print("\n".join(map(_show, new)) or "nothing new")
         return 0
     if a.action == "list":
         new = [x for x in mr.load() if x["state"] == "new"]
@@ -62,7 +63,7 @@ def _handler(a) -> int:
         for i in ids:
             print(i, mr.apply(i))
         return 0
-    print(mr.reject(a.id))
+    print(mr.undo(a.id) if a.action == "undo" else mr.reject(a.id))
     return 0
 
 

@@ -1,5 +1,6 @@
 """Memory review (memory_review.py): proposals from an agent's run and from the repeated sessions of a topic, as
-notifications with Accept / Refuse. Nothing is written before the owner accepts."""
+notifications. By default they are written at once and the notification has Undo; with `"memory_review": "ask"`
+nothing is written before the owner accepts."""
 from __future__ import annotations
 
 import time
@@ -34,6 +35,7 @@ def model(monkeypatch):
         box.asked.append(payload)
         return box.answers[min(len(box.asked), len(box.answers)) - 1], 0.001, ""
     monkeypatch.setattr(mr, "_ask", ask)
+    config.save_config({**config.load_config(), "memory_review": "ask"})
     monkeypatch.setattr(mr, "transcript", lambda sid, actions=False: "[OWNER] Run your routine.\n\n[DID] Bash: sh report.sh")
     return box
 
@@ -97,7 +99,7 @@ def test_not_for_a_session_of_the_owner_nor_when_off_nor_another_level(client, t
     config.save_config({**config.load_config(), "memory_review": False})
     assert mr.after_run(_session(A, "agent")) == [] and not model.asked
     assert mr.daily(force=True) == []
-    config.save_config({**config.load_config(), "memory_review": True})
+    config.save_config({**config.load_config(), "memory_review": "ask"})
     model.answers = [{"proposals": [{"level": "nowhere", "action": "add", "text": "x"},
                                     {"level": "agent", "action": "run", "text": "x"}, "junk"]}]
     assert mr.after_run(_session(A, "agent")) == [] and not _events()
@@ -151,3 +153,62 @@ def test_cli_lists_and_applies(client, topic, model, capsys):
     assert cli.main(["memory-review", "list"]) == 0 and pid in capsys.readouterr().out
     assert cli.main(["memory-review", "apply", pid]) == 0 and "added" in capsys.readouterr().out
     assert cli.main(["memory-review", "list"]) == 0 and "nothing waits" in capsys.readouterr().out
+
+
+def _auto() -> None:
+    cfg = config.load_config()
+    cfg.pop("memory_review", None)                                            # the default
+    config.save_config(cfg)
+
+
+def test_by_default_a_run_writes_at_once_and_undo_takes_it_back(client, topic, model):
+    _agent(client)
+    _auto()
+    mem = config.workspace() / A / "memory.md"
+    mem.write_text("# writer\n\n- Old way: run report.sh.\n")
+    model.answers = [_bullet(action="replace", old="Old way: run report.sh.")]
+    assert len(mr.after_run(_session(A, "agent"))) == 1
+    assert "- Run report.sh with --cached" in mem.read_text() and "Old way" not in mem.read_text()
+    ev = _events()[0]
+    assert ev["title"] == "Memory of acme / blog / writer: a bullet replaced" and [a["id"] for a in ev["actions"]] == ["undo"]
+    assert cli_list() == []                                                   # nothing waits
+    assert client.post(f"/api/feed/{ev['id']}/act/undo").status_code == 200
+    assert mem.read_text() == "# writer\n\n- Old way: run report.sh.\n"
+    assert feed.get(ev["id"])["resolution"] == "Taken back"
+    model.answers = [{}]
+    mr.after_run(_session(A, "agent"))
+    assert "ALREADY PROPOSED" in model.asked[-1] and "--cached" in model.asked[-1]   # taken back = refused
+
+
+def cli_list() -> list[dict]:
+    return [x for x in mr.load() if x["state"] == "new"]
+
+
+def test_by_default_three_bullets_a_day_for_one_agent(client, topic, model):
+    _agent(client)
+    _auto()
+    model.answers = [_bullet(f"Lesson {n}.") for n in range(5)]
+    for _ in range(5):
+        mr.after_run(_session(A, "agent"))
+    assert len(model.asked) == 3 and (config.workspace() / A / "memory.md").read_text().count("- Lesson") == 3
+
+
+def test_by_default_the_daily_look_creates_the_skill_and_never_overwrites_one(client, topic, model):
+    _auto()
+    for n in range(3):
+        _session(T, ago=3600 * (n + 1))
+    model.answers = [SKILL]
+    assert [x["level"] for x in mr.daily()] == ["skill", "topic"]
+    f = config.workspace() / T / ".claude" / "skills" / "new-product-sheet" / "SKILL.md"
+    assert "Written by Harness from repeated sessions" in f.read_text()
+    assert "- Weights are written without a unit." in (config.workspace() / T / "memory.md").read_text()
+    sk = next(e for e in _events() if e["title"].startswith("Skill created for acme / blog: new-product-sheet"))
+    assert client.post(f"/api/feed/{sk['id']}/act/undo").status_code == 200
+    assert not f.parent.exists() and feed.get(sk["id"])["resolution"] == "Skill removed"
+    f.parent.mkdir(parents=True)
+    f.write_text("mine")                                                      # the owner's own skill of that name
+    it = {"id": "abcd1234", "sid": "", "path": T, "level": "skill", "action": "add", "text": "skill x", "old": "",
+          "why": "", "source": "work", "model": "haiku", "at": 0, "state": "new", "skill": SKILL["skills"][0]}
+    mr._save(mr.load() + [it])
+    mr.settle(it)
+    assert f.read_text() == "mine"

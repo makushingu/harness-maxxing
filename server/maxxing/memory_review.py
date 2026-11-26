@@ -104,7 +104,7 @@ KEEP = 400                     # proposals kept in the file (the oldest go)
 PENDING_MAX = 3                # proposals waiting for one folder: no new review until the owner answers
 LEARN_EVERY_S = 24 * 3600
 LEARN_MIN, LEARN_DAYS, LEARN_TOPICS = 3, 14, 10   # a topic is read when it has 3 sessions in 14 days; 10 topics a day
-ACCEPT, REFUSE = "accept", "refuse"
+ACCEPT, REFUSE, UNDO = "accept", "refuse", "undo"
 _lock = threading.RLock()
 
 
@@ -230,8 +230,12 @@ def apply(pid: str) -> str:
     if not it:
         return "unknown or already handled"
     if it["level"] == "skill":
-        write_skill(it["path"], it.get("skill") or {})
-        it["state"] = "applied"
+        if skill_file(it["path"], it.get("skill") or {}).exists():
+            it["state"] = "rejected"
+            _save(items)
+            return "a skill of that name exists"
+        write_skill(it["path"], it.get("skill") or {}, asked=mode() == "ask")
+        it["state"], it["at"] = "applied", int(time.time())
         _save(items)
         return "skill written"
     f = levels(it["path"]).get(it["level"])
@@ -239,7 +243,7 @@ def apply(pid: str) -> str:
         return "no memory file at this level"
     body = _read(f) if f.exists() else ""
     line = it["text"] if it["text"].startswith("- ") else "- " + it["text"]
-    done = "added"
+    done, old_line = "added", ""
     if it["action"] in ("replace", "remove") and it["old"] and it["old"] in body:
         old_line = next((ln for ln in body.split("\n") if it["old"] in ln), it["old"])
         body = body.replace(old_line + "\n", (line + "\n") if it["action"] == "replace" else "", 1)
@@ -250,7 +254,40 @@ def apply(pid: str) -> str:
         body = body.rstrip("\n") + "\n" + line + "\n"
     f.parent.mkdir(parents=True, exist_ok=True)
     f.write_text(body)
-    it["state"] = "applied"
+    it["state"], it["at"] = "applied", int(time.time())
+    it["undo"] = {"line": line if done in ("added", "replaced") else "", "old": old_line if done != "added" else ""}
+    _save(items)
+    return done
+
+
+def undo(pid: str) -> str:
+    """Takes back one proposal that was written (the bullet, or the skill's folder) -> what happened. It then counts
+    as refused: not proposed again."""
+    items = load()
+    it = next((x for x in items if x["id"] == pid and x["state"] == "applied"), None)
+    if not it:
+        return "unknown or not written"
+    if it["level"] == "skill":
+        f = skill_file(it["path"], it.get("skill") or {})
+        if f.exists():
+            f.unlink()
+            if not any(f.parent.iterdir()):
+                f.parent.rmdir()
+        done = "skill removed"
+    else:
+        f, u = levels(it["path"]).get(it["level"]), it.get("undo") or {}
+        body = _read(f) if f and f.exists() else ""
+        line, old = str(u.get("line") or ""), str(u.get("old") or "")
+        if line and line + "\n" in body:
+            body = body.replace(line + "\n", (old + "\n") if old else "", 1)
+        elif line:
+            return "the bullet changed since: edit the memory by hand"
+        elif old and old not in body:
+            body = body.rstrip("\n") + "\n" + old + "\n"
+        if f:
+            f.write_text(body)
+        done = "taken back"
+    it["state"] = "rejected"
     _save(items)
     return done
 
@@ -310,26 +347,40 @@ def skill_name(skill: dict) -> str:
     return re.sub(r"[^a-z0-9-]+", "-", str(skill.get("name") or "").lower()).strip("-")[:48] or "procedure"
 
 
-def write_skill(path: str, skill: dict) -> Path:
-    """An accepted skill -> <folder>/.claude/skills/<name>/SKILL.md (says where it comes from)."""
+def skill_file(path: str, skill: dict) -> Path:
+    return config.workspace() / path.strip("/") / ".claude" / "skills" / skill_name(skill) / "SKILL.md"
+
+
+def write_skill(path: str, skill: dict, asked: bool = True) -> Path:
+    """A skill -> <folder>/.claude/skills/<name>/SKILL.md (says where it comes from)."""
     name = skill_name(skill)
-    d = config.workspace() / path.strip("/") / ".claude" / "skills" / name
+    d = skill_file(path, skill).parent
     d.mkdir(parents=True, exist_ok=True)
     steps = "\n".join(f"{n}. {' '.join(str(s).split())}" for n, s in enumerate(skill.get("steps") or [], 1))
     desc = " ".join(str(skill.get("description") or "").split()).replace('"', "'")
     (d / "SKILL.md").write_text(f"---\nname: {name}\ndescription: \"{desc}\"\n---\n\n# {name}\n\n"
-                                f"(Proposed by Harness from repeated sessions and accepted by the owner on "
+                                f"({'Proposed by Harness from repeated sessions and accepted by the owner' if asked else 'Written by Harness from repeated sessions'} on "
                                 f"{time.strftime('%Y-%m-%d')}.)\n\n{steps}\n")
     return d / "SKILL.md"
 
 
 # ---- the product's own use: proposals as notifications ------------------------------------------------
+def mode() -> str:
+    """config.json `memory_review`: absent / true = "auto" (written at once, the notification has Undo), "ask" =
+    each one waits for Accept / Refuse, false = "off"."""
+    v = config.load_config().get("memory_review", True)
+    return "off" if v is False else "ask" if v == "ask" else "auto"
+
+
 def enabled() -> bool:
-    return config.load_config().get("memory_review", True) is not False
+    return mode() != "off"
 
 
 def _waiting(path: str) -> int:
-    return sum(1 for x in load() if x.get("path") == path and x.get("state") == "new")
+    """What waits for the owner in this folder, plus what was written alone in the last 24 h: the brake of both modes."""
+    day = time.time() - 86400
+    return sum(1 for x in load() if x.get("path") == path
+               and (x.get("state") == "new" or (x.get("state") == "applied" and x.get("auto") and x.get("at", 0) > day)))
 
 
 def _where(path: str) -> str:
@@ -337,39 +388,66 @@ def _where(path: str) -> str:
     return " / ".join(parts[1::2]) or "workspace"
 
 
-def announce(it: dict) -> None:
-    """One proposal -> a notification with Accept / Refuse (web, Telegram)."""
+def announce(it: dict, done: bool = False) -> None:
+    """One proposal -> a notification with Accept / Refuse, or, already written (`done`), with Undo (web, Telegram)."""
     from . import agents, feed
     path, agent = it["path"], agents.is_agent_path(it["path"])
     if it["level"] == "skill":
         k = it.get("skill") or {}
-        title = f"Skill proposed for {_where(path)}: {skill_name(k)}"
+        title = f"Skill {'created' if done else 'proposed'} for {_where(path)}: {skill_name(k)}"
         body = (str(k.get("description") or "") + "\n\n"
                 + "\n".join(f"{n}. {s}" for n, s in enumerate(k.get("steps") or [], 1))
-                + "\n\nSeen in several sessions of this topic. Accept writes it into the topic's .claude/skills.")
+                + "\n\nSeen in several sessions of this topic. "
+                + ("It is in the topic's .claude/skills; Undo removes it." if done
+                   else "Accept writes it into the topic's .claude/skills."))
     else:
         verb = {"add": "add", "replace": "replace a bullet with", "remove": "remove"}[it["action"]]
-        title = f"Memory of {_where(path)}: {verb} a bullet?"
+        past = {"add": "a bullet added", "replace": "a bullet replaced", "remove": "a bullet removed"}[it["action"]]
+        title = f"Memory of {_where(path)}: {past}" if done else f"Memory of {_where(path)}: {verb} a bullet?"
         body = (it["text"] or it["old"]) + (f"\n\nInstead of: {it['old']}" if it["action"] == "replace" and it["old"] else "") \
-            + (f"\n\nWhy: {it['why']}" if it.get("why") else "") + f"\n\nAccept writes it into the {it['level']} memory.md."
+            + (f"\n\nWhy: {it['why']}" if it.get("why") else "") \
+            + (f"\n\nWritten into the {it['level']} memory.md; Undo takes it back." if done
+               else f"\n\nAccept writes it into the {it['level']} memory.md.")
+    acts = [{"id": UNDO, "label": "Undo"}] if done else \
+        [{"id": ACCEPT, "label": "Accept", "style": "primary"}, {"id": REFUSE, "label": "Refuse"}]
     try:
         feed.post(title, body, "info", "agents" if agent else "sessions", agents._page(path) if agent else "",
-                  ref=f"memory:{it['id']}", agent=path if agent else None,
-                  actions=[{"id": ACCEPT, "label": "Accept", "style": "primary"}, {"id": REFUSE, "label": "Refuse"}])
+                  ref=f"memory:{it['id']}", agent=path if agent else None, actions=acts)
     except Exception:  # noqa: BLE001 - the proposal still waits (maxxing memory-review list)
         log.exception("notification of a memory proposal failed")
 
 
 def feed_action(value: str, action: str, by: str, ev: dict) -> None:
-    """**Accept** / **Refuse** of a proposal's notification: the owner's click."""
-    if action not in (ACCEPT, REFUSE):
+    """**Accept** / **Refuse** / **Undo** of a proposal's notification: the owner's click."""
+    if action not in (ACCEPT, REFUSE, UNDO):
         return
     from . import feed
     try:
-        said = apply(value) if action == ACCEPT else reject(value)
+        said = apply(value) if action == ACCEPT else undo(value) if action == UNDO else reject(value)
     except Exception as e:  # noqa: BLE001 - a folder deleted since: said on the event
         said = f"not written: {e}"
     feed.update(ev["id"], resolution=said[:1].upper() + said[1:], resolve=True, read=True, notify=False)
+
+
+def settle(it: dict) -> None:
+    """A new proposal: written at once and announced with Undo ("auto"), or announced to wait for the owner ("ask")."""
+    if mode() != "auto":
+        return announce(it)
+    try:
+        said = apply(it["id"])
+    except Exception:  # noqa: BLE001 - a folder deleted since: the proposal is dropped
+        log.exception("memory proposal %s not written", it["id"])
+        reject(it["id"])
+        return
+    if said in ("added", "replaced", "removed", "skill written"):
+        items = load()
+        for x in items:
+            if x["id"] == it["id"]:
+                x["auto"] = True
+        _save(items)
+        announce(it, done=True)
+    elif said != "a skill of that name exists":
+        reject(it["id"])
 
 
 def after_run(session: dict) -> list[dict]:
@@ -382,7 +460,7 @@ def after_run(session: dict) -> list[dict]:
     for it in new[1:]:                                   # one lesson a run: the rest would be noise
         reject(it["id"])
     for it in new[:1]:
-        announce(it)
+        settle(it)
     return new[:1]
 
 
@@ -433,6 +511,6 @@ def daily(force: bool = False) -> list[dict]:
             d.setdefault("learned", {})[path] = newest
             _write(d)
         for it in new:
-            announce(it)
+            settle(it)
         out += new
     return out
