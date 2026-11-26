@@ -569,7 +569,8 @@ def _load(d: Path) -> tuple[dict | None, list[str], str | None]:
     logo["light"] = logo["light"] or logo["dark"]
     css = _css(raw.get("css"), warn)
     preview = _image(d, raw.get("preview"), "preview", warn) if raw.get("preview") is not None else (
-        "preview.png" if (d / "preview.png").is_file() and (d / "preview.png").stat().st_size <= MAX_IMAGE else None)
+        "preview.png" if (d / "preview.png").is_file() and not (d / "preview.png").is_symlink()
+        and (d / "preview.png").stat().st_size <= MAX_IMAGE else None)
     return {
         "id": tid,
         "schema": SCHEMA,

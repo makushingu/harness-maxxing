@@ -320,3 +320,14 @@ def test_work_folders_left_by_a_killed_install_are_removed(mx, tmp_path):
     os.utime(stale, (old, old))
     themes.install(src)
     assert sorted(p.name for p in r.iterdir()) == [".left.busy0002", "left"]   # a running install keeps its own
+
+
+def test_a_linked_preview_png_is_not_announced(tmp_path):
+    png = b"\x89PNG\r\n\x1a\n" + b"0" * 32
+    (tmp_path / "elsewhere.png").write_bytes(png)
+    d = _theme(tmp_path, "linked", {"name": "Linked"})
+    (d / "preview.png").symlink_to(tmp_path / "elsewhere.png")
+    assert themes.load(d)[0]["preview"] is None          # file_path() refuses links: it would be a 404
+    (d / "preview.png").unlink()
+    (d / "preview.png").write_bytes(png)
+    assert themes.load(d)[0]["preview"] == "/api/themes/linked/file/preview.png"
