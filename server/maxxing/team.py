@@ -328,6 +328,9 @@ def send(cid: str, text: str, reply_to: str | None = None, files: list[dict] | N
     return _post_mine(cid, text, check=check, **extra)
 
 
+GROUP_ID_RE = re.compile(r"g_[0-9a-f]{16}")    # what create_chat makes: a remote group id is never anything else
+
+
 def dm_id(a: str, b: str) -> str:
     """The id of the direct chat between two addresses: the same on both servers."""
     return "d_" + hashlib.sha256("|".join(sorted((a, b))).encode()).hexdigest()[:16]
@@ -847,7 +850,7 @@ def apply_remote(frm: str, contact: bool, event: dict) -> None:
         doc = _load()
         chat = next((c for c in doc["chats"] if c["id"] == cid), None)
         if kind == "chat":
-            if not contact or not cid.startswith("g_") or (chat and chat.get("admin") != who):
+            if not contact or not GROUP_ID_RE.fullmatch(cid) or (chat and chat.get("admin") != who):
                 raise TeamError(403, "forbidden", "Only a contact may add you to a group, only its creator may change it")
             roster = [m for m in (event.get("members") if isinstance(event.get("members"), list) else []) if isinstance(m, dict)][:50]
             keys = event.get("keys") if isinstance(event.get("keys"), dict) else {}

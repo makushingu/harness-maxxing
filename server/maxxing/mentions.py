@@ -63,6 +63,9 @@ def candidates(exclude: str = "") -> list[dict]:
     return rows
 
 
+TEAM_REF_RE = re.compile(r"[A-Za-z0-9_-]{1,64}")    # a Team person or chat id (p_…, g_…, d_…)
+
+
 def resolve(items: list[dict] | None, sender: str = "") -> list[dict]:
     """The mentions of a message ({kind, ref} from the page) -> [{kind, ref, label, where?, command}], unknown or
     repeated ones dropped. `command` is what Claude runs, followed by the text."""
@@ -98,7 +101,7 @@ def resolve(items: list[dict] | None, sender: str = "") -> list[dict]:
                 from . import team
                 team_rows = team.recipients() if config.load_config().get("team_page") else []
             r = next((x for x in team_rows if ref in (x["id"], x.get("chat"))), None)
-            if r:
+            if r and TEAM_REF_RE.fullmatch(str(r["id"])):    # it goes in a command Claude runs: never a quote or a line
                 out.append({"kind": kind, "ref": r["id"], "label": _plain(r["name"]), "group": r["kind"] == "group",
                             "command": f"maxxing team send {r['id']}"})
     return out
