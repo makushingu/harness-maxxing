@@ -1,20 +1,70 @@
+<p align="center">
+  <a href="https://harness-maxxing.com"><img src="docs/assets/readme/banner.webp" alt="Harness Maxxing - the control room for Claude Code" width="100%"></a>
+</p>
+
+<p align="center">
+  <a href="https://harness-maxxing.com"><b>Website</b></a> ·
+  <a href="https://harness-maxxing.com/demo/"><b>Live demo</b></a> ·
+  <a href="https://harness-maxxing.com/docs/"><b>Docs</b></a> ·
+  <a href="https://discord.com/invite/jnSDSdvyQ2"><b>Discord</b></a> ·
+  <a href="https://x.com/HarnessMaxxing"><b>X</b></a> ·
+  <a href="CHANGELOG.md"><b>Changelog</b></a>
+</p>
+
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Fair%20Source-blue" alt="License: Fair Source"></a>
+  <a href="https://github.com/makushingu/harness-maxxing/releases"><img src="https://img.shields.io/github/v/release/makushingu/harness-maxxing?include_prereleases&label=version&color=2974F3" alt="Latest version"></a>
+  <a href="#install"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fapi.harness-maxxing.com%2Fv1%2Fbadge%2Finstalls" alt="Installs"></a>
+  <a href="https://discord.com/invite/jnSDSdvyQ2"><img src="https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white" alt="Discord"></a>
+  <a href="https://github.com/makushingu/harness-maxxing/stargazers"><img src="https://img.shields.io/github/stars/makushingu/harness-maxxing?style=social" alt="GitHub stars"></a>
+  <a href="https://x.com/HarnessMaxxing"><img src="https://img.shields.io/badge/X-@HarnessMaxxing-black?logo=x" alt="X (Twitter)"></a>
+</p>
+
 # Harness Maxxing
 
-[![License: Fair Source](https://img.shields.io/badge/license-Fair%20Source-blue)](LICENSE)
-[![Installs](https://img.shields.io/endpoint?url=https%3A%2F%2Fapi.harness-maxxing.com%2Fv1%2Fbadge%2Finstalls)](#install)
-[![GitHub stars](https://img.shields.io/github/stars/makushingu/harness-maxxing?style=social)](https://github.com/makushingu/harness-maxxing/stargazers)
-[![X (Twitter)](https://img.shields.io/badge/X-@HarnessMaxxing-black?logo=x)](https://x.com/HarnessMaxxing)
-
 **A self-hosted control room for Claude Code.** Many persistent Claude conversations organised by
-project and topic, plus files, tasks, scheduled jobs, a Telegram bridge and a memory backup -
+project and topic, plus memory, agents, files, tasks, scheduled jobs, a Telegram bridge and a memory backup -
 installed on your own server with one command and configured from a guided web onboarding.
 
-Free and [fair source](#fair-source) (source-available). Install: `curl --proto '=https' --tlsv1.2 -fsSL https://get.harness-maxxing.com | bash` as root - no key,
-no account. Details in [Install](#install) below. News: [@HarnessMaxxing](https://x.com/HarnessMaxxing) on X.
+Free and [fair source](#fair-source) (source-available). No key, no account:
+
+```bash
+curl --proto '=https' --tlsv1.2 -fsSL https://get.harness-maxxing.com | bash
+```
+
+Run it as root on an Ubuntu or Debian server; details in [Install](#install) below. Want to look around first?
+Open the [live demo](https://harness-maxxing.com/demo/) in your browser (fake data, nothing to install).
+
+## Why Harness Maxxing
+
+- **Claude Code, always on.** Sessions live on your server, not in a terminal tab: close the laptop, continue from
+  your phone or Telegram, and find everything where you left it.
+- **It remembers.** Each project and topic has its own `CLAUDE.md` and `memory.md`, loaded automatically and kept
+  short by shipped skills.
+- **It works while you are away.** Scheduled jobs, agents with their own role and daily budget, webhooks and a
+  notifications feed.
+- **Your server, your account.** It runs the official Claude Code CLI with your own Claude subscription or API key;
+  your conversations and credentials stay on your server.
 
 ## Screenshots
 
-_Coming soon: dashboard, sessions (desktop and mobile), files, tasks, crons, onboarding._
+<table>
+  <tr>
+    <td colspan="2"><img src="docs/assets/readme/sessions.webp" alt="Sessions: several Claude conversations side by side"><br><sub><b>Sessions</b> - projects and topics on the left, conversations side by side, tool calls as cards.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/assets/readme/dashboard.webp" alt="Dashboard"><br><sub><b>Dashboard</b> - activity, cost, crons, tasks and your own widgets.</sub></td>
+    <td width="50%"><img src="docs/assets/readme/agents.webp" alt="Agents"><br><sub><b>Agents</b> - lasting roles with their own memory, triggers and budget.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/assets/readme/tasks.webp" alt="Tasks"><br><sub><b>Tasks</b> - kanban, list and calendar on a plain <code>tasks.json</code>.</sub></td>
+    <td width="50%"><img src="docs/assets/readme/infra.webp" alt="Infra"><br><sub><b>Infra</b> - every site, database, bucket, domain and server in one place.</sub></td>
+  </tr>
+</table>
+
+<p align="center"><img src="docs/assets/readme/mobile.webp" alt="Harness Maxxing on a phone" width="280"><br><sub>The same sessions on your phone: here a plan waiting for your OK.</sub></p>
+
+_Screenshots from the [live demo](https://harness-maxxing.com/demo/) (fake data)._
 
 ## Features
 
@@ -139,7 +189,7 @@ Day-to-day: `maxxing status`, `maxxing doctor`, `maxxing update`. Remove: `maxxi
 
 ## Documentation
 
-User documentation is in [`docs/user/`](docs/user) and inside the app (the book icon at the bottom of the sidebar, also linked from Settings -> About):
+User documentation is on [harness-maxxing.com/docs](https://harness-maxxing.com/docs/) (6 languages), in [`docs/user/`](docs/user) and inside the app (the book icon at the bottom of the sidebar, also linked from Settings -> About):
 [welcome](docs/user/01-welcome.md) · [installation](docs/user/02-installation.md) ·
 [onboarding](docs/user/03-onboarding.md) · [sessions](docs/user/04-sessions.md) ·
 [memory](docs/user/05-memory.md) · [crons](docs/user/08-crons.md) ·
@@ -193,6 +243,14 @@ Bug reports, ideas and pull requests are welcome. Read [CONTRIBUTING.md](CONTRIB
 before a feature, tests, changelog, `web/dist`), sign the [Contributor License Agreement](CLA.md) (one comment on
 your first pull request) and follow the [Code of Conduct](CODE_OF_CONDUCT.md). Security issues: see
 [SECURITY.md](SECURITY.md), never a public issue.
+
+## Community and support
+
+- **Discord**: [join the Harness Maxxing server](https://discord.com/invite/jnSDSdvyQ2) for questions, tips and news.
+- **Bugs and ideas**: [GitHub issues](https://github.com/makushingu/harness-maxxing/issues) (security issues: see
+  [SECURITY.md](SECURITY.md)).
+- **News**: [@HarnessMaxxing](https://x.com/HarnessMaxxing) on X and the [changelog](CHANGELOG.md).
+- **Inside the app**: the topic `system/help` answers from the installed docs, and `maxxing doctor` checks the server.
 
 ## Support the project
 
