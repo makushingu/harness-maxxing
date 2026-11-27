@@ -498,6 +498,15 @@ def test_a_still_busy_agent_never_pushes_back_the_day_limit(client, box, monkeyp
     assert len(left) == 1 and time.time() - left[0]["at"] > 86000       # ...with its first date
 
 
+def test_a_damaged_row_of_the_kept_turns_never_blocks_new_ones(client, box):
+    rows, acc = box["rows"], box["acc"]
+    config.write_json(poll._pending_file(), ["oops", {"agent": A, "account": acc["id"], "folder": "INBOX",
+                                                      "mails": ["bad", {"uid": "x"}], "prompt": "p", "at": time.time()}])
+    poll._keep(A, acc["id"], "INBOX", [rows[1]], {}, "p")
+    left = config.read_json(poll._pending_file(), default=[])
+    assert len(left) == 1 and [m["uid"] for m in left[0]["mails"]] == [1]
+
+
 def _poll_box(client, box, monkeypatch):
     """The `box` mailbox after a first check (uids 1-3 known) with uids 4, 5 (stripe, matching) new."""
     _grant(client, rights=["read"], trigger={"enabled": True})

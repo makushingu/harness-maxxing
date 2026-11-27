@@ -441,10 +441,11 @@ def _keep(path: str, acc_id: str, folder: str, mails: list[dict], bodies: dict[i
              for m in mails]
     with _pending_lock:
         rows = config.read_json(f, default=[]) or []
-        rows = rows if isinstance(rows, list) else []
+        rows = [r for r in rows if isinstance(r, dict)] if isinstance(rows, list) else []   # a damaged row is dropped
         for r in rows:
             if (r.get("agent"), r.get("account"), r.get("folder")) == (path, acc_id, folder):
-                known = {int(m["uid"]) for m in r.get("mails") or []}
+                r["mails"] = [m for m in r.get("mails") or [] if isinstance(m, dict) and str(m.get("uid", "")).isdigit()]
+                known = {int(m["uid"]) for m in r["mails"]}
                 add = [m for m in mails if int(m["uid"]) not in known]
                 r["mails"] = ((r.get("mails") or []) + add)[-PENDING_MAILS:]
                 if add:
