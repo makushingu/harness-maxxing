@@ -826,3 +826,11 @@ def test_an_agent_menu_item_held_down_never_reaches_the_long_press_of_the_card()
     content = src[a:src.index(">", src.index("aria-label=", a))]
     for ev in ("onContextMenu", "onTouchStart", "onTouchMove", "onTouchEnd", "onTouchCancel"):
         assert f"{ev}={{stop}}" in content, ev
+
+
+def test_the_team_forward_dialog_forgets_the_session_chosen_the_previous_time():
+    src = (WEB / "features" / "team" / "Dialogs.tsx").read_text(encoding="utf-8")
+    body = src[src.index("export function ForwardDialog("):]
+    body = body[:body.index("\n}\n")]
+    resets = re.findall(r"React\.useEffect\(\(\) => \{\n    if \(!open\) return\n(.*?)\n  \}, \[open\]\)", body, re.S)
+    assert resets and all(f in resets[0] for f in ("setSession('')", "setPath('')", "setMode('existing')"))
