@@ -344,3 +344,32 @@ def test_a_prefix_git_would_refuse_is_refused(client, code, prefix):
     r = client.put("/api/code/copy-prefs", json={"repo": str(clone), "prefix": prefix})
     assert r.status_code == 400 and r.json()["error"] == "bad_prefix", r.text
     assert client.put("/api/code/copy-prefs", json={"repo": str(clone), "prefix": "feat/x"}).status_code == 200
+
+
+def test_two_copies_made_at_the_same_time_get_their_own_branch(code, monkeypatch):
+    import threading
+    topic, clone = code
+    gate, real = threading.Barrier(2, timeout=2), worktrees._free_branch
+    def slow(*a, **kw):                                  # both pick a name before either makes it
+        name = real(*a, **kw)
+        try:
+            gate.wait()
+        except threading.BrokenBarrierError:
+            pass
+        return name
+    monkeypatch.setattr(worktrees, "_free_branch", slow)
+    out, errors = {}, []
+    def make(sid):
+        try:
+            out[sid] = worktrees.create(topic, str(clone), None, "Fix login", sid)
+        except Exception as e:  # noqa: BLE001
+            errors.append(e)
+    ts = [threading.Thread(target=make, args=(f"{n}" * 8 + "-sid",)) for n in (1, 2)]
+    [t.start() for t in ts]
+    [t.join(30) for t in ts]
+    assert not errors and len({w["branch"] for w in out.values()}) == 2
+    branches = set(_git(clone, "branch", "--format=%(refname:short)").split())
+    assert branches == {"main", *(w["branch"] for w in out.values())}
+    for sid, w in out.items():
+        worktrees.undo(sid, w)
+
