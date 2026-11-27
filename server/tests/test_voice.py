@@ -125,6 +125,14 @@ def test_status_defaults_and_settings(client, monkeypatch):
 
 
 # ---- transcribe -----------------------------------------------------------------------------
+def test_a_hand_edited_language_does_not_break_the_voice_page(client):
+    for lang in ("english", 12):
+        config.update_config(voice={"language": lang})
+        r = client.get("/api/voice")
+        assert r.status_code == 200, (lang, r.text)
+        assert voice.settings()["language"] == "auto"
+
+
 def test_transcribe_off_and_not_installed(client, tmp_path, monkeypatch):
     audio = make_audio(tmp_path / "a.webm", 1, ["-c:a", "libopus"])
     r = client.post("/api/voice/transcribe", files={"audio": ("a.webm", audio.read_bytes(), "audio/webm")})

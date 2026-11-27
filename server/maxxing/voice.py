@@ -76,7 +76,10 @@ def settings() -> dict:
     raw = raw if isinstance(raw, dict) else {}
     if out["model"] not in MODELS or "model" not in raw:
         out["model"] = recommended_model()          # small, or base on machines with < 4 GB RAM
-    out["language"] = normalise_language(out.get("language"))
+    try:
+        out["language"] = normalise_language(out.get("language"))
+    except VoiceError:                              # a hand-edited "english" or 12: the page still loads
+        out["language"] = "auto"
     out["auto_send"] = bool(out["auto_send"])
     out["direct"] = bool(out["direct"])
     out["mic"] = out["mic"] is not False
