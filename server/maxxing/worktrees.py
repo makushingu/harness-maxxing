@@ -348,10 +348,14 @@ def _copy_env(repo: Path, folder: Path) -> list[str]:
         if not rel or rel.endswith("/") or not name.startswith(".env") or rel.count("/") > 3:
             continue
         src, dst = repo / rel, folder / rel
-        if src.is_file() and not src.is_symlink() and not dst.exists():
+        try:   # a folder of the copy may be a committed link: the secrets never land outside the copy
+            if not src.is_file() or src.is_symlink() or dst.exists() or folder.resolve() not in dst.resolve().parents:
+                continue
             dst.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src, dst)
             done.append(rel)
+        except OSError as e:
+            log.info("%s not copied: %s", rel, e)
         if len(done) >= ENV_MAX:
             break
     return done
