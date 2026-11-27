@@ -51,7 +51,10 @@ POLL_S = 2.0
 
 
 async def _watch() -> None:
-    await asyncio.to_thread(approvals.prime)
+    try:
+        await asyncio.to_thread(approvals.prime)
+    except Exception:  # noqa: BLE001 - a bad file at startup must not stop the watcher for good
+        log.exception("approvals watcher start failed")
     while True:
         await asyncio.sleep(POLL_S)
         try:

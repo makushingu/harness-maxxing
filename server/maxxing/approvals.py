@@ -168,6 +168,23 @@ def public(d: dict) -> dict:
 _parsed: dict[str, tuple[tuple[int, int, int], dict | None]] = {}   # path -> ((inode, mtime_ns, size), content)
 
 
+TEXT_FIELDS = ("session", "agent_path", "tool", "status", "kind")
+
+
+def _clean(d: dict) -> dict:
+    """A copy whose times are numbers or None and whose text fields are text: a hand-edited file (a list as the
+    session) would otherwise break the counts, the watcher and the answer."""
+    d = dict(d)
+    for k in ("at", "expires", "decided_at"):
+        v = d.get(k)
+        if v is not None and (isinstance(v, bool) or not isinstance(v, (int, float))):
+            d[k] = None
+    for k in TEXT_FIELDS:
+        if k in d and d[k] is not None and not isinstance(d[k], str):
+            d[k] = ""
+    return d
+
+
 def _all() -> list[dict]:
     """Every request. A file is parsed again only when it changed: the watcher calls this every 2 s while one
     request waits, and decided ones stay for a day."""
@@ -182,12 +199,7 @@ def _all() -> list[dict]:
         d = hit[1] if hit and hit[0] == key else approval_mcp.read(Path(path))
         _parsed[path] = (key, d)
         if d and ID_RE.match(str(d.get("id") or "")) and name[:-5] == d["id"]:
-            d = dict(d)
-            for k in ("at", "expires", "decided_at"):        # a hand-edited file: a time that is not a number is no time
-                v = d.get(k)
-                if v is not None and (isinstance(v, bool) or not isinstance(v, (int, float))):
-                    d[k] = None
-            out.append(d)
+            out.append(_clean(d))
     for path in set(_parsed) - {p for p, _, _ in files}:
         _parsed.pop(path, None)
     out.sort(key=lambda d: d.get("at") or 0)
