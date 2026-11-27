@@ -3,17 +3,19 @@
 import { EmojiPicker } from 'frimousse'
 import { useLang, useT } from '@/i18n'
 import { Spinner } from '@/components/ui'
+import { useMediaQuery } from '@/stores/media'
 import { resolveEmojiData } from './emojiData'
 
 export default function EmojiPickerBody({ onPick }: { onPick: (emoji: string) => void }) {
   const t = useT()
   const lang = useLang()
+  const touch = useMediaQuery('(pointer: coarse)') // 40 px targets: 7 columns fit the same width
   return (
     <EmojiPicker.Root
       locale={lang}
       emojibaseUrl="/emojibase"
       resolveEmojiData={resolveEmojiData}
-      columns={8}
+      columns={touch ? 7 : 8}
       onEmojiSelect={({ emoji }) => onPick(emoji)}
       className="isolate flex h-[340px] w-[304px] max-w-full flex-col"
     >
@@ -45,7 +47,7 @@ export default function EmojiPickerBody({ onPick }: { onPick: (emoji: string) =>
             Emoji: ({ emoji, ...props }) => (
               <button
                 type="button"
-                className="flex size-9 items-center justify-center rounded-md text-xl leading-none data-[active]:bg-accent"
+                className="flex size-9 pointer-coarse:size-10 items-center justify-center rounded-md text-xl leading-none data-[active]:bg-accent"
                 {...props}
               >
                 {emoji.emoji}
