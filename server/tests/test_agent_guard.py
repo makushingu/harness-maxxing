@@ -660,3 +660,16 @@ def test_imports_already_in_code_stay_neutral_on_import():
         p = agent_format.parse_md(f"---\nname: Helper\n---\n{body}\n")
         assert outside_code(p["description"]) == [], (body, p["description"])
         assert p["ignored"] == ([f"@ imports kept as text: {', '.join(kept)}"] if kept else []), body
+
+
+def test_an_agent_without_its_sandbox_runs_in_its_sandboxed_topics_one(client, topic, mx):
+    from maxxing import workspace
+    _on(client)
+    _create_any(client, sandbox=False)
+    workspace.update_topic("acme", "blog", permission_mode="sandbox")
+    run = _run("NOTOOL hi")
+    wait_idle(client, run["session"]["id"])
+    argv = _calls()[-1]["argv"]
+    assert "--dangerously-skip-permissions" not in argv and "--permission-prompt-tool" in argv
+    box = _settings(argv)["sandbox"]
+    assert box["enabled"] and box["failIfUnavailable"]

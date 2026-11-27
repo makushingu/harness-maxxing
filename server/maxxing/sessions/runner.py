@@ -473,8 +473,9 @@ class Runner:
         ask = mode == "ask"                             # the topic's mode `ask`: the same, for any session
         if ask:
             mode = "default"
-        box = mode == "sandbox" and (not agent or bool(agent.get("manager"))) and not plan
-        if mode == "sandbox" and not box:               # an agent's run has its own walls (its sandbox, its rules)
+        # an agent's run has its own walls (its sandbox, its rules); without its sandbox, the topic's one applies
+        box = mode == "sandbox" and (not agent or bool(agent.get("manager")) or not agent.get("sandbox")) and not plan
+        if mode == "sandbox" and not box:
             mode = "acceptEdits"
         extra = agent.get("settings")
         if box:                                         # the topic's sandbox: what leaves it is asked to the owner
