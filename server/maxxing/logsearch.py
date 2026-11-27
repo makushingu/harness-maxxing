@@ -96,8 +96,10 @@ def search(units: list[str], *, lines: int = 200, since: str = "", level: str = 
         args += ["-u", u]
     if since:
         args += ["--since", "@" + str(int(time.time() - SINCE[since]))]
-    rows = parse(_run(args))
-    scanned = len(rows)
+    raw = _run(args)
+    rows = parse(raw)
+    # journal entries, as SCAN_MAX counts them (a traceback is one entry of several lines)
+    scanned = sum(1 for x in raw.splitlines() if x.startswith("{"))
     floor = LEVELS.index(level) if level else 0
     needle = q[:Q_MAX].casefold()
     mention = mention or {}

@@ -78,3 +78,13 @@ def test_api_search_and_session(client, journal):
     assert client.get("/api/system/logs?level=loud").json()["error"] == "bad_level"
     assert client.get("/api/system/logs?since=1y").json()["error"] == "bad_since"
     assert client.get("/api/system/logs?unit=ssh&q=x").status_code == 400
+
+
+def test_entries_of_several_lines_are_not_taken_for_a_cut_journal(monkeypatch):
+    """SCAN_MAX counts journal entries: 5,000 tracebacks of 5 lines are 5,000 entries read, nothing cut."""
+    tb = "ERROR maxxing.x: failed\nTraceback (most recent call last):\n  File \"x.py\", line 1\n    f()\nValueError: boom"
+    monkeypatch.setattr(logsearch, "_run", lambda args: "\n".join([_j(tb)] * 5000))
+    r = logsearch.search(["claude-maxxing"], level="error")
+    assert r["scanned"] == 5000 and not r["truncated"] and r["matched"] == 25000
+    monkeypatch.setattr(logsearch, "_run", lambda args: "\n".join([_j("one")] * logsearch.SCAN_MAX))
+    assert logsearch.search(["claude-maxxing"])["truncated"]
