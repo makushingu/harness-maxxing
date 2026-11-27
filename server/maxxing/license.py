@@ -330,6 +330,7 @@ def move_due() -> bool:
         last = float(_section(config.load_config()).get("move_tried_at") or 0)
     except (TypeError, ValueError):
         last = 0.0
-    if not math.isfinite(last):
+    now = time.time()
+    if not math.isfinite(last) or last > now:       # a future date (1e300, a clock set back) would wait forever
         last = 0.0
-    return time.time() - last > 6 * 3600
+    return now - last > 6 * 3600
