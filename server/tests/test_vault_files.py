@@ -408,6 +408,18 @@ def test_cli_buffered_output_into_a_closed_pipe_is_quiet(mx, monkeypatch):
     assert cli.main(["zz-print"]) == 141                  # the print is buffered: it fails at the flush
 
 
+def test_cli_help_into_a_closed_pipe_is_quiet(mx, monkeypatch):
+    """`maxxing --help | head -0`: argparse buffers the help then exits; the flush fails inside main (141, no
+    "Exception ignored ... BrokenPipeError" at exit, no code 120)."""
+    class Closed(io.BytesIO):
+        def write(self, b):
+            raise BrokenPipeError(32, "Broken pipe")
+    monkeypatch.setattr(cli, "_stdout_gone", lambda: True)
+    for argv in (["--help"], ["keys", "--help"]):
+        monkeypatch.setattr("sys.stdout", io.TextIOWrapper(Closed()))
+        assert cli.main(argv) == 141, argv
+
+
 def test_cli_get_file_output_leaves_no_partial_file(mx, monkeypatch):
     vault_files.put("PART_FILE", BLOB)
     dest = mx["tmp"] / "out" / "part.bin"
