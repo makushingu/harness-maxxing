@@ -39,6 +39,10 @@ def _rel(path: str) -> str:
     return "" if p == ws else p[len(ws) + 1:] if p.startswith(ws + "/") else p
 
 
+def _under(path: str, folder: str) -> bool:
+    return path == folder or path.startswith(folder + "/")      # projects/a, not projects/ab
+
+
 def find(q: str, kinds: list[str] | None, limit: int, within: str = "", snippet: int = 16) -> tuple[list[dict], bool]:
     """-> (results, loose): every word, else any word; never the session that asks."""
     from . import search
@@ -47,7 +51,7 @@ def find(q: str, kinds: list[str] | None, limit: int, within: str = "", snippet:
     for loose in (False, True):
         res = search.search(q, kinds, limit * (6 if within else 1), loose=loose, not_session=me, snippet=snippet)["results"]
         if within:
-            res = [r for r in res if _rel(r.get("path") or "").startswith(within)]
+            res = [r for r in res if _under(_rel(r.get("path") or ""), within)]
         if res:
             return res[:limit], loose
     return [], False

@@ -65,3 +65,10 @@ def test_search_in_a_folder_finds_its_memory_files(client, mx, capsys):
     assert "zorglubfact" in _run(capsys, "zorglubfact", "--in", "projects/a")
     assert "zorglubfact" in _run(capsys, "zorglubfact", "--in", str(d))
 
+
+def test_search_in_a_folder_leaves_its_siblings_out(client, mx, capsys):
+    _session("projects/a/topics/t", "Mine", ["The quuxbucket is mine"])
+    _session("projects/ab/topics/t", "Sibling", ["The quuxbucket is the sibling's"])
+    out = _run(capsys, "quuxbucket", "--in", "projects/a")
+    assert "Mine" in out and "Sibling" not in out
+
