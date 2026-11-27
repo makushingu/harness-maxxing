@@ -1,0 +1,1 @@
+var e={"ctext.copy":`テキストをコピー`,"ctext.source":`ソースをコピー`,"ctext.markdown":`Markdownとしてコピー`,"ctext.plain":`プレーンテキストとしてコピー`,"ctext.copied":`テキストをコピーしました`,"ctext.empty":`このファイルにコピーできるテキストはありません`,"ctext.failed":`テキストをコピーできませんでした`,"ctext.truncated":`非常に長いファイルです：先頭部分のみコピーしました`};export{e as default};

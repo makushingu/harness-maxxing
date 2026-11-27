@@ -1,0 +1,1 @@
+var e={"drag.dropToQuote":`Ablegen, um es in dieser Sitzung zu zitieren`};export{e as default};

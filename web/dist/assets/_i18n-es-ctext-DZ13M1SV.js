@@ -1,0 +1,1 @@
+var e={"ctext.copy":`Copiar el texto`,"ctext.source":`Copiar la fuente`,"ctext.markdown":`Copiar como Markdown`,"ctext.plain":`Copiar como texto sin formato`,"ctext.copied":`Texto copiado`,"ctext.empty":`No hay texto que copiar en este archivo`,"ctext.failed":`No se ha podido copiar el texto`,"ctext.truncated":`Archivo muy largo: solo se copia el principio`};export{e as default};

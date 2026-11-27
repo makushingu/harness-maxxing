@@ -1,0 +1,1 @@
+var e={"doc.unsupported":`此文档无法在此处读取（旧版 Office 格式、文件已损坏或受密码保护）。请下载后打开。`,"doc.tooLarge":`此文档过大，无法在此处显示：请下载后阅读。`,"doc.truncated":`文档较长：仅显示开头部分。请下载以阅读其余内容。`,"doc.sheetTruncated":`仅显示开头`,"doc.sheetEmpty":`空工作表`,"doc.sheets":`工作表`,"doc.pdfPage":`第 {n} 页`,"doc.pdfPageOf":`第 {n} 页，共 {count} 页`,"doc.pdfPageError":`无法显示第 {n} 页`};export{e as default};

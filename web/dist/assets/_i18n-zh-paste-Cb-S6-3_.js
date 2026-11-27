@@ -1,0 +1,1 @@
+var e={"paste.asFile":`已作为文件粘贴`,"paste.asFileHint":`较长或结构化的数据会作为附件添加，而不是填满消息。Ctrl+Shift+V 始终以文本粘贴。`,"paste.asText":`以文本粘贴`};export{e as default};

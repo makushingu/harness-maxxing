@@ -1,0 +1,1 @@
+var e={"paste.asFile":`Pegado como archivo`,"paste.asFileHint":`Los datos largos o estructurados se adjuntan en lugar de llenar el mensaje. Ctrl+Shift+V siempre pega como texto.`,"paste.asText":`Pegar como texto`};export{e as default};

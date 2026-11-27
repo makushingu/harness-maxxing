@@ -1,0 +1,1 @@
+var e={"rmark.read":`Marcar como leído`,"rmark.unread":`Marcar como no leído`};export{e as default};

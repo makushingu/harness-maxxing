@@ -1,0 +1,1 @@
+var e={"where.project":`项目`,"where.topic":`主题`,"where.projectHelp":`项目用于归集同一主题内容的各个主题。其 CLAUDE.md 和记忆适用于它的所有主题。`,"where.topicHelp":`主题是此会话的工作文件夹：Harness 会在其中工作，并使用该主题的 CLAUDE.md 和记忆，以及项目级和全局的。`,"where.move":`点击将此会话移动到其他主题。`,"where.agent":`智能体`,"where.agentHelp":`此会话在智能体的文件夹中运行：Claude 会使用该智能体的角色和记忆，以及主题、项目和全局的角色和记忆来工作。`};export{e as default};

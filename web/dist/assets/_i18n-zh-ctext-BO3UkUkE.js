@@ -1,0 +1,1 @@
+var e={"ctext.copy":`复制文本`,"ctext.source":`复制源码`,"ctext.markdown":`复制为 Markdown`,"ctext.plain":`复制为纯文本`,"ctext.copied":`文本已复制`,"ctext.empty":`此文件中没有可复制的文本`,"ctext.failed":`无法复制文本`,"ctext.truncated":`文件过长：仅复制了开头部分`};export{e as default};

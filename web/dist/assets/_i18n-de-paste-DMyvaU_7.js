@@ -1,0 +1,1 @@
+var e={"paste.asFile":`Als Datei eingefügt`,"paste.asFileHint":`Lange oder strukturierte Daten werden angehängt, statt die Nachricht zu füllen. Ctrl+Shift+V fügt immer als Text ein.`,"paste.asText":`Als Text einfügen`};export{e as default};
