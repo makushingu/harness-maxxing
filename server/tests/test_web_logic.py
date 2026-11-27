@@ -805,3 +805,16 @@ def test_the_branch_name_preview_is_the_name_the_server_gives(tmp_path):
              "a" * 30 + " ß " + "b" * 30]
     out = _run_ts(tmp_path, tmp_path / "slug.ts", f"return {json.dumps(texts)}.map((t) => m.branchSlug(t))")
     assert out == [worktrees.slug(t) for t in texts]
+
+
+def test_a_grouped_alert_repeated_today_is_shown_under_today(tmp_path):
+    src = (WEB / "pages" / "feed" / "index.tsx").read_text(encoding="utf-8")
+    a = src.index("function byDay(")
+    (tmp_path / "days.ts").write_text("type FeedEvent = { id: number; at: number }\nexport "
+                                      + src[a:src.index("\n}\n", a) + 3], encoding="utf-8")
+    day = 86400
+    # ids newest first, as the server sends them: id 1 is an alert of yesterday repeated now (its date moved)
+    events = [{"id": 3, "at": 10 * day + 100}, {"id": 2, "at": 9 * day + 100}, {"id": 1, "at": 10 * day + 200}]
+    out = _run_ts(tmp_path, tmp_path / "days.ts",
+                  f"return m.byDay({json.dumps(events)}).map((d) => d.events.map((e) => e.id))")
+    assert out == [[1, 3], [2]]
