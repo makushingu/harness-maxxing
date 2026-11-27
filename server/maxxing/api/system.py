@@ -121,7 +121,8 @@ async def cleanup_run(body: CleanupBody):
 def _logs(unit: str, lines: int) -> list[str]:
     r = subprocess.run(["journalctl", "-u", unit, "-n", str(lines), "--no-pager", "-o", "short-iso"],
                        capture_output=True, text=True, timeout=20)
-    return [ln for ln in r.stdout.splitlines() if ln.strip()]
+    from .. import logs as logs_mod
+    return [logs_mod.redact(ln) for ln in r.stdout.splitlines() if ln.strip()]   # turn units print raw tool output
 
 
 @router.get("/system/logs")
