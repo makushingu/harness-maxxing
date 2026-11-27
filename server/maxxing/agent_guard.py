@@ -544,8 +544,10 @@ def settings(path: str, a: dict, approvals: bool = False, chat: bool = False) ->
     return out
 
 
-TOPIC_CLI = ("status", "tasks", "feed", "pdf", "video", "mcp load", "cron list", "sessions list", "infra status",
-             "infra list", "team list", "memory")      # `maxxing` sub-commands a sandboxed topic runs without asking
+# `maxxing` sub-commands a sandboxed topic runs without asking (outside the sandbox: never one that reads or writes a
+# path it is given, such as `pdf` or `video`, which would reach any file of the server)
+TOPIC_CLI = ("status", "tasks", "feed", "mcp load", "cron list", "sessions list", "infra status", "infra list",
+             "team list", "memory")
 TOPIC_OWNED = (".maxxing.json", ".mcp.json", ".claude/settings.json", ".claude/settings.local.json", "agents")
 
 
