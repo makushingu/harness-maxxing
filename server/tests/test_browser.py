@@ -1967,6 +1967,18 @@ def test_network_events_never_carry_the_sites_cookies():
     assert relay.no_cookies(other) == other
 
 
+def test_cookie_headers_in_capitals_are_dropped_too():
+    from maxxing.browser import relay
+    ev = {"method": "Fetch.requestPaused", "params": {"responseHeaders": [{"name": "SET-COOKIE", "value": "sid=SECRET1"}]}}
+    assert "SECRET1" not in relay.cookies_out(json.dumps(ev))
+    ev = {"method": "Network.responseReceivedExtraInfo", "params": {"headers": {"SET-COOKIE": "sid=SECRET2"}}}
+    assert "SECRET2" not in relay.cookies_out(json.dumps(ev))
+    ev = {"method": "Network.webSocketWillSendHandshakeRequest", "params": {"request": {"headers": {"COOKIE": "a=SECRET3"}}}}
+    assert "SECRET3" not in relay.cookies_out(json.dumps(ev))
+    other = json.dumps({"method": "Page.screencastFrame", "params": {"data": "AAAA"}})
+    assert relay.cookies_out(other) == other
+
+
 def test_a_link_planted_in_place_of_the_uploads_folder_is_never_followed(tmp_path, monkeypatch):
     from types import SimpleNamespace
     from maxxing.browser import pool as pool_mod, unit
