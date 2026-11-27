@@ -786,3 +786,11 @@ def test_a_late_answer_to_a_widget_that_reloaded_never_reaches_the_new_document(
     assert out == [False, True, False, True]
     src = (WEB / "pages" / "dashboard" / "HtmlWidget.tsx").read_text(encoding="utf-8")
     assert "mayReply(seen.current, asked, doc)" in src and "mayReply(seen.current, r.asked, r.doc)" in src
+
+
+def test_a_chart_value_that_is_not_a_number_leaves_the_scale_of_the_others(tmp_path):
+    out = _run_ts(tmp_path, WEB / "pages" / "dashboard" / "chartScale.ts",
+                  "return [[3, undefined], [1, NaN, 3], [8, 'n/a', -2], [null]].map((v) => m.chartScale(v).ticks)")
+    assert out == [[0, 2.5, 5], [0, 2.5, 5], [-2, 0, 10], [0, 0.5, 1]]
+    src = (WEB / "pages" / "dashboard" / "charts.tsx").read_text(encoding="utf-8")
+    assert src.count("Number.isFinite(p[1])") == 2                  # no bar, a gap in the line

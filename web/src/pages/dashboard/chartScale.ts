@@ -7,6 +7,7 @@ export function niceMax(v: number) {
 }
 
 export function chartScale(values: number[]): { min: number; max: number; ticks: number[] } {
+  values = values.filter((v) => Number.isFinite(v)) // a missing or text value (an extension's data) is not drawn
   const max = niceMax(Math.max(0, ...values))
   const lo = Math.min(0, ...values)
   // negative values: the scale goes below 0, the bars hang under it; a value just under 0 next to large ones (float
