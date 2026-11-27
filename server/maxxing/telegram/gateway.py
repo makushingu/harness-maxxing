@@ -406,7 +406,7 @@ def topic_label(path: str) -> str:
 
 
 def _lang() -> str:
-    return "fr" if config.load_config().get("language") == "fr" else "en"
+    return config.language()
 
 
 def _w(key: str, lang: str | None = None, **kw: Any) -> str:
@@ -424,8 +424,8 @@ def _file_label(msg: dict) -> str:
 
 def _sender_lang(msg: dict) -> str:
     """Language of a message's sender (their Telegram app), else the UI's: texts sent before the chat is linked."""
-    lang = str((msg.get("from") or {}).get("language_code") or "")
-    return "fr" if lang.startswith("fr") or (not lang and _lang() == "fr") else "en"
+    lang = str((msg.get("from") or {}).get("language_code") or "")[:2].lower()      # "pt-br", "zh-hans" -> two letters
+    return config.language(lang) if lang else _lang()
 
 
 def threaded() -> bool:
@@ -1879,7 +1879,7 @@ class Gateway:
         chat = msg["chat"]
         if chat.get("type") != "private":
             return
-        text = LINK_WORDS[_sender_lang(msg)]
+        text = LINK_WORDS.get(_sender_lang(msg), LINK_WORDS["en"])
         await self.send_html(chat["id"], None, fmt.escape(text))
 
     # ---- linking -----------------------------------------------------------------------------

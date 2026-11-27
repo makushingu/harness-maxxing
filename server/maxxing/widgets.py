@@ -30,10 +30,10 @@ _T = {
         "Files": "Fichiers", "Telegram": "Telegram", "Bot": "Bot", "Status": "État", "Connected": "Connecté",
         "Stopped": "Arrêté", "Claude usage": "Utilisation Claude", "5-hour window": "Fenêtre 5 h",
         "7-day window": "Fenêtre 7 jours", "5-hour window: no limit on the Ultra plan": "Fenêtre 5 h : pas de limite avec le forfait Ultra", "Usage data unavailable": "Données d'utilisation indisponibles",
-        "resets": "réinit.", "ago": "il y a", "Set it up": "Configurer", "Load": "Charge",
-        "Up": "Allumé depuis", "Runs": "Exécutions", "Today's schedule": "Planning du jour",
+        "resets": "réinit.", "Set it up": "Configurer", "Load": "Charge",
+        "Runs": "Exécutions", "Today's schedule": "Planning du jour",
         "Runs today": "Exécutions du jour", "Failed today": "Échecs du jour", "Next": "Prochaine",
-        "Nothing scheduled today": "Rien de planifié aujourd'hui", "more jobs": "autres tâches",
+        "Nothing scheduled today": "Rien de planifié aujourd'hui",
         "Sign Claude in on this server to read the plan usage.": "Connectez Claude sur ce serveur pour lire l'utilisation du forfait.",
         "Plan usage exists only for a Claude subscription (this server uses an API key).":
             "L'utilisation du forfait n'existe qu'avec un abonnement Claude (ce serveur utilise une clé API).",
@@ -54,16 +54,300 @@ _T = {
         "Welcome! Everything starts with a session: Claude works in a topic, with its memory, on your server.":
             "Bienvenue ! Tout commence par une session : Harness travaille dans un topic, avec sa mémoire, sur votre serveur.", "today": "aujourd'hui", "tomorrow": "demain",
     },
+    "es": {
+        "Activity": "Actividad",
+        "Running": "En curso",
+        "Unread": "Sin leer",
+        "Today": "Hoy",
+        "No session yet": "Ninguna sesión por ahora",
+        "Tasks": "Tareas",
+        "Doing": "En curso",
+        "Due today": "Para hoy",
+        "Overdue": "Atrasadas",
+        "Nothing due - well done": "Nada pendiente, ¡bien hecho!",
+        "Scheduled jobs": "Tareas programadas",
+        "Jobs": "Tareas",
+        "Failed (24 h)": "Fallos (24 h)",
+        "No run yet": "Ninguna ejecución",
+        "Success": "Correcto",
+        "Failure": "Fallo",
+        "Server": "Servidor",
+        "CPU": "CPU",
+        "Memory": "Memoria",
+        "Disk": "Disco",
+        "Memory backup": "Copia de seguridad de la memoria",
+        "Not configured": "Sin configurar",
+        "Last backup": "Última copia",
+        "Never": "Nunca",
+        "Files": "Archivos",
+        "Telegram": "Telegram",
+        "Bot": "Bot",
+        "Status": "Estado",
+        "Connected": "Conectado",
+        "Stopped": "Detenido",
+        "Claude usage": "Uso de Claude",
+        "5-hour window": "Ventana de 5 h",
+        "7-day window": "Ventana de 7 días",
+        "5-hour window: no limit on the Ultra plan": "Ventana de 5 h: sin límite con el plan Ultra",
+        "Usage data unavailable": "Datos de uso no disponibles",
+        "resets": "se reinicia",
+        "Set it up": "Configurar",
+        "Load": "Carga",
+        "Runs": "Ejecuciones",
+        "Today's schedule": 'Programación de hoy',
+        "Runs today": "Ejecuciones de hoy",
+        "Failed today": "Fallos de hoy",
+        "Next": "Siguiente",
+        "Nothing scheduled today": "Nada programado hoy",
+        "Sign Claude in on this server to read the plan usage.": "Inicia sesión en Claude en este servidor para leer el uso del plan.",
+        "Plan usage exists only for a Claude subscription (this server uses an API key).": "El uso del plan solo existe con una suscripción a Claude (este servidor usa una clave de API).",
+        "Anthropic limits how often the usage can be read - next reading at": "Anthropic limita la frecuencia de lectura del uso: próxima lectura a las",
+        "The Claude sign-in was refused: sign in again.": "Se ha rechazado el inicio de sesión de Claude: inicia sesión de nuevo.",
+        "Last known values - next reading at": "Últimos valores conocidos: próxima lectura a las",
+        "Start your first session": "Inicia tu primera sesión",
+        "Ask anything: a question, a task, an idea.": "Pregunta lo que quieras: una duda, una tarea, una idea.",
+        'No open task. Add one on the Tasks page, or just tell Harness "remind me to...".': 'Ninguna tarea abierta. Añade una en la página Tareas o dile a Harness «recuérdame que…».',
+        "Nothing scheduled today.": "Nada programado hoy.",
+        "Next run": "Próxima ejecución",
+        "No active scheduled job.": "Ninguna tarea programada activa.",
+        "Ask Harness to schedule one": "Pide a Harness que programe una",
+        "Make it yours": "Hazlo tuyo",
+        "Take the tutorial": "Hacer el tutorial",
+        "4 short lessons, at your pace": "4 lecciones cortas, a tu ritmo",
+        "Add a starter project": "Añadir un proyecto de inicio",
+        "Online store, creator, freelance... ready to use": "Tienda online, creador, freelance… listos para usar",
+        "Welcome! Everything starts with a session: Claude works in a topic, with its memory, on your server.": "¡Te damos la bienvenida! Todo empieza con una sesión: Claude trabaja en un tema, con su memoria, en tu servidor.",
+        "today": "hoy",
+        "tomorrow": "mañana",
+    },
+    "de": {
+        "Activity": "Aktivität",
+        "Running": "Läuft",
+        "Unread": "Ungelesen",
+        "Today": "Heute",
+        "No session yet": "Noch keine Sitzung",
+        "Tasks": "Aufgaben",
+        "Doing": "In Arbeit",
+        "Due today": "Heute fällig",
+        "Overdue": "Überfällig",
+        "Nothing due - well done": "Nichts fällig, gut gemacht",
+        "Scheduled jobs": "Geplante Jobs",
+        "Jobs": "Jobs",
+        "Failed (24 h)": "Fehlgeschlagen (24 h)",
+        "No run yet": "Noch kein Lauf",
+        "Success": "Erfolg",
+        "Failure": "Fehler",
+        "Server": "Server",
+        "CPU": "CPU",
+        "Memory": "Arbeitsspeicher",
+        "Disk": "Festplatte",
+        "Memory backup": "Gedächtnis-Backup",
+        "Not configured": "Nicht eingerichtet",
+        "Last backup": "Letztes Backup",
+        "Never": "Nie",
+        "Files": "Dateien",
+        "Telegram": "Telegram",
+        "Bot": "Bot",
+        "Status": "Status",
+        "Connected": "Verbunden",
+        "Stopped": "Gestoppt",
+        "Claude usage": "Claude-Nutzung",
+        "5-hour window": "5-Stunden-Fenster",
+        "7-day window": "7-Tage-Fenster",
+        "5-hour window: no limit on the Ultra plan": "5-Stunden-Fenster: kein Limit im Ultra-Tarif",
+        "Usage data unavailable": "Nutzungsdaten nicht verfügbar",
+        "resets": "Reset",
+        "Set it up": "Einrichten",
+        "Load": "Last",
+        "Runs": "Läufe",
+        "Today's schedule": 'Heutiger Zeitplan',
+        "Runs today": "Läufe heute",
+        "Failed today": "Heute fehlgeschlagen",
+        "Next": "Nächster",
+        "Nothing scheduled today": "Heute ist nichts geplant",
+        "Sign Claude in on this server to read the plan usage.": "Melde Claude auf diesem Server an, um die Tarifnutzung zu lesen.",
+        "Plan usage exists only for a Claude subscription (this server uses an API key).": "Die Tarifnutzung gibt es nur mit einem Claude-Abo (dieser Server nutzt einen API-Schlüssel).",
+        "Anthropic limits how often the usage can be read - next reading at": "Anthropic begrenzt, wie oft die Nutzung gelesen werden kann - nächste Abfrage um",
+        "The Claude sign-in was refused: sign in again.": "Die Claude-Anmeldung wurde abgelehnt: Melde dich erneut an.",
+        "Last known values - next reading at": "Letzte bekannte Werte - nächste Abfrage um",
+        "Start your first session": "Starte deine erste Sitzung",
+        "Ask anything: a question, a task, an idea.": "Frag, was du willst: eine Frage, eine Aufgabe, eine Idee.",
+        'No open task. Add one on the Tasks page, or just tell Harness "remind me to...".': 'Keine offene Aufgabe. Füge eine auf der Seite Aufgaben hinzu oder sag Harness einfach „erinnere mich an …“.',
+        "Nothing scheduled today.": "Heute ist nichts geplant.",
+        "Next run": "Nächster Lauf",
+        "No active scheduled job.": "Kein aktiver geplanter Job.",
+        "Ask Harness to schedule one": "Bitte Harness, einen zu planen",
+        "Make it yours": "Mach es zu deinem",
+        "Take the tutorial": "Tutorial machen",
+        "4 short lessons, at your pace": "4 kurze Lektionen, in deinem Tempo",
+        "Add a starter project": "Startprojekt hinzufügen",
+        "Online store, creator, freelance... ready to use": "Onlineshop, Creator, Freelancer … sofort einsatzbereit",
+        "Welcome! Everything starts with a session: Claude works in a topic, with its memory, on your server.": "Willkommen! Alles beginnt mit einer Sitzung: Claude arbeitet in einem Thema, mit seinem Gedächtnis, auf deinem Server.",
+        "today": "heute",
+        "tomorrow": "morgen",
+    },
+    "zh": {
+        "Activity": "活动",
+        "Running": "运行中",
+        "Unread": "未读",
+        "Today": "今天",
+        "No session yet": "暂无会话",
+        "Tasks": "任务",
+        "Doing": "进行中",
+        "Due today": "今天到期",
+        "Overdue": "已逾期",
+        "Nothing due - well done": "没有到期的任务，干得好",
+        "Scheduled jobs": "定时任务",
+        "Jobs": "任务",
+        "Failed (24 h)": "失败（24 小时）",
+        "No run yet": "尚未运行",
+        "Success": "成功",
+        "Failure": "失败",
+        "Server": "服务器",
+        "CPU": "CPU",
+        "Memory": "内存",
+        "Disk": "磁盘",
+        "Memory backup": "记忆备份",
+        "Not configured": "未配置",
+        "Last backup": "上次备份",
+        "Never": "从未",
+        "Files": "文件",
+        "Telegram": "Telegram",
+        "Bot": "机器人",
+        "Status": "状态",
+        "Connected": "已连接",
+        "Stopped": "已停止",
+        "Claude usage": "Claude 用量",
+        "5-hour window": "5 小时窗口",
+        "7-day window": "7 天窗口",
+        "5-hour window: no limit on the Ultra plan": "5 小时窗口：Ultra 套餐无限制",
+        "Usage data unavailable": "用量数据不可用",
+        "resets": "重置",
+        "Set it up": "去设置",
+        "Load": "负载",
+        "Runs": "运行次数",
+        "Today's schedule": '今日日程',
+        "Runs today": "今日运行",
+        "Failed today": "今日失败",
+        "Next": "下一个",
+        "Nothing scheduled today": "今天没有安排",
+        "Sign Claude in on this server to read the plan usage.": "请在此服务器上登录 Claude 以读取套餐用量。",
+        "Plan usage exists only for a Claude subscription (this server uses an API key).": "只有 Claude 订阅才有套餐用量（此服务器使用的是 API 密钥）。",
+        "Anthropic limits how often the usage can be read - next reading at": "Anthropic 限制了用量的读取频率 - 下次读取时间",
+        "The Claude sign-in was refused: sign in again.": "Claude 登录被拒绝：请重新登录。",
+        "Last known values - next reading at": "最近一次已知数值 - 下次读取时间",
+        "Start your first session": "开始你的第一个会话",
+        "Ask anything: a question, a task, an idea.": "什么都可以问：一个问题、一项任务、一个想法。",
+        'No open task. Add one on the Tasks page, or just tell Harness "remind me to...".': '没有未完成的任务。在任务页面添加一个，或者直接对 Harness 说“提醒我……”。',
+        "Nothing scheduled today.": "今天没有安排。",
+        "Next run": "下次运行",
+        "No active scheduled job.": "没有启用的定时任务。",
+        "Ask Harness to schedule one": "让 Harness 安排一个",
+        "Make it yours": "打造你自己的仪表盘",
+        "Take the tutorial": "学习教程",
+        "4 short lessons, at your pace": "4 节短课，按你的节奏来",
+        "Add a starter project": "添加入门项目",
+        "Online store, creator, freelance... ready to use": "网店、创作者、自由职业……开箱即用",
+        "Welcome! Everything starts with a session: Claude works in a topic, with its memory, on your server.": "欢迎！一切从会话开始：Claude 在你的服务器上、在一个主题中带着它的记忆工作。",
+        "today": "今天",
+        "tomorrow": "明天",
+    },
+    "ja": {
+        "Activity": "アクティビティ",
+        "Running": "実行中",
+        "Unread": "未読",
+        "Today": "今日",
+        "No session yet": "セッションはまだありません",
+        "Tasks": "タスク",
+        "Doing": "進行中",
+        "Due today": "今日が期限",
+        "Overdue": "期限切れ",
+        "Nothing due - well done": "期限のタスクはありません。お見事です",
+        "Scheduled jobs": "定期ジョブ",
+        "Jobs": "ジョブ",
+        "Failed (24 h)": "失敗（24 時間）",
+        "No run yet": "実行はまだありません",
+        "Success": "成功",
+        "Failure": "失敗",
+        "Server": "サーバー",
+        "CPU": "CPU",
+        "Memory": "メモリ",
+        "Disk": "ディスク",
+        "Memory backup": "メモリのバックアップ",
+        "Not configured": "未設定",
+        "Last backup": "前回のバックアップ",
+        "Never": "なし",
+        "Files": "ファイル",
+        "Telegram": "Telegram",
+        "Bot": "ボット",
+        "Status": "状態",
+        "Connected": "接続済み",
+        "Stopped": "停止中",
+        "Claude usage": "Claude の使用量",
+        "5-hour window": "5 時間枠",
+        "7-day window": "7 日間枠",
+        "5-hour window: no limit on the Ultra plan": "5 時間枠：Ultra プランでは制限なし",
+        "Usage data unavailable": "使用量データを取得できません",
+        "resets": "リセット",
+        "Set it up": "設定する",
+        "Load": "負荷",
+        "Runs": "実行",
+        "Today's schedule": '今日のスケジュール',
+        "Runs today": "今日の実行",
+        "Failed today": "今日の失敗",
+        "Next": "次回",
+        "Nothing scheduled today": "今日の予定はありません",
+        "Sign Claude in on this server to read the plan usage.": "プランの使用量を読み取るには、このサーバーで Claude にサインインしてください。",
+        "Plan usage exists only for a Claude subscription (this server uses an API key).": "プランの使用量は Claude のサブスクリプションでのみ表示されます（このサーバーは API キーを使用しています）。",
+        "Anthropic limits how often the usage can be read - next reading at": "Anthropic は使用量の読み取り頻度を制限しています - 次回の読み取り",
+        "The Claude sign-in was refused: sign in again.": "Claude のサインインが拒否されました。もう一度サインインしてください。",
+        "Last known values - next reading at": "最後に取得した値 - 次回の読み取り",
+        "Start your first session": "最初のセッションを始める",
+        "Ask anything: a question, a task, an idea.": "質問、タスク、アイデアなど、何でも聞いてください。",
+        'No open task. Add one on the Tasks page, or just tell Harness "remind me to...".': '未完了のタスクはありません。タスクページで追加するか、Harness に「…をリマインドして」と伝えてください。',
+        "Nothing scheduled today.": "今日の予定はありません。",
+        "Next run": "次回の実行",
+        "No active scheduled job.": "有効な定期ジョブはありません。",
+        "Ask Harness to schedule one": "Harness にスケジュールを頼む",
+        "Make it yours": "自分仕様にする",
+        "Take the tutorial": "チュートリアルを受ける",
+        "4 short lessons, at your pace": "短いレッスン 4 つ、自分のペースで",
+        "Add a starter project": "スタータープロジェクトを追加",
+        "Online store, creator, freelance... ready to use": "オンラインストア、クリエイター、フリーランス…すぐに使えます",
+        "Welcome! Everything starts with a session: Claude works in a topic, with its memory, on your server.": "ようこそ！すべてはセッションから始まります。Claude はあなたのサーバー上で、トピックの中で、メモリを持って作業します。",
+        "today": "今日",
+        "tomorrow": "明日",
+    },
 }
 
 
 def t(text: str) -> str:
-    lang = config.load_config().get("language", "en")
-    return _T.get(lang, {}).get(text, text)
+    return _T.get(config.language(), {}).get(text, text)
 
 
-def _en() -> bool:
-    return t("ago") == "ago"
+# What is built around a value, where the word order or the unit depends on the language.
+_FORMS = {
+    "en": {"ago": "{v} ago", "day": "d", "up": "Up {v}", "more": "+{n} more jobs", "available": "{v} available",
+           "free": "{v} free", "days": None},
+    "fr": {"ago": "il y a {v}", "day": "j", "up": "Allumé depuis {v}", "more": "+{n} autres tâches",
+           "available": "{v} disponibles", "free": "{v} libres",
+           "days": ["lun.", "mar.", "mer.", "jeu.", "ven.", "sam.", "dim."]},
+    "es": {"ago": "hace {v}", "day": "d", "up": "Encendido desde hace {v}", "more": "+{n} tareas más",
+           "available": "{v} disponibles", "free": "{v} libres",
+           "days": ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"]},
+    "de": {"ago": "vor {v}", "day": "T", "up": "Läuft seit {v}", "more": "+{n} weitere Jobs",
+           "available": "{v} verfügbar", "free": "{v} frei",
+           "days": ["Mo.", "Di.", "Mi.", "Do.", "Fr.", "Sa.", "So."]},
+    "zh": {"ago": "{v}前", "day": "天", "up": "已运行 {v}", "more": "另有 {n} 个任务", "available": "可用 {v}",
+           "free": "剩余 {v}", "days": ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]},
+    "ja": {"ago": "{v}前", "day": "日", "up": "稼働時間 {v}", "more": "他 {n} 件のジョブ", "available": "空き {v}",
+           "free": "空き {v}", "days": ["月", "火", "水", "木", "金", "土", "日"]},
+}
+
+
+def _form(key: str, **kw: Any) -> Any:
+    v = _FORMS.get(config.language(), _FORMS["en"])[key]
+    return v.format(**kw) if kw else v
 
 
 def _zone() -> ZoneInfo:
@@ -84,8 +368,8 @@ def ago(ts: float | None) -> str:
     elif s < 86400:
         v = f"{int(s // 3600)} h"
     else:
-        v = f"{int(s // 86400)} {'d' if _en() else 'j'}"
-    return f"{v} ago" if _en() else f"il y a {v}"
+        v = f"{int(s // 86400)} {_form('day')}"
+    return _form("ago", v=v)
 
 
 def _gb(n: float) -> str:
@@ -253,7 +537,7 @@ def day(force: bool = False) -> dict:
     blocks: list[dict] = [{"type": "stats", "items": stats}]
     if lanes:
         blocks.append({"type": "timeline", "start": start, "end": end, "now": now, "lanes": lanes,
-                       "more": f"+{extra} {t('more jobs')}" if extra else None})
+                       "more": _form("more", n=extra) if extra else None})
     else:
         blocks.append({"type": "markdown", "text": t("Nothing scheduled today")})
     return {"title": t("Today's schedule"), "link": "/settings/crons", "status": "error" if failed else "ok", "blocks": blocks}
@@ -279,7 +563,7 @@ def _next_run_blocks(cr: Any, zone: ZoneInfo, now: float, start: float) -> list[
     when = dt.datetime.fromtimestamp(nxt[0], zone)
     days = (when.date() - dt.datetime.fromtimestamp(start, zone).date()).days
     day_label = t("today") if days == 0 else t("tomorrow") if days == 1 else \
-        when.strftime("%a") if _en() else ["lun.", "mar.", "mer.", "jeu.", "ven.", "sam.", "dim."][when.weekday()]
+        _form("days")[when.weekday()] if _form("days") else when.strftime("%a")
     return [{"type": "markdown", "text": t("Nothing scheduled today.")},
             {"type": "list", "items": [{"title": nxt[1], "subtitle": t("Next run"),
                                         "value": f"{day_label} {when:%H:%M}", "href": f"/settings/crons?job={nxt[2]}"}]}]
@@ -299,13 +583,12 @@ def server(force: bool = False) -> dict:
                  "hint": f"{t('Load')} {' / '.join(f'{x:.2f}' for x in h['load'])}"},
                 {"type": "progress", "label": t("Memory"), "value": round(used / 1e9, 1),
                  "max": round(mem["total"] / 1e9, 1) or 1, "unit": "GB",
-                 "hint": f"{_gb(mem['avail'])} {'available' if _en() else 'disponibles'}"},
+                 "hint": _form("available", v=_gb(mem['avail']))},
                 {"type": "progress", "label": t("Disk"), "value": dsk["pct"], "max": 100, "format": "percent",
-                 "hint": f"{_gb(dsk['free'])} {'free' if _en() else 'libres'}"},
+                 "hint": _form("free", v=_gb(dsk['free']))},
                 *([{"type": "list", "items": [{"title": i["text"], "status": i["level"]} for i in h["issues"]]}]
                   if h["issues"] else []),
-                {"type": "markdown", "text": f"{t('Up')} {up_d:.1f} {'d' if _en() else 'j'}" if up_d >= 1 else
-                 f"{t('Up')} {h['uptime_s'] / 3600:.1f} h"}]}
+                {"type": "markdown", "text": _form("up", v=f"{up_d:.1f} {_form('day')}" if up_d >= 1 else f"{h['uptime_s'] / 3600:.1f} h")}]}
 
 
 def _not_configured(title: str, link: str) -> dict:
@@ -438,6 +721,67 @@ _EXAMPLES = {
         ("sparkles", "Autre chose…", "Décrivez-le, Harness pose les bonnes questions",
          "Je voudrais un nouveau widget sur mon tableau de bord. Pose-moi les questions utiles pour le créer."),
     ],
+    "es": [
+        ("shopping-cart", "Mis ventas de Shopify de hoy", "Pedidos, ingresos, más vendidos",
+         "Añade un widget al panel que muestre mis pedidos e ingresos de Shopify de hoy."),
+        ("trending-up", "Los visitantes de mi web", "Plausible, Google Analytics, Cloudflare…",
+         "Añade un widget al panel con los visitantes de mi web hoy y en los últimos 7 días. "
+         "Pregúntame qué herramienta de analítica uso."),
+        ("credit-card", "Mis ingresos de Stripe del mes", "Pagos, reembolsos, clientes nuevos",
+         "Añade un widget al panel con mis ingresos de Stripe de este mes, los reembolsos y los clientes nuevos."),
+        ("globe", "¿Funcionan mis sitios?", "Comprobados cada pocos minutos",
+         "Añade un widget al panel que compruebe cada 5 minutos que mis sitios web responden y muestre su estado."),
+        ("star", "Mis últimas reseñas de clientes", "Google, Trustpilot, tiendas de apps…",
+         "Añade un widget al panel con mis últimas reseñas de clientes y la nota media. Pregúntame dónde están mis reseñas."),
+        ("sparkles", "Otra cosa…", "Descríbelo, Harness hace las preguntas adecuadas",
+         "Quiero un widget nuevo en mi panel. Hazme las preguntas que necesites para crearlo."),
+    ],
+    "de": [
+        ("shopping-cart", "Meine Shopify-Verkäufe von heute", "Bestellungen, Umsatz, Bestseller",
+         "Füge dem Dashboard ein Widget hinzu, das meine Shopify-Bestellungen und meinen Umsatz von heute zeigt."),
+        ("trending-up", "Besucher auf meiner Website", "Plausible, Google Analytics, Cloudflare …",
+         "Füge dem Dashboard ein Widget mit den Besuchern meiner Website heute und über 7 Tage hinzu. "
+         "Frag mich, welches Analysetool ich nutze."),
+        ("credit-card", "Mein Stripe-Umsatz diesen Monat", "Zahlungen, Erstattungen, neue Kunden",
+         "Füge dem Dashboard ein Widget mit meinem Stripe-Umsatz dieses Monats, den Erstattungen und den neuen Kunden hinzu."),
+        ("globe", "Sind meine Websites erreichbar?", "Alle paar Minuten geprüft",
+         "Füge dem Dashboard ein Widget hinzu, das alle 5 Minuten prüft, ob meine Websites antworten, und ihren Status zeigt."),
+        ("star", "Meine neuesten Kundenbewertungen", "Google, Trustpilot, App-Stores …",
+         "Füge dem Dashboard ein Widget mit meinen neuesten Kundenbewertungen und der Durchschnittsnote hinzu. "
+         "Frag mich, wo meine Bewertungen stehen."),
+        ("sparkles", "Etwas anderes …", "Beschreib es, Harness stellt die richtigen Fragen",
+         "Ich möchte ein neues Widget auf meinem Dashboard. Stell mir die Fragen, die du brauchst, um es zu bauen."),
+    ],
+    "zh": [
+        ("shopping-cart", "今天的 Shopify 销售", "订单、营收、畅销商品",
+         "在仪表盘上添加一个小组件，显示我今天的 Shopify 订单和营收。"),
+        ("trending-up", "我的网站访客", "Plausible、Google Analytics、Cloudflare……",
+         "在仪表盘上添加一个小组件，显示我的网站今天和最近 7 天的访客数。先问我用的是哪个统计工具。"),
+        ("credit-card", "本月的 Stripe 营收", "付款、退款、新客户",
+         "在仪表盘上添加一个小组件，显示本月的 Stripe 营收、退款和新客户。"),
+        ("globe", "我的网站在线吗？", "每隔几分钟检查一次",
+         "在仪表盘上添加一个小组件，每 5 分钟检查一次我的网站是否有响应，并显示它们的状态。"),
+        ("star", "最新的客户评价", "Google、Trustpilot、应用商店……",
+         "在仪表盘上添加一个小组件，显示我最新的客户评价和平均评分。先问我评价在哪里。"),
+        ("sparkles", "其他……", "描述一下，Harness 会问对问题",
+         "我想在仪表盘上加一个新的小组件。请问我构建它所需的问题。"),
+    ],
+    "ja": [
+        ("shopping-cart", "今日の Shopify の売上", "注文、売上、売れ筋商品",
+         "今日の Shopify の注文と売上を表示するウィジェットをダッシュボードに追加してください。"),
+        ("trending-up", "サイトの訪問者", "Plausible、Google Analytics、Cloudflare…",
+         "今日と過去 7 日間のサイト訪問者数を表示するウィジェットをダッシュボードに追加してください。"
+         "どのアクセス解析ツールを使っているか、私に聞いてください。"),
+        ("credit-card", "今月の Stripe の売上", "支払い、返金、新規顧客",
+         "今月の Stripe の売上、返金、新規顧客を表示するウィジェットをダッシュボードに追加してください。"),
+        ("globe", "サイトは稼働していますか？", "数分ごとに確認",
+         "私のサイトが応答するかを 5 分ごとに確認し、その状態を表示するウィジェットをダッシュボードに追加してください。"),
+        ("star", "最新のカスタマーレビュー", "Google、Trustpilot、アプリストア…",
+         "最新のカスタマーレビューと平均評価を表示するウィジェットをダッシュボードに追加してください。"
+         "レビューがどこにあるか、私に聞いてください。"),
+        ("sparkles", "その他…", "説明してください。Harness が必要な質問をします",
+         "ダッシュボードに新しいウィジェットが欲しいです。作るのに必要な質問を私にしてください。"),
+    ],
 }
 _CUSTOMIZE_TEXT = {
     "en": {"intro": "**This dashboard is built by talking.** In any session, ask \"add a widget that shows...\": "
@@ -451,6 +795,28 @@ _CUSTOMIZE_TEXT = {
            "pages": "Besoin de plus qu'une carte ? Demandez une page entière (fichier clients, suivi de commandes…) : "
                     "[voir comment](/x/pages).",
            "hide": "Masquez ce bloc avec **Modifier la disposition**."},
+    "es": {"intro": "**Este panel se construye hablando.** En cualquier sesión, pide «añade un widget que muestre…»: "
+                    "Harness lo escribe en tus extensiones, aparece aquí y las actualizaciones nunca lo tocan. "
+                    "Prueba uno:",
+           "pages": "¿Necesitas más que una tarjeta? Pide una página entera (una lista de clientes, un seguimiento de "
+                    "pedidos…): [mira cómo](/x/pages).",
+           "hide": "Oculta esta tarjeta con **Editar diseño**."},
+    "de": {"intro": "**Dieses Dashboard entsteht im Gespräch.** Bitte in einer beliebigen Sitzung „füge ein Widget "
+                    "hinzu, das … zeigt“: Harness schreibt es in deine Erweiterungen, es erscheint hier, und Updates "
+                    "fassen es nie an. Probier eins aus:",
+           "pages": "Brauchst du mehr als eine Karte? Bitte um eine ganze Seite (eine Kundenliste, eine "
+                    "Bestellverfolgung …): [so geht's](/x/pages).",
+           "hide": "Blende diese Karte mit **Layout bearbeiten** aus."},
+    "zh": {"intro": "**这个仪表盘是聊出来的。**在任意会话中说“添加一个显示……的小组件”："
+                    "Harness 会把它写进你的扩展，它就出现在这里，更新也绝不会动它。试试看：",
+           "pages": "一张卡片不够用？可以要一整个页面（客户列表、订单跟踪……）：[查看方法](/x/pages)。",
+           "hide": "用**编辑布局**隐藏这张卡片。"},
+    "ja": {"intro": "**このダッシュボードは会話で作れます。**どのセッションでも「…を表示するウィジェットを追加して」と"
+                    "頼んでください。Harness があなたの拡張機能に書き込み、ここに表示されます。アップデートで"
+                    "変更されることはありません。試してみましょう：",
+           "pages": "カードだけでは足りませんか？ページ全体（顧客リスト、注文の追跡…）を頼めます："
+                    "[方法を見る](/x/pages)。",
+           "hide": "**レイアウトを編集**でこのカードを非表示にできます。"},
 }
 
 
@@ -463,12 +829,12 @@ def ask_href(prompt: str) -> str:
 
 
 def customize(force: bool = False) -> dict:
-    lang = "fr" if config.load_config().get("language") == "fr" else "en"
-    txt = _CUSTOMIZE_TEXT[lang]
+    lang = config.language()
+    txt = _CUSTOMIZE_TEXT.get(lang, _CUSTOMIZE_TEXT["en"])
     guide = (config.workspace() / "extensions" / "pages" / "manifest.json").is_file()   # the "Your pages" guide
     outro = f"{txt['pages']} {txt['hide']}" if guide else txt["hide"]
     items = [{"icon": icon, "title": title, "subtitle": sub, "href": ask_href(prompt)}
-             for icon, title, sub, prompt in _EXAMPLES[lang]]
+             for icon, title, sub, prompt in _EXAMPLES.get(lang, _EXAMPLES["en"])]
     return {"title": t("Make it yours"), "blocks": [
         {"type": "markdown", "text": txt["intro"]},
         {"type": "list", "grid": True, "items": items},

@@ -745,7 +745,7 @@ def _cfg_init(p: argparse.ArgumentParser) -> None:
     p.add_argument("--bind", help="listen address: 127.0.0.1 or the Tailscale IP (never 0.0.0.0)")
     p.add_argument("--public-url", help="public URL, e.g. https://ui.example.com ('' to clear)")
     p.add_argument("--timezone", help="IANA time zone, e.g. Europe/Paris (default: system)")
-    p.add_argument("--language", choices=["en", "fr"], help="UI language")
+    p.add_argument("--language", choices=list(config.LANGUAGES), help="UI language")
     p.add_argument("--count", choices=["yes", "no"],
                    help="the anonymous daily count of installations, as answered at the installation")
     p.add_argument("--system-clock", choices=["follow", "keep"],

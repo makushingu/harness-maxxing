@@ -127,7 +127,7 @@ def test_templates_are_valid_and_create_an_agent(client, topic, capsys):
             assert (t.get("cron") or t.get("webhook") or t.get("mail")) and not (t.get("cron") and t.get("webhook"))
             if t.get("cron"):
                 crons.validate(t["cron"]["schedule"])
-    assert agent_templates.get("support", "fr")["name"] == "SAV" and agent_templates.get("support", "de")["name"] == "Customer support"
+    assert agent_templates.get("support", "fr")["name"] == "SAV" and agent_templates.get("support", "pt")["name"] == "Customer support"
     assert client.put("/api/settings", json={"agents_page": True}).status_code == 200
     vault.put("SHOPIFY_TOKEN", "x")
     vault.put("STRIPE_SECRET_KEY", "x")             # a full key: the read-only templates never take it

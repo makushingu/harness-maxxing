@@ -71,7 +71,7 @@ def test_put_and_validate(client, org):
     assert client.put("/api/settings", json={"timezone": "localtime"}).json()["error"] == "invalid_timezone"
     # `Factory` is a zone for Python but not for browsers (Intl.DateTimeFormat throws: the Crons page broke)
     assert client.put("/api/settings", json={"timezone": "Factory"}).json()["error"] == "invalid_timezone"
-    assert client.put("/api/settings", json={"language": "de"}).status_code == 422
+    assert client.put("/api/settings", json={"language": "xx"}).status_code == 422
     assert client.put("/api/settings", json={"public_url": "ftp://x"}).json()["error"] == "invalid_url"
     assert client.put("/api/settings", json={"files_root": "/does/not/exist"}).json()["error"] == "invalid_files_root"
     assert client.put("/api/settings", json={"files_root": "relative"}).status_code == 400
@@ -194,7 +194,7 @@ def test_a_lone_surrogate_in_the_public_url_is_refused(client, org):
 def test_a_damaged_value_shown_cleaned_does_not_block_every_other_setting(client):
     path = config.config_path()
     cfg = json.loads(path.read_text()) if path.exists() else {}
-    path.write_text(json.dumps({**cfg, "memory_max_lines": 30.5, "language": "de"}))
+    path.write_text(json.dumps({**cfg, "memory_max_lines": 30.5, "language": "xx"}))
     shown = client.get("/api/settings").json()
     assert shown["language"] == "en" and shown["memory_max_lines"] == 30
     r = client.put("/api/settings", json={**shown, "cpu_priorities": not shown["cpu_priorities"]})

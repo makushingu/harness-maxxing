@@ -43,12 +43,60 @@ _T = {"fr": {"Revenue today": "CA du jour", "Orders today": "Commandes du jour",
              "Only the latest {n} orders are counted: older days and the 7-day comparison are incomplete.":
                  "Seules les {n} dernières commandes sont comptées : les jours plus anciens et la comparaison "
                  "sur 7 jours sont incomplets."}}
+_T.update({
+    "es": {"Revenue today": "Ingresos de hoy", "Orders today": "Pedidos de hoy",
+           "To ship": "Por enviar", "Last 7 days": "Últimos 7 días", "Revenue": "Ingresos",
+           "Latest orders": "Últimos pedidos", "No order yet": "Ningún pedido por ahora",
+           "Connect your store": "Conecta tu tienda", "unfulfilled": "por enviar",
+           "fulfilled": "enviado", "vs previous 7 days": "vs. 7 días anteriores",
+           "Only the latest {n} orders are counted: older days and the 7-day comparison are incomplete.":
+               "Solo se cuentan los últimos {n} pedidos: los días más antiguos y la comparación de 7 días "
+               "están incompletos."},
+    "de": {"Revenue today": "Umsatz heute", "Orders today": "Bestellungen heute",
+           "To ship": "Zu versenden", "Last 7 days": "Letzte 7 Tage", "Revenue": "Umsatz",
+           "Latest orders": "Neueste Bestellungen", "No order yet": "Noch keine Bestellung",
+           "Connect your store": "Verbinde deinen Shop", "unfulfilled": "zu versenden",
+           "fulfilled": "versendet", "vs previous 7 days": "ggü. den 7 Tagen davor",
+           "Only the latest {n} orders are counted: older days and the 7-day comparison are incomplete.":
+               "Nur die letzten {n} Bestellungen werden gezählt: Ältere Tage und der 7-Tage-Vergleich sind "
+               "unvollständig."},
+    "zh": {"Revenue today": "今日营收", "Orders today": "今日订单",
+           "To ship": "待发货", "Last 7 days": "最近 7 天", "Revenue": "营收",
+           "Latest orders": "最新订单", "No order yet": "暂无订单",
+           "Connect your store": "连接你的店铺", "unfulfilled": "待发货",
+           "fulfilled": "已发货", "vs previous 7 days": "对比前 7 天",
+           "Only the latest {n} orders are counted: older days and the 7-day comparison are incomplete.":
+               "只统计最近 {n} 笔订单：更早的日期和 7 天对比数据不完整。"},
+    "ja": {"Revenue today": "今日の売上", "Orders today": "今日の注文",
+           "To ship": "未発送", "Last 7 days": "過去 7 日間", "Revenue": "売上",
+           "Latest orders": "最新の注文", "No order yet": "注文はまだありません",
+           "Connect your store": "ストアを接続", "unfulfilled": "未発送",
+           "fulfilled": "発送済み", "vs previous 7 days": "前の 7 日間との比較",
+           "Only the latest {n} orders are counted: older days and the 7-day comparison are incomplete.":
+               "集計されるのは最新の {n} 件の注文だけです。それより古い日と 7 日間の比較は不完全です。"},
+})
+_CONNECT = {
+    "en": "Add **SHOPIFY_STORE** (`myshop.myshopify.com`) and **SHOPIFY_ADMIN_TOKEN** (Admin API token, "
+          "`read_orders`) in [Settings → Keys](/settings/keys) — or ask Harness: *connect my Shopify store*.",
+    "fr": "Ajoutez **SHOPIFY_STORE** (`maboutique.myshopify.com`) et **SHOPIFY_ADMIN_TOKEN** (token Admin API, "
+          "`read_orders`) dans [Réglages → Clés](/settings/keys), ou demandez à Harness : *connecte ma boutique Shopify*.",
+    "es": "Añade **SHOPIFY_STORE** (`mitienda.myshopify.com`) y **SHOPIFY_ADMIN_TOKEN** (token de la Admin API, "
+          "`read_orders`) en [Ajustes → Claves](/settings/keys), o pídeselo a Harness: *conecta mi tienda Shopify*.",
+    "de": "Füge **SHOPIFY_STORE** (`meinshop.myshopify.com`) und **SHOPIFY_ADMIN_TOKEN** (Admin-API-Token, "
+          "`read_orders`) unter [Einstellungen → Schlüssel](/settings/keys) hinzu, oder bitte Harness: "
+          "*verbinde meinen Shopify-Shop*.",
+    "zh": "在[设置 → 密钥](/settings/keys)中添加 **SHOPIFY_STORE**（`myshop.myshopify.com`）和 "
+          "**SHOPIFY_ADMIN_TOKEN**（Admin API 令牌，`read_orders`），或者直接对 Harness 说：*连接我的 Shopify 店铺*。",
+    "ja": "[設定 → キー](/settings/keys) で **SHOPIFY_STORE**（`myshop.myshopify.com`）と "
+          "**SHOPIFY_ADMIN_TOKEN**（Admin API トークン、`read_orders`）を追加するか、Harness に"
+          "「*Shopify ストアを接続して*」と頼んでください。",
+}
 _cache: dict[str, Any] = {"at": 0.0, "key": None, "card": None, "ttl": CACHE_S}
 _lock = threading.Lock()
 
 
 def t(s: str) -> str:
-    return _T.get(config.load_config().get("language", "en"), {}).get(s, s)
+    return _T.get(config.language(), {}).get(s, s)
 
 
 def credentials() -> tuple[str, str]:
@@ -180,12 +228,7 @@ def build_card(data: dict[str, Any], today: dt.date, tz: ZoneInfo) -> dict:
 def connect_card() -> dict:
     return {"title": t("Shopify"), "link": "/settings/keys", "blocks": [
         {"type": "stat", "label": t("Connect your store"), "value": "—"},
-        {"type": "markdown", "text": (
-            "Add **SHOPIFY_STORE** (`myshop.myshopify.com`) and **SHOPIFY_ADMIN_TOKEN** (Admin API token, "
-            "`read_orders`) in [Settings → Keys](/settings/keys) — or ask Harness: *connect my Shopify store*."
-            if config.load_config().get("language", "en") != "fr" else
-            "Ajoutez **SHOPIFY_STORE** (`maboutique.myshopify.com`) et **SHOPIFY_ADMIN_TOKEN** (token Admin API, "
-            "`read_orders`) dans [Réglages → Clés](/settings/keys), ou demandez à Harness : *connecte ma boutique Shopify*.")},
+        {"type": "markdown", "text": _CONNECT.get(config.language(), _CONNECT["en"])},
     ]}
 
 

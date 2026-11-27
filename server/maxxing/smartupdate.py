@@ -404,8 +404,13 @@ def notes_prompt(old: str, new: str, notes: list[dict]) -> str:
             f"changed for me.\n\n{files}" + _reply_in())
 
 
+# The interface languages other than English, as named in the request sent to Claude.
+REPLY_LANGUAGES = {"fr": "French", "es": "Spanish", "de": "German", "zh": "Simplified Chinese", "ja": "Japanese"}
+
+
 def _reply_in() -> str:
-    return "\n\nAnswer me in French." if config.load_config().get("language") == "fr" else ""
+    name = REPLY_LANGUAGES.get(config.language())
+    return f"\n\nAnswer me in {name}." if name else ""
 
 
 # ---- "Update with Harness" -----------------------------------------------------------------------

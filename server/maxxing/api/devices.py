@@ -255,7 +255,7 @@ async def download(target: str, request: Request, code: str = ""):
 async def link_page(code: str, request: Request):
     if _throttled(request):
         raise HTTPException(429, detail={"error": "throttled", "message": "Too many wrong codes: wait 10 minutes"})
-    lang = "fr" if config.load_config().get("language") == "fr" else "en"
+    lang = config.language()
     if not devices.feature_on():
         st, page = 410, dist.link_page("", _server_url(request), lang)[1]
     else:

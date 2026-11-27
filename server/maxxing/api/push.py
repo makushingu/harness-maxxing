@@ -20,11 +20,15 @@ PREVIEW = 120
 _TEXT = {
     "en": {"done": "Harness has finished", "failed": "A Harness turn failed", "test": "Mobile notifications work on this device."},
     "fr": {"done": "Harness a terminé", "failed": "Un tour de Harness a échoué", "test": "Les notifications mobiles fonctionnent sur cet appareil."},
+    "es": {"done": "Harness ha terminado", "failed": "Un turno de Harness ha fallado", "test": "Las notificaciones móviles funcionan en este dispositivo."},
+    "de": {"done": "Harness ist fertig", "failed": "Ein Durchlauf von Harness ist fehlgeschlagen", "test": "Mobile Benachrichtigungen funktionieren auf diesem Gerät."},
+    "zh": {"done": "Harness 已完成", "failed": "Harness 的一个回合失败了", "test": "移动通知在此设备上可用。"},
+    "ja": {"done": "Harness が完了しました", "failed": "Harness のターンが失敗しました", "test": "このデバイスでモバイル通知が使えます。"},
 }
 
 
 def _text(key: str) -> str:
-    return _TEXT.get(config.load_config().get("language", "en"), _TEXT["en"])[key]
+    return _TEXT.get(config.language(), _TEXT["en"])[key]
 
 
 class Device(BaseModel):

@@ -32,7 +32,7 @@ _URL = config.PUBLIC_URL_RE
 
 class SettingsIn(BaseModel):
     timezone: Optional[str] = None
-    language: Optional[Literal["en", "fr"]] = None
+    language: Optional[Literal["en", "fr", "es", "de", "zh", "ja"]] = None
     public_url: Optional[str] = None
     files_root: Optional[str] = None
     presentation_default: Optional[bool] = None
@@ -70,7 +70,7 @@ def current() -> dict:
     cfg = config.load_config()
     hidden = cfg.get("result_line_hidden")
     hidden = hidden if isinstance(hidden, list) else []       # a hand-edited value of another type: nothing hidden
-    return {"timezone": cfg.get("timezone") or "UTC", "language": cfg.get("language") if cfg.get("language") in ("en", "fr") else "en",
+    return {"timezone": cfg.get("timezone") or "UTC", "language": config.language(cfg.get("language")),
             "public_url": cfg.get("public_url") or "", "files_root": cfg.get("files_root") or "/root",
             **{k: bool(cfg.get(k)) for k in FLAGS},
             "daily_budget_usd": budget.limit(),

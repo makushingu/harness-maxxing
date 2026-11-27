@@ -25,7 +25,7 @@ web/
     tour/                  guided tour (steps.ts = the script, Tour.tsx = overlay + card)
   sw/sw.js                 service worker source (emitted as dist/sw.js by the `maxxing-sw` plugin)
   public/                  manifest.webmanifest, offline.html, icons/ (PNG, from scripts/gen-icons.py)
-    i18n/{en,fr}.ts        dictionaries; useT()
+    i18n/<lang>.ts         dictionaries (en, fr by hand; es, de, zh, ja by scripts/translate_ui.py); useT()
     styles/globals.css     tokens (CSS variables) + markdown + highlight theme
 ```
 
@@ -237,7 +237,12 @@ default" (applied once per new browser).
 
 `useT()` → `t('key', {vars})`. English is the reference (`en.ts`); `fr.ts` is typed
 `Record<keyof typeof en, string>` so a missing translation fails the build. Plurals: add `key#one` (used when
-`count` is 1 — French: 0 or 1). Keys are grouped by area (`common.*`, `nav.*`, `settings.*`, `onb.*`…). The language
+`count` is 1 — French: 0 or 1). The other languages (`es`, `de`, `zh`, `ja`; `LANGUAGE_IDS` in `lib/types.ts`) are
+written by `scripts/translate_ui.py` from `en.ts`: run it after a change of `en.ts`; it redoes only the texts whose
+English changed (`i18n/translated.json`), so a correction made by hand in `<lang>.ts` stays. `scripts/i18n_check.py`
+(run by `scripts/ui-check.sh` and by the publication of a version) refuses a language that is incomplete or late, a
+translation that changed a variable, a link, a `code` span or an HTML tag, and a server table of texts
+(`{"en": ..., "fr": ...}` in `server/maxxing`) without the other languages. Keys are grouped by area (`common.*`, `nav.*`, `settings.*`, `onb.*`…). The language
 comes from server settings once signed in (stored locally too for the login page). Format dates/numbers with
 `lib/format.ts` + the current language and the configured time zone.
 

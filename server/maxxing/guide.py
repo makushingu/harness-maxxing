@@ -81,7 +81,8 @@ RULES = """You write the cards of the Harness Maxxing getting-started guide. Har
 Claude Code on the user's own server: projects split into topics (folders with a memory.md), sessions (conversations)
 in topics, agents, scheduled jobs, files, tasks, Telegram.
 Answer with ONE JSON object, nothing else: {"intro": "...", "prompts": [{"label": "...", "text": "...", "topic": "..."}]}
-- Write in the language given in "language" (fr = French, informal "vous"), plain words, no jargon.
+- Write in the language given in "language" (fr = French, informal "vous"; es = Spanish, informal "tú";
+  de = German, informal "du"; zh = Simplified Chinese; ja = Japanese, polite form), plain words, no jargon.
 - "intro": 1 or 2 short sentences (max 240 characters). After the first steps, start by linking to what the user did
   just before ("guide.tried") and why this step comes next, so the guide reads as one story.
 - "prompts": what the user will send from a new session. Level "beginner": exactly 1 prompt, simple, explained by its

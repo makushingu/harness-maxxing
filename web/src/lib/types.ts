@@ -3,7 +3,9 @@
 import type { Look } from '@/stores/ui'
 
 export type Ok = { ok: boolean }
-export type Language = 'en' | 'fr'
+/** The interface languages: one dictionary each in src/i18n/<id>.ts (en and fr by hand, the others by scripts/translate_ui.py). */
+export const LANGUAGE_IDS = ['en', 'fr', 'es', 'de', 'zh', 'ja'] as const
+export type Language = (typeof LANGUAGE_IDS)[number]
 export type Tone = 'ok' | 'warn' | 'error'
 
 /* ---------------------------------------------------------------- Auth & setup */

@@ -54,7 +54,7 @@ def _configure(p) -> None:
         s = sub.add_parser(name, help=hlp)
         s.add_argument("agent")
     s = sub.add_parser("templates", help="the ready-made agents (gallery of New agent)")
-    s.add_argument("--lang", default="", help="en, fr (default: the UI language)")
+    s.add_argument("--lang", default="", help="en, fr, es, de, zh, ja (default: the UI language)")
     s.add_argument("--json", action="store_true")
     s = sub.add_parser("create", help="create an agent in a topic")
     s.add_argument("where", help="<project>/<topic>/<agent> (agent = 1-48 lowercase letters, digits, dashes)")
@@ -64,7 +64,7 @@ def _configure(p) -> None:
     role.add_argument("--role-file", help="a file holding the role (several paragraphs)")
     s.add_argument("--template", default="", help="start from a ready-made agent (`maxxing agents templates`): its "
                    "role, safety settings and first trigger; the other options override it")
-    s.add_argument("--lang", default="", help="language of the template texts (en, fr; default: the UI language)")
+    s.add_argument("--lang", default="", help="language of the template texts (en, fr, es, de, zh, ja; default: the UI language)")
     s.add_argument("--permission", choices=("bypass", "acceptEdits", "default"), help="default: the topic's mode")
     s.add_argument("--model", default="", help="default: the model of the topic")
     s.add_argument("--approvals", action="store_true", help="ask before risky actions (answered in the UI)")

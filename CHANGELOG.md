@@ -6,6 +6,7 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 ## Unreleased
 
 New:
+- **Four more languages.** The interface, the Telegram messages, the notifications and the agent templates now also exist in Spanish, German, Simplified Chinese and Japanese, next to English and French. Pick yours in Settings → General (or on the sign-in screen).
 - **What each agent costs.** Settings → Usage has an **Agent** tab: tokens, turns and cost of every agent, next to the ones per project, topic and session. An agent's profile shows the same total and its last 30 days under its budget.
 - **Alerts when the spend leaves its usual range.** Without setting a budget first, the Notifications feed (and Telegram, by its rules) says when today costs 3 times a usual day - for the whole server, or for one agent that starts to run in a loop -, and when a turn kept failing (at least 8 failed tool calls, half of them or more). Settings → Usage → **Alerts** changes the factor, turns each one off, and adds an alert for a turn that costs more than an amount you choose. Nothing is stopped: budgets do that.
 - **Usage as a file.** Under the table of Settings → Usage, **CSV** and **JSON** download the grouping shown, every row (the table stops at 50), and **Per day** the daily chart. From a script: `maxxing usage export --group agents --format csv`.

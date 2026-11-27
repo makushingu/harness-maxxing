@@ -1,6 +1,6 @@
 import { LANGUAGES, useT } from '@/i18n'
 import { timezoneLabel, timezoneOptions, browserTimezone } from '@/lib/timezones'
-import { Button, FormField, Segmented } from '@/components/ui'
+import { Button, FormField, Select } from '@/components/ui'
 import { Combobox } from '@/components/ui/combobox'
 import type { Language } from '@/lib/types'
 
@@ -11,7 +11,7 @@ export function RegionFields({ language, timezone, onLanguage, onTimezone }: { l
   return (
     <div className="grid gap-5">
       <FormField label={t('settings.language')} hint={t('settings.languageHint')}>
-        <Segmented<Language> value={language} onChange={onLanguage} options={LANGUAGES.map((l) => ({ value: l.id, label: l.label }))} aria-label={t('settings.language')} />
+        <Select value={language} onValueChange={(v) => onLanguage(v as Language)} options={LANGUAGES.map((l) => ({ value: l.id, label: l.label }))} aria-label={t('settings.language')} className="w-auto min-w-44" />
       </FormField>
       <FormField
         label={t('settings.timezone')}
