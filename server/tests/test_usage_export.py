@@ -75,3 +75,24 @@ def test_export_needs_a_session_cookie(mx):
     from maxxing.app import create_app
     with TestClient(create_app()) as anon:
         assert anon.get("/api/stats/export").status_code == 401
+
+
+def test_concurrent_exports_share_one_computation(client, topic, monkeypatch):
+    import threading
+    _session("projects/acme/topics/blog", "mine", 7, 0.01)
+    calls, release = {"n": 0}, threading.Event()
+    real = stats.compute
+
+    def slow(full=False):
+        calls["n"] += 1
+        release.wait(5)
+        return real(full=full)
+    monkeypatch.setattr(stats, "compute", slow)
+    out: list = []
+    threads = [threading.Thread(target=lambda: out.append(stats.export_rows("sessions"))) for _ in range(8)]
+    for t in threads:
+        t.start()
+    release.set()
+    for t in threads:
+        t.join(10)
+    assert calls["n"] == 1 and len(out) == 8 and all(len(rows) == 1 for _, rows in out)

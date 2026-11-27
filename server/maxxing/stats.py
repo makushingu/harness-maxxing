@@ -18,6 +18,7 @@ from .sessions import store
 _DAY = re.compile(r"\d{4}-\d{2}-\d{2}", re.ASCII)
 _lock = threading.Lock()
 _cache: dict = {"at": 0.0, "data": None, "inflight": None}
+_cache_full: dict = {"at": 0.0, "data": None, "inflight": None}    # every session (the export), same rules
 CACHE_S = 20.0
 FORCE_MIN_S = 3.0          # a forced refresh younger than this returns the cache
 COMPUTE_WAIT_S = 120.0     # a call sharing a running computation waits at most this long
@@ -189,36 +190,39 @@ def compute(full: bool = False) -> dict:
 
 def invalidate() -> None:
     with _lock:
-        _cache["at"], _cache["data"] = 0.0, None
+        for c in (_cache, _cache_full):
+            c["at"], c["data"] = 0.0, None
 
 
-def tokens(force: bool = False) -> dict:
+def tokens(force: bool = False, full: bool = False) -> dict:
     """The usage payload, cached CACHE_S seconds. `force` (the Refresh button) recomputes unless the cache is
     under FORCE_MIN_S old. The computation runs outside `_lock`: readers of a cached payload never wait for it,
-    and calls that arrive while it runs share its result instead of starting another one."""
+    and calls that arrive while it runs share its result instead of starting another one. `full`: every session
+    (the export), cached apart with the same rules."""
+    cache = _cache_full if full else _cache
     with _lock:
-        age = time.time() - _cache["at"]
-        if _cache["data"] is not None and age < (FORCE_MIN_S if force else CACHE_S):
-            return _cache["data"]
-        inflight = _cache.get("inflight")
+        age = time.time() - cache["at"]
+        if cache["data"] is not None and age < (FORCE_MIN_S if force else CACHE_S):
+            return cache["data"]
+        inflight = cache.get("inflight")
         mine = inflight is None
         if mine:
-            inflight = _cache["inflight"] = threading.Event()
-        elif _cache["data"] is not None and not force:
-            return _cache["data"]                      # stale, a recompute is already on its way
+            inflight = cache["inflight"] = threading.Event()
+        elif cache["data"] is not None and not force:
+            return cache["data"]                       # stale, a recompute is already on its way
     if not mine:
         inflight.wait(COMPUTE_WAIT_S)
         with _lock:
-            if _cache["data"] is not None:
-                return _cache["data"]
+            if cache["data"] is not None:
+                return cache["data"]
     try:
-        data = compute()
+        data = compute(full=True) if full else compute()
         with _lock:
-            _cache["data"], _cache["at"] = data, time.time()
+            cache["data"], cache["at"] = data, time.time()
     finally:
         if mine:
             with _lock:
-                _cache["inflight"] = None
+                cache["inflight"] = None
             inflight.set()
     return data
 
@@ -239,7 +243,7 @@ def export_rows(group: str) -> tuple[tuple[str, ...], list[dict]]:
     """(columns, rows) of one grouping of the usage, every session included. Raises ValueError on an unknown group."""
     if group not in EXPORT_GROUPS:
         raise ValueError(group)
-    data = compute(full=True)
+    data = tokens(full=True)        # concurrent exports share one computation, cached CACHE_S seconds
     cols = _COLUMNS[group]
     rows = []
     for r in data[group]:
