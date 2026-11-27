@@ -46,6 +46,10 @@ export function CommunitySection() {
         }
       >
         <div className="grid gap-4">
+          <p className="flex items-start gap-2 rounded-lg border bg-muted px-3 py-2 text-[13px] text-muted-foreground" data-testid="community-disclaimer">
+            <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-warning" />
+            {t('pkg.disclaimer')}
+          </p>
           <Segmented<Tab>
             value={tab}
             onChange={setTab}

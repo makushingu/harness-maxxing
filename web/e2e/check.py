@@ -548,6 +548,7 @@ def j_community(r: Run) -> None:
     r.mock.scenario("ready")
     pg = r.page()
     r.go(pg, "/settings/community")
+    pg.locator('[data-testid="community-disclaimer"]').wait_for()   # who is responsible is said before any install
     box = pg.locator('[data-testid="community-list"]')
     box.get_by_text("Shopify stats").wait_for()
     if box.get_by_text("Neon sunset").count():

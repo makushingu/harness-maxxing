@@ -223,7 +223,8 @@ what it does, then installs it.
 You can also install from **Settings -> Community**: the catalogue in three tabs (Extensions, Themes, Skills), read from
 the website when you open the page. **Check and install** downloads the listing at the commit we reviewed and shows
 the report of `maxxing community check` below; nothing is installed until you confirm, and a package with points in
-red asks you to tick that you read them.
+red asks you to tick that you read them. We review and scan each listing as well as we can, but a check can miss
+things: you are responsible for what you install, and Harness Maxxing is not liable for what a listing does.
 
 > **Not made by the Harness Maxxing maintainers: install them at your own risk.** We check that a listing looks right
 > before it appears, not the code. An extension's `api.py` runs inside the Harness server, with the server's rights
