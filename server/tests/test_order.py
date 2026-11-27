@@ -34,3 +34,25 @@ def test_projects_and_topics_keep_the_dragged_order(client, mx):
     # the Telegram "Where?" list and other users follow the same order
     from maxxing import workspace
     assert [t["name"] for t in workspace.list_topics() if t["project"] == "beta"][:2] == ["social", "journal"]
+
+
+def test_sessions_keep_their_dragged_place_in_a_topic(client, mx):
+    client.post("/api/workspace/projects", json={"name": "shop"})
+    client.post("/api/workspace/projects/shop/topics", json={"name": "ads"})
+    url = "/api/workspace/projects/shop/topics/ads/sessions-order"
+
+    def order():
+        tree = client.get("/api/workspace/tree").json()
+        return next(t for p in tree["projects"] if p["name"] == "shop" for t in p["topics"] if t["name"] == "ads")["session_order"]
+
+    assert order() == []                                                     # nothing chosen: by activity
+    r = client.put(url, json={"names": ["b2", "a1", "b2", "../x", "c3"]})
+    assert r.status_code == 200 and r.json()["sessions"] == ["b2", "a1", "c3"]   # ids only, once each
+    assert order() == ["b2", "a1", "c3"]
+    # the topic's other settings are untouched, and an empty list forgets the order
+    from maxxing import workspace
+    workspace.set_topic_permission_mode("projects/shop/topics/ads", "sandbox")
+    assert order() == ["b2", "a1", "c3"]
+    assert client.put(url, json={"names": []}).json()["sessions"] == []
+    assert workspace.topic_permission_mode("projects/shop/topics/ads") == "sandbox"
+    assert client.put("/api/workspace/projects/shop/topics/nope/sessions-order", json={"names": []}).status_code == 404

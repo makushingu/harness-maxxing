@@ -73,6 +73,7 @@ import {
   useSessions,
   useReorderProjects,
   useReorderTopics,
+  useReorderSessions,
   useSettings,
   useWorkspace,
 } from '@/lib/queries'
@@ -232,12 +233,12 @@ export function SessionTree({ onOpenSession, onNewSession, activePath, openIds, 
     if (narrowing) {
       const out: { p: Project; topics: { tp: Topic; sessions: Session[] }[] }[] = []
       for (const p of projects) {
-        const topics = p.topics.map((tp) => ({ tp, sessions: (byPath.get(tp.path) || []).filter(shows) })).filter((x) => x.sessions.length)
+        const topics = p.topics.map((tp) => ({ tp, sessions: inOrder((byPath.get(tp.path) || []).filter(shows), tp.session_order) })).filter((x) => x.sessions.length)
         if (topics.length) out.push({ p, topics })
       }
       return out
     }
-    return projects.map((p) => ({ p, topics: p.topics.map((tp) => ({ tp, sessions: byPath.get(tp.path) || [] })) }))
+    return projects.map((p) => ({ p, topics: p.topics.map((tp) => ({ tp, sessions: inOrder(byPath.get(tp.path) || [], tp.session_order) })) }))
   }, [projects, byPath, narrowing, shows])
   const rowAt = filtered.reduce<number[]>((at, _x, i) => [...at, i ? at[i - 1] + 1 + filtered[i - 1].topics.length : 0], [])
 
@@ -484,6 +485,16 @@ function ListHeader({
   )
 }
 
+/** A topic's sessions in the order chosen by drag and drop: the ones not placed yet (new) first, as they come
+ *  (activity), then the placed ones in their order. */
+function inOrder(list: Session[], order: string[] | undefined): Session[] {
+  if (!order?.length) return list
+  const rank = new Map(order.map((id, i) => [id, i]))
+  const fresh = list.filter((s) => !rank.has(s.id))
+  const placed = list.filter((s) => rank.has(s.id)).sort((a, b) => rank.get(a.id)! - rank.get(b.id)!)
+  return [...fresh, ...placed]
+}
+
 function group(list: Session[] | undefined) {
   const m = new Map<string, Session[]>()
   for (const s of list || []) {
@@ -574,10 +585,10 @@ function useReorderRow(type: string, name: string, onMove: ((dragged: string, be
 
 // ---- drag a session onto another topic (or onto a session of another topic) to move it there ---------
 // Same as "Move to another topic" in the session's column: the server moves its folder and its Claude
-// transcript. Within a topic the order follows the list's sort (activity), so dropping there does nothing.
+// transcript (not while it runs). Dropped on a session of its own topic, it takes that place (useSessionSort).
 const DND_SESSION = 'application/x-mx-session'
 /** The session being dragged (dragover cannot read the data, only its type). */
-let draggedSession: { id: string; path: string } | null = null
+let draggedSession: { id: string; path: string; busy: boolean } | null = null
 
 /** Move a session to a topic, like the column header does (expand the destination, confirm). */
 function useMoveSessionTo() {
@@ -602,12 +613,12 @@ function useMoveSessionTo() {
 }
 
 function sessionDragProps(s: Session) {
-  if (s.state === 'running' || s.queue > 0) return {}          // a running session cannot move (the server refuses)
   return {
     draggable: true,
     onDragStart: (e: React.DragEvent) => {
       e.stopPropagation()
-      draggedSession = { id: s.id, path: s.path }
+      // a running session keeps its topic (the server refuses the move) but can change place in it
+      draggedSession = { id: s.id, path: s.path, busy: s.state === 'running' || s.queue > 0 }
       e.dataTransfer.setData(DND_SESSION, s.id)
       e.dataTransfer.setData('text/plain', s.title)
       e.dataTransfer.effectAllowed = 'move'
@@ -622,7 +633,7 @@ function sessionDragProps(s: Session) {
 function useSessionDrop(path: string) {
   const move = useMoveSessionTo()
   const [over, setOver] = React.useState(false)
-  const accepts = (e: React.DragEvent) => e.dataTransfer.types.includes(DND_SESSION) && !!draggedSession && draggedSession.path !== path
+  const accepts = (e: React.DragEvent) => e.dataTransfer.types.includes(DND_SESSION) && !!draggedSession && !draggedSession.busy && draggedSession.path !== path
   const props = {
     onDragOver: (e: React.DragEvent) => {
       if (!accepts(e)) return
@@ -645,6 +656,39 @@ function useSessionDrop(path: string) {
     },
   }
   return { over, props }
+}
+
+/** A session row of a topic: a session of the same topic dropped on it takes its place, before or after it by its
+ *  halves (`onPlace` absent: the list has no order of its own - Favorites, Recent, a search). */
+function useSessionSort(s: Session, onPlace: ((dragged: string, target: string, before: boolean) => void) | undefined) {
+  const [pos, setPos] = React.useState<'before' | 'after' | null>(null)
+  if (!onPlace) return { pos: null, props: {} }
+  const accepts = (e: React.DragEvent) => e.dataTransfer.types.includes(DND_SESSION) && !!draggedSession && draggedSession.path === s.path && draggedSession.id !== s.id
+  const props = {
+    onDragOver: (e: React.DragEvent) => {
+      if (!accepts(e)) return
+      e.preventDefault()
+      e.stopPropagation()
+      e.dataTransfer.dropEffect = 'move'
+      const r = e.currentTarget.getBoundingClientRect()
+      const next = e.clientY < r.top + r.height / 2 ? 'before' : 'after'
+      if (next !== pos) setPos(next)
+    },
+    onDragLeave: (e: React.DragEvent) => {
+      if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setPos(null)
+    },
+    onDrop: (e: React.DragEvent) => {
+      if (!accepts(e)) return
+      e.preventDefault()
+      e.stopPropagation()
+      const id = draggedSession!.id
+      draggedSession = null
+      setPos(null)
+      onPlace(id, s.id, pos === 'before')
+    },
+    onDragEnd: () => setPos(null),
+  }
+  return { pos, props }
 }
 
 /** Both handlers of one DnD event, each ignoring the drags that are not its kind. */
@@ -887,6 +931,13 @@ function TopicNode({
   const shown = all ? sessions : sessions.slice(0, cap)
   const dnd = useReorderRow(dndTopic(topic.project), topic.name, onMove)
   const drop = useSessionDrop(topic.path)
+  const reorderSessions = useReorderSessions()
+  const ids = sessions.map((s) => s.id).join(' ')
+  const place = React.useCallback(
+    (dragged: string, target: string, before: boolean) =>
+      reorderSessions.mutate({ project: topic.project, topic: topic.name, ids: moveName(ids.split(' '), dragged, target, before) }),
+    [ids, topic.project, topic.name], // eslint-disable-line react-hooks/exhaustive-deps
+  )
   const press = useLongPress(() => setMenu(true))
   return (
     <div role="treeitem" aria-expanded={open} className={cn(intro && 'mx-rise')} style={{ '--i': stagger } as React.CSSProperties}>
@@ -933,7 +984,7 @@ function TopicNode({
               <Plus className="size-3.5" /> {t('sessions.newSession')}
             </button>
           )}
-          <SessionRows sessions={shown} openIds={openIds} focusedId={focusedId} onOpen={onOpenSession} still={forceOpen} />
+          <SessionRows sessions={shown} openIds={openIds} focusedId={focusedId} onOpen={onOpenSession} still={forceOpen} onPlace={forceOpen ? undefined : place} />
           {!all && sessions.length > cap && (
             <button type="button" onClick={() => setAll(true)} className="ml-9 h-7 rounded-md px-2 text-xs text-muted-foreground hover:text-foreground max-md:h-10 pointer-coarse:h-10">
               {t('sessions.tree.showMore', { count: sessions.length - cap })}
@@ -1066,6 +1117,7 @@ function SessionRows({
   labelOf,
   compact,
   rise,
+  onPlace,
 }: {
   sessions: Session[]
   openIds: Set<string>
@@ -1079,6 +1131,8 @@ function SessionRows({
   compact?: boolean
   /** Rows mounted now rise in, staggered (session list intro). */
   rise?: boolean
+  /** A topic's own list: a session dropped on another one of it takes its place. */
+  onPlace?: (dragged: string, target: string, before: boolean) => void
 }) {
   const ms = still ? 0 : PRESENCE_MS
   const rows = usePresence(sessions, (s) => s.id, ms)
@@ -1095,7 +1149,7 @@ function SessionRows({
     <div ref={box} className="relative">
       {rows.map((p, i) => (
         <RowPresence key={p.key} id={p.key} leaving={p.leaving} appear={p.appear} rise={rise ? Math.min(i, 10) : undefined}>
-          <SessionRow s={p.item} open={openIds.has(p.item.id)} focused={focusedId === p.item.id} onOpen={onOpen} depth={depth} label={labelOf?.(p.item)} compact={compact} touchLayout={touchLayout} />
+          <SessionRow s={p.item} open={openIds.has(p.item.id)} focused={focusedId === p.item.id} onOpen={onOpen} depth={depth} label={labelOf?.(p.item)} compact={compact} touchLayout={touchLayout} onPlace={onPlace} />
         </RowPresence>
       ))}
     </div>
@@ -1129,6 +1183,7 @@ const SessionRow = React.memo(function SessionRow({
   label,
   compact,
   touchLayout,
+  onPlace,
 }: {
   s: Session
   open: boolean
@@ -1139,6 +1194,7 @@ const SessionRow = React.memo(function SessionRow({
   compact?: boolean
   /** Touch layout: two lines (title, then where and when) even in the Favorites / Recent blocks. */
   touchLayout: boolean
+  onPlace?: (dragged: string, target: string, before: boolean) => void
 }) {
   const t = useT()
   const lang = useLang()
@@ -1152,6 +1208,7 @@ const SessionRow = React.memo(function SessionRow({
   const mask = useMask()
   const model = s.real_model || s.model
   const drop = useSessionDrop(s.path)
+  const sort = useSessionSort(s, onPlace)
   const press = useLongPress(() => setMenu(true))
   const oneLine = compact && !touchLayout
   const picked = useSessionSelection((x) => x.ids.includes(s.id))
@@ -1160,7 +1217,7 @@ const SessionRow = React.memo(function SessionRow({
       role="treeitem"
       aria-selected={focused || picked}
       {...sessionDragProps(s)}
-      {...drop.props}
+      {...mergeDnd(drop.props, sort.props)}
       {...press}
       data-testid="tree-session"
       className={cn(
@@ -1296,6 +1353,7 @@ const SessionRow = React.memo(function SessionRow({
           await patch.mutateAsync({ id: s.id, title: v })
         }}
       />
+      <DropLine pos={sort.pos} />
     </div>
   )
 })

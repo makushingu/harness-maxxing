@@ -637,7 +637,7 @@ function topicObj(p, tp) {
   const ss = S.sessions.filter((s) => s.path === pth && !s.archived)
   const th = S.telegram.threads.find((x) => x.path === pth)
   return { name: tp.name, project: p.name, path: pth, description: tp.description || '', session_count: ss.length, archived_count: S.sessions.filter((s) => s.path === pth && s.archived).length,
-    running: ss.filter((s) => s.state === 'running').length, unread: ss.filter((s) => s.unread).length, errors: ss.filter((s) => s.unread && s.state === 'error').length, telegram_thread: th ? th.thread_id : null,
+    running: ss.filter((s) => s.state === 'running').length, unread: ss.filter((s) => s.unread).length, errors: ss.filter((s) => s.unread && s.state === 'error').length, telegram_thread: th ? th.thread_id : null, session_order: tp.session_order || [],
     ...(MOCK_ALL ? { agents: mockAgents().filter((a) => a.project === p.name && a.topic === tp.name) } : {}) }
 }
 function projectObj(p) {
@@ -1368,6 +1368,12 @@ R('PATCH', '/api/workspace/projects/:project/topics/:topic', ({ params, body }) 
   if (body.description !== undefined) tp.description = body.description
   bus('workspace', 'sessions')
   return topicObj(p, tp)
+})
+R('PUT', '/api/workspace/projects/:project/topics/:topic/sessions-order', ({ params, body }) => {
+  const tp = findProject(params.project).topics.find((x) => x.name === params.topic) || fail(404, 'not_found', 'Topic not found')
+  tp.session_order = [...new Set((body.names || []).filter((x) => typeof x === 'string'))]
+  bus('workspace')
+  return { sessions: tp.session_order }
 })
 R('DELETE', '/api/workspace/projects/:project/topics/:topic', ({ params }) => {
   const p = findProject(params.project)

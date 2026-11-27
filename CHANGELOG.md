@@ -6,6 +6,7 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 ## Unreleased
 
 New:
+- **Sessions in the order you choose.** In the Sessions list, drag a session above or below another one of its topic: it keeps that place, on every device. New sessions come first, as before; a running session can change place too (only moving it to another topic waits for the end of its turn).
 - **Signed versions (optional for now).** A published version can carry the signature of its publishers, and a server that follows the published versions (branch `stable`) can refuse any version without it: set `"update_verify_signature": "stable"` in config.json and `maxxing update` checks the signature before anything changes, against the keys of the version already installed. `true` asks for a signature on every branch. Off by default until every published version is signed.
 - **Protections, at a glance.** Settings → Security starts with what protects this server (two-step sign-in, permission mode, how the secrets are stored, firewall and security updates, the address the interface listens on) and what is left to turn on.
 - **A key only for the topics you choose.** In Settings → Keys, a key (or a secret file) given to Claude can be limited to some projects or topics: sessions and jobs elsewhere no longer receive it (`maxxing keys set NAME --topics projects/shop`). A key without a choice goes everywhere, as before.

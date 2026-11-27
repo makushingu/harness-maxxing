@@ -276,6 +276,7 @@ def _topic_obj(project: str, name: str, stats: dict, threads: dict) -> dict:
             "description": read_description(folder),
             "permission_mode": mode if mode in PERMISSION_MODES else "",
             "allowed_tools": topic_allowed_tools(path),
+            "session_order": topic_session_order(path),
             "session_count": st.get("sessions", 0), "archived_count": st.get("archived", 0), "running": st.get("running", 0),
             "unread": st.get("unread", 0), "errors": st.get("errors", 0), "telegram_thread": thread if isinstance(thread, int) else None,
             "agents": _agents_of(project, name, stats)}
@@ -344,6 +345,31 @@ def set_topic_order(project: str, names: list[str]) -> list[str]:
         config.write_json(project_dir(project) / META_FILE, meta)
     bus.invalidate("workspace")
     return topic_names(project)
+
+
+SESSION_ORDER_MAX = 500
+_SESSION_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+
+def topic_session_order(path: str) -> list[str]:
+    """Sessions of a topic in the order chosen by drag and drop (ids; "sessions" in the topic's .maxxing.json). The
+    tree shows the sessions not listed (new ones) first, by activity, then these in this order."""
+    try:
+        ids = _folder_meta(topic_dir(path)).get("sessions")
+    except (ValueError, OSError):
+        return []
+    return [i for i in ids if isinstance(i, str) and _SESSION_ID_RE.match(i)][:SESSION_ORDER_MAX] if isinstance(ids, list) else []
+
+
+def set_topic_session_order(project: str, topic: str, ids: list[str]) -> list[str]:
+    d = project_dir(check_slug(project)) / "topics" / check_slug(topic)
+    if not d.is_dir():
+        raise WorkspaceError(404, "not_found", f"Topic {project}/{topic} not found")
+    order = [i for i in dict.fromkeys(ids) if isinstance(i, str) and _SESSION_ID_RE.match(i)][:SESSION_ORDER_MAX]
+    with _meta_lock:
+        _set_folder_meta(d, "sessions", order)
+    bus.invalidate("workspace")
+    return topic_session_order(topic_path(project, topic))
 
 
 def _rename_in_order(names: list, old: str, new: str) -> list:

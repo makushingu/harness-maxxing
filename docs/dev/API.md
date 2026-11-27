@@ -83,6 +83,7 @@ at startup and at most every 6 h; a background timeout/network error does not ma
 | PATCH | `/api/workspace/projects/{project}` | `{name?, description?, emoji?}` | `Project` (rename moves the folder and remaps sessions; `emoji` = one emoji, `""` removes it, else `400 bad_emoji`; stored in `projects/<p>/.maxxing.json`) |
 | PUT | `/api/workspace/order` | `{names: [project]}` | `{projects}` (tree order, stored in `projects/.order.json`; unlisted projects follow A-Z) |
 | PUT | `/api/workspace/projects/{project}/order` | `{names: [topic]}` | `{topics}` (stored in `projects/<p>/.maxxing.json`) · `404` |
+| PUT | `/api/workspace/projects/{project}/topics/{topic}/sessions-order` | `{names: [session id]}` | `{sessions}` (stored in the topic's `.maxxing.json`; unlisted sessions come first, by activity) · `404` |
 | DELETE | `/api/workspace/projects/{project}` | – | moves to trash · `409 has_running_sessions` |
 | POST | `/api/workspace/projects/{project}/topics` | `{name, description?}` | `Topic` |
 | PATCH / DELETE | `/api/workspace/projects/{project}/topics/{topic}` | `{name?, description?, permission_mode?}` | `Topic` · `permission_mode` ∈ `bypass` \| `acceptEdits` \| `default` \| `""` (the global setting), else `400 bad_permission_mode`; stored in `topics/<t>/.maxxing.json` |

@@ -89,6 +89,8 @@ export type Topic = {
   telegram_thread: number | null
   /** The topic's "Always allow" rules (Claude Code rules added from an approval card). */
   allowed_tools?: string[]
+  /** Sessions in the order chosen by drag and drop (ids); the others (new ones) come first, by activity. */
+  session_order?: string[]
   /** The topic's own permission mode for Claude turns; '' = the global setting. */
   permission_mode?: '' | PermissionMode
   /** Agents of the topic (Settings -> Features -> agents_page), without their status fields. */

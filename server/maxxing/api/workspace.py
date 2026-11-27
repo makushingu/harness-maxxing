@@ -62,6 +62,12 @@ async def topic_order(project: str, body: OrderIn):
     return {"topics": await _call(workspace.set_topic_order, project, body.names)}
 
 
+@router.put("/projects/{project}/topics/{topic}/sessions-order")
+async def session_order(project: str, topic: str, body: OrderIn):
+    """Sessions order inside a topic (session ids in order; sessions not listed come first, by activity)."""
+    return {"sessions": await _call(workspace.set_topic_session_order, project, topic, body.names)}
+
+
 @router.post("/projects")
 async def create_project(body: CreateIn):
     return await _call(workspace.create_project, body.name, body.description)

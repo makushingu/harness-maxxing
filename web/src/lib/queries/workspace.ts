@@ -58,6 +58,19 @@ export function useReorderProjects() {
     invalidate: [qk.workspace],
   })
 }
+/** The sessions' order inside one topic (drag and drop in the tree; a session moves to another topic by PATCH). */
+export function useReorderSessions() {
+  return useMut(({ project, topic, ids }: { project: string; topic: string; ids: string[] }) => api.put<{ sessions: string[] }>(`/api/workspace/projects/${seg(project)}/topics/${seg(topic)}/sessions-order`, { names: ids }), {
+    optimistic: ({ project, topic, ids }) => [{
+      key: qk.workspace,
+      update: (old: WorkspaceTree) => ({
+        ...old,
+        projects: old.projects.map((p) => (p.name === project ? { ...p, topics: p.topics.map((tp) => (tp.name === topic ? { ...tp, session_order: ids } : tp)) } : p)),
+      }),
+    }],
+    invalidate: [qk.workspace],
+  })
+}
 /** The topics' order inside one project (a topic never changes project this way). */
 export function useReorderTopics() {
   return useMut(({ project, names }: { project: string; names: string[] }) => api.put<{ topics: string[] }>(`/api/workspace/projects/${seg(project)}/order`, { names }), {
