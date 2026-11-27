@@ -366,6 +366,7 @@ See [Harness Browser](33-browser.md).
 
 | Command | Purpose |
 |---|---|
+| `maxxing search "words" [--kind session,memory,file,task] [--in PATH] [--session ID] [--limit N] [--json]` | search past sessions, memory files (and their archive), files and tasks, with the passage around each result; `--in projects/<p>/topics/<t>` narrows to a folder, `--session ID` shows more of one session. What Claude runs to look a fact up |
 | `maxxing memory [--json]` | every memory.md with its line count and the line limit (Settings -> Memory) |
 | `maxxing memory-review undo ID` / `list [--json]` / `apply ID\|all` / `reject ID` / `daily` | what [agents and topics learned](memory): `undo` takes back a bullet or a skill that was written (same as Undo of its notification); `list`, `apply`, `reject` are for the proposals that wait in `"memory_review": "ask"` mode; `daily` runs the daily look at the busy topics now |
 | `maxxing memory-review run SESSION [--prompt a\|b\|agent] [--model M] [--json]` / `learn projects/P/topics/T [--model M] [--write]` | by hand: review one session and store its proposals / print the skills and rules the recent sessions of a topic repeat (nothing kept; `--write` writes the skills into the topic) |

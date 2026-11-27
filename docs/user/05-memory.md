@@ -72,6 +72,16 @@ Settings -> Keys and mention only the key name).
   at every edit, until the session is summarized (automatic compaction) - sometimes after almost every message.
 - From a shell: `maxxing memory` prints the same list.
 
+## Recall: finding what is not loaded
+
+Memory files stay short on purpose; the detail lives in past sessions and files. When Claude needs a fact that is
+not in its context - what was decided, a value, a path, what an earlier session did - it runs
+`maxxing search "two or three words"`: the search of the interface (Ctrl K), with the passage around each result.
+Every session is told to do so before reading old logs or answering that it does not know.
+
+Nothing is lost when memory is compacted: what the daily compaction takes out of a `memory.md` goes to a
+`memory-archive.md` in the same folder. That file is never loaded into a session, but the search finds it.
+
 ## Learning by itself: what agents and topics learned
 
 Harness also looks at the work itself, and keeps what is worth keeping. It writes it at once and tells you in

@@ -104,8 +104,8 @@ def test_one_append_system_prompt_flag_carries_both_texts():
     both = spawn.agents_args({}, "HINT")
     assert both[0] == "--append-system-prompt" and len(both) == 2
     assert both[1].startswith(spawn.FOREGROUND_AGENTS) and both[1].endswith("HINT")
-    assert spawn.agents_args({"background_agents": True}, "HINT") == ["--append-system-prompt", "HINT"]
-    assert spawn.agents_args({"background_agents": True}) == []
+    assert spawn.agents_args({"background_agents": True}, "HINT") == ["--append-system-prompt", spawn.RECALL + "\n\nHINT"]
+    assert spawn.agents_args({"background_agents": True}) == ["--append-system-prompt", spawn.RECALL]
 
 
 def test_usage_is_kept_60_days(mx):

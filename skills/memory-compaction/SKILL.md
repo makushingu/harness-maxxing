@@ -30,6 +30,9 @@ is the expected outcome.
      `## Decisions`, `## References` (paths, URLs, commands), `## Context` (summarised history);
    - merge duplicates, settle contradictions (latest wins), keep dates on decisions;
    - summarise old history into one or two "Context" bullets, drop the rest;
+   - **nothing is lost**: before removing or shortening bullets, append the original text of what goes away to
+     `memory-archive.md` in the same folder, under a `## Archived <YYYY-MM-DD>` heading (create the file if needed;
+     never compact or load it, never import it from CLAUDE.md). `maxxing search` finds it when a session needs it;
    - move a fact to the right level if it is obviously misplaced (topic fact in global memory, a fact
      about the whole topic in an agent's memory);
    - **never remove**: what is needed to understand the project, the user's preferences and rules,
@@ -39,7 +42,7 @@ is the expected outcome.
    or `nothing to compact`.
 
 ## Safety
-- Only edit `memory.md` files. Never `CLAUDE.md`, code, tasks.json or anything else.
+- Only edit `memory.md` files (and append to `memory-archive.md`). Never `CLAUDE.md`, code, tasks.json or anything else.
 - If unsure whether something is still useful, keep it.
 - Never paste secrets; if you find one in a memory file, replace it by the key name and tell the
   user to rotate it (Settings -> Keys).

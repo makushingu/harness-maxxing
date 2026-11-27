@@ -226,11 +226,18 @@ def upper_memory(cwd: str, root: str) -> str:
     return "\n\n".join([UPPER_MEMORY] + out[::-1]) if out else ""
 
 
+# Recall (cmd_search.py): said by the product, so every installation has it without an edit of its CLAUDE.md
+RECALL = ('When you need a fact that is not in your context (a past decision, a value, a path, what an earlier session '
+          'did), run `maxxing search "two or three words"` before reading session logs or saying you do not know '
+          "(`--in projects/<p>/topics/<t>` narrows, `--session <id>` shows more of one session). It also finds the "
+          "`memory-archive.md` files: what memory compaction took out of a memory.md.")
+
+
 def agents_args(cfg: dict, extra: str = "") -> list[str]:
     """`--append-system-prompt` asking for foreground subagents, unless config `background_agents` is on, followed by
     `extra` (the MCP servers not loaded, mcp_auto.py). One flag only: Claude Code keeps the last of several."""
-    parts = ([] if cfg.get("background_agents") else [FOREGROUND_AGENTS]) + ([extra] if extra else [])
-    return ["--append-system-prompt", "\n\n".join(parts)] if parts else []
+    parts = ([] if cfg.get("background_agents") else [FOREGROUND_AGENTS]) + [RECALL] + ([extra] if extra else [])
+    return ["--append-system-prompt", "\n\n".join(parts)]
 
 
 def settings_args(cfg: dict, extra: dict | None = None, allow: list[str] | None = None) -> list[str]:

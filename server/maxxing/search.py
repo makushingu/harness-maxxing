@@ -57,7 +57,7 @@ SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", "venv", ".cache", "
              ".mypy_cache", ".pytest_cache", "attachments", ".nuxt", ".svelte-kit", "vendor", "coverage",
              "worktrees"}                  # the separate copies of Code mode (worktrees.py): the clone is indexed
 SKIP_FILES = {"tasks.json", "package-lock.json", "yarn.lock", "pnpm-lock.yaml", "uv.lock", "poetry.lock"}
-MEMORY_NAMES = {"memory.md", "claude.md"}
+MEMORY_NAMES = {"memory.md", "claude.md", "memory-archive.md"}
 MAX_FILE_BYTES = 256 * 1024          # bigger text files are skipped (generated data, dumps)
 MAX_FILES = 20_000                   # other text files, whole workspace (memory files are not counted)
 BUCKET_MIN, BUCKET_MAX = 50, 1_000    # per topic / project / root: MAX_FILES // buckets, clamped to this range
@@ -686,6 +686,23 @@ def fts_query(q: str) -> str | None:
     return " ".join(f'"{w}"*' if len(w) >= 3 else f'"{w}"' for w in words)
 
 
+# words too common to tell anything in a loose query (the strict query keeps them: all words must match anyway)
+_COMMON = frozenset("""the and for are but not you your our with that this what which when where who how was were has have had
+does did can could will would should from into about than then them they their there here been being its out all any
+les des une que qui quoi dans pour par sur avec sans est sont pas plus tout tous cette ces nos notre vos votre mon ton
+son ses mes elle ils elles nous vous leur quel quelle quels quelles comment quand ont été fait faire dit moi toi aux
+déjà maintenant aussi donc mais car""".split())
+
+
+def fts_query_any(q: str) -> str | None:
+    """The loose query of recall (`maxxing search`): ANY word of 3+ characters, as a prefix. BM25 then puts first the
+    rows that hold the most and the rarest of them, so one word too many no longer hides the answer."""
+    words = list(dict.fromkeys(w for w in _WORD.findall(q or "") if len(w) >= 3 and w.lower() not in _COMMON))[:16]
+    if not words:
+        return None
+    return " OR ".join(f'"{w}"*' for w in words)
+
+
 _rcon: sqlite3.Connection | None = None
 _rcon_path: Path | None = None
 
@@ -700,12 +717,14 @@ def _reader() -> sqlite3.Connection:
 
 
 def search(q: str, kinds: list[str] | None = None, limit: int = 30,
-           cancelled: Callable[[], bool] | None = None) -> dict:
+           cancelled: Callable[[], bool] | None = None, *, loose: bool = False, not_session: str = "",
+           snippet: int = 16) -> dict:
     """`cancelled`: True once nobody waits for the answer (the palette sent the next query): stops waiting for
-    the reader and interrupts the query."""
+    the reader and interrupts the query. `loose`: any word instead of all (fts_query_any); `not_session`: a session
+    left out (the one that asks); `snippet`: words shown around the hit (64 at most)."""
     t0 = time.perf_counter()
     gone = cancelled or (lambda: False)
-    match = fts_query(q)
+    match = fts_query_any(q) if loose else fts_query(q)
     wanted = [k for k in (kinds or KINDS) if k in KINDS]
     if not match or not wanted or len(q.strip()) < 2:
         return {"results": [], "took_ms": 0}
@@ -724,6 +743,8 @@ def search(q: str, kinds: list[str] | None = None, limit: int = 30,
     # Jarvis's rows are left out in SQL: filtered after the LIMIT they would take the places of the visible ones
     skip = ("AND items.path != ? AND items.path NOT LIKE ? ESCAPE '\\'", (jarvis.PREFIX, jarvis.PREFIX + "/%")) \
         if jarvis.hides(jarvis.PREFIX) else ("", ())
+    if not_session:
+        skip = (skip[0] + " AND NOT (items.kind = 'session' AND items.ref = ?)", (*skip[1], not_session))
     while not _rlock.acquire(timeout=0.05):                  # one reader: queries take turns
         if gone():
             return {"results": [], "took_ms": 0, "cancelled": True}
@@ -754,7 +775,7 @@ def search(q: str, kinds: list[str] | None = None, limit: int = 30,
             # matching row (thousands for a common prefix) cost ten times the ranking itself
             ids = [r[5] for r in best]
             snips = dict(con.execute(
-                f"""SELECT rowid, snippet(fts, 1, char(2), char(3), '…', 16) FROM fts
+                f"""SELECT rowid, snippet(fts, 1, char(2), char(3), '…', {max(4, min(64, int(snippet)))}) FROM fts
                     WHERE fts MATCH ? AND rowid IN ({','.join('?' * len(ids))})""",
                 (match, *ids)).fetchall()) if ids else {}
             rows = [(kind, ref, path, title, at, snips.get(rid) or "", score)
