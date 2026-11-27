@@ -81,13 +81,32 @@ export function pruneAgentDrafts(kind: 'agent' | 'group', paths: string[]) {
 /** Fired with the draft key when a draft is written from outside its composer: a mounted composer reloads it. */
 export const DRAFT_EVENT = 'mx-draft'
 
+/** `text` added after a draft, a blank line between them. */
+export function joinDraft(cur: string, text: string): string {
+  return [cur.trimEnd(), text].filter(Boolean).join(cur.trim() ? '\n\n' : '')
+}
+
+const boxes = new Map<string, (text: string) => void>()
+/** A box of `key` open again takes what is added to its draft itself: its text may hold what was typed in the last
+ *  250 ms, not stored yet, that reloading the stored draft would lose. -> unregisters. */
+export function onAppendDraft(key: string, add: (text: string) => void): () => void {
+  boxes.set(key, add)
+  return () => {
+    if (boxes.get(key) === add) boxes.delete(key)
+  }
+}
+
 /** Adds `text` after the draft of `key` (a dictation that came back once its box was gone: another page) and tells
  *  a box of that key opened again meanwhile. false when the browser could not keep it (storage full, private mode):
  *  the caller shows the text rather than losing it. */
 export function appendDraft(key: string, text: string): boolean {
+  const box = boxes.get(key)
+  if (box) {
+    box(text)
+    return true
+  }
   try {
-    const cur = localStorage.getItem(`mx-draft:${key}`) || ''
-    localStorage.setItem(`mx-draft:${key}`, [cur.trimEnd(), text].filter(Boolean).join(cur.trim() ? '\n\n' : ''))
+    localStorage.setItem(`mx-draft:${key}`, joinDraft(localStorage.getItem(`mx-draft:${key}`) || '', text))
   } catch {
     return false
   }
