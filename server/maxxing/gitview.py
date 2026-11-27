@@ -888,7 +888,7 @@ MERGE_METHODS = ("merge", "squash", "rebase")
 
 
 def _number(n: int) -> int:
-    if not isinstance(n, int) or n < 1 or n > 10**9:
+    if not isinstance(n, int) or isinstance(n, bool) or n < 1 or n > 10**9:
         raise GitError(400, "bad_number", "invalid pull request number")
     return n
 

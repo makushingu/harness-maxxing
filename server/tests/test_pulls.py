@@ -9,6 +9,7 @@ import pytest
 from _conn_helpers import _Server
 from conftest import wait_idle
 from maxxing import config, gitview, vault
+from maxxing.gitsafe import GitError
 
 ENV = {"GIT_AUTHOR_NAME": "Ann", "GIT_AUTHOR_EMAIL": "a@example.com", "GIT_COMMITTER_NAME": "Ann",
        "GIT_COMMITTER_EMAIL": "a@example.com", "PATH": "/usr/bin:/bin"}
@@ -130,6 +131,15 @@ def test_comment_review_merge_close(client, gh):
                     ("PUT", "/repos/acme/app/pulls/7/merge"), ("PATCH", "/repos/acme/app/pulls/7")]
     assert g.sent[1][2]["comments"] == [{"path": "a.txt", "line": 2, "side": "RIGHT", "body": "ok"}]
     assert g.sent[2][2] == {"merge_method": "squash"}
+
+
+@pytest.mark.parametrize("number", [True, "7", 0, 7.0])
+def test_a_pull_request_number_must_be_a_real_number(client, gh, number):
+    g = gh()
+    r = client.post("/api/git/pull/close", json={"repo": "github:acme/app", "number": number})
+    assert r.status_code in (400, 422) and g.sent == []
+    with pytest.raises(GitError):
+        gitview.pull_close("acme/app", True)
 
 
 @pytest.mark.parametrize("sha", ["not-a-sha", "zz" * 20, "a" * 41])
