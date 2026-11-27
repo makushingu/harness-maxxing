@@ -34,7 +34,9 @@ CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"   # no 0/O, 1/I: read on a ph
 CODE_LEN = 8
 NAME_MAX = 64
 
-_lock = threading.RLock()            # every read-modify-write of devices.json (a hello racing a removal...)
+# every read-modify-write of devices.json (a hello racing a removal...), shared with the other processes: a
+# `maxxing devices` command writing while the server updates last_seen would otherwise lose one of the changes
+_lock = config.ProcessLock("devices")
 
 
 def _path() -> Path:
