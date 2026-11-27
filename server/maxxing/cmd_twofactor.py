@@ -51,7 +51,9 @@ def _handler(a) -> int:
     elif on:
         print("Two-step sign-in: on, but no Telegram chat is linked - not asked until one is linked again.")
     else:
-        print("Two-step sign-in: off" + ("" if linked else " (link Telegram first: Settings -> Telegram)") + ".")
+        # with the app on, sign-in does ask for a second step: only the Telegram approval is off
+        print(("Telegram approval: off" if app else "Two-step sign-in: off")
+              + ("" if linked else " (link Telegram first: Settings -> Telegram)") + ".")
     return 0
 
 
