@@ -79,7 +79,7 @@ def _on(s: dict) -> bool:
 
 def state() -> dict:
     s = settings()
-    meta = config.load_config().get("register_meta") or {}
+    meta = _meta_section()
     return {**s, "count_blocked": blocked(), "registered": bool(config.get_secret(TOKEN)), "error": meta.get("error", ""),
             "synced_at": meta.get("synced_at", 0)}
 
@@ -177,8 +177,14 @@ def _serialized(fn):
     return run
 
 
+def _meta_section() -> dict:
+    """The `register_meta` section of config.json; {} when a hand edit made it something else than an object."""
+    v = config.load_config().get("register_meta")
+    return v if isinstance(v, dict) else {}
+
+
 def _meta(**kw) -> None:
-    config.update_config(register_meta={**(config.load_config().get("register_meta") or {}), **kw})
+    config.update_config(register_meta={**_meta_section(), **kw})
 
 
 def _token_ok(t) -> bool:
@@ -236,7 +242,7 @@ def heartbeat_due() -> bool:
         return False
     if not _on(s):                                          # e.g. MAXXING_NO_TELEMETRY set after a count-only row:
         return bool(config.get_secret(TOKEN))               # the row is deleted (heartbeat -> sync)
-    return time.time() - float((config.load_config().get("register_meta") or {}).get("beat_at") or 0) > EVERY - 600
+    return time.time() - float(_meta_section().get("beat_at") or 0) > EVERY - 600
 
 
 @_serialized
