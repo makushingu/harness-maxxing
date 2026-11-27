@@ -6,6 +6,7 @@ import io
 import json
 import os
 import stat
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -578,3 +579,27 @@ def test_a_rotation_killed_before_the_rename_never_exposes_the_old_secret(mx):
     vault_files.put("SVC_JSON", b"new-secret", expose=True)  # putting the content again repairs it
     assert vault_files.read("SVC_JSON") == b"new-secret"
     assert vault_files.exposed_files_env() == {"SVC_JSON": str(vault_files.files_dir() / "SVC_JSON")}
+
+
+def test_a_file_that_could_not_be_read_once_is_never_swept(mx, monkeypatch):
+    vault_files.put("GOOD", b"good-bytes")
+    real = Path.read_bytes
+
+    def emfile(self):
+        if self.name == "GOOD":
+            raise OSError(24, "Too many open files")
+        return real(self)
+    monkeypatch.setattr(Path, "read_bytes", emfile)
+    vault_files.put("OTHER", b"other-bytes")                 # its sweep cannot read GOOD this time
+    monkeypatch.setattr(Path, "read_bytes", real)
+    assert vault_files.read("GOOD") == b"good-bytes" and vault_files.read("OTHER") == b"other-bytes"
+
+
+def test_an_entry_without_its_hash_is_never_swept(mx):
+    vault_files.put("LEGACY", b"legacy-bytes")
+    files = dict(config.load_secrets()["vault_files"])
+    files["LEGACY"] = {k: v for k, v in files["LEGACY"].items() if k != "sha256"}   # an older or hand-edited entry
+    config.set_secret("vault_files", files)
+    vault_files.put("OTHER", b"other-bytes")
+    assert (vault_files.files_dir() / "LEGACY").read_bytes() == b"legacy-bytes"
+    assert "LEGACY" in config.load_secrets()["vault_files"]
