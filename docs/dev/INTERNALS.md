@@ -504,9 +504,12 @@ either a text key or a file, never both (`name_taken`; `vault.put` refuses a nam
   (`file_required`); `None` fields keep their value (no `data` = metadata only). The bytes go to a temp file of the
   same directory (`mkstemp`, chmod 600, fsync) then `os.replace`; the metadata is saved under `config._lock` like
   `vault.put`. `delete(name) -> bool` removes file + entry. `list_files()` -> metadata only, sorted, never the
-  content. `read(name) -> bytes | None` (CLI `get-file`; no HTTP route calls it), `exists(name)`.
+  content. `read(name) -> bytes | None` (CLI `get-file`; no HTTP route calls it), `exists(name)`. `read`, `path_of`,
+  `list_files` and `exposed_files_env` only count a file whose bytes match the entry's sha256: a put killed between
+  the metadata save and the rename never serves the old bytes; the next `put`/`delete` sweep drops such an entry with
+  its stale file.
 - `exposed_files_env() -> {NAME: "/abs/path"}` for entries flagged `expose` whose file exists (a regular file, not a
-  symlink); never raises. The value is the PATH, never the content. Merged wherever `vault.exposed_env()` is:
+  symlink, the entry's bytes); never raises. The value is the PATH, never the content. Merged wherever `vault.exposed_env()` is:
   `sessions.spawn._exposed_vault` (so `auth_env()` and the shell cron jobs through it) and the fallback of
   `crons._job_env`. An agent's turn (`auth_env(keys=...)`) never gets a file: its `keys` setting is about text keys.
 - Not in the backup: `backup.collect` walks the workspace only and prunes any `secret-files` folder
