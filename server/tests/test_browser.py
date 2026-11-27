@@ -2058,3 +2058,17 @@ def test_an_accented_domain_of_a_sandboxed_agent_is_recognised():
     assert rules.page_refusal("https://bucher.de/", sites) is not None
     assert rules.clean_site("faß.de") == "xn--fa-hia.de"
     assert rules.page_refusal("https://faß.de/", [rules.clean_site("faß.de")]) is None
+
+
+def test_dot_folders_are_not_projects_nor_topics(mx):
+    from maxxing import browser, cli
+    for p in ("projects/..", "projects/.", "projects/../topics/x", "projects/acme/topics/..", "projects/./topics/."):
+        assert browser.owner_of(p) is None, p
+    assert browser.project_of("projects/../x") is None and browser.topic_of("projects/acme/topics/../x") is None
+    assert browser.owner_of("projects/acme") == "project:projects/acme" and browser.owner_of("projects/.a") == "project:projects/.a"
+    for args in (["browser", "set", "..", "off"], ["browser", "show", ".."]):
+        try:
+            rc = cli.main(args)
+        except SystemExit as e:
+            rc = e.code
+        assert rc not in (0, None), args

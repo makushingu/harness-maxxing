@@ -306,13 +306,16 @@ def clean(raw: object, strict: bool = False) -> dict:
     return out
 
 
+_NAME = r"(?!\.\.?(?:/|$))[^/]+"           # a folder name: "." and ".." are not projects nor topics
+
+
 def topic_of(path: str) -> str | None:
-    m = re.match(r"(projects/[^/]+/topics/[^/]+)(/|$)", (path or "").strip("/"))
+    m = re.match(rf"(projects/{_NAME}/topics/{_NAME})(/|$)", (path or "").strip("/"))
     return m.group(1) if m else None
 
 
 def project_of(path: str) -> str | None:
-    m = re.match(r"(projects/[^/]+)(/|$)", (path or "").strip("/"))
+    m = re.match(rf"(projects/{_NAME})(/|$)", (path or "").strip("/"))
     return m.group(1) if m else None
 
 
@@ -320,11 +323,13 @@ def owner_of(path: str) -> str | None:
     """Who a folder is for the browser: `agent:<path>`, `topic:<path>` or `project:<path>`; None elsewhere."""
     from .. import agents
     p = (path or "").strip("/")
+    if any(x in (".", "..") for x in p.split("/")):
+        return None
     if agents.is_agent_path(p):
         return f"agent:{p}"
-    if re.fullmatch(r"projects/[^/]+/topics/[^/]+", p):
+    if re.fullmatch(rf"projects/{_NAME}/topics/{_NAME}", p):
         return f"topic:{p}"
-    if re.fullmatch(r"projects/[^/]+", p):
+    if re.fullmatch(rf"projects/{_NAME}", p):
         return f"project:{p}"
     return None
 
