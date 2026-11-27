@@ -1133,13 +1133,13 @@ def _keep_local_rules(rel: str, data: bytes, dest: Path) -> tuple[bytes, bool]:
     keys = (*agents.SECURITY_FIELDS, *agents.SECURITY_LIMITS) if agent else _GROUP_RULES if group else _FOLDER_RULES
     try:
         d = json.loads(data)
-    except ValueError:
+    except (ValueError, RecursionError):        # nested too deep: never stops the restore
         d = None
     if not isinstance(d, dict):
         return data, False                       # not a settings file the product would read anyway
     try:
         local = json.loads(dest.read_text()) if dest.is_file() else None
-    except (OSError, ValueError):
+    except (OSError, ValueError, RecursionError):
         local = None
     out = dict(d)
     if isinstance(local, dict):
