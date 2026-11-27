@@ -9,10 +9,11 @@
  *   /api/*, /ext/*, non-GET, cross-origin   never touched (straight to the network)
  *
  * Web Push ("Harness has finished", server/maxxing/webpush.py): the server sends an EMPTY push; the worker then asks
- * POST /api/push/pending (same origin, the app's cookie) what to show, one notification per session; a tap opens it.
+ * POST /api/push/pending (same origin, the app's cookie) what to show, one notification per session or per event of
+ * the Notifications feed (with its Allow / Deny buttons when it waits for an answer); a tap opens it.
  */
-const VERSION = "05d3ebcc5001"
-const PRECACHE = ["/assets/index-CocyYDJC.js","/assets/rolldown-runtime-XKyaHtl9.js","/assets/vendor-react-BNCMh3YF.js","/assets/ui-vnwbnYfu.js","/assets/react-DurwoXPM.js","/assets/middleware-CpWMw2yu.js","/assets/preload-helper-7y9sWmk5.js","/assets/vendor-query-kkOOQXZY.js","/assets/media-DOF7ADWk.js","/assets/pwa-Ijo3mTN0.js","/assets/queries-Cehrz0aq.js","/assets/files-DIT148T1.js","/assets/toast-Br5hnZ3o.js","/assets/vendor-ui-DwJrUN99.js","/assets/upload-D7vacm17.js","/assets/createLucideIcon-BrI7woTs.js","/assets/utils-CbJjB46A.js","/assets/vendor-router-C6VFWG_N.js","/assets/spinner-XpnlRkeZ.js","/assets/chevron-right-5zDIIcRL.js","/assets/check-CEbXaWsJ.js","/assets/sheet-drag-Dq8RjI0y.js","/assets/bot-DnwIIIL3.js","/assets/git-branch-B1B5L3Ao.js","/assets/x-BEKxJziG.js","/assets/folder-open-Dr4SbNQW.js","/assets/index-CoZnfxy4.css","/assets/inter-latin-wght-normal-Dx4kXJAl.woff2"]
+const VERSION = "713b9d091485"
+const PRECACHE = ["/assets/index-BDsESJMM.js","/assets/rolldown-runtime-XKyaHtl9.js","/assets/vendor-react-BNCMh3YF.js","/assets/ui-BGfiO3jq.js","/assets/react-DurwoXPM.js","/assets/middleware-CpWMw2yu.js","/assets/preload-helper-7y9sWmk5.js","/assets/vendor-query-kkOOQXZY.js","/assets/media-zxUTO_3O.js","/assets/pwa-Ijo3mTN0.js","/assets/queries-CoQGbt2a.js","/assets/files-DAAwM9SO.js","/assets/toast-CIieOJZe.js","/assets/vendor-ui-DwJrUN99.js","/assets/upload-C-bL0Zzl.js","/assets/createLucideIcon-BrI7woTs.js","/assets/utils-CbJjB46A.js","/assets/vendor-router-C6VFWG_N.js","/assets/spinner-XpnlRkeZ.js","/assets/chevron-right-5zDIIcRL.js","/assets/check-CEbXaWsJ.js","/assets/sheet-drag-BQOmfbtf.js","/assets/bot-DnwIIIL3.js","/assets/git-branch-B1B5L3Ao.js","/assets/x-BEKxJziG.js","/assets/folder-open-Dr4SbNQW.js","/assets/index-CoZnfxy4.css","/assets/inter-latin-wght-normal-Dx4kXJAl.woff2"]
 const SHELL = `mx-shell-${VERSION}`
 const ASSETS = `mx-assets-${VERSION}`
 const OFFLINE = '/offline.html'
@@ -140,7 +141,9 @@ self.addEventListener('push', (event) => {
           tag: m.tag || undefined,
           icon: '/icons/icon-192.png',
           badge: '/icons/icon-192.png',
-          data: { url: m.url || '/' },
+          data: { url: m.url || '/', event: m.event || 0 },
+          // the buttons of a request waiting for an answer (Android and computers; an iPhone shows none: a tap opens it)
+          ...(m.event && m.actions && m.actions.length ? { actions: m.actions.map((a) => ({ action: a.id, title: a.label })), requireInteraction: true } : {}),
         })
       }
     })(),
@@ -149,10 +152,25 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
-  const url = new URL((event.notification.data && event.notification.data.url) || '/', self.location.origin)
+  const data = event.notification.data || {}
+  const url = new URL(data.url || '/', self.location.origin)
   if (url.origin !== self.location.origin) return
   event.waitUntil(
     (async () => {
+      // A button (Allow, Deny...): answer the event of the feed from here. Not signed in any more, or it failed:
+      // open the app on it instead, the answer is given there.
+      if (event.action && data.event) {
+        try {
+          const r = await fetch(`/api/feed/${data.event}/act/${encodeURIComponent(event.action)}`, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'X-Maxxing': '1' },
+          })
+          if (r.ok) return
+        } catch (e) {
+          /* opened below */
+        }
+      }
       const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
       const open = wins.find((c) => new URL(c.url).origin === url.origin)
       if (open) {
