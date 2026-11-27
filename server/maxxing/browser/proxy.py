@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import functools
 import logging
 import os
 import socket
@@ -223,9 +224,20 @@ class Proxy:
                     last: list[float]) -> bool:
         """A plain http request: its body goes to the site and nothing after it. A connection the site keeps open
         would otherwise carry the browser's next request, for any other host, unchecked."""
+        async def idle(make):
+            """A read that gives up once nothing moved either way for IDLE_TIMEOUT (the site may have answered
+            and closed: then only the client could still end this way)."""
+            while True:
+                try:
+                    return await asyncio.wait_for(make(), max(0.0, last[0] + IDLE_TIMEOUT - time.monotonic()))
+                except asyncio.TimeoutError:
+                    if time.monotonic() - last[0] < IDLE_TIMEOUT:
+                        continue                     # the other way moved meanwhile: not idle
+                    raise
+
         async def copy(n: int) -> None:
             while n > 0:
-                data = await r.read(min(65536, n))
+                data = await idle(functools.partial(r.read, min(65536, n)))
                 if not data:
                     raise ConnectionError("closed")
                 n -= len(data)
@@ -235,24 +247,24 @@ class Proxy:
             last[0] = time.monotonic()
             self.bytes_out += len(data)
             w.write(data)
-            await w.drain()
+            await asyncio.wait_for(w.drain(), IDLE_TIMEOUT)   # a site that stopped reading
         try:
             while chunked:
-                line = await r.readline()
+                line = await idle(r.readline)
                 size = int(line.split(b";", 1)[0].strip(), 16)
                 if size < 0:
                     raise ValueError(size)
                 await send(line)
                 if size == 0:
                     while line not in (b"\r\n", b"\n", b""):           # the trailers, up to the empty line
-                        line = await r.readline()
+                        line = await idle(r.readline)
                         await send(line)
                     break
                 await copy(size + 2)
             else:
                 await copy(length)
-            more = await r.read(1)                    # the client closing, or a next request
-        except (ConnectionError, OSError, ValueError):
+            more = await idle(functools.partial(r.read, 1))   # the client closing, or a next request
+        except (ConnectionError, OSError, ValueError, asyncio.TimeoutError):
             more = b"x"
         if not more:
             with contextlib.suppress(Exception):

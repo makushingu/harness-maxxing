@@ -194,6 +194,38 @@ def test_a_client_that_stops_reading_does_not_hold_its_slot(tmp_path, monkeypatc
     asyncio.run(go())
 
 
+def test_a_plain_http_client_left_open_after_the_answer_does_not_hold_its_slot(tmp_path, monkeypatch):
+    """A plain http request: the site answers and closes, the client keeps its socket open without a next request:
+    the way out gives up after IDLE_TIMEOUT and the tunnel ends, so the connection slot is freed."""
+    import socket
+    from maxxing.browser import proxy
+
+    monkeypatch.setattr(proxy, "IDLE_TIMEOUT", 0.5)
+
+    async def go():
+        px = proxy.Proxy(tmp_path / "p.sock")
+        a1, a2 = socket.socketpair()
+        b1, b2 = socket.socketpair()
+        br, bw = await asyncio.open_connection(sock=a1)
+        pr, pw = await asyncio.open_connection(sock=a2)
+        ur, uw = await asyncio.open_connection(sock=b2)
+        sr, sw = await asyncio.open_connection(sock=b1)
+
+        async def site():
+            sw.write(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok")
+            await sw.drain()
+            sw.close()
+        tunnel = asyncio.ensure_future(px._tunnel(pr, pw, ur, uw, (0, False)))
+        await site()
+        try:
+            await asyncio.wait_for(asyncio.shield(tunnel), 3)
+        finally:
+            tunnel.cancel()
+            bw.close()
+        assert (await asyncio.wait_for(br.read(), 1)).endswith(b"ok")
+    asyncio.run(go())
+
+
 def test_the_proxy_tries_ipv4_first_then_the_next_address(tmp_path, monkeypatch):
     """A site with an IPv6 address first (Wikipedia) opened through a phone exit with no IPv6 way out: IPv4 is tried
     first, and an address that fails gives way to the next one instead of failing the page."""
