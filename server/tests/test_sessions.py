@@ -922,7 +922,8 @@ def test_turns_ask_for_foreground_agents(client, topic, mx):
     client.post(f"/api/sessions/{s['id']}/messages", json={"text": "Again NOTOOL"})
     wait_for(lambda: len(calls(mx)) >= 2)
     wait_idle(client, s["id"])
-    assert "--append-system-prompt" not in calls(mx)[-1]["argv"]
+    last = calls(mx)[-1]["argv"]                              # background agents allowed: only the recall sentence
+    assert "run_in_background" not in last[last.index("--append-system-prompt") + 1]
 
 
 def test_a_lone_surrogate_in_a_request_is_a_422_not_a_500(client, topic, mx):

@@ -157,4 +157,4 @@ def test_turns_ask_for_foreground_agents_unless_background_agents_is_on():
     args = spawn.agents_args({})
     assert args[0] == "--append-system-prompt" and "run_in_background: false" in args[1]
     assert spawn.agents_args({"background_agents": False}) == args
-    assert spawn.agents_args({"background_agents": True}) == []
+    assert spawn.agents_args({"background_agents": True}) == ["--append-system-prompt", spawn.RECALL]
