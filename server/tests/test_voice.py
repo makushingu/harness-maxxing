@@ -595,3 +595,15 @@ def test_a_voice_section_that_is_not_an_object_is_no_setting(client):
     assert r.json()["settings"]["engine"] == "off"
     assert voice.update_settings(auto_send=True)["auto_send"] is True
     assert json.loads(path.read_text())["voice"]["auto_send"] is True
+
+
+def test_an_engine_error_that_echoes_the_header_never_shows_the_key(mx, tmp_path, monkeypatch):
+    def handler(req: httpx.Request) -> httpx.Response:
+        return httpx.Response(400, json={"error": {"message": f"bad header: {req.headers['authorization']}"}})
+
+    monkeypatch.setattr(voice, "http_transport", httpx.MockTransport(handler))
+    voice.update_settings(engine="groq")
+    vault.put("GROQ_API_KEY", "gsk-secret-key-123")
+    with pytest.raises(voice.VoiceError) as e:
+        voice.transcribe_file(make_audio(tmp_path / "v.ogg", 1.5, ["-c:a", "libopus"]))
+    assert e.value.code == "engine_error" and "gsk-secret" not in str(e.value) and "***" in str(e.value)

@@ -384,3 +384,20 @@ def test_a_copy_not_yet_recorded_keeps_its_ports(code):
     assert three["port"] == one["port"]                  # given back by the copy that was undone
     for sid, w in (("b" * 8 + "-sid", two), ("c" * 8 + "-sid", three)):
         worktrees.undo(sid, w)
+
+
+def test_a_clone_env_is_never_copied_through_a_linked_folder_of_the_copy(tmp_path):
+    clone = _init(tmp_path / "clone")
+    (clone / "conf").mkdir()
+    (clone / "conf" / "app.ini").write_text("x\n")
+    _git(clone, "add", ".")
+    _git(clone, "commit", "-qm", "conf")
+    (clone / "conf" / ".env").write_text("SECRET=1\n")
+    (clone / ".env").write_text("A=1\n")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    copy = tmp_path / "copy"
+    copy.mkdir()
+    (copy / "conf").symlink_to(outside)              # the base branch commits conf as a link
+    done = worktrees._copy_env(clone, copy)
+    assert list(outside.iterdir()) == [] and done == [".env"] and (copy / ".env").read_text() == "A=1\n"

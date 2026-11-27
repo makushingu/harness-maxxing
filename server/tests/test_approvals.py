@@ -730,3 +730,21 @@ def test_the_feed_buttons_of_a_request_that_is_gone_end_the_event(client, mx):
     r = client.post(f"/api/feed/{ev['id']}/act/allow")
     assert r.status_code < 500
     assert feed.get(ev["id"])["resolved"]
+
+
+def test_a_sandboxed_topic_never_runs_a_path_taking_command_outside_without_asking(topic):
+    from maxxing import agent_guard
+    allow = agent_guard.topic_settings(topic)["permissions"]["allow"]
+    assert "Bash(maxxing tasks:*)" in allow
+    assert not any(r.startswith(("Bash(maxxing pdf", "Bash(maxxing video")) for r in allow)
+
+
+def test_a_sandboxed_separate_copy_cannot_change_its_own_claude_settings(topic, tmp_path):
+    from maxxing import agent_guard
+    copy = str(tmp_path / "copy")
+    st = agent_guard.topic_settings(topic, copy)
+    assert copy in st["sandbox"]["filesystem"]["allowWrite"]
+    deny_write = st["sandbox"]["filesystem"]["denyWrite"]
+    assert {f"{copy}/.claude/settings.json", f"{copy}/.mcp.json", f"{copy}/.maxxing.json"} <= set(deny_write)
+    deny = st["permissions"]["deny"]
+    assert f"Edit(/{copy}/.claude/settings.json)" in deny and f"Edit(/{copy}/.mcp.json)" in deny

@@ -281,7 +281,7 @@ def _http():
     return httpx.Client(timeout=20, transport=http_transport)
 
 
-def _api_error(provider: str, r) -> VoiceError:
+def _api_error(provider: str, r, secrets=()) -> VoiceError:
     try:
         body = r.json()
     except (ValueError, RecursionError):
@@ -292,7 +292,11 @@ def _api_error(provider: str, r) -> VoiceError:
     else:
         msg = r.text
     code = "bad_key" if r.status_code in (401, 403) else "provider_error"
-    return VoiceError(502, code, f"{provider}: {str(msg)[:300] if msg else r.status_code}")
+    text = str(msg) if msg else str(r.status_code)
+    for v in secrets:                         # a proxy may echo the request headers (the key) back
+        if v:
+            text = text.replace(v, "***")
+    return VoiceError(502, code, f"{provider}: {text[:300]}")
 
 
 def _post(provider: str, url: str, **kw) -> dict:
@@ -304,7 +308,9 @@ def _post(provider: str, url: str, **kw) -> dict:
     except httpx.HTTPError as e:              # the key travels in a header: the message never carries it
         raise VoiceError(502, "provider_error", f"{provider}: unreachable ({type(e).__name__})") from None
     if r.status_code >= 400:
-        raise _api_error(provider, r)
+        headers = kw.get("headers") or {}
+        secrets = [w for v in headers.values() for w in (v, v.split(" ", 1)[-1]) if isinstance(v, str)]
+        raise _api_error(provider, r, sorted(set(secrets), key=len, reverse=True))
     try:
         data = r.json()
     except (ValueError, RecursionError):

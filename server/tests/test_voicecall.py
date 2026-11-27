@@ -355,3 +355,14 @@ def test_a_provider_error_that_is_not_a_json_object_is_a_502():
         e = voicecall._api_error("openai", r)
         assert e.status == 502 and e.code == "provider_error" and len(e.message) < 320, body
     assert voicecall._api_error("gemini", httpx.Response(401, text="<html>no</html>")).code == "bad_key"
+
+
+@pytest.mark.parametrize("provider", ["openai", "gemini"])
+def test_a_provider_error_that_echoes_the_key_never_shows_it(state, provider):
+    vault.put("OPENAI_API_KEY" if provider == "openai" else "GEMINI_API_KEY", "sk-secret-key-123")
+    voicecall.update_settings(mode="cloud", provider=provider)
+    voicecall.http_transport = httpx.MockTransport(
+        lambda r: httpx.Response(400, json={"error": {"message": f"bad headers: {dict(r.headers)}"}}))
+    with pytest.raises(voicecall.VoiceError) as e:
+        voicecall.cloud_token()
+    assert "sk-secret" not in e.value.message and "***" in e.value.message

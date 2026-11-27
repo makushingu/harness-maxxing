@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from maxxing import config, workspace
 
 from conftest import wait_idle
@@ -343,3 +345,20 @@ def test_a_description_with_a_nul_or_control_character_is_refused(client, mx, to
         assert r.status_code == 400 and r.json()["error"] == "bad_description"
     assert not (mx["ws"] / "projects/pnul").exists()
     assert client.post("/api/workspace/projects", json={"name": "pnul", "description": "two\nlines\tok"}).status_code == 200
+
+
+@pytest.mark.parametrize("content", ['{"permission_mode": "Sandbox"}', '{"permission_mode": 5}',
+                                     '{"permission_mode": "sandbox", "allowed_to', "", "[]"])
+def test_a_topic_mode_that_cannot_be_understood_never_falls_back_to_the_global_one(client, content):
+    """A typo or a .maxxing.json cut by a crash: the topic asks before acting, never the global bypass."""
+    client.post("/api/workspace/projects", json={"name": "acme"})
+    client.post("/api/workspace/projects/acme/topics", json={"name": "blog"})
+    path = "projects/acme/topics/blog"
+    workspace.update_topic("acme", "blog", permission_mode="sandbox")
+    assert workspace.topic_permission_mode(path) == "sandbox"
+    (workspace.topic_dir(path) / workspace.META_FILE).write_text(content)
+    assert workspace.topic_permission_mode(path) == "default"
+    (workspace.topic_dir(path) / workspace.META_FILE).write_text('{"allowed_tools": []}')
+    assert workspace.topic_permission_mode(path) == ""
+    (workspace.topic_dir(path) / workspace.META_FILE).unlink()
+    assert workspace.topic_permission_mode(path) == ""

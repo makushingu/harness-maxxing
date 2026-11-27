@@ -44,7 +44,8 @@ that read outside content: a hand-over then asks for your OK before risky action
   (free inside the topic folder, see below; the default of a new installation), `acceptEdits` (edits files, refuses commands), `ask` (asks you before anything but reading: **Allow** / **Deny** in the
   session, the notifications or Telegram), `default` (refuses edits and commands). Whatever the mode, a session in plan mode reads only and proposes a
   plan (see [Sessions](sessions)). Set them for the whole server (Settings -> Claude), a topic (topic menu -> **Permissions**) or a
-  scheduled job. Put every topic and job that reads untrusted content in a stricter mode.
+  scheduled job. Put every topic and job that reads untrusted content in a stricter mode. A topic whose mode cannot be
+  read (a typo in its `.maxxing.json`, a file cut by a crash) uses `default`, never the server's mode.
 - Each session and job runs in its own systemd unit with a memory cap and a few protections that never get in
   the way of administering the server: it cannot set the system clock, change the process personality or use
   realtime scheduling (config `unit_hardening`, on for installations made from 2.0.0-alpha.70, off on older ones). These do not make root less than root.

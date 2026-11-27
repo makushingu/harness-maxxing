@@ -349,3 +349,14 @@ def test_a_linked_preview_png_is_not_announced(tmp_path):
     (d / "preview.png").unlink()
     (d / "preview.png").write_bytes(png)
     assert themes.load(d)[0]["preview"] == "/api/themes/linked/file/preview.png"
+
+
+def test_a_linked_theme_folder_is_never_followed(mx, client, tmp_path):
+    png = b"\x89PNG\r\n\x1a\n" + b"0" * 32
+    elsewhere = _theme(tmp_path / "elsewhere", "out", {"name": "Out", "base": "glass", "wallpaper": "w.png"},
+                       {"w.png": png})
+    (mx["ws"] / "themes").mkdir(parents=True, exist_ok=True)
+    (mx["ws"] / "themes" / "out").symlink_to(elsewhere)
+    data = client.get("/api/themes").json()
+    assert data["themes"] == [] and data["errors"][0]["id"] == "out"
+    assert client.get("/api/themes/out/file/w.png").status_code == 404 and themes.get("out") is None

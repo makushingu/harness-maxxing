@@ -1472,6 +1472,9 @@ def move_session(sid: str, path: str, meta: dict | None = None) -> None:
             raise SessionError(409, "busy", "Wait for the current turn to finish before moving the session")
         old = mm.get("path") or ""
         mm["path"] = new
+        # its own mode (set by a cron or an agent) came from the old topic: the new topic's mode applies, so a
+        # session moved into a sandboxed topic never keeps a bypass of its own
+        mm.pop("permission_mode", None)
         csid = mm.get("csid") or sid
     _move_transcript(csid, root / old if old else root, root / new if new else root)
     bus.invalidate("sessions", "workspace")
