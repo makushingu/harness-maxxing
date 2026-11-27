@@ -300,6 +300,19 @@ def test_a_request_with_a_session_that_is_not_text_does_not_stop_the_watcher(cli
     assert approvals.pending()[0]["session"] == "" and approvals.waiting("") == 0
 
 
+@pytest.mark.parametrize("bad", [["s1"], {"id": 1}])
+def test_answering_a_request_with_a_session_that_is_not_text_is_not_a_500(client, mx, bad):
+    from maxxing import approval_mcp, approvals
+    folder = approvals.folder()
+    folder.mkdir(parents=True, exist_ok=True)
+    rid = "0123456789abcdee"
+    approval_mcp.write_atomic(folder / f"{rid}.json", {
+        "id": rid, "session": bad, "tool": "Bash", "status": "pending", "input": {"command": "ls"},
+        "at": time.time(), "expires": time.time() + 1800})
+    assert approvals.decide(rid, "deny")["status"] == "deny"
+    assert approval_mcp.read(folder / f"{rid}.json")["status"] == "deny"
+
+
 def test_two_answers_at_once_only_one_wins(client, mx):
     from maxxing import approval_mcp, approvals
     folder = approvals.folder()

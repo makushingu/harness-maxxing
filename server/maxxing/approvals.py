@@ -224,7 +224,7 @@ def get(rid: str) -> dict:
     d = approval_mcp.read(_file(rid)) if ID_RE.match(rid or "") else None
     if not d:
         raise ApprovalError(404, "not_found", "No such approval request")
-    return d
+    return _clean(d)                            # decide() answers, counts and notes with it: same types as _all()
 
 
 _lock = config.ProcessLock("approvals")     # read-check-write of a request (decide, the watcher's expiry)
