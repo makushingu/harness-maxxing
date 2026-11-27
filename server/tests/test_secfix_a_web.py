@@ -83,7 +83,11 @@ def test_only_a_link_of_the_app_types_a_prompt_in_a_new_session():
     assert "armPrompt(url)" in _fn(arm, "export const draftUrl")
     index = _src("pages", "sessions", "index.tsx")
     assert re.search(r"if \(!prompt \|\| [^\n]*\|\| !takePrompt\(prompt\)\) return\n\s+prefillDraft\(", index)
-    assert index.count("prefillDraft(") == 1
+    # the only other text typed for the user: what another app shared to the installed one, never in a browser tab
+    assert re.search(r"takeShare\(\)\.then\(\(s\) => \{\n\s+if \(!s\) return [^\n]*\n\s+if \(s\.text\) prefillDraft\(", index)
+    share = _fn((WEB / "pwa" / "share.ts").read_text(encoding="utf-8"), "export async function takeShare(")
+    assert share.index("if (!isStandalone())") < share.index("caches.open(")
+    assert index.count("prefillDraft(") == 2
     # the links of the app that carry a prompt arm it; a link of a message (Markdown) does not
     assert "armPrompt" not in _src("components", "ui", "markdown.tsx")
     assert "onClick={() => armPrompt(href)}" in _src("pages", "dashboard", "blocks.tsx")

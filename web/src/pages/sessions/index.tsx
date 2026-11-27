@@ -19,7 +19,8 @@ import type { Session } from '@/lib/types'
 import { PageHeader, useDocumentTitle } from '@/components/shell/Page'
 import { Button, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, EmptyState, Kbd, MOD, Tooltip } from '@/components/ui'
 import { takePrompt } from '@/features/agents/EditWithClaude'
-import { focusComposer, MAX_STACK, prefillDraft, ROW_SPLIT_MAX, ROW_SPLIT_MIN, useSessionsUI, type Col } from './store'
+import { takeShare } from '@/pwa/share'
+import { focusComposer, giveFiles, MAX_STACK, prefillDraft, ROW_SPLIT_MAX, ROW_SPLIT_MIN, useSessionsUI, type Col } from './store'
 import { stripRows } from './layouts'
 import { SessionTree } from './Tree'
 import { AgentHover } from '@/features/agents/AgentHover'
@@ -289,6 +290,22 @@ function Workspace() {
   const topics = React.useMemo(() => (ws?.projects || []).flatMap((p) => p.topics), [ws])
   const defaultTopic = currentTopic ?? topics[0]?.path ?? null
   const newInCurrent = () => defaultTopic !== null && newSession(defaultTopic)
+
+  // shared=1: another app shared a text, a link or files to the installed one (service worker -> pwa/share.ts). A new
+  // session of the current topic opens with them in its composer; nothing is sent before the user sends it.
+  React.useEffect(() => {
+    if (params.get('shared') !== '1' || defaultTopic === null) return
+    void takeShare().then((s) => {
+      if (!s) return navigate('/sessions', { replace: true })    // read already (a reload): only the address is tidied
+      if (s.text) prefillDraft(`new:${defaultTopic}`, s.text)
+      giveFiles(`new:${defaultTopic}`, s.files)
+      if (mobile) navigate(`/sessions?path=${encodeURIComponent(defaultTopic)}&new=1`, { replace: true })
+      else {
+        navigate('/sessions', { replace: true })
+        newSession(defaultTopic)
+      }
+    })
+  }, [location.search, defaultTopic]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keyboard: Alt+N / Alt+←→ / Alt+W / Alt+M (Maxxing mode) use e.code (layout- and macOS-proof), '/' focuses the composer.
   React.useEffect(() => {

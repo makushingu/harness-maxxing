@@ -265,3 +265,20 @@ def test_the_service_worker_answers_a_button_through_the_feed():
 def test_the_newer_address_of_chrome_is_a_known_push_service(client):
     assert client.post("/api/push/devices", json={"endpoint": "https://jmt17.google.com/fcm/send/abc:APA91"}).status_code == 200
     assert client.post("/api/push/devices", json={"endpoint": "https://jmt17.google.com.evil.example/fcm/send/abc"}).status_code == 400
+
+
+def test_the_installed_app_is_a_share_target():
+    """Every manifest (one per accent) offers the app in the share sheet, the worker keeps what is shared for the app
+    and the app only takes it when it is the installed one."""
+    web = SW.parents[1]
+    manifests = sorted((web / "public").glob("manifest*.webmanifest"))
+    assert len(manifests) >= 7
+    for f in manifests:
+        st = json.loads(f.read_text())["share_target"]
+        assert (st["action"], st["method"], st["enctype"]) == ("/share", "POST", "multipart/form-data"), f.name
+        assert st["params"]["files"][0]["name"] == "files" and {"title", "text", "url"} <= set(st["params"])
+    src = SW.read_text()
+    assert "pathname === '/share'" in src and "Response.redirect('/sessions?shared=1', 303)" in src
+    assert ".slice(0, 10)" in src
+    take = (web / "src" / "pwa" / "share.ts").read_text()
+    assert take.index("isStandalone()") < take.index("cache.match('/__share/meta')")

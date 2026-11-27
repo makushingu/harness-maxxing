@@ -49,8 +49,31 @@ self.addEventListener('message', (event) => {
 
 const bypass = (url) => url.pathname.startsWith('/api/') || url.pathname === '/api' || url.pathname.startsWith('/ext/') || url.pathname === '/sw.js'
 
+// Shared to the installed app from another one (manifest share_target: a photo, a file, a link, a text): kept in a
+// cache of this browser, then the app opens a new session with it (web/src/pwa/share.ts). Nothing is sent before the
+// user sends the message.
+const SHARE = 'mx-share'
+const keepShare = async (req) => {
+  try {
+    const form = await req.formData()
+    const files = form.getAll('files').filter((f) => f && typeof f === 'object' && 'name' in f).slice(0, 10)
+    const words = ['title', 'text', 'url'].map((k) => String(form.get(k) || '').trim()).filter((v, i, a) => v && a.indexOf(v) === i)
+    await caches.delete(SHARE)
+    const cache = await caches.open(SHARE)
+    for (let i = 0; i < files.length; i++) await cache.put(`/__share/${i}`, new Response(files[i]))
+    await cache.put('/__share/meta', new Response(JSON.stringify({ text: words.join('\n'), files: files.map((f) => ({ name: f.name || 'file', type: f.type || '' })) })))
+  } catch (e) {
+    /* nothing kept: the app opens anyway */
+  }
+  return Response.redirect('/sessions?shared=1', 303)
+}
+
 self.addEventListener('fetch', (event) => {
   const req = event.request
+  if (req.method === 'POST' && new URL(req.url).origin === self.location.origin && new URL(req.url).pathname === '/share') {
+    event.respondWith(keepShare(req))
+    return
+  }
   if (req.method !== 'GET') return
   const url = new URL(req.url)
   if (url.origin !== self.location.origin || bypass(url)) return

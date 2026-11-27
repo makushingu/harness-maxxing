@@ -607,6 +607,28 @@ def j_push_feed(r: Run) -> None:
     r.healthy(pg)
 
 
+def j_share(r: Run) -> None:
+    """Another app shares a text and a link to the installed app (phone): a new session opens with them typed in."""
+    r.mock.scenario("ready")
+    pg = r.page(PHONE)
+    pg.add_init_script("Object.defineProperty(navigator, 'standalone', { get: () => true })")   # the installed app
+    r.go(pg, "/sessions")
+    pg.evaluate("navigator.serviceWorker.ready")
+    r.go(pg, "/sessions")                       # the service worker now answers the requests of the page
+    pg.evaluate("""() => { const f = document.createElement('form'); f.method = 'post'; f.action = '/share'
+        f.enctype = 'multipart/form-data'
+        f.innerHTML = '<input name="text" value="Look at this before the call"><input name="url" value="https://example.com/pricing">'
+        document.body.appendChild(f); f.submit() }""")
+    pg.wait_for_url("**/sessions?*new=1*")
+    r.settle(pg)
+    box = pg.locator("main textarea").first
+    box.wait_for()
+    pg.wait_for_function("() => (document.querySelector('main textarea')?.value || '').includes('example.com/pricing')")
+    if "Look at this before the call" not in box.input_value():
+        raise Failure("the shared text is not in the message box")
+    r.healthy(pg, phone=True)
+
+
 JOURNEYS = {
     "guide": j_guide, "pages": j_pages, "pages-phone": j_pages_phone, "pages-fr": j_pages_fr,
     "pages-fr-phone": j_pages_fr_phone, "pages-translated": j_pages_translated,
@@ -615,7 +637,7 @@ JOURNEYS = {
     "new-session": j_new_session, "session-phone": j_session_phone, "palette": j_palette, "theme": j_theme,
     "setting-saved": j_setting_saved, "settings-nav": j_settings_nav, "files": j_files, "team": j_team, "nav": j_nav,
     "usage-agents": j_usage_agents, "logs-search": j_logs_search, "turn-details": j_turn_details, "community": j_community,
-    "push-feed": j_push_feed, "sign-out": j_sign_out,
+    "push-feed": j_push_feed, "share": j_share, "sign-out": j_sign_out,
 }
 
 

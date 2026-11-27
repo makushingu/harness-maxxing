@@ -6,7 +6,7 @@ import { loadGroups, useT } from '@/i18n'
 import { Button, Sensitive, Spinner, Tooltip, toast } from '@/components/ui'
 import { useMentionTargets } from '@/lib/queries'
 import { errorMessage } from '@/lib/api'
-import { DRAFT_EVENT, leftOutbox, loadAtts, loadDraft, loadQuotes, onSeed, outboxAdd, outboxDone, outboxMove, registerComposer, saveAtts, saveDraft, saveQuotes, takeSeed, useSessionsUI, type DraftAtt, type OutboxEntry, type Pending, type Seed } from './store'
+import { DRAFT_EVENT, FILES_EVENT, takeFiles, leftOutbox, loadAtts, loadDraft, loadQuotes, onSeed, outboxAdd, outboxDone, outboxMove, registerComposer, saveAtts, saveDraft, saveQuotes, takeSeed, useSessionsUI, type DraftAtt, type OutboxEntry, type Pending, type Seed } from './store'
 import { busyEnd, busyStart } from '@/lib/busy'
 import { cancelUpload, moveUploads, onUploads, startUpload, uploadsOf } from './uploads'
 import type { MentionTarget, QueueItem, SentMention } from '@/lib/types'
@@ -228,6 +228,18 @@ export const Composer = React.forwardRef<ComposerHandle, {
       }
     })
   }, [])
+  // Files given from outside (shared to the installed app): attached as soon as this composer is there.
+  React.useEffect(() => {
+    const take = (e?: Event) => {
+      if (e && (e as CustomEvent<string>).detail !== draftKey) return
+      const files = takeFiles(draftKey)
+      if (files.length) addFiles(files)
+    }
+    take()
+    window.addEventListener(FILES_EVENT, take)
+    return () => window.removeEventListener(FILES_EVENT, take)
+  }, [draftKey, addFiles])
+
   React.useImperativeHandle(ref, () => ({ addFiles, focus: () => ta.current?.focus(), quote, bringBack }), [addFiles, quote, bringBack])
   // "New session from this message": the seed may be waiting when this composer mounts, or arrive while it is open.
   React.useEffect(() => {

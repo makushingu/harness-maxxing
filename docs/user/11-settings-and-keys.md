@@ -224,6 +224,11 @@ The getting started guide (also in Help, **?** at the bottom left) and the inter
 Security**.
 
 Also:
+- **Share to Harness** (installed app, Android): in any app - Photos, Files, the browser, a note - tap **Share** and
+  pick **Harness Maxxing**. A new session of the topic you were in opens with the photo, the file, the link or the
+  text already in the message box (10 files at most); nothing is sent before you send the message, and you can
+  move the session to another topic first. An iPhone does not offer installed web apps in its share sheet: attach
+  the file from the message box instead.
 - In the installed app, **swipe from the left edge** to open the page's list (the sessions on Sessions), from the
   right edge to open the menu;
   swipe a drawer back towards its edge to close it.

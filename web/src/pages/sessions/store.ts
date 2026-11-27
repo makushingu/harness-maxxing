@@ -519,6 +519,21 @@ export function loadDraft(k: string): string {
 }
 import { DRAFT_EVENT } from '@/lib/drafts'
 export { DRAFT_EVENT }
+/* Files that arrive for a composer from outside it (shared to the installed app: pwa/share.ts): they wait here
+ * until that composer is there. */
+export const FILES_EVENT = 'mx-composer-files'
+const waitingFiles = new Map<string, File[]>()
+export function giveFiles(k: string, files: File[]) {
+  if (!files.length) return
+  waitingFiles.set(k, [...(waitingFiles.get(k) || []), ...files])
+  window.dispatchEvent(new CustomEvent(FILES_EVENT, { detail: k }))
+}
+export function takeFiles(k: string): File[] {
+  const f = waitingFiles.get(k) || []
+  waitingFiles.delete(k)
+  return f
+}
+
 const PREFILL = 'mx-prefilled:'
 
 /** Types `prompt` in a composer's draft (links such as the dashboard examples). A draft that is still an untouched
