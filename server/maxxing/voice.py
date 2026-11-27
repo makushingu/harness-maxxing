@@ -432,7 +432,8 @@ def _engine_api(engine: str, wav: Path, language: str, s: dict) -> dict:
             msg = (r.json().get("error") or {}).get("message") or r.text
         except Exception:  # noqa: BLE001
             msg = r.text
-        raise VoiceError(502, "engine_error", f"{engine} error {r.status_code}: {_clean(str(msg)[:200])}")
+        msg = str(msg).replace(key, "***")    # a proxy may echo the request headers back
+        raise VoiceError(502, "engine_error", f"{engine} error {r.status_code}: {_clean(msg[:200])}")
     try:
         j = r.json()
     except ValueError:
