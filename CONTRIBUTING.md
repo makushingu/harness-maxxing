@@ -40,6 +40,9 @@ the UI rules [docs/dev/DESIGN.md](docs/dev/DESIGN.md): change the contract docs 
   ```bash
   cd web && npm ci && npm run typecheck && npm run build
   ```
+  Then `scripts/ui-check.sh`: a real browser clicks through the built interface on the mock backend (every page,
+  computer and phone, English and French, about 4 minutes). It needs `uv` and a Chromium (the one Harness installs,
+  or `MAXXING_E2E_CHROME=/path/to/chrome`).
 - **Harness Link** (devices), only if you touched `link/` (Go) or `android/` (Kotlin):
   ```bash
   cd link && go test ./...

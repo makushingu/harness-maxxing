@@ -207,6 +207,7 @@ Developers: [`docs/dev/PLAN.md`](docs/dev/PLAN.md) (architecture), [`docs/dev/AP
 ```bash
 cd server && uv sync && uv run pytest        # server
 cd web && npm ci && npm run build            # web UI (web/dist is committed)
+scripts/ui-check.sh                          # a real browser clicks through the built UI (mock backend)
 ```
 
 ## Fair Source
