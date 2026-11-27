@@ -57,7 +57,9 @@ then `systemctl restart claude-maxxing`. The checkbox then shows it is turned of
 
 Unchecking everything (or **Stop, don't contact me**) stops it: the server sends nothing more and is never contacted
 again (security alerts included). To have what we have about it erased, ask us (see
-[harness-maxxing.com/privacy](https://harness-maxxing.com/privacy)). The counter is on by default since 2.0.0a94: an
+[harness-maxxing.com/privacy](https://harness-maxxing.com/privacy)). A new installation asks the question in the
+terminal (`ANON_COUNT=1` or `0` answers it in advance; without a terminal and without an answer, nothing is sent).
+On servers installed before, the counter is on by default since 2.0.0a94: an
 update turned it on once for servers where nobody had ever answered this choice; a server where someone had seen it
 and left it unchecked keeps it off. An update never turns on the email or the news.
 

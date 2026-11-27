@@ -6,7 +6,21 @@ section: Reference
 Harness Maxxing gives a browser (and a Telegram chat) control over Claude Code on your server.
 Read this page once.
 
-## Claude runs with full permissions (bypass mode)
+## What Claude may do on the server (permission mode)
+
+**A new installation works in the sandbox by default.** A session works without asking inside
+its topic folder; its commands cannot write elsewhere nor read the server's keys, the SSH keys or the rest of the
+home folder; what has to leave the topic (installing a package, a service, another folder) arrives as an Allow /
+Deny request, and **Full access** on that request gives the topic full rights for good. The topics of the `system`
+project keep full access: that is where Harness repairs, updates and changes itself. When the sandbox cannot start
+on a server (no bubblewrap, an AppArmor profile in the way), the installation keeps full access and `maxxing doctor`
+says so.
+
+**A server that was installed before this default keeps the mode it had** (full access, unless you changed it): nothing switches by
+itself. `maxxing doctor` shows the mode in use; Settings → Claude → Permissions changes the default, a topic's
+menu → Permissions changes one topic.
+
+### Full access (bypass mode)
 
 **Sessions, Claude jobs and shell jobs run as root, with full rights on the server.** By default `claude` runs
 with `--dangerously-skip-permissions`: Claude can read and change any file (your secrets, SSH keys, other sites'

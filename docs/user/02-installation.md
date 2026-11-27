@@ -194,6 +194,7 @@ curl --proto '=https' --tlsv1.2 -fsSL https://get.harness-maxxing.com | ACCESS=d
 | `CLAUDE_TOKEN` / `ANTHROPIC_API_KEY` | – | optional: Claude credentials stored right away |
 | `FIREWALL` | `auto` | `auto` = ufw only on a server with nothing else exposed (an active ufw is kept, rules added), `1` = always, `0` = never (security updates and fail2ban are still set up) |
 | `SSH_HARDEN` | `auto` | `auto` = turn SSH password logins off only when this session is proven to use a key, `1` = also when a key is installed but the session cannot be checked (console, web terminal), `0` = never touch SSH |
+| `ANON_COUNT` | `ask` | the anonymous daily count of installations ([what is sent](license)): `ask` = a new installation asks in the terminal (not sent when there is no terminal), `1` = send it, `0` = never |
 | `VOICE` | `local` (`off` under 3 GB of RAM) | voice messages: `local` (Whisper on the server, model downloaded in the background), `groq`, `openai` or `off` - see Voice messages. `VOICE=local` on a smaller server is asked, refused unattended |
 | `TOOLS` | `background` | `background` = Node.js, Chromium, Remotion, Scrapling and the speech model are installed once the service runs, `foreground` = wait for them, `0` = skip (`maxxing deps update` later) |
 | `SWAP` | `auto` | `auto` = a 2 GB `/swapfile` under 4 GB of RAM when there is no swap, on a fresh server only (not in containers, not on a server already in use or a re-run), `1` = the same on any server, `0` = never |

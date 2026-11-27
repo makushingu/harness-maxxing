@@ -51,6 +51,7 @@ COMPACTION_JOB = {
     "enabled": False,               # turned on at the end of the onboarding, once Claude is signed in
     "notify": "failure",
     "timeout_s": 1800,
+    "permission_mode": "bypass",    # it rewrites the memory files of every project, whatever the server's default
 }
 ENABLE_AFTER_ONBOARDING = ("memory-compaction",)   # default jobs created off until Claude is signed in
 
@@ -632,6 +633,14 @@ def do_init(a: argparse.Namespace) -> dict:
                  ("health_feed", not older), ("tasks_page", older), ("agents_page", not older),
                  ("usage_widget", not older)):
         raw.setdefault(k, v)
+    if not older and "permission_mode" not in raw and _sandbox_ready():
+        # a new install: sessions work inside their topic folder (mode sandbox), the `system` project keeps full
+        # access (it repairs and changes Harness itself); an older install keeps the mode it had
+        raw["permission_mode"] = "sandbox"
+        raw["sandbox_default"] = True
+    if getattr(a, "count", None):                 # answered in the installer: never turned on by itself after that
+        reg = raw.get("register") if isinstance(raw.get("register"), dict) else {}
+        raw["register"] = {**reg, "count": a.count == "yes", "asked": True}
     from . import register                        # once (2.0.0a94): anonymous counter on unless the user was asked
     register.migrate(raw)
     config.write_json(config.config_path(), raw)
@@ -653,6 +662,10 @@ def do_init(a: argparse.Namespace) -> dict:
 
     ws = Path(raw["workspace"])
     report["workspace_created"] = copy_templates(ws)
+    if raw.pop("sandbox_default", None):
+        report["permission_mode"] = "sandbox (project system: full access)"
+        _system_full_access(ws)
+        config.write_json(config.config_path(), raw)
     report["skills"] = install_skills()
     report["claude_settings"] = "defaults set (transcripts kept, no AI credit in commits)" if claude_settings_defaults() else "unchanged"
     report["crons"] = "skipped (--no-crons)" if a.no_crons else ensure_default_crons()
@@ -668,6 +681,25 @@ def do_init(a: argparse.Namespace) -> dict:
     if not security.password_is_set():
         report["setup_link"] = f"{cli._base(config.load_config())}/setup?token={security.ensure_setup_token()}"
     return report
+
+
+def _sandbox_ready() -> bool:
+    """What the mode `sandbox` needs is on this server (the AppArmor profile over bubblewrap is loaded when missing)."""
+    from . import agent_guard
+    try:
+        agent_guard.ensure_profile()
+        return bool(agent_guard.available(fresh=True)["ok"])
+    except Exception:  # noqa: BLE001 - never a reason to fail an install
+        return False
+
+
+def _system_full_access(ws: Path) -> None:
+    """The topics of the `system` project in mode bypass, where the server's default is the sandbox."""
+    from . import workspace
+    topics = ws / "projects/system/topics"
+    for d in sorted(topics.iterdir()) if topics.is_dir() else []:
+        if d.is_dir() and not workspace._folder_meta(d).get("permission_mode"):
+            workspace._set_folder_meta(d, "permission_mode", "bypass")
 
 
 def _is_hostname(s: str) -> bool:
@@ -714,6 +746,8 @@ def _cfg_init(p: argparse.ArgumentParser) -> None:
     p.add_argument("--public-url", help="public URL, e.g. https://ui.example.com ('' to clear)")
     p.add_argument("--timezone", help="IANA time zone, e.g. Europe/Paris (default: system)")
     p.add_argument("--language", choices=["en", "fr"], help="UI language")
+    p.add_argument("--count", choices=["yes", "no"],
+                   help="the anonymous daily count of installations, as answered at the installation")
     p.add_argument("--system-clock", choices=["follow", "keep"],
                    help="follow: the system zone follows the configured one; keep: never touch it (shared server)")
     p.add_argument("--claude-dir", help="Claude Code folder for Harness Maxxing (default ~/.claude): another one keeps "
@@ -1336,6 +1370,24 @@ def check_voice() -> Check:
     return _c("voice", lvl, title, detail, fix)
 
 
+def check_permissions() -> Check | None:
+    """The server's default permission mode: full access is said (not a problem: the owner's choice), a sandbox
+    default that cannot start is one."""
+    from . import agent_guard
+    mode = config.load_config().get("permission_mode") or "bypass"
+    if mode == "bypass":
+        return _c("permissions", INFO, "sessions run with full access to the server (permission mode: bypass)",
+                  "a topic in mode Sandbox works inside its folder, without the server's keys, and asks before leaving it",
+                  "Settings -> Claude -> Permissions -> Sandbox (or a topic's menu -> Permissions)")
+    if mode != "sandbox":
+        return None
+    st = agent_guard.available(fresh=True)
+    if st["ok"]:
+        return _c("permissions", OK, "sessions work in a sandbox by default (full access: per topic)", "")
+    return _c("permissions", FAIL, f"the sandbox cannot start: {', '.join(st['missing'])} - sessions stop",
+              "", "maxxing agents sandbox-setup   (as root)")
+
+
 def check_agent_sandbox() -> Check | None:
     """Only when a sandboxed agent exists: bubblewrap, socat and (Ubuntu 24.04+) the AppArmor profile."""
     from . import agent_guard, agents
@@ -1645,7 +1697,7 @@ def collect_checks(live: bool = False, fetch: bool = True, deps: bool = False) -
         check_python, check_uv, check_claude_cli, lambda: check_claude_version(fetch), lambda: check_claude_auth(live),
         lambda: check_skill_listing(cfg), check_setup,
         check_service, check_hardening, lambda: check_caddy_site(cfg), check_infra_paths, lambda: check_bind(cfg), lambda: check_http(cfg), lambda: check_public_url(cfg),
-        lambda: check_caddy(cfg), check_crontab, lambda: check_timezone(cfg), lambda: check_telegram(cfg), lambda: check_backup(cfg), check_voice, check_tools, check_stale_units, check_cpu_priorities, check_agent_sandbox, check_browser, check_devices, check_managed_deps, check_security, check_state_files,
+        lambda: check_caddy(cfg), check_crontab, lambda: check_timezone(cfg), lambda: check_telegram(cfg), lambda: check_backup(cfg), check_voice, check_tools, check_stale_units, check_cpu_priorities, check_agent_sandbox, check_permissions, check_browser, check_devices, check_managed_deps, check_security, check_state_files,
         lambda: check_disk(cfg), check_memory, lambda: check_workspace(cfg), check_skills, check_web,
         check_license, lambda: check_git(fetch), check_update_signature,
     ] + ([check_deps] if deps else [])
