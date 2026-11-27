@@ -88,12 +88,40 @@ def _conn() -> sqlite3.Connection:
         except sqlite3.DatabaseError as e:
             if key in _ready or not _damaged(e):
                 raise
-        stamp = f"{time.strftime('%Y%m%d-%H%M%S')}-{os.getpid()}-{time.monotonic_ns()}"   # never overwrites an older copy
-        for suffix in ("", "-wal", "-shm"):
-            with contextlib.suppress(OSError):
-                os.replace(f"{path}{suffix}", f"{path}.damaged-{stamp}{suffix}")
-        log.warning("feed.db was unreadable: moved to feed.db.damaged-%s, starting a new feed", stamp)
+        _set_aside(path, key)
         return _open(path, key)
+
+
+def _set_aside(path: Path, key: str) -> None:
+    """Move a broken feed.db (and its -wal / -shm) out of the way; the next open starts a fresh one. Under _aside_lock."""
+    stamp = f"{time.strftime('%Y%m%d-%H%M%S')}-{os.getpid()}-{time.monotonic_ns()}"   # never overwrites an older copy
+    for suffix in ("", "-wal", "-shm"):
+        with contextlib.suppress(OSError):
+            os.replace(f"{path}{suffix}", f"{path}.damaged-{stamp}{suffix}")
+    _ready.discard(key)
+    log.warning("feed.db was unreadable: moved to feed.db.damaged-%s, starting a new feed", stamp)
+
+
+def _heal() -> bool:
+    """A write hit a damaged page of a feed.db that opened fine (only its header is read at open): set it aside if
+    it is still damaged - another writer may already have replaced it. True when the next write can try again."""
+    path = db_path()
+    key = str(path)
+    with _aside_lock:
+        try:
+            c = sqlite3.connect(path, timeout=10)
+            try:
+                ok = c.execute("PRAGMA quick_check(1)").fetchone()[0] == "ok"
+            finally:
+                c.close()
+        except sqlite3.DatabaseError as e:
+            if not _damaged(e):
+                return False
+            ok = False
+        if ok:
+            return True
+        _set_aside(path, key)
+        return True
 
 
 def _damaged(e: sqlite3.DatabaseError) -> bool:
@@ -214,7 +242,20 @@ def post(title: str, body: str = "", level: str = "info", source: str = "custom"
          hops: int = 0) -> dict | None:
     """Add an event. Returns it, or None when `dedupe` says it was already posted. `actions` (buttons), `ref` (what it
     follows) and `agent` (the agent it is about) make it an alert: see act() and update(). `hops`: posted from an agent
-    run (agents.scan_feed starts the runs it triggers that many hops deep)."""
+    run (agents.scan_feed starts the runs it triggers that many hops deep). A damaged feed.db is set aside and the
+    event goes to a fresh one, or every notification would be lost from then on."""
+    args = (title, body, level, source, url, dedupe, group, notify)
+    kw = {"actions": actions, "ref": ref, "agent": agent, "hops": hops}
+    try:
+        return _post(*args, **kw)
+    except sqlite3.DatabaseError as e:
+        if not _damaged(e) or not _heal():
+            raise
+    return _post(*args, **kw)
+
+
+def _post(title: str, body: str, level: str, source: str, url: str, dedupe: str | None, group: str | None,
+          notify: bool, *, actions: list[dict] | None, ref: str | None, agent: str | None, hops: int) -> dict | None:
     title, body, url = _no_controls(_utf8(title)), _no_controls(_utf8(body)), _utf8(url)
     acts = _clean_actions(actions)
     ref = (_utf8(str(ref)) or "")[:300] or None if ref else None

@@ -476,3 +476,21 @@ def test_terminal_escapes_never_reach_the_stored_event(mx):
     assert "\x1b" not in e["title"] and "\x07" not in e["title"] and "\x9b" not in e["title"]
     assert e["title"] == "hi ]0;PWNED[2J x"
     assert e["body"] == "line\n\tnext[31m red"
+
+
+def test_a_feed_db_damaged_inside_is_set_aside_on_the_next_write(mx):
+    """A page broken after the header passes the open; every write then failed with "malformed" and the
+    system notifications (crons, updates, sign-ins) were lost without a sound."""
+    for i in range(300):
+        feed.post(f"e{i}", body="z" * 500, notify=False)
+    path = feed.db_path()
+    c = sqlite3.connect(path)
+    c.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    c.close()
+    b = bytearray(path.read_bytes())
+    b[8192:8192 + 4096] = b"\xff" * 4096
+    path.write_bytes(bytes(b))
+    assert feed.system("cron failed")["title"] == "cron failed"
+    assert feed.post("after")["title"] == "after"
+    assert [e["title"] for e in feed.list_events()["events"]] == ["after", "cron failed"]
+    assert len([p for p in path.parent.glob("feed.db.damaged-*") if not p.name.endswith(("-wal", "-shm"))]) == 1
