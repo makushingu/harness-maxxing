@@ -6,6 +6,7 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 ## Unreleased
 
 New:
+- **Protections, at a glance.** Settings → Security starts with what protects this server (two-step sign-in, permission mode, how the secrets are stored, firewall and security updates, the address the interface listens on) and what is left to turn on.
 - **A key only for the topics you choose.** In Settings → Keys, a key (or a secret file) given to Claude can be limited to some projects or topics: sessions and jobs elsewhere no longer receive it (`maxxing keys set NAME --topics projects/shop`). A key without a choice goes everywhere, as before.
 - **Two-step sign-in with an authenticator app.** Settings → Security: an app (Aegis, 2FAS, Google Authenticator...) can give the sign-in code, with or without Telegram, and 10 recovery codes replace a code once each when your phone is out of reach. Telegram stays the default.
 - **Signed-in devices.** Settings → Security lists the browsers signed in (last seen, address), with Disconnect for one and "Disconnect all the others". Nobody is signed out by the update.

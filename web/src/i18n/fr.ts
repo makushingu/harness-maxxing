@@ -871,6 +871,8 @@ export const fr: Record<keyof typeof en, string> = {
   'security.changedDesc': 'Les autres appareils ont été déconnectés.',
   'security.sessions': 'Appareils connectés',
   'security.sessionsDesc': 'Les alertes de connexion peuvent être envoyées sur Telegram (Réglages › Telegram).',
+  'security.status': 'Protections',
+  'security.statusDesc': 'Ce qui protège ce serveur, et ce qu’il reste à activer.',
   'security.everywhere': 'Pour vous déconnecter partout, changez votre mot de passe : tous les cookies de session existants cessent aussitôt de fonctionner.',
   'security.app': "Application d'authentification",
   'security.appDesc': "Après le mot de passe, un nouveau navigateur demande le code à 6 chiffres d'une application (Aegis, 2FAS, Google Authenticator…). Fonctionne sans Telegram ; avec les deux, l'un ou l'autre suffit. Sortie de secours sans l'interface : maxxing 2fa off sur le serveur.",

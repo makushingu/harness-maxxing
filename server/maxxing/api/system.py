@@ -33,6 +33,12 @@ async def get_health(force: bool = False):
     return await asyncio.to_thread(health.collect, force)
 
 
+@router.get("/system/security")
+async def get_security():
+    from .. import cmd_core
+    return {"checks": await asyncio.to_thread(cmd_core.security_report)}
+
+
 class SeenBody(BaseModel):
     id: str
     seen: bool = True

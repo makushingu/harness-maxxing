@@ -1559,6 +1559,36 @@ def check_state_files() -> Check | None:
               "compare with the current file, restore what is missing (keys: Settings -> Keys), then delete the copy")
 
 
+def check_sign_in() -> Check:
+    """The second step of the sign-in: Telegram, an authenticator app, or the password alone."""
+    from . import twofactor
+    ways = [n for n, on in (("Telegram", twofactor.enabled()), ("authenticator app", twofactor.totp_on())) if on]
+    if ways:
+        return _c("sign_in", OK, f"two-step sign-in on ({' and '.join(ways)})",
+                  f"{twofactor.recovery_left()} recovery code(s) left")
+    return _c("sign_in", WARN, "two-step sign-in off: the password alone opens this server", "",
+              "Settings -> Security -> Two-step sign-in")
+
+
+def security_report() -> list[Check]:
+    """What protects this installation, one line each (Settings -> Security): the doctor checks about security,
+    read together. A check that fails to run is skipped, never an error for the page."""
+    cfg = config.load_config()
+    out: list[Check] = []
+    for fn in (check_sign_in, check_permissions, check_secrets_store, check_security, check_update_signature):
+        try:
+            c = fn()
+        except Exception:  # noqa: BLE001
+            continue
+        if c:
+            out.append(c)
+    bind = str(cfg.get("bind") or "")
+    out.append(_c("listen", OK, "the interface listens on this machine only (reached through the reverse proxy)")
+               if bind in ("127.0.0.1", "::1", "localhost") else
+               _c("listen", INFO, f"the interface listens on {bind}", "reachable without the reverse proxy on that address"))
+    return out
+
+
 def check_secrets_store() -> Check:
     """How the server's secrets are kept on disk: clear (mode 600), or sealed by `maxxing keys encrypt`."""
     st = config.secrets_status()

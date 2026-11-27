@@ -10,6 +10,7 @@ import { SettingRow } from '@/features/common'
 import { TwoFactorRow } from '@/features/auth/TwoFactorRow'
 import { TotpRow } from '@/features/auth/TotpRow'
 import { SignedInBrowsers } from '@/features/auth/SignedInBrowsers'
+import { SecurityStatus } from '@/features/auth/SecurityStatus'
 import { SettingsCard, SectionStack } from './ui'
 
 export function SecuritySection() {
@@ -25,6 +26,9 @@ export function SecuritySection() {
   const [errors, setErrors] = React.useState<{ current?: string; password?: string; confirm?: string }>({})
   return (
     <SectionStack>
+      <SettingsCard title={t('security.status')} description={t('security.statusDesc')}>
+        <SecurityStatus />
+      </SettingsCard>
       <SettingsCard title={t('security.change')} description={t('security.changeDesc')}>
         <form
           className="grid max-w-md gap-5"

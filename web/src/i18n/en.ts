@@ -881,6 +881,8 @@ export const en = {
   'security.changedDesc': 'Other devices have been signed out.',
   'security.sessions': 'Signed-in devices',
   'security.sessionsDesc': 'Sign-in alerts can be sent to Telegram (Settings › Telegram).',
+  'security.status': 'Protections',
+  'security.statusDesc': 'What protects this server, and what is left to turn on.',
   'security.everywhere': 'To sign out everywhere, change your password: every existing session cookie stops working immediately.',
   'security.app': "Authenticator app",
   'security.appDesc': "After the password, a new browser asks for the 6-digit code of an app (Aegis, 2FAS, Google Authenticator…). Works without Telegram; with both on, either one signs you in. Way out without the UI: maxxing 2fa off on the server.",

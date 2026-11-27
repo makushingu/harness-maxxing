@@ -78,3 +78,13 @@ def test_the_installer_asks_before_the_anonymous_count():
     sh = (Path(__file__).resolve().parents[2] / "install.sh").read_text()
     assert 'ANON_COUNT="${ANON_COUNT:-ask}"' in sh and "Send this anonymous daily count?" in sh
     assert "ANON_COUNT=keep" in sh                  # an installation that exists is not asked again
+
+
+def test_the_security_page_lists_what_protects_the_server(client, monkeypatch):
+    monkeypatch.setattr(cmd_core, "check_security", lambda: cmd_core._c("security", cmd_core.OK, "hardening on"))
+    checks = client.get("/api/system/security").json()["checks"]
+    by = {c["id"]: c for c in checks}
+    assert {"sign_in", "permissions", "secrets_store", "security", "listen"} <= set(by)
+    assert by["sign_in"]["level"] == "warn" and "Two-step" in by["sign_in"]["fix"]
+    monkeypatch.setattr(cmd_core, "check_permissions", lambda: 1 / 0)       # a check that breaks is skipped
+    assert "permissions" not in {c["id"] for c in client.get("/api/system/security").json()["checks"]}
