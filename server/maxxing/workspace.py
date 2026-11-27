@@ -433,12 +433,24 @@ def topic_permission_mode(path: str) -> str:
     except (ValueError, OSError):
         return ""
     mode = meta.get("permission_mode")
-    if mode in PERMISSION_MODES or mode in (None, ""):
+    if mode in PERMISSION_MODES or (mode in (None, "") and (meta or not _meta_unreadable(folder / META_FILE))):
         return mode or ""
-    # a mode that is set but unknown (a typo): never the global setting (bypass by default), which would take a
-    # sandboxed topic out of its sandbox
-    log.warning("%s: permission mode %r not understood, the topic asks before acting (default)", path, mode)
+    # a mode that is set but unknown (a typo) or a .maxxing.json that cannot be read (cut by a crash): never the
+    # global setting (bypass by default), which would take a sandboxed topic out of its sandbox
+    log.warning("%s: permission mode %r not understood, the topic asks before acting (default)",
+                path, mode if meta else "unreadable .maxxing.json")
     return "default"
+
+
+def _meta_unreadable(f: Path) -> bool:
+    """A .maxxing.json that exists but is not a JSON object (empty file included)."""
+    try:
+        if not f.is_file():
+            return False
+        data = json.loads(_read_small(f))
+    except (ValueError, RecursionError, OSError):
+        return True
+    return not isinstance(data, dict)
 
 
 ALLOWED_MAX = 100             # "Always allow" rules of a topic

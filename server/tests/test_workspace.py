@@ -347,9 +347,10 @@ def test_a_description_with_a_nul_or_control_character_is_refused(client, mx, to
     assert client.post("/api/workspace/projects", json={"name": "pnul", "description": "two\nlines\tok"}).status_code == 200
 
 
-@pytest.mark.parametrize("content", ['{"permission_mode": "Sandbox"}', '{"permission_mode": 5}'])
+@pytest.mark.parametrize("content", ['{"permission_mode": "Sandbox"}', '{"permission_mode": 5}',
+                                     '{"permission_mode": "sandbox", "allowed_to', "", "[]"])
 def test_a_topic_mode_that_cannot_be_understood_never_falls_back_to_the_global_one(client, content):
-    """A typo: the topic asks before acting, never the global bypass."""
+    """A typo or a .maxxing.json cut by a crash: the topic asks before acting, never the global bypass."""
     client.post("/api/workspace/projects", json={"name": "acme"})
     client.post("/api/workspace/projects/acme/topics", json={"name": "blog"})
     path = "projects/acme/topics/blog"
