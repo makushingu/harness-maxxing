@@ -13,9 +13,11 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import logging
 import math
 import os
 import secrets
+import shutil
 import tempfile
 import threading
 import time
@@ -24,6 +26,8 @@ from typing import Any
 
 from .. import config
 from . import ID_RE, MODES, OS_NAMES, OSES, DevicesError, clean_scope, home, kind_of
+
+log = logging.getLogger("maxxing.devices")
 
 INVITE_TTL = 15 * 60
 INVITE_KEEP = 24 * 3600              # an expired code still answers `expired` (not `bad_code`) for a day
@@ -58,6 +62,18 @@ def normalize_code(code: str) -> str:
     return "".join(c for c in str(code or "").upper() if c.isalnum())
 
 
+def _keep_copy() -> None:
+    path = _path()
+    dest = path.with_name(f"{path.name}.damaged-{time.strftime('%Y%m%d-%H%M%S')}-{time.monotonic_ns()}")
+    try:
+        shutil.copy2(path, dest)
+        os.chmod(dest, 0o600)
+    except OSError:
+        log.exception("could not keep a copy of %s", path)
+        return
+    log.error("%s had entries that could not be read: kept as %s before saving", path, dest)
+
+
 def _num(v: Any) -> float:
     """A time of the file as a number: a hand-edited "soon" or null reads as 0 (long past), never an exception."""
     try:
@@ -77,16 +93,22 @@ def load() -> dict:
     d = config.read_json(_path(), {}) or {}
     if not isinstance(d, dict):
         d = {}
+    raw = {k: d.get(k) for k in ("devices", "invites")}
     d["devices"] = [x for x in _list(d.get("devices")) if isinstance(x, dict) and ID_RE.match(str(x.get("id") or ""))]
     for x in d["devices"]:
         if not isinstance(x.get("name"), str):
             x["name"] = _text(x.get("name"), NAME_MAX)
     d["invites"] = [x for x in _list(d.get("invites")) if isinstance(x, dict) and x.get("code_hash")]
+    # entries left out (a dict of devices instead of a list...): save() keeps a copy of the file before writing it
+    if any(v and (not isinstance(v, list) or len(v) != len(d[k])) for k, v in raw.items()):
+        d["_dropped"] = True
     return d
 
 
 def save(d: dict) -> None:
     config.keep_damaged(_path())                       # a file that did not parse was read as empty: keep it first
+    if d.pop("_dropped", False):                       # it parsed, but load() left entries out: keep it too
+        _keep_copy()
     config.write_json(_path(), d, mode=0o600)
 
 

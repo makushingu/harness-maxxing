@@ -902,3 +902,15 @@ def test_a_field_of_the_wrong_type_in_devices_json_breaks_nothing(mx, bad):
     store.resolve("laptop")
     store.invites_public()
     assert store.new_invite("linux")["code"]
+
+
+def test_devices_json_with_entries_that_cannot_be_read_is_copied_before_it_is_rewritten(mx):
+    dev = {"id": "dev_0123abcd", "confirmed": True, "name": "pc", "token_hash": "h"}
+    store._path().parent.mkdir(parents=True, exist_ok=True)
+    store._path().write_text(json.dumps({"devices": {"dev_0123abcd": dev}}))
+    store.new_invite("linux")                                  # rewrites the file
+    copies = list(store._path().parent.glob("devices.json.damaged-*"))
+    assert len(copies) == 1 and "dev_0123abcd" in copies[0].read_text()
+    assert "_dropped" not in store._path().read_text()
+    store.new_invite("linux")                                  # the file is clean now: no second copy
+    assert len(list(store._path().parent.glob("devices.json.damaged-*"))) == 1
