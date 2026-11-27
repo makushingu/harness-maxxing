@@ -479,7 +479,7 @@ def test_an_agent_turn_lists_only_its_own_text_keys(mx, monkeypatch, capsys):
     vault_files.put("GCP_SA", b"{}", note="prod GCP", expose=True)
     monkeypatch.setenv("MAXXING_AGENT", "acme/blog/help")
     monkeypatch.setattr(agents, "exists", lambda p: True)
-    monkeypatch.setattr(agents, "load", lambda p: {"keys": ["MINE", "GCP_SA"]})
+    monkeypatch.setattr(agents, "load", lambda p: {"keys": ["MINE", "GCP_SA"], "sandbox": False})
     for argv in (("list",), ("list", "--json")):
         assert run(monkeypatch, *argv) == 0
         out = capsys.readouterr().out
