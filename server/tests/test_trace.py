@@ -116,3 +116,24 @@ def test_no_log_no_turn(mx):
     m = store.new_meta("", "S")
     store.create(m)
     assert trace.turns(m["id"]) == [] and trace.turn(m["id"], 1) is None
+
+
+def test_a_message_added_during_a_turn_stays_in_that_turn(mx):
+    """runner._inject_step writes an `mx_user` with injected: true in the middle of the running turn."""
+    m = store.new_meta("", "S")
+    store.create(m)
+    log = [{"type": "mx_user", "text": "first", "at": 100.0},
+           _assistant("m1", 101.0, [{"type": "text", "text": "on it"}], _usage(1, 1)),
+           {"type": "mx_user", "text": "also this", "injected": True, "kind": "user", "at": 102.0},
+           _assistant("m2", 103.0, [{"type": "text", "text": "done"}], _usage(1, 1)),
+           {"type": "result", "subtype": "success", "mx_turn_cost": 0.5, "usage": _usage(2, 2), "mx_at": 109.0},
+           {"type": "mx_done", "code": 0, "at": 110.0},
+           {"type": "mx_user", "text": "next", "at": 200.0}]
+    with open(store.log_path(m["id"]), "a") as f:
+        f.write("".join(json.dumps(ev) + "\n" for ev in log))
+    a, b = trace.turns(m["id"])
+    assert (a["n"], a["state"], a["duration_s"], a["cost_usd"], a["prompt"]) == (1, "done", 10.0, 0.5, "first")
+    assert (b["n"], b["prompt"]) == (2, "next")
+    steps = trace.turn(m["id"], 1)["steps"]
+    assert any(s["kind"] == "note" and s["text"] == "message added: also this" for s in steps)
+    assert trace.turn(m["id"], 2)["prompt"] == "next"

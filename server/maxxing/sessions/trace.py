@@ -199,6 +199,14 @@ def _read(sid: str, want: int | None) -> list[dict]:
             if not isinstance(ev, dict):
                 continue
             kind = ev.get("type")
+            if kind == "mx_user" and ev.get("injected") is True and cur is not None:
+                # a message added to the running turn (runner._inject_step): part of that turn, not a new one
+                if want is None or cur["n"] == want:
+                    if want is not None:
+                        text = ev.get("text") if isinstance(ev.get("text"), str) else ""
+                        _add_step(cur, {"kind": "note", "at": _num(ev.get("at")), "level": "info",
+                                        "text": f"message added: {text}"[:TEXT_MAX]})
+                continue
             if kind == "mx_user":
                 if cur is not None:                        # a turn without its mx_done (crash): closed as it is
                     if want is None or cur["n"] == want:
