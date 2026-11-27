@@ -428,10 +428,17 @@ def topic_permission_mode(path: str) -> str:
         own = agents.load(path)["permission_mode"] if agents.exists(path) else ""
         return own if own in PERMISSION_MODES else topic_permission_mode(agents.topic_of(path))
     try:
-        mode = _folder_meta(topic_dir(path)).get("permission_mode")
+        folder = topic_dir(path)
+        meta = _folder_meta(folder)
     except (ValueError, OSError):
         return ""
-    return mode if mode in PERMISSION_MODES else ""
+    mode = meta.get("permission_mode")
+    if mode in PERMISSION_MODES or mode in (None, ""):
+        return mode or ""
+    # a mode that is set but unknown (a typo): never the global setting (bypass by default), which would take a
+    # sandboxed topic out of its sandbox
+    log.warning("%s: permission mode %r not understood, the topic asks before acting (default)", path, mode)
+    return "default"
 
 
 ALLOWED_MAX = 100             # "Always allow" rules of a topic
