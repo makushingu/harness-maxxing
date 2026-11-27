@@ -8,7 +8,10 @@ E-mail page. The same buttons on Telegram (feed alerts). ref of the event: `mail
 from __future__ import annotations
 
 import contextlib
+import fcntl
+import hashlib
 import logging
+import os
 import secrets
 import shutil
 import time
@@ -45,6 +48,22 @@ def page_url(acc_id: str, folder: str | None, uid: int | None) -> str:
     if folder and uid:
         q += f"&folder={quote(folder)}&draft={int(uid)}"
     return q
+
+
+@contextlib.contextmanager
+def agent_lock(agent: str):
+    """Held from the count of an agent's waiting messages to its new row (the Drafts save between is slow): two
+    sends at once, from two processes, never pass WAITING_MAX together."""
+    d = config.state_dir("mail") / "locks"
+    d.mkdir(parents=True, exist_ok=True)
+    fd = os.open(d / (hashlib.sha256(agent.encode("utf-8", "surrogatepass")).hexdigest()[:24] + ".lock"),
+                 os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        os.close(fd)
 
 
 def queue(acc: dict, agent: str, draft: dict, files: list[tuple[str, str, bytes]], why: str) -> dict:

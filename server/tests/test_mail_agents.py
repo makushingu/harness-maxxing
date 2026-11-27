@@ -7,6 +7,7 @@ test_real_imap_check_and_senders also runs against a real server.
 """
 from __future__ import annotations
 
+import contextlib
 import email
 import email.policy
 import os
@@ -716,3 +717,36 @@ def test_a_few_short_mails_keep_their_whole_text(client, box, monkeypatch):
     assert "text of 4" in text and "text of 5" in text and "[... cut" not in text and "not shown here" not in text
     long = poll.event_text(box["acc"], "INBOX", [rows[4]], {4: "y" * 3000})
     assert "y" * poll.TEXT_CHARS in long and "y" * (poll.TEXT_CHARS + 1) not in long and "[... cut:" in long
+
+
+def test_two_sends_at_once_never_pass_the_waiting_limit(client, box, monkeypatch, capsys):
+    import sys
+    import threading
+    from maxxing import cli
+    _grant(client, rights=["read", "send"], approve_send="always")
+    _as_agent(monkeypatch)
+    for i in range(outbox.WAITING_MAX - 1):
+        store.outbox_put({"id": f"o_f{i}", "account": "me-example", "agent": A, "at": time.time(),
+                          "status": "waiting", "data": {"draft": {"subject": "f"}}})
+
+    class In:
+        def read(self, *a):
+            return "x"
+
+        def isatty(self):
+            return False
+    monkeypatch.setattr(sys, "stdin", In())
+    both = threading.Barrier(2, timeout=3)
+    real = send.save_draft
+
+    def slow(*a, **k):                           # the Drafts save of both sends at the same time, when they can
+        with contextlib.suppress(threading.BrokenBarrierError):
+            both.wait()
+        return real(*a, **k)
+    monkeypatch.setattr(send, "save_draft", slow)
+    codes: list[int] = []
+    ts = [threading.Thread(target=lambda: codes.append(cli.main(["mail", "write", "--to", "bob@x.org", "-s", "S",
+                                                                  "--send"]))) for _ in range(2)]
+    [t.start() for t in ts]
+    [t.join(30) for t in ts]
+    assert sorted(codes) == [0, 1] and store.outbox_waiting(A) == outbox.WAITING_MAX
