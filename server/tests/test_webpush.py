@@ -282,3 +282,14 @@ def test_the_installed_app_is_a_share_target():
     assert ".slice(0, 10)" in src
     take = (web / "src" / "pwa" / "share.ts").read_text()
     assert take.index("isStandalone()") < take.index("cache.match('/__share/meta')")
+
+
+def test_a_device_with_an_invalid_port_does_not_stop_the_others(sent, client):
+    client.post("/api/push/devices", json={"endpoint": FCM})
+    p = webpush._path()
+    st = json.loads(p.read_text())
+    st["devices"]["bad0000000000000"] = {"endpoint": "https://fcm.googleapis.com:abc/x", "label": "", "at": 0}
+    p.write_text(json.dumps(st))
+    assert webpush.notify("t", "b", "/") == 1
+    assert [c["endpoint"] for c in sent] == [FCM]
+    assert client.post("/api/push/devices", json={"endpoint": "https://fcm.googleapis.com:99999/x"}).status_code == 400

@@ -280,3 +280,9 @@ def test_daily_asks_before_removing_a_skill_nobody_uses(client, topic, model):
     assert not idle.exists() and any("skill-old-report" in p.name for p in config.state_dir("trash").iterdir())
     assert client.post(f"/api/feed/{evs['Skill hi: remove it?']['id']}/act/refuse").status_code == 200
     assert empty.exists() and mr.daily(force=True) == []                        # refused: never asked again
+
+
+def test_cli_run_on_an_unknown_session_says_so(client, capsys):
+    from maxxing import cli
+    assert cli.main(["memory-review", "run", "nosuchsession"]) != 0
+    assert "unknown session" in capsys.readouterr().err

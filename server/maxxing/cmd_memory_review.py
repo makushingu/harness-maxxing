@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 
 from . import cli
 
@@ -33,6 +34,10 @@ def _show(x: dict) -> str:
 def _handler(a) -> int:
     from . import memory_review as mr
     if a.action == "run":
+        from .sessions import store
+        if not store.read(a.session):
+            print(f"unknown session: {a.session}", file=sys.stderr)
+            return 1
         res = mr.review(a.session, a.model, prompt=a.prompt)
         if a.json:
             print(json.dumps(res, indent=1, ensure_ascii=False))

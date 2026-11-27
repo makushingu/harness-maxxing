@@ -358,14 +358,17 @@ def topic_session_order(path: str) -> list[str]:
         ids = _folder_meta(topic_dir(path)).get("sessions")
     except (ValueError, OSError):
         return []
-    return [i for i in ids if isinstance(i, str) and _SESSION_ID_RE.match(i)][:SESSION_ORDER_MAX] if isinstance(ids, list) else []
+    return [i for i in ids if isinstance(i, str) and _SESSION_ID_RE.fullmatch(i)][:SESSION_ORDER_MAX] if isinstance(ids, list) else []
 
 
 def set_topic_session_order(project: str, topic: str, ids: list[str]) -> list[str]:
     d = project_dir(check_slug(project)) / "topics" / check_slug(topic)
     if not d.is_dir():
         raise WorkspaceError(404, "not_found", f"Topic {project}/{topic} not found")
-    order = [i for i in dict.fromkeys(ids) if isinstance(i, str) and _SESSION_ID_RE.match(i)][:SESSION_ORDER_MAX]
+    from .sessions import store
+    here = topic_path(project, topic)            # only this topic's sessions (fullmatch: "$" lets a final "\n" in)
+    order = [i for i in dict.fromkeys(ids) if isinstance(i, str) and _SESSION_ID_RE.fullmatch(i)
+             and (store.read_cached(i) or {}).get("path") == here][:SESSION_ORDER_MAX]
     with _meta_lock:
         _set_folder_meta(d, "sessions", order)
     bus.invalidate("workspace")

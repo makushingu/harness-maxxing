@@ -859,3 +859,58 @@ def test_a_strange_answer_from_a_device_is_an_error_not_a_crash(monkeypatch):
             asyncio.run(tools._shot("d"))
     assert tools._tree_text([{"id": "a", "b": [float("inf"), 1, 10**400, 2]}]).startswith("[a]")
     assert tools._list(5) == [] and tools._list([1]) == [1]
+
+
+def _pair_many(state: str, n: int) -> None:
+    from maxxing import config
+    config.STATE = Path(state)
+    for _ in range(n):
+        store.pair(store.new_invite("linux")["code"], {"os": "linux", "name": "x"})
+
+
+def _rename_many(state: str, did: str, n: int) -> None:
+    from maxxing import config
+    config.STATE = Path(state)
+    for i in range(n):
+        store.update(did, name=f"n{i}")
+
+
+def test_devices_json_written_by_two_processes_at_once_loses_no_device(mx):
+    import multiprocessing as mp
+    did = store.pair(store.new_invite("linux")["code"], {"os": "linux", "name": "x"})["device_id"]
+    ctx = mp.get_context("fork")
+    procs = [ctx.Process(target=_pair_many, args=(str(mx["state"]), 8)),
+             ctx.Process(target=_rename_many, args=(str(mx["state"]), did, 300))]
+    for p in procs:
+        p.start()
+    for p in procs:
+        p.join(60)
+        assert p.exitcode == 0
+    assert len(json.loads(store._path().read_text())["devices"]) == 9
+
+
+@pytest.mark.parametrize("bad", [
+    {"devices": 5}, {"devices": True}, {"invites": 7},
+    {"invites": [{"code_hash": "a", "expires": "soon"}]},
+    {"devices": [{"id": "dev_0123abcd", "confirmed": False, "created": "x"}]},
+    {"devices": [{"id": "dev_0123abcd", "confirmed": True, "name": 5}]},
+])
+def test_a_field_of_the_wrong_type_in_devices_json_breaks_nothing(mx, bad):
+    store._path().parent.mkdir(parents=True, exist_ok=True)
+    store._path().write_text(json.dumps(bad))
+    store.devices()
+    store.resolve("laptop")
+    store.invites_public()
+    assert store.new_invite("linux")["code"]
+
+
+def test_devices_json_with_entries_that_cannot_be_read_is_copied_before_it_is_rewritten(mx):
+    dev = {"id": "dev_0123abcd", "confirmed": True, "name": "pc", "token_hash": "h"}
+    store._path().parent.mkdir(parents=True, exist_ok=True)
+    store._path().write_text(json.dumps({"devices": {"dev_0123abcd": dev}}))
+    store.new_invite("linux")                                  # rewrites the file
+    copies = list(store._path().parent.glob("devices.json.damaged-*"))
+    assert len(copies) == 1 and "dev_0123abcd" in copies[0].read_text()
+    assert "_dropped" not in store._path().read_text()
+    store.new_invite("linux")                                  # the file is clean now: no second copy
+    assert len(list(store._path().parent.glob("devices.json.damaged-*"))) == 1

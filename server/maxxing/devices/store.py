@@ -13,8 +13,11 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import logging
+import math
 import os
 import secrets
+import shutil
 import tempfile
 import threading
 import time
@@ -23,6 +26,8 @@ from typing import Any
 
 from .. import config
 from . import ID_RE, MODES, OS_NAMES, OSES, DevicesError, clean_scope, home, kind_of
+
+log = logging.getLogger("maxxing.devices")
 
 INVITE_TTL = 15 * 60
 INVITE_KEEP = 24 * 3600              # an expired code still answers `expired` (not `bad_code`) for a day
@@ -34,7 +39,9 @@ CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"   # no 0/O, 1/I: read on a ph
 CODE_LEN = 8
 NAME_MAX = 64
 
-_lock = threading.RLock()            # every read-modify-write of devices.json (a hello racing a removal...)
+# every read-modify-write of devices.json (a hello racing a removal...), shared with the other processes: a
+# `maxxing devices` command writing while the server updates last_seen would otherwise lose one of the changes
+_lock = config.ProcessLock("devices")
 
 
 def _path() -> Path:
@@ -55,24 +62,60 @@ def normalize_code(code: str) -> str:
     return "".join(c for c in str(code or "").upper() if c.isalnum())
 
 
+def _keep_copy() -> None:
+    path = _path()
+    dest = path.with_name(f"{path.name}.damaged-{time.strftime('%Y%m%d-%H%M%S')}-{time.monotonic_ns()}")
+    try:
+        shutil.copy2(path, dest)
+        os.chmod(dest, 0o600)
+    except OSError:
+        log.exception("could not keep a copy of %s", path)
+        return
+    log.error("%s had entries that could not be read: kept as %s before saving", path, dest)
+
+
+def _num(v: Any) -> float:
+    """A time of the file as a number: a hand-edited "soon" or null reads as 0 (long past), never an exception."""
+    try:
+        f = float(v)
+    except (TypeError, ValueError, OverflowError):
+        return 0.0
+    return f if math.isfinite(f) else 0.0
+
+
+def _list(v: Any) -> list:
+    return v if isinstance(v, list) else []
+
+
 def load() -> dict:
+    """devices.json, with the shapes the code relies on: lists of dicts, a text name (a hand-edited file must not
+    break every device call)."""
     d = config.read_json(_path(), {}) or {}
     if not isinstance(d, dict):
         d = {}
-    d["devices"] = [x for x in d.get("devices") or [] if isinstance(x, dict) and ID_RE.match(str(x.get("id") or ""))]
-    d["invites"] = [x for x in d.get("invites") or [] if isinstance(x, dict) and x.get("code_hash")]
+    raw = {k: d.get(k) for k in ("devices", "invites")}
+    d["devices"] = [x for x in _list(d.get("devices")) if isinstance(x, dict) and ID_RE.match(str(x.get("id") or ""))]
+    for x in d["devices"]:
+        if not isinstance(x.get("name"), str):
+            x["name"] = _text(x.get("name"), NAME_MAX)
+    d["invites"] = [x for x in _list(d.get("invites")) if isinstance(x, dict) and x.get("code_hash")]
+    # entries left out (a dict of devices instead of a list...): save() keeps a copy of the file before writing it
+    if any(v and (not isinstance(v, list) or len(v) != len(d[k])) for k, v in raw.items()):
+        d["_dropped"] = True
     return d
 
 
 def save(d: dict) -> None:
     config.keep_damaged(_path())                       # a file that did not parse was read as empty: keep it first
+    if d.pop("_dropped", False):                       # it parsed, but load() left entries out: keep it too
+        _keep_copy()
     config.write_json(_path(), d, mode=0o600)
 
 
 def _prune(d: dict, now: float) -> list[str]:
     """Drop old invitations and devices never accepted in time -> ids dropped (their apps must be told)."""
-    d["invites"] = [i for i in d["invites"] if now < float(i.get("expires") or 0) + INVITE_KEEP][-MAX_INVITES * 3:]
-    gone = [x["id"] for x in d["devices"] if not x.get("confirmed") and now - float(x.get("created") or 0) > CANDIDATE_TTL]
+    d["invites"] = [i for i in d["invites"] if now < _num(i.get("expires")) + INVITE_KEEP][-MAX_INVITES * 3:]
+    gone = [x["id"] for x in d["devices"] if not x.get("confirmed") and now - _num(x.get("created")) > CANDIDATE_TTL]
     if gone:
         d["devices"] = [x for x in d["devices"] if x["id"] not in gone]
     return gone
@@ -99,7 +142,7 @@ def new_invite(os_name: str = "") -> dict:
         d = load()
         now = time.time()
         _prune(d, now)
-        live = [i for i in d["invites"] if now < float(i.get("expires") or 0)]
+        live = [i for i in d["invites"] if now < _num(i.get("expires"))]
         if len(live) >= MAX_INVITES:
             raise DevicesError(429, "too_many", "Too many codes waiting: use one or wait 15 minutes")
         code = "".join(secrets.choice(CODE_ALPHABET) for _ in range(CODE_LEN))
@@ -117,7 +160,7 @@ def invite(code: str) -> dict:
     h = _hash(c)
     for i in load()["invites"]:
         if hmac.compare_digest(h, str(i.get("code_hash") or "")):
-            if time.time() > float(i.get("expires") or 0):
+            if time.time() > _num(i.get("expires")):
                 raise DevicesError(410, "expired", "This code expired: add the device again in Harness Maxxing")
             if i.get("used"):
                 raise DevicesError(410, "expired", "This code was already used: add the device again in Harness Maxxing")
@@ -262,8 +305,8 @@ def public(dev: dict) -> dict:
 
 def invites_public() -> list[dict]:
     now = time.time()
-    return [{"os": i.get("os") or "", "expires_at": i["expires"]} for i in load()["invites"]
-            if now < float(i.get("expires") or 0) and not i.get("used")]
+    return [{"os": i.get("os") or "", "expires_at": _num(i.get("expires"))} for i in load()["invites"]
+            if now < _num(i.get("expires")) and not i.get("used")]
 
 
 # ---- actions log ---------------------------------------------------------------------------------------------------

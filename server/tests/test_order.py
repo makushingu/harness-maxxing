@@ -45,14 +45,17 @@ def test_sessions_keep_their_dragged_place_in_a_topic(client, mx):
         tree = client.get("/api/workspace/tree").json()
         return next(t for p in tree["projects"] if p["name"] == "shop" for t in p["topics"] if t["name"] == "ads")["session_order"]
 
+    from maxxing.sessions import store
+    a1, b2, c3, other = (store.create(store.new_meta(p, "s"))["id"] for p in
+                         ["projects/shop/topics/ads"] * 3 + ["projects/shop/topics/other"])
     assert order() == []                                                     # nothing chosen: by activity
-    r = client.put(url, json={"names": ["b2", "a1", "b2", "../x", "c3"]})
-    assert r.status_code == 200 and r.json()["sessions"] == ["b2", "a1", "c3"]   # ids only, once each
-    assert order() == ["b2", "a1", "c3"]
+    r = client.put(url, json={"names": [b2, a1, b2, "../x", c3, other, "unknown", a1 + "\n"]})
+    assert r.status_code == 200 and r.json()["sessions"] == [b2, a1, c3]     # this topic's sessions, once each
+    assert order() == [b2, a1, c3]
     # the topic's other settings are untouched, and an empty list forgets the order
     from maxxing import workspace
     workspace.set_topic_permission_mode("projects/shop/topics/ads", "sandbox")
-    assert order() == ["b2", "a1", "c3"]
+    assert order() == [b2, a1, c3]
     assert client.put(url, json={"names": []}).json()["sessions"] == []
     assert workspace.topic_permission_mode("projects/shop/topics/ads") == "sandbox"
     assert client.put("/api/workspace/projects/shop/topics/nope/sessions-order", json={"names": []}).status_code == 404
