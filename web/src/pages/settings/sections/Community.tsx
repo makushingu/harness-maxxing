@@ -12,6 +12,7 @@ import { SettingsCard, SectionStack } from './ui'
 import { COMMUNITY_URL } from './About'
 
 type Tab = 'extension' | 'theme' | 'skill'
+const KINDS = ['widget', 'page', 'view']    // the kinds of extension that have a label
 interface Listing { slug: string; type: string; tab: Tab; title: string; description: string; repo: string; sha: string; server_code: boolean; stars: number; author: string; banner: string; url: string }
 interface Finding { level: 'info' | 'warn' | 'danger'; what: string; file: string; line: number | null; excerpt: string }
 interface Report { kind: Tab; id: string; sha256: string; files: number; summary: string; runs_on_server: boolean; counts: Record<Finding['level'], number>; findings: Finding[]; installed?: { sha256: string }; changed?: boolean; listing: Listing }
@@ -71,7 +72,7 @@ export function CommunitySection() {
                   <div className="flex flex-1 flex-col gap-2 p-3">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-sm font-medium">{it.title}</span>
-                      {it.tab === 'extension' && <Badge variant="muted">{t(`pkg.type.${it.type}`)}</Badge>}
+                      {it.tab === 'extension' && KINDS.includes(it.type) && <Badge variant="muted">{t(`pkg.type.${it.type as 'widget' | 'page' | 'view'}`)}</Badge>}
                       {it.server_code && <Badge variant="outline"><Server className="size-3" /> {t('pkg.serverCode')}</Badge>}
                     </div>
                     <p className="line-clamp-3 text-[13px] text-muted-foreground">{it.description}</p>
