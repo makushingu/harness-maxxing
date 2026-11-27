@@ -1982,3 +1982,28 @@ def test_a_link_planted_in_place_of_the_uploads_folder_is_never_followed(tmp_pat
     assert not list(victim.iterdir()) and (victim.stat().st_mode & 0o777) == 0o755
     assert not (run / "uploads").is_symlink() and out.startswith("/mxrun/uploads/")
     assert (run / "uploads" / out.split("/")[3] / "a.txt").read_bytes() == b"hello"
+
+
+def test_two_callers_at_once_attach_to_a_page_once():
+    """The screencast starting and a mouse move at the same moment: one DevTools session, not two (the pictures would
+    go to the session nobody reads)."""
+    from maxxing.browser import live
+
+    class FakeCdp:
+        def __init__(self):
+            self.attached = 0
+
+        async def call(self, method, params=None, session=None, timeout=30.0):
+            if method == "Target.attachToTarget":
+                self.attached += 1
+                await asyncio.sleep(0.05)
+                return {"sessionId": f"s{self.attached}"}
+            return {}
+
+    async def run():
+        w = live.Watcher(None, "", lambda: None)
+        w.cdp = FakeCdp()
+        assert await asyncio.gather(w._session("t1"), w._session("t1")) == ["s1", "s1"]
+        assert w.cdp.attached == 1 and w.sessions == {"t1": "s1"} and not w._attaching
+        assert await w._session("t1") == "s1" and w.cdp.attached == 1
+    asyncio.run(run())

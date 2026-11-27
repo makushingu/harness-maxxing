@@ -107,6 +107,7 @@ class Watcher:
         self.dialogs: dict[str, dict] = {}            # targetId -> its alert / confirm / prompt {type, message, default}
         self.choosers: dict[str, dict] = {}           # targetId -> its file request {node, multiple}
         self._opened: dict[str, asyncio.Future] = {}  # targetId of a page asked to open a tab -> that tab's targetId
+        self._attaching: dict[str, asyncio.Future] = {}   # targetId -> its attach under way
 
     on_state: Callable[[], Any] | None = None
     on_move: Callable[[str, str, str], None] | None = None     # (targetId, url, title) of a page that changed
@@ -275,6 +276,15 @@ class Watcher:
     async def _session(self, tid: str) -> str:
         if tid in self.sessions:
             return self.sessions[tid]
+        # two callers at once (the screencast starting and a mouse move) share one attach: a second session would
+        # get the pictures nobody reads
+        t = self._attaching.get(tid)
+        if t is None:
+            t = self._attaching[tid] = asyncio.ensure_future(self._attach(tid))
+            t.add_done_callback(lambda f, tid=tid: self._attaching.get(tid) is f and self._attaching.pop(tid))
+        return await asyncio.shield(t)
+
+    async def _attach(self, tid: str) -> str:
         assert self.cdp
         s = (await self.cdp.call("Target.attachToTarget", {"targetId": tid, "flatten": True}))["sessionId"]
         self.sessions[tid] = s
