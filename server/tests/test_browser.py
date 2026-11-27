@@ -1967,6 +1967,14 @@ def test_network_events_never_carry_the_sites_cookies():
     assert relay.no_cookies(other) == other
 
 
+def test_a_refused_address_of_another_scheme_is_logged_without_its_credentials():
+    from maxxing.browser import replays
+    assert replays.page("ftp://u:SECRETPW@h/x") == "ftp:"
+    assert replays.summary("navigate_page", {"url": "javascript:fetch('https://x/?k=SECRET2')"}) == {"url": "javascript:"}
+    assert replays.page("about:blank") == "about:blank" and replays.page("chrome://newtab/") == "chrome://newtab/"
+    assert replays.page("https://u:p@a.example/x?t=1") == "https://a.example/x"
+
+
 def test_cookie_headers_in_capitals_are_dropped_too():
     from maxxing.browser import relay
     ev = {"method": "Fetch.requestPaused", "params": {"responseHeaders": [{"name": "SET-COOKIE", "value": "sid=SECRET1"}]}}

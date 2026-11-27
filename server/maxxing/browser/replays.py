@@ -24,7 +24,11 @@ def page(url: object) -> str:
     try:
         u = urlsplit(str(url or ""))
         host = u.hostname or ""
-        return f"{u.scheme}://{host}{u.path}"[:300] if u.scheme in ("http", "https") else str(url or "")[:40]
+        if u.scheme in ("http", "https"):
+            return f"{u.scheme}://{host}{u.path}"[:300]
+        if u.scheme in ("about", "chrome"):                         # about:blank, chrome://newtab/: no credentials
+            return str(url or "").split("?")[0].split("#")[0][:40]
+        return f"{u.scheme}:" if u.scheme else ""                   # ftp://user:password@..., javascript:...: the scheme only
     except ValueError:
         return ""
 
