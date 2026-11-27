@@ -448,6 +448,7 @@ def _keep(path: str, acc_id: str, folder: str, mails: list[dict], bodies: dict[i
                 known = {int(m["uid"]) for m in r["mails"]}
                 add = [m for m in mails if int(m["uid"]) not in known]
                 r["mails"] = ((r.get("mails") or []) + add)[-PENDING_MAILS:]
+                r["prompt"] = prompt                # the trigger's instructions as they are now
                 if add:
                     r["at"] = time.time()           # the day's limit counts from the newest mail
                 break
@@ -512,7 +513,9 @@ def _drain(keys: set | None) -> int:
             if not mails:
                 continue
             bodies = {int(m["uid"]): str(m["body"]) for m in mails[:TEXT_MAILS] if m.get("body") is not None}
-            n += 1 if _fire(str(r["agent"]), acc, folder, mails, bodies, str(r.get("prompt") or ""),
+            # the trigger's instructions as they are now, never those kept with the mails
+            prompt = grant["trigger"].get("prompt") or DEFAULT_PROMPT.format(acc=acc["id"], folder=folder)
+            n += 1 if _fire(str(r["agent"]), acc, folder, mails, bodies, prompt,
                             at=float(r.get("at") or 0) or None) else 0
         except Exception:  # noqa: BLE001 - one broken turn never stops the others
             log.exception("mail: kept turn of %s not started", r.get("agent"))

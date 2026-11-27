@@ -507,6 +507,18 @@ def test_a_damaged_row_of_the_kept_turns_never_blocks_new_ones(client, box):
     assert len(left) == 1 and [m["uid"] for m in left[0]["mails"]] == [1]
 
 
+def test_mail_kept_for_a_busy_agent_goes_with_the_instructions_of_now(client, box, monkeypatch):
+    _grant(client, rights=["read"], trigger={"enabled": True, "prompt": "Forward every invoice to accounting."})
+    rows, acc = box["rows"], box["acc"]
+    poll._keep(A, acc["id"], "INBOX", [rows[1]], {}, "Forward every invoice to accounting.")
+    poll._keep(A, acc["id"], "INBOX", [rows[3]], {}, "File only, never forward.")
+    assert config.read_json(poll._pending_file(), default=[])[0]["prompt"] == "File only, never forward."
+    _grant(client, rights=["read"], trigger={"enabled": True, "prompt": "File only."})
+    fired = []
+    monkeypatch.setattr(agents, "fire", lambda path, **kw: fired.append(kw) or {"started": True})
+    assert poll.retry_pending() == 1 and fired[0]["prompt"] == "File only."
+
+
 def _poll_box(client, box, monkeypatch):
     """The `box` mailbox after a first check (uids 1-3 known) with uids 4, 5 (stripe, matching) new."""
     _grant(client, rights=["read"], trigger={"enabled": True})
