@@ -65,7 +65,7 @@ export default function FeedPage() {
       description={t('feed.pageDesc')}
       actions={
         <>
-          <Button variant="outline" size="sm" disabled={!shownUnread} onClick={() => read.mutate(source && !pendingOnly ? { source } : { all: true })}>
+          <Button variant="outline" size="sm" disabled={!shownUnread} onClick={() => read.mutate({ ...(source && !pendingOnly ? { source } : { all: true }), upto: newestId(events) })}>
             <CheckCheck /> <span className="max-lg:sr-only">{t('feed.markAllRead')}</span>
           </Button>
           <Button variant="ghost" size="icon-sm" className="max-md:hidden" onClick={() => navigate('/settings/feed')} aria-label={t('feed.settings')}>
@@ -145,10 +145,15 @@ export default function FeedPage() {
   )
 }
 
-/** The events in days (newest first, as they come). */
+/** The newest event shown: Mark all as read leaves those that came after it. */
+function newestId(events: FeedEvent[]): number | undefined {
+  return events.length ? Math.max(...events.map((e) => e.id)) : undefined
+}
+
+/** The events in days, newest first: by date, not by id (a grouped alert repeated keeps its id, its date is now). */
 function byDay(events: FeedEvent[]) {
   const out: { key: string; at: number; events: FeedEvent[] }[] = []
-  for (const ev of events) {
+  for (const ev of [...events].sort((a, b) => b.at - a.at || b.id - a.id)) {
     const key = new Date(ev.at * 1000).toDateString()
     const last = out.at(-1)
     if (last?.key === key) last.events.push(ev)

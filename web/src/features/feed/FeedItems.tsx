@@ -203,7 +203,7 @@ export function FeedPanel({ className }: { className?: string }) {
           </button>
         )}
         <Tooltip content={t('feed.markAllRead')}>
-          <Button variant="ghost" size="icon-sm" className="size-7" disabled={!unread} onClick={() => read.mutate({ all: true })} aria-label={t('feed.markAllRead')}>
+          <Button variant="ghost" size="icon-sm" className="size-7" disabled={!unread} onClick={() => read.mutate({ all: true, upto: data?.events.length ? Math.max(...data.events.map((e) => e.id)) : undefined })} aria-label={t('feed.markAllRead')}>
             <CheckCheck />
           </Button>
         </Tooltip>

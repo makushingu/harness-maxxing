@@ -626,7 +626,10 @@ def watch_id() -> int:
         return last
 
 
-def mark_read(ids: list[int] | None = None, source: str | None = None, everything: bool = False) -> int:
+def mark_read(ids: list[int] | None = None, source: str | None = None, everything: bool = False,
+              upto: int | None = None) -> int:
+    """`upto`: with `everything` or `source`, the newest event the reader saw (Mark all as read): those that came
+    after it stay unread."""
     source = _utf8(source)                           # a lone surrogate: SQLite cannot take it (UnicodeEncodeError)
     with _conn() as c:
         # open alerts read now: their Telegram message loses its Seen button (update_alert)
@@ -637,6 +640,8 @@ def mark_read(ids: list[int] | None = None, source: str | None = None, everythin
         else:
             args = [i for i in map(_id, (ids or [])[:500]) if i is not None]
             where = f" AND id IN ({','.join('?' * len(args))})"
+        if (everything or source) and upto is not None and _id(upto) is not None:
+            where, args = where + " AND id<=?", [*args, _id(upto)]
         out = []
         if everything or source or args:
             out = [r[0] for r in c.execute("SELECT id FROM events WHERE read=0 AND ref IS NOT NULL "

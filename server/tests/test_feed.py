@@ -506,3 +506,13 @@ def test_actions_or_hops_of_the_wrong_type_are_a_feed_error(mx, kw):
 
 def test_huge_hops_are_bounded(mx):
     assert feed.post("x", notify=False, hops=10**30)["hops"] == 1000
+
+
+def test_mark_all_as_read_leaves_the_events_that_came_after_the_page(client, mx):
+    feed.post("Shown", source="shop")
+    upto = max(e["id"] for e in client.get("/api/feed").json()["events"])   # what the page shows
+    late = feed.post("Came after", source="shop")                       # never shown before the click
+    assert client.post("/api/feed/read", json={"all": True, "upto": upto}).json()["unread"] == 1
+    assert client.post("/api/feed/read", json={"source": "shop", "upto": upto}).json()["unread"] == 1
+    assert not feed.get(late["id"])["read"]
+    assert client.post("/api/feed/read", json={"all": True}).json()["unread"] == 0

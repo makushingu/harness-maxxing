@@ -67,6 +67,13 @@ export function ForwardDialog({
     setText(initialText)
     setTitle(suggestedTitle)
   }, [open, initialText, suggestedTitle])
+  React.useEffect(() => {
+    if (!open) return
+    // the dialog stays mounted: the choice of the previous time (a session maybe deleted since) is not kept
+    setMode('existing')
+    setSession('')
+    setPath('')
+  }, [open])
   const recent = React.useMemo(() => [...(sessions || [])].sort((a, b) => b.updated - a.updated), [sessions])
   React.useEffect(() => {
     if (open && !session && recent[0]) setSession(recent[0].id)

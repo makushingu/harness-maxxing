@@ -794,3 +794,57 @@ def test_a_chart_value_that_is_not_a_number_leaves_the_scale_of_the_others(tmp_p
     assert out == [[0, 2.5, 5], [0, 2.5, 5], [-2, 0, 10], [0, 0.5, 1]]
     src = (WEB / "pages" / "dashboard" / "charts.tsx").read_text(encoding="utf-8")
     assert src.count("Number.isFinite(p[1])") == 2                  # no bar, a gap in the line
+
+
+def test_the_branch_name_preview_is_the_name_the_server_gives(tmp_path):
+    from maxxing import worktrees
+    src = (WEB / "features" / "code" / "copyApi.ts").read_text(encoding="utf-8")
+    a = src.index("export function branchSlug(")
+    (tmp_path / "slug.ts").write_text(src[a:src.index("\n}\n", a) + 3], encoding="utf-8")
+    texts = ["Straße reparieren", "Ærø", "Fix the login page!", "Łódź đường", "Crème brûlée, øl og æbler", "İstanbul ﬁx",
+             "a" * 30 + " ß " + "b" * 30]
+    out = _run_ts(tmp_path, tmp_path / "slug.ts", f"return {json.dumps(texts)}.map((t) => m.branchSlug(t))")
+    assert out == [worktrees.slug(t) for t in texts]
+
+
+def test_a_grouped_alert_repeated_today_is_shown_under_today(tmp_path):
+    src = (WEB / "pages" / "feed" / "index.tsx").read_text(encoding="utf-8")
+    a = src.index("function byDay(")
+    (tmp_path / "days.ts").write_text("type FeedEvent = { id: number; at: number }\nexport "
+                                      + src[a:src.index("\n}\n", a) + 3], encoding="utf-8")
+    day = 86400
+    # ids newest first, as the server sends them: id 1 is an alert of yesterday repeated now (its date moved)
+    events = [{"id": 3, "at": 10 * day + 100}, {"id": 2, "at": 9 * day + 100}, {"id": 1, "at": 10 * day + 200}]
+    out = _run_ts(tmp_path, tmp_path / "days.ts",
+                  f"return m.byDay({json.dumps(events)}).map((d) => d.events.map((e) => e.id))")
+    assert out == [[1, 3], [2]]
+
+
+def test_an_agent_menu_item_held_down_never_reaches_the_long_press_of_the_card():
+    src = (WEB / "features" / "agents" / "AgentMenu.tsx").read_text(encoding="utf-8")
+    a = src.index("<DropdownMenuContent align=\"start\"")
+    content = src[a:src.index(">", src.index("aria-label=", a))]
+    for ev in ("onContextMenu", "onTouchStart", "onTouchMove", "onTouchEnd", "onTouchCancel"):
+        assert f"{ev}={{stop}}" in content, ev
+
+
+def test_the_team_forward_dialog_forgets_the_session_chosen_the_previous_time():
+    src = (WEB / "features" / "team" / "Dialogs.tsx").read_text(encoding="utf-8")
+    body = src[src.index("export function ForwardDialog("):]
+    body = body[:body.index("\n}\n")]
+    resets = re.findall(r"React\.useEffect\(\(\) => \{\n    if \(!open\) return\n(.*?)\n  \}, \[open\]\)", body, re.S)
+    assert resets and all(f in resets[0] for f in ("setSession('')", "setPath('')", "setMode('existing')"))
+
+
+def test_an_invitation_asked_before_the_team_dialog_was_reopened_is_not_shown():
+    src = (WEB / "features" / "team" / "Friends.tsx").read_text(encoding="utf-8")
+    body = src[src.index("export function AddFriendDialog("):]
+    assert "opened.current += 1" in body[:body.index("}, [open])")]
+    assert re.search(r"const n = opened\.current\s+invite\.mutate\(undefined, \{ onSuccess: \(r\) => n === opened\.current && setCode", body)
+
+
+def test_the_join_error_goes_once_the_link_is_changed_or_tried_again():
+    src = (WEB / "features" / "team" / "Friends.tsx").read_text(encoding="utf-8")
+    body = src[src.index("export function AddFriendDialog("):]
+    assert re.search(r"const doJoin = \(\) => \{\s+setJoinError\(''\)", body)
+    assert re.search(r"onChange=\{\(e\) => \{\s+setPaste\(e\.target\.value\)\s+setJoinError\(''\)", body)

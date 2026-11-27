@@ -81,8 +81,10 @@ export function useAgentMenu(a: Agent) {
       <DropdownMenuTrigger asChild>
         <span aria-hidden tabIndex={-1} className="pointer-events-none absolute size-0" style={{ left: at?.x ?? 0, top: at?.y ?? 0 }} />
       </DropdownMenuTrigger>
-      {/* the agent's element opens its page on a click and shows a tooltip on hover: nothing in the menu reaches it */}
-      <DropdownMenuContent align="start" className="w-56" onCloseAutoFocus={keepFocus} onClick={stop} onKeyDown={stop} onPointerMove={stop} onFocus={stop} aria-label={t('agents.menu.label', { name: a.display_name })} data-testid="agent-menu">
+      {/* the agent's element opens its page on a click, shows a tooltip on hover and opens this menu on a long press:
+          nothing in the menu reaches it (an item held down would open the menu again and cancel the item) */}
+      <DropdownMenuContent align="start" className="w-56" onCloseAutoFocus={keepFocus} onClick={stop} onKeyDown={stop} onPointerMove={stop} onFocus={stop}
+        onContextMenu={stop} onTouchStart={stop} onTouchMove={stop} onTouchEnd={stop} onTouchCancel={stop} aria-label={t('agents.menu.label', { name: a.display_name })} data-testid="agent-menu">
         {items}
       </DropdownMenuContent>
     </DropdownMenu>
