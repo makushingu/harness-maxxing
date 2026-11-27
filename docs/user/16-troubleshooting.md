@@ -41,7 +41,7 @@ checks and the logs, explains, and fixes what is safe to fix.
 | service, http | `claude-maxxing` running and answering |
 | security | firewall (ufw), fail2ban and automatic security updates active - warning only; fix: `bash /opt/claude-maxxing/install.sh --secure` |
 | secrets_store | how the server's secrets are kept: in clear, mode 600 (information; `maxxing keys encrypt` seals them) or sealed. **Fail** = `secrets.json.cred` cannot be decrypted (a state folder copied from another server, a reinstalled system, `systemd-creds` removed): the server reads and writes no secret until it is fixed - restore `/var/lib/systemd/credential.secret`, or put back a clear `secrets.json` (run `maxxing keys decrypt` on the server it came from) and delete the `.cred` file |
-| state_files | a damaged `config.json` / `secrets.json` was found and replaced; its copy (`*.damaged-<date>`) is kept next to it - compare, restore what is missing (keys: Settings -> Keys), delete the copy |
+| state_files | a damaged `config.json` / `secrets.json` / `signins.json` (list of signed-in browsers: they had to sign in again) was found and replaced; its copy (`*.damaged-<date>`) is kept next to it - compare, restore what is missing (keys: Settings -> Keys), delete the copy |
 | tools | Node.js, Remotion, Scrapling and the shared Chromium ready (videos, PDFs, scraping) - warning only; fix: `maxxing deps update` |
 | deps_files | external components (`maxxing deps list`): ✘ when a binary changed since it was installed or a file is not owned by root (another user could replace it), ! when one is missing or not at the version of this release; fix: `maxxing deps update` |
 | bind | not listening on a public address |

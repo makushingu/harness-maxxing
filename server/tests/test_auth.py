@@ -337,3 +337,17 @@ def test_a_huge_signins_file_is_trimmed_in_one_pass(mx):
     devs = security._signins()["devices"]
     assert len(devs) == security.SIGNINS_MAX
     assert f"d{5000 - security.SIGNINS_MAX + 1}" in devs and f"d{5000 - security.SIGNINS_MAX}" not in devs
+
+
+def test_a_damaged_signins_file_is_reported_and_kept(mx, caplog):
+    """A damaged list signs every recent browser out: logged, its copy kept before the next sign-in, shown by doctor."""
+    import logging
+    from maxxing import cmd_core, config
+    security.make_cookie()
+    security.signins_path().write_text("{")
+    with caplog.at_level(logging.ERROR, logger="maxxing.security"):
+        security.make_cookie()
+    assert "signins.json is damaged" in caplog.text
+    kept = config.damaged_copy_of(security.signins_path())
+    assert kept and kept.read_text() == "{"
+    assert cmd_core.check_state_files()["level"] == cmd_core.WARN
