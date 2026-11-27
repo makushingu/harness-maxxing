@@ -365,7 +365,7 @@ export function GitGraph({ commits, selected, highlight, onSelect, compact, gith
             {...(known ? menuHandlers({ sha: c.sha }) : {})}
           >
             {refs.length > 0 && (
-              <span className="flex max-w-[60%] min-w-0 shrink items-center gap-1 overflow-hidden">
+              <span className="flex max-w-[40%] min-w-0 shrink items-center gap-1 overflow-hidden sm:max-w-[60%]">
                 {refs.map((r) => (
                   <RefBadge key={r.kind + r.name} r={r} lane={row.color} menu={r.kind === 'tag' ? undefined : menuHandlers({ ref: r })} />
                 ))}

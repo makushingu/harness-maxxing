@@ -19,6 +19,9 @@ New:
 - **Turn details.** The ⚙ at the end of the line under an answer opens **Turn details**: each call to the model (how much context it read, how much came from the cache) and each tool, in order, with its duration and the ones that failed; the turn's tokens and cost; **JSON** downloads it. Nothing more is stored: it is read from the session's log (`maxxing sessions trace SESSION [TURN]`).
 - **Metrics for a monitoring tool (off by default).** Settings → System can expose `/metrics` in the Prometheus format for a Grafana or another system you already run: tokens, cost and turns (in total, per project, per agent), the daily budget, plan usage, scheduled jobs, disk, memory, health. Read only with a secret token shown once; no session title, message or file is in it (`maxxing metrics on`).
 
+Fixed:
+- **On a phone**: in E-mail, a tap just beside the small selection box of a message selects it instead of opening it; in Git, the branch labels of the history leave more room to the title of each commit; in Infra, the columns of *Where everything runs* no longer overlap in languages with longer words.
+
 ## 2.0.0-alpha.175 - 2026-11-27
 
 New:

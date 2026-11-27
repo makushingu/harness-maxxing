@@ -277,7 +277,14 @@ function Row({ m, selected, checked, onOpen, onCheck, menu }: { m: MailSummary; 
       data-testid="mail-row"
     >
       {!m.seen && <span className="absolute top-4 left-1 size-1.5 rounded-full bg-primary" aria-label={t('mail.unread')} />}
-      <span onClick={(e) => e.stopPropagation()} className="pt-0.5">
+      {/* on a phone the box is small: a tap just beside it still selects the message instead of opening it */}
+      <span
+        onClick={(e) => {
+          e.stopPropagation()
+          if (e.target === e.currentTarget) onCheck(!checked)
+        }}
+        className="pt-0.5 pointer-coarse:-m-2.5 pointer-coarse:p-2.5 pointer-coarse:pt-3"
+      >
         <Checkbox checked={checked} onCheckedChange={(v) => onCheck(!!v)} aria-label={t('mail.select')} className={cn(!checked && 'opacity-40 group-hover:opacity-100')} />
       </span>
       <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)] gap-0.5">

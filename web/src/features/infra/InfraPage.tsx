@@ -133,7 +133,7 @@ function Overview({ v, items, all, byId, onOpen, onPlace, onTab }: { v: InfraVie
   const servers = new Map(items.filter((r) => r.kind === 'server').map((r) => [r.location, r]))
   const nProblems = items.filter(isProblem).length
   const mask = useMask()
-  const grid = { gridTemplateColumns: `8.5rem repeat(${cols.length}, minmax(5.5rem, 1fr)) 4rem` }
+  const grid = { gridTemplateColumns: `8.5rem repeat(${cols.length}, minmax(6.5rem, 1fr)) 4rem` }
   const meterOf = (k: string) => {
     const d = servers.get(k)?.details
     if (!d?.mem_total) return null
