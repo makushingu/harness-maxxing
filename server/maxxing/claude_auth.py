@@ -80,7 +80,7 @@ def _read(p: Path) -> object:
     try:
         with open(p) as f:
             return json.load(f)
-    except (OSError, ValueError):
+    except (OSError, ValueError, RecursionError):      # "[[[[…" nested past the parser's limit
         return None
 
 
@@ -89,16 +89,26 @@ def _write(p: Path, data: dict) -> None:
     try:
         p.parent.mkdir(parents=True, exist_ok=True)
         tmp = p.with_name(f"{p.name}.{os.getpid()}.tmp")
-        with open(tmp, "w") as f:
-            json.dump(data, f)
-        os.replace(tmp, p)
-    except OSError:
+        try:
+            with open(tmp, "w") as f:
+                json.dump(data, f)
+            os.replace(tmp, p)
+        except BaseException:
+            tmp.unlink(missing_ok=True)                 # never a temporary file left behind
+            raise
+    except (OSError, TypeError, ValueError):            # a value JSON cannot hold: nothing written
         pass
 
 
 def last() -> dict:
     d = _read(state_file())
     return d if isinstance(d, dict) else {}
+
+
+def _at(rec: dict) -> float:
+    """The `at` of a stored record, 0 when it is not a finite number (a hand-edited "x", NaN)."""
+    v = rec.get("at")
+    return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) else 0.0
 
 
 def _epoch(v: object) -> float | None:
@@ -132,7 +142,7 @@ def _relevant(rec: dict, method: str | None) -> bool:
         return False
     if method == "credentials":
         try:
-            if credentials_file().stat().st_mtime > float(rec.get("at") or 0):
+            if credentials_file().stat().st_mtime > _at(rec):
                 return False                           # `claude /login` again since then
         except OSError:
             return False
@@ -149,8 +159,8 @@ def status() -> dict:
            "ends_at": None}
     if method is None or not _relevant(rec, method):
         return out
-    out["checked_at"] = rec.get("at")
-    if isinstance(rec.get("ends"), (int, float)):
+    out["checked_at"] = _at(rec) or None
+    if isinstance(rec.get("ends"), (int, float)) and not isinstance(rec["ends"], bool) and math.isfinite(rec["ends"]):
         out["ends_at"] = float(rec["ends"])
     if rec.get("ok") is False:
         err = rec.get("error") or "unknown error"
@@ -174,7 +184,7 @@ def needs_check(now: float | None = None) -> bool:
         return False
     rec = last()
     now = now or time.time()
-    return not _relevant(rec, method) or now - float(rec.get("at") or 0) > CHECK_EVERY_S
+    return not _relevant(rec, method) or now - _at(rec) > CHECK_EVERY_S
 
 
 # ---- plan limits seen in the turns -----------------------------------------------------------
