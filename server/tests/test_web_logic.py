@@ -771,3 +771,18 @@ def test_quick_add_labels_that_look_the_same_are_one_and_count_characters(tmp_pa
         const b = m.parseQuickAdd('y #' + '\\u{1F642}'.repeat(21), [], '2026-11-25')
         return [a.labels, a.title, b.labels.length, b.title]""")
     assert out == [["café"], "x", 1, "y"]
+
+
+def test_a_late_answer_to_a_widget_that_reloaded_never_reaches_the_new_document(tmp_path):
+    """A reload (or a link then Back) is a new widget document whose seq starts again at 1: it may greet before its
+    load event, at the same generation as the one that asked."""
+    out = _run_ts(tmp_path, WEB / "pages" / "dashboard" / "widgetKey.ts", """const r = []
+        const s = m.newFrame(); m.frameLoaded(s); m.frameHello(s)
+        const asked = s.gen, doc = s.doc
+        m.frameBye(s); m.frameHello(s); r.push(m.mayReply(s, asked, doc), m.mayReply(s, s.gen, s.doc))
+        m.frameLoaded(s); m.frameHello(s); r.push(m.mayReply(s, asked, doc))
+        m.frameHello(s); r.push(m.mayReply(s, s.gen, s.doc))                          // a ping's hello: the same one
+        return r""")
+    assert out == [False, True, False, True]
+    src = (WEB / "pages" / "dashboard" / "HtmlWidget.tsx").read_text(encoding="utf-8")
+    assert "mayReply(seen.current, asked, doc)" in src and "mayReply(seen.current, r.asked, r.doc)" in src
