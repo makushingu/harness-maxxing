@@ -184,6 +184,14 @@ def _read(p: Path) -> str:
         return ""
 
 
+def _whole(p: Path) -> str:
+    """The whole memory file, to be written back (`_read` cuts it for the model)."""
+    try:
+        return p.read_text("utf-8", "replace")
+    except OSError:
+        return ""
+
+
 def _known(path: str) -> str:
     """What was already proposed for this folder (waiting or refused): not to be proposed again."""
     seen = [x["text"] for x in load() if x.get("path") == path and x.get("state") in ("new", "rejected")][-20:]
@@ -241,7 +249,7 @@ def apply(pid: str) -> str:
     f = levels(it["path"]).get(it["level"])
     if not f:
         return "no memory file at this level"
-    body = _read(f) if f.exists() else ""
+    body = _whole(f) if f.exists() else ""
     line = it["text"] if it["text"].startswith("- ") else "- " + it["text"]
     done, old_line = "added", ""
     if it["action"] in ("replace", "remove") and it["old"] and it["old"] in body:
@@ -276,7 +284,7 @@ def undo(pid: str) -> str:
         done = "skill removed"
     else:
         f, u = levels(it["path"]).get(it["level"]), it.get("undo") or {}
-        body = _read(f) if f and f.exists() else ""
+        body = _whole(f) if f and f.exists() else ""
         line, old = str(u.get("line") or ""), str(u.get("old") or "")
         if line and line + "\n" in body:
             body = body.replace(line + "\n", (old + "\n") if old else "", 1)

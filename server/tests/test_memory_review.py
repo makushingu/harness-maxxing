@@ -218,3 +218,22 @@ def test_cli_run_on_an_unknown_session_says_so(client, capsys):
     from maxxing import cli
     assert cli.main(["memory-review", "run", "nosuchsession"]) != 0
     assert "unknown session" in capsys.readouterr().err
+
+
+def _stored(**kw) -> str:
+    """One waiting proposal for the global memory.md -> its id."""
+    it = {"id": "p" + str(len(mr.load())), "sid": "s", "path": "", "level": "global", "action": "add",
+          "text": "New fact.", "old": "", "why": "", "source": "owner", "model": "haiku", "at": 0, "state": "new", **kw}
+    mr._save(mr.load() + [it])
+    return it["id"]
+
+
+def test_writing_a_proposal_keeps_a_long_memory_whole(mx):
+    mem = config.workspace() / "memory.md"
+    long = "# Memory\n\n" + "".join(f"- Fact number {i} about the server.\n" for i in range(800)) + "- Last original fact.\n"
+    assert len(long) > mr.MEMORY_MAX
+    mem.write_text(long)
+    assert mr.apply(_stored()) == "added"
+    assert mem.read_text() == long + "- New fact.\n"
+    assert mr.undo("p0") == "taken back"
+    assert mem.read_text() == long
