@@ -33,6 +33,7 @@ blocks):
 | | **Pages** | the page extensions: every page pinned or not, switch on/off, **Open page**, **In the sidebar** (pin: the sidebar's Extensions folder), **Rescan** – see [Page extensions](page-extensions) |
 | | **Agents views** | the extensions that bring a view of the Overview of the Agents page (a page or a widget that also brings one shows in both), switch on/off, **New view**, **Rescan** – see [Overview views](page-extensions#overview-views-of-the-agents-page) |
 | | **Themes** | the themes installed in `<workspace>/themes`: their state (in use, advanced CSS on or off, values ignored), folders that are not usable, **New theme** (asks Harness), **Choose in Appearance** – see [Themes](themes) |
+| | **Community** | the catalogue of the website in three tabs (Extensions, Themes, Skills): **Check and install** shows what a listing would do on this server, then installs it once you confirm – see [Community extensions](page-extensions#5-community-extensions) |
 | **Workspace** | **Templates** | add a ready-made project (**starter pack**) for your kind of work; an existing project is never overwritten - see [Starter projects](starter-projects) |
 | | **Import** | the memory of another agent (Hermes, OpenClaw, Claude Code, a zip) - see [Import](import); and the way to the other imports: a memory backup (**Backup**), an agent file (Agents page) |
 | | **Backup** | repository, schedule, whitelist, history, restore – see [Backup](backup) |
@@ -43,8 +44,9 @@ blocks):
 
 The docs are not in Settings: open them with the book icon at the bottom of the sidebar (in the ⊞ menu on a phone).
 The community catalogue (widgets, pages, Agents views, skills and themes shared by other users) is on the website,
-[harness-maxxing.com/community](https://harness-maxxing.com/community): Widgets, Pages, Agents views, Themes and Skills
-link to it.
+[harness-maxxing.com/community](https://harness-maxxing.com/community), and in **Settings -> Community** (Extensions,
+Themes, Skills): **Check and install** shows what a listing would do on your server, then installs it once you confirm -
+see [Extensions](page-extensions#5-community-extensions).
 Old links keep working: `/settings/stats` opens **Usage**, `/settings/license` and `/settings/support` open **About**, `/settings/packs` and `/settings/projects` open **Templates**, `/settings/extensions` opens
 **Widgets**, `/settings/docs` opens the docs.
 

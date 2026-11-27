@@ -1241,6 +1241,26 @@ const MOCK_THEMES = [
     css: '& .rounded-xl { box-shadow: 0 0 0 1px oklch(0.75 0.17 55 / 0.25) }', css_state: 'stale', warnings: [] },
 ]
 R('GET', '/api/themes', () => ({ themes: MOCK_THEMES, errors: [] }))
+// Settings -> Community: the catalogue of the website, the report of one listing, its install
+const MOCK_CATALOGUE = [
+  { slug: 'shopify-stats', type: 'widget', tab: 'extension', title: 'Shopify stats', description: 'Sales of the day on the dashboard.', repo: 'someone/shopify-stats', sha: 'a'.repeat(40), server_code: true, stars: 4, author: 'someone', banner: '', url: 'https://harness-maxxing.com/community/shopify-stats' },
+  { slug: 'neon-sunset', type: 'theme', tab: 'theme', title: 'Neon sunset', description: 'A dark theme with warm accents.', repo: 'someone/neon', sha: 'b'.repeat(40), server_code: false, stars: 2, author: 'someone', banner: '', url: 'https://harness-maxxing.com/community/neon-sunset' },
+]
+const communityInstalled = []
+R('GET', '/api/community/installed', () => ({ packages: communityInstalled }))
+R('GET', '/api/community/catalogue', () => ({ items: MOCK_CATALOGUE }))
+R('POST', '/api/community/catalogue/:slug/check', ({ params }) => {
+  const listing = MOCK_CATALOGUE.find((x) => x.slug === params.slug)
+  if (!listing) fail(400, 'package', 'this listing is not in the catalogue')
+  return { kind: listing.tab, id: listing.slug, sha256: 'c'.repeat(64), files: 4, summary: '1 point to read first, 1 to know.', runs_on_server: listing.server_code, counts: { danger: 1, warn: 1, info: 0 }, listing,
+    findings: [{ level: 'danger', code: 'process', what: 'starts a process on the server', file: 'api.py', line: 12, excerpt: 'subprocess.run(cmd)' }, { level: 'warn', code: 'host', what: 'calls the host api.shopify.com', file: 'api.py', line: 30, excerpt: '' }] }
+})
+R('POST', '/api/community/catalogue/:slug/install', ({ params, body }) => {
+  if (body?.sha256 !== 'c'.repeat(64) || !body?.read_it) fail(409, 'changed', 'the content is not the one that was checked')
+  const it = MOCK_CATALOGUE.find((x) => x.slug === params.slug)
+  communityInstalled.push({ kind: it.tab, id: it.slug, sha256: body.sha256, source: `${it.url} @ ${it.sha.slice(0, 12)}`, installed_at: Math.floor(Date.now() / 1000), state: 'ok' })
+  return { kind: it.tab, id: it.slug, record: {} }
+})
 /* ---- getting-started guide (guide.py): cards "written" 1.5 s after they are asked */
 const GUIDE = { file: null }
 const GUIDE_WRITES = new Set(['welcome', 'first-prompt', 'memory', 'agents', 'agents-sessions', 'crons', 'tasks', 'code', 'sites', 'mail', 'content', 'final'])

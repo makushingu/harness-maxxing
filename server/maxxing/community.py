@@ -13,6 +13,10 @@ purpose. An empty list never means a package is harmless; the owner (or Claude, 
 Pinning: `install(path, sha256=...)` takes its own copy, computes the hash of that copy and refuses when it is not
 the one the report was shown for; what is installed is the copy that was hashed. `<state>/installed.json` keeps
 {kind, id, sha256, installed_sha256, source, installed_at} per package (`installed()`).
+
+The catalogue (Settings -> Community): `catalogue()` reads the accepted listings of the website, only when asked;
+`check_listing(slug)` / `install_listing(slug, sha256)` download the repository at the commit that was reviewed
+(never a branch) and go through `report` / `install` above: same report, same pinning.
 """
 from __future__ import annotations
 
@@ -25,6 +29,8 @@ import shutil
 import stat
 import tempfile
 import time
+import urllib.error
+import urllib.request
 from pathlib import Path, PurePosixPath
 from typing import Any, Iterator
 
@@ -680,3 +686,105 @@ def install(path: Path | str, sha256: str, *, read_it: bool = False, force: bool
             _swap(root, dest, force)
         r["record"] = _record(r, dest, source)
         return r
+
+
+# ---------------------------------------------------------------------------------------------- the catalogue
+SITE = os.environ.get("MAXXING_COMMUNITY_URL", "https://harness-maxxing.com/community").rstrip("/")
+ZIP_URL = os.environ.get("MAXXING_COMMUNITY_ZIP", "https://codeload.github.com/{repo}/zip/{sha}")
+TAB = {"widget": "extension", "page": "extension", "view": "extension", "skill": "skill", "theme": "theme"}
+CATALOGUE_TTL = 60
+_REPO = re.compile(r"[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9._-]{1,100}")
+_COMMIT = re.compile(r"[0-9a-f]{40}")
+_SLUG = re.compile(r"[a-z0-9-]{1,60}")
+_cache: dict[str, Any] = {"at": 0.0, "items": []}
+
+
+def _get(url: str, cap: int) -> bytes:
+    req = urllib.request.Request(url, headers={"User-Agent": "harness-maxxing", "Accept": "*/*"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            data = r.read(cap + 1)
+    except (urllib.error.URLError, OSError, ValueError) as e:
+        raise PackageError(f"cannot reach {url.split('/')[2]}: {getattr(e, 'reason', e)}") from None
+    if len(data) > cap:
+        raise PackageError(f"more than {cap // 1024 // 1024} MB to download")
+    return data
+
+
+def _site_url(v: Any) -> str:
+    return f"{SITE.rsplit('/community', 1)[0]}{v}" if isinstance(v, str) and v.startswith("/community/img/") else ""
+
+
+def _listing(it: Any) -> dict | None:
+    """One listing of the website, only the fields the UI shows and with the shapes the download relies on."""
+    if not isinstance(it, dict):
+        return None
+    slug, repo, sha, typ = (str(it.get(k) or "") for k in ("slug", "repo", "sha", "type"))
+    path = str(it.get("path") or "").strip("/")
+    parts = PurePosixPath(path).parts if path else ()
+    if not (_SLUG.fullmatch(slug) and _REPO.fullmatch(repo) and _COMMIT.fullmatch(sha) and typ in TAB) \
+            or ".." in parts or any(p.startswith(".") for p in parts):
+        return None
+    author = it.get("author") if isinstance(it.get("author"), dict) else {}
+    return {"slug": slug, "type": typ, "tab": TAB[typ], "title": _label(it.get("title"), slug)[:120],
+            "description": str(it.get("description") or "")[:600], "repo": repo, "path": path, "sha": sha,
+            "server_code": bool(it.get("server_code")), "stars": int(it.get("stars") or 0) if str(it.get("stars") or 0).isdigit() else 0,
+            "author": str(author.get("name") or author.get("login") or "")[:80], "banner": _site_url(it.get("banner")),
+            "reviewed_at": it.get("reviewed_at") if isinstance(it.get("reviewed_at"), int) else None,
+            "url": f"{SITE}/{slug}"}
+
+
+def catalogue(fresh: bool = False) -> list[dict]:
+    """The accepted listings of the website (kept CATALOGUE_TTL seconds). Called when the owner opens the page,
+    never in the background."""
+    if fresh or time.time() - _cache["at"] > CATALOGUE_TTL:
+        try:
+            raw = json.loads(_get(f"{SITE}/api/items", 4 * 1024 * 1024)).get("items")
+        except (ValueError, AttributeError):
+            raise PackageError("the catalogue answered something unreadable") from None
+        _cache.update(at=time.time(), items=[x for x in map(_listing, raw if isinstance(raw, list) else []) if x])
+    return _cache["items"]
+
+
+@contextlib.contextmanager
+def _fetched(slug: str) -> Iterator[tuple[Path, dict]]:
+    """A listing as `<slug>.zip` in a temporary folder (removed on exit): its folder of the repository, downloaded
+    at the reviewed commit. Entries keep their attributes: `report` and `install` do the checks."""
+    import zipfile
+    it = next((x for x in catalogue() if x["slug"] == slug), None)
+    if not it:
+        raise PackageError("this listing is not in the catalogue (removed, or not accepted yet)")
+    with tempfile.TemporaryDirectory(prefix="mx-community-") as tmp:
+        raw = Path(tmp) / "repo"
+        raw.write_bytes(_get(ZIP_URL.format(repo=it["repo"], sha=it["sha"]), MAX_TOTAL))
+        out = Path(tmp) / f"{slug}.zip"
+        try:
+            with zipfile.ZipFile(raw) as src, zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as dst:
+                infos = [i for i in src.infolist() if not i.is_dir()]
+                if len(infos) > MAX_FILES * 5 or sum(i.file_size for i in infos) > MAX_TOTAL:
+                    raise PackageError("the repository is too large")
+                top = infos[0].filename.split("/")[0] if infos else ""
+                base = "/".join(x for x in (top, it["path"]) if x) + "/"
+                for i in infos:
+                    if i.filename.startswith(base) and len(i.filename) > len(base):
+                        data = src.read(i)
+                        i.filename = f"{slug}/{i.filename[len(base):]}"
+                        dst.writestr(i, data)
+                if not dst.namelist():
+                    raise PackageError(f"{it['path'] or 'the package'} is not in the repository at the reviewed commit")
+        except (zipfile.BadZipFile, RuntimeError, NotImplementedError):
+            raise PackageError("the downloaded archive cannot be read") from None
+        yield out, it
+
+
+def check_listing(slug: str) -> dict:
+    """`report` of a catalogue listing at its reviewed commit, with `listing`."""
+    with _fetched(slug) as (folder, it):
+        return {**report(folder, None if it["tab"] == "extension" else it["tab"]), "listing": it}
+
+
+def install_listing(slug: str, sha256: str, *, read_it: bool = False, force: bool = False) -> dict:
+    """`install` of a catalogue listing: downloaded again, refused when it is not what `check_listing` showed."""
+    with _fetched(slug) as (folder, it):
+        return install(folder, sha256, read_it=read_it, force=force, source=f"{it['url']} @ {it['sha'][:12]}",
+                       kind=None if it["tab"] == "extension" else it["tab"])

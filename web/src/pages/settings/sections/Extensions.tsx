@@ -1,7 +1,7 @@
 // Settings -> Widgets, Pages and Agents views (2.0.0a132, were one Extensions list; views apart since 2.0.0a169, as on
 // Community): the extensions of <workspace>/extensions, each in the section of what it brings (a page that also
 // brings an Agents view shows in both). Themes: Themes.tsx.
-// The community catalogue stays on the website: only a link here.
+// The community catalogue: Community.tsx (a link to it under each list).
 import * as React from 'react'
 import { Link, useNavigate } from 'react-router'
 import { AlertTriangle, Blocks, ExternalLink, Pencil, Plus, RefreshCw, Users } from 'lucide-react'
@@ -55,7 +55,7 @@ export function ViewsSection() {
   )
 }
 
-/** A link to the community catalogue (on the website, on purpose: nothing is installed from here). */
+/** A link to the community catalogue on the website (installing from the UI: Settings -> Community). */
 export function CommunityLink({ text, type }: { text: string; type?: string }) {
   return (
     <p className="flex items-center gap-1.5 px-1 text-[13px] text-muted-foreground">

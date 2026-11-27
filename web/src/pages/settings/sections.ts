@@ -1,14 +1,14 @@
 // Settings sub-navigation (route /settings/:section). Lightweight on purpose: also used by the palette.
 // Sections are grouped under headings in the left column (and in the phone tabs, in the same order).
 // Old ids keep working: SECTION_MOVED sends them to the section that took their content.
-import { UserRound, BarChart3, Globe, Bell, FileInput, History, Info, LayoutGrid, LayoutTemplate, ToggleRight, Bot, Brain, Clock, DatabaseBackup, KeyRound, Mic, MonitorSmartphone, Paintbrush, Palette, PanelsTopLeft, Radar, Plug, Rss, Send, Server, Shield, SlidersHorizontal, Sparkles, Trash2, Webhook, Zap, type LucideIcon } from 'lucide-react'
+import { UserRound, BarChart3, Globe, Bell, FileInput, History, Info, LayoutGrid, LayoutTemplate, ToggleRight, Bot, Brain, Clock, DatabaseBackup, KeyRound, Mic, MonitorSmartphone, Paintbrush, Palette, PanelsTopLeft, Radar, Plug, Rss, Send, Server, Shield, SlidersHorizontal, Sparkles, Trash2, Users, Webhook, Zap, type LucideIcon } from 'lucide-react'
 import type { TKey } from '@/i18n'
 
 export type SettingsSectionId =
   | 'general' | 'appearance' | 'profile' | 'security' | 'features'
   | 'claude' | 'memory' | 'skills' | 'mcp' | 'keys' | 'browser' | 'devices' | 'usage'
   | 'crons' | 'webhooks' | 'events' | 'alerts' | 'feed' | 'telegram' | 'voice'
-  | 'widgets' | 'pages' | 'views' | 'themes'
+  | 'widgets' | 'pages' | 'views' | 'themes' | 'community'
   | 'templates' | 'import' | 'backup' | 'trash'
   | 'system' | 'updates' | 'about'
 
@@ -49,6 +49,7 @@ export const SETTINGS_SECTIONS: { id: SettingsSectionId; group: SettingsGroupId;
   { id: 'pages', group: 'extensions', label: 'settings.pages', description: 'settings.pages.desc', icon: PanelsTopLeft, keywords: 'pages extensions sidebar pin plugins' },
   { id: 'views', group: 'extensions', label: 'settings.views', description: 'settings.views.desc', icon: Radar, keywords: 'agents views overview office display mission control extensions' },
   { id: 'themes', group: 'extensions', label: 'settings.themes', description: 'settings.themes.desc', icon: Paintbrush, keywords: 'themes theme colors look skin installed community css' },
+  { id: 'community', group: 'extensions', label: 'pkg.section', description: 'pkg.sectionDesc', icon: Users, keywords: 'community catalogue marketplace store install shared extensions themes skills download' },
   { id: 'templates', group: 'workspace', label: 'settings.templates', description: 'settings.templates.desc', icon: LayoutTemplate, keywords: 'templates starter packs projects topics ecommerce affiliate creator apps second brain freelance new project' },
   { id: 'import', group: 'workspace', label: 'settings.import', description: 'settings.import.desc', icon: FileInput, keywords: 'import migrate hermes openclaw claude code zip memory data restore agent' },
   { id: 'backup', group: 'workspace', label: 'settings.backup', description: 'settings.backup.desc', icon: DatabaseBackup, keywords: 'github memory restore' },

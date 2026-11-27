@@ -543,6 +543,30 @@ def j_logs_search(r: Run) -> None:
     r.healthy(pg)
 
 
+def j_community(r: Run) -> None:
+    """Settings -> Community: three tabs, a listing shows what it would do, and installs only once that was read."""
+    r.mock.scenario("ready")
+    pg = r.page()
+    r.go(pg, "/settings/community")
+    box = pg.locator('[data-testid="community-list"]')
+    box.get_by_text("Shopify stats").wait_for()
+    if box.get_by_text("Neon sunset").count():
+        raise Failure("a theme is listed under Extensions")
+    box.get_by_role("button").first.click()
+    rep = pg.locator('[data-testid="community-report"]')
+    rep.get_by_text("starts a process on the server").wait_for()
+    go = pg.locator('[data-testid="community-install"]')
+    if go.is_enabled():
+        raise Failure("a package with points in red can be installed before they are read")
+    rep.locator('input[type="checkbox"]').check()
+    go.click()
+    rep.wait_for(state="detached")
+    box.get_by_role("button").first.wait_for(state="detached")     # installed: no button any more
+    pg.get_by_role("radio").nth(1).click()
+    box.get_by_text("Neon sunset").wait_for()
+    r.healthy(pg)
+
+
 def j_turn_details(r: Run) -> None:
     """The line under an answer opens "Turn details": the steps of the turn, in English, with its failed tool."""
     r.mock.scenario("ready")
@@ -589,7 +613,7 @@ JOURNEYS = {
     "onboarding": j_onboarding, "session": j_session, "session-reload": j_session_reload,
     "new-session": j_new_session, "session-phone": j_session_phone, "palette": j_palette, "theme": j_theme,
     "setting-saved": j_setting_saved, "settings-nav": j_settings_nav, "files": j_files, "team": j_team, "nav": j_nav,
-    "usage-agents": j_usage_agents, "logs-search": j_logs_search, "turn-details": j_turn_details,
+    "usage-agents": j_usage_agents, "logs-search": j_logs_search, "turn-details": j_turn_details, "community": j_community,
     "push-feed": j_push_feed, "sign-out": j_sign_out,
 }
 

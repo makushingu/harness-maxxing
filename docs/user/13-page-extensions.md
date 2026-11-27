@@ -220,6 +220,11 @@ The [community library](https://harness-maxxing.com/community) lists widgets, pa
 into a session ("Install the community extension from …"): Claude reads the code at the commit we reviewed, tells you
 what it does, then installs it.
 
+You can also install from **Settings -> Community**: the catalogue in three tabs (Extensions, Themes, Skills), read from
+the website when you open the page. **Check and install** downloads the listing at the commit we reviewed and shows
+the report of `maxxing community check` below; nothing is installed until you confirm, and a package with points in
+red asks you to tick that you read them.
+
 > **Not made by the Harness Maxxing maintainers: install them at your own risk.** We check that a listing looks right
 > before it appears, not the code. An extension's `api.py` runs inside the Harness server, with the server's rights
 > (root on a standard install): it can read your files, your keys and your sessions. Listings with an `api.py` say

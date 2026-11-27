@@ -298,13 +298,18 @@ the interface's CSS, or an edit of the rules, makes it `stale` (off).
 | GET | `/api/themes/{id}/file/{name}` | - | an image the theme names (`wallpaper`, `wallpaper_dark`, `logo`, `logo_dark`, `preview`), else 404 |
 
 ## Community (packages from outside, `maxxing/community.py`)
-Nothing is installed from the UI. `maxxing community check PATH` reads a folder or a zip (an extension, a skill or a
+`maxxing community check PATH` reads a folder or a zip (an extension, a skill or a
 theme) without running it and reports what it would do; `maxxing community install PATH --sha256 HASH` installs only the
 content that report was shown for and records it in `<state>/installed.json`. A reading aid, not a verdict.
+Settings -> Community does the same for a listing of the website's catalogue (`MAXXING_COMMUNITY_URL`), downloaded at
+its reviewed commit: `check` then `install` with the `sha256` of that report. The catalogue is read only on request.
 
 | Method | Path | Body | Response |
 |---|---|---|---|
 | GET | `/api/community/installed` | - | `{packages: [{kind: extension\|skill\|theme, id, name, version, sha256, source, installed_at, counts: {danger, warn, info}, runs_on_server, state: ok\|modified\|removed}]}` (`modified`: its files changed since the install) |
+| GET | `/api/community/catalogue` | `?fresh=1` | `{items: [{slug, type: widget\|page\|view\|skill\|theme, tab: extension\|theme\|skill, title, description, repo, path, sha, server_code, stars, author, banner, reviewed_at, url}]}` (kept 60 s; 400 when the website cannot be reached) |
+| POST | `/api/community/catalogue/{slug}/check` | - | the report of `maxxing community check --json` + `listing`; nothing is installed |
+| POST | `/api/community/catalogue/{slug}/install` | `{sha256, read_it?, force?}` | `{kind, id, record}`; 409 when the content is not the one of `sha256`, or has points to read first without `read_it` |
 
 ## Webhooks & events (Settings -> Automate, `maxxing/webhooks.py`)
 Automations without AI: one trigger + one action. Made from the pages' short form (`POST /api/webhooks`, `PATCH`
