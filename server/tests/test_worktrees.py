@@ -359,6 +359,16 @@ def test_a_branch_under_the_name_or_on_the_prefix_never_breaks_the_copy(code):
     assert e.value.code == "bad_prefix"
 
 
+def test_a_damaged_prefs_file_is_kept_before_it_is_written_over(code):
+    worktrees.set_prefs("/r/a", prepare="npm ci")
+    f = worktrees._prefs_file()
+    f.write_text(f.read_text()[:-1])                                     # cut by a full disk
+    worktrees.set_prefs("/r/c", prepare="make")
+    kept = list(f.parent.glob("worktrees.json.damaged-*"))
+    assert len(kept) == 1 and "npm ci" in kept[0].read_text()
+    assert worktrees.prefs("/r/c")["prepare"] == "make"
+
+
 def test_two_copies_made_at_the_same_time_get_their_own_branch(code, monkeypatch):
     import threading
     topic, clone = code

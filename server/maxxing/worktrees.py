@@ -91,9 +91,8 @@ def set_prefs(repo: Path | str, **kw) -> dict:
                 cur[k] = kw[k]
         d[str(repo)] = cur
         f = _prefs_file()
-        tmp = f.with_suffix(".tmp")
-        tmp.write_text(json.dumps(d, indent=2))
-        os.replace(tmp, f)
+        config.keep_damaged(f)          # unreadable (cut by a full disk): kept, the other repositories' settings with it
+        config.write_json(f, d)
     return prefs(repo)
 
 
