@@ -70,7 +70,7 @@ export function TotpRow() {
         },
       )
     else if (step === 'renew')
-      renew.mutate(password, {
+      renew.mutate({ password, code: state?.totp ? code : undefined }, {
         onSuccess: (r) => {
           close()
           setCodes(r.recovery_codes)
@@ -85,7 +85,7 @@ export function TotpRow() {
     </FormField>
   )
   const passwordField = (
-    <FormField label={t('security.current')} error={isPwError(error, t) || step !== 'off' ? error : undefined}>
+    <FormField label={t('security.current')} error={isPwError(error, t) || (step !== 'off' && step !== 'renew') || !state?.totp ? error : undefined}>
       <SecretInput value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" autoFocus />
     </FormField>
   )
@@ -128,7 +128,7 @@ export function TotpRow() {
             ) : (
               <>
                 {passwordField}
-                {step === 'off' && codeField(t('security.appOffCode'))}
+                {(step === 'off' || (step === 'renew' && state?.totp)) && codeField(t('security.appOffCode'))}
               </>
             )}
             <DialogFooter>

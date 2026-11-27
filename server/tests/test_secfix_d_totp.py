@@ -161,7 +161,7 @@ def test_recovery_codes_once_only(client):
     assert d.post("/api/auth/two-factor", json={"challenge": two["challenge"], "code": codes[1]}).status_code == 200
     # new ones need the password and end the old ones
     assert client.post("/api/auth/recovery-codes", json={"password": "nope nope nope"}).status_code == 401
-    fresh = client.post("/api/auth/recovery-codes", json={"password": PW}).json()["recovery_codes"]
+    fresh = client.post("/api/auth/recovery-codes", json={"password": PW, "code": codes[2]}).json()["recovery_codes"]
     assert len(fresh) == 10 and not set(fresh) & set(codes)
     assert not twofactor.use_recovery(codes[2]) and twofactor.use_recovery(fresh[0])
     assert not twofactor.use_recovery(fresh[0])
@@ -177,6 +177,22 @@ def test_turning_off_needs_password_and_code(client):
     assert "totp" not in s and "recovery_codes" not in s
     assert _login(_stranger(client)) == {"ok": True}
     assert client.post("/api/auth/recovery-codes", json={"password": PW}).status_code == 409
+
+
+def test_recovery_codes_need_second_factor_when_app_on(client):
+    """Password + cookie alone cannot mint recovery codes, then use one to turn the app off."""
+    secret, codes = _enrol(client)
+    assert client.post("/api/auth/recovery-codes", json={"password": PW}).status_code == 400
+    assert client.post("/api/auth/recovery-codes", json={"password": PW, "code": "000000"}).status_code == 400
+    assert twofactor.recovery_left() == 10 and twofactor.use_recovery(codes[0])
+    fresh = client.post("/api/auth/recovery-codes", json={"password": PW, "code": codes[1]}).json()["recovery_codes"]
+    assert len(fresh) == 10 and twofactor.totp_on()
+
+
+def test_re_enrol_refused_when_app_on(client):
+    secret, _ = _enrol(client)
+    assert client.post("/api/auth/totp", json={"password": PW}).status_code == 409
+    assert twofactor.totp_verify(_code(secret, 1)) and twofactor.totp_on()
 
 
 def test_telegram_and_app_together(client, monkeypatch):
