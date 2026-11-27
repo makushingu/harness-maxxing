@@ -373,3 +373,14 @@ def test_two_copies_made_at_the_same_time_get_their_own_branch(code, monkeypatch
     for sid, w in out.items():
         worktrees.undo(sid, w)
 
+
+def test_a_copy_not_yet_recorded_keeps_its_ports(code):
+    topic, clone = code
+    one = worktrees.create(topic, str(clone), None, "one", "a" * 8 + "-sid")
+    two = worktrees.create(topic, str(clone), None, "two", "b" * 8 + "-sid")
+    assert abs(one["port"] - two["port"]) >= worktrees.PORT_BLOCK
+    worktrees.undo("a" * 8 + "-sid", one)
+    three = worktrees.create(topic, str(clone), None, "three", "c" * 8 + "-sid")
+    assert three["port"] == one["port"]                  # given back by the copy that was undone
+    for sid, w in (("b" * 8 + "-sid", two), ("c" * 8 + "-sid", three)):
+        worktrees.undo(sid, w)

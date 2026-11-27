@@ -49,6 +49,8 @@ INCLUDE_MAX, INCLUDE_BYTES = 500, 200 * 1024 * 1024   # files named by .worktree
 PORT_START, PORT_BLOCK, PORT_SLOTS = 4100, 10, 80   # copy n gets 4100 + 10 n ... + 9
 _lock = threading.Lock()
 _repo_locks: dict[str, threading.Lock] = {}     # one copy at a time per repository: its folder and branch names
+_reserved: dict[str, tuple[int, float]] = {}    # sid -> (first port, when): taken before the session is recorded
+RESERVE_S = 300.0
 
 
 def enabled() -> bool:
@@ -249,6 +251,7 @@ def create(topic_path: str, repo: str, base: str | None, title: str, sid: str, *
             wt["included"] = len(included)
         with _lock:
             wt["port"] = _free_ports(sid)
+            _reserved[sid] = (wt["port"], time.time())   # until the session is recorded, seen by the next copy
     except BaseException:
         undo(sid, wt)
         raise
@@ -301,6 +304,8 @@ def _add(r: Path, tdir: Path, title: str, sid: str, pr: dict | None, base: str |
 
 def undo(sid: str, wt: dict) -> None:
     """A copy whose session could not be made: its folder goes, and its branch unless it is a pull request's."""
+    with _lock:
+        _reserved.pop(sid, None)
     try:
         remove({"id": sid, "worktree": wt}, force=True)
     except Exception:  # noqa: BLE001 - best effort: the error that brought us here is the one to report
@@ -397,7 +402,8 @@ def _listening(port: int) -> bool:
 def _free_ports(sid: str) -> int:
     """The first port of a block no other live copy owns and nothing listens on (0 when all are taken)."""
     from .sessions import store
-    used = set()
+    now = time.time()
+    used = {port for other, (port, at) in _reserved.items() if other != sid and now - at < RESERVE_S}
     for other in store.list_ids():
         if other == sid:
             continue
