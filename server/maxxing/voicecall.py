@@ -152,7 +152,8 @@ TOOLS = [
 
 # ---- settings ---------------------------------------------------------------------------------------------------
 def settings() -> dict:
-    raw = config.load_config().get("voice_call") or {}
+    raw = config.load_config().get("voice_call")
+    raw = raw if isinstance(raw, dict) else {}            # a hand-edited true, list or number: the defaults
     out = {**DEFAULTS, **{k: raw[k] for k in DEFAULTS if k in raw}}
     for k in ("mode", "provider", "talker_model", "local_voice", "openai_voice", "gemini_voice"):
         if out[k] is not None and not isinstance(out[k], str):

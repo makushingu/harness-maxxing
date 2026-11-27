@@ -20,6 +20,13 @@ def test_a_hand_edited_voice_config_still_loads(state):
     assert s["local_voice"] == "auto" and s["provider"] is None and s["mode"] == "local"
 
 
+def test_a_voice_call_section_that_is_not_an_object_gives_the_defaults(state):
+    from maxxing import config
+    for raw in (True, ["mode"], 7):
+        config.update_config(voice_call=raw)
+        assert voicecall.settings()["mode"] == "local", raw
+
+
 def test_defaults_are_local(state):
     s = voicecall.settings()
     assert s["mode"] == "local" and s["provider"] is None and s["talker_model"] == "sonnet"
