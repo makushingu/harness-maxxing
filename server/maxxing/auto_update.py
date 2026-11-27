@@ -58,7 +58,12 @@ def _entry(v) -> dict | None:
     if not isinstance(v, dict):
         return None
     at = v.get("at")
-    if not (isinstance(at, (int, float)) and not isinstance(at, bool) and math.isfinite(at)):
+    if not isinstance(at, (int, float)) or isinstance(at, bool):
+        return None
+    try:
+        if not math.isfinite(at):
+            return None
+    except OverflowError:                               # an integer of hundreds of digits is no date either
         return None
     out: dict = {"at": at}
     for k in ("verdict", "target", "version", "result", "why"):   # only the known fields, as text JSON can carry

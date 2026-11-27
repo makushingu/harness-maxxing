@@ -193,3 +193,10 @@ def test_a_lone_surrogate_in_the_state_does_not_stop_the_passes(fake):
     au.state_file().write_text('{"last": {"at": 1, "result": "busy", "why": "\\ud800"}, "junk": "\\udc00"}')
     assert au.tick(fake["spawn"], now=1000.0) == "started" and fake["spawned"] == 1
     assert au.public()["last"]["result"] == "started"
+
+
+@pytest.mark.parametrize("at", [10**400, -(10**400)])
+def test_a_huge_integer_date_is_dropped_not_raised(fake, at):
+    config.write_json(au.state_file(), {"tried": {"target": "abc123", "at": at}, "last": {"at": at, "result": "busy"}})
+    assert au.public()["tried"] is None and au.public()["last"] is None
+    assert au.tick(fake["spawn"], now=1000.0) == "started" and fake["spawned"] == 1
