@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import contextlib
 import json
 import os
 import subprocess
@@ -125,6 +126,71 @@ def test_a_one_way_stream_is_not_closed_as_idle(tmp_path, monkeypatch):
         assert await asyncio.wait_for(br.read(10), 1) == b""
         for w in (bw, sw):
             w.close()
+    asyncio.run(go())
+
+
+def test_a_half_closed_client_still_gets_the_answer(tmp_path):
+    """The client sends its request then shuts its writing side: the site sees the end, answers, and the answer
+    still reaches the client (the half-close is passed on, the tunnel is not torn down)."""
+    import socket
+    from maxxing.browser import proxy
+
+    async def go():
+        px = proxy.Proxy(tmp_path / "p.sock")
+        a1, a2 = socket.socketpair()
+        b1, b2 = socket.socketpair()
+        br, bw = await asyncio.open_connection(sock=a1)
+        pr, pw = await asyncio.open_connection(sock=a2)
+        ur, uw = await asyncio.open_connection(sock=b2)
+        sr, sw = await asyncio.open_connection(sock=b1)
+
+        async def site():
+            data = await sr.read()                    # up to the client's end of writing
+            await asyncio.sleep(0.2)
+            sw.write(b"pong:" + data)
+            await sw.drain()
+            sw.close()
+        last = [time.monotonic()]
+        tunnel = asyncio.gather(px._pipe(pr, uw, True, last), px._pipe(ur, pw, False, last), site())
+        bw.write(b"ping")
+        await bw.drain()
+        bw.write_eof()
+        assert await asyncio.wait_for(br.read(), 3) == b"pong:ping"
+        await asyncio.wait_for(tunnel, 3)
+        bw.close()
+    asyncio.run(go())
+
+
+def test_a_client_that_stops_reading_does_not_hold_its_slot(tmp_path, monkeypatch):
+    """The site keeps sending, the client keeps the socket open but no longer reads (a paused tab): the stalled
+    way gives up after IDLE_TIMEOUT and ends the whole tunnel, so the connection slot is freed."""
+    import socket
+    from maxxing.browser import proxy
+
+    monkeypatch.setattr(proxy, "IDLE_TIMEOUT", 0.5)
+
+    async def go():
+        px = proxy.Proxy(tmp_path / "p.sock")
+        a1, a2 = socket.socketpair()
+        b1, b2 = socket.socketpair()
+        br, bw = await asyncio.open_connection(sock=a1)
+        pr, pw = await asyncio.open_connection(sock=a2)
+        ur, uw = await asyncio.open_connection(sock=b2)
+        sr, sw = await asyncio.open_connection(sock=b1)
+        bw.transport.pause_reading()
+
+        async def flood():
+            with contextlib.suppress(Exception):
+                while True:
+                    sw.write(b"x" * 65536)
+                    await asyncio.wait_for(sw.drain(), 0.1)
+        flooding = asyncio.ensure_future(flood())
+        try:
+            await asyncio.wait_for(px._tunnel(pr, pw, ur, uw), 4)
+        finally:
+            flooding.cancel()
+            for w in (bw, sw):
+                w.close()
     asyncio.run(go())
 
 

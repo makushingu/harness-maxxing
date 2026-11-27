@@ -235,3 +235,23 @@ def test_a_damaged_register_section_falls_back_to_the_defaults(client, bad):
     assert client.get("/api/settings/feedback").status_code == 200
     r = client.get("/api/onboarding")
     assert r.status_code == 200 and r.json()["steps"]["profile"] is False
+
+
+@pytest.mark.parametrize("bad", [["x"], "damaged", 7])
+def test_a_damaged_register_meta_section_is_ignored(client, cloud, bad):
+    config.update_config(register_meta=bad)
+    assert client.get("/api/settings/register").status_code == 200
+    r = client.put("/api/settings/register", json={"count": True, "asked": True})
+    assert r.status_code == 200 and r.json()["registered"]
+
+
+@pytest.mark.parametrize("bad", [["x"], "damaged", 7])
+def test_a_damaged_register_meta_section_does_not_stop_the_heartbeat(cloud, bad):
+    config.update_config(register={"count": True, "asked": True}, register_meta=bad)
+    assert register.heartbeat_due()                 # no beat on record: due
+
+
+@pytest.mark.parametrize("beat", ["abc", [1], 1e300, float("nan")])
+def test_a_damaged_or_future_beat_does_not_stop_the_heartbeat(cloud, beat):
+    config.update_config(register={"count": True, "asked": True}, register_meta={"beat_at": beat})
+    assert register.heartbeat_due()

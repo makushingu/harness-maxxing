@@ -114,3 +114,30 @@ def test_a_token_that_fails_its_test_keeps_the_one_stored_before(client, mx, mon
     assert r["ok"] is False and r["error"]
     assert config.get_secret("claude_oauth_token") == "sk-ant-oat-GOODGOODGOOD"
     assert config.get_secret("anthropic_api_key") in (None, "")
+
+
+def test_a_cli_answer_that_is_not_an_object_is_a_failed_test(client, mx, monkeypatch, tmp_path):
+    import maxxing.api.claude as cl
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    fake = tmp_path / "claude-null"
+    for last in ("null", "42", "[1]"):
+        fake.write_text(f"#!/bin/sh\ncat >/dev/null\necho '{last}'\n")
+        fake.chmod(0o755)
+        monkeypatch.setattr(cl, "_resolved_bin", lambda: str(fake))
+        r = client.post("/api/claude/test")
+        assert r.status_code == 200 and r.json()["ok"] is False, (last, r.text)
+
+
+def test_a_test_that_breaks_keeps_the_credential_stored_before(client, mx, monkeypatch, tmp_path):
+    import pytest
+    import maxxing.api.claude as cl
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    assert client.post("/api/claude/auth", json={"kind": "oauth_token", "value": "sk-ant-oat-GOODGOODGOOD"}).json()["ok"]
+
+    def boom(*a, **k):
+        raise RuntimeError("the test call broke")
+    monkeypatch.setattr(cl, "run_test", boom)
+    with pytest.raises(RuntimeError):
+        client.post("/api/claude/auth", json={"kind": "api_key", "value": "sk-ant-api-NEWNEWNEW"})
+    assert config.get_secret("claude_oauth_token") == "sk-ant-oat-GOODGOODGOOD"
+    assert config.get_secret("anthropic_api_key") in (None, "")

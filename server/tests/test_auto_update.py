@@ -175,3 +175,14 @@ def test_a_damaged_state_file_does_not_block_the_update(fake, tried):
     assert pub["tried"] is None and pub["last"] is None and pub["last_check"] is None
     assert au.tick(fake["spawn"], now=1000.0) == "started" and fake["spawned"] == 1
     assert au.public()["last"]["result"] == "started"
+
+
+@pytest.mark.parametrize("state", ['{"last": {"at": 1, "result": NaN}}', '{"tried": {"at": 1, "version": "\\udc00"}}',
+                                   '{"last_check": {"at": 1, "verdict": "ok", "extra": Infinity}}'])
+def test_a_damaged_record_does_not_break_the_version_card(client, state):
+    au.state_file().parent.mkdir(parents=True, exist_ok=True)
+    au.state_file().write_text(state)                   # a hand edit: NaN, a lone surrogate, an unknown field
+    r = client.get("/api/system/version")
+    assert r.status_code == 200, r.text
+    pub = r.json()["auto_update"]
+    assert all(v is None or "extra" not in v for v in (pub["tried"], pub["last_check"], pub["last"]))

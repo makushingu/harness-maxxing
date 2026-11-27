@@ -28,17 +28,44 @@ SKIP_TEXT = "Daily budget of the server reached (Settings -> Usage)"
 
 
 def limit() -> float:
+    raw = config.load_config().get("daily_budget_usd")
+    if isinstance(raw, bool):                       # a hand-edited true is not a budget of $1
+        return 0.0
     try:
-        v = float(config.load_config().get("daily_budget_usd") or 0)
+        v = float(raw or 0)
     except (TypeError, ValueError):
         return 0.0
     return v if 0 < v <= MAX_USD else 0.0
 
 
+CACHE_S = 5.0                           # spent_today() is asked at every turn end, cron run and agent trigger
+_spent: tuple | None = None             # (key, monotonic time, total) of the last live scan
+
+
 def spent_today(now: float | None = None) -> float:
     """What the sessions cost on the day of `now`. Only the sessions written since the day before are read: one
-    that cost something today was written today (cheap in a fresh process too: a job's unit)."""
-    now = now or time.time()
+    that cost something today was written today (cheap in a fresh process too: a job's unit). The live total is
+    kept a few seconds, and read again as soon as a session is written (by this process, or anyone: the folder
+    changes)."""
+    global _spent
+    if now is not None:
+        return _scan(now)
+    now = time.time()
+    folder = store.sessions_dir()
+    try:
+        mtime = os.stat(folder).st_mtime_ns            # a meta is written by rename: the folder changes
+    except OSError:
+        mtime = None
+    key = (str(folder), store.day_of(now), mtime, store.writes)
+    hit = _spent
+    if hit and hit[0] == key and time.monotonic() - hit[1] < CACHE_S:
+        return hit[2]
+    total = _scan(now)
+    _spent = (key, time.monotonic(), total)
+    return total
+
+
+def _scan(now: float) -> float:
     day = store.day_of(now)
     total = 0.0
     try:

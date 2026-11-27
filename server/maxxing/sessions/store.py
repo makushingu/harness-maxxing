@@ -121,7 +121,12 @@ def forget_cached(keep: set[str]) -> None:
         _cache.pop(k, None)
 
 
+writes = 0                     # metas written by this process: what budget.spent_today's cache watches
+
+
 def _write(sid: str, data: dict) -> None:
+    global writes
+    writes += 1
     p = meta_path(sid)
     tmp = p.with_name(f"{p.name}.{os.getpid()}.tmp")
     try:

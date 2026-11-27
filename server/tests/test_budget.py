@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import time
 
-from maxxing import agents, budget, crons, feed
+from maxxing import agents, budget, config, crons, feed
 from maxxing.sessions import store
 
 from conftest import wait_idle
@@ -41,6 +41,11 @@ def test_the_setting_is_checked(client, topic):
         r = client.put("/api/settings", json={"daily_budget_usd": bad})
         assert r.status_code == 400 and r.json()["error"] == "invalid_daily_budget"
     assert budget.limit() == 12.35
+    for body in ({"daily_budget_usd": True}, {"limit_retry_delay_s": True}, {"limit_retry_delay_s": 1.5}):
+        assert client.put("/api/settings", json=body).status_code == 422, body   # true is not 1
+    s = client.get("/api/settings").json()
+    assert s["daily_budget_usd"] == 12.35 and s["limit_retry_delay_s"] == 60
+    assert client.put("/api/settings", json={"limit_retry_delay_s": 30}).json()["limit_retry_delay_s"] == 30
     assert _budget(client, 0)["daily_budget_usd"] == 0
 
 
@@ -148,3 +153,30 @@ def test_a_damaged_cost_in_a_session_is_ignored(client, topic):
     r = client.get("/api/stats/budget")
     assert r.status_code == 200 and r.json()["spent_today"] == 3.0
     assert budget.reached() is False
+
+
+def test_a_hand_edited_budget_or_retry_is_read_as_meant(mx):
+    config.update_config(daily_budget_usd=True)
+    assert budget.limit() == 0.0                    # true is no budget, not $1
+    for off in ("false", "False", "off", "0", 0, False):
+        config.update_config(limit_retry=off)
+        assert crons.limit_retry_on() is False, off
+    for on in (True, "true", 1, None):
+        config.update_config(limit_retry=on)
+        assert crons.limit_retry_on() is True, on
+
+
+def test_the_day_total_is_not_read_again_at_every_call(client, topic, monkeypatch):
+    """spent_today() runs at every turn end, cron run and agent trigger: one scan of the sessions, then the total
+    is kept until a session is written."""
+    _spend(topic, 2.0)
+    scans = []
+    real = budget._scan
+    monkeypatch.setattr(budget, "_scan", lambda now: scans.append(now) or real(now))
+    assert budget.spent_today() == 2.0
+    for _ in range(5):
+        budget.reached()
+        assert client.get("/api/stats/budget").json()["spent_today"] == 2.0
+    assert len(scans) == 1
+    _spend(topic, 1.5)                                    # a session written: read again
+    assert budget.spent_today() == 3.5 and len(scans) == 2

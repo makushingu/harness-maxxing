@@ -110,8 +110,12 @@ def main(argv: list[str] | None = None) -> int:
         if name == chosen:                          # only the command being run builds its options
             configure(s)
         s.set_defaults(fn=handler)
-    a = p.parse_args(argv)
     try:
+        try:
+            a = p.parse_args(argv)
+        except SystemExit:
+            sys.stdout.flush()                      # --help: its text fails here, not in the flush at exit
+            raise
         rc = a.fn(a) or 0
         sys.stdout.flush()                          # a buffered print fails here, not in the flush at exit
         return rc
