@@ -688,3 +688,14 @@ def test_summary_of_a_left_group_is_refused_before_claude_runs(monkeypatch):
     with pytest.raises(team.TeamError) as e:
         team.summarize("g_1", ids=["m0", "m1", "m2"])
     assert (e.value.status, e.value.code) == (409, "left") and calls == []   # Claude is not paid for a summary thrown away
+
+
+def test_a_received_file_is_marked_failed_when_free_space_cannot_be_read(client, topic, sent, monkeypatch):
+    from maxxing import uploads
+    def boom(*a, **k):
+        raise OSError("unreadable")
+    monkeypatch.setattr(uploads, "free_bytes", boom)
+    called = []
+    dm, mid = _received_file(monkeypatch, lambda *a, **k: called.append(1) or True)
+    assert _wait(lambda: not any(f.get("pending") for m in team.messages(dm)["messages"] for f in m["files"]), 100)
+    assert not called and team._queued[0] == 0
