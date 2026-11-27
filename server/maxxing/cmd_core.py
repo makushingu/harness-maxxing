@@ -1575,7 +1575,8 @@ def security_report() -> list[Check]:
     read together. A check that fails to run is skipped, never an error for the page."""
     cfg = config.load_config()
     out: list[Check] = []
-    for fn in (check_sign_in, check_permissions, check_secrets_store, check_security, check_update_signature):
+    for fn in (check_sign_in, check_permissions, check_secrets_store, check_security,
+               lambda: check_update_signature(always=True)):
         try:
             c = fn()
         except Exception:  # noqa: BLE001
@@ -1695,20 +1696,37 @@ def _fetch_quiet(branch: str) -> None:
     _git("fetch", "-q", "origin", "--", branch, timeout=20, token=config.get_secret(UPDATE_TOKEN) or None)
 
 
-def check_update_signature() -> Check | None:
-    if not config.load_config().get("update_verify_signature") or not (config.CODE / ".git").exists():
+def check_update_signature(always: bool = False) -> Check | None:
+    """`always`: also a line when nothing is checked (Settings -> Security); doctor stays silent then."""
+    if not (config.CODE / ".git").exists():
         return None
     from . import license
     if license.enabled():
         return None                                    # still on archives: checked once it has moved to git
-    ref = f"origin/{_current_branch()}"
+    branch = _current_branch()
+    mode = signature_mode(branch)
+    if mode == "off":
+        if not always:
+            return None
+        if config.load_config().get("update_verify_signature", "stable") == "stable":
+            return _c("update_signature", INFO, f"updates of the branch {branch} are not signed",
+                      "only published versions (branch stable) carry a signature")
+        return _c("update_signature", INFO, "update signatures are not checked (update_verify_signature is off)",
+                  "", 'set "update_verify_signature": "stable" in config.json')
+    cannot = signature_unavailable()
+    if cannot and mode == "auto":
+        return _c("update_signature", WARN, "update signatures cannot be checked on this server", cannot)
+    ref = f"origin/{branch}"
     target = _rev(ref) or _rev("HEAD")
+    if mode == "auto" and target and target == _rev("HEAD"):
+        return _c("update_signature", OK, "a new version is installed only when signed by its publishers")
     ok, detail = verify_target(target) if target else (False, "no commit")
     if ok:
         return _c("update_signature", OK, f"update signatures checked ({detail})")
-    return _c("update_signature", WARN, f"update_verify_signature is on but {ref} is not signed by a trusted key",
-              detail, "maxxing update will stop until it is: import the maintainer's key (gpg --import) or set "
-                      "gpg.ssh.allowedSignersFile; or set update_verify_signature to false in config.json")
+    return _c("update_signature", WARN, f"{ref} is not signed by a trusted key",
+              detail, f"maxxing update will stop until it is: the keys trusted are in {SIGNERS} (plus the ones git "
+                      "knows: gpg --import, gpg.ssh.allowedSignersFile); or set update_verify_signature to false "
+                      "in config.json")
 
 
 def check_license() -> Check:
@@ -2199,14 +2217,20 @@ def _update_code(a) -> int:
         line(FAIL, "git fetch failed", err)
         return 1
     target = _rev(f"origin/{branch}")              # checked before any checkout: nothing unsigned on disk
-    if config.load_config().get("update_verify_signature") and target and target != old:
+    mode = signature_mode(branch)
+    cannot = signature_unavailable() if mode == "auto" else ""
+    if cannot and target and target != old:        # the default never blocks a server that has no way to check
+        line(WARN, f"the signature of {target[:8]} was not checked: {cannot}")
+    elif mode != "off" and target and target != old:
+        _git("fetch", "-q", "origin", "--", "+refs/tags/v*:refs/tags/v*", timeout=120,
+             token=config.get_secret(UPDATE_TOKEN) or None)        # the signature of a version is on its tag
         ok, detail = verify_target(target)
         if not ok:
-            line(FAIL, f"update stopped: {target[:8]} has no valid signature (update_verify_signature is on)"
+            line(FAIL, f"update stopped: {target[:8]} has no valid signature (update_verify_signature)"
                  f" - nothing changed, {__version__} keeps running",
-                 f"{detail} | check: git -C {config.CODE} verify-commit {target[:8]} ; import the maintainer's "
-                 "key (gpg --import) or set gpg.ssh.allowedSignersFile ; or turn the check off: "
-                 "update_verify_signature false in config.json")
+                 f"{detail} | check: git -C {config.CODE} tag --points-at {target[:8]} ; the keys trusted are in "
+                 f"{SIGNERS} (plus the ones git knows: gpg --import, gpg.ssh.allowedSignersFile) ; to turn the "
+                 "check off: update_verify_signature false in config.json")
             _notify(f"Harness Maxxing update stopped: the new version {target[:8]} is not signed by a trusted "
                     "key (update_verify_signature). Nothing changed.")
             return 1
@@ -2344,20 +2368,48 @@ def _autosave(dirty: list[str]) -> bool:
     return True
 
 
+SIGNERS = Path(__file__).with_name("release-signers")      # the publishers' keys, shipped with the installed version
+
+
+def signature_mode(branch: str) -> str:
+    """Config `update_verify_signature` -> "on" (true: every branch, stops when it cannot check), "auto" (the default,
+    "stable": the `stable` branch only moves to published versions, each tagged and signed) or "off"."""
+    v = config.load_config().get("update_verify_signature", "stable")
+    if v is True:
+        return "on"
+    return "auto" if v == "stable" and branch == "stable" else "off"
+
+
+def signature_unavailable() -> str:
+    """Why this server cannot check an SSH signature ("" = it can): git older than 2.34, no ssh-keygen, no key file."""
+    if not SIGNERS.is_file():
+        return f"{SIGNERS.name} is missing from the installed code"
+    if not shutil.which("ssh-keygen"):
+        return "ssh-keygen is not installed (package openssh-client)"
+    code, out = run(["git", "--version"], timeout=10)
+    m = re.search(r"(\d+)\.(\d+)", out or "")
+    if code != 0 or not m or (int(m.group(1)), int(m.group(2))) < (2, 34):
+        return f"git 2.34 or later is needed ({(out or '').strip() or 'git not found'})"
+    return ""
+
+
 def verify_target(target: str) -> tuple[bool, str]:
-    """Config `update_verify_signature`: the commit to install must carry a valid signature (`git verify-commit`),
-    or a tag pointing at it must (`git verify-tag`). Trust = the keys git knows (gpg keyring, or
-    gpg.ssh.allowedSignersFile for SSH signatures). -> (ok, detail)."""
-    code, out = _git("verify-commit", target, timeout=30)
-    if code == 0:
-        return True, f"commit {target[:8]} signature verified"
-    detail = out.strip()[-300:]
+    """The commit to install must carry a valid signature (`git verify-commit`), or a tag pointing at it must
+    (`git verify-tag`). Trust = the publishers' keys shipped with the installed version (`release-signers`, read
+    before anything of the new version is on disk), then the keys git knows on this server (gpg keyring,
+    gpg.ssh.allowedSignersFile). -> (ok, detail)."""
     _, tags = _git("tag", "--points-at", target)
-    for tag in tags.split():
-        tcode, tout = _git("verify-tag", tag, timeout=30)
-        if tcode == 0:
-            return True, f"tag {tag} signature verified"
-        detail = tout.strip()[-300:] or detail
+    detail = ""
+    for trust in ((["-c", f"gpg.ssh.allowedSignersFile={SIGNERS}"],) if SIGNERS.is_file() else ()) + ([],):
+        code, out = _git(*trust, "verify-commit", target, timeout=30)
+        if code == 0:
+            return True, f"commit {target[:8]} signature verified"
+        detail = detail or out.strip()[-300:]
+        for tag in tags.split():
+            tcode, tout = _git(*trust, "verify-tag", tag, timeout=30)
+            if tcode == 0:
+                return True, f"tag {tag} signature verified"
+            detail = tout.strip()[-300:] or detail
     return False, detail or "no signature"
 
 

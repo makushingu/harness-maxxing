@@ -508,3 +508,28 @@ def test_git_routes_with_a_path_longer_than_a_file_name_are_a_404(client, org):
     for route, extra in (("graph", {}), ("commit", {"sha": "0" * 40})):
         r = client.get(f"/api/git/{route}", params={"repo": "a" * 300, **extra})
         assert r.status_code == 404 and r.json()["error"] == "not_a_repo", r.text
+
+
+def test_a_filter_added_after_the_first_listing_never_runs(repo, tmp_path):
+    """GHSA-942m-233g-9pmw: the filter names are read before every git call. A filter added after the first listing,
+    with the modification time of .git/config put back, is neutralised like one that was there from the start."""
+    import os
+    flag = tmp_path / "ran"
+    hook = tmp_path / "hook.sh"
+    hook.write_text(f"#!/bin/sh\necho ran >> {flag}\ncat\n")
+    hook.chmod(0o755)
+    gitview.clear_cache()
+    assert not gitview.summary(repo).get("error")                 # first listing: no filter yet
+    cfg = repo / ".git" / "config"
+    before = cfg.stat()
+    gd = (repo / ".git").stat()
+    with cfg.open("a") as f:
+        f.write(f'[filter "late"]\n\tclean = {hook}\n')
+    (repo / ".git" / "info").mkdir(exist_ok=True)
+    (repo / ".git" / "info" / "attributes").write_text("* filter=late\n")
+    os.utime(cfg, ns=(before.st_atime_ns, before.st_mtime_ns))
+    os.utime(repo / ".git", ns=(gd.st_atime_ns, gd.st_mtime_ns))
+    (repo / "f1.txt").write_text("9")
+    gitview.clear_cache()
+    assert not gitview.summary(repo).get("error")
+    assert not flag.exists()

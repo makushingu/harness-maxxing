@@ -961,12 +961,20 @@ clears the list - jobs of existing installs are never touched (their key is alre
   (the rest is the root user and its capabilities, which the product needs).
 
 ## Signed updates (`update_verify_signature`)
-- Config `update_verify_signature` (default false). `cmd_update`, right after the fetch and before anything
-  changes (auto-save of dirty files, pre-update ref, merge/rebase): `verify_target(origin/<branch>)` =
-  `git verify-commit <sha>`, else `git verify-tag` of each `git tag --points-at <sha>`; failure -> FAIL line,
-  `_notify`, exit 1. Skipped when already up to date and on licensed installs (archive verified with ed25519).
-  `--resume` / `--rollback` do not re-check (the target was checked when the update started).
-- Doctor `update_signature` (only when on): verifies `origin/<current branch>` (else HEAD), WARN if unsigned.
+- `server/maxxing/release-signers`: the publishers' SSH keys (git allowed-signers format, `namespaces="git"`). The
+  cloud's `publish.py` signs the tag `v<version>` with the publisher's own key before `stable` moves.
+- Config `update_verify_signature`: `"stable"` (default) = checked when the branch followed is `stable`; `true` =
+  every branch; `false` = never. `cmd_core.signature_mode(branch)` -> `auto` / `on` / `off`.
+- `cmd_update`, right after the fetch and before anything changes (auto-save of dirty files, pre-update ref,
+  merge/rebase): fetch of `refs/tags/v*`, then `verify_target(origin/<branch>)` = `git verify-commit <sha>`, else
+  `git verify-tag` of each `git tag --points-at <sha>`, first with the installed `release-signers` (the trust anchor
+  is the version already running, never the one being installed), then with the keys git knows on the server (gpg
+  keyring, `gpg.ssh.allowedSignersFile`). Failure -> FAIL line, `_notify`, exit 1. Skipped when already up to date
+  and on licensed installs. `auto` on a server that cannot check (`signature_unavailable()`: git < 2.34, no
+  ssh-keygen) warns and goes on; `on` stops. `--resume` / `--rollback` do not re-check.
+- Doctor `update_signature`: OK / WARN when checked, silent when off (a line in Settings -> Security).
+- A key is added or removed by a version signed with a key already listed. What it does not cover: a new install
+  (install.sh clones without a trust anchor), the branches `beta` and `main`, a downgrade to an older signed version.
 
 ## External components (deps.toml, deps.py)
 - `server/maxxing/deps.toml` is the one list of what Harness Maxxing installs besides apt packages: version, URL

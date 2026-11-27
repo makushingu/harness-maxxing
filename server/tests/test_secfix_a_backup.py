@@ -18,3 +18,21 @@ def test_restore_on_a_server_in_use_keeps_its_own_backup_list(ws, mx_state):
     _in_use()
     backup._apply(dict(blob))
     assert backup._settings()["include"] == mine and backup._settings()["schedule"] == "0 5 * * *"
+
+
+def test_a_second_restore_keeps_held_code_off(ws, mx_state):
+    """GHSA-r5wh-pw6w-8xmc: restoring the same data twice leaves the held job and the held extension off."""
+    import pytest
+    from maxxing import config
+    crons = pytest.importorskip("maxxing.crons")
+    jobs = {"jobs": [{"id": "j1", "name": "Pushed", "schedule": "0 1 * * *", "kind": "shell", "command": "id",
+                      "enabled": True}]}
+    files = {f"{backup.META_DIR}/crons/jobs.json": json.dumps(jobs).encode(),
+             "extensions/probe/api.py": b"def card(ctx):\n    return {'blocks': []}\n",
+             f"{backup.META_DIR}/config.json": json.dumps({"extensions": {"disabled": []}}).encode()}
+    _in_use()
+    first = backup._apply(dict(files))
+    assert first["held"]["crons"] == ["Pushed"] and first["held"]["extensions"] == ["probe"]
+    backup._apply(dict(files))
+    assert not crons.list_jobs()[0]["enabled"]
+    assert "probe" in config.load_config()["extensions"]["disabled"]

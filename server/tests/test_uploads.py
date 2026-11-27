@@ -123,3 +123,32 @@ def test_infinite_upload_max_mb_falls_back_to_the_default(mx):
     # a hand-edited 1e999 loads as inf: int(inf) raises OverflowError, which broke every upload
     config.update_config(upload_max_mb=float("inf"), upload_min_free_mb=float("-inf"))
     assert uploads.limits() == (2048 * uploads.MB, 1024 * uploads.MB)
+
+
+def test_delete_multipart_needs_auth_before_body(mx):
+    """GHSA-m4p9-j9q8-j8x3: a multipart DELETE is answered 401 before a byte of its body is read."""
+    import asyncio
+    from maxxing.app import create_app
+    from maxxing import security
+    security.set_password("rightpassword")
+    app = create_app()
+    pulled = []
+
+    async def go(method):
+        sent = []
+
+        async def receive():
+            pulled.append(method)
+            return {"type": "http.request", "body": b"x" * 65536, "more_body": True}
+
+        async def send(m):
+            sent.append(m)
+        scope = {"type": "http", "method": method, "path": "/api/telegram", "raw_path": b"/api/telegram",
+                 "query_string": b"", "http_version": "1.1", "scheme": "http", "server": ("t", 80),
+                 "client": ("203.0.113.9", 1), "root_path": "",
+                 "headers": [(b"x-maxxing", b"1"), (b"content-type", b"multipart/form-data; boundary=zz"),
+                             (b"transfer-encoding", b"chunked")]}
+        await asyncio.wait_for(app(scope, receive, send), 20)
+        return next(m["status"] for m in sent if m["type"] == "http.response.start")
+    assert asyncio.run(go("DELETE")) == 401
+    assert pulled == []

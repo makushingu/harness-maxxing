@@ -966,6 +966,22 @@ def test_update_signature_signed_tag_is_enough(env, repos, monkeypatch, capsys):
     assert "tag v1.1 signature verified" in capsys.readouterr().out
 
 
+def test_update_signature_default_stops_an_unsigned_published_version(env, repos, monkeypatch, capsys):
+    """The default ("stable"): on the branch that only takes published versions, an unsigned one is refused; a
+    server that has no way to check (no ssh-keygen, old git) is warned and updates."""
+    clone, seen = _signed_update_env(env, repos, monkeypatch, verify_commit=1)
+    monkeypatch.setattr(cmd_core, "signature_mode", lambda branch: "auto")
+    monkeypatch.setattr(cmd_core, "signature_unavailable", lambda: "")
+    assert run_cli("update") == 1
+    assert "no valid signature" in capsys.readouterr().out
+    assert any("+refs/tags/v*:refs/tags/v*" in c for c in seen)          # the tags are fetched before the check
+    assert "signed?" not in (clone / "CHANGELOG.md").read_text()
+    monkeypatch.setattr(cmd_core, "signature_unavailable", lambda: "ssh-keygen is not installed")
+    assert run_cli("update") == 0
+    assert "was not checked: ssh-keygen is not installed" in capsys.readouterr().out
+    assert "signed?" in (clone / "CHANGELOG.md").read_text()
+
+
 def test_doctor_update_signature(env, repos, monkeypatch):
     monkeypatch.setattr(config, "CODE", repos["clone"])
     assert cmd_core.check_update_signature() is None

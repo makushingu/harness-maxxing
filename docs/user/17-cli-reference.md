@@ -72,13 +72,15 @@ lists the **workspace upgrade notes** of the versions installed (`<code>/docs/up
 instructions for Claude to adapt your workspace. The easiest path is the topic `system/harness` (`system/update` on older servers):
 say "update" and Claude checks, explains, updates after your yes, then applies these notes.
 
-**Signed updates only (optional).** Set `"update_verify_signature": true` in
-`/var/lib/claude-maxxing/config.json` and `maxxing update` installs a new version only if its commit, or a tag
-pointing at it, carries a valid signature from a key git trusts on this server (`git verify-commit` /
-`git verify-tag`: import the maintainer's GPG key with `gpg --import`, or point `gpg.ssh.allowedSignersFile` at
-their SSH key). Otherwise the update stops before changing anything (exit code `1`, a warning in the
-notifications feed and on Telegram) and the current version keeps running. `maxxing doctor` tells whether the
-latest fetched version passes the check. Off by default.
+**Signed versions.** Every published version carries the signature of its publishers. On a server that follows
+the published versions (branch `stable`, the default), `maxxing update` installs a new version only when its tag is
+signed by one of the keys shipped with the version already installed (`server/maxxing/release-signers`), and checks
+it before anything changes. Otherwise the update stops (exit code `1`, a warning in the notifications feed and on
+Telegram) and the current version keeps running. `maxxing doctor` and Settings -> Security tell whether the check is
+on. `"update_verify_signature"` in `/var/lib/claude-maxxing/config.json` changes it: `true` asks for a signature on
+every branch (also `beta` and `main`, whose commits are not signed by default: add your own keys with `gpg --import`
+or `gpg.ssh.allowedSignersFile`), `false` turns it off. A server without `ssh-keygen` or with a git older than 2.34
+cannot check: it says so and updates.
 
 ## maxxing license
 

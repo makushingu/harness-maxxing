@@ -124,7 +124,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
                "include": ["**/CLAUDE.md", "**/memory.md", "**/NOTES.md", "tasks.json",
                            "projects/*/topics/*/accounts.md", "extensions/**", ".claude/skills/**"]},
     "voice": {"engine": "off", "model": "small", "language": "auto", "auto_send": False},
-    "update_verify_signature": False,      # maxxing update: the new commit (or its tag) must be signed by a known key
+    "update_verify_signature": "stable",   # maxxing update: "stable" = a published version (branch stable) must be signed by its
+                                           # publishers (maxxing/release-signers); true = every branch; false = never
     "upload_max_mb": 2048,                 # per upload (one request of the UI); 0 = no cap
     "upload_min_free_mb": 1024,            # uploads refused (507) when they would leave less free disk
     # Memory cap of each turn / scheduled job unit (systemd MemoryMax: "75%" of RAM, "4G"...; "" or "infinity" = none).

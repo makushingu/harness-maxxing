@@ -24,33 +24,20 @@ SAFE_GIT = ("-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null", "-c"
             # below never see: status / diff never look inside submodules
             "-c", "diff.ignoreSubmodules=all", "-c", "submodule.recurse=false")
 EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"     # attributes read from it = none from the worktree
-_filters: dict[str, tuple[tuple, list[str]]] = {}
 
 
 def _filter_overrides(repo: Path) -> list[str]:
     """`-c filter.<name>.*` neutral values for every filter driver git would see for this repo: every config scope
-    (local, worktree via `extensions.worktreeConfig`, included files), cached while those files are unchanged."""
-    gd = repo / ".git"
-    stamp = tuple((f.stat().st_mtime_ns if f.exists() else 0) for f in (gd / "config", gd / "config.worktree", gd))
-    hit = _filters.get(str(repo))
-    if hit and hit[0] == stamp:
-        return hit[1]
-    names: set[str] = set()
-    cacheable = True
+    (local, worktree via `extensions.worktreeConfig`, included files). Read before every call, never cached: whoever
+    writes the config can put its modification time back, and a `.git` file (worktree, submodule) has no config to
+    watch. A read that fails raises: no git call runs with filters this module could not list."""
     try:
         r = subprocess.run(["git", *SAFE_GIT, "-C", str(repo), "config", "--includes", "--list"],
                            capture_output=True, text=True, timeout=10, errors="replace",
                            env={**os.environ, "GIT_TERMINAL_PROMPT": "0", "LC_ALL": "C", "GIT_CONFIG_NOSYSTEM": "1"})
-        for ln in r.stdout.splitlines():
-            m = re.match(r"filter\.(.+)\.(?:clean|smudge|process|required)=", ln)
-            if m:
-                names.add(m.group(1))
-            if ln.startswith(("include.", "includeif.")):
-                cacheable = False                         # an included file can change without touching these
-    except (OSError, subprocess.TimeoutExpired):
-        return []
-    out = [a for n in sorted(names) for a in ("-c", f"filter.{n}.clean=cat", "-c", f"filter.{n}.smudge=cat",
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise GitError(500, "git_failed", f"git config could not be read: {e}") from e
+    names = {m.group(1) for ln in r.stdout.splitlines()
+             if (m := re.match(r"filter\.(.+)\.(?:clean|smudge|process|required)=", ln))}
+    return [a for n in sorted(names) for a in ("-c", f"filter.{n}.clean=cat", "-c", f"filter.{n}.smudge=cat",
                                               "-c", f"filter.{n}.process=", "-c", f"filter.{n}.required=false")]
-    if cacheable:
-        _filters[str(repo)] = (stamp, out)
-    return out

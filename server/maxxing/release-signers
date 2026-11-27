@@ -1,0 +1,4 @@
+# Who signs the published versions of Harness Maxxing (git "allowed signers" format, one SSH key per person).
+# `maxxing update` checks the tag of a new version against THIS file, the one of the version already installed:
+# a key is added or removed by a version signed with a key listed here.
+feu@harness-maxxing.com namespaces="git" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBxttbriIHBUDWEbQiiNWcAuXefNm5jMPfVHrGxrDA6o
