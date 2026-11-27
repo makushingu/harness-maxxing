@@ -2032,3 +2032,15 @@ def test_a_dialog_answer_that_fails_leaves_the_dialog_to_answer():
         await w._answer_dialog(w.nav_of("t1"), {"accept": True})
         assert "t1" not in w.dialogs
     asyncio.run(run())
+
+
+def test_a_damaged_tab_in_the_tabs_file_does_not_lose_the_others(mx):
+    import json
+    from maxxing.browser.tabs import Tabs
+    t = Tabs("main")
+    t.file().parent.mkdir(parents=True, exist_ok=True)
+    tab = lambda key, at: {"key": key, "url": f"https://{key}.example.com/", "title": key, "at": at, "used": at}
+    t.file().write_text(json.dumps({"tabs": [tab("aaa", 1.0), tab("bbb", "hier"), tab("ccc", [1]), tab("ddd", 2.0)]}))
+    t.load()
+    assert {x["key"] for x in t.ordered()} == {"aaa", "bbb", "ccc", "ddd"}
+    assert all(isinstance(x["at"], float) and isinstance(x["used"], float) for x in t.ordered())
