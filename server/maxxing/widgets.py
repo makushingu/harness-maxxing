@@ -94,8 +94,10 @@ def _gb(n: float) -> str:
 
 # ---- widgets --------------------------------------------------------------------------------
 def activity(force: bool = False) -> dict:
+    from . import jarvis
     from .sessions import service                       # owned by core
-    sessions = [s for s in service.list_sessions() if not s.get("archived")]
+    # Jarvis's own sessions are hidden from the owner (never opened, never read): not counted either
+    sessions = [s for s in service.list_sessions() if not s.get("archived") and not jarvis.hides(s.get("path"))]
     if not sessions:
         return {"title": t("Activity"), "link": "/sessions", "blocks": _first_steps()}
     midnight = dt.datetime.now(_zone()).replace(hour=0, minute=0, second=0, microsecond=0).timestamp()

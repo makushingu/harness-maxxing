@@ -10,6 +10,7 @@ New:
 - **Agents and topics learn by themselves.** After a run, an agent adds one line to its own memory when the run taught something (a faster way a tool pointed to, what worked after a failure). Once a day, a topic where you asked for the same procedure three times gets a skill written from those sessions, and a correction you gave twice becomes a rule in its memory. Each one is written at once and shown in Notifications with **Undo**; at most three in 24 hours for one agent or topic, and a skill of yours is never replaced. `"memory_review": "ask"` in `config.json` makes each one wait for **Accept** / **Refuse** instead; `false` turns it off.
 
 Fixed:
+- **Dashboard: Jarvis's backstage sessions no longer count as Unread.** The Activity widget counted the sessions Jarvis keeps hidden from you; they could never be opened or read, so Unread never went back to 0 and went up with every backstage run. Reported by a user.
 - **Team: selected text in your own messages is visible.** Selecting text in one of your bubbles (to copy it) showed no highlight, the selection colour being the bubble's.
 
 ## 2.0.0-alpha.173 - 2026-11-26
