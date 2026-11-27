@@ -251,6 +251,8 @@ def apply(pid: str) -> str:
     if not f:
         return "no memory file at this level"
     body = _whole(f) if f.exists() else ""
+    if body and not body.endswith("\n"):                                      # edited by hand: the last bullet too
+        body += "\n"
     line = it["text"] if it["text"].startswith("- ") else "- " + it["text"]
     done, old_line = "added", ""
     if it["action"] in ("replace", "remove") and it["old"] and it["old"] in body:
@@ -286,6 +288,8 @@ def undo(pid: str) -> str:
     else:
         f, u = levels(it["path"]).get(it["level"]), it.get("undo") or {}
         body = _whole(f) if f and f.exists() else ""
+        if body and not body.endswith("\n"):
+            body += "\n"
         line, old = str(u.get("line") or ""), str(u.get("old") or "")
         if line and line + "\n" in body:
             body = body.replace(line + "\n", (old + "\n") if old else "", 1)

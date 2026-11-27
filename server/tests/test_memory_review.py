@@ -247,3 +247,13 @@ def test_writing_a_proposal_keeps_the_bytes_of_a_latin1_memory(mx):
     assert mem.read_bytes() == old + b"- New fact.\n"
     assert mr.undo("p0") == "taken back"
     assert mem.read_bytes() == old
+
+
+@pytest.mark.parametrize("action", ["replace", "remove"])
+def test_the_last_bullet_of_a_memory_without_a_final_newline(mx, action):
+    mem = config.workspace() / "memory.md"
+    mem.write_text("# Memory\n\n- Keep me.\n- Old fact.")
+    assert mr.apply(_stored(action=action, old="Old fact.")) == action + "d"
+    assert mem.read_text() == "# Memory\n\n- Keep me.\n" + ("- New fact.\n" if action == "replace" else "")
+    assert mr.undo("p0") == "taken back"
+    assert mem.read_text() == "# Memory\n\n- Keep me.\n- Old fact.\n"
