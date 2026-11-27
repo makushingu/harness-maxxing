@@ -403,3 +403,13 @@ def test_a_failed_save_frees_the_signed_delivery_so_the_retry_is_not_a_duplicate
     monkeypatch.setattr(webhooks, "_save_request", real)
     r = client.post(f"/api/hooks/{_tok(h)}", content=body, headers=hdr)
     assert r.status_code == 202 and not r.json().get("duplicate"), r.text
+
+
+def test_a_phone_hook_made_generic_drops_its_hashed_key(client, mx):
+    h = client.post("/api/webhooks", json=_shell("p2", "true", source="phone")).json()
+    client.post(f"/api/webhooks/{h['id']}/secret", json={"secret": "k3y"})
+    assert config.load_secrets()["webhooks"][h["id"]]["secret"].startswith("sha256:")
+    r = client.patch(f"/api/webhooks/{h['id']}", json={"trigger": {"kind": "in", "source": "generic"}})
+    assert r.status_code == 200, r.text
+    assert not r.json().get("has_secret")      # never the key's hash as the HMAC secret: a new one is set
+    assert "secret" not in config.load_secrets()["webhooks"][h["id"]]

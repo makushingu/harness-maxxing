@@ -442,6 +442,8 @@ def update(hid: str, spec: dict) -> dict:
         if h["trigger"]["kind"] != "in":
             s.pop("token", None)
             s.pop("secret", None)
+        elif _is_phone(old) and not _is_phone(h):
+            s.pop("secret", None)                 # only its hash is kept: never usable as an HMAC key, set a new one
         if h["action"]["kind"] == "call" and h["action"].get("sign") and not s.get("sign"):
             s["sign"] = _secrets.token_hex(24)
         hooks = [h if x["id"] == hid else x for x in hooks]
