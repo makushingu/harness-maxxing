@@ -88,3 +88,17 @@ def test_entries_of_several_lines_are_not_taken_for_a_cut_journal(monkeypatch):
     assert r["scanned"] == 5000 and not r["truncated"] and r["matched"] == 25000
     monkeypatch.setattr(logsearch, "_run", lambda args: "\n".join([_j("one")] * logsearch.SCAN_MAX))
     assert logsearch.search(["claude-maxxing"])["truncated"]
+
+
+def test_long_lines_are_cut_before_masking_and_lines_below_the_level_are_not_masked(monkeypatch):
+    from maxxing import logs
+    key = "sk-ant-api03-" + "k" * 40
+    long_line = "x" * 3990 + key + "y" * 44_000
+    monkeypatch.setattr(logsearch, "_run", lambda args: "\n".join(
+        [_j("ERROR maxxing.app: " + long_line)] + [_j("INFO maxxing.app: " + "z" * 48_000)] * 50))
+    masked: list[int] = []
+    real = logs.redact
+    monkeypatch.setattr(logs, "redact", lambda t: masked.append(len(t)) or real(t))
+    r = logsearch.search(["x"], level="error")
+    assert r["matched"] == 1 and "sk-ant-api03-<redacted>" in r["rows"][0]["text"] and "kkkk" not in r["rows"][0]["text"]
+    assert len(masked) == 1 and masked[0] <= logsearch.LINE_MAX + 256

@@ -53,8 +53,8 @@ def _priority(v) -> int:
     return 3 if p <= 3 else 2 if p == 4 else 1 if p <= 6 else 0
 
 
-def parse(out: str) -> list[dict]:
-    """journalctl -o json lines -> [{at, unit, level, text}], oldest first."""
+def parse(out: str, floor: int = 0) -> list[dict]:
+    """journalctl -o json lines -> [{at, unit, level, text}], oldest first; `floor`: the lowest level kept (index of LEVELS)."""
     rows: list[dict] = []
     prev_level, prev_unit = 1, ""
     for raw in out.splitlines():
@@ -78,7 +78,11 @@ def parse(out: str) -> list[dict]:
             else:
                 level = _priority(ev.get("PRIORITY"))
             prev_level, prev_unit = level, unit
-            rows.append({"at": at, "unit": unit, "level": LEVELS[level], "text": logs.redact(text)[:LINE_MAX]})
+            if level < floor:
+                continue                                # below the level asked: never masked nor kept
+            # cut before masking (a journal line reaches 48 KB): the margin keeps a key across the cut recognised
+            rows.append({"at": at, "unit": unit, "level": LEVELS[level],
+                         "text": logs.redact(text[:LINE_MAX + 256])[:LINE_MAX]})
     return rows
 
 
@@ -97,10 +101,10 @@ def search(units: list[str], *, lines: int = 200, since: str = "", level: str = 
     if since:
         args += ["--since", "@" + str(int(time.time() - SINCE[since]))]
     raw = _run(args)
-    rows = parse(raw)
+    floor = LEVELS.index(level) if level else 0
+    rows = parse(raw, floor)
     # journal entries, as SCAN_MAX counts them (a traceback is one entry of several lines)
     scanned = sum(1 for x in raw.splitlines() if x.startswith("{"))
-    floor = LEVELS.index(level) if level else 0
     needle = q[:Q_MAX].casefold()
     mention = mention or {}
     keep = [r for r in rows
