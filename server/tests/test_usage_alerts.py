@@ -121,3 +121,10 @@ def test_a_turn_that_keeps_failing(client, topic, monkeypatch):
     m2 = _spend(topic, 0.2)
     usage_alerts.check(m2, None)
     assert len(_events("kept failing")) == 1
+
+
+def test_the_usual_day_is_the_median_of_the_last_14_days_only(client, topic):
+    for ago in (1, 2, usage_alerts.BASE_DAYS + 1):             # the third day is 15 days ago: not counted
+        _spend(topic, 4.0, ago)
+    usage_alerts.check(_spend(topic, 20.0), None)
+    assert _events("more than usual") == []                    # two days of history: too few

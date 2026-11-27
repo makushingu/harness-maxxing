@@ -18,6 +18,7 @@ import logging
 import math
 import statistics
 import time
+from datetime import date, timedelta
 
 from . import config
 from .sessions import store
@@ -74,7 +75,8 @@ def _costs(now: float) -> dict[str, dict[str, float]]:
     if hit and hit[0] == day and time.monotonic() - hit[1] < BASE_CACHE_S:
         return hit[2]
     from . import agents
-    keep = {store.day_of(now - i * 86400) for i in range(BASE_DAYS + 2)}       # + 2: a day of 23 or 25 hours
+    first = date.fromisoformat(day)                 # today and the BASE_DAYS before it, by the calendar
+    keep = {(first - timedelta(days=i)).isoformat() for i in range(BASE_DAYS + 1)}
     out: dict[str, dict[str, float]] = {"": {}}
     for sid in store.list_ids():
         m = store.read_cached(sid)
