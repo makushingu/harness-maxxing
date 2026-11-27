@@ -78,7 +78,7 @@ export const copyApi = {
 export function branchSlug(text: string): string {
   const t = text
     .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\x00-\x7f]/g, '') // what has no ASCII form goes, as on the server (ß, æ, ø...)
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')

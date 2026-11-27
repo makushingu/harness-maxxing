@@ -794,3 +794,14 @@ def test_a_chart_value_that_is_not_a_number_leaves_the_scale_of_the_others(tmp_p
     assert out == [[0, 2.5, 5], [0, 2.5, 5], [-2, 0, 10], [0, 0.5, 1]]
     src = (WEB / "pages" / "dashboard" / "charts.tsx").read_text(encoding="utf-8")
     assert src.count("Number.isFinite(p[1])") == 2                  # no bar, a gap in the line
+
+
+def test_the_branch_name_preview_is_the_name_the_server_gives(tmp_path):
+    from maxxing import worktrees
+    src = (WEB / "features" / "code" / "copyApi.ts").read_text(encoding="utf-8")
+    a = src.index("export function branchSlug(")
+    (tmp_path / "slug.ts").write_text(src[a:src.index("\n}\n", a) + 3], encoding="utf-8")
+    texts = ["Straße reparieren", "Ærø", "Fix the login page!", "Łódź đường", "Crème brûlée, øl og æbler", "İstanbul ﬁx",
+             "a" * 30 + " ß " + "b" * 30]
+    out = _run_ts(tmp_path, tmp_path / "slug.ts", f"return {json.dumps(texts)}.map((t) => m.branchSlug(t))")
+    assert out == [worktrees.slug(t) for t in texts]
