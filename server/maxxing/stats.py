@@ -9,11 +9,13 @@ from __future__ import annotations
 
 import json
 import math
+import re
 import threading
 import time
 
 from .sessions import store
 
+_DAY = re.compile(r"\d{4}-\d{2}-\d{2}", re.ASCII)
 _lock = threading.Lock()
 _cache: dict = {"at": 0.0, "data": None, "inflight": None}
 CACHE_S = 20.0
@@ -153,9 +155,8 @@ def compute() -> dict:
         _add(projects.setdefault(_project_of(path), {"name": _project_of(path)}), tk, cost, turns)
         _add(topics.setdefault(path, {"path": path}), tk, cost, turns)
         for day, d in (m.get("days") if isinstance(m.get("days"), dict) else {}).items():
-            if isinstance(d, dict):
-                day = _text(day)
-                cur = days.setdefault(day, {"date": day, "tokens": 0, "cost_usd": 0.0})
+            if isinstance(d, dict) and isinstance(day, str) and _DAY.fullmatch(day):   # a hand-made key sorted
+                cur = days.setdefault(day, {"date": day, "tokens": 0, "cost_usd": 0.0})    # after them pushed real days out
                 cur["tokens"] += _int(d.get("tokens"))
                 cur["cost_usd"] = round(cur["cost_usd"] + _float(d.get("cost")), 6)
         title = _text(m.get("title"))

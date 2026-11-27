@@ -47,6 +47,14 @@ def test_a_surrogate_in_updated_does_not_break_the_usage_page(client, mx):
     assert client.get("/api/stats/tokens").status_code == 200
 
 
+def test_day_keys_that_are_not_dates_do_not_take_the_place_of_real_days(client, mx):
+    a = _session("projects/acme/topics/blog", "A")
+    with store.edit(a) as m:
+        m["days"] = {"2026-01-02": {"tokens": 5, "cost": 0.1}, "zzz": {"tokens": 9}, "9999-99-99x": {"tokens": 1},
+                     **{f"~{i}": {"tokens": 1} for i in range(store.DAYS_KEPT)}}
+    assert [d["date"] for d in stats.compute()["days"]] == ["2026-01-02"]
+
+
 def test_memory_files_limit_and_settings(client, mx):
     ws = config.workspace()
     (ws / "memory.md").write_text("# Global\n" + "- x\n" * 10)
