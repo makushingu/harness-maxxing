@@ -41,6 +41,7 @@ class ReadIn(BaseModel):
     ids: list[int] | None = None
     source: str | None = None
     all: bool = False
+    upto: int | None = None         # with all / source: the newest event shown (newer ones stay unread)
 
 
 class SettingsIn(BaseModel):
@@ -74,7 +75,7 @@ async def post_event(body: PostIn):
 
 @router.post("/read")
 async def mark_read(body: ReadIn):
-    return {"unread": await _call(feed.mark_read, body.ids, body.source, body.all)}
+    return {"unread": await _call(feed.mark_read, body.ids, body.source, body.all, body.upto)}
 
 
 @router.post("/{event_id}/act/{action}")

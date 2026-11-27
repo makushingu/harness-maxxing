@@ -30,10 +30,12 @@ export function useFeedPages(source: string | null = null, unread = false, pendi
 }
 
 export function useMarkFeedRead() {
-  return useMut((b: { ids?: number[]; source?: string; all?: boolean }) => api.post<{ unread: number }>('/api/feed/read', b), {
+  // upto (with all / source): the newest event shown, so one that came after the click stays unread
+  return useMut((b: { ids?: number[]; source?: string; all?: boolean; upto?: number }) => api.post<{ unread: number }>('/api/feed/read', b), {
     // Shown as read at once; the refetch (invalidate) brings the server's counts.
-    optimistic: ({ ids, source, all }) => {
-      const hit = (e: FeedEvent) => all || (source ? e.source === source : !!ids?.includes(e.id))
+    optimistic: ({ ids, source, all, upto }) => {
+      const hit = (e: FeedEvent) =>
+        (all || (source ? e.source === source : !!ids?.includes(e.id))) && (!!ids?.length || upto == null || e.id <= upto)
       const mark = (l: FeedList): FeedList => {
         const n = l.events.filter((e) => !e.read && hit(e)).length
         const errs = l.events.filter((e) => !e.read && hit(e) && e.level === 'error').length
