@@ -1,0 +1,1 @@
+var e=null;function t(t){let n=typeof t==`string`?t.indexOf(`?`):-1,r=n<0?null:new URLSearchParams(t.slice(n+1)).get(`prompt`);r&&(e=r)}function n(t){let n=e===t;return e=null,n}var r=(e,n)=>{let r=`/sessions?new=1&path=${encodeURIComponent(e)}&prompt=${encodeURIComponent(n)}`;return t(r),r};export{r as n,n as r,t};
