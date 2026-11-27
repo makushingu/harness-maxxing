@@ -119,6 +119,16 @@ def test_install_list_files_and_remove(mx, client, tmp_path, capsys):
     assert cli.main(["themes", "remove", "dune"]) == 1
 
 
+def test_a_clean_zip_installs_without_source(mx, tmp_path):
+    import zipfile
+    src = _theme(tmp_path / "src", "dune", {"name": "Dune", "base": "solid", "light": {"primary": "#b5651d"}})
+    z = tmp_path / "dune.zip"
+    with zipfile.ZipFile(z, "w") as zf:
+        zf.write(src / "theme.json", "theme.json")
+    assert cli.main(["themes", "install", str(z)]) == 0
+    assert (mx["ws"] / "themes" / "dune" / "theme.json").is_file()
+
+
 def test_solid_wallpaper_is_ignored(tmp_path):
     d = _theme(tmp_path, "ww", {"name": "W", "wallpaper": "w.png"}, {"w.png": b"x"})
     t, warn, _ = themes.load(d)
