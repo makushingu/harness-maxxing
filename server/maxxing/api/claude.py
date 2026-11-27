@@ -85,6 +85,7 @@ def run_test(model: str = TEST_MODEL, source: str = "test", timeout_s: int = TES
         data = json.loads(r.stdout.strip().splitlines()[-1]) if r.stdout.strip() else {}
     except ValueError:
         data = {}
+    data = data if isinstance(data, dict) else {}       # a last line of null, 42 or [1]: no answer
     text = str(data.get("result") or "")
     if r.returncode == 0 and not data.get("is_error") and text.strip():
         out["ok"] = True
@@ -190,7 +191,12 @@ async def set_auth(body: AuthIn):
         before = {name: config.get_secret(name) for name in SECRET_FOR.values()}
         # one stored credential at a time
         config.set_secrets({name: value if kind == body.kind else None for kind, name in SECRET_FOR.items()})
-        res = await asyncio.to_thread(run_test)
+        try:
+            res = await asyncio.to_thread(run_test)
+        except Exception:                               # the test itself broke: never keep an unchecked credential
+            config.set_secrets({name: v or None for name, v in before.items()})
+            claude_auth.forget()
+            raise
         if not res["ok"] and any(before.values()):      # a token that fails its test: the one stored before stays
             config.set_secrets({name: v or None for name, v in before.items()})
             claude_auth.forget()
