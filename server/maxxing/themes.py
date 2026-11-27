@@ -362,6 +362,33 @@ _CSS_BANNED = [
 ]
 
 
+def _strip_comments(v: str) -> str | None:
+    """CSS without its comments, like the browser reads it: `/*` inside a quoted string is text, not a comment
+    (a regex would cut `content: "/*"` and the rule after it). None when a comment is never closed."""
+    out, i, n, quote = [], 0, len(v), ""
+    while i < n:
+        c = v[i]
+        if quote:
+            out.append(c)
+            if c == quote or c == "\n":          # a newline ends a string for the browser as well
+                quote = ""
+            i += 1
+        elif c in "\"'":
+            quote = c
+            out.append(c)
+            i += 1
+        elif v.startswith("/*", i):
+            j = v.find("*/", i + 2)
+            if j < 0:
+                return None
+            out.append(" ")
+            i = j + 2
+        else:
+            out.append(c)
+            i += 1
+    return "".join(out)
+
+
 def _css(v: Any, warn: list[str]) -> str | None:
     """The advanced CSS of a theme (a string, or a list of lines), or None with a warning: refused as a whole."""
     if v is None or v == "" or v == []:
@@ -378,8 +405,8 @@ def _css(v: Any, warn: list[str]) -> str | None:
     if re.search(r"[\x00-\x08\x0b-\x1f\x7f\u2028\u2029]", v):
         warn.append("css: control characters (only newlines and tabs), ignored")
         return None
-    bare = re.sub(r"/\*.*?\*/", " ", v, flags=re.S)
-    if "/*" in bare:
+    bare = _strip_comments(v)
+    if bare is None:
         warn.append("css: unclosed comment, ignored")
         return None
     depth, quote = 0, ""

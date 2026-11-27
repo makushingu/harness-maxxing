@@ -265,6 +265,14 @@ def test_advanced_css_cannot_cover_the_app(tmp_path):
         assert t["css"], (ok, warn)
 
 
+def test_comments_are_removed_but_never_inside_a_string(tmp_path):
+    css = '& aside::before { content: "/*" }\n& aside { opacity: .9 } /* it\'s a note */'
+    t, warn, _ = themes.load(_theme(tmp_path, "str", {"name": "S", "css": css}))
+    assert t["css"] == '& aside::before { content: "/*" }\n& aside { opacity: .9 }', warn
+    t, warn, _ = themes.load(_theme(tmp_path, "open", {"name": "O", "css": '& aside { content: "x" } /* never closed'}))
+    assert t["css"] is None and "css: unclosed comment, ignored" in warn
+
+
 def test_serving_a_theme_image_does_not_read_the_theme_again(mx, monkeypatch, tmp_path):
     png = b"\x89PNG\r\n\x1a\n" + b"0" * 32
     src = _theme(tmp_path / "src", "cached", {"name": "Cached", "base": "glass", "wallpaper": "wall.png"},
