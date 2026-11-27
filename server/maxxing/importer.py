@@ -276,6 +276,10 @@ def _plan(zf: zipfile.ZipFile, scans: dict[str, list[str] | None]) -> dict[str, 
             # an agent runs by itself (triggers, permissions): never planted by an import, created in Harness
             skipped.append({"file": info.filename, "reason": "agent folder (not imported: create agents in Harness)"})
             continue
+        if parts[0] == "projects" and len(parts) >= 4 and parts[2] == "groups":
+            # a group makes agents of the project talk together: never planted in a project by an import
+            skipped.append({"file": info.filename, "reason": "agent group (not imported: create groups in Harness)"})
+            continue
         if parts[0] == "projects" and len(parts) >= 3:
             pr = proj(parts[1])
             if parts[2] == "topics" and len(parts) >= 5:
@@ -428,7 +432,8 @@ def _check_dest(dest: Path, root: Path) -> None:
 _APPLY_LOCK = threading.Lock()
 
 
-_IMPORT_REF_RE = re.compile(r"(?<!\S)@(?!memory\.md(?!\S))(?=[~/.\w])(?=\S*[~/.])\S*")
+# Claude Code reads `@path` up to the first space that is not escaped (`@a\ b/../x` is one path): same grammar here
+_IMPORT_REF_RE = re.compile(r"(?<!\S)@(?!memory\.md(?![^\s\\]|\\ ))(?=(?:[^\s\\]|\\ )*[~/.])(?:[^\s\\]|\\ )+")
 
 
 def _defang_imports(text: str) -> str:
@@ -437,8 +442,14 @@ def _defang_imports(text: str) -> str:
     return _IMPORT_REF_RE.sub(lambda m: f"`{m.group(0)}`", text)
 
 
+_HOOKS_KEY_RE = re.compile(r"""\s*["']?hooks["']?\s*:""", re.I)
+_PLAIN_KEY_RE = re.compile(r"""(?:[A-Za-z_][\w.-]*|"[\w .-]*"|'[\w .-]*')\s*:(?:\s|$)""")
+
+
 def _strip_skill_hooks(text: str) -> str:
-    """Remove the `hooks:` field of the front matter of a SKILL.md: a hook runs a command by itself."""
+    """Remove the `hooks:` field of the front matter of a SKILL.md: a hook runs a command by itself. A top-level
+    line that is not a plain `key:` goes too (a flow mapping `{hooks: ...}`, an escaped key `"hoo\\x6bs"`, a complex
+    key `? hooks`, an anchor, a merge): they are the other ways YAML has to spell that key."""
     lines = text.removeprefix("\ufeff").split("\n")
     if not lines or lines[0].strip() != "---":
         return text
@@ -446,12 +457,16 @@ def _strip_skill_hooks(text: str) -> str:
         end = next(i for i in range(1, len(lines)) if lines[i].strip() == "---")
     except StopIteration:
         return text
+    indent = lambda ln: len(ln) - len(ln.lstrip(" \t"))      # noqa: E731
+    top = next((indent(ln) for ln in lines[1:end] if ln.strip() and not ln.lstrip().startswith("#")), 0)
     out, skipping = [lines[0]], False
     for ln in lines[1:end]:
-        if re.match(r"""\s*["']?hooks["']?\s*:""", ln):
+        body = ln.lstrip(" \t")
+        nested = not body or body[0] in "#-" or indent(ln) > top
+        if _HOOKS_KEY_RE.match(ln) or not (nested or _PLAIN_KEY_RE.match(body)):
             skipping = True
             continue
-        if skipping and (not ln.strip() or ln[:1] in (" ", "\t", "-")):
+        if skipping and nested:
             continue
         skipping = False
         out.append(ln)
@@ -537,9 +552,11 @@ def _apply(path: Path) -> dict[str, Any]:
                 plan["skipped"].append({"file": item["src"],
                                         "reason": "a folder, a file or a link is in the way (not imported)"})
                 continue
-            if item["kind"] == "skill" and dest.name.lower() == "skill.md":
+            dparts = PurePosixPath(item["dest"]).parts
+            if dest.name.lower() == "skill.md":              # at any level: a topic can carry its own .claude/skills
                 data = _strip_skill_hooks(data.decode("utf-8", errors="replace")).encode("utf-8")
-            elif dest.name in ("CLAUDE.md", "memory.md"):
+            elif dest.name in ("CLAUDE.md", "CLAUDE.local.md", "memory.md") or (
+                    dest.suffix.lower() == ".md" and ".claude" in dparts and "skills" not in dparts):
                 data = _defang_imports(data.decode("utf-8", errors="replace")).encode("utf-8")
             rel_parent = str(PurePosixPath(item["dest"]).parent)
             is_md_level = dest.name in ("memory.md", "CLAUDE.md") and item["kind"] in ("project", "topic", "root_memory") \

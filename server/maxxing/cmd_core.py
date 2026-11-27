@@ -940,7 +940,14 @@ def check_claude_auth(live: bool = False) -> Check:
     if key:
         env["ANTHROPIC_API_KEY"] = key
     t0 = time.time()
-    code, out = run([b or "claude", "-p", "Reply with the single word: ok"], timeout=120, cwd="/tmp", env=env)
+    # an empty folder of its own, under the state folder: in /tmp any local account could leave project settings
+    # (hooks) or a CLAUDE.md that this call, made as root with the Claude sign-in, would load
+    import tempfile
+    cwd = tempfile.mkdtemp(prefix="doctor-live-", dir=config.STATE if config.STATE.is_dir() else None)
+    try:
+        code, out = run([b or "claude", "-p", "Reply with the single word: ok"], timeout=120, cwd=cwd, env=env)
+    finally:
+        shutil.rmtree(cwd, ignore_errors=True)
     from . import claude_auth as ca
     if code == 0 and "ok" in out.lower():
         ca.record(True, None, "check")
@@ -2106,6 +2113,9 @@ def _update_code(a) -> int:
                     "key (update_verify_signature). Nothing changed.")
             return 1
         line(OK, detail)
+    # what is installed is the commit that was checked, never the ref: another fetch (doctor, the update check) can
+    # move origin/<branch> to a commit nobody verified before the merge below
+    pinned = target or f"origin/{branch}"
     if not resumed:
         _mark_in_progress(old)
     if branch != _current_branch():
@@ -2118,7 +2128,9 @@ def _update_code(a) -> int:
             ran = {c["id"] for c in carried}
             left = [c for c in customs.list_customs(branch, head=stale) if c["id"] not in ran]
             _git("update-ref", f"refs/maxxing/before-switch/{branch}", stale)
-        code, out = _git("checkout", "-q", "-B", branch, "--track", f"origin/{branch}")
+        code, out = _git("checkout", "-q", "-B", branch, pinned)
+        if code == 0:
+            _git("branch", "-q", f"--set-upstream-to=origin/{branch}", branch)
         if code != 0:
             line(FAIL, f"cannot switch to branch {branch}", out.strip()[-300:])
             return 1
@@ -2171,18 +2183,18 @@ def _update_code(a) -> int:
     if old == target or (not mine and _rev("HEAD") == target):
         line(OK, f"code already up to date ({old[:8]})")
     elif not mine:
-        code, out = _git("merge", "--ff-only", "-q", f"origin/{branch}")
+        code, out = _git("merge", "--ff-only", "-q", pinned)
         if code != 0 and customs.same_code_upstream(branch):
             # The repository's history was rewritten upstream (same code, new commits): nothing local to keep, the
             # code directory follows the new history (the rollback point stays the old commit).
-            code, out = _git("reset", "-q", "--hard", f"origin/{branch}")
+            code, out = _git("reset", "-q", "--hard", pinned)
             if code == 0:
                 line(OK, "the history of the repository was rewritten upstream: this server now follows it")
         elif code != 0:
             # Local commits whose changes are all upstream already (a customization merged upstream as another
             # commit): a rebase drops them and the code follows upstream; a conflict leaves everything as it was.
             customs.ensure_identity()
-            code, out = customs.git("rebase", "-q", f"origin/{branch}", timeout=300)
+            code, out = customs.git("rebase", "-q", pinned, timeout=300)
             if code != 0:
                 customs.git("rebase", "--abort")
             else:
@@ -2192,13 +2204,13 @@ def _update_code(a) -> int:
             return 1
     else:
         customs.ensure_identity()
-        code, out = customs.git("rebase", "-q", f"origin/{branch}", timeout=300)
+        code, out = customs.git("rebase", "-q", pinned, timeout=300)
         if code != 0:
             files = customs.conflicts()
             customs.git("rebase", "--abort")
             web_back = bool(_UPDATE_CTX.get("stashed"))
             old = _back_to(old)
-            _, remote_src = _git("show", f"origin/{branch}:server/maxxing/__init__.py")
+            _, remote_src = _git("show", f"{pinned}:server/maxxing/__init__.py")
             info = customs.set_pending(reason="conflict", **{"from": old}, from_version=_from_version(),
                                        target=target, target_version=_version_in(remote_src) or "",
                                        customs=[c["title"] for c in mine], conflicts=files)

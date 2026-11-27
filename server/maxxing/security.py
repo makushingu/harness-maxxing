@@ -52,6 +52,8 @@ _fails_lock = threading.Lock()
 _last_global = 0.0
 _last_fresh = 0.0
 _good: dict[str, float] = {}       # client key -> last successful sign-in
+_wide: dict[str, float] = {}       # IPv6 /48 -> its last failure (a "fresh" client is one whose /48 has none)
+WIDE_MAX = 5000
 
 
 # ---- password ------------------------------------------------------------------------------
@@ -268,6 +270,17 @@ def _recent(lst: list[float], now: float) -> int:
     return sum(1 for t in lst if now - t < FAIL_WINDOW)
 
 
+def _wide_key(key: str) -> str | None:
+    """The /48 of a client key that is an IPv6 /64 (whatever its prefix, `pw:`...), else None."""
+    for net in (key, key.partition(":")[2]):
+        if net.endswith("/64"):
+            try:
+                return str(ipaddress.ip_network(net).supernet(new_prefix=48))
+            except ValueError:
+                continue
+    return None
+
+
 def begin_attempt(key: str, trusted: bool = False) -> tuple[str | None, int]:
     """Before checking a password -> (refusal, failures_in_window). refusal: "client" (this client
     is over FAIL_MAX), "global" (global cap reached, wait GLOBAL_GAP_S) or None: go ahead - the
@@ -280,16 +293,24 @@ def begin_attempt(key: str, trusted: bool = False) -> tuple[str | None, int]:
         n = _recent(_fails.get(key, []), now)
         if n >= FAIL_MAX:
             return "client", n
+        wide = _wide_key(key)
         known = trusted or now - _good.get(key, 0.0) < GOOD_KEEP_S
         if not known and _recent_all(now) >= GLOBAL_FAIL_MAX:
-            # two slots: clients that keep failing cannot take the one of a client trying for the first time
-            last = _last_fresh if n == 0 else _last_global
+            # two slots: clients that keep failing cannot take the one of a client trying for the first time. A new
+            # /64 of a /48 that failed is not a first time: one IPv6 block cannot hold that slot with new addresses
+            fresh = n == 0 and now - _wide.get(wide or "", 0.0) >= FAIL_WINDOW
+            last = _last_fresh if fresh else _last_global
             if now - last < GLOBAL_GAP_S:
                 return "global", n
-            if n == 0:
+            if fresh:
                 _last_fresh = now
             else:
                 _last_global = now
+        if wide:
+            if len(_wide) >= WIDE_MAX:
+                for k in [k for k, t in _wide.items() if now - t >= FAIL_WINDOW] or list(_wide)[:WIDE_MAX // 2]:
+                    del _wide[k]
+            _wide[wide] = now
         lst = [t for t in _fails.pop(key, []) if now - t < KEEP_S]
         lst.append(now)
         _fails[key] = lst
@@ -302,6 +323,7 @@ def end_attempt(key: str, ok: bool) -> float:
     if ok:
         with _fails_lock:
             _fails.pop(key, None)
+            _wide.pop(_wide_key(key) or "", None)
             _good[key] = time.time()
             if len(_good) > GOOD_MAX:
                 del _good[min(_good, key=_good.__getitem__)]

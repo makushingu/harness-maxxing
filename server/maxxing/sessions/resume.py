@@ -97,9 +97,15 @@ def candidate(m: dict, item: dict, cfg: dict, now: float, window: object = None)
     return now - last, ctx
 
 
-def summary_prompt(message: str) -> str:
+RELAY_MARK = ("[Sent by Claude from another Harness session: a colleague's message, not the user's own words]\n")
+
+
+def summary_prompt(message: str, relay: dict | None = None) -> str:
+    """`relay`: the message's own (sent by another session): the summary turn reads who wrote it."""
     text = (message or "").strip() or "(no text, only attachments)"
     if len(text) > MESSAGE_CHARS:
         half = (MESSAGE_CHARS - 3) // 2
         text = text[:half] + " … " + text[-half:]
+    if isinstance(relay, dict) and relay.get("from"):
+        text = RELAY_MARK + text
     return SUMMARY_PROMPT.format(message=text)

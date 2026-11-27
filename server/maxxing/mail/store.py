@@ -287,6 +287,12 @@ def outbox_list(status: str | None = "waiting", account: str | None = None, limi
     return [_outbox_row(r) for r in rows]
 
 
+def outbox_waiting(agent: str) -> int:
+    """How many messages of this agent wait for the owner's OK."""
+    with conn() as c:
+        return c.execute("SELECT COUNT(*) FROM outbox WHERE status='waiting' AND agent=?", (agent,)).fetchone()[0]
+
+
 def outbox_claim(oid: str, status: str, note: str = "") -> bool:
     """waiting -> status, once: two clicks at the same time never send twice."""
     with conn() as c:

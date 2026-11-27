@@ -902,10 +902,19 @@ def _still_to_apply(name: str, now: Any, d: dict, stale: list[str]) -> bool:
     return True
 
 
-_MODE_RANK = {"default": 0, "acceptEdits": 1, "bypass": 2}
+_MODE_RANK = {"default": 0, "ask": 0, "plan": 0, "acceptEdits": 1, "sandbox": 1, "bypass": 2}
 
 
-def _safer(cur: dict, target: dict, k: str) -> bool:
+def _mode_rank(mode: str, path: str) -> int:
+    """How open a permission mode is; "" is what the agent then inherits: its topic's mode, else the server's."""
+    if not mode and path:
+        from . import workspace
+        mode = workspace.topic_permission_mode(topic_of(path)) or config.load_config().get("permission_mode") \
+            or "bypass"
+    return _MODE_RANK.get(mode or "acceptEdits", 1)
+
+
+def _safer(cur: dict, target: dict, k: str, path: str = "") -> bool:
     """A safety change that only makes the agent safer (its new sandbox, approvals on, fewer keys or tools, a lower
     budget...): the manager applies it without asking. Anything that opens it waits for the owner."""
     c, n = cur[k], target[k]
@@ -915,7 +924,7 @@ def _safer(cur: dict, target: dict, k: str) -> bool:
     if k == "trust_outside":
         return not n and bool(c)
     if k == "permission_mode":
-        return _MODE_RANK.get(n or "acceptEdits", 1) < _MODE_RANK.get(c or "acceptEdits", 1)
+        return _mode_rank(n, path) < _mode_rank(c, path)
     if k in ("domains", "writable"):
         return boxing or set(n) <= set(c)
     if k in ("keys", "allowed_tools", "devices"):        # devices: fewer of the person's devices is safer
@@ -960,7 +969,7 @@ def request_change(path: str, fields: dict, session: str = "") -> dict:
     sec = {k: target[k] for k in SECURITY_FIELDS if k in f and target[k] != cur[k]}
     s_lim = {k: target["limits"][k] for k in SECURITY_LIMITS if k in lim and target["limits"][k] != cur["limits"][k]}
     # what only makes it safer goes at once (asked changes are applied, if allowed, over it)
-    for k in [k for k in sec if _safer(cur, target, k)]:
+    for k in [k for k in sec if _safer(cur, target, k, path)]:
         direct[k] = sec.pop(k)
     for k in [k for k in s_lim if _safer_limit(cur["limits"][k], s_lim[k], k)]:
         direct.setdefault("limits", {})[k] = s_lim.pop(k)
@@ -1764,6 +1773,49 @@ def _put_back(path: str, snap: dict) -> bool:
     return True
 
 
+def _put_back_safety(path: str, snap: dict) -> list[str]:
+    """The safety settings of agent.json as they were when the owner's conversation started its turn: the manager
+    changes them with `maxxing agents set` (asked to the owner), never by writing the file. -> the names put back."""
+    from . import workspace
+    f = folder(path) / AGENT_FILE
+    try:
+        old = json.loads(snap.get("agent") or "")
+        now = json.loads(f.read_text(encoding="utf-8"))
+        if not (isinstance(old, dict) and isinstance(now, dict)):
+            raise ValueError("not an object")
+    except (OSError, ValueError, TypeError):
+        return [AGENT_FILE] if _put_back(path, snap) else []
+    out, names = dict(now), []
+    for k in SECURITY_FIELDS:
+        if now.get(k) != old.get(k):
+            names.append(k)
+            out.pop(k, None)
+            if k in old:
+                out[k] = old[k]
+    lim_old = old.get("limits") if isinstance(old.get("limits"), dict) else {}
+    lim = dict(now["limits"]) if isinstance(now.get("limits"), dict) else {}
+    for k in SECURITY_LIMITS:
+        if lim.get(k) != lim_old.get(k):
+            names.append(f"limits.{k}")
+            lim.pop(k, None)
+            if k in lim_old:
+                lim[k] = lim_old[k]
+    if not names:
+        return []
+    if lim or "limits" in now:
+        out["limits"] = lim
+    try:
+        tmp = f.with_name(f".{AGENT_FILE}.{_secrets.token_hex(4)}.tmp")
+        tmp.write_text(json.dumps(out, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        os.replace(tmp, f)
+    except OSError:
+        log.exception("agent %s: safety settings not put back", path)
+        return []
+    workspace._forget(f)
+    _invalidate()
+    return names
+
+
 # ---- budget and rate ----------------------------------------------------------------------------------
 def _agent_metas(since: float | None = None) -> dict[str, list[dict]]:
     """Agent path -> the metas of its sessions, in one pass over the sessions folder. since: only the files written
@@ -2373,6 +2425,7 @@ def _fire(path: str, *, trigger: str, text: str, prompt: str, source: str, attac
 # flush_waiting). Schedules and feed events keep the hold rule: refused busy, or tried again (`wait`).
 # Any other reason (budget, disabled, rate, depth) is never a wait.
 OWNER_WAIT_MAX = 20
+OWNER_WAIT_KEPT = 5             # places only the owner's own messages take: other agents' sends never fill the line
 _waiting: set[str] = set()      # agents with messages waiting (seeded from their state at the first flush_waiting)
 _waiting_seeded = False
 
@@ -2385,7 +2438,7 @@ def _owner_wait(path: str, *, trigger: str, prompt: str, source: str, attachment
     own = _owner_chat(trigger, source, text)
     st = _read_state(path)
     q = st.get("owner_wait") if isinstance(st.get("owner_wait"), list) else []
-    if len(q) >= OWNER_WAIT_MAX:
+    if len(q) >= OWNER_WAIT_MAX - (0 if own else OWNER_WAIT_KEPT):
         return None
     msg = post(path, "run", prompt if own else text or prompt, cap=CHAT_TEXT_MAX if own else 600, trigger=trigger,
                source=source, waiting=True, **({"owner": True} if own else {}),
@@ -2718,7 +2771,9 @@ def on_turn_end(session: dict, result: dict | None) -> None:
             log.exception("agent %s: agents after it", path)
         from . import webhooks                          # the "agent" event hooks (no AI: Settings -> Events)
         webhooks.emit("agent", {"agent": path, "ok": bool(ok), "text": (text or "")[:4000],
-                                "session": session.get("id"), "depth": _int(env.get("MAXXING_AGENT_DEPTH"))})
+                                "session": session.get("id"), "depth": _int(env.get("MAXXING_AGENT_DEPTH")),
+                                # read by the hooks: what they post or start is one hop further in this chain
+                                "hops": _int(env.get("MAXXING_AGENT_DEPTH"))})
     if not group:
         try:
             _plan_limit_retry(path, session["id"], ok, text, str(session.get("error") or ""), env)
@@ -2732,8 +2787,11 @@ def on_turn_end(session: dict, result: dict | None) -> None:
         snap = _pop_snapshot(path, session["id"])
         changed = _changed_since(path, snap)
         if changed and manager_turn(meta):           # the conversation may change its role: said, not a warning
-            post(path, "note", f"The conversation changed {' and '.join(changed)}.", status="changed_chat",
-                 session=session["id"], files=changed)
+            back = _put_back_safety(path, snap) if AGENT_FILE in changed else []
+            post(path, "note", f"The conversation changed {' and '.join(changed)}."
+                 + (f" Its safety settings ({', '.join(back)}) were written without `maxxing agents set`: they were "
+                    "put back as they were." if back else ""), status="changed_chat",
+                 session=session["id"], files=changed, **({"restored": back} if back else {}))
         elif changed:
             back = AGENT_FILE in changed and _put_back(path, snap)
             rest = [n for n in changed if not (back and n == AGENT_FILE)]

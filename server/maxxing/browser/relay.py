@@ -113,7 +113,7 @@ async def pump(sock: Path, path: str, sites: Callable[[], list[str] | None],
                 except ValueError:
                     cmd = {}
                 why = None if isinstance(cmd, dict) else "not a DevTools command"
-                if why is None and cmd.get("method") == "Target.createTarget" and not cmd.get("sessionId"):
+                if why is None and cmd.get("method") == "Target.createTarget":
                     await send(json.dumps(await view.new_tab(cmd)))
                     continue
                 if why is None:

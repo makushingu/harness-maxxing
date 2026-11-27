@@ -283,11 +283,17 @@ def people() -> dict:
     """Contacts as Team people (accepted ones, and members of shared groups), keyed by person id."""
     out = {}
     now = time.time()
-    for addr, p in _peek()["peers"].items():
+    peers = _peek()["peers"]
+    contacts = {str(p.get("name") or "").casefold() for p in peers.values() if p.get("status") == "accepted"} - {""}
+    for addr, p in peers.items():
         if not _known(p):
             continue                # a group member with a request not answered yet stays in its groups
         seen = now - float(p.get("last_seen") or 0)
-        out[pid(addr)] = {"name": p.get("name") or urlsplit(addr).hostname, "emoji": p.get("emoji", ""),
+        name = p.get("name") or urlsplit(addr).hostname
+        if p.get("status") != "accepted" and name.casefold() in contacts:
+            # its name was given by a group's creator: never shown as the exact name of one of my contacts
+            name = f"{name} ({urlsplit(addr).hostname})"
+        out[pid(addr)] = {"name": name, "emoji": p.get("emoji", ""),
                           "color": p.get("color") or "zinc", "photo": p.get("photo", ""), "photo_url": photo_url(addr, p),
                           "server": urlsplit(addr).hostname, "address": addr,
                           "status": "online" if seen < ONLINE_S + SEEN_WRITE_S else "away" if seen < 3600 else "offline",
@@ -987,6 +993,7 @@ def fetch_photo(person: str, version: str) -> bytes | None:
 
 
 FETCH_DEADLINE = 30 * 60                                   # a download that takes longer is dropped
+FETCH_GRACE, FETCH_MIN_RATE = 60, 16 << 10                 # after a minute, under 16 KB/s on average: dropped too
 
 
 def fetch_file(address: str, fid: str, dest: Path, max_bytes: int, chat: str, reserve: int = 0) -> bool:
@@ -995,7 +1002,8 @@ def fetch_file(address: str, fid: str, dest: Path, max_bytes: int, chat: str, re
     from .uploads import free_bytes
     path = f"/api/team-peer/files/{fid}"
     tmp = dest.with_name(f"{dest.name}.{os.urandom(4).hex()}.part")   # its own name: a received file called X.part stays
-    end = time.monotonic() + FETCH_DEADLINE
+    start = time.monotonic()
+    end = start + FETCH_DEADLINE
     try:
         headers = _sign(_key_to(address, chat), "GET", path, own_address(), address, b"")
         with _http().stream("GET", _check_target(address) + path, headers=headers, timeout=60, follow_redirects=False) as r:
@@ -1005,8 +1013,9 @@ def fetch_file(address: str, fid: str, dest: Path, max_bytes: int, chat: str, re
             with open(tmp, "xb") as out:
                 for chunk in r.iter_bytes(1 << 16):
                     n += len(chunk)
-                    if (max_bytes and n > max_bytes) or time.monotonic() > end:
-                        raise OSError("too large or too slow")
+                    now = time.monotonic()
+                    if (max_bytes and n > max_bytes) or now > end or n < (now - start - FETCH_GRACE) * FETCH_MIN_RATE:
+                        raise OSError("too large or too slow")       # a slow sender must not hold a download slot
                     if n - checked >= 32 << 20 or checked == 0:  # the disk, now and every 32 MB
                         checked = n
                         if free_bytes(dest.parent) - len(chunk) < reserve:

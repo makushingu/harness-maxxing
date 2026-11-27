@@ -3283,6 +3283,8 @@ async def forget() -> None:
                   agent_threads={})
         tg.pop("two_factor", None)                     # no bridge, no second step
     mutate_tg(fn)
+    from .. import twofactor
+    twofactor.forget_devices()      # as `2fa off`: a browser trusted before is asked again if two-step comes back
     for p in (_state_path(), _offset_path(), _inflight_path(), _replies_path(), _msgs_path(),
               Path(f"{_msgs_path()}-wal"), Path(f"{_msgs_path()}-shm"), _msgs_path().with_name("messages.json"),
               _new_path(), config.state_dir("telegram") / "notes.json"):

@@ -89,7 +89,7 @@ def test_the_proxy_refuses_local_answers_and_raw_addresses(tmp_path, monkeypatch
             if host not in answers:
                 raise OSError("no such host")
             return [(2, 1, 6, "", (answers[host], port))]
-        monkeypatch.setattr(loop, "getaddrinfo", fake)
+        monkeypatch.setattr(px, "_resolve", fake)
         assert await px.check("public.test", 443) == ["93.184.216.34"]
         for h in ("rebind.test", "lan.test", "localhost", "127.0.0.1", "[::1]", "x.localhost", "nowhere.test"):
             assert await px.check(h, 443) is None, h
@@ -207,7 +207,7 @@ def test_the_proxy_tries_ipv4_first_then_the_next_address(tmp_path, monkeypatch)
         async def fake(host, port, **kw):
             return [(10, 1, 6, "", ("2a02:ec80::1", port, 0, 0)), (2, 1, 6, "", ("185.15.59.224", port)),
                     (2, 1, 6, "", ("185.15.59.225", port))]
-        monkeypatch.setattr(loop, "getaddrinfo", fake)
+        monkeypatch.setattr(px, "_resolve", fake)
         assert await px.check("wiki.test", 443) == ["185.15.59.224", "185.15.59.225", "2a02:ec80::1"]
 
         async def echo(r, w):

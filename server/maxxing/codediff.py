@@ -271,6 +271,7 @@ def repo_head(repo: Path) -> dict:
         if len(lr) == 2:
             behind, ahead = int(lr[0]), int(lr[1])
     remote = _run(repo, "config", "--get", "remote.origin.url", check=False).stdout.strip()
+    remote = re.sub(r"//[^/]*@", "//", remote)       # never the credentials embedded in a remote URL (as gitview)
     return {"root": str(repo), "name": repo.name, "branch": branch or None, "upstream": up or None,
             "ahead": ahead, "behind": behind, "remote": remote or None}
 

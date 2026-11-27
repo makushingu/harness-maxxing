@@ -936,6 +936,8 @@ def _apply(files: dict[str, bytes], hold: bool | None = None) -> dict:
                 with config._lock:                                       # noqa: SLF001
                     cfg = config.load_config()
                     for k, clean in (("schedule", clean_schedule), ("include", clean_include)):
+                        if hold and k == "include":       # what the next backups send out: this server's own list
+                            continue
                         if saved["backup"].get(k):
                             try:
                                 cfg["backup"][k] = clean(saved["backup"][k])

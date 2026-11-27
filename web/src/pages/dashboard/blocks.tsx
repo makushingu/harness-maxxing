@@ -8,6 +8,7 @@ import { useLang } from '@/i18n'
 import { NamedIcon, ProgressBar, Sensitive, Skeleton, StatusDot } from '@/components/ui'
 import { reducedMotion } from '@/lib/presence'
 import { Chart, compact } from './charts'
+import { armPrompt } from '@/features/agents/EditWithClaude'
 
 const Markdown = React.lazy(() => import('@/components/ui/markdown').then((m) => ({ default: m.Markdown })))
 
@@ -60,7 +61,7 @@ const rise = (i: number) => ({ className: 'mx-rise', style: { '--i': Math.min(i,
 export function SmartLink({ href, className, children }: { href: string; className?: string; children: React.ReactNode }) {
   if (href.startsWith('/') && !href.startsWith('//'))
     return (
-      <Link to={href} className={className}>
+      <Link to={href} className={className} onClick={() => armPrompt(href)}>
         {children}
       </Link>
     )
@@ -446,7 +447,10 @@ export function BlockView({ block }: { block: Block }) {
       return (
         <Sensitive block>
           <React.Suspense fallback={<Skeleton className="h-10" />}>
-            <Markdown className="text-[13px]">{block.text}</Markdown>
+            {/* a link of the widget may open a pre-filled session (armPrompt) */}
+            <div onClickCapture={(e) => armPrompt((e.target as Element).closest?.('a')?.getAttribute('href'))}>
+              <Markdown className="text-[13px]">{block.text}</Markdown>
+            </div>
           </React.Suspense>
         </Sensitive>
       )

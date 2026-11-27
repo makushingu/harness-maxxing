@@ -345,12 +345,17 @@ def _save_for_view_locked(acc_id: str, folder: str, uid: int, parts: list[tuple[
                           ident: str | None = None) -> dict[int, str]:
     root = _view_root()
     now = time.time()
+    base = _view_base(acc_id, folder, uid)
+    # the copies live in the workspace, where a turn can write: a link in place of a folder (the root, an account,
+    # a message) would send the cleaning below and the copies somewhere else
+    for d in (root, base.parent, base):
+        if d.is_symlink():
+            raise HTTPException(409, detail={"error": "outside", "message": f"{d} is a link: remove it"})
     if root.is_dir():
         for d in root.glob("*/*"):
             with contextlib.suppress(OSError):
-                if d.is_dir() and not d.is_symlink() and now - d.stat().st_mtime > VIEW_TTL:
+                if d.is_dir() and not d.is_symlink() and not d.parent.is_symlink() and now - d.stat().st_mtime > VIEW_TTL:
                     shutil.rmtree(d, ignore_errors=True)
-    base = _view_base(acc_id, folder, uid)
     mark = base / VIEW_ID
     try:
         old = mark.read_text(encoding="utf-8")
@@ -361,7 +366,9 @@ def _save_for_view_locked(acc_id: str, folder: str, uid: int, parts: list[tuple[
     out: dict[int, str] = {}
     for idx, name, _ctype, data in parts:
         d = base / str(int(idx))
-        if d.is_dir():
+        if d.is_symlink():
+            d.unlink()
+        elif d.is_dir():
             shutil.rmtree(d, ignore_errors=True)
         d.mkdir(parents=True, exist_ok=True)
         f = d / _view_name(name)

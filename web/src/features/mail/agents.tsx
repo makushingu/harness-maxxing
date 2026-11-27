@@ -164,12 +164,13 @@ function OutboxItem({ item: x, onEdit }: { item: MailOutboxItem; onEdit: (draft:
         </span>
       </div>
       <div className="grid grid-cols-[minmax(0,1fr)] gap-0.5">
-        <span className="truncate">
+        {/* every address shows: the owner sends to all of them */}
+        <span className="wrap-anywhere">
           <span className="text-muted-foreground">{t('mail.to')} </span>
           <Sensitive length={10}>{to.join(', ')}</Sensitive>
         </span>
         {!!x.bcc?.length && (
-          <span className="truncate" data-testid="mail-outbox-bcc">
+          <span className="wrap-anywhere" data-testid="mail-outbox-bcc">
             <span className="text-muted-foreground">{t('mail.compose.bcc')} </span>
             <Sensitive length={10}>{x.bcc.join(', ')}</Sensitive>
           </span>

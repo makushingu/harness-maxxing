@@ -20,8 +20,6 @@ FRAMES = {"iframe", "worker", "webview", "auction_worklet", "shared_storage_work
 WORKERS = {"service_worker", "shared_worker", "background_page"}   # shared by the pages of an origin: never shown
 TAB_WAIT = 2.0                      # a new tab: wait this long to learn the page it holds (the watcher attaches to it)
 OWN_IDS = 1_000_000_000            # ids of the commands the relay sends itself (their answers are dropped)
-TARGET_COMMANDS = ("Target.attachToTarget", "Target.closeTarget", "Target.activateTarget", "Target.detachFromTarget",
-                   "Target.exposeDevToolsProtocol", "Target.getTargetInfo")
 
 
 class View:
@@ -111,7 +109,9 @@ class View:
             child = str(p.get("sessionId") or "")
             target = str(info.get("targetId") or "")
             parent_page = self.sessions.get(str(sid)) if sid else None
-            if (info.get("type") in ("page", "tab") or info.get("type") in WORKERS) and not await self.visible(info):
+            orphan = info.get("type") in FRAMES and not parent_page      # a frame reached by its id, not through a page
+            if orphan or ((info.get("type") in ("page", "tab") or info.get("type") in WORKERS)
+                          and not await self.visible(info)):
                 self.hidden_sessions.add(child)
                 return None, [self._cmd("Runtime.runIfWaitingForDebugger", {}, child),
                               self._cmd("Target.detachFromTarget", {"sessionId": child}, sid)]
@@ -137,7 +137,7 @@ class View:
         if sid and sid in self.hidden_sessions:
             return "This tab belongs to another browser."
         params = cmd.get("params") if isinstance(cmd.get("params"), dict) else {}
-        if method in TARGET_COMMANDS and params.get("targetId") and not self.allowed(str(params["targetId"])):
+        if method.startswith("Target.") and params.get("targetId") and not self.allowed(str(params["targetId"])):
             return "This tab belongs to another browser: use the tabs of yours (list_pages) or open one (new_page)."
         if sid and self.on_use:
             page = self.page(str(sid))
@@ -157,10 +157,11 @@ class View:
         """Target.createTarget, made by the server in this navigator: the answer for the tools."""
         assert self.create is not None
         params = cmd.get("params") if isinstance(cmd.get("params"), dict) else {}
+        via = {"sessionId": cmd["sessionId"]} if cmd.get("sessionId") else {}     # asked through a session of the browser
         try:
             tid = await self.create(params)
         except Exception as e:  # noqa: BLE001
-            return {"id": cmd.get("id"), "error": {"code": -32000, "message": str(e)[:300] or "no new tab"}}
+            return {**via, "id": cmd.get("id"), "error": {"code": -32000, "message": str(e)[:300] or "no new tab"}}
         self.seen.add(tid)
         self.hidden.discard(tid)
-        return {"id": cmd.get("id"), "result": {"targetId": tid}}
+        return {**via, "id": cmd.get("id"), "result": {"targetId": tid}}

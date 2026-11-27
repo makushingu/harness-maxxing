@@ -812,7 +812,8 @@ export function ToolGroup({ items, live }: { items: Extract<Item, { kind: 'tool'
   )
 }
 
-export function toolDiff(name: string, input: Record<string, unknown>, writeLines = 0): DiffLine[] | null {
+/** `whole`: every line of a Write (what an approval is about); a tool card shows its first 200. */
+export function toolDiff(name: string, input: Record<string, unknown>, writeLines = 0, whole = false): DiffLine[] | null {
   const s = (v: unknown) => (typeof v === 'string' ? v : '')
   if (name === 'Edit') return lineDiff(s(input.old_string), s(input.new_string))
   if (name === 'MultiEdit' && Array.isArray(input.edits)) {
@@ -825,7 +826,7 @@ export function toolDiff(name: string, input: Record<string, unknown>, writeLine
   }
   if (name === 'Write') {
     const lines = s(input.content).split('\n')
-    const shown: DiffLine[] = lines.slice(0, 200).map((l) => ({ t: '+' as const, s: l }))
+    const shown: DiffLine[] = (whole ? lines : lines.slice(0, 200)).map((l) => ({ t: '+' as const, s: l }))
     const rest = Math.max(writeLines, lines.length) - shown.length
     if (rest > 0) shown.push({ t: ' ', s: `⋯ ${rest}` })
     return shown
@@ -834,7 +835,10 @@ export function toolDiff(name: string, input: Record<string, unknown>, writeLine
 }
 
 export function ToolInput({ name, input, diff, display }: { name: string; input: Record<string, unknown>; diff: DiffLine[] | null; display: string | null }) {
+  const t = useT()
   const open = useOpenPreview()
+  // the diff shows one occurrence: say when the edit changes them all
+  const everywhere = input.replace_all === true || (Array.isArray(input.edits) && input.edits.some((e: { replace_all?: unknown } | null) => e?.replace_all === true))
   const file = typeof input.file_path === 'string' ? input.file_path : typeof input.notebook_path === 'string' ? input.notebook_path : null
   return (
     <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2">
@@ -847,6 +851,7 @@ export function ToolInput({ name, input, diff, display }: { name: string; input:
           </button>
         </Tooltip>
       )}
+      {diff && everywhere && <p className="text-xs font-medium text-warning" data-testid="tool-replace-all">{t('sessions.diff.all')}</p>}
       {diff ? (
         <DiffView lines={diff} />
       ) : name === 'Bash' && typeof input.command === 'string' ? (

@@ -14,7 +14,8 @@ MAX_ACTIONS = 500
 MAX_BYTES = 400_000          # past this the journal is cut down to KEEP_BYTES (whole lines, the newest)
 KEEP_BYTES = 200_000
 _lock = threading.Lock()     # appends and the compaction: a line written during a compaction is never lost
-SECRET_ARGS = ("value", "text", "values", "key", "keys", "function", "script", "expression", "elements")
+SECRET_ARGS = ("value", "text", "values", "key", "keys", "function", "script", "expression", "elements",
+               "promptText", "initScript")
 SID_RE = re.compile(r"^[A-Za-z0-9_-]{6,80}\Z")
 
 

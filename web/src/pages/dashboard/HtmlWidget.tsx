@@ -20,6 +20,7 @@ import { useT } from '@/i18n'
 import { Skeleton } from '@/components/ui'
 import { cn } from '@/lib/utils'
 import { frameBye, frameHello, frameKey, frameLoaded, mayReply, newFrame, ours } from './widgetKey'
+import { armPrompt } from '@/features/agents/EditWithClaude'
 
 const VARS: [string, string][] = [
   ['--mx-bg', '--background'],
@@ -168,7 +169,10 @@ export function HtmlWidget({
       if (m.mx === 'resize' && typeof m.height === 'number') setH(Math.min(maxHeight, Math.max(80, Math.round(m.height))))
       if (m.mx === 'navigate') {
         const r = (m as { route?: unknown }).route
-        if (allowedRoute(r, hostRef.current?.routes || [])) navigate(r)
+        if (allowedRoute(r, hostRef.current?.routes || [])) {
+          armPrompt(r)
+          navigate(r)
+        }
       }
       if (m.mx === 'app') {
         const path = String(m.path || '')

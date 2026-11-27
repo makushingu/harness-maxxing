@@ -421,7 +421,7 @@ function ActionBar({ pr }: { pr: Pull }) {
       if (await run('comment', () => prApi.comment(pr.full, pr.number, text.trim()), t('pr.commented'))) setText('')
       return
     }
-    const ok = await run(event, () => prApi.review(pr.full, pr.number, event, text.trim(), drafts), event === 'APPROVE' ? t('pr.approved') : event === 'REQUEST_CHANGES' ? t('pr.changesAsked') : t('pr.commented'))
+    const ok = await run(event, () => prApi.review(pr.full, pr.number, event, text.trim(), drafts, pr.head_sha), event === 'APPROVE' ? t('pr.approved') : event === 'REQUEST_CHANGES' ? t('pr.changesAsked') : t('pr.commented'))
     if (ok) {
       setText('')
       useDrafts.getState().clear(key)

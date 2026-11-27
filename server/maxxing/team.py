@@ -53,6 +53,8 @@ _lock = config.ProcessLock("team")          # team.json: also written by `maxxin
 _slots = threading.BoundedSemaphore(4)          # files of the others: 4 downloads at a time
 _queued = [0]                                   # downloads started or waiting (at most QUEUE_MAX, the others fail)
 QUEUE_MAX = 100
+SENDER_QUEUE_MAX, SENDER_SLOTS = 25, 2          # one sender never fills the queue nor holds every slot
+_by_sender: dict[str, list] = {}                # address -> [queued, its semaphore]
 TYPING_S = 6                    # "is writing" lasts this long after the last signal
 TYPING_EVERY = 3                # the user's own signal goes out at most this often per chat
 _typing: dict[str, dict[str, float]] = {}       # chat -> person -> until (memory only, never saved)
@@ -993,11 +995,13 @@ def _fetch(frm: str, cid: str, mid: str, f: dict) -> None:
     d = files_dir()
     ok, dest = False, None
     with _lock:
+        mine = _by_sender.setdefault(frm, [0, threading.BoundedSemaphore(SENDER_SLOTS)])
         _queued[0] += 1
-        room = _queued[0] <= QUEUE_MAX
+        mine[0] += 1
+        room = _queued[0] <= QUEUE_MAX and mine[0] <= SENDER_QUEUE_MAX
     try:
         if room and (not max_b or f["size"] <= max_b) and free_bytes(d) - f["size"] >= reserve:
-            with _slots:
+            with mine[1], _slots:
                 try:
                     dest, fd = reserve_path(d, f["name"])  # the name is taken at once: two "image.png" never collide
                 except OSError:                         # a name the file system refuses: marked failed below
@@ -1013,6 +1017,9 @@ def _fetch(frm: str, cid: str, mid: str, f: dict) -> None:
     finally:
         with _lock:
             _queued[0] -= 1
+            mine[0] -= 1
+            if not mine[0]:
+                _by_sender.pop(frm, None)
     with _lock:
         doc = _load()
         try:

@@ -14,6 +14,7 @@ import { useUI, resolveTheme } from '@/stores/ui'
 import { useLang, useT, tDyn } from '@/i18n'
 import { Button, EmptyState, NamedIcon, SkeletonText, Tooltip } from '@/components/ui'
 import { PageHeader } from '@/components/shell/Page'
+import { armPrompt } from '@/features/agents/EditWithClaude'
 
 type Mount = (el: HTMLElement, ctx: ExtensionContext) => void | (() => void)
 export type ExtensionContext = {
@@ -94,7 +95,7 @@ export default function ExtensionPage() {
       id,
       api: (path, opts = {}) =>
         request(`/api/ext/${seg(id)}/${path.replace(/^\/+/, '')}`, { method: opts.method || 'GET', body: opts.method && opts.method !== 'GET' ? (opts.body ?? {}) : undefined, query: opts.query }),
-      navigate: (to) => latest.current.navigate(to),
+      navigate: (to) => (armPrompt(to), latest.current.navigate(to)),
       theme,
       lang,
       t: (key) => tDyn(latest.current.t, key),

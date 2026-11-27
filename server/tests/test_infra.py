@@ -1307,8 +1307,8 @@ def test_a_malformed_probe_answer_costs_only_its_server(monkeypatch):
     answers = {"a": "[1]", "b": json.dumps({"sites": 5, "databases": [1, {"engine": "sqlite", "path": "/srv/a.db"}], "server": "x"}),
                "c": "[" * 5000, "d": json.dumps({"error": 7}),
                "e": '{"server": {"load": NaN}, "sites": [{"host": "a.example", "size": Infinity}]}'}
-    monkeypatch.setattr(infra.subprocess, "run",
-                        lambda cmd, **k: subprocess.CompletedProcess(cmd, 0, answers[cmd[-4].split("@")[0]], ""))
+    monkeypatch.setattr(infra, "_run_capped",
+                        lambda cmd, *a, **k: subprocess.CompletedProcess(cmd, 0, answers[cmd[-4].split("@")[0]], ""))
     probes = {n: infra.probe_remote({"name": n, "host": "h.example.com", "user": n}, {}) for n in answers}
     assert probes["a"]["error"] and probes["c"]["error"] and probes["d"]["error"] == "7" and probes["e"]["error"]
     assert probes["b"]["sites"] == [] and probes["b"]["databases"] == [{"engine": "sqlite", "path": "/srv/a.db"}] and "server" not in probes["b"]

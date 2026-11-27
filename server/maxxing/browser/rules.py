@@ -94,6 +94,9 @@ def parse_ip(h: str) -> ipaddress._BaseAddress | None:
     return None
 
 
+NAT64 = ipaddress.ip_network("64:ff9b::/96")     # a translator sends these to the IPv4 address of the last 32 bits
+
+
 def ip_public(ip: ipaddress._BaseAddress) -> bool:
     if isinstance(ip, ipaddress.IPv6Address):
         if ip.ipv4_mapped:
@@ -102,6 +105,8 @@ def ip_public(ip: ipaddress._BaseAddress) -> bool:
             ip = ip.sixtofour
         elif ip.teredo:
             return False
+        elif ip in NAT64:
+            ip = ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)
     return ip.is_global and not ip.is_multicast
 
 

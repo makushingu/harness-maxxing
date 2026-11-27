@@ -14,6 +14,7 @@ import logging
 import os
 import re
 import time
+import unicodedata
 from collections import Counter
 from pathlib import Path
 from typing import Any
@@ -72,8 +73,10 @@ def summary(tool: str, inp: Any) -> tuple[str, bool]:
         text = json.dumps(inp, ensure_ascii=False) if inp else ""
         rest = set()
     from . import logs
-    text = logs.redact(text)
-    whole = len(text) <= SHORT_MAX and not rest
+    raw, text = text, logs.redact(text)
+    # invisible or reordering characters (zero-width, bidi), or a hidden part: the line shown is not the request
+    odd = text != raw or any(unicodedata.category(c) in ("Cf", "Cc") for c in raw)
+    whole = len(text) <= SHORT_MAX and not rest and not odd
     text = text if len(text) <= SHORT_MAX else text[:SHORT_MAX - 1] + "…"
     if tool == "Bash" and inp.get("dangerouslyDisableSandbox") is True:
         tool = "Bash outside the sandbox"            # the retry of a command the topic's sandbox refused

@@ -24,6 +24,8 @@ log = logging.getLogger("maxxing.mail")
 KEEP_DAYS = 14
 TEXT_SHOWN = 1500                                   # in the Notifications / Telegram card
 TEXT_PAGE = 100_000                                 # on the mail page
+SUBJECT_SHOWN, RCPTS_SHOWN, FILES_SHOWN = 200, 600, 400   # in the card: the text must keep its place under them
+WAITING_MAX = 20                                    # messages of one agent waiting for the owner's OK at once
 
 
 def _dir(oid: str) -> Path:
@@ -61,18 +63,28 @@ def queue(acc: dict, agent: str, draft: dict, files: list[tuple[str, str, bytes]
     row = {"id": oid, "account": acc["id"], "agent": agent, "at": time.time(), "status": "waiting", "data": data}
     store.outbox_put(row)
     to = ", ".join((draft.get("to") or []) + (draft.get("cc") or []) + (draft.get("bcc") or []))
+    subject = str(draft.get("subject") or "")
     text = str(draft.get("text") or "").strip()
-    cut = len(text) > TEXT_SHOWN
-    if cut:
-        text = text[:TEXT_SHOWN] + " [...]\n\n(Longer than shown: open it to read it all before sending it.)"
-    body = f"From: {acc['address']}\nTo: {to}\nSubject: {draft.get('subject') or ''}\n"
     fwd = draft.get("forward") or {}
     fnames = list(fwd.get("names") or [])
     fnames += [f"part {i}" for i in (fwd.get("indexes") or [])[len(fnames):]]
     shown = [n["name"] for n in names] + [f"{x} (forwarded)" for x in fnames]
+    listed = ", ".join(shown)
+    # the subject and the recipients of a reply come from the incoming mail: a long one must not push the agent's
+    # text out of the card while Send stays one tap away
+    cut = len(text) > TEXT_SHOWN or len(to) > RCPTS_SHOWN or len(subject) > SUBJECT_SHOWN or len(listed) > FILES_SHOWN
+
+    def short(s: str, n: int) -> str:
+        return s if len(s) <= n else s[:n] + " [...]"
+    if len(text) > TEXT_SHOWN:
+        text = text[:TEXT_SHOWN] + " [...]"
+    if cut:
+        text += "\n\n(Longer than shown: open it to read it all before sending it.)"
+    body = f"From: {acc['address']}\nTo: {short(to, RCPTS_SHOWN)}\nSubject: {short(subject, SUBJECT_SHOWN)}\n"
     if shown:                                       # every file that goes out, the forwarded ones too
-        body += f"Attachments ({len(shown)}): {', '.join(shown)}\n"
+        body += f"Attachments ({len(shown)}): {short(listed, FILES_SHOWN)}\n"
     body += f"\n{text}"
+    cut = cut or len(body) > feed.BODY_MAX
     ev = feed.post(f"{_agent_name(agent)} wants to send an e-mail", body, level="warning", source="mail",
                    url=page_url(acc["id"], saved.get("folder"), saved.get("uid")), ref=f"mailsend:{oid}",
                    agent=agent, actions=([] if cut else [{"id": "allow", "label": "Send", "style": "primary"}])

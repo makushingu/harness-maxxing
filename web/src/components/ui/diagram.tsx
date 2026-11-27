@@ -61,18 +61,54 @@ let queue: Promise<unknown> = Promise.resolve()
 /** Last drawings (the viewer opens on the one already drawn in the message, no second render). */
 const drawn = new Map<string, string>()
 
+const LOADS = 'img,image,feImage,video,audio,source,track,picture,input,object,embed,iframe,link,script'
+const REMOTE_CSS = /@import[^;]*;?|url\(\s*(?!['"]?(?:#|data:))[^)]*\)/gi
+// Mermaid measures a label in the page: a tag or a style that loads something (`<img src>`, `background:url()`) would
+// send its request while the diagram is drawn. `secure`: a diagram cannot change these with its own directives.
+const LABELS = {
+  dompurifyConfig: { FORBID_TAGS: ['style', ...LOADS.split(',')], FORBID_ATTR: ['style', 'src', 'srcset', 'background', 'poster'] },
+  secure: ['secure', 'securityLevel', 'startOnLoad', 'maxTextSize', 'suppressErrorRendering', 'maxEdges', 'dompurifyConfig'],
+}
+
+/** An image shape (`@{ img: … }`) is downloaded by mermaid to be measured: such a diagram is not drawn (its code shows). */
+async function refuseImages(mermaid: Mermaid, code: string) {
+  const diagram = await mermaid.mermaidAPI.getDiagramFromText(code)
+  const nodes = (diagram.db as { getData?: () => { nodes?: { img?: unknown }[] } }).getData?.().nodes
+  if (Array.isArray(nodes) && nodes.some((n) => n?.img)) throw new Error('image shape')
+}
+
+/** Second net, on what mermaid drew: nothing in it loads from elsewhere (a request would carry what its URL says
+ *  the moment the message shows). */
+export function noRemote(svg: string): string {
+  const doc = new DOMParser().parseFromString(svg, 'text/html')
+  for (const el of doc.body.querySelectorAll(LOADS)) {
+    const src = el.getAttribute('src') ?? el.getAttribute('href') ?? el.getAttribute('xlink:href') ?? ''
+    if (!/^(image|feImage|img)$/i.test(el.tagName) || !/^data:image\//i.test(src) || el.hasAttribute('srcset')) el.remove()
+  }
+  for (const el of doc.body.querySelectorAll('[style]')) {
+    const css = el.getAttribute('style') || ''
+    if (/url\(|@import/i.test(css)) el.setAttribute('style', css.replace(REMOTE_CSS, 'none'))
+  }
+  for (const el of doc.body.querySelectorAll('style')) {
+    const css = el.textContent || ''
+    if (/url\(|@import/i.test(css)) el.textContent = css.replace(REMOTE_CSS, 'none')
+  }
+  return doc.body.innerHTML
+}
+
 async function render(code: string, dark: boolean): Promise<string> {
   const key = `${dark ? 1 : 0}${code}`
   const hit = drawn.get(key)
   if (hit) return hit
   const mermaid = await load()
   if (configured !== dark) {
-    // strict: no click handlers or raw HTML in labels (the SVG is sanitized by mermaid).
-    mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: dark ? 'dark' : 'neutral', fontFamily: 'inherit' })
+    // strict: no click handlers or scripts in labels (what could load from elsewhere is removed by noRemote).
+    mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: dark ? 'dark' : 'neutral', fontFamily: 'inherit', ...LABELS })
     configured = dark
   }
   await mermaid.parse(code)
-  const { svg } = await mermaid.render(`mx-diagram-${++seq}`, code)
+  await refuseImages(mermaid, code)
+  const svg = noRemote((await mermaid.render(`mx-diagram-${++seq}`, code)).svg)
   if (drawn.size > 50) drawn.delete(drawn.keys().next().value!)
   drawn.set(key, svg)
   return svg

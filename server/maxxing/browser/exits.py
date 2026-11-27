@@ -30,6 +30,7 @@ import json
 import logging
 import os
 import re
+import secrets
 import shutil
 import socket
 import ssl
@@ -39,7 +40,7 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 
 from .. import browser, bus, config
 
@@ -60,6 +61,7 @@ TAILSCALE_VERSION = "1.104.7"
 TAILSCALE_SHA = {"amd64": "e56693ff74a64f2591b7e819c280635a100aae1ddfb0ef058fcd052b7cd8d16c",
                  "arm64": "d6bed2720310b328b861f943d7b4016c5358a9bad60575eb51e8143b79068484"}
 WIREPROXY_VERSION = "1.1.3"
+SOCKS_USER = "harness"
 WIREPROXY_SHA = {"amd64": "e88c1d090740373fc606c1bafd81d9a5eadc642cce5667616e20e9d7a444f51c",
                  "arm64": "370e00bd2167960d1ecd1c3c1439715bbaa94a0a110a2040468670c9af6021b6"}
 
@@ -95,7 +97,11 @@ def clean_exit(raw: object, strict: bool = False) -> dict | None:
         if u is None:
             bad("proxy: socks5://host:port or http://host:port")
             url = ""
-        out.update(url=url, user=str(src.get("user") or "")[:200])
+        user = str(src.get("user") or "")
+        if u is not None and "@" in url:              # user:password@ never stays in the address (set_exit: the vault)
+            user = user or _userinfo(url)[0]
+            url = f"{urlsplit(url).scheme}://{'[' + u[1] + ']' if ':' in u[1] else u[1]}:{u[2]}"
+        out.update(url=url, user=user[:200])
     elif kind == "tailscale":
         node = str(src.get("node") or "").strip()[:200]
         ls = str(src.get("login_server") or "").strip()[:300]
@@ -114,6 +120,15 @@ def _parse_proxy(url: str) -> tuple[str, str, int] | None:
         return ("http" if u.scheme == "http" else "socks5"), u.hostname, u.port
     except ValueError:
         return None
+
+
+def _userinfo(url: object) -> tuple[str, str]:
+    """(user, password) written inside a proxy address."""
+    try:
+        u = urlsplit(str(url or "") if "://" in str(url or "") else f"socks5://{url}")
+        return unquote(u.username or ""), unquote(u.password or "")
+    except ValueError:
+        return "", ""
 
 
 def exits(s: dict | None = None) -> list[dict]:
@@ -144,6 +159,8 @@ def set_exit(values: dict, eid: str | None = None, secret: str | None = None) ->
                 raise browser.BrowserError(404, "no_exit", "No such exit")
             values.pop("type", None)
             cur.update(clean_exit({**cur, **values}, strict=True) or {})
+        if not secret and get(eid, s)["type"] == "proxy":      # type: ignore[index]
+            secret = _userinfo(values.get("url"))[1]
         if secret:
             try:
                 vault.put(secret_name(eid), secret, note=f"Harness Browser: exit {eid}", expose=False)
@@ -540,8 +557,13 @@ class WireGuard:
         port = _free_port()
         (_dir(eid) / "port").write_text(str(port))
         f = _dir(eid) / "wireproxy.conf"
-        f.write_text(conf.strip() + f"\n\n[Socks5]\nBindAddress = 127.0.0.1:{port}\n")
-        os.chmod(f, 0o600)
+        key = secrets.token_hex(16)                  # another process of this server cannot go out by the box
+        for path, text in ((_dir(eid) / "socks", key),
+                           (f, conf.strip() + f"\n\n[Socks5]\nBindAddress = 127.0.0.1:{port}\n"
+                               f"Username = {SOCKS_USER}\nPassword = {key}\n")):
+            path.touch(mode=0o600)
+            os.chmod(path, 0o600)
+            path.write_text(text)
         stop_unit_sync(eid)
         _start_unit(eid, [binp, "-c", str(f)], "WireGuard")
         time.sleep(1.0)
@@ -650,7 +672,10 @@ class Runtime:
                 raise ExitDown(_TS_WHY.get(st["state"], "the Tailscale exit is not ready"))
             return Upstream("socks5", "127.0.0.1", Tailscale.ensure(e))
         if kind == "wireguard":
-            return Upstream("socks5", "127.0.0.1", WireGuard.ensure(e))
+            port = WireGuard.ensure(e)
+            with contextlib.suppress(OSError):
+                return Upstream("socks5", "127.0.0.1", port, SOCKS_USER, (_dir(e["id"]) / "socks").read_text().strip())
+            return Upstream("socks5", "127.0.0.1", port)     # started before its SOCKS server asked for a password
         raise ExitDown("unknown exit")
 
     async def check(self, eid: str) -> bool:

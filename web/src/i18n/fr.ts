@@ -256,6 +256,7 @@ export const fr: Record<keyof typeof en, string> = {
   'sessions.layout.name.halfRight3': 'Moitié droite, par 3',
   'sessions.layout.zone': 'Zone {n}',
   'sessions.diff.more': 'Afficher {count} lignes de plus',
+  'sessions.diff.all': 'Remplace toutes les occurrences',
   'sessions.msg.delete': 'Supprimer ce message',
   'sessions.msg.deleted': 'Message supprimé',
   'sessions.msg.edit': 'Modifier',

@@ -338,7 +338,7 @@ def test_cli_add_list_and_agent_guard(mx, capsys, monkeypatch):
     monkeypatch.setattr(agent_guard, "agent_turn", lambda: {"path": "acme/blog/agents/w", "tampered": False})
     monkeypatch.setattr(agent_guard, "in_the_sandbox", lambda: False)
     assert "not allowed" in (agent_guard.check_cli(["webhooks", "add"]) or "")
-    assert agent_guard.check_cli(["webhooks", "list"]) is None or "sandboxed" in agent_guard.check_cli(["webhooks", "list"])
+    assert "not allowed" in (agent_guard.check_cli(["webhooks", "list"]) or "")   # its URLs are its keys
 
 
 def test_a_phone_without_a_session_can_send_a_file(client, mx):

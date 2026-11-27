@@ -22,7 +22,11 @@ RESERVED = {"PATH", "HOME", "USER", "LOGNAME", "SHELL", "PWD", "TERM", "LANG", "
             "LD_AUDIT", "BASH_ENV", "ENV", "PROMPT_COMMAND", "NODE_OPTIONS", "NODE_PATH",
             "PYTHONSTARTUP", "PYTHONHOME", "GIT_SSH_COMMAND", "GIT_EXEC_PATH", "ANTHROPIC_BASE_URL",
             "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CONFIG_DIR", "SHELLOPTS", "PS4", "SSH_AUTH_SOCK",
-            "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE"}
+            "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE",
+            "CLAUDE_CODE_SHELL_PREFIX", "SSH_ASKPASS", "SSH_ASKPASS_REQUIRE", "SUDO_ASKPASS", "PERL5OPT", "PERL5LIB",
+            "PERL5DB", "RUBYOPT", "RUBYLIB", "JAVA_TOOL_OPTIONS", "JDK_JAVA_OPTIONS", "PAGER", "MANPAGER", "EDITOR",
+            "VISUAL", "BROWSER", "LESSOPEN", "LESSCLOSE", "IFS", "ZDOTDIR", "PIP_INDEX_URL", "PIP_EXTRA_INDEX_URL",
+            "PIP_CONFIG_FILE", "UV_INDEX_URL", "UV_EXTRA_INDEX_URL", "UV_DEFAULT_INDEX", "NPM_CONFIG_REGISTRY"}
 # Whole families: git config/dirs/askpass, loader and interpreter hooks, TLS trust stores, config dirs.
 RESERVED_PREFIXES = ("MAXXING_", "GIT_", "LD_", "DYLD_", "PYTHON", "NODE_", "BASH_", "XDG_", "SSL_")
 
@@ -30,6 +34,11 @@ RESERVED_PREFIXES = ("MAXXING_", "GIT_", "LD_", "DYLD_", "PYTHON", "NODE_", "BAS
 def is_reserved(name: str) -> bool:
     """True for a name an exposed secret must never set (RESERVED, its prefixes, the *_PROXY variables)."""
     return name in RESERVED or name.startswith(RESERVED_PREFIXES) or name.endswith("_PROXY")
+
+
+def internal(name: str) -> bool:
+    """A key Harness keeps for itself (a mailbox's password, a browser connection's): nothing exposes it on its own."""
+    return bool(re.fullmatch(r"MAIL_[A-Z0-9_]+_PASSWORD|BROWSER_EXIT_[A-Z0-9_]+", name))
 
 
 class VaultError(ValueError):

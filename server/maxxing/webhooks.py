@@ -70,6 +70,7 @@ DEFAULT_MB = 1
 PHONE_MB = 20
 WAIT_S = 30.0                    # reply "wait": the caller gets the result within this, else 504 (the run goes on)
 SYNC_MAX = 4                     # callers waiting at once, all hooks together
+SYNC_PER_HOOK = 3                # of those, on one hook: a slow hook never takes every place from the others
 MAX_PARALLEL = 4
 DEFAULT_WAITING = 50
 MAX_WAITING = 500
@@ -781,8 +782,18 @@ def receive(token: str, method: str, headers: dict, query: dict, body: bytes,
     from . import feed, feedhooks
     low = {k.lower(): v for k, v in headers.items()}
     claim = None
+    if s.get("secret") and t["source"] == "generic" and not body:
+        query = {}      # the signature covers the body only: with none, it is the same for any query (a replay's too)
     if s.get("secret") and t["source"] in ("shopify", "github", "generic") and body:
         claim = feedhooks._replay_key(t["source"], low, body)
+    elif s.get("secret") and t["source"] == "stripe" and body:
+        # Stripe signs each retry anew (another `t`): the event id is what tells a delivery already taken
+        try:
+            evt = json.loads(body).get("id")
+        except (ValueError, AttributeError, RecursionError):
+            evt = None
+        claim = f"evt:{evt[:200]}" if isinstance(evt, str) and evt else None
+    if claim:
         if not feed.claim_delivery(f"wh:{h['id']}", claim, feedhooks.REPLAY_KEEP_S.get(t["source"], feedhooks.DEFAULT_REPLAY_S)):
             return {"status": 200, "json": {"ok": True, "duplicate": True}}
     try:
@@ -799,7 +810,7 @@ def receive(token: str, method: str, headers: dict, query: dict, body: bytes,
                 feed.release_delivery(f"wh:{h['id']}", claim)
             return {"status": 503, "json": {"error": "busy", "message": "Too many calls waiting"}, "retry_after": 30}
         wait = t["reply"] == "wait" and not ignored
-        if wait and not dispatcher.sync_slot():
+        if wait and not dispatcher.sync_slot(h["id"]):
             if claim:
                 feed.release_delivery(f"wh:{h['id']}", claim)
             return {"status": 503, "json": {"error": "busy", "message": "Too many callers waiting"}, "retry_after": 10}
@@ -816,7 +827,7 @@ def receive(token: str, method: str, headers: dict, query: dict, body: bytes,
             dispatcher.submit(h["id"], cid, wait=wait)
         except BaseException:
             if wait:
-                dispatcher.sync_release()
+                dispatcher.sync_release(h["id"])
             raise
         if wait:
             return {"status": 202, "json": {"ok": True, "call": cid}, "hook": h["id"], "call": cid, "wait": True}
@@ -1343,12 +1354,16 @@ def data_csv(hid: str, limit: int = 100_000) -> str:
     cols = list(fields) or _scalar_keys(rows)
     buf = io.StringIO()
     w = csv.writer(buf)
-    w.writerow(["id", "at"] + cols)
+
+    def cell(v: Any) -> Any:
+        """The values come from outside callers: one that starts like a formula must not run in a spreadsheet."""
+        v = "" if v is None else json.dumps(v, ensure_ascii=False) if isinstance(v, (dict, list)) else v
+        return "'" + v if isinstance(v, str) and v[:1] in ("=", "+", "-", "@", "\t", "\r") else v
+    w.writerow(["id", "at"] + [cell(c) for c in cols])
     for r in rows:
         vals = r.get("fields") if fields else (r.get("data") if isinstance(r.get("data"), dict) else {})
         w.writerow([r["id"], dt.datetime.fromtimestamp(r["at"]).isoformat(timespec="seconds")] +
-                   ["" if (vals or {}).get(c) is None else (json.dumps(vals[c], ensure_ascii=False)
-                    if isinstance(vals[c], (dict, list)) else vals[c]) for c in cols])
+                   [cell((vals or {}).get(c)) for c in cols])
     return buf.getvalue()
 
 
@@ -1463,22 +1478,29 @@ class Dispatcher:
         self.waiting: dict[str, deque] = {}
         self.done: dict[str, threading.Event] = {}
         self.sync = 0
+        self.sync_by: dict[str, int] = {}
 
     def has_room(self, h: dict) -> bool:
         with self.lock:
             busy = self.running.get(h["id"], 0) >= h["queue"]["parallel"]
             return not busy or len(self.waiting.get(h["id"], ())) < h["queue"]["max_waiting"]
 
-    def sync_slot(self) -> bool:
+    def sync_slot(self, hid: str) -> bool:
         with self.lock:
-            if self.sync >= SYNC_MAX:
+            if self.sync >= SYNC_MAX or self.sync_by.get(hid, 0) >= SYNC_PER_HOOK:
                 return False
             self.sync += 1
+            self.sync_by[hid] = self.sync_by.get(hid, 0) + 1
             return True
 
-    def sync_release(self) -> None:
+    def sync_release(self, hid: str) -> None:
         with self.lock:
             self.sync = max(0, self.sync - 1)
+            left = self.sync_by.get(hid, 0) - 1
+            if left > 0:
+                self.sync_by[hid] = left
+            else:
+                self.sync_by.pop(hid, None)
 
     def submit(self, hid: str, cid: str, wait: bool = False) -> None:
         try:

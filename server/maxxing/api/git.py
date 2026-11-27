@@ -81,12 +81,13 @@ class ReviewIn(PullAct):
     event: str                                  # APPROVE | REQUEST_CHANGES | COMMENT
     body: str = Field("", max_length=60000)
     comments: list[LineComment] = Field(default_factory=list, max_length=100)
+    sha: str | None = Field(None, max_length=64)
 
 
 @router.post("/api/git/pull/review")
 async def pull_review(b: ReviewIn):
     return await _call(gitview.pull_review, _gh_repo(b.repo), b.number, b.event, b.body,
-                       [c.model_dump() for c in b.comments])
+                       [c.model_dump() for c in b.comments], b.sha)
 
 
 class MergeIn(PullAct):

@@ -204,7 +204,9 @@ async def _check_current(request: Request, password: str) -> None:
     """The current password of a signed-in request, or 429 / 401."""
     # a stolen cookie must not become a way to guess the password: same throttle as the sign-in, own counter
     key = "pw:" + security.client_key(request)
-    refusal, _ = security.begin_attempt(key)
+    # signed in: only this client's own cap applies (the global one would let a stranger's wrong sign-ins block
+    # the owner's password change, 2FA switch or terminal)
+    refusal, _ = security.begin_attempt(key, trusted=True)
     if refusal:
         raise HTTPException(429, detail={"error": "throttled", "message": "Too many attempts - try again in 15 min"})
     ok = await _verify(password)

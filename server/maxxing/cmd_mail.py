@@ -687,6 +687,9 @@ def _write(a, acc: dict, out, guard: Guard | None = None, g: dict | None = None)
                 from .mail import outbox
                 why = "every message waits for the owner's OK" if g["approve_send"] == "always" else \
                     f"new recipient{'s' if len(new) > 1 else ''}: {', '.join(new)}"
+                if store.outbox_waiting(guard.path) >= outbox.WAITING_MAX:
+                    raise Refused(f"{outbox.WAITING_MAX} messages of this agent already wait for the owner's OK: "
+                                  "nothing more until the owner answers them in Notifications")
                 res = outbox.queue(acc, guard.path, draft, files, why)
                 guard.note(acc, source, a.folder, "draft", "waiting for the owner's OK")
                 print(json.dumps(res) if out else f"not sent yet: {why}. The message is in {res['folder']} (uid "

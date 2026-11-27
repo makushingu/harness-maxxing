@@ -427,6 +427,15 @@ def _nice() -> list[str]:
     return [nice, "-n", "10"] if nice else []
 
 
+THUMB_MEM = 4 << 30     # bytes of address space for one ffmpeg: a picture of huge dimensions fails instead of
+                        # taking the server's memory (a 4K video needs well over 1 GB of it, mostly unused)
+
+
+def _capped() -> list[str]:
+    prlimit = shutil.which("prlimit")
+    return [prlimit, f"--as={THUMB_MEM}"] if prlimit else []
+
+
 def _ffmpeg_thumb(src: Path, dest: Path, w: int, video: bool, h: int = 0) -> bool | None:
     """True: dest written; False: ffmpeg cannot read the file; None: no ffmpeg or it timed out (worth another try).
     `h`: at least this height too (a wide picture shown in a box of fixed height is not stretched)."""
@@ -446,7 +455,7 @@ def _ffmpeg_thumb(src: Path, dest: Path, w: int, video: bool, h: int = 0) -> boo
             # (AVIF/HEIC/HEIF are mov containers image2 cannot read: name the mov demuxer, which reads no pattern)
             single = ([] if video or "%" not in str(src) else ["-f", "mov"] if src.suffix.lower() in MOV_IMAGE_EXT
                       else ["-f", "image2", "-pattern_type", "none"])
-            cmd = [*_nice(), ffmpeg, "-v", "error", "-y", "-protocol_whitelist", "file",
+            cmd = [*_nice(), *_capped(), ffmpeg, "-v", "error", "-y", "-protocol_whitelist", "file",
                    "-format_whitelist", videos.VIDEO_FORMATS if video else IMAGE_FORMATS, *seek, *single, "-i", str(src),
                    "-frames:v", "1", "-vf", scale, "-c:v", "libwebp", "-quality", "78", "-f", "webp", str(tmp)]
             try:

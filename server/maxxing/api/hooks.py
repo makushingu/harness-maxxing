@@ -62,9 +62,11 @@ async def _ours(token: str, request: Request, hook: dict) -> Response:
     try:
         await asyncio.to_thread(webhooks.dispatcher.wait, out["call"], webhooks.WAIT_S)
     finally:
-        webhooks.dispatcher.sync_release()
+        webhooks.dispatcher.sync_release(out["hook"])
     status, data, ctype = await asyncio.to_thread(webhooks.reply_of, out["hook"], out["call"])
-    return Response(data, status_code=status, media_type=ctype)
+    # the target / the script picks the type: on the UI's origin it must never render as a page that runs script
+    return Response(data, status_code=status, media_type=ctype, headers={
+        "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", "Content-Security-Policy": "sandbox"})
 
 
 @router.api_route("/{token}", methods=["GET", "POST"])

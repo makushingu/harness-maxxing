@@ -18,6 +18,7 @@ import { agentRunRoute, isAgentSession, useSessions, useSessionSeeded, useSettin
 import type { Session } from '@/lib/types'
 import { PageHeader, useDocumentTitle } from '@/components/shell/Page'
 import { Button, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, EmptyState, Kbd, MOD, Tooltip } from '@/components/ui'
+import { takePrompt } from '@/features/agents/EditWithClaude'
 import { focusComposer, MAX_STACK, prefillDraft, ROW_SPLIT_MAX, ROW_SPLIT_MIN, useSessionsUI, type Col } from './store'
 import { stripRows } from './layouts'
 import { SessionTree } from './Tree'
@@ -92,11 +93,12 @@ function Workspace() {
   const currentTopic = focusedCol?.kind === 'new' ? focusedCol.path : (focusedSession?.path ?? paramPath)
 
   // new=1&prompt=<text>: put the text in the new column's draft before the composer mounts (read at its first render).
-  // The URL is rewritten without it right after, so a reload does not type it again.
+  // The URL is rewritten without it right after, so a reload does not type it again. Only a prompt armed by a link
+  // of the app (armPrompt) is typed: not the one of a link in a message or of an address opened from outside.
   React.useMemo(() => {
     const prompt = params.get('prompt')
     const path = params.get('path')
-    if (!prompt || params.get('new') !== '1' || path === null) return
+    if (!prompt || params.get('new') !== '1' || path === null || !takePrompt(prompt)) return
     prefillDraft(`new:${path}`, prompt)
   }, [location.search]) // eslint-disable-line react-hooks/exhaustive-deps
 

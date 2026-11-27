@@ -24,6 +24,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from typing import Any
 
 import httpx
 
@@ -145,10 +146,50 @@ def ssh_command(s: dict, *remote: str) -> list[str]:
     return cmd + ["--", f"{s.get('user') or 'root'}@{s['host']}", *remote]
 
 
+REMOTE_OUT_MAX = 4 << 20        # bytes read of what a remote server prints: past it, ssh is killed
+
+
+def _run_capped(cmd: list[str], stdin: str, timeout: float, cap: int = REMOTE_OUT_MAX) -> subprocess.CompletedProcess:
+    """subprocess.run(capture_output, text) that never holds more than `cap` bytes of each stream: the other end
+    is another machine, and what it prints would otherwise all be kept in the server's memory."""
+    p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    bufs = [bytearray(), bytearray()]
+
+    def pump(f: Any, buf: bytearray) -> None:
+        with contextlib.suppress(OSError, ValueError):
+            while chunk := f.read1(1 << 16):
+                if len(buf) + len(chunk) > cap:
+                    p.kill()
+                    return
+                buf += chunk
+
+    def feed() -> None:
+        with contextlib.suppress(OSError, ValueError):
+            p.stdin.write(stdin.encode())
+            p.stdin.close()
+    threads = [threading.Thread(target=pump, args=(p.stdout, bufs[0]), daemon=True),
+               threading.Thread(target=pump, args=(p.stderr, bufs[1]), daemon=True),
+               threading.Thread(target=feed, daemon=True)]
+    for t in threads:
+        t.start()
+    try:
+        code = p.wait(timeout)
+    except subprocess.TimeoutExpired:
+        p.kill()
+        p.wait()
+        raise
+    finally:
+        for t in threads[:2]:
+            t.join(5)
+        for f in (p.stdout, p.stderr, p.stdin):
+            with contextlib.suppress(OSError, ValueError):
+                f.close()
+    return subprocess.CompletedProcess(cmd, code, bufs[0].decode("utf-8", "replace"), bufs[1].decode("utf-8", "replace"))
+
+
 def probe_remote(s: dict, opts: dict) -> dict:
     try:
-        r = subprocess.run(ssh_command(s, "python3", "-", shlex.quote(json.dumps(opts))), input=PROBE.read_text(),
-                           capture_output=True, text=True, timeout=PROBE_TIMEOUT, errors="replace")
+        r = _run_capped(ssh_command(s, "python3", "-", shlex.quote(json.dumps(opts))), PROBE.read_text(), PROBE_TIMEOUT)
     except subprocess.TimeoutExpired:
         return {"error": f"no answer in {PROBE_TIMEOUT} s"}
     except OSError as e:

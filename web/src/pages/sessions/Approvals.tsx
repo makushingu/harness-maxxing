@@ -58,7 +58,7 @@ export function ApprovalCard({ approval: a, className, plain }: { approval: Appr
   const Icon = toolIcon(a.tool)
   const change = a.kind === 'agent_change'          // an agent's own safety settings: one line per change
   const name = change ? t('approval.agentChange') : a.tool.startsWith('mcp__') ? a.tool.split('__').slice(2).join('__') || a.tool : a.tool
-  const diff = React.useMemo(() => toolDiff(a.tool, a.input), [a.tool, a.input])
+  const diff = React.useMemo(() => toolDiff(a.tool, a.input, 0, true), [a.tool, a.input])
   const left = useSecondsLeft(a.expires)
   const send = (decision: 'allow' | 'deny', always = false, full = false) => {
     setChoice(full ? 'full' : always ? 'always' : decision)

@@ -815,8 +815,11 @@ def _start(path: str, me: str, item: dict, st: dict, g: dict) -> str | None:
                 env = {"MAXXING_AGENT": me, "MAXXING_AGENT_TRIGGER": f"group:{path}", "MAXXING_AGENT_DEPTH": "0",
                        "MAXXING_AGENT_GROUP": path}
                 title = f"{a['name'] or slug(me)} - {g['emoji'] + ' ' if g['emoji'] else ''}{g['name'] or parse(path)[1]}"
-                s = service.create_session(me, message=_message(path, me, item, st, True), title=title,
-                                           attachments=files or None,
+                first = _message(path, me, item, st, True)
+                # outside text: the session exists (and its mark is written) before its first turn starts, which
+                # reads it (turn_outside) from another process
+                s = service.create_session(me, message=None if outside else first, title=title,
+                                           attachments=None if outside else files or None,
                                            model=a["model"] or None, source="agent", notify=False, cron=True,
                                            env=env, timeout_s=a["limits"]["timeout_s"],
                                            permission_mode=a["permission_mode"],
@@ -824,6 +827,10 @@ def _start(path: str, me: str, item: dict, st: dict, g: dict) -> str | None:
                 sid = s["id"]
                 sessions[me] = sid
                 st["turns"][sid] = {"outside": outside}
+                if outside:
+                    _write_state(path, st)
+                    service.send_message(sid, first, attachments=files or None, source="agent",
+                                         sender=_group_sender(path, g))
         except Exception as e:  # noqa: BLE001 - SessionError (bad model, busy...)
             post(path, "skip", f"{_at(g, me)}: {e}", author=me, reason="error")
             return None

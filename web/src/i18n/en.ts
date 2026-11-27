@@ -258,6 +258,7 @@ export const en = {
   'sessions.layout.name.halfRight3': 'Half right, by 3',
   'sessions.layout.zone': 'Zone {n}',
   'sessions.diff.more': 'Show {count} more lines',
+  'sessions.diff.all': 'Replaces every occurrence',
   'sessions.msg.delete': 'Delete this message',
   'sessions.msg.deleted': 'Message deleted',
   'sessions.msg.edit': 'Edit',

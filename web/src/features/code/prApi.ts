@@ -54,7 +54,7 @@ export function usePull(full: string, n: number) {
 const at = (full: string, number: number) => ({ repo: `github:${full}`, number })
 export const prApi = {
   comment: (full: string, n: number, body: string) => api.post('/api/git/pull/comment', { ...at(full, n), body }),
-  review: (full: string, n: number, event: ReviewEvent, body: string, comments: DraftComment[] = []) => api.post('/api/git/pull/review', { ...at(full, n), event, body, comments }),
+  review: (full: string, n: number, event: ReviewEvent, body: string, comments: DraftComment[] = [], sha?: string) => api.post('/api/git/pull/review', { ...at(full, n), event, body, comments, sha }),
   merge: (full: string, n: number, method: string, sha?: string) => api.post<{ merged: boolean; message?: string }>('/api/git/pull/merge', { ...at(full, n), method, sha }),
   close: (full: string, n: number) => api.post('/api/git/pull/close', at(full, n)),
   session: (full: string, n: number, review: boolean, message?: string) => api.post<Session>('/api/code/pr-session', { ...at(full, n), review, message }),

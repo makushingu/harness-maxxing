@@ -535,9 +535,9 @@ def settings(path: str, a: dict, approvals: bool = False, chat: bool = False) ->
         # no sandbox, and not free (bypass): Write/Edit reach its `writable` folders (--add-dir), so the files that
         # are the owner's keep off them as in the sandbox; the topic is read without asking, its .env files excepted
         topic = folder.parent.parent
-        deny = [f"Read(/{topic}/{g})" for g in ENV_GLOBS]
+        deny = [f"Read(/{topic}/{g})" for g in ENV_GLOBS] + [_deny_edit(p) for p in locked_paths(path)]
         if a.get("writable"):
-            deny += topic_edit_denied(path)
+            deny += [r for r in topic_edit_denied(path) if r not in deny]
         out["permissions"] = {"deny": deny, "allow": topic_read(path) + ([] if approvals else list(FREE_CLI))}
     if a.get("rules"):
         out["hooks"] = {"PreToolUse": [{"matcher": "*", "hooks": [{"type": "command", "command": hook_command(path)}]}]}
@@ -723,6 +723,8 @@ def sandboxed_turn() -> str | None:
     """The agent path when this process belongs to a sandboxed agent turn (its systemd unit), else None. The owner's
     conversation with that agent is not one: it runs outside the sandbox (agents.run_settings)."""
     meta = turn_meta()
+    if meta is None and not _unit():        # no unit (no systemd-run): the environment is all there is
+        meta = {"path": (os.environ.get("MAXXING_AGENT") or "").strip(), "env": dict(os.environ)}
     p = (meta or {}).get("path") or ""
     from . import agents
     return p if p and _sandboxed(p) and not agents.manager_turn(meta) else None
@@ -741,7 +743,14 @@ AGENT_MANAGER = {"cron", "webhook", "watch", "after", "on", "off", "silent", "lo
 
 # ...and so is what starts something with the owner's rights outside the agent's guards (a session of any topic,
 # a scheduled job now): an agent hands work to another agent (`maxxing agents send`), which keeps its own
-OWNER_ONLY = {"sessions": {"new", "send"}, "cron": {"run", "restore"}}
+OWNER_ONLY = {"sessions": {"new", "send"}, "cron": {"run", "restore"},
+              "jarvis": {"say", "new", "set", "brief", "dream"}}      # + `jarvis work close` (check_cli)
+# ...and, outside the owner's conversation with the agent: what shows the address that starts a webhook (its URL
+# is its key) or what it received; marking the owner's notifications as read
+OWNER_KEPT = {"webhooks": ({"list", "show", "url", "calls", "call", "data"},
+                           "the address of a webhook starts it, and what it received is the owner's. Say what you "
+                           "need in your answer."),
+              "feed": ({"read-all"}, "the notifications are the owner's to mark as read.")}
 
 
 def _manages(turn: dict, words: list[str], argv: list[str]) -> bool:
@@ -810,7 +819,11 @@ def check_cli(argv: list[str]) -> str | None:
     subs, why = OWNER_SUBS.get(cmd, ((), ""))
     if turn["path"] and sub in subs:
         return f"`maxxing {cmd} {sub}` is not allowed in an agent turn: {why}"
-    if turn["path"] and not turn.get("manager") and sub in OWNER_ONLY.get(cmd, ()):
+    kept, why = OWNER_KEPT.get(cmd, ((), ""))
+    if turn["path"] and not turn.get("manager") and sub in kept:
+        return f"`maxxing {cmd} {sub}` is not allowed in an agent run: {why}"
+    if turn["path"] and not turn.get("manager") and (sub in OWNER_ONLY.get(cmd, ())
+                                                     or words[:3] == ["jarvis", "work", "close"]):
         return (f"`maxxing {cmd} {sub}` is not allowed in an agent run: it would start work with the owner's rights, "
                 "outside this agent's budget and guards. Hand it to another agent (`maxxing agents send`) or say "
                 "what should be done in your answer.")

@@ -39,6 +39,47 @@ def sniff(data: bytes) -> str | None:
     return None
 
 
+PHOTO_PX_MAX = 4096     # a side: a small file can declare huge dimensions, decoded in full by every browser
+
+
+def dimensions(data: bytes) -> tuple[int, int] | None:
+    """(width, height) declared by a JPEG / PNG / WebP, None when they cannot be read."""
+    try:
+        if data[:8] == b"\x89PNG\r\n\x1a\n" and data[12:16] == b"IHDR":
+            return int.from_bytes(data[16:20], "big"), int.from_bytes(data[20:24], "big")
+        if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+            kind = data[12:16]
+            if kind == b"VP8X":
+                return int.from_bytes(data[24:27], "little") + 1, int.from_bytes(data[27:30], "little") + 1
+            if kind == b"VP8L" and data[20] == 0x2F:
+                bits = int.from_bytes(data[21:25], "little")
+                return (bits & 0x3FFF) + 1, ((bits >> 14) & 0x3FFF) + 1
+            if kind == b"VP8 " and data[23:26] == b"\x9d\x01\x2a":
+                return int.from_bytes(data[26:28], "little") & 0x3FFF, int.from_bytes(data[28:30], "little") & 0x3FFF
+            return None
+        if data[:3] == b"\xff\xd8\xff":
+            i = 2
+            while i + 9 < len(data):
+                if data[i] != 0xFF:
+                    return None
+                m = data[i + 1]
+                if m == 0xFF:                                   # fill byte
+                    i += 1
+                elif m in (0x01, *range(0xD0, 0xDA)):           # markers without a length
+                    i += 2
+                elif 0xC0 <= m <= 0xCF and m not in (0xC4, 0xC8, 0xCC):     # a frame header
+                    return int.from_bytes(data[i + 7:i + 9], "big"), int.from_bytes(data[i + 5:i + 7], "big")
+                else:
+                    i += 2 + int.from_bytes(data[i + 2:i + 4], "big")
+    except IndexError:
+        pass
+    return None
+
+
+def oversized(data: bytes) -> bool:
+    return max(dimensions(data) or (0, 0)) > PHOTO_PX_MAX
+
+
 def own_path() -> Path:
     return config.STATE / "profile" / "photo"
 
@@ -49,6 +90,8 @@ def save(data: bytes) -> str:
         raise ValueError("too_large" if data else "empty")
     if not sniff(data):
         raise ValueError("not_an_image")
+    if oversized(data):
+        raise ValueError("too_large")
     p = own_path()
     p.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=p.parent, prefix=".photo-", suffix=".part")   # one per save: never shared
@@ -128,7 +171,7 @@ def cached(pid: str, version: str) -> tuple[Path, str] | None:
             _busy.add(key)
         try:
             data = teampeer.fetch_photo(pid, version)
-            if not data or not sniff(data) or hashlib.sha256(data).hexdigest()[:16] != version:
+            if not data or not sniff(data) or oversized(data) or hashlib.sha256(data).hexdigest()[:16] != version:
                 _remember_failure(key)
                 return None
             d.mkdir(parents=True, exist_ok=True)

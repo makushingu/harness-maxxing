@@ -37,6 +37,17 @@ SANDBOX = ("sandbox allow-scripts allow-popups allow-forms allow-modals "
            "allow-downloads; frame-ancestors 'self'")
 
 
+# A file received from someone else (an e-mail attachment, a file sent in Team): shown, but its scripts do not run
+# and it loads nothing from the network (no opening tracker, no form posted elsewhere).
+RECEIVED = ("sandbox; default-src 'none'; img-src data:; style-src 'unsafe-inline'; form-action 'none'; "
+            "frame-ancestors 'self'")
+
+
+def _received(p: Path) -> bool:
+    ws = config.workspace().resolve()
+    return any(_inside(p, ws / d / "attachments") for d in ("mail", "team"))
+
+
 def _sign(payload: bytes) -> str:
     return hmac.new(security._cookie_key(), b"site|" + payload, hashlib.sha256).hexdigest()[:32]
 
@@ -162,6 +173,6 @@ async def site(token: str, rel: str):
     if not found:
         raise _err(404, "not_found", "File not found")
     return FileResponse(p, media_type=_mime(p), headers={
-        "Content-Security-Policy": SANDBOX, "X-Content-Type-Options": "nosniff",
+        "Content-Security-Policy": RECEIVED if _received(p) else SANDBOX, "X-Content-Type-Options": "nosniff",
         # no-cache: every view asks again (ETag keeps it cheap), so a sign-out or a revoked link takes effect at once
         "Cache-Control": "private, no-cache", "Referrer-Policy": "no-referrer"})

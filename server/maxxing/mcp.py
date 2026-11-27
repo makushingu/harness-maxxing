@@ -547,6 +547,8 @@ def _expose_refs(cfg: dict) -> list[str]:
     exposed = []
     hidden = {r["name"] for r in vault.list_secrets() if not r.get("expose")}
     for n in sorted(_refs(cfg) & hidden):
+        if vault.internal(n):                              # a mailbox's password: never handed to every session
+            continue
         try:
             vault.put(n, expose=True)
             exposed.append(n)
@@ -565,6 +567,8 @@ def _redacted(cfg: dict) -> dict:
         c["args"] = _blank_args(c["args"])
     if c.get("url"):
         c["url"] = _url_masked(str(c["url"]), "") or "https://redacted.invalid/"
+    if _command_secret(c.get("command")):
+        c["command"] = "redacted"
     return c
 
 

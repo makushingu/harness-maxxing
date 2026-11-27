@@ -906,7 +906,7 @@ GitHub accepts (writes: one that can write, else `403 no_write`; GitHub refusing
 | GET | `/api/git/pulls?repo=&state=open` | – | `[{number, title, author, head, base, draft, url, updated, state: open\|closed\|merged, outside, review_me}]` (`state` open \| closed \| all, 30 most recently updated) |
 | GET | `/api/git/pull?repo=&number=` | – | `{full, number, title, body, author:{login, avatar}, association, outside, state, draft, mergeable, mergeable_state, head, head_sha, head_repo, fork, base, url, created, updated, commits, add, del, files:[{path, old, status, add, del, hunks, binary, cut, lines}] (≤ 300), files_total, conversation:[{kind: comment\|review, id, author, body, state?, at, url}], line_comments:[{id, path, line, side, author, body, at, reply_to, outdated}], checks:[{name, status, conclusion, url}], methods, can_write, local_paths}` |
 | POST | `/api/git/pull/comment` | `{repo, number, body}` | `{id, url}` |
-| POST | `/api/git/pull/review` | `{repo, number, event: APPROVE\|REQUEST_CHANGES\|COMMENT, body, comments:[{path, line, side, body}]}` | `{id, state, url}` |
+| POST | `/api/git/pull/review` | `{repo, number, event: APPROVE\|REQUEST_CHANGES\|COMMENT, body, comments:[{path, line, side, body}], sha?}` (`sha`: the head commit that was read; refused when the pull request moved) | `{id, state, url}` |
 | POST | `/api/git/pull/merge` | `{repo, number, method: squash\|merge\|rebase, sha?}` | `{merged, sha, message}` |
 | POST | `/api/git/pull/close` | `{repo, number}` | `{state}` |
 

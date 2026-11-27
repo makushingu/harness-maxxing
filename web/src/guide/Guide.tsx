@@ -20,6 +20,7 @@ import { clampHole, firstEl, measure, sameRect, useCardPosition, type Rect } fro
 import { useGuideOn, useGuideOpen, useTutorialHref } from '@/tour/store'
 import { useGuide, useGuideActions, useGuideContext, type GuidePrompt, type GuideState } from './api'
 import { plan, STEP_BY_ID, stepBody, stepTip, stepTitle, useLabel, USES, type Use } from './steps'
+import { draftUrl } from '@/features/agents/EditWithClaude'
 
 export function GuideHost() {
   const { data } = useGuide()
@@ -299,7 +300,7 @@ function GuideRun({ state }: { state: GuideState }) {
     // the next step waits in the pill at the top; the prompt is in the new session's box, not sent
     void actions.patch({ status: 'paused', index: last ? index : index + 1, done: done(id), tried: { step: id, label: p.label, topic: p.topic } })
     if (mobile) useTouchNav.getState().setPanel(null)
-    navigate(`/sessions?path=${encodeURIComponent(p.topic)}&new=1&prompt=${encodeURIComponent(p.text)}`)
+    navigate(draftUrl(p.topic, p.text))
   }
 
   // Esc pauses, arrows move (not while typing in a field of the card).

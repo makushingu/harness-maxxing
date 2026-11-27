@@ -980,8 +980,10 @@ def pull_comment(full: str, number: int, body: str) -> dict:
     return {"id": c.get("id"), "url": c.get("html_url")}
 
 
-def pull_review(full: str, number: int, event: str, body: str = "", comments: list[dict] | None = None) -> dict:
-    """A review: APPROVE | REQUEST_CHANGES | COMMENT, with optional line comments [{path, line, side, body}]."""
+def pull_review(full: str, number: int, event: str, body: str = "", comments: list[dict] | None = None,
+                sha: str | None = None) -> dict:
+    """A review: APPROVE | REQUEST_CHANGES | COMMENT, with optional line comments [{path, line, side, body}].
+    `sha`: the head commit that was read - GitHub refuses (422) when the pull request moved since."""
     full, n = _full(full), _number(number)
     if event not in ("APPROVE", "REQUEST_CHANGES", "COMMENT"):
         raise GitError(400, "bad_event", "event: APPROVE | REQUEST_CHANGES | COMMENT")
@@ -991,7 +993,8 @@ def pull_review(full: str, number: int, event: str, body: str = "", comments: li
     if event != "APPROVE" and not (body or "").strip() and not lines:
         raise GitError(400, "empty", "write something first")
     r = _gh_send(full, f"/repos/{full}/pulls/{n}/reviews",
-                 {"event": event, "body": (body or "")[:60000], **({"comments": lines} if lines else {})})
+                 {"event": event, "body": (body or "")[:60000], **({"comments": lines} if lines else {}),
+                  **({"commit_id": sha} if sha and re.fullmatch(r"[0-9a-f]{7,64}", sha) else {})})
     return {"id": r.get("id"), "state": r.get("state"), "url": r.get("html_url")}
 
 

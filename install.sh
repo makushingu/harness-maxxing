@@ -395,7 +395,8 @@ dep_url() {
 # after a failure reuses it, or resumes a transfer that was cut. Root only (700); the sha256 is checked on every use.
 CACHE_DIR="${CACHE_DIR:-/var/cache/harness-maxxing}"
 cache_ready() { # the cache folder exists, is ours and is not a link (otherwise downloads go straight to $WORK)
-  [ ! -L "$CACHE_DIR" ] && mkdir -p -m 700 "$CACHE_DIR" 2>/dev/null && [ -d "$CACHE_DIR" ] && [ -O "$CACHE_DIR" ]
+  [ ! -L "$CACHE_DIR" ] && mkdir -p -m 700 "$CACHE_DIR" 2>/dev/null && [ -d "$CACHE_DIR" ] && [ -O "$CACHE_DIR" ] \
+    && chmod 700 "$CACHE_DIR" 2>/dev/null     # mkdir -m leaves a folder that was already there as it was
 }
 cache_clear() { # after a successful install: only the files fetch_verified wrote (<sha256>, <sha256>.part)
   [ -d "$CACHE_DIR" ] && [ ! -L "$CACHE_DIR" ] || return 0
@@ -1618,6 +1619,8 @@ EOF
       die "$CADDYFILE already serves $DOMAIN - remove that block, then re-run"
     fi
     printf '\nimport %s\n' "$CADDY_SITE" >> "$CADDYFILE"
+    grep -qE '^[[:space:]]*admin[[:space:]]' "$CADDYFILE" \
+      || warn "$CADDYFILE keeps Caddy's admin API on 127.0.0.1:2019 (any local user can reconfigure it): add 'admin unix//run/caddy/admin.sock' or 'admin off' to its global options"
   fi
   chmod 644 "$CADDY_SITE" "$CADDYFILE"; chmod 755 /etc/caddy/maxxing-paths
   caddy validate --config "$CADDYFILE" --adapter caddyfile >/dev/null 2>&1 \

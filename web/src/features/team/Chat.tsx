@@ -24,7 +24,7 @@ import type { Att } from '@/features/composer/AttachmentChip'
 import { VoiceButton } from '@/features/voice/VoiceButton'
 import { DRAFT_EVENT } from '@/lib/drafts'
 import { insertAtCaret } from '@/features/composer/text'
-import { Markdown } from '@/components/ui/markdown'
+import { Markdown, PLAIN_BLOCKS } from '@/components/ui/markdown'
 import { confirm } from '@/components/ui/alert-dialog'
 import { Avatar } from '@/features/profile/Avatar'
 import { projectColor } from '@/features/tasks/model'
@@ -942,8 +942,9 @@ function Reactions({ team, chat, m }: { team: TeamState | undefined; chat: TeamC
   )
 }
 
-/** A summary may come from another server: no remote picture (it would tell its owner who reads it, and when). */
-const NO_IMAGES = { img: ({ alt }: { alt?: string }) => (alt ? <span className="text-muted-foreground">[{alt}]</span> : null) }
+/** A summary may come from another server: no remote picture (it would tell its owner who reads it, and when), and
+ *  no live card (a ```pr-review block would be one click from a review published in the owner's name). */
+const SUMMARY_PARTS = { ...PLAIN_BLOCKS, img: ({ alt }: { alt?: string }) => (alt ? <span className="text-muted-foreground">[{alt}]</span> : null) }
 
 function SummaryCard({ m }: { m: TeamMessage }) {
   const t = useT()
@@ -955,7 +956,7 @@ function SummaryCard({ m }: { m: TeamMessage }) {
         {t('team.summaryBy')}
         {s && <span className="ml-auto font-normal text-muted-foreground">{t('team.summaryOf', { count: s.count })}</span>}
       </div>
-      <Markdown components={NO_IMAGES} className="min-w-0 px-3.5 py-2.5 text-[13.5px] [overflow-wrap:anywhere] [&_p]:my-1.5 [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto [&_ul]:my-1">{m.text}</Markdown>
+      <Markdown components={SUMMARY_PARTS} className="min-w-0 px-3.5 py-2.5 text-[13.5px] [overflow-wrap:anywhere] [&_p]:my-1.5 [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto [&_ul]:my-1">{m.text}</Markdown>
     </div>
   )
 }

@@ -70,9 +70,18 @@ def ask(sid: str, question: str) -> dict:
 
 def _run(m: dict, csid: str, cwd: str, cfg: dict, question: str, first: bool = False) -> dict:
     model = (m.get("model") or cfg.get("default_model") or "").strip()
+    # an agent's session: its thread is read inside the agent's own walls (secrets, private paths, rules, keys)
+    from maxxing import agents
+    menv = m.get("env") or {}
+    agent = agents.run_settings(m.get("path") or "", menv.get("MAXXING_AGENT_OUTSIDE") == "1",
+                                group=str(menv.get("MAXXING_AGENT_GROUP") or ""), manager=agents.manager_turn(m))
+    walls = dict(agent.get("settings") or {})
+    if "permissions" in walls:                          # its deny rules only: a question pre-allows nothing
+        walls["permissions"] = {"deny": list(walls["permissions"].get("deny") or [])}
     args = [spawn.claude_bin(), "-p", "--output-format", "json", *spawn.permission_args("plan")[0],
-            "--resume", csid, "--fork-session", "--no-session-persistence", *spawn.settings_args(cfg)] + (["--model", model] if model else [])
-    env = spawn.claude_env(m.get("env") or {}, "plan")
+            "--resume", csid, "--fork-session", "--no-session-persistence",
+            *spawn.settings_args(cfg, walls)] + (["--model", model] if model else [])
+    env = spawn.claude_env(menv, "plan", agent.get("keys") if agent else None)
     t0 = time.time()
     try:
         p = subprocess.run(args, input=ASK_PREFACE + question, capture_output=True, text=True, cwd=cwd, env=env,

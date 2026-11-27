@@ -379,7 +379,7 @@ class Runner:
         item = _merge_reports(item, q)
         if smart:                                      # a summary written for this message (smart resume)
             idle = (resume.away_text(smart[0]), smart[1] // 1000)
-            prompt = resume.summary_prompt(item.get("text") or "")
+            prompt = resume.summary_prompt(item.get("text") or "", item.get("relay"))
         else:                                          # the idle rule: a plain summary
             idle = _idle_compact(m, item, cfg, now, window)
             prompt = SUMMARY_PROMPT

@@ -18,8 +18,10 @@ import contextlib
 import logging
 import os
 import socket
+import threading
 import time
 from collections import deque
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from . import exits, rules
@@ -31,6 +33,11 @@ CONNECT_TIMEOUT = 15.0
 IDLE_TIMEOUT = 300.0                  # a tunnel with no byte either way for this long is closed
 MAX_CONNECTIONS = 256
 MAX_ADDRESSES = 4
+RESOLVERS = 8                         # lookups run on threads of their own: a name that never answers holds one of these,
+MAX_RESOLVING = 64                    # never the server's shared pool; past this many waiting, a host is refused
+_resolver = ThreadPoolExecutor(RESOLVERS, thread_name_prefix="browser-dns")
+_resolving = 0
+_rlock = threading.Lock()
 EXIT_PAGE = "The exit of this browser profile is offline ({why}). Harness Maxxing waits for it: it never uses the server's address instead."
 BLOCK_PAGE = "Blocked by Harness Maxxing: {host} cannot be reached from this browser (not a public internet site)."
 
@@ -45,6 +52,7 @@ class Proxy:
         self.bytes_in = self.bytes_out = 0
         self.blocked: deque[tuple[float, str]] = deque(maxlen=20)
         self.open = 0
+        self.exit_ip: dict[str, str] = {}        # the address the sites saw through each exit, at its last good test
 
     async def start(self) -> None:
         self.sock.unlink(missing_ok=True)
@@ -99,6 +107,11 @@ class Proxy:
                 return await _answer(w, 400, "Only http:// through a plain request")
             path = (u.path or "/") + (f"?{u.query}" if u.query else "")
             kept = [ln for ln in lines[1:] if ln and not ln.lower().startswith(("proxy-", "connection:"))]
+            heads = {k.strip().lower(): v.strip() for k, _, v in (ln.partition(":") for ln in kept)}
+            chunked = "chunked" in heads.get("transfer-encoding", "").lower()
+            length = heads.get("content-length") or "0"
+            if not (length.isascii() and length.isdigit()):
+                return await _answer(w, 400, "Bad request")
             rest = (f"{method} {path} {version}\r\n" + "\r\n".join(kept) + "\r\nConnection: close\r\n\r\n").encode("latin-1")
         if not host or port is None or not 0 < port < 65536:
             return await _answer(w, 400, "Bad request")
@@ -112,6 +125,9 @@ class Proxy:
                 eid, up = await asyncio.to_thread(self.upstream)
         except exits.ExitDown as e:
             return await _answer(w, 502, EXIT_PAGE.format(why=e))
+        if eid and self._exit_itself(eid, ips):
+            self.blocked.append((time.time(), host))
+            return await _answer(w, 403, BLOCK_PAGE.format(host=host))
         err: Exception | None = None
         for ip in ips[:MAX_ADDRESSES]:              # IPv4 first: a phone exit often has no IPv6 way out
             try:
@@ -132,7 +148,7 @@ class Proxy:
             else:
                 uw.write(rest)
                 await uw.drain()
-            await self._tunnel(r, w, ur, uw)
+            await self._tunnel(r, w, ur, uw, None if method == "CONNECT" else (int(length), chunked))
         finally:
             _close(uw)
 
@@ -142,8 +158,7 @@ class Proxy:
         if rules.local_host(h) or rules.parse_ip(h) is not None:
             return None
         try:
-            infos = await asyncio.wait_for(
-                asyncio.get_running_loop().getaddrinfo(h, port, type=socket.SOCK_STREAM), 10)
+            infos = await self._resolve(h, port)
         except (OSError, asyncio.TimeoutError, UnicodeError):
             return None
         ips = []
@@ -157,12 +172,14 @@ class Proxy:
         return ips or None
 
     async def _tunnel(self, r: asyncio.StreamReader, w: asyncio.StreamWriter,
-                      ur: asyncio.StreamReader, uw: asyncio.StreamWriter) -> None:
+                      ur: asyncio.StreamReader, uw: asyncio.StreamWriter,
+                      body: tuple[int, bool] | None = None) -> None:
         """Both ways of a tunnel. A way that ends cleanly (EOF) passes the half-close on and lets the other one
         finish (the client sends its request then shuts its writing side, the site still answers); a way that fails
-        or stalls ends both, so a client that stopped reading does not hold its connection slot forever."""
+        or stalls ends both, so a client that stopped reading does not hold its connection slot forever. `body`
+        (length, chunked): a plain http request, whose way out carries that one request only (`_body`)."""
         last = [time.monotonic()]                     # the last byte either way: shared, a one-way stream stays open
-        ways = {asyncio.ensure_future(self._pipe(r, uw, True, last)),
+        ways = {asyncio.ensure_future(self._body(r, uw, *body, last) if body else self._pipe(r, uw, True, last)),
                 asyncio.ensure_future(self._pipe(ur, w, False, last))}
         try:
             while ways:
@@ -174,6 +191,76 @@ class Proxy:
                 t.cancel()
             if ways:
                 await asyncio.gather(*ways, return_exceptions=True)
+
+    async def _resolve(self, h: str, port: int) -> list:
+        global _resolving
+        with _rlock:
+            if _resolving >= MAX_RESOLVING:
+                raise OSError("too many lookups")
+            _resolving += 1
+        f = _resolver.submit(socket.getaddrinfo, h, port, 0, socket.SOCK_STREAM)
+        f.add_done_callback(_resolved)               # when its thread is free again (or it never got one), not at the timeout
+        return await asyncio.wait_for(asyncio.wrap_future(f), 10)
+
+    def _exit_itself(self, eid: str, ips: list[str]) -> bool:
+        """One of `ips` is the address the sites see through this exit (its last test): a name pointing there would
+        reach the box or the router of that network from the inside (IPv6: its whole /64)."""
+        seen = (exits.runtime().tests.get(eid) or {}).get("ip")
+        if seen:
+            self.exit_ip[eid] = str(seen)
+        mine = rules.parse_ip(self.exit_ip.get(eid) or "")
+        if mine is None:
+            return False
+        for a in ips:
+            ip = rules.parse_ip(a.split("%", 1)[0])
+            if ip is None or ip.version != mine.version:
+                continue
+            if ip == mine or (ip.version == 6 and int(ip) >> 64 == int(mine) >> 64):
+                return True
+        return False
+
+    async def _body(self, r: asyncio.StreamReader, w: asyncio.StreamWriter, length: int, chunked: bool,
+                    last: list[float]) -> bool:
+        """A plain http request: its body goes to the site and nothing after it. A connection the site keeps open
+        would otherwise carry the browser's next request, for any other host, unchecked."""
+        async def copy(n: int) -> None:
+            while n > 0:
+                data = await r.read(min(65536, n))
+                if not data:
+                    raise ConnectionError("closed")
+                n -= len(data)
+                await send(data)
+
+        async def send(data: bytes) -> None:
+            last[0] = time.monotonic()
+            self.bytes_out += len(data)
+            w.write(data)
+            await w.drain()
+        try:
+            while chunked:
+                line = await r.readline()
+                size = int(line.split(b";", 1)[0].strip(), 16)
+                if size < 0:
+                    raise ValueError(size)
+                await send(line)
+                if size == 0:
+                    while line not in (b"\r\n", b"\n", b""):           # the trailers, up to the empty line
+                        line = await r.readline()
+                        await send(line)
+                    break
+                await copy(size + 2)
+            else:
+                await copy(length)
+            more = await r.read(1)                    # the client closing, or a next request
+        except (ConnectionError, OSError, ValueError):
+            more = b"x"
+        if not more:
+            with contextlib.suppress(Exception):
+                if w.can_write_eof():
+                    w.write_eof()                    # the request is whole: the site may still be answering
+                    return True
+        _close(w)
+        return not more
 
     async def _pipe(self, r: asyncio.StreamReader, w: asyncio.StreamWriter, out: bool,
                     last: list[float] | None = None) -> bool:
@@ -209,6 +296,12 @@ class Proxy:
                 return True
         _close(w)
         return True
+
+
+def _resolved(_f) -> None:
+    global _resolving
+    with _rlock:
+        _resolving -= 1
 
 
 def _split_hostport(target: str, default: int) -> tuple[str, int | None]:
