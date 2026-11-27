@@ -132,8 +132,7 @@ class Proxy:
             else:
                 uw.write(rest)
                 await uw.drain()
-            last = [time.monotonic()]                 # the last byte either way: shared, a one-way stream stays open
-            await asyncio.gather(self._pipe(r, uw, True, last), self._pipe(ur, w, False, last))
+            await self._tunnel(r, w, ur, uw)
         finally:
             _close(uw)
 
@@ -157,8 +156,17 @@ class Proxy:
         ips.sort(key=lambda a: ":" in a)             # stable: the resolver's order inside each family
         return ips or None
 
+    async def _tunnel(self, r: asyncio.StreamReader, w: asyncio.StreamWriter,
+                      ur: asyncio.StreamReader, uw: asyncio.StreamWriter) -> None:
+        """Both ways of a tunnel. A way that ends cleanly (EOF) passes the half-close on and lets the other one
+        finish: the client sends its request then shuts its writing side, the site still answers."""
+        last = [time.monotonic()]                     # the last byte either way: shared, a one-way stream stays open
+        await asyncio.gather(self._pipe(r, uw, True, last), self._pipe(ur, w, False, last))
+
     async def _pipe(self, r: asyncio.StreamReader, w: asyncio.StreamWriter, out: bool,
-                    last: list[float] | None = None) -> None:
+                    last: list[float] | None = None) -> bool:
+        """Copy r to w until r ends (True: the end of writing is passed on to w) or fails, stalls or goes idle
+        (False: w is closed)."""
         last = last if last is not None else [time.monotonic()]
         try:
             while True:
@@ -178,9 +186,17 @@ class Proxy:
                 w.write(data)
                 await w.drain()
         except (ConnectionError, asyncio.TimeoutError, OSError):
-            pass
-        finally:
             _close(w)
+            return False
+        except BaseException:
+            _close(w)
+            raise
+        with contextlib.suppress(Exception):
+            if w.can_write_eof():
+                w.write_eof()                        # half-close: the other way may still be talking
+                return True
+        _close(w)
+        return True
 
 
 def _split_hostport(target: str, default: int) -> tuple[str, int | None]:
