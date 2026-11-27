@@ -59,6 +59,7 @@ SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", "venv", ".cache", "
 SKIP_FILES = {"tasks.json", "package-lock.json", "yarn.lock", "pnpm-lock.yaml", "uv.lock", "poetry.lock"}
 MEMORY_NAMES = {"memory.md", "claude.md", "memory-archive.md"}
 MAX_FILE_BYTES = 256 * 1024          # bigger text files are skipped (generated data, dumps)
+MAX_MEMORY_BYTES = 4 * 1024 * 1024   # memory files: memory-archive.md only grows (compaction adds to it), still read
 MAX_FILES = 20_000                   # other text files, whole workspace (memory files are not counted)
 BUCKET_MIN, BUCKET_MAX = 50, 1_000    # per topic / project / root: MAX_FILES // buckets, clamped to this range
 MAX_SCAN_ENTRIES = 20_000            # directory entries one bucket's walk may visit (big data folders)
@@ -492,9 +493,10 @@ def _index_memory(con: sqlite3.Connection, base: str, mem_dirs: list[str], known
 
 
 def _take(con: sqlite3.Connection, base: str, fp: str, known: dict, alive: set[str]) -> bool:
-    """Index `fp` when it is a file worth reading (see _file_stat) of at most MAX_FILE_BYTES. -> it was."""
+    """Index `fp` when it is a file worth reading (see _file_stat) of at most MAX_FILE_BYTES (MAX_MEMORY_BYTES for a
+    memory file). -> it was."""
     st = _file_stat(fp, base)
-    if st is None or st.st_size > MAX_FILE_BYTES:
+    if st is None or st.st_size > (MAX_MEMORY_BYTES if os.path.basename(fp).lower() in MEMORY_NAMES else MAX_FILE_BYTES):
         return False
     alive.add(f"f:{fp}")
     _index_one(con, base, fp, st, known)

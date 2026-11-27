@@ -81,6 +81,16 @@ def test_incremental_and_cleanup(client, mx):
     assert st["bytes"] > 0
 
 
+def test_a_memory_archive_bigger_than_a_plain_file_is_still_found(client, mx):
+    d = config.workspace() / "projects" / "acme"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "memory-archive.md").write_text("# Archive\n" + "- old fact about nothing\n" * 12_000 + "- zanzibarite decision\n")
+    assert (d / "memory-archive.md").stat().st_size > search.MAX_FILE_BYTES
+    search.refresh(deep=True)
+    hits = client.get("/api/search", params={"q": "zanzibarite"}).json()["results"]
+    assert [h["title"] for h in hits] == ["memory-archive.md"] and hits[0]["kind"] == "memory"
+
+
 def test_query_parsing():
     assert search.fts_query("Fact  client!") == '"Fact"* "client"*'
     assert search.fts_query('a "b') == '"a" "b"'
