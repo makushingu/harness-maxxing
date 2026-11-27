@@ -485,6 +485,19 @@ def test_mail_kept_for_a_busy_agent_follows_its_rights_now(client, box, monkeypa
     assert poll.retry_pending() == 0 and config.read_json(poll._pending_file(), default=[]) == []
 
 
+def test_a_still_busy_agent_never_pushes_back_the_day_limit(client, box, monkeypatch):
+    _grant(client, rights=["read"], trigger={"enabled": True})
+    monkeypatch.setattr(agents, "fire", lambda path, **kw: {"started": False, "reason": "busy"})
+    rows, acc = box["rows"], box["acc"]
+    poll._keep(A, acc["id"], "INBOX", [rows[1]], {}, "p")
+    kept = config.read_json(poll._pending_file(), default=[])
+    kept[0]["at"] -= 86000                                               # kept almost a day ago
+    config.write_json(poll._pending_file(), kept)
+    assert poll.retry_pending() == 0                                     # still busy: kept again...
+    left = config.read_json(poll._pending_file(), default=[])
+    assert len(left) == 1 and time.time() - left[0]["at"] > 86000       # ...with its first date
+
+
 def _poll_box(client, box, monkeypatch):
     """The `box` mailbox after a first check (uids 1-3 known) with uids 4, 5 (stripe, matching) new."""
     _grant(client, rights=["read"], trigger={"enabled": True})

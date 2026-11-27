@@ -403,9 +403,10 @@ def _queue(acc: dict, folder: str, path: str, grant: dict, rows: list[dict], bod
         return None
 
 
-def _fire(path: str, acc: dict, folder: str, rows: list[dict], bodies: dict[int, str], prompt: str) -> bool:
+def _fire(path: str, acc: dict, folder: str, rows: list[dict], bodies: dict[int, str], prompt: str,
+          at: float | None = None) -> bool:
     """One turn for these mails; the text is built here (one marker for all of them, also for mail kept while the
-    agent was busy)."""
+    agent was busy). `at`: when a kept turn was first kept (a busy agent keeps it again with that date)."""
     from .. import agents
     shown = {u: b for u, b in bodies.items() if u in {int(r["uid"]) for r in rows[:TEXT_MAILS]}}
     try:
@@ -415,7 +416,7 @@ def _fire(path: str, acc: dict, folder: str, rows: list[dict], bodies: dict[int,
         log.exception("mail: agent %s not started", path)
         return False
     if r.get("reason") == "busy":
-        _keep(path, acc["id"], folder, rows, shown, prompt)
+        _keep(path, acc["id"], folder, rows, shown, prompt, at=at)
         return False
     return bool(r.get("started"))
 
@@ -431,8 +432,10 @@ ROW_KEYS = ("uid", "from", "to", "subject", "date", "attachments", "from_verifie
 _pending_lock = config.ProcessLock("mail-pending")
 
 
-def _keep(path: str, acc_id: str, folder: str, mails: list[dict], bodies: dict[int, str], prompt: str) -> None:
-    """The mails (headers + the texts shown), never a text: the turn's text is built again when it starts."""
+def _keep(path: str, acc_id: str, folder: str, mails: list[dict], bodies: dict[int, str], prompt: str,
+          at: float | None = None) -> None:
+    """The mails (headers + the texts shown), never a text: the turn's text is built again when it starts. `at`:
+    the date of a turn kept again (still busy), so the day's limit of `_drain` is not pushed back on every check."""
     f = _pending_file()
     mails = [{k: m.get(k) for k in ROW_KEYS} | ({"body": bodies[int(m["uid"])]} if int(m["uid"]) in bodies else {})
              for m in mails]
@@ -449,7 +452,7 @@ def _keep(path: str, acc_id: str, folder: str, mails: list[dict], bodies: dict[i
                 break
         else:
             rows.append({"agent": path, "account": acc_id, "folder": folder, "mails": mails[-PENDING_MAILS:],
-                         "prompt": prompt, "at": time.time()})
+                         "prompt": prompt, "at": time.time() if at is None else at})
         f.parent.mkdir(parents=True, exist_ok=True)
         config.write_json(f, rows[-50:])
 
@@ -508,7 +511,8 @@ def _drain(keys: set | None) -> int:
             if not mails:
                 continue
             bodies = {int(m["uid"]): str(m["body"]) for m in mails[:TEXT_MAILS] if m.get("body") is not None}
-            n += 1 if _fire(str(r["agent"]), acc, folder, mails, bodies, str(r.get("prompt") or "")) else 0
+            n += 1 if _fire(str(r["agent"]), acc, folder, mails, bodies, str(r.get("prompt") or ""),
+                            at=float(r.get("at") or 0) or None) else 0
         except Exception:  # noqa: BLE001 - one broken turn never stops the others
             log.exception("mail: kept turn of %s not started", r.get("agent"))
     return n
