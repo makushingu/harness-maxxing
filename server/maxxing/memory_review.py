@@ -192,6 +192,15 @@ def _read(p: Path) -> str:
         return ""
 
 
+def _whole(p: Path) -> str:
+    """The whole memory file, to be written back (`_read` cuts it for the model). Bytes that are not UTF-8 (a file
+    saved as Latin-1) go through unchanged."""
+    try:
+        return p.read_text("utf-8", "surrogateescape")
+    except OSError:
+        return ""
+
+
 def _known(path: str) -> str:
     """What was already proposed for this folder (waiting or refused): not to be proposed again."""
     seen = [x["text"] for x in load() if x.get("path") == path and x.get("state") in ("new", "rejected")][-20:]
@@ -227,11 +236,17 @@ def review(sid: str, model: str = "haiku", text: str | None = None, prompt: str 
                     "text": txt, "old": str(x.get("old") or "").strip()[:600], "why": str(x.get("why") or "")[:120],
                     "source": "work" if x.get("source") == "work" else "owner", "model": model, "at": int(time.time()),
                     "state": "new"})
-    _save(load() + new)
+    with _lock:
+        _save(load() + new)
     return {"proposals": new, "cost": cost, "ms": int((time.time() - t0) * 1000)}
 
 
 def apply(pid: str) -> str:
+    with _lock:                                                                # read, change, write: one step
+        return _apply(pid)
+
+
+def _apply(pid: str) -> str:
     """Writes one proposal into its memory.md -> what happened."""
     items = load()
     it = next((x for x in items if x["id"] == pid and x["state"] == "new"), None)
@@ -260,7 +275,9 @@ def apply(pid: str) -> str:
     f = levels(it["path"]).get(it["level"])
     if not f:
         return "no memory file at this level"
-    body = _read(f) if f.exists() else ""
+    body = _whole(f) if f.exists() else ""
+    if body and not body.endswith("\n"):                                      # edited by hand: the last bullet too
+        body += "\n"
     line = it["text"] if it["text"].startswith("- ") else "- " + it["text"]
     done, old_line = "added", ""
     if it["action"] in ("replace", "remove") and it["old"] and it["old"] in body:
@@ -272,7 +289,7 @@ def apply(pid: str) -> str:
     else:
         body = body.rstrip("\n") + "\n" + line + "\n"
     f.parent.mkdir(parents=True, exist_ok=True)
-    f.write_text(body)
+    f.write_text(body, "utf-8", "surrogateescape")
     it["state"], it["at"] = "applied", int(time.time())
     it["undo"] = {"line": line if done in ("added", "replaced") else "", "old": old_line if done != "added" else ""}
     _save(items)
@@ -280,6 +297,11 @@ def apply(pid: str) -> str:
 
 
 def undo(pid: str) -> str:
+    with _lock:                                                                # read, change, write: one step
+        return _undo(pid)
+
+
+def _undo(pid: str) -> str:
     """Takes back one proposal that was written (the bullet, or the skill's folder) -> what happened. It then counts
     as refused: not proposed again."""
     items = load()
@@ -297,7 +319,9 @@ def undo(pid: str) -> str:
         done = "skill removed"
     else:
         f, u = levels(it["path"]).get(it["level"]), it.get("undo") or {}
-        body = _read(f) if f and f.exists() else ""
+        body = _whole(f) if f and f.exists() else ""
+        if body and not body.endswith("\n"):
+            body += "\n"
         line, old = str(u.get("line") or ""), str(u.get("old") or "")
         if line and line + "\n" in body:
             body = body.replace(line + "\n", (old + "\n") if old else "", 1)
@@ -306,7 +330,7 @@ def undo(pid: str) -> str:
         elif old and old not in body:
             body = body.rstrip("\n") + "\n" + old + "\n"
         if f:
-            f.write_text(body)
+            f.write_text(body, "utf-8", "surrogateescape")
         done = "taken back"
     it["state"] = "rejected"
     _save(items)
@@ -314,6 +338,11 @@ def undo(pid: str) -> str:
 
 
 def reject(pid: str) -> str:
+    with _lock:                                                                # read, change, write: one step
+        return _reject(pid)
+
+
+def _reject(pid: str) -> str:
     items = load()
     for x in items:
         if x["id"] == pid and x["state"] == "new":

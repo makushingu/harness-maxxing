@@ -9,6 +9,7 @@ import * as React from 'react'
 import { loadGroups, useT, type TFn } from '@/i18n'
 import { toast } from '@/components/ui'
 import { api, errorMessage, isApiError } from '@/lib/api'
+import { joinDraft, onAppendDraft } from '@/lib/drafts'
 import { cancelUpload, onUploads, startUpload, uploadsOf } from '@/pages/sessions/uploads'
 import { fromDraftAtt, toDraftAtts, type Att } from '@/pages/sessions/Composer'
 import { DRAFT_EVENT, loadAtts, loadDraft, saveAtts, saveDraft } from '@/pages/sessions/store'
@@ -80,6 +81,8 @@ export function useDraftText(key: string) {
   live.current = { text, key }
   const unsaved = React.useRef(false)
   useBringBack(textBack, key, (back: string) => setText((cur) => joinBack(back, cur)))
+  // a dictation that ended while the box was gone: added to the text shown (which may hold what was just typed)
+  React.useEffect(() => onAppendDraft(key, (t) => setText((cur) => joinDraft(cur, t))), [key])
   const loaded = React.useRef(true) // just read from the draft: nothing to store yet
   React.useEffect(() => {
     if (loaded.current) {

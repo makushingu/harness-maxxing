@@ -286,3 +286,61 @@ def test_cli_run_on_an_unknown_session_says_so(client, capsys):
     from maxxing import cli
     assert cli.main(["memory-review", "run", "nosuchsession"]) != 0
     assert "unknown session" in capsys.readouterr().err
+
+
+def _stored(**kw) -> str:
+    """One waiting proposal for the global memory.md -> its id."""
+    it = {"id": "p" + str(len(mr.load())), "sid": "s", "path": "", "level": "global", "action": "add",
+          "text": "New fact.", "old": "", "why": "", "source": "owner", "model": "haiku", "at": 0, "state": "new", **kw}
+    mr._save(mr.load() + [it])
+    return it["id"]
+
+
+def test_writing_a_proposal_keeps_a_long_memory_whole(mx):
+    mem = config.workspace() / "memory.md"
+    long = "# Memory\n\n" + "".join(f"- Fact number {i} about the server.\n" for i in range(800)) + "- Last original fact.\n"
+    assert len(long) > mr.MEMORY_MAX
+    mem.write_text(long)
+    assert mr.apply(_stored()) == "added"
+    assert mem.read_text() == long + "- New fact.\n"
+    assert mr.undo("p0") == "taken back"
+    assert mem.read_text() == long
+
+
+def test_writing_a_proposal_keeps_the_bytes_of_a_latin1_memory(mx):
+    mem = config.workspace() / "memory.md"
+    old = "# Mémoire\n\n- Café ouvert à 8 h.\n".encode("latin-1")
+    mem.write_bytes(old)
+    assert mr.apply(_stored()) == "added"
+    assert mem.read_bytes() == old + b"- New fact.\n"
+    assert mr.undo("p0") == "taken back"
+    assert mem.read_bytes() == old
+
+
+@pytest.mark.parametrize("action", ["replace", "remove"])
+def test_the_last_bullet_of_a_memory_without_a_final_newline(mx, action):
+    mem = config.workspace() / "memory.md"
+    mem.write_text("# Memory\n\n- Keep me.\n- Old fact.")
+    assert mr.apply(_stored(action=action, old="Old fact.")) == action + "d"
+    assert mem.read_text() == "# Memory\n\n- Keep me.\n" + ("- New fact.\n" if action == "replace" else "")
+    assert mr.undo("p0") == "taken back"
+    assert mem.read_text() == "# Memory\n\n- Keep me.\n- Old fact.\n"
+
+
+def test_a_proposal_stored_while_another_is_written_is_kept(mx, monkeypatch):
+    import threading
+    pid, levels, other = _stored(), mr.levels, []
+
+    def store_meanwhile(path):                                                # another run stores its proposal now
+        def later():
+            with mr._lock:                                                    # as review() stores
+                mr._save(mr.load() + [{**mr.load()[0], "id": "later", "state": "new"}])
+        t = threading.Thread(target=later)
+        t.start()
+        t.join(0.3)
+        other.append(t)
+        return levels(path)
+    monkeypatch.setattr(mr, "levels", store_meanwhile)
+    assert mr.apply(pid) == "added"
+    other[0].join(5)
+    assert {x["id"]: x["state"] for x in mr.load()} == {pid: "applied", "later": "new"}

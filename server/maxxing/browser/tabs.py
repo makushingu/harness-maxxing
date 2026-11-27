@@ -205,7 +205,15 @@ def _clean(t: dict) -> dict:
     by = {k: str(v)[:200] for k, v in by.items() if k in ("kind", "sid", "name", "path")}
     return {"key": str(t["key"])[:20], "url": str(t.get("url") or "")[:URL_MAX], "title": str(t.get("title") or "")[:200],
             "by": by, "nav": t["nav"] if valid_nav(t.get("nav")) else of_by(by),
-            "at": float(t.get("at") or time.time()), "used": float(t.get("used") or time.time())}
+            "at": _when(t.get("at")), "used": _when(t.get("used"))}
+
+
+def _when(v) -> float:
+    """A time from the tabs file; a damaged one (text, a list) is now, so the other tabs still load."""
+    try:
+        return float(v) if v else time.time()
+    except (TypeError, ValueError, OverflowError):
+        return time.time()
 
 
 def mine(t: dict, sid: str, path: str) -> bool:

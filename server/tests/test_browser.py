@@ -1982,3 +1982,105 @@ def test_a_link_planted_in_place_of_the_uploads_folder_is_never_followed(tmp_pat
     assert not list(victim.iterdir()) and (victim.stat().st_mode & 0o777) == 0o755
     assert not (run / "uploads").is_symlink() and out.startswith("/mxrun/uploads/")
     assert (run / "uploads" / out.split("/")[3] / "a.txt").read_bytes() == b"hello"
+
+
+def test_two_callers_at_once_attach_to_a_page_once():
+    """The screencast starting and a mouse move at the same moment: one DevTools session, not two (the pictures would
+    go to the session nobody reads)."""
+    from maxxing.browser import live
+
+    class FakeCdp:
+        def __init__(self):
+            self.attached = 0
+
+        async def call(self, method, params=None, session=None, timeout=30.0):
+            if method == "Target.attachToTarget":
+                self.attached += 1
+                await asyncio.sleep(0.05)
+                return {"sessionId": f"s{self.attached}"}
+            return {}
+
+    async def run():
+        w = live.Watcher(None, "", lambda: None)
+        w.cdp = FakeCdp()
+        assert await asyncio.gather(w._session("t1"), w._session("t1")) == ["s1", "s1"]
+        assert w.cdp.attached == 1 and w.sessions == {"t1": "s1"} and not w._attaching
+        assert await w._session("t1") == "s1" and w.cdp.attached == 1
+    asyncio.run(run())
+
+
+def test_a_dialog_answer_that_fails_leaves_the_dialog_to_answer():
+    """Answering an alert / confirm times out: the dialog stays shown (the page still waits for an answer)."""
+    from maxxing.browser import live
+
+    class FakeCdp:
+        fail: BaseException | None = asyncio.TimeoutError()
+
+        async def call(self, method, params=None, session=None, timeout=30.0):
+            if method == "Page.handleJavaScriptDialog" and self.fail:
+                raise self.fail
+            return {}
+
+    async def run():
+        w = live.Watcher(None, "")
+        w.cdp, w.sessions = FakeCdp(), {"t1": "s1"}
+        w.dialogs["t1"] = {"type": "confirm", "message": "Sure?", "default": ""}
+        with pytest.raises(asyncio.TimeoutError):
+            await w._answer_dialog(w.nav_of("t1"), {"accept": True})
+        assert "t1" in w.dialogs
+        w.cdp.fail = RuntimeError("No dialog is showing")                 # closed meanwhile: forgotten
+        await w._answer_dialog(w.nav_of("t1"), {"accept": True})
+        assert "t1" not in w.dialogs
+    asyncio.run(run())
+
+
+def test_a_damaged_tab_in_the_tabs_file_does_not_lose_the_others(mx):
+    import json
+    from maxxing.browser.tabs import Tabs
+    t = Tabs("main")
+    t.file().parent.mkdir(parents=True, exist_ok=True)
+    tab = lambda key, at: {"key": key, "url": f"https://{key}.example.com/", "title": key, "at": at, "used": at}
+    t.file().write_text(json.dumps({"tabs": [tab("aaa", 1.0), tab("bbb", "hier"), tab("ccc", [1]), tab("ddd", 2.0)]}))
+    t.load()
+    assert {x["key"] for x in t.ordered()} == {"aaa", "bbb", "ccc", "ddd"}
+    assert all(isinstance(x["at"], float) and isinstance(x["used"], float) for x in t.ordered())
+
+
+def test_an_accented_domain_of_a_sandboxed_agent_is_recognised():
+    """bücher.de is stored in punycode: the address as typed (Unicode) is one of the agent's domains; faß.de is stored
+    as Chromium writes it (xn--fa-hia.de, not fass.de)."""
+    from maxxing.browser import rules
+    sites = [rules.clean_site("bücher.de")]
+    assert sites == ["xn--bcher-kva.de"]
+    assert rules.page_refusal("https://www.bücher.de/", sites) is None
+    assert rules.off_domains("https://www.bücher.de/", sites) is None
+    assert rules.page_refusal("https://www.xn--bcher-kva.de/", sites) is None
+    assert rules.page_refusal("https://bucher.de/", sites) is not None
+    assert rules.clean_site("faß.de") == "xn--fa-hia.de"
+    assert rules.page_refusal("https://faß.de/", [rules.clean_site("faß.de")]) is None
+
+
+def test_dot_folders_are_not_projects_nor_topics(mx):
+    from maxxing import browser, cli
+    for p in ("projects/..", "projects/.", "projects/../topics/x", "projects/acme/topics/..", "projects/./topics/."):
+        assert browser.owner_of(p) is None, p
+    assert browser.project_of("projects/../x") is None and browser.topic_of("projects/acme/topics/../x") is None
+    assert browser.owner_of("projects/acme") == "project:projects/acme" and browser.owner_of("projects/.a") == "project:projects/.a"
+    for args in (["browser", "set", "..", "off"], ["browser", "show", ".."]):
+        try:
+            rc = cli.main(args)
+        except SystemExit as e:
+            rc = e.code
+        assert rc not in (0, None), args
+
+
+def test_cli_takes_the_full_folder_as_its_help_says(mx, capsys):
+    from maxxing import cli
+    (mx["ws"] / T).mkdir(parents=True)
+    assert cli.main(["browser", "show", str(mx["ws"] / "projects/acme")]) == 0
+    assert cli.main(["browser", "set", str(mx["ws"] / T) + "/", "on"]) == 0
+    try:
+        rc = cli.main(["browser", "show", str(mx["tmp"] / "elsewhere/projects/acme")])
+    except SystemExit as e:
+        rc = e.code
+    assert rc not in (0, None)

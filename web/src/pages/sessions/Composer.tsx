@@ -8,6 +8,7 @@ import { useMentionTargets } from '@/lib/queries'
 import { errorMessage } from '@/lib/api'
 import { DRAFT_EVENT, FILES_EVENT, takeFiles, leftOutbox, loadAtts, loadDraft, loadQuotes, onSeed, outboxAdd, outboxDone, outboxMove, registerComposer, saveAtts, saveDraft, saveQuotes, takeSeed, useSessionsUI, type DraftAtt, type OutboxEntry, type Pending, type Seed } from './store'
 import { busyEnd, busyStart } from '@/lib/busy'
+import { joinDraft, onAppendDraft } from '@/lib/drafts'
 import { cancelUpload, moveUploads, onUploads, startUpload, uploadsOf } from './uploads'
 import type { MentionTarget, QueueItem, SentMention } from '@/lib/types'
 import { baseName, isImage, quotedFile, quotesMarkdown, thumbUrl } from './util'
@@ -104,6 +105,9 @@ export const Composer = React.forwardRef<ComposerHandle, {
     window.addEventListener(DRAFT_EVENT, onDraft)
     return () => window.removeEventListener(DRAFT_EVENT, onDraft)
   }, [draftKey])
+
+  // A dictation that ended while this box was gone: added to the text shown (which may hold what was just typed).
+  React.useEffect(() => onAppendDraft(draftKey, (t) => setText((cur) => joinDraft(cur, t))), [draftKey])
 
   // Draft key changes (new column → real session): carry the text over.
   const prevKey = React.useRef(draftKey)
