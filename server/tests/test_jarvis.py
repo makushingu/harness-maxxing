@@ -38,6 +38,8 @@ def test_open_makes_its_hidden_folder_and_conversation(client, mx):
     assert all(t["project"] != "jarvis" for t in workspace.list_topics())
     assert all(s["id"] != sid for s in client.get("/api/sessions").json())
     assert client.get(f"/api/sessions/{sid}").status_code == 200
+    from maxxing import widgets                             # nor counted by the dashboard's Activity (Unread)
+    assert all(i["href"] != f"/sessions/{sid}" for b in widgets.activity(force=True)["blocks"] for i in b.get("items", []) if "href" in i)
     # shown with "internals"
     client.put("/api/jarvis/settings", json={"internals": True})
     assert any(p["name"] == "jarvis" for p in client.get("/api/workspace/tree").json()["projects"])

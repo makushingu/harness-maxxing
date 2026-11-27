@@ -3,6 +3,11 @@
 All notable changes to Harness Maxxing. Versions follow semantic versioning.
 `maxxing update` prints the lines added here since your installed version.
 
+## 2.0.0-alpha.174 - 2026-11-27
+
+Fixed:
+- **Dashboard: Jarvis's backstage sessions no longer count as Unread.** The Activity widget counted the sessions Jarvis keeps hidden from you; they could never be opened or read, so Unread never went back to 0 and went up with every backstage run. Reported by a user.
+
 ## 2.0.0-alpha.173 - 2026-11-26
 
 Improved:
