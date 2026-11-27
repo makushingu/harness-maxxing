@@ -750,3 +750,15 @@ def test_two_sends_at_once_never_pass_the_waiting_limit(client, box, monkeypatch
     [t.start() for t in ts]
     [t.join(30) for t in ts]
     assert sorted(codes) == [0, 1] and store.outbox_waiting(A) == outbox.WAITING_MAX
+
+
+def test_a_new_uidvalidity_forgets_what_agents_did_with_mails_known_by_their_uid(mx):
+    """A mail without a Message-ID is known by folder + UID: once the UIDs mean other mails, a new mail with an old
+    UID must not count as already seen by the agent."""
+    for key in ("INBOX#3", "INBOX#4", "<a@example.com>", "INBOX2#3", "Archive#3"):
+        store.note("box", key, A, "read")
+    store.note("other", "INBOX#3", A, "read")
+    store.forget_folder("box", "INBOX")
+    keys = ["INBOX#3", "INBOX#4", "<a@example.com>", "INBOX2#3", "Archive#3"]
+    assert set(store.seen_by("box", keys)) == {"<a@example.com>", "INBOX2#3", "Archive#3"}
+    assert set(store.seen_by("other", ["INBOX#3"])) == {"INBOX#3"}

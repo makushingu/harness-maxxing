@@ -138,8 +138,15 @@ def set_position(account: str, folder: str, *, uidvalidity: int | None = None, l
 
 
 def forget_folder(account: str, folder: str) -> None:
+    """Its UIDVALIDITY changed: its UIDs mean other mails now (and so do the notes on mails without a Message-ID,
+    known by folder + UID)."""
+    pre = f"{folder}#"
     with conn() as c:
         c.execute("DELETE FROM messages WHERE account=? AND folder=?", (account, folder))
+        old = [r["id"] for r in c.execute("SELECT id, mkey FROM seen_by WHERE account=? AND substr(mkey, 1, ?)=?",
+                                          (account, len(pre), pre))
+               if r["mkey"][len(pre):].isdigit()]
+        c.executemany("DELETE FROM seen_by WHERE id=?", [(i,) for i in old])
 
 
 def last_check(account: str) -> dict | None:
