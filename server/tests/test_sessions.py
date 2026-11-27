@@ -1027,3 +1027,16 @@ def test_a_damaged_or_removed_open_sessions_file_never_takes_the_rev_back(client
     assert r["ids"] == ["f"] and r["rev"] > 5
     opened._file().unlink()
     assert client.post("/api/sessions/open", json={"open": ["g"]}).json()["rev"] > r["rev"]
+
+
+def test_a_session_moved_into_a_sandboxed_topic_follows_its_mode(client, topic):
+    from maxxing import config, workspace
+    from maxxing.sessions import runner
+    client.post("/api/workspace/projects/acme/topics", json={"name": "safe"})
+    workspace.update_topic("acme", "safe", permission_mode="sandbox")
+    s = client.post("/api/sessions", json={"path": topic, "message": "hello"}).json()
+    wait_idle(client, s["id"])
+    with store.edit(s["id"]) as m:                    # a cron's or an agent's session: a mode of its own
+        m["permission_mode"] = "bypass"
+    assert client.patch(f"/api/sessions/{s['id']}", json={"path": "projects/acme/topics/safe"}).status_code == 200
+    assert runner.effective_mode(store.read(s["id"]), config.load_config()) == "sandbox"
