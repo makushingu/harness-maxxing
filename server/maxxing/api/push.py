@@ -74,11 +74,13 @@ async def test():
 
 def _still_open(items: list[dict]) -> list[dict]:
     """Without the feed events answered since they were queued (on the computer, on Telegram, on another phone). A
-    request read but not answered (the computer's "mark all read") still waits for Allow / Deny: it stays."""
+    request read but not answered (the computer's "mark all read") still waits for Allow / Deny: it stays; any other
+    event read (an alert with a Seen or an Open button) goes, as in the feed's waiting list (feed._PENDING)."""
     out = []
     for m in items:
         ev = feed.get(m["event"]) if m.get("event") else None
-        if m.get("event") and (not ev or ev.get("resolved") or (ev.get("read") and not ev.get("actions"))):
+        asks = bool(ev and ev.get("actions") and str(ev.get("ref") or "").startswith("approval:"))
+        if m.get("event") and (not ev or ev.get("resolved") or (ev.get("read") and not asks)):
             continue
         out.append(m)
     return out

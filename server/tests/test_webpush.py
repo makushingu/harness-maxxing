@@ -240,10 +240,12 @@ def test_a_request_read_but_not_answered_still_reaches_the_phone(sent, client):
     ev = feed.post("Waiting", "Bash: ls", "warning", "agents", ref="approval:" + "3" * 16, notify=False,
                    actions=[{"id": "allow", "label": "Allow", "style": "primary"}, {"id": "deny", "label": "Deny", "style": "danger"}])
     info = feed.post("Cron failed", "", "error", "crons", notify=False)
+    seen = feed.post("Disk almost full", "", "warning", "health", ref="health:disk", notify=False,
+                     actions=[{"id": "seen", "label": "Seen"}])           # an alert with a button, not a request
     api_push.scan_feed()
     client.post("/api/feed/read", json={"all": True})            # "mark all read" on the computer
     items = client.post("/api/push/pending", json={"device": webpush.device_id(FCM)}).json()["items"]
-    assert [m.get("event") for m in items] == [ev["id"]] and info["id"] != ev["id"]
+    assert [m.get("event") for m in items] == [ev["id"]] and info["id"] != ev["id"] != seen["id"]
 
 
 @pytest.mark.parametrize("mode, rings", [("all", ["Cron failed", "Waiting"]), ("asks", ["Waiting"]), ("off", [])])
