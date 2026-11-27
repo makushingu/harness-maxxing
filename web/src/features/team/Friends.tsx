@@ -242,8 +242,10 @@ export function AddFriendDialog({ open, onOpenChange }: { open: boolean; onOpenC
   const [code, setCode] = React.useState<string | null>(null)
   const [paste, setPaste] = React.useState('')
   const [joinError, setJoinError] = React.useState('')
+  const opened = React.useRef(0) // each opening of the dialog: an answer asked before it is not shown in it
   React.useEffect(() => {
     if (open) {
+      opened.current += 1
       setCode(null)
       setPaste('')
       setJoinError('')
@@ -279,7 +281,10 @@ export function AddFriendDialog({ open, onOpenChange }: { open: boolean; onOpenC
                 <p className="text-[11.5px] text-muted-foreground">{t('team.cx.inviteOnce')}</p>
               </div>
             ) : (
-              <Button size="sm" className="mt-auto" loading={invite.isPending} onClick={() => invite.mutate(undefined, { onSuccess: (r) => setCode(r.invitation) })}>
+              <Button size="sm" className="mt-auto" loading={invite.isPending} onClick={() => {
+                  const n = opened.current
+                  invite.mutate(undefined, { onSuccess: (r) => n === opened.current && setCode(r.invitation) })
+                }}>
                 <Link2 /> {t('team.cx.create')}
               </Button>
             )}

@@ -834,3 +834,10 @@ def test_the_team_forward_dialog_forgets_the_session_chosen_the_previous_time():
     body = body[:body.index("\n}\n")]
     resets = re.findall(r"React\.useEffect\(\(\) => \{\n    if \(!open\) return\n(.*?)\n  \}, \[open\]\)", body, re.S)
     assert resets and all(f in resets[0] for f in ("setSession('')", "setPath('')", "setMode('existing')"))
+
+
+def test_an_invitation_asked_before_the_team_dialog_was_reopened_is_not_shown():
+    src = (WEB / "features" / "team" / "Friends.tsx").read_text(encoding="utf-8")
+    body = src[src.index("export function AddFriendDialog("):]
+    assert "opened.current += 1" in body[:body.index("}, [open])")]
+    assert re.search(r"const n = opened\.current\s+invite\.mutate\(undefined, \{ onSuccess: \(r\) => n === opened\.current && setCode", body)
