@@ -166,7 +166,7 @@ def settings() -> dict:
         out["talker_model"] = "sonnet"
     try:
         out["silence_ms"] = int(min(SILENCE_RANGE[1], max(SILENCE_RANGE[0], int(out["silence_ms"]))))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):        # OverflowError: an infinite number (1e400)
         out["silence_ms"] = DEFAULTS["silence_ms"]
     out["local_voice"] = tts.ALIASES.get(out["local_voice"], out["local_voice"])
     if out["local_voice"] not in ("auto", *tts.VOICES):
