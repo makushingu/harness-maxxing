@@ -54,29 +54,34 @@ def list_files() -> list[dict]:
     return [{"name": k, "filename": e.get("filename") or k, "size": e.get("size"),
              "sha256": e["sha256"][:SHA_SHOWN] if isinstance(e.get("sha256"), str) else None,
              "note": e.get("note", ""), "expose": bool(e.get("expose")), "updated": e.get("updated")}
-            for k, e in sorted(_meta().items()) if path_of(k)]   # an entry without its file (a crash): not listed
+            for k, e in sorted(_meta().items()) if _bytes(k, e) is not None]   # no file or stale bytes (a crash)
+
+
+def _bytes(name: str, entry: dict | None = None) -> bytes | None:
+    """The stored bytes of `name` when they are the entry's (a regular file, not a link, its sha256), else None: a put
+    killed between saving the metadata and renaming the new file leaves the old bytes behind."""
+    e = _meta().get(name) if entry is None else entry
+    if e is None or not NAME_RE.match(name):
+        return None
+    p = files_dir() / name
+    try:
+        if not p.is_file() or p.is_symlink() or p.stat().st_size > MAX_SIZE:
+            return None
+        data = p.read_bytes()
+    except OSError:
+        return None
+    want = e.get("sha256")
+    return data if isinstance(want, str) and hashlib.sha256(data).hexdigest() == want else None
 
 
 def path_of(name: str) -> Path | None:
-    """The stored file of `name` (a regular file, not a link), else None."""
-    if name not in _meta() or not NAME_RE.match(name):
-        return None
-    p = files_dir() / name
-    return p if p.is_file() and not p.is_symlink() else None
+    """The stored file of `name` when it holds the entry's bytes, else None (never the path of stale bytes)."""
+    return files_dir() / name if _bytes(name) is not None else None
 
 
 def read(name: str) -> bytes | None:
-    """The content, or None - also when the bytes are not the ones of the entry (a put killed between saving the
-    metadata and renaming the new file leaves the old bytes behind)."""
-    p = path_of(name)
-    try:
-        data = p.read_bytes() if p else None
-    except OSError:
-        return None
-    want = _meta().get(name, {}).get("sha256")
-    if data is not None and isinstance(want, str) and hashlib.sha256(data).hexdigest() != want:
-        return None
-    return data
+    """The content, or None (no entry, no file, or bytes that are not the entry's)."""
+    return _bytes(name)
 
 
 def _stage(name: str, data: bytes) -> Path:
@@ -102,7 +107,8 @@ def _sweep(files: dict, s: dict) -> None:
     """Under config._lock: remove what a crash left in the folder - temp files older than STALE_TMP_S and files with
     no metadata entry. A file that has an entry is never touched; folders are left alone. Never raises.
     Nothing when the entries could not be read (secrets.json damaged, vault_files not an object): every file would
-    look orphaned. An entry whose file is gone (a put killed before the rename) is dropped from `files`."""
+    look orphaned. An entry whose file is gone or holds other bytes (a put killed before the rename) is dropped from
+    `files`."""
     if not isinstance(s.get("vault_files"), dict):
         return
     try:
@@ -110,8 +116,8 @@ def _sweep(files: dict, s: dict) -> None:
     except OSError:
         return
     present = {p.name for p in entries}
-    for k in [k for k in files if k not in present]:
-        files.pop(k)
+    for k in [k for k in files if k not in present or _bytes(k, files[k]) is None]:
+        files.pop(k)                                        # its bytes, stale, are then removed below
     now = time.time()
     for p in entries:
         try:
@@ -191,6 +197,6 @@ def exposed_files_env() -> dict[str, str]:
     try:
         return {k: str(files_dir() / k) for k, e in _meta().items()
                 if e.get("expose") and NAME_RE.match(k) and not is_reserved(k)
-                and path_of(k)}
+                and _bytes(k, e) is not None}
     except Exception:
         return {}
