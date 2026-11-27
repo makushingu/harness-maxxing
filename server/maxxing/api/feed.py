@@ -47,6 +47,7 @@ class SettingsIn(BaseModel):
     telegram: bool | None = None
     rules: dict[str, str] | None = None
     health: bool | None = None
+    push: str | None = None
 
 
 class HookIn(BaseModel):
@@ -105,7 +106,7 @@ def _settings_view() -> dict:
     names += sorted(seen - set(names))
     sources = [{"source": n, "label": feed.BUILTIN.get(n, n), "builtin": n in feed.BUILTIN,
                 "rule": s["rules"].get(n, "auto"), "own_thread": n in feed.OWN_THREAD} for n in names]
-    return {"telegram": s["telegram"], "health": s["health"], "sources": sources, "hooks": feedhooks.list_hooks(),
+    return {"telegram": s["telegram"], "push": s["push"], "health": s["health"], "sources": sources, "hooks": feedhooks.list_hooks(),
             "kinds": list(feedhooks.KINDS), "rules": list(feed.RULES)}
 
 
@@ -117,7 +118,7 @@ async def get_settings():
 @router.put("/settings")
 async def put_settings(body: SettingsIn):
     rules = {**feed.settings()["rules"], **body.rules} if body.rules is not None else None
-    await _call(feed.save_settings, body.telegram, rules, None, body.health)
+    await _call(feed.save_settings, body.telegram, rules, None, body.health, body.push)
     return await _call(_settings_view)
 
 

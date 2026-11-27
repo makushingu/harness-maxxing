@@ -5,9 +5,11 @@ import { BellRing, Smartphone, Trash2 } from 'lucide-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, errorMessage, seg } from '@/lib/api'
 import { useT } from '@/i18n'
-import { Button, Switch, toast } from '@/components/ui'
+import { Button, Select, Switch, toast } from '@/components/ui'
+import type { FeedSettings } from '@/lib/types'
 import { Callout, SettingRow } from '@/features/common'
 import { SettingsCard } from '@/pages/settings/sections/ui'
+import { useFeedSettings, useSaveFeedSettings } from '@/lib/queries/feed'
 import { disablePush, enablePush, needsInstall, pushDevicesKey, pushSupported, thisDevice, type PushDevice } from './push'
 
 function deviceLabel(): string {
@@ -22,6 +24,8 @@ export function PushSettings() {
   const qc = useQueryClient()
   const supported = pushSupported()
   const { data: devices } = useQuery({ queryKey: pushDevicesKey, queryFn: () => api.get<PushDevice[]>('/api/push/devices'), enabled: supported })
+  const feed = useFeedSettings()
+  const saveFeed = useSaveFeedSettings()
   const [mine, setMine] = React.useState<string | null>(null)
   const [busy, setBusy] = React.useState(false)
   const [perm, setPerm] = React.useState<NotificationPermission | null>(() => (supported ? Notification.permission : null))
@@ -108,6 +112,16 @@ export function PushSettings() {
           )}
         </>
       )}
+      <SettingRow label={t('push.feed')} description={t('push.feedDesc')} className="mt-4">
+        <Select
+          value={feed.data?.push ?? 'all'}
+          disabled={!feed.data}
+          onValueChange={(v) => saveFeed.mutate({ push: v as FeedSettings['push'] })}
+          options={(['all', 'asks', 'off'] as const).map((v) => ({ value: v, label: t(`push.feed.${v}`) }))}
+          aria-label={t('push.feed')}
+          className="w-auto min-w-44"
+        />
+      </SettingRow>
     </SettingsCard>
   )
 }

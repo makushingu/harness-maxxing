@@ -443,6 +443,12 @@ The **…** of a session (or a right-click on its header, a long press on a phon
   you are looking at stays quiet. **Send a test** checks it; the list below shows the registered devices and removes
   them. It needs the app served over HTTPS (as for installing it); on iPhone and iPad add it to the Home Screen first.
   Nothing goes through Google or Apple but an empty "wake up" - the text comes from your own server.
+  The same devices also ring for what the Notifications feed says that cannot wait: a request waiting for your OK
+  (an agent or a session asking to run a command, an e-mail waiting to be sent...) and the alerts - warnings and
+  errors such as a job that failed, an unusual spend or a site down. On Android and on a computer the request comes
+  with **Allow** and **Deny** in the notification itself; on an iPhone a tap opens it. A request too long to be shown
+  whole can only be denied from there. *From the Notifications feed* chooses **Requests and alerts**, **Requests
+  only** or **Nothing**.
   To keep one session quiet on your phones, turn off **Mobile notifications** in its **…** window (or untick it in
   the new-session form); the switch shows once a device is registered.
   Click a counter - running or finished, in the sidebar or on a project / topic of the tree -

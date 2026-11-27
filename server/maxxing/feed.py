@@ -31,6 +31,7 @@ log = logging.getLogger("maxxing.feed")
 
 LEVELS = ("info", "success", "warning", "error")
 RULES = ("auto", "off", "silent", "loud")
+PUSH = ("all", "asks", "off")     # what of the feed rings on the phones: requests and alerts, requests only, nothing
 RETENTION_DAYS = 30
 GROUP_WINDOW_S = 24 * 3600
 TITLE_MAX, BODY_MAX = 200, 4000
@@ -622,12 +623,12 @@ def get(event_id: int) -> dict | None:
 def settings() -> dict:
     f = config.load_config().get("feed") or {}
     rules = {k: v for k, v in (f.get("rules") or {}).items() if v in RULES}
-    return {"telegram": f.get("telegram", True) is not False, "rules": rules, "hooks": list(f.get("hooks") or []),
-            "health": bool(config.load_config().get("health_feed"))}
+    return {"telegram": f.get("telegram", True) is not False, "push": f.get("push") if f.get("push") in PUSH else "all", "rules": rules,
+            "hooks": list(f.get("hooks") or []), "health": bool(config.load_config().get("health_feed"))}
 
 
 def save_settings(telegram: bool | None = None, rules: dict | None = None, hooks: list | None = None,
-                  health: bool | None = None) -> dict:
+                  health: bool | None = None, push: str | None = None) -> dict:
     with config._lock:
         cfg = config.load_config()
         if health is not None:
@@ -635,6 +636,10 @@ def save_settings(telegram: bool | None = None, rules: dict | None = None, hooks
         f = dict(cfg.get("feed") or {})
         if telegram is not None:
             f["telegram"] = bool(telegram)
+        if push is not None:
+            if push not in PUSH:
+                raise FeedError(400, "bad_push", f"Phones: {', '.join(PUSH)}")
+            f["push"] = push
         if rules is not None:
             clean = {}
             for k, v in rules.items():
@@ -662,6 +667,15 @@ def rule_for(source: str, level: str, s: dict | None = None) -> str:
     if source in OWN_THREAD:
         return "off"
     return {"error": "loud", "warning": "silent"}.get(level, "off")
+
+
+def rings_phone(ev: dict, s: dict | None = None) -> bool:
+    """Whether an event also goes to the phones (api/push.py, Settings -> Notifications -> Mobile notifications):
+    one waiting for an answer, and with "all" a warning or an error; never one already dealt with."""
+    mode = (s or settings())["push"]
+    if mode == "off" or ev.get("read") or ev.get("resolved"):
+        return False
+    return bool(ev.get("actions")) or (mode == "all" and ev.get("level") in ("warning", "error"))
 
 
 def _to_telegram(ev: dict) -> None:

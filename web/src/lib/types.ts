@@ -562,7 +562,7 @@ export type FeedRule = 'auto' | 'off' | 'silent' | 'loud'
 export type FeedHookKind = 'stripe' | 'shopify' | 'github' | 'generic'
 export type FeedHook = { id: string; name: string; kind: FeedHookKind; created: number; url: string; has_secret: boolean }
 export type FeedSource = { source: string; label: string; builtin: boolean; rule: FeedRule; own_thread: boolean }
-export type FeedSettings = { telegram: boolean; health: boolean; sources: FeedSource[]; hooks: FeedHook[]; kinds: FeedHookKind[]; rules: FeedRule[] }
+export type FeedSettings = { telegram: boolean; push: 'all' | 'asks' | 'off'; health: boolean; sources: FeedSource[]; hooks: FeedHook[]; kinds: FeedHookKind[]; rules: FeedRule[] }
 
 /* ---------------------------------------------------------------- Webhooks & events (Settings -> Automate) */
 export type WebhookSource = 'stripe' | 'shopify' | 'github' | 'generic' | 'phone'

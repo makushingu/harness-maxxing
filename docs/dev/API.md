@@ -1140,7 +1140,7 @@ Web Push (VAPID) with no dependency: ES256 on P-256 in pure Python (`webpush.py`
 | POST | `/api/push/devices` | `{endpoint, label?}` | `{id, label}` (registers or refreshes) · `400 bad_endpoint` (not a known push service, or 20 devices) |
 | DELETE | `/api/push/devices/{id}` | – | `{ok: true}` · `404` |
 | POST | `/api/push/test` | – | `{sent}`: devices woken with a test notification |
-| POST | `/api/push/pending` | `{device}` | `{items: [{title, body, url, tag}]}`: what the woken device shows, then forgets (`[]` for an unknown device) |
+| POST | `/api/push/pending` | `{device}` | `{items: [{title, body, url, tag, event?, actions?: [{id, label}]}]}`: what the woken device shows, then forgets (`[]` for an unknown device). `event` + `actions` (two at most): an event of the Notifications feed and its buttons, answered by the service worker with `POST /api/feed/{event}/act/{id}`; an event answered meanwhile is left out. The feed reaches the phones through `api/push.py` `scan_feed` (every 3 s, events of any process): `feed.rings_phone` = an event with buttons, plus the warnings and errors when `push` is `all` |
 
 ## Stats
 
@@ -1166,7 +1166,7 @@ cause is handled; their `actions` are then `[]`. `open` is a link button (the UI
 | POST | `/api/feed` | `{title, body?, level?, source?, url?, dedupe?, group?}` | `{event, duplicate}` (`dedupe` = idempotent per source; `group` folds into the latest unread row of that group, 24 h) · `400 empty\|bad_level\|bad_source` |
 | POST | `/api/feed/read` | `{ids?: number[], source?, all?: bool}` | `{unread}` |
 | DELETE | `/api/feed/{id}` | – | `{ok}` |
-| GET / PUT | `/api/feed/settings` | PUT `{telegram?: bool, health?: bool, rules?: {<source>: "auto"\|"off"\|"silent"\|"loud"}}` (merged; at most 200 non-auto rules, else `400 too_many_rules`) | `{telegram, health, sources: [{source, label, builtin, rule, own_thread}], hooks: FeedHook[], kinds, rules}`; `health` = config `health_feed` (server health problems as alerts; `maxxing init`: on for a new install, off for an older one) |
+| GET / PUT | `/api/feed/settings` | PUT `{telegram?: bool, push?: "all"\|"asks"\|"off" (what of the feed rings on the phones, `400 bad_push`), health?: bool, rules?: {<source>: "auto"\|"off"\|"silent"\|"loud"}}` (merged; at most 200 non-auto rules, else `400 too_many_rules`) | `{telegram, push, health, sources: [{source, label, builtin, rule, own_thread}], hooks: FeedHook[], kinds, rules}`; `health` = config `health_feed` (server health problems as alerts; `maxxing init`: on for a new install, off for an older one) |
 | POST | `/api/feed/hooks` | `{name, kind: "stripe"\|"shopify"\|"github"\|"generic", secret?}` | `FeedHook = {id, name, kind, created, url, has_secret}` · `409 exists\|reserved`, `400 bad_kind` |
 | PATCH | `/api/feed/hooks/{id}` | `{secret?, regenerate?: bool}` | `FeedHook` (regenerate = new token, the old URL dies) |
 | DELETE | `/api/feed/hooks/{id}` | – | `{ok}` |

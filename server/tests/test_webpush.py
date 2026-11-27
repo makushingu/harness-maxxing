@@ -186,3 +186,82 @@ def test_a_hand_edited_registration_time_does_not_break_the_devices(client):
     assert [d["label"] for d in webpush.devices()] == ["Phone", "Tablet"]
     r = client.get("/api/push/devices")
     assert r.status_code == 200 and len(r.json()) == 2
+
+
+# ---- the Notifications feed on the phones ---------------------------------------------------------------------
+def _scan(client) -> list[dict]:
+    api_push.scan_feed()
+    return client.post("/api/push/pending", json={"device": webpush.device_id(FCM)}).json()["items"]
+
+
+def test_a_request_waiting_for_an_answer_rings_with_its_buttons(sent, client):
+    from maxxing import feed
+    client.post("/api/push/devices", json={"endpoint": FCM})
+    api_push._feed_last = None
+    assert _scan(client) == []                                    # the first look only notes where the feed is
+    ev = feed.post("Blog Writer is waiting for your OK", "Bash: npm publish", "warning", "agents", "/agents?a=x",
+                   ref="approval:" + "0" * 16, notify=False,
+                   actions=[{"id": "allow", "label": "Allow", "style": "primary"}, {"id": "deny", "label": "Deny", "style": "danger"}])
+    feed.post("All good", "", "info", "custom", notify=False)     # not something that cannot wait
+    items = _scan(client)
+    assert len(sent) == 1 and len(items) == 1
+    assert items[0] == {"title": "Blog Writer is waiting for your OK", "body": "Bash: npm publish", "url": "/agents?a=x",
+                        "tag": f"mx-feed-{ev['id']}", "event": ev["id"],
+                        "actions": [{"id": "allow", "label": "Allow"}, {"id": "deny", "label": "Deny"}]}
+    assert _scan(client) == []                                    # once
+
+
+def test_a_request_too_long_to_show_whole_cannot_be_allowed_from_the_notification(sent, client):
+    from maxxing import feed
+    client.post("/api/push/devices", json={"endpoint": FCM})
+    api_push._feed_last = feed.max_id()
+    feed.post("Waiting", "x" * 400, "warning", "agents", ref="approval:" + "1" * 16, notify=False,
+              actions=[{"id": "allow", "label": "Allow", "style": "primary"}, {"id": "open", "label": "Open", "style": "link"},
+                       {"id": "deny", "label": "Deny", "style": "danger"}])
+    item = _scan(client)[0]
+    assert item["actions"] == [{"id": "deny", "label": "Deny"}] and len(item["body"]) == webpush.BODY_MAX
+
+
+def test_an_event_answered_meanwhile_is_not_shown(sent, client):
+    from maxxing import feed
+    client.post("/api/push/devices", json={"endpoint": FCM})
+    api_push._feed_last = feed.max_id()
+    ev = feed.post("Waiting", "Bash: ls", "warning", "agents", ref="approval:" + "2" * 16, notify=False,
+                   actions=[{"id": "deny", "label": "Deny", "style": "danger"}])
+    api_push.scan_feed()
+    feed.update(ev["id"], resolve=True, resolution="Allowed", notify=False)
+    assert client.post("/api/push/pending", json={"device": webpush.device_id(FCM)}).json()["items"] == []
+
+
+@pytest.mark.parametrize("mode, rings", [("all", ["Cron failed", "Waiting"]), ("asks", ["Waiting"]), ("off", [])])
+def test_the_setting_says_what_of_the_feed_rings(sent, client, mode, rings):
+    from maxxing import feed
+    client.post("/api/push/devices", json={"endpoint": FCM})
+    assert client.put("/api/feed/settings", json={"push": mode}).json()["push"] == mode
+    api_push._feed_last = feed.max_id()
+    feed.post("Cron failed", "exit 1", "error", "crons", notify=False)
+    feed.post("Waiting", "Bash: ls", "warning", "agents", ref="approval:" + "3" * 16, notify=False,
+              actions=[{"id": "deny", "label": "Deny", "style": "danger"}])
+    assert [m["title"] for m in _scan(client)] == rings
+    assert client.put("/api/feed/settings", json={"push": "loud"}).status_code == 400
+
+
+def test_the_buttons_are_in_the_language_of_the_server(sent, client):
+    from maxxing import feed
+    client.post("/api/push/devices", json={"endpoint": FCM})
+    client.put("/api/settings", json={"language": "fr"})
+    api_push._feed_last = feed.max_id()
+    feed.post("Waiting", "Bash: ls", "warning", "agents", ref="approval:" + "4" * 16, notify=False,
+              actions=[{"id": "allow", "label": "Allow", "style": "primary"}, {"id": "deny", "label": "Deny", "style": "danger"}])
+    assert [a["label"] for a in _scan(client)[0]["actions"]] == ["Autoriser", "Refuser"]
+
+
+def test_the_service_worker_answers_a_button_through_the_feed():
+    src = SW.read_text()
+    assert "event.action && data.event" in src and "/api/feed/${data.event}/act/" in src
+    assert "actions: m.actions.map" in src
+
+
+def test_the_newer_address_of_chrome_is_a_known_push_service(client):
+    assert client.post("/api/push/devices", json={"endpoint": "https://jmt17.google.com/fcm/send/abc:APA91"}).status_code == 200
+    assert client.post("/api/push/devices", json={"endpoint": "https://jmt17.google.com.evil.example/fcm/send/abc"}).status_code == 400

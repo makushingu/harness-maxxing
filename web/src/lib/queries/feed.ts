@@ -68,13 +68,14 @@ export function useFeedSettings() {
   return useQuery({ queryKey: qk.feed.settings, queryFn: () => api.get<FeedSettings>('/api/feed/settings') })
 }
 export function useSaveFeedSettings() {
-  return useMut((b: { telegram?: boolean; health?: boolean; rules?: Record<string, FeedRule> }) => api.put<FeedSettings>('/api/feed/settings', b), {
+  return useMut((b: { telegram?: boolean; push?: FeedSettings['push']; health?: boolean; rules?: Record<string, FeedRule> }) => api.put<FeedSettings>('/api/feed/settings', b), {
     optimistic: (b) => [
       {
         key: qk.feed.settings,
         update: (f: FeedSettings) => ({
           ...f,
           telegram: b.telegram ?? f.telegram,
+          push: b.push ?? f.push,
           health: b.health ?? f.health,
           sources: f.sources.map((x) => (b.rules?.[x.source] ? { ...x, rule: b.rules[x.source] } : x)),
         }),

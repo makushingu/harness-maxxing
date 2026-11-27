@@ -34,10 +34,12 @@ QUEUE_MAX = 20
 QUEUE_TTL_S = 24 * 3600
 DEVICES_MAX = 20
 SEND_TIMEOUT_S = 10
+BODY_MAX = 240
 # The push services of the browsers. The server only ever sends to these hosts (https): an endpoint is chosen by the
 # browser that registers it, so without this list a signed-in page could make the server call any address.
 PUSH_HOSTS = (
     "fcm.googleapis.com",                      # Chrome, Edge, Brave, Opera, Samsung Internet (Android and desktop)
+    "jmt17.google.com",                        # the same service, the address recent Chrome versions are given
     "updates.push.services.mozilla.com",       # Firefox
     "push.services.mozilla.com",
     "web.push.apple.com",                      # Safari and the installed app on iOS / macOS
@@ -314,14 +316,18 @@ def wake(did: str) -> str:
     return "error"
 
 
-def notify(title: str, body: str, url: str, tag: str = "", only: str | None = None) -> int:
-    """Queue one notification on every device (or `only`) and wake them: the number of devices woken."""
+def notify(title: str, body: str, url: str, tag: str = "", only: str | None = None, *,
+           event: int | None = None, actions: list[dict] | None = None) -> int:
+    """Queue one notification on every device (or `only`) and wake them: the number of devices woken.
+    `event` + `actions` ([{id, label}], two at most): buttons that answer that event of the feed (api/push.py)."""
     now = time.time()
     with _lock:
         ids = [only] if only else list(_load()["devices"])
         for did in ids:
             q = [m for m in _queues.get(did, []) if now - m["at"] < QUEUE_TTL_S and (not tag or m.get("tag") != tag)]
-            q.append({"title": title[:120], "body": body[:240], "url": url, "tag": tag, "at": now})
+            q.append({"title": title[:120], "body": body[:BODY_MAX], "url": url, "tag": tag, "at": now,
+                      **({"event": int(event), "actions": [{"id": str(x["id"])[:40], "label": str(x["label"])[:40]}
+                                                           for x in (actions or [])[:2]]} if event else {})})
             _queues[did] = q[-QUEUE_MAX:]
     return sum(1 for did in ids if wake(did) == "ok")
 
@@ -333,4 +339,4 @@ def pending(did: str) -> list[dict]:
         if did not in _load()["devices"]:
             return []
         items = [m for m in _queues.pop(did, []) if now - m["at"] < QUEUE_TTL_S]
-    return [{k: m[k] for k in ("title", "body", "url", "tag")} for m in items]
+    return [{k: m[k] for k in ("title", "body", "url", "tag", "event", "actions") if k in m} for m in items]

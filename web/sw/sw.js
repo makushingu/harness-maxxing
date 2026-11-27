@@ -9,7 +9,8 @@
  *   /api/*, /ext/*, non-GET, cross-origin   never touched (straight to the network)
  *
  * Web Push ("Harness has finished", server/maxxing/webpush.py): the server sends an EMPTY push; the worker then asks
- * POST /api/push/pending (same origin, the app's cookie) what to show, one notification per session; a tap opens it.
+ * POST /api/push/pending (same origin, the app's cookie) what to show, one notification per session or per event of
+ * the Notifications feed (with its Allow / Deny buttons when it waits for an answer); a tap opens it.
  */
 const VERSION = '__MX_VERSION__'
 const PRECACHE = __MX_PRECACHE__
@@ -140,7 +141,9 @@ self.addEventListener('push', (event) => {
           tag: m.tag || undefined,
           icon: '/icons/icon-192.png',
           badge: '/icons/icon-192.png',
-          data: { url: m.url || '/' },
+          data: { url: m.url || '/', event: m.event || 0 },
+          // the buttons of a request waiting for an answer (Android and computers; an iPhone shows none: a tap opens it)
+          ...(m.event && m.actions && m.actions.length ? { actions: m.actions.map((a) => ({ action: a.id, title: a.label })), requireInteraction: true } : {}),
         })
       }
     })(),
@@ -149,10 +152,25 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
-  const url = new URL((event.notification.data && event.notification.data.url) || '/', self.location.origin)
+  const data = event.notification.data || {}
+  const url = new URL(data.url || '/', self.location.origin)
   if (url.origin !== self.location.origin) return
   event.waitUntil(
     (async () => {
+      // A button (Allow, Deny...): answer the event of the feed from here. Not signed in any more, or it failed:
+      // open the app on it instead, the answer is given there.
+      if (event.action && data.event) {
+        try {
+          const r = await fetch(`/api/feed/${data.event}/act/${encodeURIComponent(event.action)}`, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'X-Maxxing': '1' },
+          })
+          if (r.ok) return
+        } catch (e) {
+          /* opened below */
+        }
+      }
       const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
       const open = wins.find((c) => new URL(c.url).origin === url.origin)
       if (open) {

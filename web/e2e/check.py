@@ -564,6 +564,24 @@ def j_turn_details(r: Run) -> None:
     r.healthy(pg)
 
 
+def j_push_feed(r: Run) -> None:
+    """Settings -> Notifications -> Mobile notifications: what of the feed rings on the phones is saved."""
+    r.mock.scenario("ready")
+    pg = r.page()
+    r.go(pg, "/settings/alerts")
+    box = pg.get_by_role("combobox", name="From the Notifications feed")
+    box.wait_for()
+    box.click()
+    pg.get_by_role("option", name="Requests only").click()
+    pg.wait_for_timeout(500)
+    r.go(pg, "/settings/alerts")
+    box = pg.get_by_role("combobox", name="From the Notifications feed")
+    box.wait_for()
+    if "Requests only" not in box.inner_text():
+        raise Failure("the choice went back to its old value after a reload")
+    r.healthy(pg)
+
+
 JOURNEYS = {
     "guide": j_guide, "pages": j_pages, "pages-phone": j_pages_phone, "pages-fr": j_pages_fr,
     "pages-fr-phone": j_pages_fr_phone, "pages-translated": j_pages_translated,
@@ -572,7 +590,7 @@ JOURNEYS = {
     "new-session": j_new_session, "session-phone": j_session_phone, "palette": j_palette, "theme": j_theme,
     "setting-saved": j_setting_saved, "settings-nav": j_settings_nav, "files": j_files, "team": j_team, "nav": j_nav,
     "usage-agents": j_usage_agents, "logs-search": j_logs_search, "turn-details": j_turn_details,
-    "sign-out": j_sign_out,
+    "push-feed": j_push_feed, "sign-out": j_sign_out,
 }
 
 

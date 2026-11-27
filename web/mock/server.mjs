@@ -1442,6 +1442,9 @@ R('POST', '/api/sessions/open', ({ body }) => {
 // the phones that get the notifications (webpush.py): one, so the per-session switch shows
 const PUSH_DEVICES = [{ id: 'demo-phone', label: 'Chrome · Android', at: Date.now() / 1000 - 86400 }]
 R('GET', '/api/push/devices', () => PUSH_DEVICES)
+const FEED_SETTINGS = { telegram: true, push: 'all', health: false, sources: [], hooks: [], kinds: [], rules: ['auto', 'off', 'silent', 'loud'] }
+R('GET', '/api/feed/settings', () => FEED_SETTINGS)
+R('PUT', '/api/feed/settings', ({ body }) => Object.assign(FEED_SETTINGS, body && typeof body.push === 'string' ? { push: body.push } : {}))
 R('GET', '/api/sessions', ({ q }) => {
   const pth = q.get('path')
   const arch = q.get('archived') === '1'
