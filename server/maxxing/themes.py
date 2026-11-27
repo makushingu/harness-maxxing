@@ -629,6 +629,9 @@ def list_themes() -> dict:
     for d in sorted(r.iterdir()) if r.is_dir() else []:
         if not d.is_dir() or d.name.startswith((".", "_")):
             continue
+        if d.is_symlink():              # a linked folder would serve files from anywhere on the server
+            errors.append({"id": d.name, "error": "the theme folder is a link, ignored"})
+            continue
         try:
             t, _, err = load(d)
         except Exception as e:          # one broken folder never hides the others
@@ -644,7 +647,7 @@ def list_themes() -> dict:
 
 
 def get(tid: str) -> dict | None:
-    if not ID_RE.fullmatch(tid) or not (root() / tid).is_dir():
+    if not ID_RE.fullmatch(tid) or not (root() / tid).is_dir() or (root() / tid).is_symlink():
         return None
     t, _, _ = load(root() / tid)
     return t
