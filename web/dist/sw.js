@@ -12,8 +12,8 @@
  * POST /api/push/pending (same origin, the app's cookie) what to show, one notification per session or per event of
  * the Notifications feed (with its Allow / Deny buttons when it waits for an answer); a tap opens it.
  */
-const VERSION = "fff6ac0d3e50"
-const PRECACHE = ["/assets/index-VJsul38o.js","/assets/rolldown-runtime-XKyaHtl9.js","/assets/vendor-react-BNCMh3YF.js","/assets/ui-CgrseF5p.js","/assets/react-DurwoXPM.js","/assets/middleware-CpWMw2yu.js","/assets/preload-helper-7y9sWmk5.js","/assets/vendor-query-kkOOQXZY.js","/assets/media-DO2bnQEv.js","/assets/pwa-Ijo3mTN0.js","/assets/queries-zmKiT-dV.js","/assets/files-BN-tfyBL.js","/assets/toast-dCesaWDZ.js","/assets/vendor-ui-DwJrUN99.js","/assets/upload-_2k2uj8J.js","/assets/createLucideIcon-BrI7woTs.js","/assets/utils-CbJjB46A.js","/assets/vendor-router-C6VFWG_N.js","/assets/spinner-XpnlRkeZ.js","/assets/chevron-right-5zDIIcRL.js","/assets/check-CEbXaWsJ.js","/assets/sheet-drag-Buo75ihO.js","/assets/bot-DnwIIIL3.js","/assets/git-branch-B1B5L3Ao.js","/assets/x-BEKxJziG.js","/assets/folder-open-Dr4SbNQW.js","/assets/index-BsDPzanP.css","/assets/inter-latin-wght-normal-Dx4kXJAl.woff2"]
+const VERSION = "90973b1f6238"
+const PRECACHE = ["/assets/index-DhNlwpyX.js","/assets/rolldown-runtime-XKyaHtl9.js","/assets/vendor-react-BNCMh3YF.js","/assets/ui-CgrseF5p.js","/assets/react-DurwoXPM.js","/assets/middleware-CpWMw2yu.js","/assets/preload-helper-7y9sWmk5.js","/assets/vendor-query-kkOOQXZY.js","/assets/media-DO2bnQEv.js","/assets/pwa-Ijo3mTN0.js","/assets/queries-zmKiT-dV.js","/assets/files-BN-tfyBL.js","/assets/toast-dCesaWDZ.js","/assets/vendor-ui-DwJrUN99.js","/assets/upload-EG1nTm_D.js","/assets/createLucideIcon-BrI7woTs.js","/assets/utils-CbJjB46A.js","/assets/vendor-router-C6VFWG_N.js","/assets/spinner-XpnlRkeZ.js","/assets/chevron-right-5zDIIcRL.js","/assets/check-CEbXaWsJ.js","/assets/sheet-drag-Buo75ihO.js","/assets/bot-DnwIIIL3.js","/assets/git-branch-B1B5L3Ao.js","/assets/x-BEKxJziG.js","/assets/folder-open-Dr4SbNQW.js","/assets/index-BsDPzanP.css","/assets/inter-latin-wght-normal-Dx4kXJAl.woff2"]
 const SHELL = `mx-shell-${VERSION}`
 const ASSETS = `mx-assets-${VERSION}`
 const OFFLINE = '/offline.html'
@@ -49,8 +49,31 @@ self.addEventListener('message', (event) => {
 
 const bypass = (url) => url.pathname.startsWith('/api/') || url.pathname === '/api' || url.pathname.startsWith('/ext/') || url.pathname === '/sw.js'
 
+// Shared to the installed app from another one (manifest share_target: a photo, a file, a link, a text): kept in a
+// cache of this browser, then the app opens a new session with it (web/src/pwa/share.ts). Nothing is sent before the
+// user sends the message.
+const SHARE = 'mx-share'
+const keepShare = async (req) => {
+  try {
+    const form = await req.formData()
+    const files = form.getAll('files').filter((f) => f && typeof f === 'object' && 'name' in f).slice(0, 10)
+    const words = ['title', 'text', 'url'].map((k) => String(form.get(k) || '').trim()).filter((v, i, a) => v && a.indexOf(v) === i)
+    await caches.delete(SHARE)
+    const cache = await caches.open(SHARE)
+    for (let i = 0; i < files.length; i++) await cache.put(`/__share/${i}`, new Response(files[i]))
+    await cache.put('/__share/meta', new Response(JSON.stringify({ text: words.join('\n'), files: files.map((f) => ({ name: f.name || 'file', type: f.type || '' })) })))
+  } catch (e) {
+    /* nothing kept: the app opens anyway */
+  }
+  return Response.redirect('/sessions?shared=1', 303)
+}
+
 self.addEventListener('fetch', (event) => {
   const req = event.request
+  if (req.method === 'POST' && new URL(req.url).origin === self.location.origin && new URL(req.url).pathname === '/share') {
+    event.respondWith(keepShare(req))
+    return
+  }
   if (req.method !== 'GET') return
   const url = new URL(req.url)
   if (url.origin !== self.location.origin || bypass(url)) return
