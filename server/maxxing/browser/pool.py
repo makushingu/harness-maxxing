@@ -30,6 +30,7 @@ import shutil
 import stat
 import time
 from pathlib import Path
+from typing import BinaryIO
 
 from .. import browser, bus, config
 from . import cdm, domains, exits, navs, replays, rules, unit
@@ -1012,8 +1013,9 @@ def trail_text(trail: list[dict]) -> str:
 
 
 # ---- files given to a page ---------------------------------------------------------------------------------------
-def stage(b: Browser, name: str, data: bytes | None = None, src: Path | None = None) -> str:
+def stage(b: Browser, name: str, data: bytes | None = None, src: BinaryIO | None = None) -> str:
     """Copy a file into the profile's uploads folder (emptied at each start); returns its path as Chromium sees it.
+    `src` is a file already opened and checked by the caller: at most UPLOAD_MAX bytes of it are copied (413 above).
     run/<profile> belongs to the browser's user, who could put a link in place of `uploads`: every step goes through
     folders opened without following links, `uploads` and below belong to the server (the browser's group reads)."""
     ids = None if unit._direct() else unit.user_ids()
@@ -1044,8 +1046,13 @@ def stage(b: Browser, name: str, data: bytes | None = None, src: Path | None = N
         fd = os.open(safe, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o640, dir_fd=d)
         with os.fdopen(fd, "wb") as out:
             if src is not None:
-                with open(src, "rb") as f:
-                    shutil.copyfileobj(f, out)
+                left = UPLOAD_MAX + 1                           # the file may grow after the caller's check
+                while left and (chunk := src.read(min(left, 1 << 20))):
+                    out.write(chunk)
+                    left -= len(chunk)
+                if not left:
+                    os.unlink(safe, dir_fd=d)
+                    raise browser.BrowserError(413, "upload", f"{safe} is larger than {UPLOAD_MAX // 1024 // 1024} MB.")
             else:
                 out.write(data or b"")
             os.fchmod(out.fileno(), 0o640)
@@ -1069,15 +1076,27 @@ def claude_file(b: Browser, owner_path: str, raw: str) -> str:
         raise browser.BrowserError(403, "upload", "Files can only be given to a page from a project or topic folder.")
     root = (config.workspace() / rel).resolve()
     p = Path(raw).expanduser()
-    p = (p if p.is_absolute() else (config.workspace() / owner_path / p)).resolve()
+    try:
+        p = (p if p.is_absolute() else (config.workspace() / owner_path / p)).resolve()
+    except OSError:                                         # a link removed while it is read
+        raise browser.BrowserError(404, "upload", f"No such file: {raw}") from None
     if not p.is_relative_to(root):
         raise browser.BrowserError(403, "upload", f"Only files of this folder ({root}) can be given to a page: copy the "
                                                   "file there first.")
-    if not p.is_file():
-        raise browser.BrowserError(404, "upload", f"No such file: {p}")
-    if p.stat().st_size > UPLOAD_MAX:
-        raise browser.BrowserError(413, "upload", f"{p.name} is larger than {UPLOAD_MAX // 1024 // 1024} MB.")
-    return stage(b, p.name, src=p)
+    try:            # opened once, then checked on the descriptor: a folder of the path swapped for a link in between
+        fd = os.open(p, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)    # cannot carry another file
+    except OSError:
+        raise browser.BrowserError(404, "upload", f"No such file: {p}") from None
+    with os.fdopen(fd, "rb") as f:
+        st = os.fstat(f.fileno())
+        if not Path(os.readlink(f"/proc/self/fd/{f.fileno()}")).is_relative_to(root):
+            raise browser.BrowserError(403, "upload", f"Only files of this folder ({root}) can be given to a page: copy "
+                                                      "the file there first.")
+        if not stat.S_ISREG(st.st_mode):
+            raise browser.BrowserError(404, "upload", f"No such file: {p}")
+        if st.st_size > UPLOAD_MAX:
+            raise browser.BrowserError(413, "upload", f"{p.name} is larger than {UPLOAD_MAX // 1024 // 1024} MB.")
+        return stage(b, p.name, src=f)
 
 
 def _error(text: str) -> dict:

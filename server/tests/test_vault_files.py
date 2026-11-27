@@ -547,6 +547,34 @@ def test_a_put_killed_between_metadata_and_rename_never_serves_stale_or_phantom_
     config.set_secret("vault_files", files)                 # the state a kill right after the metadata save leaves
     assert vault_files.read("OLD_FILE") is None              # the old bytes are not the entry's: not served
     assert vault_files.read("NEW_FILE") is None
-    assert [f["name"] for f in vault_files.list_files()] == ["OLD_FILE"]
+    assert vault_files.list_files() == []                    # nor listed as if the new bytes were stored
     vault_files.put("NEW_FILE", b"again", create=True)       # the phantom entry does not block the name
     assert vault_files.read("NEW_FILE") == b"again"
+    assert "OLD_FILE" not in config.load_secrets()["vault_files"]    # dropped with its stale bytes by the sweep
+    assert not (vault_files.files_dir() / "OLD_FILE").exists()
+
+
+def test_a_rotation_killed_before_the_rename_never_exposes_the_old_secret(mx):
+    vault_files.put("SVC_JSON", b"old-secret", expose=True)
+    pid = os.fork()
+    if pid == 0:                                            # the put is killed right after saving the metadata
+        real = os.replace
+
+        def kill(src, dst, *a, **k):
+            if str(dst).startswith(str(vault_files.files_dir())):
+                os._exit(9)
+            return real(src, dst, *a, **k)
+        os.replace = kill
+        try:
+            vault_files.put("SVC_JSON", b"new-secret")
+        finally:
+            os._exit(0)
+    os.waitpid(pid, 0)
+    assert "SVC_JSON" not in vault_files.exposed_files_env()     # the path would serve the old bytes
+    assert vault_files.path_of("SVC_JSON") is None and vault_files.list_files() == []
+    with pytest.raises(vault.VaultError) as e:               # a metadata-only put asks for the content again
+        vault_files.put("SVC_JSON", note="edited")
+    assert e.value.code == "file_required" and vault_files.path_of("SVC_JSON") is None
+    vault_files.put("SVC_JSON", b"new-secret", expose=True)  # putting the content again repairs it
+    assert vault_files.read("SVC_JSON") == b"new-secret"
+    assert vault_files.exposed_files_env() == {"SVC_JSON": str(vault_files.files_dir() / "SVC_JSON")}

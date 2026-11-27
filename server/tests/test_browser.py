@@ -1439,6 +1439,52 @@ def test_claude_gives_a_page_only_files_of_its_folder(tmp_path, monkeypatch):
             pool_mod.claude_file(B(), "projects/acme/topics/blog", bad)
 
 
+def test_a_folder_swapped_for_a_link_never_carries_an_outside_file_to_a_page(tmp_path, monkeypatch):
+    import io
+    import threading
+    from maxxing import browser, config
+    from maxxing.browser import pool as pool_mod
+    monkeypatch.setenv("MAXXING_BROWSER_LAUNCH", "direct")
+    ws = tmp_path / "ws"
+    topic = ws / "projects" / "acme" / "topics" / "blog"
+    (topic / "real").mkdir(parents=True)
+    (topic / "real" / "f.txt").write_text("inside")
+    (tmp_path / "outside").mkdir()
+    (tmp_path / "outside" / "f.txt").write_text("SECRET")
+    monkeypatch.setattr(config, "workspace", lambda: ws)
+
+    class B:
+        run = tmp_path / "run" / "main"
+    d, real, stop = topic / "d", topic / "real", threading.Event()
+
+    def swap():                         # the folder of the path, then a link to elsewhere, then the folder again
+        while not stop.is_set():
+            os.rename(d, real)
+            os.symlink(tmp_path / "outside", d)
+            os.unlink(d)
+            os.rename(real, d)
+    os.rename(real, d)
+    t = threading.Thread(target=swap)
+    t.start()
+    leaked = 0
+    try:
+        for _ in range(3000):
+            try:
+                out = pool_mod.claude_file(B(), "projects/acme/topics/blog", "d/f.txt")
+            except browser.BrowserError:
+                continue
+            leaked += Path(out).read_text() == "SECRET"
+    finally:
+        stop.set()
+        t.join()
+    assert leaked == 0
+    monkeypatch.setattr(pool_mod, "UPLOAD_MAX", 10)       # a file that grew after the size check: never copied whole
+    with pytest.raises(browser.BrowserError) as e:
+        pool_mod.stage(B(), "big.bin", src=io.BytesIO(b"x" * 11))
+    assert e.value.status == 413
+    assert not any(f.is_file() and f.name == "big.bin" for f in (B.run / "uploads").rglob("*"))
+
+
 def test_an_agent_uses_its_project_profile_unless_it_chooses_another(client, topic, mx):
     from maxxing import agents, browser
     _agent(client)
