@@ -186,3 +186,14 @@ def test_a_hand_edited_registration_time_does_not_break_the_devices(client):
     assert [d["label"] for d in webpush.devices()] == ["Phone", "Tablet"]
     r = client.get("/api/push/devices")
     assert r.status_code == 200 and len(r.json()) == 2
+
+
+def test_a_device_with_an_invalid_port_does_not_stop_the_others(sent, client):
+    client.post("/api/push/devices", json={"endpoint": FCM})
+    p = webpush._path()
+    st = json.loads(p.read_text())
+    st["devices"]["bad0000000000000"] = {"endpoint": "https://fcm.googleapis.com:abc/x", "label": "", "at": 0}
+    p.write_text(json.dumps(st))
+    assert webpush.notify("t", "b", "/") == 1
+    assert [c["endpoint"] for c in sent] == [FCM]
+    assert client.post("/api/push/devices", json={"endpoint": "https://fcm.googleapis.com:99999/x"}).status_code == 400

@@ -218,9 +218,13 @@ def device_id(endpoint: str) -> str:
 def allowed_endpoint(endpoint: object) -> bool:
     if not isinstance(endpoint, str) or len(endpoint) > 1000:
         return False
-    u = urlsplit(endpoint)
+    try:
+        u = urlsplit(endpoint)
+        port = u.port                       # ValueError for "host:abc" or a port out of range (a hand-edited file)
+    except ValueError:
+        return False
     host = (u.hostname or "").lower()
-    if u.scheme != "https" or u.username or u.password or u.port not in (None, 443) or not host:
+    if u.scheme != "https" or u.username or u.password or port not in (None, 443) or not host:
         return False
     return any(host == h or host.endswith("." + h) for h in PUSH_HOSTS)
 
