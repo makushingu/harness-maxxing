@@ -28,9 +28,11 @@ agent's only its domains (`maxxing agents set PATH domains='["example.com"]'`).
 """
 from __future__ import annotations
 
+import contextlib
 import json
 import shutil
 import sys
+from pathlib import Path
 
 from . import cli
 
@@ -83,12 +85,17 @@ def _configure(p) -> None:
 
 
 def _path(raw: str) -> str:
-    p = raw.strip().strip("/")
+    from . import agents, browser, config
+    p = raw.strip()
+    if p.startswith("/"):                                  # the full folder: its path in the workspace
+        ws = config.workspace().resolve()
+        with contextlib.suppress(ValueError):
+            p = Path(p).resolve().relative_to(ws).as_posix()
+    p = p.strip("/")
     if not p.startswith("projects/"):
         parts = p.split("/")
         p = {1: f"projects/{parts[0]}", 2: f"projects/{parts[0]}/topics/{parts[-1]}"}.get(len(parts)) or (
             f"projects/{parts[0]}/topics/{parts[1]}/agents/{parts[2]}" if len(parts) == 3 else p)
-    from . import agents, browser, config
     owner = browser.owner_of(p)
     if not owner or (owner.startswith("agent:") and not agents.exists(p)) or \
             (not owner.startswith("agent:") and not (config.workspace() / p).is_dir()):

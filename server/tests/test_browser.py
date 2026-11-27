@@ -2072,3 +2072,15 @@ def test_dot_folders_are_not_projects_nor_topics(mx):
         except SystemExit as e:
             rc = e.code
         assert rc not in (0, None), args
+
+
+def test_cli_takes_the_full_folder_as_its_help_says(mx, capsys):
+    from maxxing import cli
+    (mx["ws"] / T).mkdir(parents=True)
+    assert cli.main(["browser", "show", str(mx["ws"] / "projects/acme")]) == 0
+    assert cli.main(["browser", "set", str(mx["ws"] / T) + "/", "on"]) == 0
+    try:
+        rc = cli.main(["browser", "show", str(mx["tmp"] / "elsewhere/projects/acme")])
+    except SystemExit as e:
+        rc = e.code
+    assert rc not in (0, None)
