@@ -417,3 +417,14 @@ def test_the_memory_files_list_shows_whole_paths_on_a_phone():
     src = (WEB / "pages" / "settings" / "sections" / "Memory.tsx").read_text()
     cell = re.search(r'<td className="([^"]*)" title=\{mask\(f\.path', src)
     assert cell and {"max-md:whitespace-normal", "max-md:[overflow-wrap:anywhere]"} <= set(cell[1].split())
+
+
+def test_copy_bar_merge_button_is_capped_so_the_menu_stays_on_screen():
+    # "Merge into <base>" with a long base (release/2026.11-payments-hotfix) was 324 px in a shrink-0 block: on a
+    # phone the bar overflowed, the ⋯ menu (Update, Discard) went off screen and the branch fell to 0 px
+    src = (WEB / "features" / "code" / "CopyBar.tsx").read_text()
+    m = re.search(r'<Button [^\n]*?className="([^"]*)"[^\n]*data-testid="copy-merge">\s*<GitMerge />\s*<span className="([^"]*)">', src)
+    assert m, "the merge button's label is not in its own span"
+    assert re.search(r"\bmax-w-\d+\b", m[1]) and "truncate" in m[2].split() and "min-w-0" in m[2].split()
+    branch = re.search(r'<span className="inline-flex ([^"]*) items-center gap-1 font-mono text-\[11px\]">\s*<GitBranch', src)
+    assert branch and re.search(r"\bmin-w-(?!0\b)\d+\b", branch[1]), "the copy's branch can shrink to nothing"

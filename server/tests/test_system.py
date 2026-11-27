@@ -211,6 +211,14 @@ def test_logs_whitelist(client, monkeypatch):
     assert client.get("/api/system/logs?lines=0").status_code == 422
 
 
+def test_logs_redact_secrets(client, monkeypatch):
+    key, tok = "sk-ant-api03-" + "A" * 40, "ghp_" + "b" * 36
+    monkeypatch.setattr(system_api.subprocess, "run", lambda cmd, **kw:
+                        types.SimpleNamespace(returncode=0, stdout=f"curl -H x-api-key: {key}\ntoken {tok}\n", stderr=""))
+    body = client.get("/api/system/logs?unit=maxxing-turn-abc").text
+    assert key not in body and tok not in body and "<redacted>" in body
+
+
 def test_version(client, monkeypatch):
     from maxxing import cmd_core
     monkeypatch.setattr(cmd_core, "_current_branch", lambda: "main")

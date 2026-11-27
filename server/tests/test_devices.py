@@ -904,6 +904,16 @@ def test_a_field_of_the_wrong_type_in_devices_json_breaks_nothing(mx, bad):
     assert store.new_invite("linux")["code"]
 
 
+@pytest.mark.parametrize("scope", ["project:a*", {"*": 1}, [["*"], 5]])
+def test_a_scope_of_the_wrong_type_opens_the_device_to_no_project(mx, scope):
+    from maxxing import devices
+    dev = {"id": "dev_0123abcd", "confirmed": True, "name": "pc", "token_hash": "h", "scope": scope}
+    store._path().parent.mkdir(parents=True, exist_ok=True)
+    store._path().write_text(json.dumps({"devices": [dev]}))
+    got = store.load()["devices"][0]
+    assert got["scope"] == [] and not devices.in_scope(got, "projects/b/topics/t")
+
+
 def test_devices_json_with_entries_that_cannot_be_read_is_copied_before_it_is_rewritten(mx):
     dev = {"id": "dev_0123abcd", "confirmed": True, "name": "pc", "token_hash": "h"}
     store._path().parent.mkdir(parents=True, exist_ok=True)

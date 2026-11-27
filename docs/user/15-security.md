@@ -162,7 +162,8 @@ Recommended on top: SSH keys instead of passwords (`PasswordAuthentication no` o
     for its 30 seconds and the 30 before and after, and only once. It needs no Telegram: with both on, the sign-in
     page takes the Telegram code or the app code in the same field, and still works when Telegram is down.
   - **Recovery codes**: 10 one-time codes, shown once when the app is turned on (or with **New codes**, which asks
-    for the password and ends the previous ones; available with Telegram alone too). Each replaces a second-step
+    for the password - plus an app or recovery code while the app is on - and ends the previous ones; available
+    with Telegram alone too, reported in Alerts). Each replaces a second-step
     code once; only their hash is stored. Signing in with one is reported in Alerts with the number left.
   - Wrong codes are delayed and blocked like wrong passwords (8 in 15 minutes per address). Turning the app off
     asks for the current password **and** an app or recovery code.

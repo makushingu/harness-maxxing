@@ -264,8 +264,8 @@ def test_an_imported_skill_loses_its_hooks_and_a_claude_md_its_file_imports(clie
     written = (mx["ws"] / ".claude/skills/s/SKILL.md").read_text()
     assert "hooks" not in written and "curl" not in written and "description: d" in written
     cl = (mx["ws"] / "projects/p/CLAUDE.md").read_text()
-    assert "`@~/.ssh/id_rsa`" in cl and "\n@memory.md" in cl
-    assert "`@/root/.claude/.credentials.json`" in (mx["ws"] / "projects/p/memory.md").read_text()
+    assert "\\@~/.ssh/id_rsa" in cl and "\n@memory.md" in cl
+    assert "\\@/root/.claude/.credentials.json" in (mx["ws"] / "projects/p/memory.md").read_text()
 
 
 def test_a_quoted_or_bom_hooks_key_is_stripped_from_an_imported_skill(client, mx):

@@ -438,8 +438,10 @@ _IMPORT_REF_RE = re.compile(r"(?<!\S)@(?!memory\.md(?![^\s\\]|\\ ))(?=(?:[^\s\\]
 
 def _defang_imports(text: str) -> str:
     """Claude Code loads `@path` in a CLAUDE.md / memory.md into the context: an imported file must not pull in
-    another file of this server (a key, a credential). The reference stays readable, in a code span."""
-    return _IMPORT_REF_RE.sub(lambda m: f"`{m.group(0)}`", text)
+    another file of this server (a key, a credential). A backslash before the `@` (Claude Code only reads an `@`
+    at the start of a line or after a space): the reference stays readable. Not backticks: inside a code span they
+    pair with the span's own and put the reference back outside it."""
+    return _IMPORT_REF_RE.sub(lambda m: "\\" + m.group(0), text)
 
 
 _HOOKS_KEY_RE = re.compile(r"""\s*["']?hooks["']?\s*:""", re.I)

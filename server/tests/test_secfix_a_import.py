@@ -28,9 +28,16 @@ def test_a_plain_front_matter_is_kept_whole():
 
 def test_an_import_with_an_escaped_space_is_defanged():
     d = importer._defang_imports
-    assert d("@a\\ b/../../../root/.claude/.credentials.json") == "`@a\\ b/../../../root/.claude/.credentials.json`"
-    assert d("see @memory.md\\ /../../x.json") == "see `@memory.md\\ /../../x.json`"
+    assert d("@a\\ b/../../../root/.claude/.credentials.json") == "\\@a\\ b/../../../root/.claude/.credentials.json"
+    assert d("see @memory.md\\ /../../x.json") == "see \\@memory.md\\ /../../x.json"
     assert d("@memory.md\nmail a@b.com, ask @romain") == "@memory.md\nmail a@b.com, ask @romain"
+
+
+def test_an_import_inside_inline_code_is_not_put_back_outside_it():
+    d = importer._defang_imports
+    out = d("x `y @/etc/passwd z` w")
+    assert out == "x `y \\@/etc/passwd z` w" and d(out) == out
+    assert importer._IMPORT_REF_RE.search(out) is None
 
 
 def test_a_skill_inside_a_topic_loses_its_hooks_and_local_notes_their_imports(client, mx):
@@ -43,8 +50,8 @@ def test_a_skill_inside_a_topic_loses_its_hooks_and_local_notes_their_imports(cl
     t = mx["ws"] / "projects/p/topics/t"
     written = (t / ".claude/skills/x/SKILL.md").read_text()
     assert "hooks" not in written and "curl" not in written and "description: d" in written
-    assert (t / "CLAUDE.local.md").read_text() == "`@~/.ssh/id_rsa`\n"
-    assert "`@/root/.claude/.credentials.json`" in (t / ".claude/rules/r.md").read_text()
+    assert (t / "CLAUDE.local.md").read_text() == "\\@~/.ssh/id_rsa\n"
+    assert "\\@/root/.claude/.credentials.json" in (t / ".claude/rules/r.md").read_text()
 
 
 def test_an_agent_group_is_never_planted_by_an_import(client, mx):

@@ -78,7 +78,7 @@ export function useTotpOff() {
 }
 
 export function useNewRecoveryCodes() {
-  return useMut((password: string) => api.post<RecoveryCodes>('/api/auth/recovery-codes', { password }), { invalidate: [secondFactorKey], errorToast: false })
+  return useMut((body: { password: string; code?: string }) => api.post<RecoveryCodes>('/api/auth/recovery-codes', body), { invalidate: [secondFactorKey], errorToast: false })
 }
 
 export function useSignedInBrowsers() {

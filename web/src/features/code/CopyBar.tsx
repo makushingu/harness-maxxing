@@ -84,7 +84,7 @@ export function CopyBar({ session, running, onAsk }: { session: Session; running
           </span>
         }
       >
-        <span className="inline-flex min-w-0 items-center gap-1 font-mono text-[11px]">
+        <span className="inline-flex min-w-20 items-center gap-1 font-mono text-[11px]">
           <GitBranch className="size-3.5 shrink-0 text-primary" />
           <span className="truncate"><Sensitive>{s?.branch || wt.branch}</Sensitive></span>
         </span>
@@ -144,14 +144,14 @@ export function CopyBar({ session, running, onAsk }: { session: Session; running
           </Button>
         )}
         {main === 'merge' && (
-          <Button size="sm" variant="outline" className="h-7" onClick={() => setEnd('merge')} disabled={running || (!s?.ahead && !dirty)} data-testid="copy-merge">
+          <Button size="sm" variant="outline" className="h-7 max-w-40" onClick={() => setEnd('merge')} disabled={running || (!s?.ahead && !dirty)} title={t('copy.mergeInto', { base: s?.base ?? wt.base })} data-testid="copy-merge">
             <GitMerge />
-            {t('copy.mergeInto', { base: s?.base ?? wt.base })}
+            <span className="min-w-0 truncate">{t('copy.mergeInto', { base: s?.base ?? wt.base })}</span>
           </Button>
         )}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button size="icon-sm" variant="ghost" className="size-7" aria-label={t('copy.finish')} disabled={running}>
+            <Button size="icon-sm" variant="ghost" className="size-7 shrink-0" aria-label={t('copy.finish')} disabled={running}>
               <MoreHorizontal />
             </Button>
           </DropdownMenuTrigger>

@@ -437,8 +437,9 @@ def _keep(path: str, acc_id: str, folder: str, mails: list[dict], bodies: dict[i
     """The mails (headers + the texts shown), never a text: the turn's text is built again when it starts. `at`:
     the date of a turn kept again (still busy), so the day's limit of `_drain` is not pushed back on every check."""
     f = _pending_file()
-    mails = [{k: m.get(k) for k in ROW_KEYS} | ({"body": bodies[int(m["uid"])]} if int(m["uid"]) in bodies else {})
-             for m in mails]
+    # a turn shows at most TEXT_CHARS of a text (one more char: event_text still marks it cut), of TEXT_MAILS mails
+    mails = [{k: m.get(k) for k in ROW_KEYS} | ({"body": bodies[int(m["uid"])][:TEXT_CHARS + 1]}
+                                                 if int(m["uid"]) in bodies else {}) for m in mails]
     with _pending_lock:
         rows = config.read_json(f, default=[]) or []
         rows = [r for r in rows if isinstance(r, dict)] if isinstance(rows, list) else []   # a damaged row is dropped
@@ -448,12 +449,17 @@ def _keep(path: str, acc_id: str, folder: str, mails: list[dict], bodies: dict[i
                 known = {int(m["uid"]) for m in r["mails"]}
                 add = [m for m in mails if int(m["uid"]) not in known]
                 r["mails"] = ((r.get("mails") or []) + add)[-PENDING_MAILS:]
+                for m in r["mails"][TEXT_MAILS:]:
+                    m.pop("body", None)
                 r["prompt"] = prompt                # the trigger's instructions as they are now
                 if add:
                     r["at"] = time.time()           # the day's limit counts from the newest mail
                 break
         else:
-            rows.append({"agent": path, "account": acc_id, "folder": folder, "mails": mails[-PENDING_MAILS:],
+            mails = mails[-PENDING_MAILS:]
+            for m in mails[TEXT_MAILS:]:
+                m.pop("body", None)
+            rows.append({"agent": path, "account": acc_id, "folder": folder, "mails": mails,
                          "prompt": prompt, "at": time.time() if at is None else at})
         f.parent.mkdir(parents=True, exist_ok=True)
         config.write_json(f, rows[-50:])

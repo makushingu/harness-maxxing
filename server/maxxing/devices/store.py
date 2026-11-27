@@ -95,12 +95,17 @@ def load() -> dict:
         d = {}
     raw = {k: d.get(k) for k in ("devices", "invites")}
     d["devices"] = [x for x in _list(d.get("devices")) if isinstance(x, dict) and ID_RE.match(str(x.get("id") or ""))]
+    bad_scope = False
     for x in d["devices"]:
         if not isinstance(x.get("name"), str):
             x["name"] = _text(x.get("name"), NAME_MAX)
+        if "scope" in x:                               # `"*" in scope` on a text or a dict would match a part of it
+            scope = [v for v in _list(x["scope"]) if isinstance(v, str)]
+            if scope != x["scope"]:
+                x["scope"], bad_scope = scope, True
     d["invites"] = [x for x in _list(d.get("invites")) if isinstance(x, dict) and x.get("code_hash")]
     # entries left out (a dict of devices instead of a list...): save() keeps a copy of the file before writing it
-    if any(v and (not isinstance(v, list) or len(v) != len(d[k])) for k, v in raw.items()):
+    if bad_scope or any(v and (not isinstance(v, list) or len(v) != len(d[k])) for k, v in raw.items()):
         d["_dropped"] = True
     return d
 

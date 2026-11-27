@@ -51,6 +51,11 @@ class TotpOffIn(BaseModel):
     code: str
 
 
+class RecoveryIn(BaseModel):
+    password: str
+    code: str | None = None
+
+
 def _check_strength(pw: str) -> None:
     if len(pw) < security.MIN_PASSWORD:
         raise HTTPException(400, detail={"error": "weak_password",
@@ -238,6 +243,8 @@ async def second_factor():
 async def totp_begin(body: CurrentIn, request: Request):
     """Start enrolling an authenticator app: the secret is shown this once; POST /totp/confirm turns it on."""
     await _check_current(request, body.password)
+    if twofactor.totp_on():                                     # replacing the secret would skip /totp/off's code
+        raise HTTPException(409, detail={"error": "already_on", "message": "Turn the authenticator app off first"})
     secret = await asyncio.to_thread(twofactor.totp_begin)
     return {"secret": secret, "uri": twofactor.totp_uri(secret, request.url.hostname or "")}
 
@@ -263,12 +270,17 @@ async def totp_off(body: TotpOffIn, request: Request):
 
 
 @router.post("/recovery-codes", dependencies=[Depends(security.require_auth)])
-async def recovery_codes(body: CurrentIn, request: Request):
-    """New recovery codes (shown this once); the old ones stop working."""
+async def recovery_codes(body: RecoveryIn, request: Request):
+    """New recovery codes (shown this once); the old ones stop working. With the app on, an app or recovery code
+    too: otherwise the password and a cookie would mint codes that then turn the app off."""
     await _check_current(request, body.password)
     if not twofactor.required():
         raise HTTPException(409, detail={"error": "no_second_factor", "message": "Turn on two-step sign-in first"})
-    return {"recovery_codes": await asyncio.to_thread(twofactor.new_recovery_codes)}
+    if twofactor.totp_on():
+        await _check_second(request, twofactor.verify_second, body.code or "")
+    codes = await asyncio.to_thread(twofactor.new_recovery_codes)
+    _alert(request, "New recovery codes made for sign-in", loud=True)
+    return {"recovery_codes": codes}
 
 
 @router.get("/devices", dependencies=[Depends(security.require_auth)])

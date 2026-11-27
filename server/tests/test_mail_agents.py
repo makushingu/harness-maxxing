@@ -485,6 +485,20 @@ def test_mail_kept_for_a_busy_agent_follows_its_rights_now(client, box, monkeypa
     assert poll.retry_pending() == 0 and config.read_json(poll._pending_file(), default=[]) == []
 
 
+def test_mails_kept_for_a_busy_agent_keep_only_the_text_a_turn_shows(client):
+    """20 checks of 10 long mails: pending.json keeps the TEXT_CHARS a turn shows of the first TEXT_MAILS mails."""
+    for k in range(20):
+        rows = [{"uid": k * 10 + i + 1, "from": {"email": "a@b.c"}, "subject": "News"} for i in range(10)]
+        poll._keep(A, "acc", "INBOX", rows, {r["uid"]: "x" * 250_000 for r in rows}, "p")
+    kept = config.read_json(poll._pending_file(), default=[])
+    assert poll._pending_file().stat().st_size < 1_000_000
+    mails = kept[0]["mails"]
+    assert len(mails) == 200 and all(len(m["body"]) == poll.TEXT_CHARS + 1 for m in mails[:poll.TEXT_MAILS])
+    assert not any("body" in m for m in mails[poll.TEXT_MAILS:])
+    bodies = {int(m["uid"]): m["body"] for m in mails[:poll.TEXT_MAILS]}
+    assert "[... cut" in poll.event_text({"id": "acc", "address": "me@b.c", "name": "Me"}, "INBOX", mails[:poll.TEXT_MAILS], bodies)
+
+
 def test_a_still_busy_agent_never_pushes_back_the_day_limit(client, box, monkeypatch):
     _grant(client, rights=["read"], trigger={"enabled": True})
     monkeypatch.setattr(agents, "fire", lambda path, **kw: {"started": False, "reason": "busy"})

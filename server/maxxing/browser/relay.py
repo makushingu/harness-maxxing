@@ -70,6 +70,13 @@ def no_cookies(text: str) -> str:
     return json.dumps({**m, "params": _scrub(m["params"])})
 
 
+def cookies_out(text: str) -> str:
+    """no_cookies() on the messages that may carry one: the test ignores case (HTTP/1.1 keeps the header's case,
+    SET-COOKIE included); json.loads only for those, not for every screencast frame."""
+    low = text.lower()
+    return no_cookies(text) if "ookie" in low or "headerstext" in low else text
+
+
 async def pump(sock: Path, path: str, sites: Callable[[], list[str] | None],
                recv: Callable[[], Awaitable[str | None]], send: Callable[[str], Awaitable[None]],
                view=None, wait_tab: Callable[[str], Awaitable[str | None]] | None = None) -> None:
@@ -82,8 +89,7 @@ async def pump(sock: Path, path: str, sites: Callable[[], list[str] | None],
         try:
             async for msg in up:
                 text = msg if isinstance(msg, str) else msg.decode()
-                if "ookie" in text or "headersText" in text:
-                    text = no_cookies(text)
+                text = cookies_out(text)
                 if view is not None:
                     try:
                         m = json.loads(text)
