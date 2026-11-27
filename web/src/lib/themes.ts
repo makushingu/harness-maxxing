@@ -36,7 +36,11 @@ export type ThemeList = { themes: InstalledTheme[]; errors: { id: string; error:
 
 /** What the store keeps of the theme in use: enough to paint it before the app loads. `extra` = its advanced CSS
  *  (empty unless the server says it was checked against this interface), dropped while `themeCssOff`. */
-export type ThemeLook = { id: string; base: Material; mode: 'light' | 'dark' | null; css: string; extra: string; cssState: InstalledTheme['css_state']; ownAccent: boolean; ownSurfaces: boolean; logo: { light: string; dark: string } | null }
+export type ThemeLook = { id: string; base: Material; mode: 'light' | 'dark' | null; css: string; extra: string; cssState: InstalledTheme['css_state']; ownAccent: boolean; ownSurfaces: boolean; logo: { light: string; dark: string } | null; ui?: string }
+
+/** The interface's own stylesheet (Vite hashes its name: it changes exactly when the interface's CSS does). The
+ *  advanced CSS kept by the store is used only on the build it was checked with (index.html does the same). */
+export const uiBuild = (): string => (typeof document === 'undefined' ? '' : (document.querySelector('link[rel="stylesheet"][href^="/assets/"]')?.getAttribute('href') ?? ''))
 
 export const label = (l: Label, lang: string) => (typeof l === 'string' ? l : l[lang] || l.en || Object.values(l)[0] || '')
 
@@ -62,7 +66,7 @@ export function themeLook(t: InstalledTheme): ThemeLook | null {
   const extra = state === 'on' && t.css && ADVANCED_OK(t.css) ? `html[data-theme-id="${t.id}"]{\n${t.css}\n}` : ''
   const lg = t.logo ?? { light: null, dark: null }
   const logo = isThemeFile(lg.light) && isThemeFile(lg.dark) ? { light: lg.light, dark: lg.dark } : null
-  return { id: t.id, base: t.base, mode: t.modes.length === 1 ? t.modes[0] : null, css, extra, cssState: state, ownAccent: t.own_accent, ownSurfaces: t.own_surfaces, logo }
+  return { id: t.id, base: t.base, mode: t.modes.length === 1 ? t.modes[0] : null, css, extra, cssState: state, ownAccent: t.own_accent, ownSurfaces: t.own_surfaces, logo, ui: uiBuild() }
 }
 
 /** Second line of defense behind the server (themes.py _css): nothing that loads, nothing that leaves the scope. */

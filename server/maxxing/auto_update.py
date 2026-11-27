@@ -58,7 +58,12 @@ def _entry(v) -> dict | None:
     if not isinstance(v, dict):
         return None
     at = v.get("at")
-    if not (isinstance(at, (int, float)) and not isinstance(at, bool) and math.isfinite(at)):
+    if not isinstance(at, (int, float)) or isinstance(at, bool):
+        return None
+    try:
+        if not math.isfinite(at):
+            return None
+    except OverflowError:                               # an integer of hundreds of digits is no date either
         return None
     out: dict = {"at": at}
     for k in ("verdict", "target", "version", "result", "why"):   # only the known fields, as text JSON can carry
@@ -172,9 +177,10 @@ def tick(spawn, now: float | None = None) -> str:
     now = time.time() if now is None else now
     if not enabled():
         return "off"
-    d = load()
-    before = d.get("last") if isinstance(d.get("last"), dict) else {}
-    result, why = _decide(spawn, now, d)
+    raw = load()
+    d = {k: e for k in ("tried", "last_check", "last") if (e := _entry(raw.get(k))) is not None}
+    before = d.get("last") or {}                        # rewritten from the cleaned records only: a lone surrogate
+    result, why = _decide(spawn, now, d)                # left as is would fail the UTF-8 write on every pass
     d["last"] = {"at": now, "result": result, **({"why": WHY.get(why, "work")} if why else {})}
     config.write_json(state_file(), d, mode=0o600)
     if (before.get("result"), before.get("why")) != (result, d["last"].get("why")):

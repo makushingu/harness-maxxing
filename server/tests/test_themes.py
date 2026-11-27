@@ -119,6 +119,16 @@ def test_install_list_files_and_remove(mx, client, tmp_path, capsys):
     assert cli.main(["themes", "remove", "dune"]) == 1
 
 
+def test_a_clean_zip_installs_without_source(mx, tmp_path):
+    import zipfile
+    src = _theme(tmp_path / "src", "dune", {"name": "Dune", "base": "solid", "light": {"primary": "#b5651d"}})
+    z = tmp_path / "dune.zip"
+    with zipfile.ZipFile(z, "w") as zf:
+        zf.write(src / "theme.json", "theme.json")
+    assert cli.main(["themes", "install", str(z)]) == 0
+    assert (mx["ws"] / "themes" / "dune" / "theme.json").is_file()
+
+
 def test_solid_wallpaper_is_ignored(tmp_path):
     d = _theme(tmp_path, "ww", {"name": "W", "wallpaper": "w.png"}, {"w.png": b"x"})
     t, warn, _ = themes.load(d)
@@ -253,6 +263,14 @@ def test_advanced_css_cannot_cover_the_app(tmp_path):
     for ok in ["& aside { z-index: 2; opacity: .9 }", "& aside { z-index: auto !important }"]:
         t, warn, _ = themes.load(_theme(tmp_path, "fine", {"name": "F", "css": ok}))
         assert t["css"], (ok, warn)
+
+
+def test_comments_are_removed_but_never_inside_a_string(tmp_path):
+    css = '& aside::before { content: "/*" }\n& aside { opacity: .9 } /* it\'s a note */'
+    t, warn, _ = themes.load(_theme(tmp_path, "str", {"name": "S", "css": css}))
+    assert t["css"] == '& aside::before { content: "/*" }\n& aside { opacity: .9 }', warn
+    t, warn, _ = themes.load(_theme(tmp_path, "open", {"name": "O", "css": '& aside { content: "x" } /* never closed'}))
+    assert t["css"] is None and "css: unclosed comment, ignored" in warn
 
 
 def test_serving_a_theme_image_does_not_read_the_theme_again(mx, monkeypatch, tmp_path):

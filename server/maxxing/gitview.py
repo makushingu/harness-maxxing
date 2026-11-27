@@ -817,14 +817,19 @@ def _gh_send(full: str, path: str, body: dict, method: str = "POST") -> Any:
             r = _client().request(method, github_api() + path, headers=_headers(tok), json=body)
         except httpx.HTTPError as e:
             raise GitError(502, "github_unreachable", f"GitHub unreachable: {type(e).__name__}") from None
-        if r.status_code in (200, 201):
-            return r.json()
         try:
             msg = r.json()
-            text = msg.get("message", "") + "".join(f" - {e.get('message', '')}" for e in msg.get("errors") or []
-                                                     if isinstance(e, dict))
-        except ValueError:
-            text = ""
+        except (ValueError, RecursionError):
+            msg = None
+        if r.status_code in (200, 201):
+            if not isinstance(msg, dict):               # a proxy's HTML page, a list: never a 500
+                raise GitError(502, "github_error", "GitHub sent an unreadable answer")
+            return msg
+        text = ""
+        if isinstance(msg, dict):
+            errs = msg.get("errors")
+            text = str(msg.get("message") or "") + "".join(f" - {e.get('message', '')}" for e in
+                                                           (errs if isinstance(errs, list) else []) if isinstance(e, dict))
         if r.status_code in (401, 403, 404):
             last = GitError(403, "no_write", "no GitHub token can write to this repository (Settings -> Keys)")
             continue
@@ -888,9 +893,19 @@ MERGE_METHODS = ("merge", "squash", "rebase")
 
 
 def _number(n: int) -> int:
-    if not isinstance(n, int) or n < 1 or n > 10**9:
+    if not isinstance(n, int) or isinstance(n, bool) or n < 1 or n > 10**9:
         raise GitError(400, "bad_number", "invalid pull request number")
     return n
+
+
+def _sha(sha: str | None) -> dict:
+    """The head commit a review or a merge is bound to: refused when given but not a commit id, never dropped
+    (dropping it would approve or merge whatever the pull request holds now)."""
+    if sha is None or sha == "":
+        return {}
+    if not isinstance(sha, str) or not SHA_RE.match(sha):
+        raise GitError(400, "bad_sha", "invalid commit id")
+    return {"sha": sha.lower()}
 
 
 def _who(u: dict | None) -> dict:
@@ -994,7 +1009,7 @@ def pull_review(full: str, number: int, event: str, body: str = "", comments: li
         raise GitError(400, "empty", "write something first")
     r = _gh_send(full, f"/repos/{full}/pulls/{n}/reviews",
                  {"event": event, "body": (body or "")[:60000], **({"comments": lines} if lines else {}),
-                  **({"commit_id": sha} if sha and re.fullmatch(r"[0-9a-f]{7,64}", sha) else {})})
+                  **{"commit_id": v for v in _sha(sha).values()}})
     return {"id": r.get("id"), "state": r.get("state"), "url": r.get("html_url")}
 
 
@@ -1003,7 +1018,7 @@ def pull_merge(full: str, number: int, method: str = "squash", sha: str | None =
     if method not in MERGE_METHODS:
         raise GitError(400, "bad_method", "method: merge | squash | rebase")
     r = _gh_send(full, f"/repos/{full}/pulls/{n}/merge",
-                 {"merge_method": method, **({"sha": sha} if sha and SHA_RE.match(sha) else {})}, method="PUT")
+                 {"merge_method": method, **_sha(sha)}, method="PUT")
     return {"merged": bool(r.get("merged")), "sha": r.get("sha"), "message": r.get("message")}
 
 

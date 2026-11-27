@@ -58,7 +58,7 @@ async def pull(repo: str, number: int):
 
 class PullAct(BaseModel):
     repo: str
-    number: int
+    number: int = Field(..., strict=True, ge=1)  # `true` would otherwise be pull request #1
 
 
 class CommentIn(PullAct):

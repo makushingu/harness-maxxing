@@ -2,7 +2,7 @@
 
   maxxing themes list [--json]              installed themes (and folders that are not usable)
   maxxing themes check <folder> [--json]    read a theme like the interface will: what it sets, what is dropped and why
-  maxxing themes install <folder> [--force] check it, then copy it into <workspace>/themes/<id>/
+  maxxing themes install <folder|zip> [--force]  check it, then copy it into <workspace>/themes/<id>/
                                             (a theme from outside: `--sha256 HASH [--source TEXT]` of the
                                             `maxxing community check` the owner read; findings ask to confirm,
                                             `--yes` [`--read`] answers them)
@@ -78,7 +78,7 @@ def _install(a):
     except community.PackageError:
         return themes.install(src, force=a.force)       # its own error message
     risky = r["counts"]["danger"] + r["counts"]["warn"]
-    if not (risky or a.sha256 or a.source or a.yes):
+    if not (risky or a.sha256 or a.source or a.yes) and src.is_dir():   # a zip is unpacked by community.install
         return themes.install(src, force=a.force)
     cmd_community.print_report(r)
     if a.sha256 and a.sha256.strip().lower() != r["sha256"]:

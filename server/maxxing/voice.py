@@ -243,6 +243,8 @@ def normalise(src: Path, dest: Path, max_seconds: int = MAX_SECONDS) -> float:
             p = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
     except subprocess.TimeoutExpired:
         raise VoiceError(422, "bad_audio", "audio conversion timed out") from None
+    except OSError:                                    # removed (or no longer runnable) since it was looked up
+        raise VoiceError(503, "no_ffmpeg", "ffmpeg is not installed on the server (apt-get install ffmpeg)") from None
     if p.returncode != 0 or not dest.is_file():
         err = (p.stderr or "").strip().splitlines()
         raise VoiceError(422, "bad_audio", "unreadable audio" + (f": {err[-1][:200]}" if err else ""))

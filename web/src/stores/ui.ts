@@ -5,7 +5,7 @@ import { persist } from 'zustand/middleware'
 import { LANGUAGE_IDS, type Language } from '@/lib/types'
 import { applyFavicon } from '@/lib/accent'
 import { applyFonts, MONO_FONTS, SANS_FONTS, type MonoFont, type SansFont } from '@/lib/fonts'
-import { applyThemeCss, isThemeFile, type InstalledTheme, type ThemeLook, themeLook } from '@/lib/themes'
+import { applyThemeCss, isThemeFile, type InstalledTheme, type ThemeLook, themeLook, uiBuild } from '@/lib/themes'
 
 export type Theme = 'dark' | 'light' | 'system'
 export type Density = 'comfortable' | 'compact'
@@ -200,8 +200,9 @@ export const useUI = create<UIState>()(
         if (!(out.font in SANS_FONTS)) out.font = 'inter'
         if (out.tint !== 'tinted') out.tint = 'neutral'
         if (out.material !== 'glass') out.material = 'solid'
+        // its advanced CSS checked with another build (an update came since): off until the server says (useThemeSync)
         const ct = out.customTheme as ThemeLook | null | undefined
-        out.customTheme = ct && typeof ct === 'object' && typeof ct.css === 'string' && /^[a-z0-9][a-z0-9-]{1,39}$/.test(ct.id) ? { ...ct, extra: typeof ct.extra === 'string' ? ct.extra : '', cssState: ct.cssState ?? 'none', logo: ct.logo && isThemeFile(ct.logo.light) && isThemeFile(ct.logo.dark) ? ct.logo : null } : null
+        out.customTheme = ct && typeof ct === 'object' && typeof ct.css === 'string' && /^[a-z0-9][a-z0-9-]{1,39}$/.test(ct.id) ? { ...ct, extra: typeof ct.extra === 'string' && ct.ui === uiBuild() ? ct.extra : '', cssState: ct.cssState ?? 'none', logo: ct.logo && isThemeFile(ct.logo.light) && isThemeFile(ct.logo.dark) ? ct.logo : null } : null
         out.themeCssOff = out.themeCssOff === true
         if (!(out.monoFont in MONO_FONTS)) out.monoFont = 'system'
         if (out.layout !== 'touch' && out.layout !== 'desktop') out.layout = 'auto'

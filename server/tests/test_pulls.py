@@ -9,6 +9,7 @@ import pytest
 from _conn_helpers import _Server
 from conftest import wait_idle
 from maxxing import config, gitview, vault
+from maxxing.gitsafe import GitError
 
 ENV = {"GIT_AUTHOR_NAME": "Ann", "GIT_AUTHOR_EMAIL": "a@example.com", "GIT_COMMITTER_NAME": "Ann",
        "GIT_COMMITTER_EMAIL": "a@example.com", "PATH": "/usr/bin:/bin"}
@@ -27,6 +28,7 @@ class GH:
         self.sha, self.updated, self.more = "a" * 40, "2026-11-13T10:00:00Z", []   # the watch tests move them
         self.files = [{"filename": "a.txt", "status": "modified", "additions": 1, "deletions": 1, "patch": PATCH}]
         self.runs = [{"name": "tests", "status": "completed", "conclusion": "failure"}]
+        self.garbage = None                             # what a broken proxy answers to a write, with a 200
         self.srv = _Server(self.handler)
 
     def handler(self, method, path, headers, body):
@@ -35,6 +37,8 @@ class GH:
         j = "application/json"
         if method != "GET":
             self.sent.append((method, u.path, json.loads(body or b"{}")))
+            if self.garbage is not None:
+                return 200, self.garbage, "text/html"
         if u.path == "/user":
             return 200, {"login": "ann"}, j
         if u.path == "/user/repos":
@@ -130,6 +134,42 @@ def test_comment_review_merge_close(client, gh):
                     ("PUT", "/repos/acme/app/pulls/7/merge"), ("PATCH", "/repos/acme/app/pulls/7")]
     assert g.sent[1][2]["comments"] == [{"path": "a.txt", "line": 2, "side": "RIGHT", "body": "ok"}]
     assert g.sent[2][2] == {"merge_method": "squash"}
+
+
+@pytest.mark.parametrize("garbage", [b"<html>proxy</html>", ["merged"], "merged"])
+def test_an_unreadable_github_answer_is_a_clear_502(client, gh, garbage):
+    g = gh()
+    g.garbage = garbage
+    base = {"repo": "github:acme/app", "number": 7}
+    for path, extra in (("close", {}), ("merge", {"method": "squash"}), ("comment", {"body": "hi"})):
+        r = client.post(f"/api/git/pull/{path}", json={**base, **extra})
+        assert r.status_code == 502 and r.json()["error"] == "github_error", r.text
+
+
+@pytest.mark.parametrize("number", [True, "7", 0, 7.0])
+def test_a_pull_request_number_must_be_a_real_number(client, gh, number):
+    g = gh()
+    r = client.post("/api/git/pull/close", json={"repo": "github:acme/app", "number": number})
+    assert r.status_code in (400, 422) and g.sent == []
+    with pytest.raises(GitError):
+        gitview.pull_close("acme/app", True)
+
+
+@pytest.mark.parametrize("sha", ["not-a-sha", "zz" * 20, "a" * 41])
+def test_an_invalid_head_sha_refuses_the_review_and_the_merge(client, gh, sha):
+    g = gh()
+    base = {"repo": "github:acme/app", "number": 7, "sha": sha}
+    assert client.post("/api/git/pull/review", json={**base, "event": "APPROVE"}).status_code == 400
+    assert client.post("/api/git/pull/merge", json={**base, "method": "squash"}).status_code == 400
+    assert g.sent == []
+
+
+def test_an_uppercase_head_sha_binds_the_review_too(client, gh):
+    g = gh()
+    base = {"repo": "github:acme/app", "number": 7, "sha": "A" * 40}
+    assert client.post("/api/git/pull/review", json={**base, "event": "APPROVE"}).status_code == 200
+    assert client.post("/api/git/pull/merge", json={**base, "method": "squash"}).status_code == 200
+    assert g.sent[0][2]["commit_id"] == "a" * 40 and g.sent[1][2]["sha"] == "a" * 40
 
 
 @pytest.fixture

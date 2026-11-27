@@ -40,7 +40,7 @@
           if (ct && typeof ct.css === 'string' && /^[a-z0-9][a-z0-9-]{1,39}$/.test(ct.id)) {
             r.dataset.themeId = ct.id;
             if (ct.mode) { dark = ct.mode === 'dark'; r.classList.toggle('dark', dark); }
-            var st = document.createElement('style'); st.id = 'mx-theme'; st.textContent = typeof ct.extra === 'string' && ct.extra && s.themeCssOff !== true ? ct.css + '\n' + ct.extra : ct.css; document.head.appendChild(st);
+            var st = document.createElement('style'); st.id = 'mx-theme'; st.textContent = ct.css; document.head.appendChild(st);
           }
           // Logo in the accent color (copy of src/lib/accent.ts applyAppIcons): tab icon, installed app
           // (manifest icons and launch screen) and the iOS home-screen icon.
@@ -131,6 +131,19 @@
     </style>
   </head>
   <body>
+    <script>
+      // The theme's advanced CSS, only on the build it was checked with (copy of src/stores/ui.ts merge, uiBuild):
+      // after an update it waits for the server's word. Here the interface's stylesheet is known, before the first paint.
+      (function () {
+        try {
+          var s = JSON.parse(localStorage.getItem('mx-ui') || '{}').state || {};
+          var ct = s.customTheme, st = document.getElementById('mx-theme');
+          var l = document.querySelector('link[rel="stylesheet"][href^="/assets/"]');
+          if (st && ct && typeof ct.css === 'string' && typeof ct.extra === 'string' && ct.extra && s.themeCssOff !== true &&
+              typeof ct.ui === 'string' && ct.ui === ((l && l.getAttribute('href')) || '')) st.textContent = ct.css + '\n' + ct.extra;
+        } catch (e) {}
+      })();
+    </script>
     <div id="root"></div>
     <div id="mxb" aria-hidden="true"></div>
     <div id="mxl" aria-hidden="true"></div>

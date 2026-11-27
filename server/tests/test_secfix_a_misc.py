@@ -240,8 +240,9 @@ def test_a_review_is_pinned_to_the_commit_that_was_read(monkeypatch):
     monkeypatch.setattr(gitview, "_gh_send", lambda full, path, body, *a, **k: sent.append(body) or {"id": 1, "state": "APPROVED"})
     gitview.pull_review("o/r", 5, "APPROVE", sha="a" * 40)
     gitview.pull_review("o/r", 5, "APPROVE")
-    gitview.pull_review("o/r", 5, "APPROVE", sha="not a sha")
-    assert sent[0]["commit_id"] == "a" * 40 and "commit_id" not in sent[1] and "commit_id" not in sent[2]
+    with pytest.raises(gitview.GitError):               # given but not a commit id: refused, never dropped
+        gitview.pull_review("o/r", 5, "APPROVE", sha="not a sha")
+    assert sent[0]["commit_id"] == "a" * 40 and "commit_id" not in sent[1] and len(sent) == 2
 
 
 # ---- Infra --------------------------------------------------------------------------------------------------

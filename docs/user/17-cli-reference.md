@@ -276,7 +276,7 @@ installed by Harness (skill `maxxing-theme`).
 |---|---|
 | `maxxing themes list [--json]` | installed themes, and folders that are not usable with the reason |
 | `maxxing themes check FOLDER [--json]` | read a theme like the interface will: what it sets, what is dropped and why (nothing installed) |
-| `maxxing themes install FOLDER [--force]` | check it, then copy it into `<workspace>/themes/<id>/` (`--force` replaces it); refused in an agent's run |
+| `maxxing themes install FOLDER [--force]` | check it (a folder or a zip), then copy it into `<workspace>/themes/<id>/` (`--force` replaces it); refused in an agent's run |
 | `maxxing themes install FOLDER --sha256 HASH [--source TEXT] [--yes] [--read]` | a theme from outside: installs only the content `maxxing community check` reported, and records it |
 | `maxxing themes verify ID` | its advanced CSS was checked with this version of the interface: switch it back on (an update that changes the interface's CSS switches it off); refused in an agent's run |
 | `maxxing themes remove ID` | delete an installed theme (browsers using it go back to its base); refused in an agent's run |

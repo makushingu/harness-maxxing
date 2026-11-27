@@ -64,6 +64,15 @@ def test_normalise_errors(mx, tmp_path):
     assert e.value.code == "too_long" and e.value.status == 413
 
 
+def test_ffmpeg_gone_after_the_lookup_is_said_not_a_500(mx, tmp_path, monkeypatch):
+    monkeypatch.setattr(voice, "ffmpeg_bin", lambda: str(tmp_path / "gone" / "ffmpeg"))
+    src = tmp_path / "a.webm"
+    src.write_bytes(b"x")
+    with pytest.raises(voice.VoiceError) as e:
+        voice.normalise(src, tmp_path / "o.wav")
+    assert e.value.code == "no_ffmpeg" and e.value.status == 503
+
+
 def test_a_burst_of_voice_notes_runs_at_most_two_conversions_at_once(mx, tmp_path, monkeypatch):
     import threading
     running, peak, lock = [0], [0], threading.Lock()
