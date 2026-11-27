@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { AlertTriangle, Brain, FolderSearch, Check, ChevronRight, CircleAlert, Copy, FileText, GripVertical, History, Info, MessageSquarePlus, Mic, Paperclip, Pause, Pencil, Play, ScrollText, Trash2, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useT, useLang } from '@/i18n'
+import { useT, useLang, withGroups } from '@/i18n'
 import { fmtDate, fmtNumber } from '@/lib/format'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Sensitive, Spinner, Tooltip, usePresentation } from '@/components/ui'
 import { Markdown } from '@/components/ui/markdown'
@@ -946,6 +946,8 @@ function ToolOutput({ text, error }: { text: string; error: boolean }) {
 }
 
 /* ---------------------------------------------------------------- meta rows */
+const TurnDetails = React.lazy(withGroups(['trace'], () => import('./TurnDetails')))
+
 function InitRow({ model }: { model: string }) {
   const { models } = React.useContext(ItemContext)
   return (
@@ -972,6 +974,7 @@ function ResultRow({ ev, changes }: { ev: Extract<Item, { kind: 'result' }>['ev'
   const { models, sid } = React.useContext(ItemContext)
   const { hidden } = useResultLine()
   const billed = useCostIsBilled()
+  const [details, setDetails] = React.useState(false)
   const show = (f: ResultField) => !hidden.includes(f)
   const u = ev.usage
   const ctx = (u?.input || 0) + (u?.cache_read || 0) + (u?.cache_write || 0)
@@ -998,7 +1001,12 @@ function ResultRow({ ev, changes }: { ev: Extract<Item, { kind: 'result' }>['ev'
         .filter(Boolean)
         .flatMap((el, i) => (i ? [<span key={`s${i}`} aria-hidden>·</span>, el] : [el]))}
       {changes && sid && <ChangesChip sid={sid} ev={changes} />}
-      <ResultLineMenu />
+      <ResultLineMenu onDetails={sid ? () => setDetails(true) : undefined} />
+      {details && sid && (
+        <React.Suspense fallback={null}>
+          <TurnDetails sid={sid} at={ev.at} onClose={() => setDetails(false)} />
+        </React.Suspense>
+      )}
     </div>
   )
 }

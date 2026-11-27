@@ -35,6 +35,7 @@ ROUTERS = [
     "voice",
     "memory",
     "stats",
+    "metrics",
     "search",
     "feed",
     "hooks",

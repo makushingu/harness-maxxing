@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, seg } from '../api'
-import type { Changelog, CleanupPartId, CleanupResult, CleanupScan, CpuSnapshot, Health, LogsPayload, MemoryInfo, Ok, Preflight, Service, ServiceAction, Session, TokenStats, UpdateReport, UsagePayload, VersionInfo } from '../types'
+import type { Changelog, CleanupPartId, CleanupResult, CleanupScan, CpuSnapshot, Health, LogFilters, LogsPayload, MemoryInfo, MetricsStatus, Ok, Preflight, Service, ServiceAction, Session, TokenStats, UpdateReport, UsagePayload, VersionInfo } from '../types'
 import { qk } from './keys'
 import { useMut } from './util'
 
@@ -38,12 +38,24 @@ export const servicesQuery = () => ({ queryKey: qk.system.services, queryFn: () 
 export function useServices() {
   return useQuery(servicesQuery())
 }
-export function useLogs(unit: string, lines = 200) {
+export function useLogs(unit: string, lines = 200, f?: LogFilters) {
+  const since = f?.since || '', level = f?.level || '', q = f?.q || ''
   return useQuery({
-    queryKey: qk.system.logs(unit, lines),
-    queryFn: () => api.get<LogsPayload>('/api/system/logs', { unit, lines }),
+    queryKey: qk.system.logs(unit, lines, since, level, q),
+    queryFn: () => api.get<LogsPayload>('/api/system/logs', { unit, lines, ...(since && { since }), ...(level && { level }), ...(q && { q }) }),
     enabled: !!unit,
+    placeholderData: (prev) => prev,     // typing in the search box keeps the lines on screen until the answer
   })
+}
+/** GET /metrics (Prometheus format): off by default; the token is shown once, in the answer that made it. */
+export function useMetrics() {
+  return useQuery({ queryKey: qk.system.metrics, queryFn: () => api.get<MetricsStatus>('/api/system/metrics') })
+}
+export function useSetMetrics() {
+  return useMut((enabled: boolean) => api.put<MetricsStatus>('/api/system/metrics', { enabled }), { invalidate: [qk.system.metrics] })
+}
+export function useNewMetricsToken() {
+  return useMut(() => api.post<MetricsStatus>('/api/system/metrics/token'), { invalidate: [qk.system.metrics] })
 }
 export const versionQuery = () => ({ queryKey: qk.system.version, queryFn: () => api.get<VersionInfo>('/api/system/version'), staleTime: 5 * 60_000 })
 export function useVersion() {

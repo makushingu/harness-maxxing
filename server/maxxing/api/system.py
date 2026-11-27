@@ -15,12 +15,13 @@ from typing import Any, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from .. import __version__, bus, config, health
+from .. import __version__, bus, config, health, logsearch
 from ..security import require_auth
 
 log = logging.getLogger("maxxing.license")
 router = APIRouter(prefix="/api", tags=["system"], dependencies=[Depends(require_auth)])
 
+_SESSION_ID = re.compile(r"^[A-Za-z0-9_-]{8,80}\Z")
 _TRANSIENT_UNIT = re.compile(r"^maxxing-[a-z0-9-]{1,64}\Z")     # session turns, cron runs, update
 
 
@@ -125,11 +126,27 @@ def _logs(unit: str, lines: int) -> list[str]:
 
 
 @router.get("/system/logs")
-async def logs(unit: str = health.SELF_UNIT, lines: int = Query(200, ge=1, le=5000)):
+async def logs(unit: str = health.SELF_UNIT, lines: int = Query(200, ge=1, le=5000), since: str = "", level: str = "",
+               q: str = Query("", max_length=logsearch.Q_MAX), session: str = Query("", max_length=80)):
+    """The last lines of a unit's journal. With `since`, `level`, `q` or `session`: a search (logsearch.py) - a
+    period, a minimum level, a text, or the journal of one session (its turn unit + what the server says about it)."""
     if unit not in health.service_names() and not _TRANSIENT_UNIT.match(unit):
         raise _err(400, "unit_not_allowed", f"logs of {unit} are not available here")
+    if level and level not in logsearch.LEVELS:
+        raise _err(400, "bad_level", "level is one of " + ", ".join(logsearch.LEVELS))
+    if since and since not in logsearch.SINCE:
+        raise _err(400, "bad_since", "since is one of " + ", ".join(logsearch.SINCE))
+    units, mention = [unit], None
+    if session:
+        from ..sessions import spawn, store
+        if not _SESSION_ID.match(session) or store.read_cached(session) is None:
+            raise _err(404, "not_found", "Session not found")
+        units, mention = [health.SELF_UNIT, spawn.unit_name(session)], {health.SELF_UNIT: session[:8]}
     try:
-        return {"lines": await asyncio.to_thread(_logs, unit, lines)}
+        if not (since or level or q or session):
+            return {"lines": await asyncio.to_thread(_logs, unit, lines)}
+        r = await asyncio.to_thread(lambda: logsearch.search(units, lines=lines, since=since, level=level, q=q, mention=mention))
+        return {k: r[k] for k in ("lines", "matched", "scanned", "truncated")}
     except (OSError, subprocess.TimeoutExpired) as e:
         raise _err(502, "journalctl_failed", str(e)) from None
 

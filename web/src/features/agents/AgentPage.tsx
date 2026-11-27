@@ -9,6 +9,7 @@
 // - its profile on the right (a sheet on a phone): role edited in place, "When it works" (triggers as sentences,
 //   webhook address, what came in, test; one menu adds one), protection and budget, memory, settings (a sheet).
 // Opening the page marks its results as read (POST /seen).
+import { AgentUsage } from './AgentUsage'
 import * as React from 'react'
 import { AgentBrowserCard } from '@/features/browser/AgentBrowserCard'
 import { AgentDevicesCard } from '@/features/devices/AgentDevicesCard'
@@ -1179,6 +1180,7 @@ function Profile({ agent: a }: { agent: AgentDetail }) {
               <div className={cn('h-full rounded-full', spent >= lim.usd_per_day ? 'bg-destructive' : 'bg-primary')} style={{ width: `${Math.min(100, (spent / lim.usd_per_day) * 100)}%` }} />
             </div>
           )}
+          <AgentUsage path={a.path} />
           {lim.runs_per_hour > 0 && (a.runs_last_hour || 0) >= lim.runs_per_hour && (
             <span className="text-warning tabular-nums">{t('agents.runsHour', { count: a.runs_last_hour || 0, max: lim.runs_per_hour })}</span>
           )}

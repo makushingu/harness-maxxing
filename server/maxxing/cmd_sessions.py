@@ -7,6 +7,9 @@
   maxxing sessions send TO TEXT... [--file P] [--report-to S] [--json]
                                               write to another session as if typed in it (TO = its id or title);
                                               from a turn, the message says which session sent it
+  maxxing sessions trace SESSION [TURN] [--json]
+                                              what each turn did in numbers (duration, model and tool calls, tokens,
+                                              cost); with TURN (its number, or `last`), that turn step by step
   maxxing sessions list [--json]              the sessions that are not archived (id, state, topic, title)
   maxxing sessions list --topic P/T [--days N] [--json]
                                               a topic's recent sessions for Jarvis: about (title, last answer), who
@@ -50,6 +53,10 @@ def _configure(p) -> None:
                    help="from Jarvis's conversation: start a new session even though the topic has reusable ones, "
                         "with why (another subject): shown on its work board")
     n.add_argument("--json", action="store_true")
+    tr = sub.add_parser("trace", help="what each turn did; with a turn number, that turn step by step")
+    tr.add_argument("session", help="the session's id or title")
+    tr.add_argument("turn", nargs="?", help="a turn number (1 = the first) or `last`")
+    tr.add_argument("--json", action="store_true")
     ls = sub.add_parser("list", help="the sessions that are not archived")
     ls.add_argument("--topic", default="", help="<project>/<topic>: its recent sessions, with what they are about and "
                                                 "whether new work may continue one (reusable, why_not)")
@@ -251,6 +258,61 @@ def _list(a) -> int:
     return 0
 
 
+def _trace(a) -> int:
+    import json
+    import sys
+    import time
+
+    from .sessions import service, trace
+    try:
+        sid = service.find_session(a.session)["id"]
+    except service.SessionError as e:
+        print(e.message, file=sys.stderr)
+        return 2
+    clock = lambda at: time.strftime("%m-%d %H:%M:%S", time.localtime(at)) if at else "-"  # noqa: E731
+    secs = lambda v: "-" if v is None else f"{v:.1f}s"  # noqa: E731
+    if a.turn is None:
+        rows = trace.turns(sid)
+        if a.json:
+            print(json.dumps({"session": sid, "turns": rows}, ensure_ascii=False))
+            return 0
+        for t in rows:
+            cost = "-" if t["cost_usd"] is None else f"${t['cost_usd']:.2f}"
+            print(f"{t['n']:>4}  {clock(t['at'])}  {t['state']:<9} {secs(t['duration_s']):>8}  {t['model_calls']:>4} calls "
+                  f"{t['tool_calls']:>4} tools {t['errors']:>3} err  {t['total_tokens']:>11,} tok  {cost:>8}  "
+                  + " ".join(t["prompt"].split())[:60])
+        return 0
+    rows = trace.turns(sid) if a.turn == "last" else []
+    try:
+        n = rows[-1]["n"] if a.turn == "last" and rows else int(a.turn)
+    except ValueError:
+        print("TURN is a number or `last`", file=sys.stderr)
+        return 2
+    t = trace.turn(sid, n)
+    if t is None:
+        print(f"no turn {a.turn} in this session", file=sys.stderr)
+        return 2
+    if a.json:
+        print(json.dumps({"session": sid, "turn": t}, ensure_ascii=False))
+        return 0
+    cost = "-" if t["cost_usd"] is None else f"${t['cost_usd']:.2f}"
+    print(f"turn {t['n']}  {clock(t['at'])}  {t['state']}  {secs(t['duration_s'])}  {t['total_tokens']:,} tokens  {cost}  {t['model']}")
+    start = t["at"] or 0
+    for s in t["steps"]:
+        off = f"+{s['at'] - start:7.1f}s" if s.get("at") and start else " " * 9
+        pad = "    " if s.get("sub") else ""
+        if s["kind"] == "model":
+            print(f"{off}  {pad}model  context {s['context']:,}" + ("  (thinking)" if s["thinking"] else ""))
+        elif s["kind"] == "tool":
+            end = "FAILED" if s["error"] else secs(s["duration_s"]) if s["done"] else "no result"
+            print(f"{off}  {pad}tool   {s['summary']}  [{end}]")
+        else:
+            print(f"{off}  note   {s['text']}")
+    if t["steps_dropped"]:
+        print(f"... {t['steps_dropped']} more step(s) not shown")
+    return 0
+
+
 def _handler(a) -> int:
     if a.sess_cmd == "token-report":
         return _token_report(a)
@@ -258,6 +320,8 @@ def _handler(a) -> int:
         return _send(a)
     if a.sess_cmd == "list":
         return _list(a)
+    if a.sess_cmd == "trace":
+        return _trace(a)
     if a.sess_cmd == "new":
         return _new(a)
     from .sessions import service, store

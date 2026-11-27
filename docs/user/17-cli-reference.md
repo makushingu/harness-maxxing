@@ -365,6 +365,10 @@ See [Harness Browser](33-browser.md).
 | `maxxing sessions list [--json]` | the sessions that are not archived: id, state, topic, title |
 | `maxxing sessions list --topic <project>/<topic> [--days N] [--json]` | a topic's sessions of the last 30 days (or N) with what Jarvis needs to continue one: start of the last answer, who started it, `reusable` or why not |
 | `maxxing sessions compact-logs [--dry-run]` | clip the tool outputs of existing session logs and drop the bulky Claude start-up lists and progress lines (frees disk space; `--dry-run` only reports what would be saved) |
+| `maxxing sessions trace SESSION [TURN\|last] [--json]` | what a turn did, step by step: each call to the model (context read, share from the cache), each tool with its duration and the ones that failed, the turn's tokens and cost. Without TURN: the list of the session's turns. Read from the session's log (the **Turn details** window of the interface) |
+| `maxxing usage export [--group days\|projects\|topics\|agents\|sessions] [--format csv\|json] [-o FILE]` | tokens, turns and cost as a file (Settings -> Usage -> CSV / JSON) |
+| `maxxing logs [--since 15m\|1h\|6h\|24h\|7d\|30d] [--level info\|warning\|error] [--grep TEXT] [--unit NAME] [--session ID] [-n N] [--json]` | search the journal of Harness Maxxing (or of another service of the System page) |
+| `maxxing metrics [status\|on\|off\|token]` | the `/metrics` address for Prometheus: `on` prints the address and, the first time, its token; `token` makes a new one |
 | `maxxing sessions token-report [--days N] [--json]` | where the tokens of your sessions go, read from Claude Code's transcripts: context size per call, cache rewritten after an idle hour or a model switch, the tools whose outputs fill the context, and what automatic compaction at 400k / 300k / 250k / 200k would have saved on the same calls |
 
 ## Backup

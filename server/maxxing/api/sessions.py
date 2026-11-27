@@ -299,6 +299,26 @@ async def seen(sid: str, body: SeenIn | None = None):
     return {"ok": True}
 
 
+@router.get("/sessions/{sid}/turns")
+async def turns(sid: str):
+    """What each turn of the session did, in numbers (trace.py): duration, model and tool calls, tokens, cost."""
+    from ..sessions import trace
+    _found(await asyncio.to_thread(service.get_session, sid))
+    return {"turns": await asyncio.to_thread(trace.turns, sid)}
+
+
+@router.get("/sessions/{sid}/turns/{n}")
+async def turn(sid: str, n: int, download: bool = False):
+    """One turn step by step: every model call and tool call with its time, tokens and outcome."""
+    from ..sessions import trace
+    _found(await asyncio.to_thread(service.get_session, sid))
+    t = await asyncio.to_thread(trace.turn, sid, n) if 1 <= n <= 1_000_000 else None
+    if t is None:
+        raise HTTPException(404, detail={"error": "not_found", "message": "Turn not found"})
+    head = {"Content-Disposition": f'attachment; filename="harness-turn-{sid[:8]}-{n}.json"'} if download else {}
+    return JSONResponse({"session": sid, "turn": t}, headers=head)
+
+
 @router.get("/sessions/{sid}/events")
 async def events(sid: str, from_: int | None = Query(None, alias="from", ge=0),
                  tail: int | None = Query(None, ge=1, le=5000), before: int | None = Query(None, ge=0),

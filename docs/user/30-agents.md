@@ -202,7 +202,7 @@ it starts folded on screens narrower than 1600 px so the conversation keeps its 
   last 10 min ago") and **Send a test**, which posts a test event so you see it start. A schedule shows its time zone
   when it is not your browser's. **Add a trigger** adds a schedule, a webhook, a notification filter, Telegram or a
   mailbox.
-- **Protection and budget**: today's cost against its budget, Free or Protected (with its sites; click to change it),
+- **Protection and budget**: today's cost against its budget, what it used so far (tokens, turns, cost) with its last 30 days (the same line as Settings -> Usage -> **Agent**), Free or Protected (with its sites; click to change it),
   and only when they apply: whether it asks you first, the keys it gets.
 - **What it remembers**: the start of its `memory.md`; **See / edit** opens it.
 - **Settings**, in four sections (the chips on top jump to them): **Essentials** (on, silent, its look, the model, the

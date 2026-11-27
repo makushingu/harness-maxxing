@@ -2034,7 +2034,23 @@ R('GET', '/api/system/logs', ({ q }) => {
   const unit = q.get('unit') || 'claude-maxxing'
   if (!S.services.some((s) => s.name === unit)) fail(404, 'not_found', 'Unknown unit')
   const n = Math.min(2000, Math.max(1, parseInt(q.get('lines') || '200', 10) || 200))
-  return { lines: journal(unit, n) }
+  const text = (q.get('q') || '').toLowerCase()
+  const level = q.get('level') || ''
+  if (!text && !level && !q.get('since')) return { lines: journal(unit, n) }
+  // a search: the same journal, filtered (the mock knows WARN / ERROR by the word in the line)
+  const all = journal(unit, 2000)
+  const hit = all.filter((l) => (!text || l.toLowerCase().includes(text)) && (!level || level === 'info' || /WARN|ERROR/.test(l)) && (level !== 'error' || /ERROR/.test(l)))
+  return { lines: hit.slice(-n), matched: hit.length, scanned: all.length, truncated: false }
+})
+R('GET', '/api/system/metrics', () => ({ enabled: !!S.metrics?.enabled, has_token: !!S.metrics?.token, url: 'http://127.0.0.1:8787/metrics' }))
+R('PUT', '/api/system/metrics', ({ body }) => {
+  const first = !!body.enabled && !S.metrics?.token
+  S.metrics = { enabled: !!body.enabled, token: S.metrics?.token || (body.enabled ? 'hmx_mock-token-0001' : '') }
+  return { enabled: S.metrics.enabled, has_token: !!S.metrics.token, url: 'http://127.0.0.1:8787/metrics', token: first ? S.metrics.token : null }
+})
+R('POST', '/api/system/metrics/token', () => {
+  S.metrics = { enabled: !!S.metrics?.enabled, token: 'hmx_mock-token-' + String(Date.now()).slice(-4) }
+  return { enabled: S.metrics.enabled, has_token: true, url: 'http://127.0.0.1:8787/metrics', token: S.metrics.token }
 })
 R('GET', '/api/system/version', () => ({ version: VERSION, commit: 'a1b2c3d', latest_commit: 'e4f5a6b', behind: 3 }))
 R('POST', '/api/system/update', () => ({ ok: true }))
@@ -2056,7 +2072,25 @@ R('GET', '/api/stats/tokens', () => {
   return { totals: row(12_500_000), projects: [{ name: 'acme', ...row(9_000_000) }, { name: '', ...row(3_500_000) }],
     topics: [{ path: 'projects/acme/topics/blog', ...row(6_000_000) }, { path: 'projects/acme/topics/shop', ...row(3_000_000) }],
     sessions: (S.sessions || []).slice(0, 5).map((x, i) => ({ id: x.id, title: x.title, path: x.path, archived: false, updated: x.updated, ...row(2_000_000 - i * 300_000) })),
+    agents: mockAgents().slice(0, 2).map((a, i) => ({ path: a.path, label: a.display_name, name: a.name, agent: a.display_name, ...row(1_800_000 - i * 700_000), days: days.slice(-14).map((d) => ({ ...d, tokens: Math.round(d.tokens / (4 + i)) })) })),
     days, at: now() }
+})
+// What a turn did (the "Turn details" window): two turns for every session of the mock.
+function mockTurns() {
+  const t = now()
+  const info = (n, at, prompt, extra) => ({ n, at, prompt, state: 'done', duration_s: 41.2, cost_usd: 0.31, model: 'claude-opus-4-5', tokens: { input: 1200, output: 2400, cache_read: 182000, cache_write: 9000 },
+    total_tokens: 194600, model_calls: 3, tool_calls: 3, errors: 1, ...extra })
+  return [info(1, t - 3 * HOUR, 'Draft the weekly article', {}), info(2, t - 2 * HOUR, 'Shorten the intro and fix the title', { duration_s: 18.4, cost_usd: 0.12 })]
+}
+R('GET', '/api/sessions/:id/turns', () => ({ turns: mockTurns() }))
+R('GET', '/api/sessions/:id/turns/:n', ({ params }) => {
+  const turn = mockTurns().find((x) => String(x.n) === params.n)
+  if (!turn) fail(404, 'not_found', 'Unknown turn')
+  const at = turn.at
+  const model = (d, context) => ({ kind: 'model', at: at + d, model: turn.model, context, cache_read: Math.round(context * 0.9), cache_write: 3000, text_chars: 420, thinking: d < 1, sub: false })
+  const tool = (d, name, summary, extra = {}) => ({ kind: 'tool', at: at + d, name, summary, duration_s: 1.4, error: false, done: true, sub: false, ...extra })
+  return { turn: { ...turn, steps_dropped: 0, steps: [model(0.4, 61000), tool(3.1, 'Read', 'Read drafts/article.md'), tool(4.9, 'Bash', 'npm run lint', { error: true, duration_s: 6.2 }),
+    model(11.6, 64500), tool(14.2, 'Edit', 'Edit drafts/article.md'), { kind: 'note', at: at + 15, level: 'info', text: 'Context compacted' }, model(16, 66200)] } }
 })
 R('GET', '/api/usage', () => ({ available: true, plan: 'Max', source: 'api', seen_at: now(),
   five_hour: { pct: +meters().five.toFixed(1), resets_at: now() + 2 * HOUR }, seven_day: { pct: +meters().week.toFixed(1), resets_at: now() + 3 * DAY } }))
@@ -2106,6 +2140,12 @@ R('POST', '/api/jarvis/new', () => { jarvisSid = ''; return jarvisStatus() })
 R('PUT', '/api/jarvis/settings', () => jarvisStatus())
 R('POST', '/api/jarvis/work/:id/close', () => jarvisStatus())
 R('GET', '/api/agents', () => ({ agents: mockAgents(), avatar: {} }))
+R('GET', '/api/agents/:project/:topic/:name', ({ params }) => {
+  const a = mockAgents().find((x) => x.project === params.project && x.topic === params.topic && x.name === params.name)
+  if (!a) fail(404, 'not_found', 'Unknown agent')
+  return { ...a, crons: [], webhooks: [], trigger_stats: {} }
+})
+R('GET', '/api/agents/:project/:topic/:name/thread', () => ({ messages: [] }))
 R('GET', '/api/agents/layout', () => ({ projects: [], colors: {}, agents: {} }))
 // MOCK_FEATURES=all: three chats (a DM with unread messages, a quiet DM, a group) for the Team bubbles.
 const TEAM = (() => {

@@ -57,7 +57,8 @@ export const qk = {
   system: {
     services: ['system', 'services'] as const,
     cpu: ['system', 'cpu'] as const,
-    logs: (unit: string, lines: number) => ['system', 'logs', unit, lines] as const,
+    logs: (unit: string, lines: number, since = '', level = '', q = '') => ['system', 'logs', unit, lines, since, level, q] as const,
+    metrics: ['system', 'metrics'] as const,
     version: ['system', 'version'] as const,
     usage: ['system', 'usage'] as const,
     changelog: ['system', 'changelog'] as const,

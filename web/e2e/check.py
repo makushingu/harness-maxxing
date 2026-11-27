@@ -90,10 +90,15 @@ class Mock:
         self.stop()
         raise RuntimeError("the mock server did not start (node web/mock/server.mjs)")
 
-    def call(self, method: str, path: str, body: dict | None = None) -> None:
-        req = urllib.request.Request(self.base + path, data=json.dumps(body or {}).encode(), method=method,
+    def call(self, method: str, path: str, body: dict | None = None):
+        data = None if method == "GET" else json.dumps(body or {}).encode()
+        req = urllib.request.Request(self.base + path, data=data, method=method,
                                      headers={"Content-Type": "application/json", "X-Maxxing": "1"})
-        urllib.request.urlopen(req, timeout=5).read()
+        raw = urllib.request.urlopen(req, timeout=5).read()
+        try:
+            return json.loads(raw)
+        except ValueError:
+            return None
 
     def scenario(self, name: str, lang: str = "en") -> None:
         """Back to a fresh state of `name` (setup | login | onboarding | ready), the start guide closed."""
@@ -480,12 +485,62 @@ def j_sign_out(r: Run) -> None:
         raise Failure("the pages are still open after a sign-out")
 
 
+def j_usage_agents(r: Run) -> None:
+    """Settings -> Usage counts each agent, and the table can be downloaded as it is shown."""
+    r.mock.scenario("ready")
+    pg = r.page()
+    r.go(pg, "/settings/usage")
+    pg.locator("main").get_by_text("Agent", exact=True).first.click()
+    table = pg.locator('[data-testid="usage-table"]')
+    table.get_by_text("Blog Writer").first.wait_for()
+    href = pg.locator('[data-testid="usage-export-csv"]').get_attribute("href") or ""
+    if "group=agents" not in href or "format=csv" not in href:
+        raise Failure(f"the CSV link does not download the agents shown: {href!r}")
+    r.healthy(pg)
+
+
+def j_logs_search(r: Run) -> None:
+    """Settings -> System: a search in the logs says how many lines match; /metrics shows its token once."""
+    r.mock.scenario("ready")
+    pg = r.page()
+    r.go(pg, "/settings/system")
+    pg.locator('main input[maxlength="200"]').fill("cron")
+    pg.wait_for_function("""() => /\\d/.test(document.querySelector('[data-testid="logs-count"]')?.innerText || '')""")
+    pg.locator('[data-testid="metrics-switch"]').click()
+    pg.locator('[data-testid="metrics-url"]').wait_for()
+    if "/metrics" not in pg.locator('[data-testid="metrics-url"]').inner_text():
+        raise Failure("the metrics address is not shown once the switch is on")
+    r.healthy(pg)
+
+
+def j_turn_details(r: Run) -> None:
+    """The line under an answer opens "Turn details": the steps of the turn, in English, with its failed tool."""
+    r.mock.scenario("ready")
+    pg = r.page()
+    got = r.mock.call("GET", "/api/sessions")
+    idle = next(x for x in (got["sessions"] if isinstance(got, dict) else got) if x.get("state") == "idle" and x.get("turns"))
+    r.go(pg, f"/sessions?path={idle['path']}&session={idle['id']}")
+    menu = pg.locator('[data-testid="result-line-menu"]').last
+    menu.scroll_into_view_if_needed()
+    menu.click()
+    pg.locator('[data-testid="turn-details-open"]').click()
+    box = pg.locator('[data-testid="turn-details"]')
+    box.locator('[data-testid="turn-steps"] li').first.wait_for()
+    text = box.inner_text()
+    if box.locator('[data-testid="turn-steps"] li').count() < 3 or "failed" not in text:
+        raise Failure(f"the steps of the turn are not shown: {' '.join(text.split())[:160]!r}")
+    if "trace." in text:
+        raise Failure("the window shows text keys instead of its texts")
+    r.healthy(pg)
+
+
 JOURNEYS = {
     "guide": j_guide, "pages": j_pages, "pages-phone": j_pages_phone, "pages-fr": j_pages_fr,
     "pages-fr-phone": j_pages_fr_phone, "not-found": j_not_found, "setup": j_setup, "login": j_login,
     "onboarding": j_onboarding, "session": j_session, "session-reload": j_session_reload,
     "new-session": j_new_session, "session-phone": j_session_phone, "palette": j_palette, "theme": j_theme,
     "setting-saved": j_setting_saved, "settings-nav": j_settings_nav, "files": j_files, "team": j_team, "nav": j_nav,
+    "usage-agents": j_usage_agents, "logs-search": j_logs_search, "turn-details": j_turn_details,
     "sign-out": j_sign_out,
 }
 

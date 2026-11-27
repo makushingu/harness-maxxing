@@ -22,7 +22,7 @@ blocks):
 | | **Skills** | the skills Claude sees on this server: **yours** (in `~/.claude/skills`, the workspace, a project or a topic, with where each one lives) and the ones **shipped with Harness** (refreshed by every update, read-only); **Open**, **Edit with Claude**, **Share with the community**, **New skill** - see [Skills](skills) |
 | | **MCP** | the MCP servers of Claude Code (a service's tools for Claude): every session or one topic, state, **Connect** (sign-in), **Remove** - see [MCP servers](28-mcp.md) |
 | | **Keys** | your secrets vault (below) |
-| | **Usage** | **Daily budget**: a ceiling in dollars per day for the whole server (0 = none), counted at the price Claude Code reports for each turn (on a subscription: what the same turns would cost with an API key). A [notification](feed) at 80 %, an alert when it is reached; from then on the scheduled prompt jobs and the agents' triggers wait for the next day (skipped, with the reason), while your own messages, your messages to an agent and **Run now** still run. The card shows what today cost so far. **Start again after the usage limit** (on by default): a scheduled job or an agent run stopped by the usage limit of your Claude plan starts again by itself once the limit resets, plus a delay (60 seconds by default). Then Claude plan usage (5-hour window, week) and the plan name (Pro, Max, Ultra): the same figures as the bars at the bottom of the sidebar, read from the last Claude answer; a verified **Ultra** account has no 5-hour limit, so only the week is shown; **Show plan usage** (on for new installs) shows them here and adds the dashboard widget (experimental: it may also ask Anthropic directly when no answer came for 10 minutes); tokens per project, topic and session, tokens per day, how fast turns start (Claude Code ready / first answer, median of recent turns) |
+| | **Usage** | **Daily budget**: a ceiling in dollars per day for the whole server (0 = none), counted at the price Claude Code reports for each turn (on a subscription: what the same turns would cost with an API key). A [notification](feed) at 80 %, an alert when it is reached; from then on the scheduled prompt jobs and the agents' triggers wait for the next day (skipped, with the reason), while your own messages, your messages to an agent and **Run now** still run. The card shows what today cost so far. **Start again after the usage limit** (on by default): a scheduled job or an agent run stopped by the usage limit of your Claude plan starts again by itself once the limit resets, plus a delay (60 seconds by default). Then Claude plan usage (5-hour window, week) and the plan name (Pro, Max, Ultra): the same figures as the bars at the bottom of the sidebar, read from the last Claude answer; a verified **Ultra** account has no 5-hour limit, so only the week is shown; **Show plan usage** (on for new installs) shows them here and adds the dashboard widget (experimental: it may also ask Anthropic directly when no answer came for 10 minutes); tokens and cost per project, topic, **agent** and session (**CSV** / **JSON** under the table download every row of the grouping shown, **Per day** the daily chart; `maxxing usage export`), tokens per day, how fast turns start (Claude Code ready / first answer, median of recent turns) |
 | **Automate** | **Crons** | the scheduled jobs: list, run now, history, editor (see [Crons](crons)); old `/crons` links open it |
 | | **Webhooks** | every URL that a service calls on this server (Stripe, Shopify, GitHub, a form, a phone Shortcut, n8n...): what each one does, its last calls, test, replay, new URL, secret; also the webhooks that post to the notifications feed and the ones of agents. Made by asking Harness - see [Webhooks](webhooks) |
 | | **Events** | when something happens in Harness (a notification, an agent run that ends, a cron that fails), do one thing without AI - see [Events](events) |
@@ -37,7 +37,7 @@ blocks):
 | | **Import** | the memory of another agent (Hermes, OpenClaw, Claude Code, a zip) - see [Import](import); and the way to the other imports: a memory backup (**Backup**), an agent file (Agents page) |
 | | **Backup** | repository, schedule, whitelist, history, restore – see [Backup](backup) |
 | | **Trash** | deleted sessions, topics and files, restore them or empty the trash |
-| **Server** | **System** | health, **disk space** (see [below](#disk-space)), **CPU priorities** (see [below](#cpu-priorities)), services (start/stop/restart), logs, and the **address of the server**: public URL and files root (the folder the file viewer can show) |
+| **Server** | **System** | health, **disk space** (see [below](#disk-space)), **CPU priorities** (see [below](#cpu-priorities)), services (start/stop/restart), logs (see [below](#logs)), **metrics for a monitoring tool** (see [below](#metrics-for-a-monitoring-tool)), and the **address of the server**: public URL and files root (the folder the file viewer can show) |
 | | **Updates** | the installed version, **Check** and **Update** (with the smart update preflight), **Automatic update**, **What's new** (also shown once after each update; the main new features have a **Show me** button that takes you to them and highlights them), then every version of Harness Maxxing, newest first, with a search |
 | | **About** | the version and the useful links (docs, GitHub, community), the optional **Enterprise key** (only for companies that need one: record it, see it, remove it - see [License](license)), **Support**: Harness Maxxing is free, **Donate** opens the donation page of the website in a new tab (nothing is sent from the app); **Hide the Donate buttons** removes them from What's new and the Feedback window, in every browser - see [License](license#donations) |
 
@@ -88,6 +88,46 @@ processor most (Harness, a session, an agent, heavy work, a job, the browser, Do
 long programs wait for the processor. A high CPU figure alone is not a problem; when programs wait (more than 20 % of
 the time) the meter turns amber and says **waiting**. If the processor stays full for 10 minutes, a health problem
 (also in Settings -> Feed) names the program that takes the most; it clears itself.
+
+## Logs
+
+**Settings -> System -> Logs** shows the journal of a service of this server (Harness Maxxing by default). Three
+filters narrow it down:
+
+- **Search**: the lines that contain a text (no difference between capitals and small letters);
+- **Level**: every line, warnings and errors, or errors only. A Python error keeps its whole trace;
+- **Period**: the last 15 minutes up to 30 days.
+
+Under the lines, a sentence says how many match and whether the journal held more than was read (a search reads the
+20 000 most recent lines of the period). Passwords, tokens and keys are masked as everywhere else.
+
+In a terminal: `maxxing logs --since 24h --level error`, `maxxing logs --grep telegram`,
+`maxxing logs --session <id>` (the lines about one session), `--json` for a script.
+
+## Metrics for a monitoring tool
+
+For those who already run Prometheus, Grafana or another monitoring system. Off by default: nothing is exposed
+until you turn it on, and most installations never need it (Settings -> Usage and the dashboard show the same
+figures).
+
+**Settings -> System -> Metrics for a monitoring tool -> Expose /metrics** (or `maxxing metrics on`) gives:
+
+- an address, `https://<your address>/metrics`, in the Prometheus text format;
+- a secret token, shown once: the monitoring tool sends it as `Authorization: Bearer <token>`. Without it the
+  address answers 401; with the switch off, 404. **New token** replaces it (the old one stops working at once).
+
+What it holds: tokens, cost and turns (in total, today, per project and per agent), the daily budget and whether it
+is reached, the usage of your Claude plan, the scheduled jobs (last run, its result and duration), sessions running,
+disk, memory, load, the health checks and the age of the last backup. No session title, message, file name or key
+is in it.
+
+```yaml
+scrape_configs:
+  - job_name: harness
+    scheme: https
+    authorization: { credentials: "hmx_..." }
+    static_configs: [{ targets: ["harness.example.com"] }]
+```
 
 ## Features
 

@@ -19,6 +19,7 @@ _cache: dict = {"at": 0.0, "data": None, "inflight": None}
 CACHE_S = 20.0
 FORCE_MIN_S = 3.0          # a forced refresh younger than this returns the cache
 COMPUTE_WAIT_S = 120.0     # a call sharing a running computation waits at most this long
+AGENT_DAYS = 30            # days of an agent's own history in the payload
 
 
 def _scan_log(sid: str) -> dict:
@@ -127,11 +128,13 @@ def _median(values: list[float]) -> float | None:
     return round(v[mid] if len(v) % 2 else (v[mid - 1] + v[mid]) / 2, 3)
 
 
-def compute() -> dict:
+def compute(full: bool = False) -> dict:
+    """The usage payload. `full` (the export) keeps every session instead of the top 100."""
     totals: dict = {}
     projects: dict[str, dict] = {}
     topics: dict[str, dict] = {}
     days: dict[str, dict] = {}
+    path_days: dict[str, dict[str, dict]] = {}      # per folder, for the agents: {path: {day: {tokens, cost_usd}}}
     sessions = []
     starts: list[float] = []
     firsts: list[float] = []
@@ -156,21 +159,26 @@ def compute() -> dict:
             if isinstance(d, dict):
                 day = _text(day)
                 cur = days.setdefault(day, {"date": day, "tokens": 0, "cost_usd": 0.0})
-                cur["tokens"] += _int(d.get("tokens"))
-                cur["cost_usd"] = round(cur["cost_usd"] + _float(d.get("cost")), 6)
+                for cur in (cur, path_days.setdefault(path, {}).setdefault(day, {"date": day, "tokens": 0, "cost_usd": 0.0})):
+                    cur["tokens"] += _int(d.get("tokens"))
+                    cur["cost_usd"] = round(cur["cost_usd"] + _float(d.get("cost")), 6)
         title = _text(m.get("title"))
         sessions.append({"id": sid, "title": title or "Untitled", "path": path,
                          "archived": bool(m.get("archived")), "updated": _when(m.get("updated")) or _when(m.get("created")),
                          **tk, "total": sum(tk.values()), "cost_usd": round(cost, 6), "turns": turns})
     for row in topics.values():
         row.update(_where_label(row["path"]))
+    # one row per agent folder: what `topics` counts for it, with its own days (the agent page draws them)
+    agents = [{**row, "name": row["agent"], "days": [d for _, d in sorted(path_days.get(row["path"], {}).items())][-AGENT_DAYS:]}
+              for row in topics.values() if row.get("agent")]
     by_total = lambda x: (x.get("total", 0), x.get("cost_usd", 0))  # noqa: E731
     sessions.sort(key=by_total, reverse=True)
     return {
         "totals": totals or {**store.empty_tokens(), "total": 0, "cost_usd": 0.0, "turns": 0, "sessions": 0},
         "projects": sorted(projects.values(), key=by_total, reverse=True),
         "topics": sorted(topics.values(), key=by_total, reverse=True),
-        "sessions": sessions[:100],
+        "agents": sorted(agents, key=by_total, reverse=True),
+        "sessions": sessions if full else sessions[:100],
         "days": [days[k] for k in sorted(days)][-store.DAYS_KEPT:],
         # recent turns of every session: seconds until Claude Code's first event / its first answer
         "latency": {"start_s": _median(starts), "first_answer_s": _median(firsts), "turns": len(starts)},
@@ -212,3 +220,51 @@ def tokens(force: bool = False) -> dict:
                 _cache["inflight"] = None
             inflight.set()
     return data
+
+
+# ---------------------------------------------------------------- export (Settings -> Usage, `maxxing usage export`)
+EXPORT_GROUPS = ("days", "projects", "topics", "agents", "sessions")
+_COUNTS = ("total", "input", "output", "cache_read", "cache_write", "cost_usd", "turns")
+_COLUMNS = {
+    "days": ("date", "tokens", "cost_usd"),
+    "projects": ("project", *_COUNTS, "sessions"),
+    "topics": ("path", "label", "agent", *_COUNTS, "sessions"),
+    "agents": ("path", "agent", "label", *_COUNTS, "sessions"),
+    "sessions": ("id", "title", "path", "archived", "updated", *_COUNTS),
+}
+
+
+def export_rows(group: str) -> tuple[tuple[str, ...], list[dict]]:
+    """(columns, rows) of one grouping of the usage, every session included. Raises ValueError on an unknown group."""
+    if group not in EXPORT_GROUPS:
+        raise ValueError(group)
+    data = compute(full=True)
+    cols = _COLUMNS[group]
+    rows = []
+    for r in data[group]:
+        r = {**r, "project": r.get("name") or "", "agent": r.get("agent") or r.get("name") or ""} if group != "sessions" else r
+        rows.append({c: r.get(c, "") if r.get(c) is not None else "" for c in cols})
+    return cols, rows
+
+
+def _cell(v) -> str:
+    """A CSV cell that a spreadsheet never runs as a formula: a title or a folder name starting with = + - @ (or a
+    tab / carriage return) gets a leading apostrophe. Numbers are written as they are."""
+    if isinstance(v, bool):
+        return "true" if v else "false"
+    if isinstance(v, (int, float)):
+        return repr(round(v, 6)) if isinstance(v, float) else str(v)
+    s = str(v)
+    return "'" + s if s[:1] in ("=", "+", "-", "@", "\t", "\r") else s
+
+
+def export_csv(group: str) -> str:
+    import csv
+    import io
+    cols, rows = export_rows(group)
+    out = io.StringIO()
+    w = csv.writer(out, lineterminator="\n")
+    w.writerow(cols)
+    for r in rows:
+        w.writerow([_cell(r[c]) for c in cols])
+    return out.getvalue()

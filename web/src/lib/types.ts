@@ -978,6 +978,8 @@ export type TokenStats = {
   totals: TokenCounts
   projects: (TokenCounts & { name: string })[]
   topics: (TokenCounts & { path: string })[]
+  /** One row per agent folder (what `topics` counts for it), with its own last 30 days. */
+  agents?: (TokenCounts & { path: string; name: string; label: string; days: { date: string; tokens: number; cost_usd: number }[] })[]
   sessions: (Omit<TokenCounts, 'sessions'> & { id: string; title: string; path: string; archived: boolean; updated: number })[]
   days: { date: string; tokens: number; cost_usd: number }[]
   /** Recent turns: median seconds until Claude Code's first event (start) and its first answer. */
@@ -1028,7 +1030,21 @@ export type CpuSnapshot = {
 }
 export type Service = { name: string; label: string; active: boolean; enabled: boolean; since: number | null; state: string }
 export type ServiceAction = 'start' | 'stop' | 'restart'
-export type LogsPayload = { lines: string[] }
+export type LogsPayload = { lines: string[]; /** a search only: lines that match, journal lines read, and whether the journal held more than was read */ matched?: number; scanned?: number; truncated?: boolean }
+export type LogFilters = { since: string; level: string; q: string }
+/** GET /metrics (Prometheus): its switch; `token` only in the answer that created it. */
+export type MetricsStatus = { enabled: boolean; has_token: boolean; url: string; token?: string | null }
+/** What a turn did (GET /api/sessions/{id}/turns): see docs/dev/API.md. */
+export type TurnInfo = {
+  n: number; at: number | null; prompt: string; state: 'done' | 'failed' | 'stopped' | 'timed_out' | 'running'; duration_s: number | null
+  cost_usd: number | null; model: string; tokens: { input: number; output: number; cache_read: number; cache_write: number }; total_tokens: number
+  model_calls: number; tool_calls: number; errors: number
+}
+export type TurnStep =
+  | { kind: 'model'; at: number | null; model: string; context: number; cache_read: number; cache_write: number; text_chars: number; thinking: boolean; sub: boolean }
+  | { kind: 'tool'; at: number | null; name: string; summary: string; duration_s: number | null; error: boolean; done: boolean; sub: boolean }
+  | { kind: 'note'; at: number | null; level: string; text: string }
+export type TurnDetail = TurnInfo & { steps: TurnStep[]; steps_dropped: number }
 export type VersionInfo = {
   version: string
   commit: string

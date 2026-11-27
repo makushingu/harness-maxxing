@@ -1,9 +1,9 @@
 import * as React from 'react'
 import { Brush, HardDrive, Play, RefreshCw, RotateCw, Sparkles, Square } from 'lucide-react'
 import { useNavigate } from 'react-router'
-import { useCleanup, useCleanupScan, useHealth, useLogs, useServiceAction, useServices, useSettings, useSaveSettings } from '@/lib/queries'
+import { useCleanup, useCleanupScan, useHealth, useLogs, useMetrics, useNewMetricsToken, useServiceAction, useServices, useSetMetrics, useSettings, useSaveSettings } from '@/lib/queries'
 import { fmtBytes, fmtRelative } from '@/lib/format'
-import type { CleanupPartId, ServiceAction } from '@/lib/types'
+import type { CleanupPartId, MetricsStatus, ServiceAction } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { useLang, useT } from '@/i18n'
 import {
@@ -124,12 +124,24 @@ function ServicesCard() {
   )
 }
 
+const LOG_LEVELS = ['all', 'warning', 'error'] as const
+const LOG_SINCE = ['all', '1h', '24h', '7d'] as const
+
+/** The journal of a service: its last lines, or a search in it (a period, a level, a text: logsearch.py). */
 function LogsCard() {
   const t = useT()
   const { data: services } = useServices()
   const [unit, setUnit] = React.useState(SELF)
   const [lines, setLines] = React.useState(200)
-  const { data, isFetching, refetch, isLoading } = useLogs(unit, lines)
+  const [level, setLevel] = React.useState<(typeof LOG_LEVELS)[number]>('all')
+  const [since, setSince] = React.useState<(typeof LOG_SINCE)[number]>('all')
+  const [text, setText] = React.useState('')
+  const [q, setQ] = React.useState('')
+  React.useEffect(() => {
+    const id = window.setTimeout(() => setQ(text.trim()), 300)
+    return () => window.clearTimeout(id)
+  }, [text])
+  const { data, isFetching, refetch, isLoading } = useLogs(unit, lines, { since: since === 'all' ? '' : since, level: level === 'all' ? '' : level, q })
   const box = React.useRef<HTMLPreElement>(null)
   React.useLayoutEffect(() => {
     if (box.current) box.current.scrollTop = box.current.scrollHeight
@@ -148,11 +160,80 @@ function LogsCard() {
         </div>
       }
     >
+      <div className="mb-2 flex flex-wrap gap-2">
+        <Input value={text} onChange={(e) => setText(e.target.value)} placeholder={t('system.logSearch')} aria-label={t('system.logSearch')} maxLength={200} className="h-8 min-w-40 flex-1" data-testid="logs-search" />
+        <Select value={level} onValueChange={(v) => setLevel(v as typeof level)} options={LOG_LEVELS.map((v) => ({ value: v, label: t(`system.logLevel.${v}`) }))} className="h-8 w-44" aria-label={t('system.logLevelLabel')} data-testid="logs-level" />
+        <Select value={since} onValueChange={(v) => setSince(v as typeof since)} options={LOG_SINCE.map((v) => ({ value: v, label: t(`system.logSince.${v}`) }))} className="h-8 w-40" aria-label={t('system.logSinceLabel')} />
+      </div>
       <Sensitive block placeholder={<div className="h-80 rounded-lg bg-muted" />}>
-        <pre ref={box} className={cn('h-80 overflow-auto rounded-lg border bg-fill-1 p-3 font-mono text-[12px] leading-relaxed whitespace-pre-wrap break-all', isLoading && 'animate-shimmer')}>
+        <pre ref={box} className={cn('h-80 overflow-auto rounded-lg border bg-fill-1 p-3 font-mono text-[12px] leading-relaxed whitespace-pre-wrap break-all', isLoading && 'animate-shimmer')} data-testid="logs-box">
           {data?.lines.length ? data.lines.join('\n') : isLoading ? '' : t('system.noLogs')}
         </pre>
       </Sensitive>
+      {data?.matched != null && (
+        <p className="mt-1.5 text-xs text-muted-foreground" data-testid="logs-count">
+          {t('system.logMatched', { shown: data.lines.length, matched: data.matched })}
+          {data.truncated && ` ${t('system.logTruncated', { n: data.scanned || 0 })}`}
+        </p>
+      )}
+    </SettingsCard>
+  )
+}
+
+/** GET /metrics in the Prometheus format (metrics.py): off by default; its token is shown once, when it is made. */
+function MetricsCard() {
+  const t = useT()
+  const { data } = useMetrics()
+  const set = useSetMetrics()
+  const renew = useNewMetricsToken()
+  const [token, setToken] = React.useState<string | null>(null)
+  const got = (r: MetricsStatus) => {
+    if (r.token) setToken(r.token)
+    if (!r.enabled) setToken(null)
+  }
+  const url = data ? (/^https?:/.test(data.url) ? data.url : window.location.origin + '/metrics') : ''
+  return (
+    <SettingsCard title={t('system.metrics')} description={t('system.metricsDesc')}>
+      <SettingRow label={t('system.metricsOn')} description={t('system.metricsOnDesc')} htmlFor="mx-metrics">
+        <Switch id="mx-metrics" data-testid="metrics-switch" checked={!!data?.enabled} disabled={!data || set.isPending} onCheckedChange={(v) => set.mutate(v, { onSuccess: got })} />
+      </SettingRow>
+      {data?.enabled && (
+        <div className="mt-4 grid min-w-0 gap-3 text-sm">
+          <Sensitive block placeholder={<div className="h-8 rounded-lg bg-muted" />}>
+            <code className="block overflow-x-auto rounded-lg border bg-fill-1 px-3 py-2 font-mono text-[12px] whitespace-nowrap" data-testid="metrics-url">
+              {url}
+            </code>
+          </Sensitive>
+          {token ? (
+            <div className="grid min-w-0 gap-1.5 rounded-lg border border-warning/40 bg-warning/10 p-3">
+              <span className="text-xs font-medium">{t('system.metricsTokenOnce')}</span>
+              <code className="block overflow-x-auto font-mono text-[12px] whitespace-nowrap select-all" data-testid="metrics-token">
+                {token}
+              </code>
+              <div>
+                <Button variant="outline" size="sm" onClick={() => void navigator.clipboard?.writeText(token).then(() => toast.success(t('import.copied')))}>
+                  {t('common.copy')}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="min-w-0 flex-1 text-xs text-muted-foreground">{t('system.metricsTokenHint')}</span>
+              <Button
+                variant="outline"
+                size="sm"
+                loading={renew.isPending}
+                data-testid="metrics-new-token"
+                onClick={async () => {
+                  if (await confirm({ title: t('system.metricsNewToken'), description: t('system.metricsNewTokenConfirm'), confirmText: t('system.metricsNewToken') })) renew.mutate(undefined, { onSuccess: got })
+                }}
+              >
+                {t('system.metricsNewToken')}
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
     </SettingsCard>
   )
 }
@@ -331,6 +412,7 @@ export function SystemSection() {
       <ServicesCard />
       <AddressCard />
       <LogsCard />
+      <MetricsCard />
     </SectionStack>
   )
 }

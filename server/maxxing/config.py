@@ -84,6 +84,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "onboarding_completed": False,
     "profile": {"name": "", "color": "", "emoji": ""},   # the user's pseudo: messages, notifications
     "daily_budget_usd": 0.0,           # Settings -> Usage: dollars a day for the whole server (budget.py), 0 = none
+    "metrics": False,                  # GET /metrics in the Prometheus format, with a bearer token (metrics.py)
     "usage_widget": False,             # Settings -> Usage: show plan usage (`maxxing init`: on for new installs since 2.0.0a132)
     "maxxing_mode": False,             # Settings -> Features (beta): a finished session comes to the front (Sessions page)
     "health_feed": False,              # server health problems also in the Notifications feed (`maxxing init`: on when new)

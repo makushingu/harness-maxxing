@@ -5,6 +5,13 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 
 ## Unreleased
 
+New:
+- **What each agent costs.** Settings → Usage has an **Agent** tab: tokens, turns and cost of every agent, next to the ones per project, topic and session. An agent's profile shows the same total and its last 30 days under its budget.
+- **Usage as a file.** Under the table of Settings → Usage, **CSV** and **JSON** download the grouping shown, every row (the table stops at 50), and **Per day** the daily chart. From a script: `maxxing usage export --group agents --format csv`.
+- **Search the logs.** Settings → System → Logs gets a search field, a level (every line, warnings and errors, errors only) and a period (15 minutes to 30 days); a Python error keeps its whole trace. In a terminal: `maxxing logs --since 24h --level error --grep telegram`, or `--session ID` for the lines about one session.
+- **Turn details.** The ⚙ at the end of the line under an answer opens **Turn details**: each call to the model (how much context it read, how much came from the cache) and each tool, in order, with its duration and the ones that failed; the turn's tokens and cost; **JSON** downloads it. Nothing more is stored: it is read from the session's log (`maxxing sessions trace SESSION [TURN]`).
+- **Metrics for a monitoring tool (off by default).** Settings → System can expose `/metrics` in the Prometheus format for a Grafana or another system you already run: tokens, cost and turns (in total, per project, per agent), the daily budget, plan usage, scheduled jobs, disk, memory, health. Read only with a secret token shown once; no session title, message or file is in it (`maxxing metrics on`).
+
 ## 2.0.0-alpha.175 - 2026-11-27
 
 New:

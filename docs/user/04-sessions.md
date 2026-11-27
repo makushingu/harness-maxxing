@@ -268,6 +268,10 @@ into another app, the content arrives as plain text (a file as its path).
 - **Right click** a picture, a video, an attachment or a file path (long press on Android): **Open**, **Download**,
   **Quote** (adds the file to your next message as one line with its path - Claude reads it only if needed, the
   picture does not fill the context) and **Copy path**.
+- **Turn details**: the ⚙ at the end of the line under an answer -> **Turn details** shows what the turn did, in
+  order: each call to the model (how much context it read, how much of it came from the cache), each tool with its
+  duration, the ones that failed, then the turn's tokens and cost. **Previous turn** / **Next turn** move through
+  the session, **JSON** downloads the turn. Nothing more is stored for it: it is read from the session's log.
 - **Code changes**: when a turn changed files of a git repository, a button under the answer sums them up
   (**app · 3 files · +12 −4**); click it to review the diff, undo a file, commit, push or open a pull request. Right
   click one of your messages for **Revert to before this message**. See [Code in a session](35-code.md).

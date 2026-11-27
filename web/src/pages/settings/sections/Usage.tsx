@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { Link } from 'react-router'
-import { BarChart3, RotateCw } from 'lucide-react'
+import { BarChart3, Download, RotateCw } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { qk, useBudget, useSaveSettings, useSettings, useTokenStats, useUsage } from '@/lib/queries'
@@ -13,7 +13,9 @@ import { Callout, SettingRow } from '@/features/common'
 import { Chart, compact } from '@/pages/dashboard/charts'
 import { SettingsCard, SectionStack } from './ui'
 
-type Group = 'projects' | 'topics' | 'sessions'
+type Group = 'projects' | 'topics' | 'agents' | 'sessions'
+const GROUP_KEY = { projects: 'stats.byProject', topics: 'stats.byTopic', agents: 'stats.byAgent', sessions: 'stats.bySession' } as const
+const cost = (v: number) => `$${v.toFixed(v < 10 ? 2 : 0)}`
 
 
 function QuotaRow({ label, w }: { label: string; w: UsageWindow | null }) {
@@ -185,6 +187,7 @@ function Tile({ label, value, hint }: { label: string; value: string; hint?: str
 function rowsOf(data: TokenStats, group: Group, root: string) {
   if (group === 'projects') return data.projects.map((p) => ({ key: p.name || '~', label: p.name || root, href: null as string | null, c: p as Omit<TokenCounts, 'sessions'> & { sessions?: number } }))
   if (group === 'topics') return data.topics.map((tp) => ({ key: tp.path || '~', label: tp.path ? tp.path.replace(/^projects\//, '').replace('/topics/', ' / ').replace('/agents/', ' · ') : root, href: `/sessions?path=${encodeURIComponent(tp.path)}`, c: tp }))
+  if (group === 'agents') return (data.agents || []).map((a) => ({ key: a.path, label: a.label, href: `/sessions?path=${encodeURIComponent(a.path)}`, c: a }))
   return data.sessions.map((s) => ({ key: s.id, label: s.title, href: `/sessions?path=${encodeURIComponent(s.path)}&session=${s.id}`, c: s }))
 }
 
@@ -252,15 +255,17 @@ function TokensCard() {
               options={[
                 { value: 'projects', label: t('stats.byProject') },
                 { value: 'topics', label: t('stats.byTopic') },
+                ...(data.agents?.length ? [{ value: 'agents' as const, label: t('stats.byAgent') }] : []),
                 { value: 'sessions', label: t('stats.bySession') },
               ]}
             />
             <div className="-mx-2 overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-sm" data-testid="usage-table">
                 <thead>
                   <tr className="text-left text-xs text-muted-foreground">
-                    <th className="px-2 py-1.5 font-medium">{t(group === 'projects' ? 'stats.byProject' : group === 'topics' ? 'stats.byTopic' : 'stats.bySession')}</th>
+                    <th className="w-2/5 px-2 py-1.5 font-medium">{t(GROUP_KEY[group])}</th>
                     <th className="px-2 py-1.5 text-right font-medium">{t('stats.total')}</th>
+                    <th className="px-2 py-1.5 text-right font-medium">{t('stats.costCol')}</th>
                     <th className="px-2 py-1.5 text-right font-medium max-sm:hidden">{t('stats.inOut')}</th>
                     <th className="px-2 py-1.5 text-right font-medium max-md:hidden">{t('stats.cache')}</th>
                     <th className="px-2 py-1.5 text-right font-medium max-sm:hidden">{t('stats.turnsCol')}</th>
@@ -288,6 +293,9 @@ function TokensCard() {
                             </div>
                           </td>
                           <td className="px-2 py-1.5 text-right font-medium tabular-nums">{n(r.c.total)}</td>
+                          <td className="px-2 py-1.5 text-right text-muted-foreground tabular-nums">
+                            <Sensitive length={4}>{cost(r.c.cost_usd)}</Sensitive>
+                          </td>
                           <td className="px-2 py-1.5 text-right text-muted-foreground tabular-nums max-sm:hidden">
                             {n(r.c.input)} / {n(r.c.output)}
                           </td>
@@ -298,6 +306,22 @@ function TokensCard() {
                     })}
                 </tbody>
               </table>
+            </div>
+            {/* the same grouping as a file, every row (the table stops at 50); "days" = the chart above */}
+            <div className="flex flex-wrap items-center gap-2 pt-1 text-xs text-muted-foreground">
+              <span>{t('stats.export')}</span>
+              {(['csv', 'json'] as const).map((f) => (
+                <Button key={f} asChild variant="outline" size="sm">
+                  <a href={`/api/stats/export?group=${group}&format=${f}`} download={`harness-usage-${group}.${f}`} data-testid={`usage-export-${f}`}>
+                    <Download /> {f.toUpperCase()}
+                  </a>
+                </Button>
+              ))}
+              <Button asChild variant="ghost" size="sm">
+                <a href="/api/stats/export?group=days&format=csv" download="harness-usage-days.csv">
+                  <Download /> {t('stats.exportDays')}
+                </a>
+              </Button>
             </div>
           </div>
         </div>
