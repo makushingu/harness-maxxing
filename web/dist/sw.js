@@ -11,8 +11,8 @@
  * Web Push ("Harness has finished", server/maxxing/webpush.py): the server sends an EMPTY push; the worker then asks
  * POST /api/push/pending (same origin, the app's cookie) what to show, one notification per session; a tap opens it.
  */
-const VERSION = "4559dfcecf8d"
-const PRECACHE = ["/assets/index-Cm9Zo_9t.js","/assets/rolldown-runtime-XKyaHtl9.js","/assets/vendor-react-BNCMh3YF.js","/assets/ui-BPZDPXiY.js","/assets/react-DurwoXPM.js","/assets/middleware-CpWMw2yu.js","/assets/preload-helper-7y9sWmk5.js","/assets/vendor-query-kkOOQXZY.js","/assets/media-_H-QEmDW.js","/assets/pwa-Ijo3mTN0.js","/assets/queries-33O0sstx.js","/assets/toast-DR8VLhke.js","/assets/vendor-ui-DwJrUN99.js","/assets/upload-BeEGGYGO.js","/assets/createLucideIcon-BrI7woTs.js","/assets/utils-CbJjB46A.js","/assets/vendor-router-C6VFWG_N.js","/assets/spinner-XpnlRkeZ.js","/assets/check-CEbXaWsJ.js","/assets/sheet-drag-84BVf4oC.js","/assets/bot-DnwIIIL3.js","/assets/git-branch-B1B5L3Ao.js","/assets/x-BEKxJziG.js","/assets/folder-open-Dr4SbNQW.js","/assets/index-B0lBCXV_.css","/assets/inter-latin-wght-normal-Dx4kXJAl.woff2"]
+const VERSION = "7504a30fcb32"
+const PRECACHE = ["/assets/index-ubXP-bda.js","/assets/rolldown-runtime-XKyaHtl9.js","/assets/vendor-react-BNCMh3YF.js","/assets/ui-Bh_DX0Z4.js","/assets/react-DurwoXPM.js","/assets/middleware-CpWMw2yu.js","/assets/preload-helper-7y9sWmk5.js","/assets/vendor-query-kkOOQXZY.js","/assets/media-zRdq5T7T.js","/assets/pwa-Ijo3mTN0.js","/assets/queries-CPEpsQCa.js","/assets/toast-38eDfBZq.js","/assets/vendor-ui-DwJrUN99.js","/assets/upload-D2pjQNNf.js","/assets/createLucideIcon-BrI7woTs.js","/assets/utils-CbJjB46A.js","/assets/vendor-router-C6VFWG_N.js","/assets/spinner-XpnlRkeZ.js","/assets/check-CEbXaWsJ.js","/assets/sheet-drag-gnDDdum3.js","/assets/bot-DnwIIIL3.js","/assets/git-branch-B1B5L3Ao.js","/assets/x-BEKxJziG.js","/assets/folder-open-Dr4SbNQW.js","/assets/index-DiwG5-cC.css","/assets/inter-latin-wght-normal-Dx4kXJAl.woff2"]
 const SHELL = `mx-shell-${VERSION}`
 const ASSETS = `mx-assets-${VERSION}`
 const OFFLINE = '/offline.html'
