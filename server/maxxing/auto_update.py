@@ -58,7 +58,13 @@ def _entry(v) -> dict | None:
     if not isinstance(v, dict):
         return None
     at = v.get("at")
-    return v if isinstance(at, (int, float)) and not isinstance(at, bool) and math.isfinite(at) else None
+    if not (isinstance(at, (int, float)) and not isinstance(at, bool) and math.isfinite(at)):
+        return None
+    out: dict = {"at": at}
+    for k in ("verdict", "target", "version", "result", "why"):   # only the known fields, as text JSON can carry
+        if k in v:                                                # (a NaN or a lone surrogate broke the answer)
+            out[k] = v[k].encode("utf-8", "replace").decode() if isinstance(v[k], str) else None
+    return out
 
 
 def public() -> dict:
