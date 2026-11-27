@@ -212,3 +212,71 @@ def test_by_default_the_daily_look_creates_the_skill_and_never_overwrites_one(cl
     mr._save(mr.load() + [it])
     mr.settle(it)
     assert f.read_text() == "mine"
+
+
+def _worked(path: str, turns: int, idle_h: float = 3.0, **kw) -> dict:
+    m = store.new_meta(path, "worked", **kw)
+    m["turns"] = turns
+    store.create(m)
+    m["updated"] = time.time() - idle_h * 3600                # create() stamps "now"
+    config.write_json(store.meta_path(m["id"]), m)
+    return m
+
+
+BULLET = {"proposals": [{"level": "topic", "action": "add", "text": "Articles go out on Tuesdays.", "why": "decided", "source": "owner"}]}
+
+
+def test_daily_reads_the_owners_quiet_sessions_once(client, topic, model):
+    config.save_config({**config.load_config(), "memory_review": True})          # the default: written, with Undo
+    s = _worked(T, 4)
+    _worked(T, 2)                                             # too short
+    _worked(T, 9, idle_h=0.5)                                 # still in use
+    _worked(T, 9, source="agent")                             # a run: read after the run, not here
+    model.answers = [BULLET]
+    new = mr.daily(force=True)
+    read = lambda: [a for a in model.asked if "=== CONVERSATION ===" in a]     # noqa: E731 - not the topic's daily look
+    assert [(x["sid"], x["level"]) for x in new] == [(s["id"], "topic")] and len(read()) == 1
+    assert "- Articles go out on Tuesdays." in (config.workspace() / T / "memory.md").read_text()
+    ev = next(e for e in _events() if e["title"] == "Memory of acme / blog: a bullet added")
+    assert [a["id"] for a in ev["actions"]] == ["undo"]
+    assert mr.daily(force=True) == [] and len(read()) == 1                       # read once
+    m = store.read(s["id"])
+    m["turns"] = 7                                            # it worked again: read again
+    config.write_json(store.meta_path(s["id"]), m)
+    model.answers = [{"proposals": []}]
+    assert mr.daily(force=True) == [] and len(read()) == 2
+
+
+def _skill(folder, name: str, body: str, days_old: float = 0.0):
+    d = folder / ".claude" / "skills" / name
+    d.mkdir(parents=True)
+    f = d / "SKILL.md"
+    f.write_text(f"---\nname: {name}\ndescription: \"d\"\n---\n{body}")
+    if days_old:
+        import os
+        t = time.time() - days_old * 86400
+        os.utime(f, (t, t))
+    return d
+
+
+def test_daily_asks_before_removing_a_skill_nobody_uses(client, topic, model):
+    config.save_config({**config.load_config(), "memory_review": True})          # even when the rest is written alone
+    ws = config.workspace()
+    steps = "1. Do this carefully.\n2. Then do that, and check the result.\n"
+    empty = _skill(ws / T, "hi", "x\n")
+    idle = _skill(ws / T, "old-report", steps, days_old=45)
+    used = _skill(ws / T, "weekly-post", steps, days_old=45)
+    fresh = _skill(ws / T, "new-thing", steps, days_old=3)
+    s = store.create(store.new_meta(T, "uses a skill"))
+    with open(store.log_path(s["id"]), "a") as f:
+        f.write('{"type": "assistant", "message": {"content": [{"type": "tool_use", "id": "t1", "name": "Skill", "input": {"skill": "weekly-post"}}]}}\n')
+    new = mr.daily(force=True)
+    assert sorted(x["skill"]["name"] for x in new) == ["hi", "old-report"] and model.asked == []
+    assert all(d.exists() for d in (empty, idle, used, fresh))                  # nothing removed alone
+    evs = {e["title"]: e for e in _events()}
+    ev = evs["Skill old-report: remove it?"]
+    assert [a["id"] for a in ev["actions"]] == ["accept", "refuse"] and "30 days" in ev["body"]
+    assert client.post(f"/api/feed/{ev['id']}/act/accept").status_code == 200
+    assert not idle.exists() and any("skill-old-report" in p.name for p in config.state_dir("trash").iterdir())
+    assert client.post(f"/api/feed/{evs['Skill hi: remove it?']['id']}/act/refuse").status_code == 200
+    assert empty.exists() and mr.daily(force=True) == []                        # refused: never asked again

@@ -94,6 +94,15 @@ Harness also looks at the work itself, and keeps what is worth keeping. It write
   corrections); when you gave the same correction twice, a rule in the topic's `memory.md`. A skill of yours with
   the same name is never replaced.
 
+- **Once a day, for the sessions you worked in**: a session with at least three new turns that has been quiet for
+  two hours is read once, and what should stay - a decision, a rule you gave, a path, the state of the work - is
+  written into the right `memory.md` (two lines at most for one session). Memory no longer depends on Claude
+  thinking of it at the end of an exchange.
+- **Once a day, the skills nobody uses**: a skill of yours with nothing in it, or that no session started in 30
+  days, gets a notification asking whether to remove it. This one is always asked: **Accept** moves the skill to the
+  [Trash](settings-and-keys) (it can be restored), **Refuse** keeps it and it is never asked again. The skills
+  shipped with Harness are never concerned.
+
 A small model reads the conversation (Haiku: a fraction of a cent per look), with no tools and no access to
 anything else. What you undo is not written again; at most three things are written in 24 hours for one agent or
 topic. The daily look reads the topics that had at least three sessions in the last 14 days, ten topics a day at

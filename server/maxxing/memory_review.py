@@ -7,10 +7,14 @@ until the owner accepts a proposal: a notification with **Accept** / **Refuse** 
                          pointed to); `after_run`, from the sessions' turn end (api/memory.py)
     once a day           the topics with several recent sessions: a skill for a procedure asked three times, a rule
                          for a correction given twice; `daily`
+    once a day           the owner's sessions that worked and are quiet now: what their memory.md should keep, so
+                         the capture no longer depends on the assistant thinking of it; `_reviewable`
+    once a day           the skills nobody starts (empty, or 30 days without a use): always ASKED, never removed
+                         alone; Accept moves the skill to the Trash; `_stale_skills`
 
 `"memory_review": false` in config.json turns both off. `<state>/memory_proposals.json` = {"proposals": [{id, sid, path,
 level (global|project|topic|agent|skill), action, text, old, why, source, at, state (new|applied|rejected), skill?}],
-"learned": {path: newest session seen}, "learned_at": when}."""
+"learned": {path: newest session seen}, "reviewed": {session id: turns it had when read}, "learned_at": when}."""
 from __future__ import annotations
 
 import json
@@ -104,6 +108,10 @@ KEEP = 400                     # proposals kept in the file (the oldest go)
 PENDING_MAX = 3                # proposals waiting for one folder: no new review until the owner answers
 LEARN_EVERY_S = 24 * 3600
 LEARN_MIN, LEARN_DAYS, LEARN_TOPICS = 3, 14, 10   # a topic is read when it has 3 sessions in 14 days; 10 topics a day
+# a session of the owner is read once it has REVIEW_TURNS turns more than at its last read and is quiet for
+# REVIEW_IDLE_S; the REVIEW_SESSIONS newest a day, REVIEW_KEEP bullets at most for one session
+REVIEW_TURNS, REVIEW_IDLE_S, REVIEW_DAYS, REVIEW_SESSIONS, REVIEW_KEEP = 3, 2 * 3600, 7, 10, 2
+SKILL_IDLE_DAYS, SKILL_EMPTY, SKILL_ASKS = 30, 40, 3      # days without a use; characters of an "empty" skill; asked a day
 ACCEPT, REFUSE, UNDO = "accept", "refuse", "undo"
 _lock = threading.RLock()
 
@@ -229,6 +237,17 @@ def apply(pid: str) -> str:
     it = next((x for x in items if x["id"] == pid and x["state"] == "new"), None)
     if not it:
         return "unknown or already handled"
+    if it["level"] == "skill" and it["action"] == "remove":
+        folder = Path(str((it.get("skill") or {}).get("folder") or ""))
+        if str(folder) not in {x["folder"] for x in _own_skills()}:        # gone, or no longer a skill of the user
+            it["state"] = "rejected"
+            _save(items)
+            return "the skill is no longer there"
+        from . import workspace
+        workspace.move_to_trash(folder, label=f"skill-{folder.name}")
+        it["state"], it["at"] = "applied", int(time.time())
+        _save(items)
+        return "skill moved to the Trash"
     if it["level"] == "skill":
         if skill_file(it["path"], it.get("skill") or {}).exists():
             it["state"] = "rejected"
@@ -267,6 +286,8 @@ def undo(pid: str) -> str:
     it = next((x for x in items if x["id"] == pid and x["state"] == "applied"), None)
     if not it:
         return "unknown or not written"
+    if it["level"] == "skill" and it["action"] == "remove":
+        return "restore it from Settings -> Trash"
     if it["level"] == "skill":
         f = skill_file(it["path"], it.get("skill") or {})
         if f.exists():
@@ -392,7 +413,12 @@ def announce(it: dict, done: bool = False) -> None:
     """One proposal -> a notification with Accept / Refuse, or, already written (`done`), with Undo (web, Telegram)."""
     from . import agents, feed
     path, agent = it["path"], agents.is_agent_path(it["path"])
-    if it["level"] == "skill":
+    if it["level"] == "skill" and it["action"] == "remove":
+        k = it.get("skill") or {}
+        title = f"Skill {k.get('name')}: remove it?"
+        body = (f"{it.get('why') or 'Not used'}.\n\n{k.get('folder')}\n\nAccept moves it to the Trash (Settings -> "
+                "Trash brings it back); Refuse keeps it and it is not asked again.")
+    elif it["level"] == "skill":
         k = it.get("skill") or {}
         title = f"Skill {'created' if done else 'proposed'} for {_where(path)}: {skill_name(k)}"
         body = (str(k.get("description") or "") + "\n\n"
@@ -430,8 +456,9 @@ def feed_action(value: str, action: str, by: str, ev: dict) -> None:
 
 
 def settle(it: dict) -> None:
-    """A new proposal: written at once and announced with Undo ("auto"), or announced to wait for the owner ("ask")."""
-    if mode() != "auto":
+    """A new proposal: written at once and announced with Undo ("auto"), or announced to wait for the owner ("ask").
+    Removing a skill is always asked."""
+    if mode() != "auto" or (it["level"] == "skill" and it["action"] == "remove"):
         return announce(it)
     try:
         said = apply(it["id"])
@@ -479,8 +506,121 @@ def _learnable() -> list[tuple[str, float]]:
     return sorted(due, key=lambda x: -x[1])[:LEARN_TOPICS]
 
 
+def _reviewable() -> list[tuple[str, int, str]]:
+    """(session id, its turns, its folder) for the owner's sessions to read today: enough new turns since their last
+    read, quiet now. Agent runs (read after each run) and scheduled jobs are not the owner's."""
+    from . import agents
+    from .sessions import store
+    seen, now, out = _data().get("reviewed") or {}, time.time(), []
+    for i in store.list_ids():
+        m = store.read(i) or {}
+        turns, at, path = int(m.get("turns") or 0), float(m.get("updated") or 0), str(m.get("path") or "")
+        if turns - int(seen.get(i) or 0) >= REVIEW_TURNS and now - REVIEW_DAYS * 86400 <= at <= now - REVIEW_IDLE_S \
+                and m.get("state") != "running" and m.get("source") not in ("agent", "cron") and not m.get("cron") \
+                and not agents.is_agent_path(path):
+            out.append((at, i, turns, path))
+    return [(i, turns, path) for _, i, turns, path in sorted(out, reverse=True)[:REVIEW_SESSIONS]]
+
+
+def _sessions_review() -> list[dict]:
+    out = []
+    for sid, turns, path in _reviewable():
+        keep = min(REVIEW_KEEP, PENDING_MAX - _waiting(path))
+        if keep <= 0:                                    # the brake of the folder: read again tomorrow
+            continue
+        new = review(sid, "haiku").get("proposals") or []
+        for it in new[keep:]:
+            reject(it["id"])
+        with _lock:
+            d = _data()
+            d.setdefault("reviewed", {})[sid] = turns
+            _write(d)
+        for it in new[:keep]:
+            settle(it)
+        out += new[:keep]
+    return out
+
+
+def _own_skills() -> list[dict]:
+    """[{name, folder, path}] of the skills that are the user's to remove: theirs and the workspace's, never the
+    product's (an update would bring them back)."""
+    from . import skills
+    return [{"name": k["name"], "folder": str(Path(k["path"]).parent), "path": k["path"]}
+            for k in skills.list_skills() if k.get("origin") != "product"]
+
+
+_USED = re.compile(r'"name": ?"Skill", ?"input": ?\{"skill": ?"([^"]+)"')
+
+
+def _used_skills(since: float) -> set[str]:
+    """The names of the skills started (by Claude, or by /name) in the sessions written since `since`."""
+    from .sessions import store
+    used: set[str] = set()
+    for i in store.list_ids():
+        f = store.log_path(i)
+        try:
+            if f.stat().st_mtime < since:
+                continue
+            with f.open(encoding="utf-8", errors="replace") as fh:
+                for line in fh:
+                    if '"Skill"' in line:
+                        used.update(_USED.findall(line))
+                    elif '"mx_user"' in line and '"text": "/' in line:
+                        m = re.search(r'"text": "/([\w:-]+)', line)
+                        if m:
+                            used.add(m.group(1))
+        except OSError:
+            continue
+    return used
+
+
+def _stale_skills() -> list[dict]:
+    """The removals to ask for today: a skill with nothing in it, or older than SKILL_IDLE_DAYS that no session
+    started since. One that was refused (or asked) once is never asked again."""
+    asked = {(x.get("skill") or {}).get("folder") for x in load() if x.get("level") == "skill" and x.get("action") == "remove"}
+    own = [k for k in _own_skills() if k["folder"] not in asked]
+    since, out, used = time.time() - SKILL_IDLE_DAYS * 86400, [], None
+    for k in own:
+        f = Path(k["path"])
+        try:
+            body, old = re.sub(r"\A---\n.*?\n---\n", "", f.read_text("utf-8", "replace"), flags=re.S), f.stat().st_mtime < since
+        except OSError:
+            continue
+        why = ""
+        if len(body.strip()) < SKILL_EMPTY:
+            why = "It has no instructions"
+        elif old:
+            used = _used_skills(since) if used is None else used          # the logs are read only when a skill is old
+            if k["name"] not in used and Path(k["folder"]).name not in used:
+                why = f"No session started it in the last {SKILL_IDLE_DAYS} days"
+        if why:
+            out.append({"id": uuid.uuid4().hex[:8], "sid": "", "path": "", "level": "skill", "action": "remove",
+                        "text": f"remove skill {k['name']}", "old": "", "why": why, "source": "work", "model": "",
+                        "at": int(time.time()), "state": "new", "skill": {"name": k["name"], "folder": k["folder"]}})
+        if len(out) >= SKILL_ASKS:
+            break
+    return out
+
+
+def _safely(what: str, fn) -> list[dict]:
+    try:
+        return fn()
+    except Exception:  # noqa: BLE001 - one part of the daily look never stops the others
+        log.exception("daily memory review: %s", what)
+        return []
+
+
+def _skills_review() -> list[dict]:
+    new = _stale_skills()
+    _save(load() + new)
+    for it in new:
+        settle(it)
+    return new
+
+
 def daily(force: bool = False) -> list[dict]:
-    """Once a day: the skills and rules the recent sessions of each busy topic repeat -> the proposals announced."""
+    """Once a day: the skills and rules the recent sessions of each busy topic repeat, what the owner's sessions of
+    the day should leave in memory, and the skills nobody uses -> the proposals announced."""
     if not enabled() or (not force and time.time() - float(_data().get("learned_at") or 0) < LEARN_EVERY_S):
         return []
     with _lock:
@@ -513,4 +653,4 @@ def daily(force: bool = False) -> list[dict]:
         for it in new:
             settle(it)
         out += new
-    return out
+    return out + _safely("sessions", _sessions_review) + _safely("skills", _skills_review)
