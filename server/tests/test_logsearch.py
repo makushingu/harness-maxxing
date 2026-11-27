@@ -93,7 +93,7 @@ def test_entries_of_several_lines_are_not_taken_for_a_cut_journal(monkeypatch):
 def test_long_lines_are_cut_before_masking_and_lines_below_the_level_are_not_masked(monkeypatch):
     from maxxing import logs
     key = "sk-ant-api03-" + "k" * 40
-    long_line = "x" * 3990 + key + "y" * 44_000
+    long_line = "x" * 3950 + " " + key + " " + "y" * 44_000                        # the key ends past LINE_MAX
     monkeypatch.setattr(logsearch, "_run", lambda args: "\n".join(
         [_j("ERROR maxxing.app: " + long_line)] + [_j("INFO maxxing.app: " + "z" * 48_000)] * 50))
     masked: list[int] = []
