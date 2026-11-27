@@ -249,3 +249,9 @@ def test_a_damaged_register_meta_section_is_ignored(client, cloud, bad):
 def test_a_damaged_register_meta_section_does_not_stop_the_heartbeat(cloud, bad):
     config.update_config(register={"count": True, "asked": True}, register_meta=bad)
     assert register.heartbeat_due()                 # no beat on record: due
+
+
+@pytest.mark.parametrize("beat", ["abc", [1], 1e300, float("nan")])
+def test_a_damaged_or_future_beat_does_not_stop_the_heartbeat(cloud, beat):
+    config.update_config(register={"count": True, "asked": True}, register_meta={"beat_at": beat})
+    assert register.heartbeat_due()

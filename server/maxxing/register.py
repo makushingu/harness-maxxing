@@ -19,6 +19,7 @@ from __future__ import annotations
 import functools
 import json
 import logging
+import math
 import os
 import platform
 import re
@@ -242,7 +243,14 @@ def heartbeat_due() -> bool:
         return False
     if not _on(s):                                          # e.g. MAXXING_NO_TELEMETRY set after a count-only row:
         return bool(config.get_secret(TOKEN))               # the row is deleted (heartbeat -> sync)
-    return time.time() - float(_meta_section().get("beat_at") or 0) > EVERY - 600
+    now = time.time()
+    try:
+        last = float(_meta_section().get("beat_at") or 0)
+    except (TypeError, ValueError):
+        last = 0.0
+    if not math.isfinite(last) or last > now:              # a damaged or future date: due, not never (like move_due)
+        last = 0.0
+    return now - last > EVERY - 600
 
 
 @_serialized
