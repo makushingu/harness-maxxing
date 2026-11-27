@@ -128,3 +128,14 @@ def test_the_usual_day_is_the_median_of_the_last_14_days_only(client, topic):
         _spend(topic, 4.0, ago)
     usage_alerts.check(_spend(topic, 20.0), None)
     assert _events("more than usual") == []                    # two days of history: too few
+
+
+def test_an_unusual_day_deleted_from_the_feed_does_not_come_back_the_same_day(client, topic):
+    for ago in (1, 2, 3):
+        _spend(topic, 4.0, ago)
+    usage_alerts.check(_spend(topic, 20.0), None)
+    evs = _events("more than usual")
+    assert len(evs) == 1
+    feed.delete(evs[0]["id"])
+    usage_alerts.check(_spend(topic, 0.5), None)
+    assert _events("more than usual") == []

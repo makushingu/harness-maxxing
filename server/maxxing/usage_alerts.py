@@ -14,9 +14,11 @@ Claude Code reports: real money with an API key, the price of the same tokens on
 """
 from __future__ import annotations
 
+import json
 import logging
 import math
 import statistics
+import threading
 import time
 from datetime import date, timedelta
 
@@ -128,6 +130,27 @@ def _today(path: str, now: float) -> float:
     return total
 
 
+_said_lock = threading.Lock()
+
+
+def _first_today(key: str, day: str) -> bool:
+    """True the first time `key` is said on `day`: once a day per cause, even when its notification was deleted from
+    the feed (which forgets its dedupe key)."""
+    p = config.state_dir() / "usage_alerts.json"
+    with _said_lock:
+        try:
+            d = json.loads(p.read_text())
+        except (OSError, ValueError):
+            d = {}
+        said = d.get(day) if isinstance(d, dict) and isinstance(d.get(day), list) else []
+        if key in said:
+            return False
+        tmp = p.with_suffix(".tmp")
+        tmp.write_text(json.dumps({day: [*said, key]}))
+        tmp.replace(p)
+        return True
+
+
 def _spike(path: str, factor: float, now: float) -> None:
     from . import feed
     day = store.day_of(now)
@@ -144,12 +167,14 @@ def _spike(path: str, factor: float, now: float) -> None:
         name = agents._display(path)
         if agents.silent(path):
             return
+        if not _first_today(f"spike:{path}", day):
+            return
         feed.post(f"{name} costs more than usual today",
                   f"{spent:.2f} $ so far today, {times:.1f} times its usual day ({base:.2f} $, median of the last "
                   f"{BASE_DAYS} days). Nothing is stopped: give it a daily budget in its settings if that is not "
                   "expected.", "warning", "system", agents._page(path), dedupe=f"usage:spike:{day}:{path}",
                   agent=path, actions=OPEN)
-    else:
+    elif _first_today("spike", day):
         feed.post("Today costs more than usual",
                   f"{spent:.2f} $ so far today, {times:.1f} times a usual day ({base:.2f} $, median of the last "
                   f"{BASE_DAYS} days). Nothing is stopped: Settings -> Usage shows where it goes and sets a daily "
