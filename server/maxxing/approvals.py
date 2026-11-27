@@ -198,6 +198,15 @@ def _decided(d: dict) -> float:
         return time.time()
 
 
+def _change_expires(d: dict) -> float:
+    """When an agent_change request expires: its time, else CHANGE_TTL_S after it was made, else now (a hand-edited
+    file without valid times would otherwise wait forever)."""
+    if d.get("expires"):
+        return float(d["expires"])
+    from .agents import CHANGE_TTL_S
+    return float(d["at"]) + CHANGE_TTL_S if d.get("at") else 0.0
+
+
 def _all() -> list[dict]:
     """Every request. A file is parsed again only when it changed: the watcher calls this every 2 s while one
     request waits, and decided ones stay for a day."""
@@ -472,7 +481,7 @@ def scan(force: bool = False) -> bool:
     for d in items:
         rid, st = d["id"], d.get("status")
         change = d.get("kind") == "agent_change"         # outlives its turn, until it expires (agents.request_change)
-        if st == "pending" and (now > float(d.get("expires") or now) if change else
+        if st == "pending" and (now > _change_expires(d) if change else
                                 now - float(d.get("at") or now) > ORPHAN_GRACE_S and not _running(d.get("session") or "")):
             with _lock:                         # its turn is gone: nobody waits for it (unless answered meanwhile)
                 cur = approval_mcp.read(_file(rid)) or d

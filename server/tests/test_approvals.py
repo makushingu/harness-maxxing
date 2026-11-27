@@ -706,3 +706,18 @@ def test_a_decided_request_with_nan_times_is_still_cleaned_up(mx, monkeypatch):
     approvals.scan(force=True)
     approvals.scan(force=True)
     assert not f.exists()
+
+
+@pytest.mark.parametrize("age, expired", [(10 * 86400, True), (60, False), (None, True)])
+def test_an_agent_change_request_without_a_valid_expiry_still_expires(mx, monkeypatch, age, expired):
+    from maxxing import approval_mcp, approvals
+    _quiet_watcher(monkeypatch)
+    monkeypatch.setattr(approvals, "_running", lambda sid: False)
+    d = approvals.folder()
+    d.mkdir(parents=True, exist_ok=True)
+    rid = "c" * 16
+    at = "x" if age is None else time.time() - age
+    approval_mcp.write_atomic(d / f"{rid}.json", {"id": rid, "session": "s1", "status": "pending", "at": at,
+                                                  "kind": "agent_change", "expires": "x", "tool": "Bash", "input": {}})
+    approvals.scan(force=True)
+    assert (approval_mcp.read(d / f"{rid}.json")["status"] == "expired") is expired
