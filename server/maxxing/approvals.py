@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 import re
 import time
@@ -172,17 +173,29 @@ TEXT_FIELDS = ("session", "agent_path", "tool", "status", "kind")
 
 
 def _clean(d: dict) -> dict:
-    """A copy whose times are numbers or None and whose text fields are text: a hand-edited file (a list as the
-    session) would otherwise break the counts, the watcher and the answer."""
+    """A copy whose times are finite numbers or None (NaN never ages) and whose text fields are text: a hand-edited
+    file (a list as the session) would otherwise break the counts, the watcher and the answer."""
     d = dict(d)
     for k in ("at", "expires", "decided_at"):
         v = d.get(k)
-        if v is not None and (isinstance(v, bool) or not isinstance(v, (int, float))):
+        if v is not None and (isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v)):
             d[k] = None
     for k in TEXT_FIELDS:
         if k in d and d[k] is not None and not isinstance(d[k], str):
             d[k] = ""
     return d
+
+
+def _decided(d: dict) -> float:
+    """When an answered request was decided: its time, else the file's (a hand-edited one without a valid time would
+    otherwise never be cleaned)."""
+    at = d.get("decided_at") or d.get("at")
+    if at:
+        return float(at)
+    try:
+        return _file(d["id"]).stat().st_mtime
+    except OSError:
+        return time.time()
 
 
 def _all() -> list[dict]:
@@ -470,7 +483,7 @@ def scan(force: bool = False) -> bool:
         final.append(d)
         prev = _seen.get(rid)
         if prev == st:
-            if st != "pending" and now - float(d.get("decided_at") or d.get("at") or now) > KEEP_S:
+            if st != "pending" and now - _decided(d) > KEEP_S:
                 _file(rid).unlink(missing_ok=True)
             continue
         _seen[rid] = str(st)
@@ -502,7 +515,7 @@ def prime() -> None:
         elif (_running(d.get("session") or "") or d.get("kind") == "agent_change") and _feed_new(d) is not False:
             _post(d, "approval", short(str(d.get("tool") or ""), d.get("input")), status="pending")
             _telegram("notify_approval", d)
-        if d.get("status") != "pending" and now - float(d.get("decided_at") or d.get("at") or now) > KEEP_S:
+        if d.get("status") != "pending" and now - _decided(d) > KEEP_S:
             _file(d["id"]).unlink(missing_ok=True)
         else:
             _seen[d["id"]] = str(d.get("status"))

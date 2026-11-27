@@ -681,3 +681,28 @@ def test_full_access_is_refused_outside_a_sandboxed_topic(client, topic, mx):
     assert r.status_code == 400 and "not_sandboxed" in r.text
     client.post(f"/api/approvals/{p['id']}", json={"decision": "deny"})
     wait_idle(client, sid)
+
+
+def _quiet_watcher(monkeypatch) -> None:
+    from maxxing import approvals
+    approvals._parsed.clear(); approvals._seen.clear(); approvals._sig["v"] = None
+    for n in ("_note", "_invalidate", "_feed_new", "_telegram", "_post"):
+        monkeypatch.setattr(approvals, n, lambda *a, **k: None)
+
+
+def test_a_decided_request_with_nan_times_is_still_cleaned_up(mx, monkeypatch):
+    from maxxing import approvals
+    _quiet_watcher(monkeypatch)
+    monkeypatch.setattr(approvals, "_running", lambda sid: True)
+    d = approvals.folder()
+    d.mkdir(parents=True, exist_ok=True)
+    f = d / f"{'a' * 16}.json"
+    f.write_text('{"id":"%s","session":"s1","status":"deny","at":NaN,"decided_at":NaN}' % ("a" * 16))
+    assert next(x for x in approvals._all() if x["id"] == "a" * 16)["decided_at"] is None
+    approvals.scan(force=True)
+    assert f.exists()                           # decided just now: kept for a day
+    old = time.time() - approvals.KEEP_S - 60
+    os.utime(f, (old, old))
+    approvals.scan(force=True)
+    approvals.scan(force=True)
+    assert not f.exists()
