@@ -22,6 +22,7 @@ Changed:
 - **Tools updated: Scrapling 0.5.1, Remotion 4.0.547, uv 0.13.10, Node.js 22.23.5.** Your server moves to them by itself after the update. With Scrapling 0.5, `scrapling extract fetch` uses the human-like browser (it can also pass a Cloudflare check with `--solve-cloudflare`); `extract stealthy-fetch` and `DynamicFetcher` are gone. A scraping script of yours that uses them needs the new name: Claude does it after the update.
 
 Fixed:
+- **Dragging a topic or a session in the list shown on hover.** When the sessions list was shown over the page (second sidebar closed), it went away as soon as a drag started, and the drag did nothing: it now stays until the drop.
 - Git page and Changes view: a filter program added to a repository's configuration after its first listing could run on the server at the next listing. The filters are now read before every git call (reported by Anthony14FR).
 - Restoring a backup on a server in use: an agent group keeps its own members, trust setting and limits, and a group that is new comes back without trust between its members (reported by Anthony14FR).
 - A request to delete something sent as a file upload, without being signed in, was read in full before being refused. It is refused first (reported by Anthony14FR).

@@ -34,8 +34,11 @@ let timer: number | undefined
 /** A peek is on its way (the hover intent delay runs). */
 let opening = false
 
-/** A menu or dialog opened from the list (a row's ⋯, a context menu) keeps it until it closes. */
-const busy = () => !!document.querySelector('[role="menu"][data-state="open"], [role="dialog"][data-state="open"]')
+/** A drag started in the list (a topic or a session moved in the tree): the browser sends the pointer's leave as the
+ *  drag starts, and putting the list away would drop the row being dragged. */
+let dragging = false
+/** A menu or dialog opened from the list (a row's ⋯, a context menu) or a drag from it keeps it until it ends. */
+const busy = () => dragging || !!document.querySelector('[role="menu"][data-state="open"], [role="dialog"][data-state="open"]')
 
 const peekList = () => {
   window.clearTimeout(timer)
@@ -143,13 +146,32 @@ export function SecondBar({ left }: { left: number }) {
     const leave = (e: PointerEvent) => e.pointerType === 'mouse' && leaveList()
     // a pick in the list shown over the page (a session, an agent, a chat) puts it away
     const click = (e: MouseEvent) => (e.target as Element).closest('a[href], [data-session-row], [data-chat-row]') && window.setTimeout(closeList)
+    // a drag from the list keeps it (capture: the rows stop the event); it ends in it (dropped on a row) -> it stays, elsewhere -> it goes
+    const dragStart = () => {
+      dragging = true
+    }
+    const dragEnd = (e: DragEvent) => {
+      if (!dragging) return
+      dragging = false
+      const r = el.getBoundingClientRect()
+      if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) peekList()
+      else leaveList()
+    }
     el.addEventListener('pointerenter', enter)
     el.addEventListener('pointerleave', leave)
     el.addEventListener('click', click, true)
+    el.addEventListener('dragstart', dragStart, true)
+    // the dragged row may be gone after the drop (a session moved to a folded topic): listen on the document
+    document.addEventListener('drop', dragEnd, true)
+    document.addEventListener('dragend', dragEnd, true)
     return () => {
+      dragging = false
       el.removeEventListener('pointerenter', enter)
       el.removeEventListener('pointerleave', leave)
       el.removeEventListener('click', click, true)
+      el.removeEventListener('dragstart', dragStart, true)
+      document.removeEventListener('drop', dragEnd, true)
+      document.removeEventListener('dragend', dragEnd, true)
     }
   }, [over])
 
