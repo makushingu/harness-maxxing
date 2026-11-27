@@ -2007,3 +2007,28 @@ def test_two_callers_at_once_attach_to_a_page_once():
         assert w.cdp.attached == 1 and w.sessions == {"t1": "s1"} and not w._attaching
         assert await w._session("t1") == "s1" and w.cdp.attached == 1
     asyncio.run(run())
+
+
+def test_a_dialog_answer_that_fails_leaves_the_dialog_to_answer():
+    """Answering an alert / confirm times out: the dialog stays shown (the page still waits for an answer)."""
+    from maxxing.browser import live
+
+    class FakeCdp:
+        fail: BaseException | None = asyncio.TimeoutError()
+
+        async def call(self, method, params=None, session=None, timeout=30.0):
+            if method == "Page.handleJavaScriptDialog" and self.fail:
+                raise self.fail
+            return {}
+
+    async def run():
+        w = live.Watcher(None, "")
+        w.cdp, w.sessions = FakeCdp(), {"t1": "s1"}
+        w.dialogs["t1"] = {"type": "confirm", "message": "Sure?", "default": ""}
+        with pytest.raises(asyncio.TimeoutError):
+            await w._answer_dialog(w.nav_of("t1"), {"accept": True})
+        assert "t1" in w.dialogs
+        w.cdp.fail = RuntimeError("No dialog is showing")                 # closed meanwhile: forgotten
+        await w._answer_dialog(w.nav_of("t1"), {"accept": True})
+        assert "t1" not in w.dialogs
+    asyncio.run(run())

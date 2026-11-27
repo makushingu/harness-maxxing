@@ -673,13 +673,15 @@ class Watcher:
         tid = self._asking_tid(self.dialogs, nav)
         if not tid or not self.cdp:
             return None
-        d = self.dialogs.pop(tid)
+        d = self.dialogs[tid]                       # forgotten once answered: a timeout leaves it to answer again
         ds = await self._session(tid)
         params: dict = {"accept": bool(ev.get("accept"))}
         if d["type"] == "prompt" and ev.get("accept"):
             params["promptText"] = str(ev.get("text") or "")[:2000]
         with contextlib.suppress(RuntimeError):     # already closed by the page or by Claude
             await self.cdp.call("Page.handleJavaScriptDialog", params, session=ds)
+        if self.dialogs.get(tid) is d:
+            del self.dialogs[tid]
         await self._state()
         return None
 
