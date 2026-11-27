@@ -13,6 +13,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import math
 import os
 import secrets
 import tempfile
@@ -57,12 +58,30 @@ def normalize_code(code: str) -> str:
     return "".join(c for c in str(code or "").upper() if c.isalnum())
 
 
+def _num(v: Any) -> float:
+    """A time of the file as a number: a hand-edited "soon" or null reads as 0 (long past), never an exception."""
+    try:
+        f = float(v)
+    except (TypeError, ValueError, OverflowError):
+        return 0.0
+    return f if math.isfinite(f) else 0.0
+
+
+def _list(v: Any) -> list:
+    return v if isinstance(v, list) else []
+
+
 def load() -> dict:
+    """devices.json, with the shapes the code relies on: lists of dicts, a text name (a hand-edited file must not
+    break every device call)."""
     d = config.read_json(_path(), {}) or {}
     if not isinstance(d, dict):
         d = {}
-    d["devices"] = [x for x in d.get("devices") or [] if isinstance(x, dict) and ID_RE.match(str(x.get("id") or ""))]
-    d["invites"] = [x for x in d.get("invites") or [] if isinstance(x, dict) and x.get("code_hash")]
+    d["devices"] = [x for x in _list(d.get("devices")) if isinstance(x, dict) and ID_RE.match(str(x.get("id") or ""))]
+    for x in d["devices"]:
+        if not isinstance(x.get("name"), str):
+            x["name"] = _text(x.get("name"), NAME_MAX)
+    d["invites"] = [x for x in _list(d.get("invites")) if isinstance(x, dict) and x.get("code_hash")]
     return d
 
 
@@ -73,8 +92,8 @@ def save(d: dict) -> None:
 
 def _prune(d: dict, now: float) -> list[str]:
     """Drop old invitations and devices never accepted in time -> ids dropped (their apps must be told)."""
-    d["invites"] = [i for i in d["invites"] if now < float(i.get("expires") or 0) + INVITE_KEEP][-MAX_INVITES * 3:]
-    gone = [x["id"] for x in d["devices"] if not x.get("confirmed") and now - float(x.get("created") or 0) > CANDIDATE_TTL]
+    d["invites"] = [i for i in d["invites"] if now < _num(i.get("expires")) + INVITE_KEEP][-MAX_INVITES * 3:]
+    gone = [x["id"] for x in d["devices"] if not x.get("confirmed") and now - _num(x.get("created")) > CANDIDATE_TTL]
     if gone:
         d["devices"] = [x for x in d["devices"] if x["id"] not in gone]
     return gone
@@ -101,7 +120,7 @@ def new_invite(os_name: str = "") -> dict:
         d = load()
         now = time.time()
         _prune(d, now)
-        live = [i for i in d["invites"] if now < float(i.get("expires") or 0)]
+        live = [i for i in d["invites"] if now < _num(i.get("expires"))]
         if len(live) >= MAX_INVITES:
             raise DevicesError(429, "too_many", "Too many codes waiting: use one or wait 15 minutes")
         code = "".join(secrets.choice(CODE_ALPHABET) for _ in range(CODE_LEN))
@@ -119,7 +138,7 @@ def invite(code: str) -> dict:
     h = _hash(c)
     for i in load()["invites"]:
         if hmac.compare_digest(h, str(i.get("code_hash") or "")):
-            if time.time() > float(i.get("expires") or 0):
+            if time.time() > _num(i.get("expires")):
                 raise DevicesError(410, "expired", "This code expired: add the device again in Harness Maxxing")
             if i.get("used"):
                 raise DevicesError(410, "expired", "This code was already used: add the device again in Harness Maxxing")
@@ -264,8 +283,8 @@ def public(dev: dict) -> dict:
 
 def invites_public() -> list[dict]:
     now = time.time()
-    return [{"os": i.get("os") or "", "expires_at": i["expires"]} for i in load()["invites"]
-            if now < float(i.get("expires") or 0) and not i.get("used")]
+    return [{"os": i.get("os") or "", "expires_at": _num(i.get("expires"))} for i in load()["invites"]
+            if now < _num(i.get("expires")) and not i.get("used")]
 
 
 # ---- actions log ---------------------------------------------------------------------------------------------------

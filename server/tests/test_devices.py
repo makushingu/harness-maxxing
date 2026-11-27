@@ -887,3 +887,18 @@ def test_devices_json_written_by_two_processes_at_once_loses_no_device(mx):
         p.join(60)
         assert p.exitcode == 0
     assert len(json.loads(store._path().read_text())["devices"]) == 9
+
+
+@pytest.mark.parametrize("bad", [
+    {"devices": 5}, {"devices": True}, {"invites": 7},
+    {"invites": [{"code_hash": "a", "expires": "soon"}]},
+    {"devices": [{"id": "dev_0123abcd", "confirmed": False, "created": "x"}]},
+    {"devices": [{"id": "dev_0123abcd", "confirmed": True, "name": 5}]},
+])
+def test_a_field_of_the_wrong_type_in_devices_json_breaks_nothing(mx, bad):
+    store._path().parent.mkdir(parents=True, exist_ok=True)
+    store._path().write_text(json.dumps(bad))
+    store.devices()
+    store.resolve("laptop")
+    store.invites_public()
+    assert store.new_invite("linux")["code"]
