@@ -164,3 +164,19 @@ def test_a_hand_edited_budget_or_retry_is_read_as_meant(mx):
     for on in (True, "true", 1, None):
         config.update_config(limit_retry=on)
         assert crons.limit_retry_on() is True, on
+
+
+def test_the_day_total_is_not_read_again_at_every_call(client, topic, monkeypatch):
+    """spent_today() runs at every turn end, cron run and agent trigger: one scan of the sessions, then the total
+    is kept until a session is written."""
+    _spend(topic, 2.0)
+    scans = []
+    real = budget._scan
+    monkeypatch.setattr(budget, "_scan", lambda now: scans.append(now) or real(now))
+    assert budget.spent_today() == 2.0
+    for _ in range(5):
+        budget.reached()
+        assert client.get("/api/stats/budget").json()["spent_today"] == 2.0
+    assert len(scans) == 1
+    _spend(topic, 1.5)                                    # a session written: read again
+    assert budget.spent_today() == 3.5 and len(scans) == 2
