@@ -131,10 +131,22 @@ def _valid_branch(repo: Path, name: str) -> bool:
     return codediff._run(repo, "check-ref-format", "--branch", name, check=False).returncode == 0
 
 
+def _has_branches_under(repo: Path, name: str) -> bool:
+    return bool(codediff._run(repo, "for-each-ref", "--count=1", "--format=%(refname)", f"refs/heads/{name}/",
+                              check=False).stdout.strip())
+
+
 def _free_branch(repo: Path, prefix: str, base_name: str, keep: str | None = None) -> str:
+    """A branch name git can make: not taken, and no branch under it (`name/x`) nor above it (a part of the prefix
+    that became a branch after it was chosen: then no name under it can be made)."""
     stem = f"{prefix}/{base_name}" if prefix else base_name
+    parts = stem.split("/")[:-1]
+    taken = next((n for n in ("/".join(parts[:i]) for i in range(1, len(parts) + 1)) if _branch_exists(repo, n)), None)
+    if taken:
+        raise GitError(400, "bad_prefix", f"'{taken}' is a branch of this repository: choose another prefix for the "
+                                          "separate copies (Code mode settings)")
     name, i = stem, 2
-    while name != keep and _branch_exists(repo, name):
+    while name != keep and (_branch_exists(repo, name) or _has_branches_under(repo, name)):
         name, i = f"{stem}-{i}", i + 1
     return name
 

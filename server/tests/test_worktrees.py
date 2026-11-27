@@ -346,6 +346,19 @@ def test_a_prefix_git_would_refuse_is_refused(client, code, prefix):
     assert client.put("/api/code/copy-prefs", json={"repo": str(clone), "prefix": "feat/x"}).status_code == 200
 
 
+def test_a_branch_under_the_name_or_on_the_prefix_never_breaks_the_copy(code):
+    topic, clone = code
+    _git(clone, "branch", "session/fix-login/step-2")                    # git cannot make session/fix-login
+    w = worktrees.create(topic, str(clone), None, "Fix login", "11111111-sid")
+    assert w["branch"] == "session/fix-login-2"
+    worktrees.undo("11111111-sid", w)
+    _git(clone, "branch", "-D", "session/fix-login/step-2")
+    _git(clone, "branch", "session")                                     # nothing can be made under session/
+    with pytest.raises(worktrees.GitError) as e:
+        worktrees.create(topic, str(clone), None, "Fix login", "22222222-sid")
+    assert e.value.code == "bad_prefix"
+
+
 def test_two_copies_made_at_the_same_time_get_their_own_branch(code, monkeypatch):
     import threading
     topic, clone = code
