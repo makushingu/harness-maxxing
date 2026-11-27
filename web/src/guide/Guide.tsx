@@ -392,6 +392,15 @@ function GuideRun({ state }: { state: GuideState }) {
             <span>{t(stepTip(id))}</span>
           </p>
 
+          {step.tools?.filter((x) => settings && !settings[x.key]).map((x) => (
+            <div key={x.key} className="flex items-center gap-2 rounded-md border border-dashed p-2.5 text-[13px]">
+              <span className="flex-1 text-muted-foreground">{t(x.label)}</span>
+              <Button size="sm" variant="outline" onClick={() => save.mutate({ [x.key]: true })} data-testid={`guide-tool-${x.key}`}>
+                {t('guide.enable')}
+              </Button>
+            </div>
+          ))}
+
           {featureOff && step.feature && (
             <div className="flex items-center gap-2 rounded-md border border-dashed p-2.5 text-[13px]">
               <span className="flex-1 text-muted-foreground">{t('guide.featureOff')}</span>

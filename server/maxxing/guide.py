@@ -71,6 +71,7 @@ STEPS: dict[str, str | None] = {
     "team": None,
     "content": "Files and documents: Harness makes PDFs, images, videos and documents, all opened from the Files "
                "page. The prompt makes one short document useful to them (a one-page PDF, a resized image).",
+    "tools": None,
     "safety": None,
     "features": None,
     "health": None,

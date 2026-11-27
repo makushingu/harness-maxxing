@@ -46,7 +46,7 @@ It speaks the language of Harness (Settings -> General), examples included.
 1. **Your level**: *Beginner* (step by step, simple examples) or *Intermediate* (what Harness adds, examples that go
    further).
 2. **The tour**: *Full* (about 5 minutes: sessions, Zones and Tabs, memory, agents on their page and in the
-   sessions, scheduled jobs, tasks, phone, code, sites, e-mail, Team, files, backup, the pages to switch on, server
+   sessions, scheduled jobs, tasks, phone, code, sites, e-mail, Team, files, the Browser and Devices (off until you switch them on from the card), backup, the pages to switch on, server
    health) or *Partial* (about 2 minutes): the essentials plus only the uses you tick - the recommended ones are
    ticked already (from what is set up here). **Close** if you do not need it.
 

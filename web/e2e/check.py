@@ -219,6 +219,27 @@ def _pages(r: Run, size: dict, lang: str) -> None:
         raise Failure(f"{len(bad)} page(s) in {lang}:\n      " + "\n      ".join(bad))
 
 
+def j_guide_tools(r: Run) -> None:
+    """The guide's Tools step: the Browser and Devices are off, each is switched on from the card."""
+    r.mock.scenario("ready")
+    r.mock.call("PUT", "/api/settings", {"browser_feature": False, "devices_feature": False})
+    r.mock.call("PUT", "/api/guide", {"status": "running", "level": "beginner", "mode": "full", "uses": [],
+                                      "steps": ["tools", "final"], "index": 0, "done": []})
+    pg = r.page()
+    r.go(pg, "/")
+    for key in ("browser_feature", "devices_feature"):
+        b = pg.locator(f'[data-testid="guide-tool-{key}"]')
+        b.wait_for()
+        b.click()
+        b.wait_for(state="detached")                       # on: its button leaves the card
+    got = r.mock.call("GET", "/api/settings")
+    r.mock.call("PUT", "/api/settings", {"browser_feature": False, "devices_feature": False})
+    r.mock.call("POST", "/api/guide/reset")
+    if not (got.get("browser_feature") and got.get("devices_feature")):
+        raise Failure("the card's buttons did not switch the Browser and Devices on")
+    r.healthy(pg)
+
+
 def j_pages(r: Run) -> None:
     """Every page and every Settings section opens, on a computer, in English."""
     _pages(r, DESKTOP, "en")
@@ -636,7 +657,7 @@ JOURNEYS = {
     "onboarding": j_onboarding, "session": j_session, "session-reload": j_session_reload,
     "new-session": j_new_session, "session-phone": j_session_phone, "palette": j_palette, "theme": j_theme,
     "setting-saved": j_setting_saved, "settings-nav": j_settings_nav, "files": j_files, "team": j_team, "nav": j_nav,
-    "usage-agents": j_usage_agents, "logs-search": j_logs_search, "turn-details": j_turn_details, "community": j_community,
+    "usage-agents": j_usage_agents, "logs-search": j_logs_search, "turn-details": j_turn_details, "community": j_community, "guide-tools": j_guide_tools,
     "push-feed": j_push_feed, "share": j_share, "sign-out": j_sign_out,
 }
 

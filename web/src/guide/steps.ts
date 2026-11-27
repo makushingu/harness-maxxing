@@ -19,6 +19,8 @@ export type GuideStep = {
   before?: (ctx: StepCtx) => void
   /** An optional page this step is about: off -> the card offers to switch it on. */
   feature?: keyof Settings & `${string}_page`
+  /** Tools that are off unless turned on (Browser, Devices): the card has one switch-on button for each. */
+  tools?: { key: 'browser_feature' | 'devices_feature'; label: TKey }[]
   /** Opus writes prompts for this card (else only its intro line, or nothing). */
   prompts?: boolean
 }
@@ -44,6 +46,7 @@ export const GUIDE_STEPS: GuideStep[] = [
   { id: 'mail', part: 'mail', targets: ['nav-mail'], before: panel('app'), feature: 'mail_page', prompts: true },
   { id: 'team', part: 'team', targets: ['nav-team'], before: panel('app'), feature: 'team_page' },
   { id: 'content', part: 'content', targets: ['nav-files'], before: panel('app'), prompts: true },
+  { id: 'tools', part: 'end', targets: ['browser-feature'], route: page('/settings/browser'), before: panel(null), tools: [{ key: 'browser_feature', label: 'guide.tools.browser' }, { key: 'devices_feature', label: 'guide.tools.devices' }] },
   { id: 'safety', part: 'end', targets: [], route: page('/settings/backup'), before: panel(null) },
   { id: 'features', part: 'end', targets: [], route: page('/settings/features'), before: panel(null) },
   { id: 'health', part: 'end', targets: ['health'], before: panel('app') },

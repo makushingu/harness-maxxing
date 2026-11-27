@@ -1961,7 +1961,7 @@ R('GET', '/api/settings', () => S.settings)
 R('PUT', '/api/settings', ({ body }) => {
   if (body.language !== undefined && !UI_LANGS.includes(body.language)) fail(422, 'invalid', `language must be one of ${UI_LANGS.join(', ')}`)
   if (body.public_url !== undefined && body.public_url && !/^https?:\/\//.test(body.public_url)) fail(422, 'invalid', 'public_url must start with http(s)://')
-  for (const k of ['timezone', 'language', 'public_url', 'files_root', 'presentation_default', 'daily_budget_usd', 'alert_spend_factor', 'alert_turn_usd', 'alert_tool_errors', 'usage_widget', 'memory_max_lines', 'donation_hidden', ...PAGE_FLAGS, 'sidebar_order', 'nav_badges_hidden']) if (body[k] !== undefined) S.settings[k] = body[k]
+  for (const k of ['timezone', 'language', 'public_url', 'files_root', 'presentation_default', 'daily_budget_usd', 'alert_spend_factor', 'alert_turn_usd', 'alert_tool_errors', 'usage_widget', 'browser_feature', 'devices_feature', 'memory_max_lines', 'donation_hidden', ...PAGE_FLAGS, 'sidebar_order', 'nav_badges_hidden']) if (body[k] !== undefined) S.settings[k] = body[k]
   return S.settings
 })
 /* ---- feedback: checked first (a word decides here: "bug" or "idea" is sent, "model" or "API" is for this
