@@ -23,6 +23,7 @@ Changed:
 
 Fixed:
 - Git page and Changes view: a filter program added to a repository's configuration after its first listing could run on the server at the next listing. The filters are now read before every git call (reported by Anthony14FR).
+- Restoring a backup on a server in use: an agent group keeps its own members, trust setting and limits, and a group that is new comes back without trust between its members (reported by Anthony14FR).
 - A request to delete something sent as a file upload, without being signed in, was read in full before being refused. It is refused first (reported by Anthony14FR).
 - **Terminals and live views close when a sign-in ends.** A terminal, a Browser or a Device view left open kept working after a sign-out or a password change; they now close with the sign-in they belonged to.
 - **The secret key of a phone webhook is stored hashed.** Reading the server's files no longer gives the address that starts the webhook.

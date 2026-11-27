@@ -1117,17 +1117,20 @@ def _strip_hooks(rel: str, data: bytes) -> tuple[bytes, object]:
 _AGENT_FILE = re.compile(r"\Aprojects/[^/]+/topics/[^/]+/agents/[^/]+/agent\.json\Z")
 _FOLDER_FILE = re.compile(r"\Aprojects/[^/]+(/topics/[^/]+)?/\.maxxing\.json\Z")
 _FOLDER_RULES = ("permission_mode", "allowed_tools", "browser", "devices")
+_GROUP_FILE = re.compile(r"\Aprojects/[^/]+/groups/[^/]+/group\.json\Z")
+_GROUP_RULES = ("members", "lead", "shared_files", "trust_members", "limits")   # who talks to whom, trusted or not
 
 
 def _keep_local_rules(rel: str, data: bytes, dest: Path) -> tuple[bytes, bool]:
-    """agent.json / .maxxing.json restored on a server in use: their security settings stay the ones of this server
-    (a new agent comes back switched off, a new folder with the default rules; an agent or a trigger switched off here
-    stays off). -> (data to write, changed)."""
+    """agent.json / .maxxing.json / group.json restored on a server in use: their security settings stay the ones of
+    this server (a new agent comes back switched off, a new folder with the default rules, a new group without trust
+    between its members; an agent or a trigger switched off here stays off). -> (data to write, changed)."""
     agent = bool(_AGENT_FILE.match(rel))
-    if not agent and not _FOLDER_FILE.match(rel):
+    group = bool(_GROUP_FILE.match(rel))
+    if not agent and not group and not _FOLDER_FILE.match(rel):
         return data, False
     from . import agents
-    keys = (*agents.SECURITY_FIELDS, *agents.SECURITY_LIMITS) if agent else _FOLDER_RULES
+    keys = (*agents.SECURITY_FIELDS, *agents.SECURITY_LIMITS) if agent else _GROUP_RULES if group else _FOLDER_RULES
     try:
         d = json.loads(data)
     except ValueError:
@@ -1146,6 +1149,9 @@ def _keep_local_rules(rel: str, data: bytes, dest: Path) -> tuple[bytes, bool]:
                 out[k] = local[k]
         if agent:
             _keep_switched_off(out, local)
+    elif group:                                  # a group new here: its members' hand-overs count as outside text
+        out["trust_members"] = False
+        out.pop("limits", None)
     else:
         for k in keys if not agent else ():
             out.pop(k, None)

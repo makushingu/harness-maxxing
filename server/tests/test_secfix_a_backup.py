@@ -36,3 +36,23 @@ def test_a_second_restore_keeps_held_code_off(ws, mx_state):
     backup._apply(dict(files))
     assert not crons.list_jobs()[0]["enabled"]
     assert "probe" in config.load_config()["extensions"]["disabled"]
+
+
+def test_restore_on_a_server_in_use_keeps_the_members_of_its_groups(ws, mx_state):
+    """A group of this server keeps its members, its trust setting and its limits; a group new here comes back
+    without trust between its members."""
+    _in_use()
+    mine, new = (f"projects/acme/groups/{n}/group.json" for n in ("team", "other"))
+    local = {"name": "team", "members": [{"path": "projects/acme/topics/blog/agents/a"}], "trust_members": False,
+             "limits": {"turns": 5}}
+    (ws / mine).parent.mkdir(parents=True)
+    (ws / mine).write_text(json.dumps(local))
+    pushed = {"name": "team 2", "members": [{"path": "projects/acme/topics/blog/agents/a"},
+                                            {"path": "projects/acme/topics/blog/agents/spy"}],
+              "trust_members": True, "limits": {"turns": 9999}}
+    r = backup._apply({mine: json.dumps(pushed).encode(), new: json.dumps(pushed).encode()})
+    a, b = (json.loads((ws / rel).read_text()) for rel in (mine, new))
+    assert a["name"] == "team 2" and a["members"] == local["members"] and a["trust_members"] is False
+    assert a["limits"] == {"turns": 5}
+    assert b["trust_members"] is False and "limits" not in b
+    assert {mine, new} <= set(r["held"]["rules"])
