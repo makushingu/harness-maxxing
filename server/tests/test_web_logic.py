@@ -818,3 +818,11 @@ def test_a_grouped_alert_repeated_today_is_shown_under_today(tmp_path):
     out = _run_ts(tmp_path, tmp_path / "days.ts",
                   f"return m.byDay({json.dumps(events)}).map((d) => d.events.map((e) => e.id))")
     assert out == [[1, 3], [2]]
+
+
+def test_an_agent_menu_item_held_down_never_reaches_the_long_press_of_the_card():
+    src = (WEB / "features" / "agents" / "AgentMenu.tsx").read_text(encoding="utf-8")
+    a = src.index("<DropdownMenuContent align=\"start\"")
+    content = src[a:src.index(">", src.index("aria-label=", a))]
+    for ev in ("onContextMenu", "onTouchStart", "onTouchMove", "onTouchEnd", "onTouchCancel"):
+        assert f"{ev}={{stop}}" in content, ev
