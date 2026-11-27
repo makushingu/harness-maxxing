@@ -324,3 +324,30 @@ def test_a_cookie_issued_in_the_second_of_the_overflow_still_works(mx, monkeypat
     fresh = security.make_cookie()                            # signed in again within the same second
     assert security.cookie_valid(fresh)
     assert not any(security.cookie_valid(v) for v in [*old, last])   # this second's revocation is kept
+
+
+def test_a_huge_signins_file_is_trimmed_in_one_pass(mx):
+    """A copied signins.json with thousands of browsers: one sort, not one scan per browser removed, under the lock."""
+    import time
+    now = int(time.time())
+    security._write_signins({"devices": {f"d{i}": {"created": now, "seen": now - 5000 + i} for i in range(5000)}})
+    t = time.monotonic()
+    security.make_cookie()
+    assert time.monotonic() - t < 1.0
+    devs = security._signins()["devices"]
+    assert len(devs) == security.SIGNINS_MAX
+    assert f"d{5000 - security.SIGNINS_MAX + 1}" in devs and f"d{5000 - security.SIGNINS_MAX}" not in devs
+
+
+def test_a_damaged_signins_file_is_reported_and_kept(mx, caplog):
+    """A damaged list signs every recent browser out: logged, its copy kept before the next sign-in, shown by doctor."""
+    import logging
+    from maxxing import cmd_core, config
+    security.make_cookie()
+    security.signins_path().write_text("{")
+    with caplog.at_level(logging.ERROR, logger="maxxing.security"):
+        security.make_cookie()
+    assert "signins.json is damaged" in caplog.text
+    kept = config.damaged_copy_of(security.signins_path())
+    assert kept and kept.read_text() == "{"
+    assert cmd_core.check_state_files()["level"] == cmd_core.WARN

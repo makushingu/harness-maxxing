@@ -33,6 +33,7 @@ import copy
 import hashlib
 import ipaddress
 import hmac
+import logging
 import os
 import secrets
 import threading
@@ -41,6 +42,8 @@ import time
 from fastapi import HTTPException, Request
 
 from . import config
+
+log = logging.getLogger("maxxing.security")
 
 COOKIE = "mx_session"
 COOKIE_MAX_AGE = 30 * 24 * 3600
@@ -163,8 +166,9 @@ def make_cookie(ua: str = "", ip: str = "") -> str:
         devs = data["devices"]
         for k in [k for k, d in devs.items() if _num(d, "created") + COOKIE_MAX_AGE <= now]:
             del devs[k]
-        while len(devs) >= SIGNINS_MAX:
-            del devs[min(devs, key=lambda k: _num(devs[k], "seen"))]
+        if len(devs) >= SIGNINS_MAX:                 # one sort: a copied file with thousands of entries stays quick
+            for k in sorted(devs, key=lambda k: _num(devs[k], "seen"))[:len(devs) - SIGNINS_MAX + 1]:
+                del devs[k]
         devs[did] = {"created": now, "seen": now, "ua": (ua or "")[:200], "ip": (ip or "")[:64]}
     _edit_signins(add)
     _seen_at[did] = time.time()
@@ -198,6 +202,9 @@ def _signins() -> dict:
     if key is not None and _signins_cache["key"] == key:
         return _signins_cache["data"]
     data = config.read_json(p, None) if key is not None else None
+    if key is not None and not (isinstance(data, dict) and isinstance(data.get("devices"), dict)):
+        log.error("%s is damaged: every browser signed in since the list began must sign in again "
+                  "(a copy is kept before the next sign-in rewrites it)", p)
     if not isinstance(data, dict) or not isinstance(data.get("devices"), dict):
         data = {"devices": {}, "legacy": key is None, "since": int(time.time())}
     data["devices"] = {k: v for k, v in data["devices"].items() if isinstance(k, str) and isinstance(v, dict)}
@@ -206,6 +213,7 @@ def _signins() -> dict:
 
 
 def _write_signins(data: dict) -> None:
+    config.keep_damaged(signins_path())                       # a damaged list is evidence: never lost (doctor shows it)
     try:
         config._atomic_write(signins_path(), data, 0o600)     # noqa: SLF001
     finally:

@@ -1550,8 +1550,10 @@ def check_security() -> Check:
 
 
 def check_state_files() -> Check | None:
-    """config.json / secrets.json found damaged: a copy was kept before they were rewritten."""
-    copies = [c for c in (config.damaged_copy_of(config.config_path()), config.damaged_copy_of(config.secrets_path())) if c]
+    """config.json / secrets.json / signins.json found damaged: a copy was kept before they were rewritten."""
+    from . import security
+    copies = [c for c in (config.damaged_copy_of(config.config_path()), config.damaged_copy_of(config.secrets_path()),
+                          config.damaged_copy_of(security.signins_path())) if c]
     if not copies:
         return None
     return _c("state_files", WARN, "a damaged settings file was replaced - its copy is kept",

@@ -76,6 +76,48 @@ def _unquote(v: str) -> str:
 
 
 IMPORT_RE = re.compile(r"(?<![^\s])@[^\s`]+")   # Claude Code's memory import: "@path" at a line start or after a space
+FENCE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
+
+
+def _code_ranges(s: str) -> tuple[list[tuple[int, int]], list[int]]:
+    """([start, end) of every fenced block and code span of `s`, positions of the lone backticks outside them).
+    A "@path" in code is never imported, and a lone "`" would pair with a backtick added around an import."""
+    ranges: list[tuple[int, int]] = []
+    lone: list[int] = []
+    pos, fence, text_from = 0, None, 0
+    chunks: list[tuple[int, int]] = []
+    for line in s.splitlines(keepends=True):
+        m = FENCE_RE.match(line)
+        if fence is None and m:
+            chunks.append((text_from, pos))
+            fence, text_from = (m.group(1)[0], len(m.group(1)), pos), None
+        elif fence is not None and m and m.group(1)[0] == fence[0] and len(m.group(1)) >= fence[1] \
+                and not line[m.end():].strip():
+            ranges.append((fence[2], pos + len(line)))
+            fence, text_from = None, pos + len(line)
+        pos += len(line)
+    if fence is not None:
+        ranges.append((fence[2], len(s)))
+    else:
+        chunks.append((text_from, len(s)))
+    for a, b in chunks:
+        i = a
+        while i < b:
+            if s[i] == "\\":
+                i += 2
+                continue
+            if s[i] != "`":
+                i += 1
+                continue
+            n = len(s[i:b]) - len(s[i:b].lstrip("`"))
+            close = re.compile(r"(?<!`)`{%d}(?!`)" % n).search(s, i + n, b)
+            if close:
+                ranges.append((i, close.end()))
+                i = close.end()
+            else:
+                lone += [i] if n == 1 else []
+                i += n
+    return ranges, lone
 
 
 def parse_md(text: str) -> dict:
@@ -150,9 +192,14 @@ def parse_md(text: str) -> dict:
             lowered = [f"permissionMode: {mode} (set to acceptEdits)"]
     role = body if not desc or " ".join(desc.split()) in " ".join(body.split()) else f"{desc}\n\n{body}".strip()
     # The role becomes the agent's CLAUDE.md, where "@path" imports a file into every run: in a subagent file it is
-    # only text. Each one is put in backticks (a code span is never imported) and listed for the import preview.
-    imports = IMPORT_RE.findall(role)
-    role = IMPORT_RE.sub(lambda m: f"`{m.group(0)}`", role)
+    # only text. Each one outside code is put in backticks (a code span is never imported) and listed for the import preview.
+    code, lone = _code_ranges(role)
+    found = [m for m in IMPORT_RE.finditer(role) if not any(a <= m.start() < b for a, b in code)]
+    imports = [m.group(0) for m in found]
+    if found:
+        edits = sorted([(m.start(), m.end(), f"`{m.group(0)}`") for m in found] + [(i, i + 1, "\\`") for i in lone])
+        for a, b, rep in reversed(edits):
+            role = role[:a] + rep + role[b:]
     if imports:
         lowered.append(f"@ imports kept as text: {', '.join(dict.fromkeys(imports))[:300]}")
     return {"name": slug, "description": role or desc, "fields": fields,

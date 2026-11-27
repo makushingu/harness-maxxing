@@ -1094,7 +1094,8 @@ To set them on the service: `systemctl edit claude-maxxing` -> `[Service]` `Envi
 - `config._atomic_write`: `mkstemp` in the same folder, permissions set before writing (`mode`, else the
   existing file's, else `0666 & ~umask`), `os.replace`. `config.json` / `secrets.json` that do not
   parse are read as `{}` (defaults) and copied to `<name>.damaged-<stamp>` before any save
-  (`_keep_damaged`, `damaged_copy_of`; doctor `state_files`).
+  (`_keep_damaged`, `damaged_copy_of`; doctor `state_files`). A damaged `signins.json` is logged
+  (`maxxing.security`) and kept the same way (`config.keep_damaged`) before the next sign-in rewrites it.
 - Sealed secrets (`maxxing keys encrypt` / `decrypt` = `config.seal_secrets` / `unseal_secrets`): when
   `<state>/secrets.json.cred` exists it is the store. `load_secrets` pipes it through `systemd-creds decrypt
   --name=maxxing-secrets - -` once per (inode, mtime, size) of the file (per process), every write

@@ -642,3 +642,21 @@ def test_a_tool_with_a_unicode_line_separator_survives_export_and_import(client,
     from maxxing import agent_format
     md = client.get("/api/agents/acme/blog/writer/export").text
     assert agent_format.parse_md(md)["fields"]["allowed_tools"] == tools
+
+
+def test_imports_already_in_code_stay_neutral_on_import():
+    """Backticks added around an "@path" already in a code span would close it and free the import."""
+    import re
+    from maxxing import agent_format
+
+    def outside_code(md: str) -> list[str]:
+        md = re.sub(r"(?ms)^```.*?^```[ \t]*$", "", md)
+        md = re.sub(r"(?<!\\)(`+)(?!`).*?(?<!`)\1(?!`)", "", md)
+        return re.findall(r"(?:^|\s)(@\S+)", md)
+
+    for body, kept in [("See ` @~/.ssh/id_rsa ` here", []), ("Use ``a @x`` now", []),
+                       ("```\n@~/.ssh/id_rsa\n```\nRead @docs/a.md", ["@docs/a.md"]),
+                       ("A lone ` then @x", ["@x"]), ("In ` @y ` and @z", ["@z"])]:
+        p = agent_format.parse_md(f"---\nname: Helper\n---\n{body}\n")
+        assert outside_code(p["description"]) == [], (body, p["description"])
+        assert p["ignored"] == ([f"@ imports kept as text: {', '.join(kept)}"] if kept else []), body
