@@ -73,11 +73,12 @@ async def test():
 
 
 def _still_open(items: list[dict]) -> list[dict]:
-    """Without the feed events answered since they were queued (on the computer, on Telegram, on another phone)."""
+    """Without the feed events answered since they were queued (on the computer, on Telegram, on another phone). A
+    request read but not answered (the computer's "mark all read") still waits for Allow / Deny: it stays."""
     out = []
     for m in items:
         ev = feed.get(m["event"]) if m.get("event") else None
-        if m.get("event") and (not ev or ev.get("resolved") or ev.get("read")):
+        if m.get("event") and (not ev or ev.get("resolved") or (ev.get("read") and not ev.get("actions"))):
             continue
         out.append(m)
     return out

@@ -233,6 +233,19 @@ def test_an_event_answered_meanwhile_is_not_shown(sent, client):
     assert client.post("/api/push/pending", json={"device": webpush.device_id(FCM)}).json()["items"] == []
 
 
+def test_a_request_read_but_not_answered_still_reaches_the_phone(sent, client):
+    from maxxing import feed
+    client.post("/api/push/devices", json={"endpoint": FCM})
+    api_push._feed_last = feed.max_id()
+    ev = feed.post("Waiting", "Bash: ls", "warning", "agents", ref="approval:" + "3" * 16, notify=False,
+                   actions=[{"id": "allow", "label": "Allow", "style": "primary"}, {"id": "deny", "label": "Deny", "style": "danger"}])
+    info = feed.post("Cron failed", "", "error", "crons", notify=False)
+    api_push.scan_feed()
+    client.post("/api/feed/read", json={"all": True})            # "mark all read" on the computer
+    items = client.post("/api/push/pending", json={"device": webpush.device_id(FCM)}).json()["items"]
+    assert [m.get("event") for m in items] == [ev["id"]] and info["id"] != ev["id"]
+
+
 @pytest.mark.parametrize("mode, rings", [("all", ["Cron failed", "Waiting"]), ("asks", ["Waiting"]), ("off", [])])
 def test_the_setting_says_what_of_the_feed_rings(sent, client, mode, rings):
     from maxxing import feed
