@@ -163,8 +163,9 @@ def make_cookie(ua: str = "", ip: str = "") -> str:
         devs = data["devices"]
         for k in [k for k, d in devs.items() if _num(d, "created") + COOKIE_MAX_AGE <= now]:
             del devs[k]
-        while len(devs) >= SIGNINS_MAX:
-            del devs[min(devs, key=lambda k: _num(devs[k], "seen"))]
+        if len(devs) >= SIGNINS_MAX:                 # one sort: a copied file with thousands of entries stays quick
+            for k in sorted(devs, key=lambda k: _num(devs[k], "seen"))[:len(devs) - SIGNINS_MAX + 1]:
+                del devs[k]
         devs[did] = {"created": now, "seen": now, "ua": (ua or "")[:200], "ip": (ip or "")[:64]}
     _edit_signins(add)
     _seen_at[did] = time.time()
