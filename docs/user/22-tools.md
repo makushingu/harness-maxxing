@@ -31,7 +31,7 @@ prints it with `maxxing pdf page.html page.pdf` (A4, backgrounds, your fonts).
 ## Web scraping
 
 Ask "collect the name and price of every product on this site into a CSV" or "tell me every morning
-if this page changes". Claude uses Scrapling: `scrapling extract get|fetch|stealthy-fetch URL out.md`
+if this page changes". Claude uses Scrapling: `scrapling extract get|fetch URL out.md`
 for one page (plain HTTP, or a real browser for JavaScript pages), or a short Python script run with
 `scrapling-python` for structured data over several pages. Results land in the topic (`data/`),
 with the script, so the job can be re-run or scheduled. It respects `robots.txt` and goes slowly by

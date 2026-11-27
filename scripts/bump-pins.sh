@@ -8,7 +8,7 @@
 #               against it; installs update themselves afterwards)
 #   caddy       the repository key must still have the pinned fingerprint (a change is reported, not written)
 #   scrapling   latest version on PyPI below SCRAPLING_BELOW; templates/scrapling/requirements.txt re-resolved with every hash
-#   remotion    reported only (templates/remotion/package-lock.json is bumped with npm by hand, then tested)
+#   remotion    latest REMOTION_MAJOR release: templates/remotion/package.json + its lock (npm), then the pin
 #   garage      reported only (its pins live in server/maxxing/infra/actions.py)
 # Usage: scripts/bump-pins.sh [NODE_MAJOR (22)]   then review `git diff`, run the tests and an install in a container.
 set -euo pipefail
@@ -96,7 +96,7 @@ else echo "  WARNING: the Caddy key is now $fpr (pinned: $want) - check https://
 # Scrapling + its hash-locked requirements
 # SCRAPLING_BELOW: 0.5 removed DynamicFetcher and renamed `extract stealthy-fetch` (skills/web-scraping, users'
 # scripts) - raise it once they are migrated. SCRAPLING_EXTRA: floors for fixed advisories (GHSA-mmhr-3c5m-f64f).
-SCRAPLING_BELOW=0.5
+SCRAPLING_BELOW=0.6
 SCRAPLING_EXTRA="soupsieve>=4.0.0"
 scr=$(curl -fsSL https://pypi.org/pypi/scrapling/json | python3 -I -c '
 import json, sys
@@ -127,6 +127,31 @@ if [ -n "$scr" ]; then
   echo "  templates/scrapling/requirements.txt re-resolved ($(grep -cE '^[a-z]' templates/scrapling/requirements.txt) packages)"
 fi
 
-echo "  remotion: $(cur remotion version) (bump templates/remotion/package.json + lock with npm, then the remotion pin)"
+# Remotion: the latest release of its major (REMOTION_MAJOR), every remotion / @remotion/* package of
+# templates/remotion/package.json at that exact version, the lockfile re-resolved by npm (integrity hashes), then the pin
+REMOTION_MAJOR=4
+rem=$(curl -fsSL https://registry.npmjs.org/remotion | python3 -I -c '
+import json, sys
+d = json.load(sys.stdin)
+key = lambda v: tuple(int(p) for p in v.split("."))
+ok = [v for v in d["versions"] if v.split(".")[0] == sys.argv[1] and v.replace(".", "").isdigit()]
+print(max(ok, key=key) if ok else "")' "$REMOTION_MAJOR")
+[ -n "$rem" ] || { echo "remotion: no $REMOTION_MAJOR.x release found" >&2; exit 1; }
+if [ "$rem" != "$(cur remotion version)" ]; then
+  python3 -I - templates/remotion/package.json "$rem" <<'PY'
+import json, sys
+path, v = sys.argv[1:3]
+d = json.load(open(path, encoding="utf-8"))
+for k in d["dependencies"]:
+    if k == "remotion" or k.startswith("@remotion/"):
+        d["dependencies"][k] = v
+open(path, "w", encoding="utf-8").write(json.dumps(d, indent=2) + "\n")
+PY
+  (cd templates/remotion && npm install --package-lock-only --ignore-scripts --no-audit --no-fund --silent)
+  pin remotion version "$rem"
+  echo "  templates/remotion/package-lock.json re-resolved"
+else
+  echo "  remotion.version unchanged ($rem)"
+fi
 echo "  garage: pinned in server/maxxing/infra/actions.py"
-echo "done - review: git diff $F templates/scrapling"
+echo "done - review: git diff $F templates/scrapling templates/remotion, then scripts/check-tools.sh"

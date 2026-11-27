@@ -9,6 +9,9 @@ New:
 - **Sandbox mode for a topic.** A new permission mode (topic menu -> Permissions, Settings -> Claude, a scheduled job): Claude works without asking inside the topic folder, and its commands can neither write elsewhere nor read the server's keys, the SSH keys or the rest of the home folder. What has to leave the topic (install a package, restart a service, another folder) is asked to you first, with a **Full access** button that allows it and gives the topic full access from its next message. Nothing changes for existing topics: `bypass` stays the default.
 - **Agents and topics learn by themselves.** After a run, an agent adds one line to its own memory when the run taught something (a faster way a tool pointed to, what worked after a failure). Once a day, a topic where you asked for the same procedure three times gets a skill written from those sessions, and a correction you gave twice becomes a rule in its memory. Each one is written at once and shown in Notifications with **Undo**; at most three in 24 hours for one agent or topic, and a skill of yours is never replaced. `"memory_review": "ask"` in `config.json` makes each one wait for **Accept** / **Refuse** instead; `false` turns it off.
 
+Changed:
+- **Tools updated: Scrapling 0.5.1, Remotion 4.0.547, uv 0.13.10, Node.js 22.23.5.** Your server moves to them by itself after the update. With Scrapling 0.5, `scrapling extract fetch` uses the human-like browser (it can also pass a Cloudflare check with `--solve-cloudflare`); `extract stealthy-fetch` and `DynamicFetcher` are gone. A scraping script of yours that uses them needs the new name: Claude does it after the update.
+
 Fixed:
 - **Team: selected text in your own messages is visible.** Selecting text in one of your bubbles (to copy it) showed no highlight, the selection colour being the bubble's.
 

@@ -99,7 +99,7 @@ See [License](license).
 | `maxxing video render [DIR] [--id Intro] [--out out/video.mp4]` | render a Remotion project with the background priority (through `maxxing heavy`) |
 | `maxxing video status` | Node.js, Remotion and the headless browser on this server (exit 1 if not ready) |
 | `maxxing pdf IN.html OUT.pdf` | print an HTML file or an `https://` URL to PDF (A4, backgrounds) |
-| `scrapling extract get\|fetch\|stealthy-fetch URL OUT.md` | fetch a page (HTTP / browser / stealthy browser) to Markdown, text or HTML |
+| `scrapling extract get\|fetch URL OUT.md` | fetch a page (HTTP / browser) to Markdown, text or HTML |
 | `scrapling-python SCRIPT.py` | run a scraping script with Scrapling and its browser |
 | `bash /opt/claude-maxxing/install.sh --tools` | (re)install Node.js, Chromium, Remotion and Scrapling (= `maxxing deps update`) |
 

@@ -8,11 +8,11 @@
     "render": "remotion render src/index.jsx Intro out/video.mp4"
   },
   "dependencies": {
-    "@remotion/cli": "4.0.534",
-    "@remotion/google-fonts": "4.0.534",
+    "@remotion/cli": "4.0.547",
+    "@remotion/google-fonts": "4.0.547",
     "react": "18.3.1",
     "react-dom": "18.3.1",
-    "remotion": "4.0.534"
+    "remotion": "4.0.547"
   },
   "overrides": {
     "zod": "4.6.7"

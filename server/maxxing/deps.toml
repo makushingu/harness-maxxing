@@ -29,10 +29,10 @@ schema = 1
 [uv]
 title = "uv (Python toolchain)"
 kind = "archive"
-version = "0.13.8"
+version = "0.13.10"
 url = "https://github.com/astral-sh/uv/releases/download/{version}/uv-{arch}-unknown-linux-gnu.tar.gz"
 arch = { x86_64 = "x86_64", aarch64 = "aarch64" }
-sha256 = { x86_64 = "5acfd9177cfecf0bf87578f059728215ccc884388988f55f7a65041b57387d91", aarch64 = "74f2f5c6024d397481db228db8fc25eed420db192243f88438c118e7e013e585" }
+sha256 = { x86_64 = "bf65ac1a0af10f92c522d91ac096c7c0a39657647b155577e7836c2cbbb4526c", aarch64 = "14590f644805a6234ffe071154340669e38137f38e60aa9629690119704107d2" }
 path = "/usr/local/bin/uv"
 files = ["uv", "uvx"]
 remove = ["/usr/local/bin/uv", "/usr/local/bin/uvx"]
@@ -54,10 +54,10 @@ source = "python-build-standalone, downloaded and checked by the pinned uv (its 
 [node]
 title = "Node.js (video rendering, PDFs)"
 kind = "archive"
-version = "22.23.3"
+version = "22.23.5"
 url = "https://nodejs.org/dist/v{version}/node-v{version}-linux-{arch}.tar.xz"
 arch = { x86_64 = "x64", aarch64 = "arm64" }
-sha256 = { x86_64 = "df450af89261115ef9f9e3830c3eeb2cc9213b63c720b1af623cb5dcbe2e02de", aarch64 = "a44aeb94849a299b22df10b9e622ec2f605c2183501bc40590705131de7c740f" }
+sha256 = { x86_64 = "cdeb8670a0c81f51b4dc4ac61919f9b1ad917b304bf8221eb939570663d240f8", aarch64 = "2babb9eb5264860d540849f4b064a6fbdebcdc323657d9d382ce23d313fd5e09" }
 # one folder per version in {state}/tools/nodejs/<version>, "current" -> the one in use; /usr/local/bin/node, npm,
 # npx and corepack link to it unless the server has a Node.js of its own (then only Harness Maxxing's PATH has it)
 path = "{state}/tools/nodejs"
@@ -70,10 +70,10 @@ source = "https://nodejs.org/dist/ (SHASUMS256.txt.asc, signed by a Node.js rele
 [claude]
 title = "Claude Code"
 kind = "binary"
-version = "2.1.292"
+version = "2.1.326"
 url = "https://downloads.claude.ai/claude-code-releases/{version}/linux-{arch}/claude"
 arch = { x86_64 = "x64", aarch64 = "arm64" }
-sha256 = { x86_64 = "a967e7b1d8b4e47ee421d5433027880347952b0c0857abf880e2c942a4ec93b3", aarch64 = "24caa9e6ff13bf227049a2626f1c816fc895023050f0ec3b12dbf14d897367e0" }
+sha256 = { x86_64 = "b6b3647d981130dc44fc670846ae97b6cde531ffb667cf9c4d17cfcafb38cb37", aarch64 = "98d56f6ffe53469767a74864a38eaf359d62ef557a8de1b1ad524d61a66ec119" }
 path = "{home}/.local/bin/claude"
 links = ["claude"]
 remove = ["{home}/.local/bin/claude", "{home}/.local/share/claude", "/usr/local/bin/claude"]
@@ -100,7 +100,7 @@ source = "Caddy's apt repository, key checked against its fingerprint, apt sourc
 [scrapling]
 title = "Scrapling (web scraping) with Playwright"
 kind = "venv"
-version = "0.4.15"
+version = "0.5.1"
 lock = "templates/scrapling/requirements.txt"
 # one virtualenv per version + lock in {state}/tools/scrapling/<version>-<lock hash>, "current" -> the one in use
 path = "{state}/tools/scrapling"
@@ -124,7 +124,7 @@ source = "the build of the hash-locked Playwright of the Scrapling lock, over HT
 [remotion]
 title = "Remotion (motion design videos)"
 kind = "npm"
-version = "4.0.534"
+version = "4.0.547"
 lock = "templates/remotion/package-lock.json"
 path = "{state}/tools/remotion"
 remove = ["{state}/tools/remotion"]

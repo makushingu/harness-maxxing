@@ -6,22 +6,23 @@ description: Collect data from websites with Scrapling - one page or a whole sit
 # Web scraping (Scrapling)
 
 Scrapling is installed on the server (`scrapling`, `scrapling-python`; check: `maxxing video status`).
-Three ways to fetch, from the lightest to the heaviest - start light, go up only if needed:
+Two ways to fetch, from the lightest to the heaviest - start light, go up only if needed:
 
 | Fetcher | CLI | Use when |
 |---|---|---|
 | `Fetcher` (HTTP, real browser TLS) | `scrapling extract get URL out.md` | normal pages, APIs, sitemaps - fast |
-| `DynamicFetcher` (Chromium) | `scrapling extract fetch URL out.md` | the content is built by JavaScript (empty result with `get`) |
-| `StealthyFetcher` (Chromium, more human) | `scrapling extract stealthy-fetch URL out.md` | the site blocks plain browsers |
+| `StealthyFetcher` (Chromium, human-like) | `scrapling extract fetch URL out.md` | the content is built by JavaScript (empty result with `get`) or the site blocks plain clients; add `--solve-cloudflare` for a Cloudflare check |
 
 `out.md` gives Markdown (best to read), `out.txt` text, `out.html` HTML. Add `--css-selector '.price'`
 to keep only part of the page. `scrapling extract get --help` lists options (headers, cookies, proxy).
+Scrapling 0.5+: `DynamicFetcher` / `DynamicSession` and `extract stealthy-fetch` are gone - use `StealthyFetcher` /
+`StealthySession` and `extract fetch` (an old script that imports them fails: change the name, nothing else).
 
 ## Structured data: a small script
 ```python
 # scrape.py - run with: scrapling-python scrape.py
 import csv
-from scrapling.fetchers import Fetcher            # or DynamicFetcher / StealthyFetcher (.fetch(url))
+from scrapling.fetchers import Fetcher            # or StealthyFetcher (.fetch(url)) for JavaScript pages
 
 rows, url = [], "https://example.com/products?page=1"
 while url and len(rows) < 500:
