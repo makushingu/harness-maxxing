@@ -893,6 +893,16 @@ def _number(n: int) -> int:
     return n
 
 
+def _sha(sha: str | None) -> dict:
+    """The head commit a review or a merge is bound to: refused when given but not a commit id, never dropped
+    (dropping it would approve or merge whatever the pull request holds now)."""
+    if sha is None or sha == "":
+        return {}
+    if not isinstance(sha, str) or not SHA_RE.match(sha):
+        raise GitError(400, "bad_sha", "invalid commit id")
+    return {"sha": sha.lower()}
+
+
 def _who(u: dict | None) -> dict:
     u = u or {}
     return {"login": u.get("login") or "", "avatar": u.get("avatar_url") or ""}
@@ -994,7 +1004,7 @@ def pull_review(full: str, number: int, event: str, body: str = "", comments: li
         raise GitError(400, "empty", "write something first")
     r = _gh_send(full, f"/repos/{full}/pulls/{n}/reviews",
                  {"event": event, "body": (body or "")[:60000], **({"comments": lines} if lines else {}),
-                  **({"commit_id": sha} if sha and re.fullmatch(r"[0-9a-f]{7,64}", sha) else {})})
+                  **{"commit_id": v for v in _sha(sha).values()}})
     return {"id": r.get("id"), "state": r.get("state"), "url": r.get("html_url")}
 
 
@@ -1003,7 +1013,7 @@ def pull_merge(full: str, number: int, method: str = "squash", sha: str | None =
     if method not in MERGE_METHODS:
         raise GitError(400, "bad_method", "method: merge | squash | rebase")
     r = _gh_send(full, f"/repos/{full}/pulls/{n}/merge",
-                 {"merge_method": method, **({"sha": sha} if sha and SHA_RE.match(sha) else {})}, method="PUT")
+                 {"merge_method": method, **_sha(sha)}, method="PUT")
     return {"merged": bool(r.get("merged")), "sha": r.get("sha"), "message": r.get("message")}
 
 

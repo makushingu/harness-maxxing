@@ -132,6 +132,23 @@ def test_comment_review_merge_close(client, gh):
     assert g.sent[2][2] == {"merge_method": "squash"}
 
 
+@pytest.mark.parametrize("sha", ["not-a-sha", "zz" * 20, "a" * 41])
+def test_an_invalid_head_sha_refuses_the_review_and_the_merge(client, gh, sha):
+    g = gh()
+    base = {"repo": "github:acme/app", "number": 7, "sha": sha}
+    assert client.post("/api/git/pull/review", json={**base, "event": "APPROVE"}).status_code == 400
+    assert client.post("/api/git/pull/merge", json={**base, "method": "squash"}).status_code == 400
+    assert g.sent == []
+
+
+def test_an_uppercase_head_sha_binds_the_review_too(client, gh):
+    g = gh()
+    base = {"repo": "github:acme/app", "number": 7, "sha": "A" * 40}
+    assert client.post("/api/git/pull/review", json={**base, "event": "APPROVE"}).status_code == 200
+    assert client.post("/api/git/pull/merge", json={**base, "method": "squash"}).status_code == 200
+    assert g.sent[0][2]["commit_id"] == "a" * 40 and g.sent[1][2]["sha"] == "a" * 40
+
+
 @pytest.fixture
 def clone(client, topic, mx, tmp_path):
     """A clone of acme/app in the topic whose origin (a bare repository) has the PR's branch and refs/pull/7/head."""
