@@ -72,3 +72,8 @@ def test_search_in_a_folder_leaves_its_siblings_out(client, mx, capsys):
     out = _run(capsys, "quuxbucket", "--in", "projects/a")
     assert "Mine" in out and "Sibling" not in out
 
+
+def test_search_limit_is_bounded(client, mx, capsys):
+    _session(T, "Limits", ["The flimflam setting is on"])
+    for n in ("99999999999999999999", "-5"):
+        assert "Limits" in _run(capsys, "flimflam", "--limit", n)

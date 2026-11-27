@@ -11,6 +11,7 @@ import time
 from . import cli, config
 
 AROUND = 700          # characters shown around a hit of --session
+LIMIT_MAX = 200
 
 
 def _configure(p) -> None:
@@ -86,7 +87,7 @@ def _handler(a) -> int:
     if not q.strip():
         print("usage: maxxing search \"words\"", file=sys.stderr)
         return 2
-    limit = max(1, a.limit)
+    limit = min(max(1, a.limit), LIMIT_MAX)
     if a.session:
         hits = _in_session(q, a.session, limit)
         if a.json:
