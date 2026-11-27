@@ -21,6 +21,10 @@ installer used other paths than the defaults; `maxxing init` (run by every updat
 
 The page only reads the skills: changes go through Claude (or your editor), never through a form.
 
+A skill can also appear by itself in a topic: when you asked for the same procedure in three sessions, Harness
+writes one into the topic's `.claude/skills/` and tells you in Notifications, with **Undo**. A skill of yours with
+the same name is never replaced. See [Memory](memory#learning-by-itself-what-agents-and-topics-learned).
+
 ## Shipped skills
 
 | Skill | Claude uses it when |
@@ -33,6 +37,8 @@ The page only reads the skills: changes go through Claude (or your editor), neve
 | `maxxing-backup` | you configure, run or restore the backup, or move to a new server |
 | `maxxing-cron` | you want something to happen on a schedule |
 | `maxxing-tasks` | you talk about your tasks or the board |
+| `maxxing-agents` | you want "an agent that…": a lasting role in a topic started by a schedule, a webhook, the feed, Telegram or another agent, or several agents working together (see [Agents](agents)) |
+| `maxxing-infra` | you want a site online, a database or a bucket on this server, another server added, or ask "where is X / is it up" (see [Infra](infra)) |
 | `maxxing-feed` | you say "notify me when…", or want sales, orders, deployments, e-mails or a script's results reported (webhooks, `maxxing feed post`) |
 | `maxxing-webhooks` | you want a URL that a service calls (Stripe, GitHub, a form, n8n, a phone Shortcut) or "when X happens, do Y" without AI: Settings -> Webhooks / Events |
 | `maxxing-mail` | you talk about your inbox, mail to answer or sort, drafts, or want an agent to handle a mailbox |

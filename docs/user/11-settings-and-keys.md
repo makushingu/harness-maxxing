@@ -11,10 +11,10 @@ blocks):
 
 | Block | Section | What you find |
 |---|---|---|
-| **General** | **General** | language (English/French), time zone, **App** (install it on this computer or phone, below), the getting started guide and the tutorial |
+| **General** | **General** | language (English, French, Spanish, German, Simplified Chinese or Japanese - see [Language](#language)), time zone, **App** (install it on this computer or phone, below), the getting started guide and the tutorial |
 | | **Appearance** | saved in this browser, in three cards. **Theme**: *Solid* (the default: plain colors) or *Glass* (the bars, menus and dialogs become see-through over a soft backdrop in your accent color; off when your system asks for less transparency), and the themes Harness installed for you next to them ([Themes](39-themes.md); **Ask Harness** for a new one), each shown as a small preview. **Options of the theme**: mode (dark, light or system), accent color (the logo takes it too), background (neutral or tinted with the accent), interface font (23, grouped by style: modern, with character, rounded, serif, easy to read, monospace) and code font (11; a font other than the default loads the first time you pick it) - the last mode, accent and background you pick also color the sign-in page and any browser that never chose one (new phone, private window). **Layout**: density, **layout** of this device (*Auto*: the touch layout on phones and tablets, the sidebar on computers; *Touch*; *Desktop* when the screen is wide enough), the first screen of the touch layout (*Last session* or *Dashboard*) |
 | | **Profile** | your pseudo, a **photo** (kept on this server, shown instead of the color and emoji, also to your Team contacts), color and emoji (picked from a searchable list) for messages, notifications and Team, with a preview; **Stay in touch**: the optional e-mail, news and anonymous counter (see [License](license)) |
-| | **Security** | change the password, two-step sign-in with Telegram (see [Telegram](telegram#two-step-sign-in)), **Privacy**: the presentation mode by default (new browsers start with your data masked), sign out everywhere |
+| | **Security** | **Protections** (what protects this server, and what is left to turn on), change the password, **Two-step sign-in** (Telegram, an authenticator app, recovery codes), **Privacy**: the presentation mode by default (new browsers start with your data masked), **Signed-in devices** (the browsers signed in, **Disconnect**, **Disconnect all the others**), sign out - see [Security](security#sign-in) |
 | | **Features** | every page of the sidebar: the ones always there, the optional ones with their switch, the options of the sessions under Sessions (below) |
 | | **Voice** | how voice messages and dictation are transcribed (on the server, Groq, OpenAI, or off), the microphone and call buttons, the voice mode |
 | **Claude** | **Claude** | authentication (status, token or API key, live test), default model, automatic compaction threshold, compaction when you come back to an idle session, smart resume (a summary written for the message you come back with), short session titles (and whether Claude writes them), automatic Claude Code updates, permission mode |
@@ -47,6 +47,17 @@ The community catalogue (widgets, pages, Agents views, skills and themes shared 
 link to it.
 Old links keep working: `/settings/stats` opens **Usage**, `/settings/license` and `/settings/support` open **About**, `/settings/packs` and `/settings/projects` open **Templates**, `/settings/extensions` opens
 **Widgets**, `/settings/docs` opens the docs.
+
+## Language
+
+The interface exists in six languages: English, French, Spanish, German, Simplified Chinese and Japanese. Choose
+yours in **Settings -> General -> Language** (the first step of the setup wizard asks it too): it is a setting of
+the server, so every browser signed in follows it. The sign-in page opens in that language, and its language
+button changes it for that page.
+
+What the server writes follows the same setting: the Telegram bot's own messages and its command menu, mobile
+notifications, the built-in texts of the dashboard. From a terminal: `maxxing init --language es` (`en`, `fr`, `es`,
+`de`, `zh`, `ja`).
 
 ## Disk space
 
@@ -266,7 +277,8 @@ lists Claude Code under `claude_version` when it is behind.
 
 | Mode | Behaviour |
 |---|---|
-| `bypass` (default) | Claude runs every tool without asking (`--dangerously-skip-permissions`). Needed for unattended work; suitable for a server dedicated to Claude. |
+| `sandbox` (**Sandbox (this topic only)**) | the default of a new installation. Claude works without asking inside the topic folder: its commands write there only and cannot read the server's keys, the SSH keys nor the rest of the home folder. What has to leave the topic (install a package, restart a service, another folder) asks you first, with a **Full access** button that gives the topic full access. The topics of the `system` project keep full access. See [Security](security#what-claude-may-do-on-the-server-permission-mode) |
+| `bypass` (**Full access**) | Claude runs every tool without asking (`--dangerously-skip-permissions`). Needed for unattended work on the whole server; suitable for a server dedicated to Claude. A server installed before the sandbox became the default keeps this mode until you change it. |
 | `acceptEdits` | file edits are allowed, other actions (commands) are refused unless pre-approved in Claude Code settings |
 | `ask` (**Ask me**) | reading is free; every other tool that is not pre-allowed waits for your **Allow** / **Deny** (see below) |
 | `default` (**Strict**) | Claude Code's standard permissions, nobody is asked: what needs an approval is refused |

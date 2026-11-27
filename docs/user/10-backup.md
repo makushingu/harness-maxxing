@@ -68,8 +68,9 @@ Settings -> Backup.
   of the latest commit (or a chosen one). Files that would be overwritten are first moved to the
   trash (`/var/lib/claude-maxxing/trash/backup-restore-<date>/`). Files over 5 MB (never saved by a backup) are
   skipped, and a restore stops if the files add up to more than 500 MB.
-- On a **new server** (no session started yet: the installer's restore, a move to another server) everything comes
-  back as it was, jobs and extensions on. On a server **already in use**, code that runs on the server comes back
+- On a **new server** (no session started yet) `maxxing backup restore --from` brings everything back as it was,
+  jobs and extensions on; `--hold` keeps off what is described below, and the installer's restore (`RESTORE_FROM`)
+  always uses it, then asks before turning anything on. On a server **already in use**, code that runs on the server comes back
   **turned off**: scheduled jobs (shell or Claude) this server does not
   already have exactly the same and turned on (a job that is off here stays off), and extensions any of whose code files the restore writes (turned off before their
   files are written: their code never runs, even for a moment); Claude Code `hooks` and the other settings that run
@@ -82,7 +83,8 @@ Settings -> Backup.
   before use. Agents and topics keep this server's security settings (sandbox, permission mode, allowed tools,
   budget...; an agent the server does not have comes back switched off), and agents, triggers and extensions turned off
   here stay off.
-  A notification lists all of it; check them, then turn them on in Crons and Extensions. Anyone able to push to the backup repository could otherwise
+  A notification lists all of it; check them, then turn them on in Crons and Extensions (`maxxing backup held` lists
+  what the last restore kept off, `maxxing backup release` turns all of it on at once). Anyone able to push to the backup repository could otherwise
   get their code run here. The memory backup job itself stays on.
 - One old version of one file: browse its history on GitHub and copy it back.
 
@@ -92,7 +94,10 @@ Settings -> Backup.
 curl --proto '=https' --tlsv1.2 -fsSL https://get.harness-maxxing.com | RESTORE_FROM=owner/name RESTORE_TOKEN=<token> bash
 ```
 
-The installer restores your memory, settings and jobs. Then sign in, re-enter what is never backed
+The installer restores your memory, settings and jobs. Scheduled jobs, extensions, Claude Code hooks, local MCP
+servers and customizations of the product come back turned off: the installer lists them and asks **Turn all of
+this on now?** (`RESTORE_TRUST=1` answers yes in advance; later: `maxxing backup release`, and `maxxing custom
+restore` for the customizations). Then sign in, re-enter what is never backed
 up (Claude token, Telegram bot token, Keys), and re-link Telegram – stop the old server first, a
 bot can only be served by one server.
 
@@ -102,5 +107,8 @@ bot can only be served by one server.
 maxxing backup status [--json]
 maxxing backup run
 maxxing backup restore [--ref <commit>]
-maxxing backup restore --from owner/name      # token from $MAXXING_GITHUB_TOKEN or prompted
+maxxing backup restore --from owner/name      # token from --token, $MAXXING_GITHUB_TOKEN or prompted
+maxxing backup restore --from owner/name --hold   # keep jobs, extensions, hooks and local MCP servers off
+maxxing backup held                           # what the last restore kept off
+maxxing backup release                        # turn all of it on, once checked
 ```

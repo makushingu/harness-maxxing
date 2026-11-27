@@ -21,7 +21,7 @@ Nothing outside that folder is reachable from the UI.
   `/var/lib/claude-maxxing/config.json` (`upload_max_mb: 0` removes the size limit; no restart needed).
   Empty files are uploaded too; a dropped folder is skipped (a message says so): drop the files inside it.
 - Drag a file or folder onto another folder (or onto a folder of the breadcrumb at the top) to
-  **move** it there; dragging one of the selected items moves the whole selection. Desktop browsers only; on a phone use *Rename / move* in the item menu.
+  **move** it there; dragging one of the selected items moves the whole selection. Desktop browsers only; on a phone use *Rename or move* in the item menu.
 
 ## Preview
 
@@ -172,7 +172,8 @@ In a folder (the Files page list or grid, and the folder grid of the file viewer
   included, as one zip made while it downloads. Up to 2 GB (before compression) and 100,000 files and folders; a bigger folder
   says so, download its sub-folders instead. Links that point outside the files root are left out.
 - **iPhone / iPad, app added to the home screen**: **Download** opens the share sheet (*Save to Files*, AirDrop,
-  Messages...) for files up to 50 MB; a bigger file opens inside the app, where the system offers to save or share
+  Messages...) for files up to 50 MB (when reading the file took more than a moment, tap **Save** on the **File
+  ready** notice to get the share sheet); a bigger file opens inside the app, where the system offers to save or share
   it - swipe from the left edge of the screen to come back. *Open the original* also stays in the app (Safari,
   outside the app, would not be signed in).
 

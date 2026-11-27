@@ -24,8 +24,8 @@ stopped.
   its **…** window; a column holds up to three sessions (three stacked share the height evenly). Two stacked sessions
   both keep their message box; in a stack of three, only the session you clicked shows its full message box and the
   others show a slim **Write…** bar - click it to write there. Drag the line
-  between two stacked sessions to share the height (double-click: half and half). The same button, or **Give it its
-  own column**, puts them back side by side. A stacked session shorter than about 560 px keeps a one-line header
+  between two stacked sessions to share the height (double-click: half and half). The same button, or
+  **Unstack**, puts them back side by side. A stacked session shorter than about 560 px keeps a one-line header
   (title, context, **…**, close): the plan and bell marks stay while they are on, the project / topic line and the
   cost are hidden.
 - **Widening a session to read**: drag the right edge of a column, up to 2000 px (never wider than the screen leaves
@@ -78,8 +78,7 @@ stopped.
 
 Under the session's title, its **project / topic** is a button: click it, type to search, pick another topic.
 Or drag the session in the session list and drop it on another topic (or on any session of that topic) -
-it is the same move. A session that is working cannot move until it finishes; inside its own topic the order
-follows the list's sort, so dropping there changes nothing.
+it is the same move. A session that is working cannot move to another topic until it finishes.
 The session moves there (the list updates) and Claude continues the same conversation, now working in the
 new topic's folder with that topic's context. Possible once Claude has finished (not during a turn or while
 messages wait). Its Telegram thread is renamed. Files it created stay where they are.
@@ -87,6 +86,13 @@ messages wait). Its Telegram thread is renamed. Files it created stay where they
 The project and the topic of a session show as two badges under its title. Hover one to see what it is (its
 description, what a project or a topic means for Harness, its folder); click them to move the session to
 another topic.
+
+## The order of the sessions in a topic
+
+In the tree of the sessions list, drag a session above or below another session of the same topic: it keeps that
+place, on every device. A session you never placed comes before the placed ones, the most recently active first,
+so a new session still shows up at the top of its topic. A session that is working can change place too. The
+**Favorites** and **Recent** blocks keep their own order.
 
 ## The sessions list
 
@@ -106,7 +112,8 @@ The top of the list is the same on a computer and on a phone:
     the most lately come first; then recent activity, A → Z, creation date). One line each: the title and its
     `# topic` on the right; hover it for `project › topic`.
   - **Show projects as**: **Tree** (projects, topics, sessions, each folds; drag a project or a topic within its
-    project to reorder, drag a session onto another topic to move it) or **One level at a time** (the projects;
+    project to reorder, drag a session onto another topic to move it, or above or below another session of its
+    own topic to choose its place - see [below](#the-order-of-the-sessions-in-a-topic)) or **One level at a time** (the projects;
     click one for its topics, a topic for its sessions; the small arrow at the top goes back one level).
     **Fold all folders** / **Unfold all folders** (tree only).
   - **Blocks on top**: tick **Favorites** and **Recent** to show them at the top of the list, and how many
@@ -448,7 +455,8 @@ The **…** of a session (or a right-click on its header, a long press on a phon
   so until you open it.
 - **Mark all as read** (the double tick at the top of the list, when sessions are unread; also in the menu of a
   project or a topic, for its sessions only): every unread session is read at once, as in the Agents list.
-- **Archive** hides a session from the list without deleting it (see the Archived filter).
+- **Archive** hides a session from the list without deleting it: it goes under the **Archived (N)** row of its
+  topic, which unfolds on a click.
 - **Delete** stops a running turn and removes the session files.
 
 ## Search
@@ -491,7 +499,8 @@ A Telegram session can be continued from the web UI and the other way round.
 | ? | list of shortcuts |
 | Ctrl/⌘+\ | show / hide the sidebar |
 | Shift+P | presentation mode (hides sensitive data on screen) |
-| G then D / S / F / T / C | go to Dashboard / Sessions / Files / Tasks / Crons |
+| G then D / S / F / , | go to Home (the dashboard) / Sessions / Files / Settings |
+| G then J / A / T / M / E / I / B | go to Jarvis / Agents / Tasks / Team / E-mail / Infra / Git, for the pages that are switched on |
 | Alt+T | switch between Tabs and Zones (Sessions page) |
 | Alt+M | Maxxing mode on / off (Sessions page, once enabled in Settings -> Features) |
 | Ctrl+J | terminal under the session on / off (once Code mode is on in Settings -> Features -> Sessions, see [Code in a session](35-code.md#terminal)) |

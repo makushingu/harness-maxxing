@@ -124,15 +124,15 @@ provider writes it on **every** mail, since otherwise a sender could write a fak
 
 - **Gmail, Yahoo, iCloud, Fastmail, Zoho**: automatic, once the mailbox really is there (its servers) and a few
   checks saw its mail.
-- **Another provider**: when one of the mailbox's own servers tops nearly all its mail of the last week, Edit the
-  mailbox shows it with **Trust <server>**. Confirm only if you know that every mail of the mailbox goes through it
+- **Another provider**: when one of the mailbox's own servers tops nearly all its mail of the last week, **Mailbox
+  settings** shows it with **Trust <server>**. Confirm only if you know that every mail of the mailbox goes through it
   (ask your provider, or look at a mail you sent yourself from another address).
-- **Nobody**: Edit the mailbox says so. No sender is verified, so an agent with an "Only mail from" list sees no mail.
+- **Nobody**: **Mailbox settings** says so. No sender is verified, so an agent with an "Only mail from" list sees no mail.
 
-Edit the mailbox -> **Sender checks (advanced)** names the servers yourself (for a redirection or a filter in front
+**Mailbox settings** -> **Sender checks (advanced)** names the servers yourself (for a redirection or a filter in front
 of your mailbox). A provider that skips the check on some of its own internal mail is a risk Harness cannot see.
 
-**Checks.** Harness looks for new mail every 10 minutes (5, 10, 30 or 60: Edit the mailbox -> Check for new mail
+**Checks.** Harness looks for new mail every 10 minutes (5, 10, 30 or 60: **Mailbox settings** -> Check for new mail
 every), and right away with the **Refresh** button or `maxxing mail refresh`. The page itself always shows the mailbox
 live; the checks start the agents and fill **All mailboxes** (shown when you have two or more). A check takes 200 new
 mails at most, the oldest first: the rest comes with the next one, a minute later. Two checks of a mailbox never run at

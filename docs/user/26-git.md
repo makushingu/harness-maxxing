@@ -10,7 +10,8 @@ Harness Maxxing shows git as pictures: the branches, the commits, what is not pu
 - **The Git page** (sidebar -> **Git**): every repository of the server and of your GitHub account, with your
   rights on each; click one to see all its branches and commits. Turn it on in Settings -> Features.
 
-Everything is read-only: nothing is ever committed, pushed or changed from these views.
+The graphs are read-only: nothing is ever committed or pushed from them. A pull request opened from the page is
+the exception: you can comment, approve, merge or close it (see [Pull requests in Harness](code#pull-requests-in-harness)).
 
 ## Graphs in the chat
 
@@ -67,8 +68,8 @@ The repository must be inside the files root (`/root` by default): the same fold
   private ones with a lock, and "cloned here" when the server has a copy; your right on it (admin, maintain,
   write, triage, read) is at the top of the repository once it is open.
 - Click a repository: the graph of its branches and commits (the 200 most recent, **Show more** for up to 1,000),
-  the details of a commit (in a sheet from the bottom on a phone or a tablet), and for GitHub the open pull
-  requests. The short id at the end of a line is a link to the commit on GitHub, when it is there. A clone linked to GitHub has a button to switch between the server's copy and GitHub (which shows every
+  the details of a commit (in a sheet from the bottom on a phone or a tablet), and for GitHub the pull
+  requests (**Open / To review / Closed**; click one to open it in Harness). The short id at the end of a line is a link to the commit on GitHub, when it is there. A clone linked to GitHub has a button to switch between the server's copy and GitHub (which shows every
   branch, even those not fetched on the server). With many branches, the lines of the graph squeeze on a narrow
   screen and long branch names end with "…" (full name on hover).
 
@@ -90,7 +91,8 @@ the page only ever sees their names.
 
 ### Safety
 
-The page only reads repositories: it never fetches, pulls or pushes. A repository found on the server may come
+The page only reads the repositories of the server: it never fetches, pulls or pushes (what you do on a pull
+request goes to GitHub, with your token). A repository found on the server may come
 from anywhere (an extracted archive, a clone made by Claude), so the settings of a repository that would make git
 run a program while reading it (file monitor, signature check, clean filters, external diff, hooks) are switched
 off, and a repository owned by another system user is not opened (git's own ownership check). When GitHub's rate

@@ -7,22 +7,23 @@ The first visit happens through the **one-time setup link** printed by the insta
 (`https://ui.example.com/setup?token=...`). Whoever has the link can claim the instance, so keep
 it private. Lost it? Run `maxxing setup-link` on the server.
 
-The setup link first asks for the UI password (8 characters minimum, stored hashed with scrypt).
+The setup link first asks for the UI password (12 characters minimum, stored hashed with scrypt).
 Then the wizard has nine steps. You can leave and come back: it resumes where you stopped, and
 every step also exists in Settings.
 
-1. **Language & time zone** – English or French, and the time zone used by scheduled jobs.
+1. **Language & time zone** – the interface language (English, French, Spanish, German, Simplified Chinese or
+   Japanese) and the time zone used by scheduled jobs.
 2. **About you** (all optional) – your pseudo, an email for security alerts (and the product news if you want),
-   and, only for companies that have one, an **Enterprise license key**. The anonymous installation counter is on by
-   default and is turned off in Settings → Profile. See [License](license).
-3. **Claude connection** – the wizard detects whether Claude Code is signed in. Otherwise:
+   and, only for companies that have one, an **Enterprise license key**. The anonymous installation counter follows
+   what was answered at the installation; change it in Settings → Profile. See [License](license).
+3. **Connect Claude** – the wizard detects whether Claude Code is signed in. Otherwise:
    - run `claude setup-token` on any machine with a browser and paste the long-lived token, or
    - paste an Anthropic API key (pay-as-you-go).
    A real one-line test call confirms it works.
 4. **Import** (optional) – coming from another agent (Hermes, Claude Code, OpenClaw…)? Copy the
    prompt into it, drop the zip it makes: your projects, topics, memory and skills arrive, and
    Claude finishes the job (tasks, scheduled jobs, keys to add). See [Import](import).
-5. **First project & topic** – a starter project `general` with a topic `inbox` already exists;
+5. **Your projects** – a starter project `general` with a topic `inbox` already exists;
    create your own (for example `acme` / `blog`).
 6. **Your pages** (optional) – *What will you use?* Sessions, Files and Notifications are always there; switch on
    the other pages you need now (Agents is on already; Tasks, Team, E-mail, Infra, Git are off). The same rows
@@ -32,7 +33,7 @@ every step also exists in Settings.
 8. **Memory backup** (optional, recommended) – a private GitHub repository receiving your memory
    every day. See [Backup](backup).
 9. **Ready** – then the **getting started guide** is proposed (below), and **Tell me when a session finishes** (a browser notification when
-   Claude is done and the tab is not in front; also in Settings → Features).
+   Claude is done and the tab is not in front; also in Settings → Alerts, **Notify me when a session finishes**).
 
 ## The getting started guide
 

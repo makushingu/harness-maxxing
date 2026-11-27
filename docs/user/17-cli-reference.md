@@ -38,7 +38,8 @@ As root on systemd it also writes the slices of the [CPU priorities](settings-an
 | `--timezone TZ` | IANA name (default: the system zone). Keep it equal to the system zone (`timedatectl`), which cron uses - unless the server clock is kept. An unknown zone is refused |
 | `--system-clock follow\|keep` | `follow`: changing the time zone in the UI also switches the system zone; `keep`: never touch it (shared server), jobs check their schedule in your zone |
 | `--claude-dir PATH` | Claude Code folder for Harness Maxxing (default `~/.claude`; `""` = back to it). Another folder keeps it apart from a Claude Code already used on the server (passed to sessions as `CLAUDE_CONFIG_DIR`) |
-| `--language en\|fr` | interface language |
+| `--language en\|fr\|es\|de\|zh\|ja` | interface language (also the language of what the server writes) |
+| `--count yes\|no` | the anonymous daily count of installations, as answered at the installation (the installer passes it; later: Settings -> Profile) |
 | `--secret-from-stdin NAME` | store a secret read from stdin: `claude_oauth_token`, `anthropic_api_key`, `github_update_token` |
 | `--no-crons` | do not create the default jobs |
 | `--quiet`, `--json` | output control |
@@ -127,12 +128,12 @@ Changes made to the product code, recorded so updates carry them over (see [Cust
 
 | Command | Effect |
 |---|---|
-| `maxxing custom` / `status [--json]` | customizations, unsaved changes in the code directory, the customized interface, pending update |
+| `maxxing custom` / `status [--json]` / `list` | customizations, unsaved changes in the code directory, the customized interface, pending update |
 | `maxxing custom save "TITLE" --why "REASON" [--files F…] [--check "CMD"]` | commit the uncommitted changes as one customization (refused under `web/dist`, the shipped interface build); `--check` = a command that succeeds while it works, run after every update |
 | `maxxing custom check ID "CMD"` | set (or clear with `""`) the check of a customization |
 | `maxxing custom drop ID` | remove one customization |
 | `maxxing custom export` | rewrite `<workspace>/CUSTOMIZATIONS.md` and `customizations/*.patch` |
-| `maxxing custom restore [--from DIR]` | re-apply the saved patches (new server) |
+| `maxxing custom restore [--from DIR] [--stat]` | re-apply the saved patches (new server); `--stat` only lists the patches that would be applied |
 | `maxxing custom build [--force] [--json]` | typecheck and build the customized interface into the state directory (shown at once; the first build installs the build tools) |
 
 ## maxxing deps
@@ -142,7 +143,7 @@ Remotion, the Whisper models, Garage). As root.
 
 | Command | Effect |
 |---|---|
-| `maxxing deps list [--json]` | installed and expected version of each one (exit 1 when one is missing or outdated) |
+| `maxxing deps list [--json] [--quiet]` | installed and expected version of each one (exit 1 when one is missing or outdated); `--quiet`, on any `deps` command, prints only problems |
 | `maxxing deps verify [NAME...]` | checksums of the installed binaries, files not owned by root or writable by others |
 | `maxxing deps update [NAME...] [--notify]` | install the pinned versions next to the old ones, switch once they work (every `maxxing update` does it) |
 | `maxxing deps remove NAME [--force]` | delete what the manifest lists for it (`--force` for uv, Python, Claude Code) |
@@ -165,6 +166,9 @@ Remotion, the Whisper models, Garage). As root.
 | `maxxing cron list` | jobs, schedules, last results |
 | `maxxing cron run <id>` | run a job now in your terminal and wait for it; `--detach` starts it in its own systemd unit with the memory limits and returns (it runs it here if systemd refuses) (what the crontab calls); `--if-due` runs it only if its schedule matches now in your zone (server clock kept) |
 | `maxxing cron sync` | rewrite the managed crontab block from the job list |
+| `maxxing cron tick` | start the missed runs and the retries that are due (what the server does every 5 minutes) |
+| `maxxing cron deleted` | the removed jobs that are kept |
+| `maxxing cron restore <id>` | put a removed job back |
 
 ## Notifications feed
 
@@ -196,13 +200,15 @@ Remotion, the Whisper models, Garage). As root.
 | `maxxing keys delete-file NAME` | remove a secret file |
 | `maxxing keys encrypt` | seal the server's secrets on disk (as root): `secrets.json` becomes `secrets.json.cred`, encrypted by `systemd-creds` with this machine's key (and its TPM when systemd uses one), checked by decrypting it back before the clear file is removed. A copy kept of a once damaged `secrets.json` (`secrets.json.damaged-*`) is not sealed: it is named in a warning, to compare and delete. Refuses, changing nothing, when `systemd-creds` is missing (systemd older than 250) or the check fails. Nothing else changes: the server and every `maxxing` command read it as before. See [Security](15-security.md#secrets-sealed-on-disk-optional) for what it protects and what it does not |
 | `maxxing keys decrypt` | undo it: a clear `secrets.json` (mode 600) again. Needed before moving the state folder to another server |
-| `maxxing infra status` / `infra list [--kind K] [--json]` | the Infra inventory: sources, problems, every site / database / bucket / domain / server (last snapshot) |
+| `maxxing infra status` / `infra list [--kind K] [--all] [--json]` | the Infra inventory: sources, problems, every site / database / bucket / domain / server (last snapshot); `--all` includes hidden and system resources |
 | `maxxing infra refresh` | read everything now (this server, other servers over SSH, Cloudflare, Hostinger, URL checks) |
 | `maxxing infra mail [--refresh] [--json]` | e-mail, view only: mailboxes of the E-mail page, Cloudflare Email Routing forwards, Hostinger e-mail, DNS health (MX, SPF, DKIM, DMARC) of the mail domains with what to fix |
-| `maxxing infra site add NAME (--dir D \| --port N) [--host H] [--dns] [--project P]` | put a site online: `https://<Harness address>/<NAME>/` (sandboxed) or its own host; `site remove`, `site list`, `reserved` |
+| `maxxing infra site add NAME (--dir D \| --port N) [--host H] [--dns] [--project P] [--keep-prefix]` | put a site online: `https://<Harness address>/<NAME>/` (sandboxed) or its own host (`--dns`: create its DNS record on Cloudflare); `--keep-prefix`: an app under `/<NAME>/` that handles the prefix itself; `site remove NAME`, `site list`, `infra reserved` (the names a site cannot take) |
 | `maxxing infra db install` / `db create NAME` / `db sqlite PATH` / `db backup` | PostgreSQL on localhost, one database + user per app (URL in the vault as `DB_<NAME>_URL`), nightly backups |
 | `maxxing infra bucket install` / `bucket create NAME [--public]` | S3 buckets on this server (Garage), keys in the vault as `S3_<NAME>_*` |
-| `maxxing infra server add NAME HOST [--user U] [--key K]` | read another server over SSH (`server remove`, `server list`) |
+| `maxxing infra server connect TARGET [--user U] [--port N] [--label L]` | connect another server: an address, or a Hostinger VPS id (see `infra list --kind server`) |
+| `maxxing infra server add NAME HOST [--user U] [--port N] [--key K] [--note T] [--label L] [--force]` | read another server over SSH with a key you already have (`server rename NAME LABEL`, `server remove NAME`, `server list`) |
+| `maxxing infra domain add NAME` / `domain remove NAME` / `domain list` | domains added by hand (any registrar) |
 | `maxxing infra annotate ID [--project P] [--note T] [--hide\|--show]` | attach a resource to a project, note it, hide it |
 
 Scripts read keys from the environment (`os.environ["NAME"]`, `$NAME`); a script that renews a token
@@ -232,7 +238,9 @@ OAuth sign-ins (state "To connect") are done in Settings -> MCP -> **Connect**. 
 | `maxxing agents templates [--lang L] [--json]` | the ready-made agents (id, name, trigger) |
 | `maxxing agents create P/T/A --role TEXT\|--role-file F\|--template ID [--lang L] [--name N] [--model M] [--permission M] [--approvals] [--keys A,B] [--trust-outside] [--telegram] [--usd-per-day N] [--runs-per-hour N] [--domains H,H] [--writable D,D] [--mail ADDRESS] [--no-sandbox] [--off] [--json]` | create an agent in a topic (sandboxed unless `--no-sandbox`; `--template`: a ready-made agent, the other options override it; `--mail`: a mailbox for the agent - the one an e-mail template needs, or for a role-only agent read + drafts with the `maxxing mail` tool allowed) |
 | `maxxing agents show AGENT` | its settings, role, triggers, schedule jobs and webhook URLs (JSON, no secret) |
+| `maxxing agents set AGENT FIELD=VALUE... [--json FIELDS]` | change its settings (JSON values: `approvals=true`, `domains='["example.com"]'`, `limits.usd_per_day=3`, `model=sonnet`); `--json`: the fields as one JSON object. From the agent's own runs, what makes it less safe waits for your OK (see [Agents](30-agents.md)) |
 | `maxxing agents cron AGENT --schedule CRON [--prompt T] [--name N] [--json]` | add a schedule (a Claude job in the agent folder) |
+| `maxxing agents cron AGENT --job ID [--schedule CRON] [--prompt T] [--name N] [--on \| --off] [--remove]` | change one of its schedules (its id: `agents show`), switch it on or off, or remove it |
 | `maxxing agents webhook AGENT [--kind generic\|stripe\|shopify\|github] [--prompt T] [--levels L] [--match W] [--json]` | add a webhook and print its URL |
 | `maxxing agents watch AGENT --source S [--levels L] [--match W] [--prompt T] [--json]` | start it on new feed events of a source |
 | `maxxing agents after AGENT OTHER [--on ok\|error\|any] [--match W] [--prompt T] [--json]` | start AGENT on the result of each automatic run of OTHER |
@@ -305,7 +313,7 @@ one action). Harness creates them from a session; the definition is JSON (see th
 | `maxxing mail accounts [--json]` | the mailboxes of the E-mail page |
 | `maxxing mail folders [-a ACCOUNT]` | folders with unread / total counts |
 | `maxxing mail list [-a A] [-f FOLDER] [--unread] [--flagged] [-s TEXT] [-n 20] [--page N]` | messages, newest first |
-| `maxxing mail read UID [-a A] [-f FOLDER] [--keep-unread]` | one message (its body is framed as data, not instructions) |
+| `maxxing mail read UID [-a A] [-f FOLDER] [--keep-unread] [--max N] [--full]` | one message (its body is framed as data, not instructions); at most 20,000 characters of the body unless `--max N` (`0` = all) or `--full` |
 | `maxxing mail archive\|trash\|junk\|inbox\|seen\|unseen\|flag\|unflag UID...` | sort messages |
 | `maxxing mail move UID... --to FOLDER` / `mkdir NAME [--parent F]` | move / create a folder |
 | `maxxing mail attachment UID INDEX OUT [--force]` | save an attachment: into a folder under its name (`name (2).pdf` when taken), or as the file OUT (replaced only with `--force`) |
@@ -360,16 +368,33 @@ See [Harness Browser](33-browser.md).
 |---|---|
 | `maxxing memory [--json]` | every memory.md with its line count and the line limit (Settings -> Memory) |
 | `maxxing memory-review undo ID` / `list [--json]` / `apply ID\|all` / `reject ID` / `daily` | what [agents and topics learned](memory): `undo` takes back a bullet or a skill that was written (same as Undo of its notification); `list`, `apply`, `reject` are for the proposals that wait in `"memory_review": "ask"` mode; `daily` runs the daily look at the busy topics now |
-| `maxxing sessions send SESSION MESSAGE... [--file PATH] [--json]` | write to a session as if typed in it (SESSION: its id, its first 8 characters or its title - case and accents ignored, a unique beginning is enough; `--file` repeatable). Run by Claude from a session, the message says which session sent it; 3 sends in a row between sessions or agents at most. Refused in a sandboxed agent |
-| `maxxing sessions new TOPIC [MESSAGE...] [--title T] [--model M] [--effort E] [--file PATH] [--fresh REASON] [--json]` | start a session in a topic (TOPIC: `<project>/<topic>` or `projects/<project>/topics/<topic>`) with a first message; no `--title`: made from the message. Run by Claude from a session or an agent, the message says which session started it, with the same limit of 3 sends in a row. From Jarvis's conversation it is refused (exit 3, with their list, closest to the subject first) while the topic has sessions that can take the work: `sessions send` to one of them, or `--fresh "<reason>"` for another subject (the reason shows on its work board card). An agent is started with `maxxing agents run` instead. Refused in a sandboxed agent |
+| `maxxing memory-review run SESSION [--prompt a\|b\|agent] [--model M] [--json]` / `learn projects/P/topics/T [--model M] [--write]` | by hand: review one session and store its proposals / print the skills and rules the recent sessions of a topic repeat (nothing kept; `--write` writes the skills into the topic) |
+| `maxxing sessions send SESSION MESSAGE... [--file PATH] [--report-to SESSION\|me] [--json]` | write to a session as if typed in it (SESSION: its id, its first 8 characters or its title - case and accents ignored, a unique beginning is enough; `--file` repeatable). `--report-to`: the session its next answers are reported to (`me` = the session of this turn). Run by Claude from a session, the message says which session sent it; 3 sends in a row between sessions or agents at most. Refused in a sandboxed agent |
+| `maxxing sessions new TOPIC [MESSAGE...] [--title T] [--model M] [--effort E] [--file PATH] [--report-to SESSION\|me] [--fresh REASON] [--json]` | start a session in a topic (TOPIC: `<project>/<topic>` or `projects/<project>/topics/<topic>`) with a first message; no `--title`: made from the message. Run by Claude from a session or an agent, the message says which session started it, with the same limit of 3 sends in a row. From Jarvis's conversation it is refused (exit 3, with their list, closest to the subject first) while the topic has sessions that can take the work: `sessions send` to one of them, or `--fresh "<reason>"` for another subject (the reason shows on its work board card). An agent is started with `maxxing agents run` instead. Refused in a sandboxed agent |
 | `maxxing sessions list [--json]` | the sessions that are not archived: id, state, topic, title |
 | `maxxing sessions list --topic <project>/<topic> [--days N] [--json]` | a topic's sessions of the last 30 days (or N) with what Jarvis needs to continue one: start of the last answer, who started it, `reusable` or why not |
+| `maxxing topics list [--json]` | every project and topic with its description |
+| `maxxing topics new PROJECT/TOPIC [--description T] [--project-description T]` | create a topic, and its project when it is new (lowercase letters, digits, `-`); the description is the first paragraph of its `CLAUDE.md` |
 | `maxxing sessions compact-logs [--dry-run]` | clip the tool outputs of existing session logs and drop the bulky Claude start-up lists and progress lines (frees disk space; `--dry-run` only reports what would be saved) |
 | `maxxing sessions trace SESSION [TURN\|last] [--json]` | what a turn did, step by step: each call to the model (context read, share from the cache), each tool with its duration and the ones that failed, the turn's tokens and cost. Without TURN: the list of the session's turns. Read from the session's log (the **Turn details** window of the interface) |
 | `maxxing usage export [--group days\|projects\|topics\|agents\|sessions] [--format csv\|json] [-o FILE]` | tokens, turns and cost as a file (Settings -> Usage -> CSV / JSON) |
 | `maxxing logs [--since 15m\|1h\|6h\|24h\|7d\|30d] [--level info\|warning\|error] [--grep TEXT] [--unit NAME] [--session ID] [-n N] [--json]` | search the journal of Harness Maxxing (or of another service of the System page) |
 | `maxxing metrics [status\|on\|off\|token]` | the `/metrics` address for Prometheus: `on` prints the address and, the first time, its token; `token` makes a new one |
 | `maxxing sessions token-report [--days N] [--json]` | where the tokens of your sessions go, read from Claude Code's transcripts: context size per call, cache rewritten after an idle hour or a model switch, the tools whose outputs fill the context, and what automatic compaction at 400k / 300k / 250k / 200k would have saved on the same calls |
+
+## Jarvis
+
+| Command | Purpose |
+|---|---|
+| `maxxing jarvis status [--json]` | on or off, its conversation, its settings, the open work |
+| `maxxing jarvis say "TEXT"` | a message into its conversation of the moment |
+| `maxxing jarvis new` | its next message starts a new conversation |
+| `maxxing jarvis work [--all] [--json]` / `work close REF` | the work board (`--all`: closed entries too) / an entry is done (REF: its number or its session id) |
+| `maxxing jarvis digest [--since H] [--mark]` | what changed since the last night pass (`--since`: the last H hours instead; `--mark`: the next digest starts now) |
+| `maxxing jarvis brief` / `dream` | the morning brief, now / the night pass, now (a separate session) |
+| `maxxing jarvis set KEY VALUE` | one of its settings: `model`, `dream_model`, `root`, `ask_first`, `internals`, `daily`, `brief`, `dream`, `compact_tokens`, `telegram`, `report_effort`, `reuse`, `archive_done` |
+
+See [Jarvis](36-jarvis.md).
 
 ## Backup
 
@@ -378,7 +403,8 @@ See [Harness Browser](33-browser.md).
 | `maxxing backup status [--json]` | configuration and last run |
 | `maxxing backup run` | back up now (exit code 2 if a secret was found) |
 | `maxxing backup restore [--ref COMMIT]` | restore the whitelisted files |
-| `maxxing backup restore --from OWNER/NAME [--token T]` | new server: configure an existing backup repository, then restore (token also from `$MAXXING_GITHUB_TOKEN`) |
+| `maxxing backup restore --from OWNER/NAME [--token T] [--hold]` | new server: configure an existing backup repository, then restore (token also from `$MAXXING_GITHUB_TOKEN`); `--hold`: keep off what would run code here (jobs, extensions, hooks, local MCP servers), as on a server in use |
+| `maxxing backup held` / `backup release` | what the last restore kept off / turn all of it on, once checked |
 
 ## Telegram
 

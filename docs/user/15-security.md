@@ -22,7 +22,7 @@ menu → Permissions changes one topic.
 
 ### Full access (bypass mode)
 
-**Sessions, Claude jobs and shell jobs run as root, with full rights on the server.** By default `claude` runs
+**Sessions, Claude jobs and shell jobs run as root, with full rights on the server.** In this mode `claude` runs
 with `--dangerously-skip-permissions`: Claude can read and change any file (your secrets, SSH keys, other sites'
 data), install software, change the firewall, start or stop services and run any command, without asking.
 That is what makes unattended work, crons, server administration and phone conversations possible – and why
@@ -40,10 +40,10 @@ the only extra place a member may write is the group's shared folder (turn off "
 that read outside content: a hand-over then asks for your OK before risky actions).
 
 **What limits it:**
-- **Permission modes, per topic and per job** (the real limit): `bypass` (default, no questions), `sandbox`
-  (free inside the topic folder, see below), `acceptEdits` (edits files, refuses commands), `ask` (asks you before anything but reading: **Allow** / **Deny** in the
-  session, the notifications or Telegram), `default` (refuses edits and commands), `plan` (reads only, proposes a
-  plan). Set them for the whole server (Settings -> Claude), a topic (topic menu -> **Permissions**) or a
+- **Permission modes, per topic and per job** (the real limit): `bypass` (no questions), `sandbox`
+  (free inside the topic folder, see below; the default of a new installation), `acceptEdits` (edits files, refuses commands), `ask` (asks you before anything but reading: **Allow** / **Deny** in the
+  session, the notifications or Telegram), `default` (refuses edits and commands). Whatever the mode, a session in plan mode reads only and proposes a
+  plan (see [Sessions](sessions)). Set them for the whole server (Settings -> Claude), a topic (topic menu -> **Permissions**) or a
   scheduled job. Put every topic and job that reads untrusted content in a stricter mode.
 - Each session and job runs in its own systemd unit with a memory cap and a few protections that never get in
   the way of administering the server: it cannot set the system clock, change the process personality or use
@@ -277,6 +277,21 @@ date (`maxxing community list`, Settings). It is a reading aid, not a verdict: i
 and it does not replace reading the code or knowing who wrote it. Details:
 [13-page-extensions.md](13-page-extensions.md#what-a-package-does-before-it-is-installed).
 
+## Protections (Settings -> Security)
+
+**Settings -> Security** starts with the card **Protections**: what protects this server and what is left to turn
+on, one line each, read from the same checks as `maxxing doctor`:
+
+- **two-step sign-in**: on (with Telegram, the authenticator app, and the recovery codes left) or off - then the
+  password alone opens the server;
+- **permission mode**: sessions in a sandbox by default, or full access to the server;
+- **secrets**: stored in clear (mode 600) or sealed on disk;
+- **server**: firewall, fail2ban and automatic security updates;
+- **updates**: whether the signature of a new version is checked before it is installed;
+- **listen address**: this machine only (reached through the reverse proxy), or another address.
+
+A line that is not green says what to open or which command to run. The card only reads: it changes nothing.
+
 ## Anthropic account
 
 Harness Maxxing runs the official Claude Code CLI with **your** account or API key on **your**
@@ -288,6 +303,7 @@ for your plan.
 - [ ] Dedicated server; SSH by key only, firewall, fail2ban and automatic security updates on (set by the installer).
 - [ ] Domain (HTTPS) or Tailscale access; nothing reachable from the Internet but SSH, 80 and 443.
 - [ ] SSH with a key (password login disabled).
-- [ ] Strong UI password; Telegram account protected.
+- [ ] Strong UI password; two-step sign-in on (Telegram or an authenticator app), recovery codes kept somewhere safe;
+      Telegram account protected.
 - [ ] Memory backup to a private repository.
 - [ ] `maxxing doctor` all green.

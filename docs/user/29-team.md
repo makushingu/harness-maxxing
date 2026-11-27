@@ -26,9 +26,9 @@ returns to the chats, and **☰** at the top left shows them over the chat open.
 Every Harness talks straight to the other one, server to server: no Harness Maxxing server in between, ours
 included.
 
-1. **Team -> Connections -> Create an invitation**: a link `https://ui.example.com#...`, valid 15 minutes, usable
+1. **Team -> Friends -> Add a friend -> Create an invitation**: a link `https://ui.example.com#...`, valid 15 minutes, usable
    once. Send it to the person through a channel you trust (a message, a call...).
-2. They paste it in **Connections -> Join** on their Harness and click **Send the request**.
+2. They paste it under **Join**, in **Add a friend** on their Harness, and click **Send the request**.
 3. You see their request with a fingerprint like `7F3A-91C2`; they see the same one. Check it with them (by
    phone or another app), then **Accept**.
 
@@ -36,8 +36,8 @@ included.
 > Nothing they write ever reaches Claude by itself, but read what you forward to a session.
 
 Both servers need a **public address** (Harness installed with a domain, `https://`). Team does not work through
-Tailscale nor on a local network: the other server could not reach yours. Connections shows why when it is not
-ready. **Remove** a contact in Connections: their server is told and can no longer write to you. To connect
+Tailscale nor on a local network: the other server could not reach yours. **Add a friend** shows why when it is not
+ready. **Remove this contact** in a friend's menu: their server is told and can no longer write to you. To connect
 again with someone who is still a contact (a reinstalled server, for example), they remove you first, then use a
 new invitation: an invitation never replaces an existing contact.
 

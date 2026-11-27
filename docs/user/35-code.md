@@ -133,7 +133,8 @@ command on the server). Then:
 - **+** opens another one, in any repository of the session; one tab per terminal; drag the top edge to resize.
 - Select text, then **Send the selection to Claude**: it goes into your next message as a quote.
 - A page reload finds the terminals again with what they printed. They close when you close them, after 30 minutes
-  without activity, or when the Harness service restarts. 4 at most at a time.
+  without activity, when the sign-in they belong to ends (sign-out, password change, **Disconnect** in Settings ->
+  Security) or when the Harness service restarts. 4 at most at a time.
 - On a phone the drawer takes most of the screen, with a row of keys a phone keyboard lacks (Esc, Tab, Ctrl+C,
   arrows).
 - Agents never get a terminal.

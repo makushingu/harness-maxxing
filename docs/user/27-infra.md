@@ -194,7 +194,7 @@ when they are on the E-mail page.
 ## Terminal
 
 `maxxing infra status`, `maxxing infra list [--kind site] [--json]`, `maxxing infra refresh`, and the recipes:
-`site add|remove|list`, `db install|create|sqlite|backup`, `bucket install|create`, `server connect|add|rename|remove|list`,
+`site add|remove|list`, `reserved` (the names a site cannot take), `db install|create|sqlite|backup`, `bucket install|create`, `server connect|add|rename|remove|list`,
 `domain add|remove|list`,
 `annotate`, and `maxxing infra mail [--refresh] [--json]` (the E-mail tab). See `maxxing infra --help` and the CLI reference.
 

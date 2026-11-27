@@ -62,12 +62,12 @@ switch to turn it off and on. Open a row to see:
 - **Send a test**: a realistic example of what the service sends (a Stripe sale, a GitHub push...), so you see the
   webhook work before the service calls it. A test really runs the action: a test of a stored webhook adds a sample
   row, a test of a webhook that calls a URL calls it;
-- the **⋯** menu: **New URL** (the old one stops working at once; paste the new one in the service), **Secret**,
+- the **⋯** menu: **New URL** (the old one stops working at once; paste the new one in the service), **Set the secret** / **Change the secret**,
   **Delete** (its calls and data too).
 
 The same list also shows the **notification webhooks** (*Posts each event to the notifications feed*: Stripe,
 Shopify, GitHub, JSON) and the webhooks of **agents** (badge *Agent*, *Starts the agent ...*, **Manage in the
-agent**). Open one: its URL, where to paste it in the service, **Send a test**, **New URL**, **Secret**,
+agent**). Open one: its URL, where to paste it in the service, **Send a test**, **New URL**, **Set the secret**,
 **Delete** (an agent's webhook is removed from the agent). Their events are in the notifications feed.
 
 ## The URL and the secrets

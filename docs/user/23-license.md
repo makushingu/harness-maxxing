@@ -126,7 +126,7 @@ comes from GitHub like every install.
 They used to update from signed archives. Since 2.0.0a87 they **move to the public git repository by themselves**:
 a few minutes after their next update (or at the next `maxxing update`) the code follows the `stable` branch of
 `github.com/makushingu/harness-maxxing`, at the same version, with the customizations kept; the key stays (Settings
-→ License). If it cannot move yet (no network, uncommitted changes in the code folder, an update being finished) it
+→ About). If it cannot move yet (no network, uncommitted changes in the code folder, an update being finished) it
 tries again every few hours and `maxxing doctor` says why.
 
 ## What is sent to the license server

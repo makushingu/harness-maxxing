@@ -86,10 +86,12 @@ Harness also looks at the work itself, and keeps what is worth keeping. It write
 
 A small model reads the conversation (Haiku: a fraction of a cent per look), with no tools and no access to
 anything else. What you undo is not written again; at most three things are written in 24 hours for one agent or
-topic. From a shell: `maxxing memory-review undo ID`.
+topic. The daily look reads the topics that had at least three sessions in the last 14 days, ten topics a day at
+most. From a shell: `maxxing memory-review undo ID` takes one back, `maxxing memory-review daily` runs the daily
+look now.
 
 To decide each one yourself, set `"memory_review": "ask"` in `config.json`: nothing is written, each one arrives
-with **Accept** and **Refuse** (`maxxing memory-review list`, `apply ID`, `reject ID`), and while three wait for one
+with **Accept** and **Refuse** (`maxxing memory-review list`, `apply ID` or `apply all`, `reject ID`), and while three wait for one
 agent or topic, it is not read again. `"memory_review": false` turns it off.
 
 ## Editing memory yourself

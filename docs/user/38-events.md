@@ -47,7 +47,7 @@ app). A token for ntfy or an API key goes in Settings -> Keys: the event reads i
 
 The same list as the Webhooks page: each event's sentence (*When a cron job fails, notify ntfy*), its state, the last
 time it ran, a switch. Open a row to see the last runs (50 kept) with what was received and what happened,
-**Replay**, **Send a test** (a realistic notification, agent result or cron run), **Change with Harness**, **Fix with
+**Replay**, **Send a test** (a realistic notification, agent result or cron run), **Edit**, **Fix with
 Harness** after a failure, and the **⋯** menu (Delete).
 
 ## Good to know

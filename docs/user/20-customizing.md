@@ -130,7 +130,8 @@ already waits for you (conflict, rolled-back version), and tries a given version
 
 ## New server
 
-Restore your memory backup on the new server (`RESTORE_FROM=owner/name` at install): the installer
-re-applies your customizations. Otherwise run `maxxing custom restore`.
+Restore your memory backup on the new server (`RESTORE_FROM=owner/name` at install): the installer lists your
+saved customizations and re-applies them when you answer yes to **Turn all of this on now?** (or with
+`RESTORE_TRUST=1`). Otherwise run `maxxing custom restore` (`--stat` only lists the patches it would apply).
 
 See also: `maxxing custom --help` and the skill `maxxing-customize` (what Claude follows).

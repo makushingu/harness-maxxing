@@ -133,14 +133,14 @@ Safety:
 A phone switched off, a proxy that stopped: the profile **waits** for its connection, it never goes out by the server's
 address on its own (the sites would see your account move to a data center and could lock it).
 
-- Claude's browser action waits for the connection (3 minutes by default, **Settings -> Features -> Harness Browser ->
+- Claude's browser action waits for the connection (3 minutes by default, **Settings -> Browser -> How it works ->
   Wait for a connection that is down**), then stops using the browser, finishes what it can without it and tells you.
 - You get a notification **Browser exit offline** with **Retry now** and **Go on when it is back**.
 - The session shows a card **The connection ... is down** with **Go on when it is back**, **Retry now** and **Open the
   connection**. With **Go on when it is back**, Claude goes on by itself as soon as the connection works again.
 - In Settings -> Browser the profile says **paused** and the connection **offline**.
 
-A profile can choose the other way: **When the exit is down -> Go out by the server's address**. Its sites may then
+A profile can choose the other way: **When the connection is down -> Go out by the server's address**. Its sites may then
 see a data-center address and ask more checks.
 
 ## Which sites
@@ -163,7 +163,7 @@ keeps it.
 ## Using it, watching Claude
 
 The address bar opens what you type: an address (`example.com`), or a **search** for anything else - Google by
-default, or DuckDuckGo or Bing (**Settings -> Features -> Harness Browser -> Search engine**; Google sometimes asks a
+default, or DuckDuckGo or Bing (**Settings -> Browser -> How it works -> Search engine**; Google sometimes asks a
 browser driven by Claude to prove it is not a robot, the other two do not). A new tab has the same search box in its middle.
 
 - **Copy and paste**: Ctrl+C (⌘C) on the page copies its selected text to your clipboard; Ctrl+V pastes yours into
@@ -222,7 +222,7 @@ action. **Skip** tells it to do without that step. With no answer in time, it gi
 - While one runs, the bottom of the sidebar shows **Browser · 620 MB · 6 tabs open**. When the server runs short of
   memory, the line turns amber with **Sleep** (every tab not shown goes to sleep); when memory is critical, the
   oldest tabs sleep by themselves.
-- These are in **Settings -> Features -> Harness Browser**: **A tab sleeps after**, **A profile sleeps after**, **Tabs
+- These are in **Settings -> Browser -> How it works**: **A tab sleeps after**, **A profile sleeps after**, **Tabs
   awake at most**, **Profiles running at once**, **Wait for a connection that is down**, **Search engine**, plus **Ask me when it
   is stuck**, **Wait for me** and **Allow downloads** (off by default; files go to `downloads/browser` in the workspace).
 

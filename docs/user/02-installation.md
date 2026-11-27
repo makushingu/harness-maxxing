@@ -14,7 +14,8 @@ section: Getting started
 - For HTTPS access: a domain name whose DNS A/AAAA record points to the server, and ports 80/443
   open. Alternatively Tailscale, or an SSH tunnel.
 
-We recommend a server dedicated to Harness Maxxing: by default Claude runs with full permissions
+We recommend a server dedicated to Harness Maxxing: on a new installation a session works in the sandbox of its
+topic, but the `system` project, and every topic you give **Full access**, run with full permissions on the server
 (see [Security](security)). A server that already runs other things works too - see
 [Installing on a server already in use](#installing-on-a-server-already-in-use).
 
@@ -28,7 +29,7 @@ curl --proto '=https' --tlsv1.2 -fsSL https://get.harness-maxxing.com | bash
 
 (`--proto '=https' --tlsv1.2`: curl only speaks HTTPS with TLS 1.2 or newer, even if a redirect points elsewhere.)
 
-It asks three questions (access mode, domain, restore a backup), then clones the public git repository
+It asks a few questions (access mode, domain, restore a backup, the anonymous daily count), then clones the public git repository
 (`github.com/makushingu/harness-maxxing`, branch `stable` = the published versions) - no key, no account. Updates then come from that branch
 (`maxxing update`). Unattended install:
 `curl --proto '=https' --tlsv1.2 -fsSL https://get.harness-maxxing.com | ACCESS=domain DOMAIN=ui.example.com ASSUME_YES=1 bash`.
@@ -99,7 +100,8 @@ on if you want them), and `maxxing update` keeps a working server Python and a `
 already has its own `node`: Harness Maxxing uses its copy, your programs keep theirs.
 
 Each `maxxing update` moves them to the versions of the new release (installed next to the old ones, switched once
-they work). Claude Code keeps updating itself (Settings -> Claude). System packages (Caddy, ffmpeg, git...) get their
+they work). Claude Code is updated apart: by hand (`claude update`), or by the server when **Update Claude Code automatically**
+is on (Settings -> Claude, off by default). System packages (Caddy, ffmpeg, git...) get their
 security updates from `unattended-upgrades`.
 
 Open the link: the [onboarding](onboarding) does the rest.
@@ -191,6 +193,7 @@ curl --proto '=https' --tlsv1.2 -fsSL https://get.harness-maxxing.com | ACCESS=d
 | `SYSTEM_CLOCK` | `auto` | `follow` = the system zone follows yours (default on a fresh server), `keep` = never touch it (default on a server already in use; jobs still run at your times) |
 | `CLAUDE_DIR` | `~/.claude` (`~/.claude-harness` when Claude Code is already used and you keep the default answer) | Claude Code folder used by Harness Maxxing; set it to skip the question. Another folder (e.g. `/root/.claude-harness`) keeps it apart from a Claude Code you already use on this server: its own skills, global `CLAUDE.md`, conversations and sign-in; your `~/.claude` is not touched. Bring skills over one by one when you need them |
 | `RESTORE_FROM`, `RESTORE_TOKEN` | – | restore an existing memory backup (see below) |
+| `RESTORE_TRUST` | `0` | `1` = turn on what the restore brought back and kept off (scheduled jobs, extensions, Claude Code hooks, local MCP servers, customizations of the product) without asking |
 | `CLAUDE_TOKEN` / `ANTHROPIC_API_KEY` | – | optional: Claude credentials stored right away |
 | `FIREWALL` | `auto` | `auto` = ufw only on a server with nothing else exposed (an active ufw is kept, rules added), `1` = always, `0` = never (security updates and fail2ban are still set up) |
 | `SSH_HARDEN` | `auto` | `auto` = turn SSH password logins off only when this session is proven to use a key, `1` = also when a key is installed but the session cannot be checked (console, web terminal), `0` = never touch SSH |
@@ -211,8 +214,12 @@ server: Settings → About → Remove the key, see [License](license)):
 curl --proto '=https' --tlsv1.2 -fsSL https://get.harness-maxxing.com | RESTORE_FROM=owner/memory-backup RESTORE_TOKEN=<token> bash
 ```
 
-The installer runs `maxxing backup restore --from owner/memory-backup` after creating the
-workspace. See [Backup](backup).
+The installer runs `maxxing backup restore --from owner/memory-backup --hold` after creating the
+workspace: what would run code on the new server (scheduled jobs, extensions, Claude Code hooks, local MCP
+servers, your customizations of the product) comes back turned off. The installer lists it and asks **Turn all
+of this on now?** - say yes only if you trust everything in that repository (`RESTORE_TRUST=1` answers yes in
+advance). Later: `maxxing backup release`, and `maxxing custom restore` for the customizations. See
+[Backup](backup).
 
 ## Re-running, updating, uninstalling
 

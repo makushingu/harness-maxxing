@@ -115,7 +115,7 @@ messages) it deletes.
 - A very long text that Telegram splits into several messages (over 4,096 characters) is put back together
   and sent as one message.
 - Editing a message you already sent does nothing: the bot says so once - send a new message instead.
-- The bot answers in the language of the web UI (English or French), and the command menu is
+- The bot answers in the language of the web UI (Settings -> General), and the command menu is
   translated. While linking, it uses the language of your Telegram app.
 - Commands:
 
@@ -138,6 +138,9 @@ messages) it deletes.
   continued in the web UI rings too. In *Threads + web conversations* it makes the copied answers ring.
 
 ## Two-step sign-in
+
+This section is about the Telegram method. An authenticator app (with recovery codes) can be used as well, or
+instead: see [Security](security#sign-in).
 
 Settings -> Telegram (or Settings -> Security) -> **Two-step sign-in**: after the right password, a browser
 that is not trusted yet waits for your approval in Telegram. The *Alerts* thread (the main chat in Simple) gets a message with the IP,

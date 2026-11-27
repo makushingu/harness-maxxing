@@ -8,8 +8,8 @@ run many persistent Claude conversations organised by project and topic, from a 
 Telegram, together with the files, tasks, scheduled jobs and memory that make them useful.
 
 Everything runs on your server, with your own Claude account or API key. Nothing else leaves it except
-an anonymous daily counter (version, system, health codes; no name, no IP, no content), which you can turn off
-in Settings → Profile - see [License](license#saying-hello-optional).
+an anonymous daily counter (version, system, health codes; no name, no IP, no content), which the installer asks
+you about and which you turn on or off in Settings → Profile - see [License](license#saying-hello-optional).
 
 ## Concepts
 
@@ -33,11 +33,11 @@ A new workspace is not empty: it explains and maintains itself.
 | Project | Topics | What for |
 |---|---|---|
 | `general` | `inbox` | quick questions and one-off tasks |
-| `system` | `help`, `update`, `server`, `tasks`, `accounts`, `extensions` | Harness Maxxing itself: ask how to do something, update the product, look after the server, manage tasks, keep an inventory of your subscriptions, build extensions. See [The system project](system-project). |
-| `tutorial` | `1-first-steps`, `2-files-and-memory`, `3-tasks-and-crons`, `4-telegram-and-voice` | four interactive 5-minute lessons: open a lesson, start a session and say "hi". Delete the project when you are done; updates never bring it back. |
+| `system` | `harness`, `help`, `tutorial` | Harness Maxxing itself: `harness` updates the product, builds extensions and adds starter packs; `help` answers how to do something and looks after the server; `tutorial` holds four interactive 5-minute lessons (start a session there and say "hi"; delete the topic when you are done, updates never bring it back). See [The system project](system-project). |
 
 These are ordinary projects: rename, extend or delete them. Updates only add files that are
-missing and never re-create a project or topic you deleted.
+missing and never re-create a project or topic you deleted. A workspace made before 2.0.0a33 keeps its former
+layout (more topics in `system`, a `tutorial` project with one topic per lesson).
 
 ## What you can do
 
@@ -78,14 +78,14 @@ missing and never re-create a project or topic you deleted.
   post a notification. **New webhook** / **New event** on the page, or ask Harness. See [Webhooks](webhooks) and [Events](events).
 - **Tasks** (optional, **Settings -> Features**): a kanban board stored in `tasks.json`, which Claude can read and update.
 - **Crons** (in **Settings**): scheduled shell commands or Harness prompts, with history and Telegram reports.
-- **Telegram**: talk to the same sessions from your phone, one thread per open session.
+- **Telegram**: talk to the same sessions from your phone, in one chat or with one thread per open session.
 - **Backup**: your memory pushed every day to a private GitHub repository.
 - **Dashboard and extensions**: built-in widgets plus your own widgets and pages.
 - **Starter projects**: ready-made projects for an online store, an affiliate site, a content creator, apps, a
   second brain or a freelance business - their topics already know the job (Settings -> Templates).
 - **Notifications**: a feed next to the widgets, its unread count on Home in the sidebar (and a Telegram thread if you want) for cron jobs, sales,
   orders, deployments and your scripts - Stripe, Shopify, GitHub or any webhook, or `maxxing feed post`.
-- **Your look**: light or dark, six accent colors (the logo follows), a neutral or tinted background,
+- **Your look**: a theme (*Solid*, *Glass*, or one Harness makes for you), light or dark, six accent colors (the logo follows), a neutral or tinted background,
   23 interface fonts and 11 code fonts.
 - **Customize and import**: change the product's code and keep your changes across updates; import
   your memory and skills from another agent.

@@ -20,11 +20,12 @@ Click **New job** and fill in:
 | Name | short label |
 | Schedule | **Repeat**: a cron expression; the editor shows it in words and lists the next runs. **Once**: a date and time (see [One-time jobs](#one-time-jobs)) |
 | Catch up a missed run | repeating jobs: run once a run missed while the server was off (on by default, see below) |
-| Type | **Shell** (a command run with bash) or **Claude** (a prompt sent to a session in a topic) |
-| Command | shell: e.g. `/root/maxxing/projects/acme/scripts/report.sh` |
+| Type | **Shell** (a command run with bash) or **Harness prompt** (a prompt sent to a session in a topic: a *Claude job* on this page) |
+| Shell command | shell: e.g. `/root/maxxing/projects/acme/scripts/report.sh` |
 | Topic, prompt, model | Claude: where the session runs (follows a rename of the topic or its project), what to do, which model |
 | Reuse session | Claude: keep one session across runs (it accumulates context) instead of a new session each time |
-| Notify | Telegram report: never, on failure (default), always |
+| Permission mode | Claude: what Claude may do in this job. *Same as the topic (or the global setting)* by default; pick a stricter one for a job that reads content from outside - see [Settings and keys](settings-and-keys#permission-mode). Unattended: what the mode does not allow is refused (in **Ask me**, the request goes to the notifications and Telegram, and is denied without an answer) |
+| Report | Telegram report: never, on failure (default), always |
 | Timeout | maximum duration (default 1 hour) |
 | Retries after a failure | shell: try a failed command again, up to 5 times (none by default) |
 
@@ -120,6 +121,10 @@ maxxing init --timezone Europe/Paris && systemctl restart claude-maxxing
   version exists, a Telegram message tells you to open the topic `system/harness` (`system/update` on servers installed before 2.0.0a33) and say "update".
   It never updates by itself. On a server with neither a git remote nor a license (a local copy) it is created
   disabled (nothing to check); `maxxing update --check` then says "updates unavailable (no git remote)".
+- **Clean caches and old versions** – Sundays 04:30, shell job `maxxing deps clean --quiet`: old versions of the
+  external components, unused browsers, leftovers, oversized logs.
+- **Check dependencies for vulnerabilities** – Mondays 10:00, shell job `maxxing deps check --notify`: a
+  notification when an installed component has a known vulnerability.
 - **Morning tasks** (disabled) – daily 08:00, Claude job in `general/inbox` (`system/tasks` before 2.0.0a33):
   overdue and today's tasks, sent on Telegram. Enable it in Settings -> Crons.
 - **Renewal reminder** – created when you ask for subscription reminders (Mondays 09:30, in the topic that keeps
@@ -179,7 +184,8 @@ On a server without systemd (some containers), the job runs inside the cron proc
 the memory limits do not.
 
 Secrets flagged "expose" in Settings -> Keys are available as environment variables to shell jobs
-and Claude sessions.
+and Claude sessions. A key limited to some projects or topics (**Topics** in its dialog) only reaches the jobs of
+those topics.
 
 A shell job runs with the same Claude setup as your sessions (Harness' Claude Code folder and the Claude
 account connected in Harness), so a script can call `claude -p "..."` itself - for example a script that
