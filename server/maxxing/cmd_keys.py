@@ -201,6 +201,9 @@ def _sealing(a, agent: str) -> int:
     if a.action == "encrypt":
         print(f"secrets sealed in {config.sealed_path()} (systemd-creds)" if done == "sealed"
               else f"already sealed: {config.sealed_path()}")
+        for c in config.damaged_copies(config.secrets_path()):     # kept when secrets.json was damaged: not sealed
+            print(f"warning: {c} is a copy of a damaged secrets.json, still in clear: compare it with the keys, "
+                  "then delete it")
         print("Undo: maxxing keys decrypt. Before moving the state folder to another server: decrypt first.")
     else:
         print(f"secrets back in clear in {config.secrets_path()} (mode 600)" if done == "clear"

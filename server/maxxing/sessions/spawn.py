@@ -133,6 +133,7 @@ def protected_paths() -> list[str]:
     reads (`cat`) are refused, a script that opens the file is not - permission modes are the real limit."""
     home = os.environ.get("HOME") or pwd.getpwuid(os.getuid()).pw_dir
     return [str(config.STATE / "secrets.json"), str(config.STATE / "secrets.json.cred"),
+            str(config.STATE / "secrets.json.damaged-*"),       # the copies kept of a damaged one: keys in clear
             str(config.STATE / "secret-files") + "/**",
             str(config.STATE / "reverse-proxy.conf"), str(Path(home) / ".ssh") + "/**"]
 

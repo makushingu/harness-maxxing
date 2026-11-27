@@ -191,6 +191,20 @@ def test_encrypt_refuses_a_damaged_clear_file(creds, capsys):
     assert config.secrets_path().read_text() == "{not json" and not config.sealed_path().exists()
 
 
+def test_encrypt_warns_about_a_clear_copy_of_a_damaged_store(creds, capsys):
+    from maxxing.sessions import spawn
+    config.secrets_path().write_text("{not json")
+    config.set_secret("telegram_token", "123:abc")             # repaired: the damaged file is kept as a copy
+    copy = config.damaged_copy_of(config.secrets_path())
+    assert copy and copy.read_text() == "{not json"
+    copy.write_text('{"telegram_token": "123:abc"}')            # a copy that still holds a key in clear
+    assert keys("encrypt") == 0
+    out = capsys.readouterr().out
+    assert str(copy) in out and "still in clear" in out
+    rules = spawn.deny_rules({"protect_secrets": True})
+    assert f"Read(/{config.STATE / 'secrets.json.damaged-*'})" in rules
+
+
 def test_unreadable_store_is_loud_and_never_overwritten(creds, capsys, caplog):
     security.set_password("correct horse battery")
     config.set_secret("a", "1")

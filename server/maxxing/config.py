@@ -320,9 +320,14 @@ def _document(path: Path) -> dict:
     return data
 
 
+def damaged_copies(path: Path) -> list[Path]:
+    """Every copy kept of a damaged config/secrets file, oldest first."""
+    return sorted(path.parent.glob(path.name + ".damaged-*"))
+
+
 def damaged_copy_of(path: Path) -> Path | None:
     """The copy kept of a damaged config/secrets file (doctor shows it), if any."""
-    copies = sorted(path.parent.glob(path.name + ".damaged-*"))
+    copies = damaged_copies(path)
     return copies[-1] if copies else None
 
 
