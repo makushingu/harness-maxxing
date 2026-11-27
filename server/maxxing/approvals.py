@@ -428,13 +428,14 @@ def _feed_done(d: dict) -> None:
 
 
 def feed_action(rid: str, action: str, by: str, ev: dict) -> None:
-    """A button of the request's feed event (web or Telegram). Already answered: nothing to do, the event says how."""
+    """A button of the request's feed event (web or Telegram). Already answered: nothing to do, the event says how.
+    Gone (cleaned up, deleted by hand): the event ends instead of keeping its buttons forever."""
     if action not in DECISIONS:
         return
     try:
         decide(rid, action, by=by)
     except ApprovalError as e:
-        if e.status != 409:
+        if e.status not in (404, 409):
             raise
         d = approval_mcp.read(_file(rid)) if ID_RE.match(rid or "") else None
         if d:

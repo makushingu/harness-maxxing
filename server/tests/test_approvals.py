@@ -721,3 +721,12 @@ def test_an_agent_change_request_without_a_valid_expiry_still_expires(mx, monkey
                                                   "kind": "agent_change", "expires": "x", "tool": "Bash", "input": {}})
     approvals.scan(force=True)
     assert (approval_mcp.read(d / f"{rid}.json")["status"] == "expired") is expired
+
+
+def test_the_feed_buttons_of_a_request_that_is_gone_end_the_event(client, mx):
+    from maxxing import feed
+    ev = feed.post("Approval", source="agents", ref="approval:0123456789abcdef",
+                   actions=[{"id": "allow", "label": "Allow"}, {"id": "deny", "label": "Deny"}])
+    r = client.post(f"/api/feed/{ev['id']}/act/allow")
+    assert r.status_code < 500
+    assert feed.get(ev["id"])["resolved"]
