@@ -8,7 +8,7 @@ import os
 import sys
 import time
 
-from . import cli
+from . import cli, config
 
 AROUND = 700          # characters shown around a hit of --session
 
@@ -33,15 +33,21 @@ def _clean(s: str) -> str:
     return " ".join(s.replace("\x02", "").replace("\x03", "").split())
 
 
+def _rel(path: str) -> str:
+    """A path relative to the workspace: sessions give "projects/<p>/topics/<t>", files and memories their full path."""
+    p, ws = path.strip("/"), str(config.workspace()).strip("/")
+    return "" if p == ws else p[len(ws) + 1:] if p.startswith(ws + "/") else p
+
+
 def find(q: str, kinds: list[str] | None, limit: int, within: str = "", snippet: int = 16) -> tuple[list[dict], bool]:
     """-> (results, loose): every word, else any word; never the session that asks."""
     from . import search
     me = os.environ.get("MAXXING_SESSION") or ""
-    within = within.strip("/")
+    within = _rel(within)
     for loose in (False, True):
         res = search.search(q, kinds, limit * (6 if within else 1), loose=loose, not_session=me, snippet=snippet)["results"]
         if within:
-            res = [r for r in res if (r.get("path") or "").strip("/").startswith(within)]
+            res = [r for r in res if _rel(r.get("path") or "").startswith(within)]
         if res:
             return res[:limit], loose
     return [], False

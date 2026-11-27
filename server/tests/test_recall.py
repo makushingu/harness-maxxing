@@ -56,3 +56,12 @@ def test_every_session_is_told_to_search():
     for cfg in ({}, {"background_agents": True}):
         argv = spawn.agents_args(cfg, "HINT")
         assert argv[0] == "--append-system-prompt" and "maxxing search" in argv[1] and argv[1].endswith("HINT")
+
+
+def test_search_in_a_folder_finds_its_memory_files(client, mx, capsys):
+    d = config.workspace() / "projects/a"
+    d.mkdir(parents=True)
+    (d / "memory.md").write_text("- The zorglubfact lives here\n")
+    assert "zorglubfact" in _run(capsys, "zorglubfact", "--in", "projects/a")
+    assert "zorglubfact" in _run(capsys, "zorglubfact", "--in", str(d))
+
