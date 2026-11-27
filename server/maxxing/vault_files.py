@@ -58,21 +58,32 @@ def list_files() -> list[dict]:
             for k, e in sorted(_meta().items()) if _bytes(k, e) is not None]   # no file or stale bytes (a crash)
 
 
+def _check(name: str, entry: dict) -> tuple[bytes | None, bool]:
+    """(the stored bytes of `name` when they are the entry's, else None; True when they are known not to be: no
+    regular file, a link, or other bytes - a put killed between saving the metadata and renaming the new file leaves
+    the old bytes behind). A read that failed (too many open files, EIO), a file too big or an entry with no sha256
+    says nothing about the bytes: (None, False)."""
+    p = files_dir() / name
+    try:
+        if p.is_symlink() or not p.is_file():
+            return None, True
+        if p.stat().st_size > MAX_SIZE:
+            return None, False
+        data = p.read_bytes()
+    except OSError:
+        return None, False
+    want = entry.get("sha256")
+    if not isinstance(want, str):
+        return None, False
+    return (data, False) if hashlib.sha256(data).hexdigest() == want else (None, True)
+
+
 def _bytes(name: str, entry: dict | None = None) -> bytes | None:
-    """The stored bytes of `name` when they are the entry's (a regular file, not a link, its sha256), else None: a put
-    killed between saving the metadata and renaming the new file leaves the old bytes behind."""
+    """The stored bytes of `name` when they are the entry's (a regular file, not a link, its sha256), else None."""
     e = _meta().get(name) if entry is None else entry
     if e is None or not NAME_RE.match(name):
         return None
-    p = files_dir() / name
-    try:
-        if not p.is_file() or p.is_symlink() or p.stat().st_size > MAX_SIZE:
-            return None
-        data = p.read_bytes()
-    except OSError:
-        return None
-    want = e.get("sha256")
-    return data if isinstance(want, str) and hashlib.sha256(data).hexdigest() == want else None
+    return _check(name, e)[0]
 
 
 def path_of(name: str) -> Path | None:
@@ -109,7 +120,7 @@ def _sweep(files: dict, s: dict) -> None:
     no metadata entry. A file that has an entry is never touched; folders are left alone. Never raises.
     Nothing when the entries could not be read (secrets.json damaged, vault_files not an object): every file would
     look orphaned. An entry whose file is gone or holds other bytes (a put killed before the rename) is dropped from
-    `files`."""
+    `files`; one whose file could not be read this time is kept, with its file."""
     if not isinstance(s.get("vault_files"), dict):
         return
     try:
@@ -117,7 +128,8 @@ def _sweep(files: dict, s: dict) -> None:
     except OSError:
         return
     present = {p.name for p in entries}
-    for k in [k for k in files if k not in present or _bytes(k, files[k]) is None]:
+    for k in [k for k in files if k not in present or not isinstance(files[k], dict) or not NAME_RE.match(k)
+              or _check(k, files[k])[1]]:
         files.pop(k)                                        # its bytes, stale, are then removed below
     now = time.time()
     for p in entries:

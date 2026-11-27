@@ -153,3 +153,22 @@ def test_a_token_has_no_end_date(mx, tmp_path, monkeypatch):
     config.set_secret("claude_oauth_token", "sk-ant-oat01-x")
     claude_auth.record(True, None, "turn", "2026-11-18T21:05:20.730Z")
     assert claude_auth.status()["ends_at"] is None
+
+
+def test_a_damaged_state_file_breaks_nothing(mx, tmp_path, monkeypatch):
+    _creds(tmp_path, monkeypatch)
+    for bad in ("[" * 100000, '{"ok": true, "at": "x", "method": "credentials"}',
+                '{"ok": true, "at": NaN, "method": "credentials", "ends": -Infinity}',
+                '{"ok": true, "at": 1, "method": "credentials", "ends": NaN}'):
+        claude_auth.state_file().write_text(bad)
+        claude_auth.limits_file().write_text(bad)
+        st = claude_auth.status()
+        assert st["method"] == "credentials" and st["ends_at"] is None, bad
+        assert claude_auth.ending(st) is None
+        assert claude_auth.needs_check() is True
+        claude_auth.limits()
+
+
+def test_a_value_json_cannot_hold_leaves_no_temporary_file(mx):
+    claude_auth._write(claude_auth.limits_file(), {"five_hour": object()})
+    assert not list(claude_auth.limits_file().parent.glob("claude-limits.json.*.tmp"))

@@ -115,6 +115,19 @@ def test_health_issue_marked_seen(client, org, services, monkeypatch):
     assert next(i for i in h["issues"] if i["id"] == job["id"])["seen"] is False
 
 
+def test_a_mark_made_before_ids_held_the_job_keeps_the_issue_seen(mx, monkeypatch):
+    iss = health._issue("warn", "cron_failed", 'Scheduled job "Backup" failed (code 1)', ref="c_backup")
+    old_id = health.issue_id(iss, ref=False)              # the id of that issue before ids held the job
+    assert old_id != health.issue_id(iss)
+    health._seen_path().write_text(json.dumps({old_id: time.time() - 60}))
+    health._apply_seen([iss])
+    assert iss["seen"] is True and iss["id"] == health.issue_id(iss)
+    assert set(json.loads(health._seen_path().read_text())) == {iss["id"]}     # kept under the new id
+    other = health._issue("warn", "cron_failed", 'Scheduled job "Weekly" failed (code 1)', ref="c_weekly")
+    health._apply_seen([other])
+    assert other["seen"] is False
+
+
 def test_two_marks_at_once_are_both_kept(mx, monkeypatch):
     iss = [health._issue("warn", "cron_failed", 'Scheduled job "Alpha" failed (code 1)'),
            health._issue("warn", "claude_auth", "Claude is not connected")]
