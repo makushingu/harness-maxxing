@@ -237,3 +237,13 @@ def test_writing_a_proposal_keeps_a_long_memory_whole(mx):
     assert mem.read_text() == long + "- New fact.\n"
     assert mr.undo("p0") == "taken back"
     assert mem.read_text() == long
+
+
+def test_writing_a_proposal_keeps_the_bytes_of_a_latin1_memory(mx):
+    mem = config.workspace() / "memory.md"
+    old = "# Mémoire\n\n- Café ouvert à 8 h.\n".encode("latin-1")
+    mem.write_bytes(old)
+    assert mr.apply(_stored()) == "added"
+    assert mem.read_bytes() == old + b"- New fact.\n"
+    assert mr.undo("p0") == "taken back"
+    assert mem.read_bytes() == old

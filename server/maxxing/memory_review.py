@@ -185,9 +185,10 @@ def _read(p: Path) -> str:
 
 
 def _whole(p: Path) -> str:
-    """The whole memory file, to be written back (`_read` cuts it for the model)."""
+    """The whole memory file, to be written back (`_read` cuts it for the model). Bytes that are not UTF-8 (a file
+    saved as Latin-1) go through unchanged."""
     try:
-        return p.read_text("utf-8", "replace")
+        return p.read_text("utf-8", "surrogateescape")
     except OSError:
         return ""
 
@@ -261,7 +262,7 @@ def apply(pid: str) -> str:
     else:
         body = body.rstrip("\n") + "\n" + line + "\n"
     f.parent.mkdir(parents=True, exist_ok=True)
-    f.write_text(body)
+    f.write_text(body, "utf-8", "surrogateescape")
     it["state"], it["at"] = "applied", int(time.time())
     it["undo"] = {"line": line if done in ("added", "replaced") else "", "old": old_line if done != "added" else ""}
     _save(items)
@@ -293,7 +294,7 @@ def undo(pid: str) -> str:
         elif old and old not in body:
             body = body.rstrip("\n") + "\n" + old + "\n"
         if f:
-            f.write_text(body)
+            f.write_text(body, "utf-8", "surrogateescape")
         done = "taken back"
     it["state"] = "rejected"
     _save(items)
