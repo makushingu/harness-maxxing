@@ -252,7 +252,8 @@ export function AddFriendDialog({ open, onOpenChange }: { open: boolean; onOpenC
     }
   }, [open])
   const copy = (s: string) => void navigator.clipboard?.writeText(s).then(() => toast.success(t('team.copied')))
-  const doJoin = () =>
+  const doJoin = () => {
+    setJoinError('')
     join.mutate(paste.trim(), {
       onSuccess: (r) => {
         onOpenChange(false)
@@ -260,6 +261,7 @@ export function AddFriendDialog({ open, onOpenChange }: { open: boolean; onOpenC
       },
       onError: (e) => setJoinError(errorMessage(e)),
     })
+  }
 
   return (
     <TeamDialog open={open} onOpenChange={onOpenChange} title={t('team.friends.add')} desc={t('team.cx.desc')} className="md:max-w-xl">
@@ -290,7 +292,13 @@ export function AddFriendDialog({ open, onOpenChange }: { open: boolean; onOpenC
             )}
           </Way>
           <Way icon={LogIn} title={t('team.cx.join')} desc={t('team.cx.joinDesc')}>
-            <Input value={paste} onChange={(e) => setPaste(e.target.value)} placeholder="https://ui.example.com#…" className="h-8 font-mono text-[11.5px]" />
+            <Input
+              value={paste}
+              onChange={(e) => {
+                setPaste(e.target.value)
+                setJoinError('') // the error was about the previous link
+              }}
+              placeholder="https://ui.example.com#…" className="h-8 font-mono text-[11.5px]" />
             {joinError && <p className="text-[12px] text-destructive">{joinError}</p>}
             <Button size="sm" variant="outline" className="mt-auto" disabled={!paste.includes('#')} loading={join.isPending} onClick={doJoin}>
               {t('team.cx.joinBtn')}

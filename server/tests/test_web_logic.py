@@ -841,3 +841,10 @@ def test_an_invitation_asked_before_the_team_dialog_was_reopened_is_not_shown():
     body = src[src.index("export function AddFriendDialog("):]
     assert "opened.current += 1" in body[:body.index("}, [open])")]
     assert re.search(r"const n = opened\.current\s+invite\.mutate\(undefined, \{ onSuccess: \(r\) => n === opened\.current && setCode", body)
+
+
+def test_the_join_error_goes_once_the_link_is_changed_or_tried_again():
+    src = (WEB / "features" / "team" / "Friends.tsx").read_text(encoding="utf-8")
+    body = src[src.index("export function AddFriendDialog("):]
+    assert re.search(r"const doJoin = \(\) => \{\s+setJoinError\(''\)", body)
+    assert re.search(r"onChange=\{\(e\) => \{\s+setPaste\(e\.target\.value\)\s+setJoinError\(''\)", body)
