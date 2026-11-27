@@ -282,12 +282,13 @@ def _seen_path() -> Path:
     return config.STATE / "health-seen.json"
 
 
-def issue_id(issue: dict) -> str:
+def issue_id(issue: dict, ref: bool = True) -> str:
     """Stable id of an issue: its code and text without the numbers ("Last backup is 31 h old" keeps the id of
-    "30 h old"; another job failing is another issue). Quoted names keep their digits ("Backup 1" / "Backup 2")."""
+    "30 h old"; another job failing is another issue). Quoted names keep their digits ("Backup 1" / "Backup 2").
+    `ref=False`: the id without the issue's `ref`, as it was before ids held one (marks made before that update)."""
     text = "".join(part if i % 2 else "".join(c for c in part if not c.isdigit())
                    for i, part in enumerate(re.split(r'("[^"]*")', issue["text"])))
-    key = issue["code"] + ":" + text + (f":{issue['ref']}" if issue.get("ref") else "")
+    key = issue["code"] + ":" + text + (f":{issue['ref']}" if ref and issue.get("ref") else "")
     return hashlib.sha1(key.encode()).hexdigest()[:12]
 
 
@@ -305,6 +306,8 @@ def _apply_seen(issues: list[dict]) -> None:
         for i in issues:
             i["id"] = issue_id(i)
             at = seen.get(i["id"])
+            if at is None and i.get("ref"):                 # a mark made before ids held the ref: carried over
+                at = seen.get(issue_id(i, ref=False))
             i["seen"] = at is not None and now - at < SEEN_TTL_S
             if i["seen"]:
                 keep[i["id"]] = at
