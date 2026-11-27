@@ -193,8 +193,9 @@ export function parseQuickAdd(input: string, projects: TaskProject[], today: str
       out.priority = tok.length as TaskPriority
       continue
     }
-    if (/^#[^\s#]{1,40}$/.test(tok)) {
-      const l = tok.slice(1)
+    // 40 characters, not UTF-16 units (an emoji counts once); NFC: "café" typed composed or not is one label
+    if (/^#[^\s#]{1,40}$/u.test(tok)) {
+      const l = tok.slice(1).normalize('NFC')
       if (!seen.has(l)) {
         seen.add(l)
         out.labels.push(l)

@@ -841,3 +841,16 @@ def test_keep_switched_off_ignores_trigger_ids_that_are_not_text():
     local = {"triggers": [{"id": [1], "enabled": False}, {"id": "t1", "enabled": False}]}
     backup._keep_switched_off(out, local)
     assert out["triggers"] == [{"id": {"x": 1}, "enabled": True}, {"id": "t1", "enabled": False}]
+
+
+def test_a_settings_file_nested_too_deep_never_stops_a_restore(tmp_path):
+    from maxxing import backup as bk
+    rel = "projects/p/groups/g/group.json"
+    deep = b"[" * 200000 + b"]" * 200000
+    assert bk._keep_local_rules(rel, deep, tmp_path / "group.json") == (deep, False)
+    dest = tmp_path / "local.json"
+    dest.write_bytes(deep)
+    out, changed = bk._keep_local_rules(rel, json.dumps({"members": [], "trust_members": True}).encode(), dest)
+    assert changed and json.loads(out)["trust_members"] is False      # as a new group: no trust between members
+    agent = b'{"a":' * 200000 + b"1" + b"}" * 200000
+    assert bk._keep_local_rules("projects/p/topics/t/agents/a/agent.json", agent, tmp_path / "x")[1] is False

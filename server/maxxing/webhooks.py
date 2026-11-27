@@ -442,6 +442,8 @@ def update(hid: str, spec: dict) -> dict:
         if h["trigger"]["kind"] != "in":
             s.pop("token", None)
             s.pop("secret", None)
+        elif _is_phone(old) and not _is_phone(h):
+            s.pop("secret", None)                 # only its hash is kept: never usable as an HMAC key, set a new one
         if h["action"]["kind"] == "call" and h["action"].get("sign") and not s.get("sign"):
             s["sign"] = _secrets.token_hex(24)
         hooks = [h if x["id"] == hid else x for x in hooks]
@@ -1558,7 +1560,13 @@ class Dispatcher:
                 self.waiting.setdefault(hid, deque()).append(cid)
                 start = False
         if start:
-            threading.Thread(target=self._work, args=(hid, cid), name=f"webhook-{hid}", daemon=True).start()
+            try:
+                threading.Thread(target=self._work, args=(hid, cid), name=f"webhook-{hid}", daemon=True).start()
+            except BaseException:
+                with self.lock:                   # no worker: the hook's slot is given back
+                    self.running[hid] = max(0, self.running.get(hid, 1) - 1)
+                    self.done.pop(cid, None)
+                raise
 
     def _work(self, hid: str, cid: str) -> None:
         while cid:

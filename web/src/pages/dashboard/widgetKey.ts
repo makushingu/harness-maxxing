@@ -6,9 +6,11 @@ export function frameKey(): string {
 /** Which document is in the frame. `gen` counts the documents loaded there; `okGen` is the one that greeted the host
  * with the key (-1: none). A page a link loaded into the frame does not know the key: it gets no data, theme nor
  * answer. The host pings the frame at each load, the widget greets back, and says goodbye when it leaves (pagehide). */
-export type FrameState = { gen: number; okGen: number }
+export type FrameState = { gen: number; okGen: number; doc: number; left: boolean }
 
-export const newFrame = (): FrameState => ({ gen: 0, okGen: -1 })
+/** `doc` counts the widget documents that greeted: a reload, or a link then Back, is a new one even before its load
+ * event (same `gen`), and its requests start again at seq 1: a late answer to the one that left must not reach it. */
+export const newFrame = (): FrameState => ({ gen: 0, okGen: -1, doc: 0, left: false })
 
 /** A document finished loading in the frame: unknown until it greets (the ping asks it to). */
 export function frameLoaded(s: FrameState): void {
@@ -17,20 +19,23 @@ export function frameLoaded(s: FrameState): void {
 
 /** A message with the key: the document in the frame now is the widget (even ahead of its own load event). */
 export function frameHello(s: FrameState): void {
+  if (s.left) s.doc++
+  s.left = false
   s.okGen = s.gen
 }
 
 /** The widget's document is leaving (a link, Back): nothing more goes to the frame until a widget greets again. */
 export function frameBye(s: FrameState): void {
   s.okGen = -1
+  s.left = true
 }
 
 export function ours(s: FrameState): boolean {
   return s.okGen === s.gen
 }
 
-/** Whether the answer to a request received at generation `asked` may go to the frame now: the widget is there and
- * it is the document that asked (`gen - 1`: asked before its own load event). */
-export function mayReply(s: FrameState, asked: number): boolean {
-  return ours(s) && asked >= s.gen - 1
+/** Whether the answer to a request received at generation `asked` from widget document `doc` may go to the frame
+ * now: the widget is there and it is the document that asked (`gen - 1`: asked before its own load event). */
+export function mayReply(s: FrameState, asked: number, doc: number = s.doc): boolean {
+  return ours(s) && asked >= s.gen - 1 && doc === s.doc
 }

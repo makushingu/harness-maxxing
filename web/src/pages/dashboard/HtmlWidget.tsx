@@ -123,7 +123,7 @@ export function HtmlWidget({
   // Which document is in the frame (widgetKey.ts): a page that is not the widget gets no data, theme nor answer.
   const seen = React.useRef(newFrame())
   // answers that came back while the frame was not known to be the widget: sent once it greets, dropped if it never does
-  const held = React.useRef<{ asked: number; msg: unknown }[]>([])
+  const held = React.useRef<{ asked: number; doc: number; msg: unknown }[]>([])
   // The frame URL is fixed at mount (theme changes go by message): a new fragment would not reload it anyway.
   const [frameSrc] = React.useState(
     () => `${frameUrl || src.replace(/widget\.html$/, 'widget-frame')}#${encodeURIComponent(JSON.stringify({ theme: resolveTheme(useUI.getState().theme), material: useUI.getState().material, vars: themeVars(), key }))}`,
@@ -154,17 +154,18 @@ export function HtmlWidget({
       }
       frameHello(seen.current)
       const asked = seen.current.gen
+      const doc = seen.current.doc
       if (m.mx === 'hello') {
         pushRef.current()
         themeRef.current()
       }
       const wait = held.current
       held.current = []
-      for (const r of wait) if (mayReply(seen.current, r.asked)) win.postMessage(r.msg, '*')
+      for (const r of wait) if (mayReply(seen.current, r.asked, r.doc)) win.postMessage(r.msg, '*')
       // the answer only to the document that asked: if a link replaced it meanwhile, it waits for the widget or is dropped
       const reply = (msg: unknown) => {
-        if (mayReply(seen.current, asked)) win.postMessage(msg, '*')
-        else if (seen.current.gen - asked < 2) held.current.push({ asked, msg })
+        if (mayReply(seen.current, asked, doc)) win.postMessage(msg, '*')
+        else if (seen.current.gen - asked < 2 && doc === seen.current.doc) held.current.push({ asked, doc, msg })
       }
       if (m.mx === 'resize' && typeof m.height === 'number') setH(Math.min(maxHeight, Math.max(80, Math.round(m.height))))
       if (m.mx === 'navigate') {

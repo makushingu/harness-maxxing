@@ -1000,7 +1000,12 @@ def _fetch(frm: str, cid: str, mid: str, f: dict) -> None:
         mine[0] += 1
         room = _queued[0] <= QUEUE_MAX and mine[0] <= SENDER_QUEUE_MAX
     try:
-        if room and (not max_b or f["size"] <= max_b) and free_bytes(d) - f["size"] >= reserve:
+        try:
+            room = room and (not max_b or f["size"] <= max_b) and free_bytes(d) - f["size"] >= reserve
+        except Exception:                               # the folder unreadable: marked failed below, never pending
+            log.exception("team: free space of %s", d)
+            room = False
+        if room:
             with mine[1], _slots:
                 try:
                     dest, fd = reserve_path(d, f["name"])  # the name is taken at once: two "image.png" never collide

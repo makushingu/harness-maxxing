@@ -638,6 +638,14 @@ def test_a_topic_in_mode_sandbox_runs_in_claude_codes_sandbox_and_full_access_le
     assert approvals.short("Bash", {"command": "apt install x", "dangerouslyDisableSandbox": True}) == "Bash outside the sandbox: apt install x"
 
 
+def test_a_sandboxed_topic_session_cannot_edit_anything_in_its_agents_folder(client, topic, mx):
+    from maxxing import agent_guard, config
+    folder = config.workspace() / topic
+    deny = agent_guard.topic_settings(topic)["permissions"]["deny"]
+    assert f"Edit(/{folder}/agents/**)" in deny      # an agent's .claude/settings.json (hooks), .mcp.json, CLAUDE.md
+    assert f"Edit(/{folder}/.maxxing.json)" in deny and f"Edit(/{folder}/.claude/settings.json)" in deny
+
+
 def test_full_access_is_refused_outside_a_sandboxed_topic(client, topic, mx):
     assert client.patch("/api/workspace/projects/acme/topics/blog", json={"permission_mode": "ask"}).status_code == 200
     sid = client.post("/api/sessions", json={"path": topic, "message": "APPROVE push"}).json()["id"]

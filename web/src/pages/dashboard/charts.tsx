@@ -114,6 +114,7 @@ export function Chart({ kind, series, unit, height = 140 }: { kind: 'bar' | 'lin
                   const groupW = Math.min(band - 4, 24 * series.length + 2 * (series.length - 1))
                   const bw = Math.max(2, (groupW - 2 * (series.length - 1)) / series.length)
                   return s.points.map((p, i) => {
+                    if (!Number.isFinite(p[1])) return null // no value: no bar, the others keep the scale
                     const x0 = xc(i) - groupW / 2 + si * (bw + 2)
                     const h = Math.abs(y(0) - y(p[1]))
                     const r = Math.min(4, bw / 2, h)
@@ -131,15 +132,18 @@ export function Chart({ kind, series, unit, height = 140 }: { kind: 'bar' | 'lin
                   })
                 })
               : series.map((s, si) => {
-                  const pts = s.points.map((p, i) => [xl(i), y(p[1])] as const)
-                  if (!pts.length) return null // an empty series: nothing to draw (a shorter one stops where it ends)
-                  const line = pts.map((p, i) => `${i ? 'L' : 'M'}${p[0]},${p[1]}`).join(' ')
-                  const last = pts[pts.length - 1]
+                  // a point without a value is a gap in the line
+                  const pts = s.points.map((p, i) => (Number.isFinite(p[1]) ? ([xl(i), y(p[1])] as const) : null))
+                  const drawn = pts.filter((p) => p != null)
+                  if (!drawn.length) return null // an empty series: nothing to draw (a shorter one stops where it ends)
+                  const line = pts.map((p, i) => (p ? `${i && pts[i - 1] ? 'L' : 'M'}${p[0]},${p[1]}` : '')).filter(Boolean).join(' ')
+                  const first = drawn[0]
+                  const last = drawn[drawn.length - 1]
                   const at = hover == null ? undefined : pts[hover]
                   return (
                     <g key={si}>
-                      {series.length === 1 && (
-                        <path d={`${line} L${last[0]},${y(0)} L${pts[0][0]},${y(0)} Z`} fill={`url(#${id}-g${si})`} className="mx-fade [animation-delay:380ms] [animation-duration:420ms]" />
+                      {series.length === 1 && drawn.length === pts.length && (
+                        <path d={`${line} L${last[0]},${y(0)} L${first[0]},${y(0)} Z`} fill={`url(#${id}-g${si})`} className="mx-fade [animation-delay:380ms] [animation-duration:420ms]" />
                       )}
                       {/* the line draws itself left to right, then its last point pops in */}
                       <path d={line} pathLength={1} fill="none" stroke={color(si)} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" className="mx-draw" />

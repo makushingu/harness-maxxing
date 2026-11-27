@@ -563,8 +563,7 @@ def topic_settings(path: str, cwd: str = "") -> dict:
     owned = [str(folder / p) for p in TOPIC_OWNED]
     write = [str(folder)] + ([cwd] if cwd and Path(cwd) != folder else [])
     memory = [str(ws / "memory.md"), str(folder.parent.parent / "memory.md")]     # the levels above: the memory skill
-    deny = _deny_secrets(secrets) + [f"Edit(/{folder}/{p})" for p in TOPIC_OWNED[:4]] \
-        + [f"Edit(/{folder}/agents/**/agent.json)"]
+    deny = _deny_secrets(secrets) + [_deny_edit_owned(folder, p) for p in TOPIC_OWNED]     # as the shell's denyWrite
     return {"sandbox": {"enabled": True, "allowUnsandboxedCommands": True, "failIfUnavailable": True,
                         "autoAllowBashIfSandboxed": True, "excludedCommands": ["maxxing:*"],
                         "filesystem": {"denyRead": secrets + [p for p in home_wall() if p not in secrets],
@@ -582,6 +581,12 @@ def _deny_secrets(paths: list[str]) -> list[str]:
             and not Path(p).name.startswith(".env") else p
         out += [f"Read(/{g})", f"Edit(/{g})"]
     return out
+
+
+def _deny_edit_owned(folder: Path, p: str) -> str:
+    """Edit deny of a TOPIC_OWNED entry: a folder (agents/) with all it holds, so a session never plants an agent's
+    hooks, MCP servers or role there."""
+    return f"Edit(/{folder}/{p}/**)" if p == "agents" else f"Edit(/{folder}/{p})"
 
 
 def _deny_edit(p: str) -> str:

@@ -763,3 +763,34 @@ def test_a_mail_port_corrected_after_a_known_one_keeps_its_security(tmp_path):
                 walk('starttls', ['143', '14', '1', '19', '199', '1993']), walk('ssl', ['2', '25', '252', '2525']),
                 walk('ssl', ['587']), walk('ssl', ['constructor'])]""")
     assert out == ["starttls", "starttls", "starttls", "ssl", "starttls", "ssl"]
+
+
+def test_quick_add_labels_that_look_the_same_are_one_and_count_characters(tmp_path):
+    out = _run_ts(tmp_path, WEB / "features" / "tasks" / "model.ts", """
+        const a = m.parseQuickAdd('x #caf\\u00e9 #cafe\\u0301', [], '2026-11-25')
+        const b = m.parseQuickAdd('y #' + '\\u{1F642}'.repeat(21), [], '2026-11-25')
+        return [a.labels, a.title, b.labels.length, b.title]""")
+    assert out == [["café"], "x", 1, "y"]
+
+
+def test_a_late_answer_to_a_widget_that_reloaded_never_reaches_the_new_document(tmp_path):
+    """A reload (or a link then Back) is a new widget document whose seq starts again at 1: it may greet before its
+    load event, at the same generation as the one that asked."""
+    out = _run_ts(tmp_path, WEB / "pages" / "dashboard" / "widgetKey.ts", """const r = []
+        const s = m.newFrame(); m.frameLoaded(s); m.frameHello(s)
+        const asked = s.gen, doc = s.doc
+        m.frameBye(s); m.frameHello(s); r.push(m.mayReply(s, asked, doc), m.mayReply(s, s.gen, s.doc))
+        m.frameLoaded(s); m.frameHello(s); r.push(m.mayReply(s, asked, doc))
+        m.frameHello(s); r.push(m.mayReply(s, s.gen, s.doc))                          // a ping's hello: the same one
+        return r""")
+    assert out == [False, True, False, True]
+    src = (WEB / "pages" / "dashboard" / "HtmlWidget.tsx").read_text(encoding="utf-8")
+    assert "mayReply(seen.current, asked, doc)" in src and "mayReply(seen.current, r.asked, r.doc)" in src
+
+
+def test_a_chart_value_that_is_not_a_number_leaves_the_scale_of_the_others(tmp_path):
+    out = _run_ts(tmp_path, WEB / "pages" / "dashboard" / "chartScale.ts",
+                  "return [[3, undefined], [1, NaN, 3], [8, 'n/a', -2], [null]].map((v) => m.chartScale(v).ticks)")
+    assert out == [[0, 2.5, 5], [0, 2.5, 5], [-2, 0, 10], [0, 0.5, 1]]
+    src = (WEB / "pages" / "dashboard" / "charts.tsx").read_text(encoding="utf-8")
+    assert src.count("Number.isFinite(p[1])") == 2                  # no bar, a gap in the line

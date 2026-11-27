@@ -805,6 +805,7 @@ def _start(path: str, me: str, item: dict, st: dict, g: dict) -> str | None:
         outside = item.get("reason") == "handover" and not g["trust_members"]
         files = _origin_files(path, me, st)
         st.setdefault("turns", {})
+        made = ""
         try:
             if not fresh:
                 st["turns"][sid] = {"outside": outside}
@@ -824,7 +825,7 @@ def _start(path: str, me: str, item: dict, st: dict, g: dict) -> str | None:
                                            env=env, timeout_s=a["limits"]["timeout_s"],
                                            permission_mode=a["permission_mode"],
                                            sender=_group_sender(path, g))
-                sid = s["id"]
+                sid = made = s["id"]
                 sessions[me] = sid
                 st["turns"][sid] = {"outside": outside}
                 if outside:
@@ -832,6 +833,11 @@ def _start(path: str, me: str, item: dict, st: dict, g: dict) -> str | None:
                     service.send_message(sid, first, attachments=files or None, source="agent",
                                          sender=_group_sender(path, g))
         except Exception as e:  # noqa: BLE001 - SessionError (bad model, busy...)
+            if made:                # its first message never went: the next turn starts afresh (header, since)
+                sessions.pop(me, None)
+                st["turns"].pop(made, None)
+                with contextlib.suppress(Exception):
+                    service.delete_session(made)
             post(path, "skip", f"{_at(g, me)}: {e}", author=me, reason="error")
             return None
         st.setdefault("since", {})[me] = time.time()
