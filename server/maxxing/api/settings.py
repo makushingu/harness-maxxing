@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, StrictFloat, StrictInt
 
 from .. import budget, bus, config, crons, memory, profile_photo
 from ..security import require_auth
@@ -53,9 +53,10 @@ class SettingsIn(BaseModel):
     cpu_priorities: Optional[bool] = None         # Settings -> System: the UI first when the processor is full
     sidebar_order: Optional[list[str]] = None     # routes of the sidebar pages, in the order the user dragged them
     nav_badges_hidden: Optional[list[Literal[BADGE_PAGES]]] = None  # type: ignore[valid-type]  # Features: pages whose badge is off
-    daily_budget_usd: Optional[float] = None      # Settings -> Usage: dollars a day for the whole server, 0 = none
+    # strict: a JSON true is not 1 (a budget of $1, a delay of 1 s)
+    daily_budget_usd: Optional[StrictFloat] = None  # Settings -> Usage: dollars a day for the whole server, 0 = none
     limit_retry: Optional[bool] = None            # Settings -> Usage: a run stopped by the usage limit starts again
-    limit_retry_delay_s: Optional[int] = None     # ...this many seconds after the reset (0-3600)
+    limit_retry_delay_s: Optional[StrictInt] = None  # ...this many seconds after the reset (0-3600)
 
 
 def _err(code: str, msg: str) -> HTTPException:

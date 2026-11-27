@@ -41,6 +41,11 @@ def test_the_setting_is_checked(client, topic):
         r = client.put("/api/settings", json={"daily_budget_usd": bad})
         assert r.status_code == 400 and r.json()["error"] == "invalid_daily_budget"
     assert budget.limit() == 12.35
+    for body in ({"daily_budget_usd": True}, {"limit_retry_delay_s": True}, {"limit_retry_delay_s": 1.5}):
+        assert client.put("/api/settings", json=body).status_code == 422, body   # true is not 1
+    s = client.get("/api/settings").json()
+    assert s["daily_budget_usd"] == 12.35 and s["limit_retry_delay_s"] == 60
+    assert client.put("/api/settings", json={"limit_retry_delay_s": 30}).json()["limit_retry_delay_s"] == 30
     assert _budget(client, 0)["daily_budget_usd"] == 0
 
 
