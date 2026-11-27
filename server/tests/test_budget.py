@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import time
 
-from maxxing import agents, budget, crons, feed
+from maxxing import agents, budget, config, crons, feed
 from maxxing.sessions import store
 
 from conftest import wait_idle
@@ -153,3 +153,14 @@ def test_a_damaged_cost_in_a_session_is_ignored(client, topic):
     r = client.get("/api/stats/budget")
     assert r.status_code == 200 and r.json()["spent_today"] == 3.0
     assert budget.reached() is False
+
+
+def test_a_hand_edited_budget_or_retry_is_read_as_meant(mx):
+    config.update_config(daily_budget_usd=True)
+    assert budget.limit() == 0.0                    # true is no budget, not $1
+    for off in ("false", "False", "off", "0", 0, False):
+        config.update_config(limit_retry=off)
+        assert crons.limit_retry_on() is False, off
+    for on in (True, "true", 1, None):
+        config.update_config(limit_retry=on)
+        assert crons.limit_retry_on() is True, on

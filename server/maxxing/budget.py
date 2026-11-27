@@ -28,8 +28,11 @@ SKIP_TEXT = "Daily budget of the server reached (Settings -> Usage)"
 
 
 def limit() -> float:
+    raw = config.load_config().get("daily_budget_usd")
+    if isinstance(raw, bool):                       # a hand-edited true is not a budget of $1
+        return 0.0
     try:
-        v = float(config.load_config().get("daily_budget_usd") or 0)
+        v = float(raw or 0)
     except (TypeError, ValueError):
         return 0.0
     return v if 0 < v <= MAX_USD else 0.0

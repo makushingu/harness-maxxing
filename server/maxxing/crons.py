@@ -1490,7 +1490,12 @@ def text_reset(text: str, now: float) -> float | None:
 
 def limit_retry_on() -> bool:
     """config limit_retry (Settings -> Usage): a run stopped by the usage limit starts again after the reset."""
-    return config.load_config().get("limit_retry", True) is not False
+    v = config.load_config().get("limit_retry", True)
+    if isinstance(v, str):                          # config.json edited by hand: "false", "off", "0" turn it off
+        return v.strip().lower() not in ("false", "off", "no", "0")
+    if isinstance(v, (int, float)) and not isinstance(v, bool):
+        return v != 0
+    return v is not False
 
 
 def limit_retry_delay() -> float:
