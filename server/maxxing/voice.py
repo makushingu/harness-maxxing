@@ -408,7 +408,9 @@ def _engine_api(engine: str, wav: Path, language: str, s: dict) -> dict:
         raise VoiceError(503, "no_key", f"add {KEY_NAMES[engine]} in Settings → Keys")
     if not (key.isascii() and key.isprintable()):     # httpx cannot put it in a header (UnicodeEncodeError)
         raise VoiceError(503, "no_key", f"{KEY_NAMES[engine]} contains invalid characters, paste it again in Settings → Keys")
-    model = (config.load_config().get("voice") or {}).get(f"{engine}_model") or API_MODELS[engine]
+    v = config.load_config().get("voice")
+    m = v.get(f"{engine}_model") if isinstance(v, dict) else None
+    model = m if isinstance(m, str) and m else API_MODELS[engine]   # a hand-edited 5: the default model
     audio = _to_ogg(wav, wav.with_suffix(".ogg"))
     verbose = model.startswith("whisper")
     data = {"model": model, "response_format": "verbose_json" if verbose else "json"}

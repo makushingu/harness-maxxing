@@ -202,6 +202,21 @@ def test_api_engines(mx, tmp_path, monkeypatch, engine, key, expected_model):
 
 
 
+def test_a_hand_edited_api_model_that_is_not_text_uses_the_default(mx, tmp_path, monkeypatch):
+    seen: list[bytes] = []
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        seen.append(req.content)
+        return httpx.Response(200, json={"text": "ok", "language": "english", "duration": 1.5})
+
+    monkeypatch.setattr(voice, "http_transport", httpx.MockTransport(handler))
+    monkeypatch.setenv("MAXXING_GROQ_API", "https://mock.example.com/v1")
+    config.update_config(voice={"engine": "groq", "groq_model": 5})
+    vault.put("GROQ_API_KEY", "secret-key-123")
+    out = voice.transcribe_file(make_audio(tmp_path / "v.ogg", 1.5, ["-c:a", "libopus"]))
+    assert out["model"] == "whisper-large-v3-turbo" and b"whisper-large-v3-turbo" in seen[0]
+
+
 def test_a_pasted_key_is_trimmed_and_never_shown_in_an_engine_error(mx, tmp_path, monkeypatch):
     seen: list[str] = []
 
