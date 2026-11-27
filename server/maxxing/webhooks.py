@@ -1560,7 +1560,13 @@ class Dispatcher:
                 self.waiting.setdefault(hid, deque()).append(cid)
                 start = False
         if start:
-            threading.Thread(target=self._work, args=(hid, cid), name=f"webhook-{hid}", daemon=True).start()
+            try:
+                threading.Thread(target=self._work, args=(hid, cid), name=f"webhook-{hid}", daemon=True).start()
+            except BaseException:
+                with self.lock:                   # no worker: the hook's slot is given back
+                    self.running[hid] = max(0, self.running.get(hid, 1) - 1)
+                    self.done.pop(cid, None)
+                raise
 
     def _work(self, hid: str, cid: str) -> None:
         while cid:

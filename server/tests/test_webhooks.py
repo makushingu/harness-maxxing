@@ -413,3 +413,19 @@ def test_a_phone_hook_made_generic_drops_its_hashed_key(client, mx):
     assert r.status_code == 200, r.text
     assert not r.json().get("has_secret")      # never the key's hash as the HMAC secret: a new one is set
     assert "secret" not in config.load_secrets()["webhooks"][h["id"]]
+
+
+def test_a_worker_that_cannot_start_gives_its_slot_back(mx, monkeypatch):
+    h = webhooks.create({"name": "t", "trigger": {"kind": "in"}, "action": {"kind": "store"}})
+    d = webhooks.Dispatcher()
+    monkeypatch.setattr(webhooks, "dispatcher", d)
+    real = threading.Thread.start
+
+    def boom(self):
+        if self.name.startswith("webhook-"):
+            raise RuntimeError("can't start new thread")
+        return real(self)
+    monkeypatch.setattr(threading.Thread, "start", boom)
+    with pytest.raises(RuntimeError):
+        webhooks.receive(_tok(h), "POST", {"content-type": "application/json"}, {}, b'{"a":1}')
+    assert d.running.get(h["id"], 0) == 0 and not d.done
