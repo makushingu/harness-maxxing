@@ -2044,3 +2044,17 @@ def test_a_damaged_tab_in_the_tabs_file_does_not_lose_the_others(mx):
     t.load()
     assert {x["key"] for x in t.ordered()} == {"aaa", "bbb", "ccc", "ddd"}
     assert all(isinstance(x["at"], float) and isinstance(x["used"], float) for x in t.ordered())
+
+
+def test_an_accented_domain_of_a_sandboxed_agent_is_recognised():
+    """bücher.de is stored in punycode: the address as typed (Unicode) is one of the agent's domains; faß.de is stored
+    as Chromium writes it (xn--fa-hia.de, not fass.de)."""
+    from maxxing.browser import rules
+    sites = [rules.clean_site("bücher.de")]
+    assert sites == ["xn--bcher-kva.de"]
+    assert rules.page_refusal("https://www.bücher.de/", sites) is None
+    assert rules.off_domains("https://www.bücher.de/", sites) is None
+    assert rules.page_refusal("https://www.xn--bcher-kva.de/", sites) is None
+    assert rules.page_refusal("https://bucher.de/", sites) is not None
+    assert rules.clean_site("faß.de") == "xn--fa-hia.de"
+    assert rules.page_refusal("https://faß.de/", [rules.clean_site("faß.de")]) is None

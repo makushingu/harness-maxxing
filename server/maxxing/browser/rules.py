@@ -48,7 +48,7 @@ def clean_site(raw: object) -> str | None:
     if s.startswith("*."):
         s = s[2:]
     try:
-        s = s.encode("idna").decode("ascii") if not s.isascii() else s
+        s = puny(s)
     except UnicodeError:
         return None
     if not SITE_RE.match(s) or len(s) > 253 or s in TOO_WIDE or local_host(s):
@@ -57,8 +57,23 @@ def clean_site(raw: object) -> str | None:
 
 
 def site_allowed(host: str, sites: list[str]) -> bool:
-    h = (host or "").lower().rstrip(".")
+    try:
+        h = puny((host or "").lower().rstrip("."))      # www.bücher.de as typed, xn--bcher-kva.de as stored
+    except UnicodeError:
+        return False
     return any(h == s or h.endswith("." + s) for s in sites)
+
+
+def puny(host: str) -> str:
+    """A host name as Chromium writes it: Unicode labels in punycode, by UTS 46 without the transitional mapping
+    (faß.de -> xn--fa-hia.de, where Python's own "idna" codec gives fass.de). UnicodeError when it is no name."""
+    if host.isascii():
+        return host
+    try:
+        import idna
+    except ImportError:                                   # (installed with httpx)
+        return host.encode("idna").decode("ascii")
+    return idna.encode(host, uts46=True, transitional=False).decode("ascii")
 
 
 # ---- hosts -------------------------------------------------------------------------------------------------------
@@ -70,7 +85,7 @@ def local_host(host: str) -> bool:
         return True
     if not h.isascii() and ":" not in h:
         try:
-            h = h.encode("idna").decode("ascii")
+            h = puny(h)
         except UnicodeError:
             return True
     if "%" in h or not h.isascii():
