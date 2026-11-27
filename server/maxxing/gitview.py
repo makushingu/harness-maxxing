@@ -817,14 +817,19 @@ def _gh_send(full: str, path: str, body: dict, method: str = "POST") -> Any:
             r = _client().request(method, github_api() + path, headers=_headers(tok), json=body)
         except httpx.HTTPError as e:
             raise GitError(502, "github_unreachable", f"GitHub unreachable: {type(e).__name__}") from None
-        if r.status_code in (200, 201):
-            return r.json()
         try:
             msg = r.json()
-            text = msg.get("message", "") + "".join(f" - {e.get('message', '')}" for e in msg.get("errors") or []
-                                                     if isinstance(e, dict))
-        except ValueError:
-            text = ""
+        except (ValueError, RecursionError):
+            msg = None
+        if r.status_code in (200, 201):
+            if not isinstance(msg, dict):               # a proxy's HTML page, a list: never a 500
+                raise GitError(502, "github_error", "GitHub sent an unreadable answer")
+            return msg
+        text = ""
+        if isinstance(msg, dict):
+            errs = msg.get("errors")
+            text = str(msg.get("message") or "") + "".join(f" - {e.get('message', '')}" for e in
+                                                           (errs if isinstance(errs, list) else []) if isinstance(e, dict))
         if r.status_code in (401, 403, 404):
             last = GitError(403, "no_write", "no GitHub token can write to this repository (Settings -> Keys)")
             continue
