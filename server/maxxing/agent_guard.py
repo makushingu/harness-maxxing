@@ -562,10 +562,12 @@ def topic_settings(path: str, cwd: str = "") -> dict:
     ws = config.workspace()
     folder = ws / path.strip("/")
     secrets = secret_paths()
-    owned = [str(folder / p) for p in TOPIC_OWNED]
     write = [str(folder)] + ([cwd] if cwd and Path(cwd) != folder else [])
+    # the separate copy is the session's cwd: its own .claude/settings.json and .mcp.json (hooks, MCP servers, rules
+    # loaded by the next turn outside the sandbox) are kept off as the topic's
+    owned = [str(Path(w) / p) for w in write for p in TOPIC_OWNED]
     memory = [str(ws / "memory.md"), str(folder.parent.parent / "memory.md")]     # the levels above: the memory skill
-    deny = _deny_secrets(secrets) + [_deny_edit_owned(folder, p) for p in TOPIC_OWNED]     # as the shell's denyWrite
+    deny = _deny_secrets(secrets) + [_deny_edit_owned(Path(w), p) for w in write for p in TOPIC_OWNED]   # as denyWrite
     return {"sandbox": {"enabled": True, "allowUnsandboxedCommands": True, "failIfUnavailable": True,
                         "autoAllowBashIfSandboxed": True, "excludedCommands": ["maxxing:*"],
                         "filesystem": {"denyRead": secrets + [p for p in home_wall() if p not in secrets],

@@ -737,3 +737,14 @@ def test_a_sandboxed_topic_never_runs_a_path_taking_command_outside_without_aski
     allow = agent_guard.topic_settings(topic)["permissions"]["allow"]
     assert "Bash(maxxing tasks:*)" in allow
     assert not any(r.startswith(("Bash(maxxing pdf", "Bash(maxxing video")) for r in allow)
+
+
+def test_a_sandboxed_separate_copy_cannot_change_its_own_claude_settings(topic, tmp_path):
+    from maxxing import agent_guard
+    copy = str(tmp_path / "copy")
+    st = agent_guard.topic_settings(topic, copy)
+    assert copy in st["sandbox"]["filesystem"]["allowWrite"]
+    deny_write = st["sandbox"]["filesystem"]["denyWrite"]
+    assert {f"{copy}/.claude/settings.json", f"{copy}/.mcp.json", f"{copy}/.maxxing.json"} <= set(deny_write)
+    deny = st["permissions"]["deny"]
+    assert f"Edit(/{copy}/.claude/settings.json)" in deny and f"Edit(/{copy}/.mcp.json)" in deny
