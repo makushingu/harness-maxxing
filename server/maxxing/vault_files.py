@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from . import config
-from .vault import NAME_RE, VaultError, _is_text, check_name, is_reserved, set_note_expose
+from .vault import NAME_RE, VaultError, _is_text, check_name, in_scope, is_reserved, set_note_expose, topics_of
 
 DIRNAME = "secret-files"
 MAX_SIZE = 1024 * 1024
@@ -53,7 +53,8 @@ def list_files() -> list[dict]:
     """Metadata only, never the content."""
     return [{"name": k, "filename": e.get("filename") or k, "size": e.get("size"),
              "sha256": e["sha256"][:SHA_SHOWN] if isinstance(e.get("sha256"), str) else None,
-             "note": e.get("note", ""), "expose": bool(e.get("expose")), "updated": e.get("updated")}
+             "note": e.get("note", ""), "expose": bool(e.get("expose")), "topics": topics_of(e) or [],
+             "updated": e.get("updated")}
             for k, e in sorted(_meta().items()) if path_of(k)]   # an entry without its file (a crash): not listed
 
 
@@ -125,8 +126,9 @@ def _sweep(files: dict, s: dict) -> None:
 
 
 def put(name: str, data: bytes | None = None, filename: str | None = None, note: str | None = None,
-        expose: bool | None = None, create: bool = False) -> None:
+        expose: bool | None = None, create: bool = False, topics: list[str] | None = None) -> None:
     """Create or update. A new file needs `data`; omitted fields keep their value (no `data`: metadata only).
+    `topics`: the projects / topics it is given to ([] = every topic), see vault.check_topics.
     `create`: only a new name (the "Add file" dialog must not replace a file of the same name)."""
     check_name(name)
     if data is not None and not 1 <= len(data) <= MAX_SIZE:
@@ -142,7 +144,7 @@ def put(name: str, data: bytes | None = None, filename: str | None = None, note:
         cur: dict[str, Any] = dict(files.get(name) or {})
         if data is None and not cur:
             raise VaultError("a new file needs its content", "file_required")
-        set_note_expose(cur, note, expose)
+        set_note_expose(cur, note, expose, topics)
         if filename is not None or "filename" not in cur:
             cur["filename"] = clean_filename(filename, cur.get("filename") or name)
         tmp = None
@@ -186,11 +188,12 @@ def delete(name: str) -> bool:
     return True
 
 
-def exposed_files_env() -> dict[str, str]:
-    """{NAME: absolute path} of the files flagged `expose` that exist (never raises). The path, never the content."""
+def exposed_files_env(path: str | None = "") -> dict[str, str]:
+    """{NAME: absolute path} of the files flagged `expose` that exist and that the topic `path` may get (never
+    raises). The path, never the content."""
     try:
         return {k: str(files_dir() / k) for k, e in _meta().items()
                 if e.get("expose") and NAME_RE.match(k) and not is_reserved(k)
-                and path_of(k)}
+                and in_scope(e, path) and path_of(k)}
     except Exception:
         return {}

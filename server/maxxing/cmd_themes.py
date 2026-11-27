@@ -3,6 +3,9 @@
   maxxing themes list [--json]              installed themes (and folders that are not usable)
   maxxing themes check <folder> [--json]    read a theme like the interface will: what it sets, what is dropped and why
   maxxing themes install <folder> [--force] check it, then copy it into <workspace>/themes/<id>/
+                                            (a theme from outside: `--sha256 HASH [--source TEXT]` of the
+                                            `maxxing community check` the owner read; findings ask to confirm,
+                                            `--yes` [`--read`] answers them)
   maxxing themes verify <id>                its advanced css still looks right with this interface: switch it back on
   maxxing themes remove <id>                delete an installed theme (browsers using it go back to its base)
   maxxing themes tokens [--json]            the variables a theme may set, and their kind
@@ -24,6 +27,10 @@ def _configure(p) -> None:
     r.add_argument("folder"); r.add_argument("--json", action="store_true")
     r = sub.add_parser("install", help="check a theme folder and install it")
     r.add_argument("folder"); r.add_argument("--force", action="store_true", help="replace an installed theme")
+    r.add_argument("--sha256", help="hash of the report that was read (maxxing community check): refused when the content differs")
+    r.add_argument("--source", default="", help="where a theme from outside comes from, kept with it")
+    r.add_argument("--yes", action="store_true", help="do not ask about the findings (needs --sha256)")
+    r.add_argument("--read", action="store_true", help="the owner read the findings marked danger")
     r = sub.add_parser("verify", help="switch a theme's advanced css back on after checking it (after an update)")
     r.add_argument("id")
     r = sub.add_parser("remove", help="delete an installed theme")
@@ -60,6 +67,39 @@ def _report(t: dict, warn: list[str]) -> None:
         print("  no warning")
 
 
+def _install(a):
+    """(theme, warnings), or (None, exit code). A theme with findings to check, or given with --sha256 / --source
+    (it comes from outside), goes through community.install: the report is shown, the content pinned and recorded."""
+    from . import cmd_community, community, themes
+    src = Path(a.folder).expanduser()
+    src = src.parent if src.is_file() and src.name == "theme.json" else src
+    try:
+        r = community.report(src, "theme")
+    except community.PackageError:
+        return themes.install(src, force=a.force)       # its own error message
+    risky = r["counts"]["danger"] + r["counts"]["warn"]
+    if not (risky or a.sha256 or a.source or a.yes):
+        return themes.install(src, force=a.force)
+    cmd_community.print_report(r)
+    if a.sha256 and a.sha256.strip().lower() != r["sha256"]:
+        print("error: the content is not the one that was checked (--sha256 differs): nothing installed.",
+              file=sys.stderr)
+        return None, 1
+    read_it = False
+    if risky or a.yes:
+        code, read_it = cmd_community.confirm(r, a.yes, a.read, a.sha256, f"maxxing themes install {a.folder}")
+        if code:
+            return None, code
+    try:
+        done = community.install(src, r["sha256"], read_it=read_it, force=a.force, source=a.source, kind="theme")
+    except community.PackageError as e:
+        raise themes.ThemeError(str(e)) from None
+    t, warn, _ = themes.load(themes.root() / done["id"])
+    if not t:
+        raise themes.ThemeError("installed, but it cannot be read back")
+    return t, warn
+
+
 def _handler(a) -> int:
     from . import themes
     c = a.th_cmd
@@ -90,7 +130,9 @@ def _handler(a) -> int:
             _report(t, warn)
             return 0
         if c == "install":
-            t, warn = themes.install(Path(a.folder), force=a.force)
+            t, warn = _install(a)
+            if t is None:
+                return warn
             _report(t, warn)
             print(f"Installed in {themes.root() / t['id']}: Settings -> Appearance -> Theme.")
             return 0

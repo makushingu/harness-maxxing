@@ -219,6 +219,7 @@ async def test_logout_does_not_freeze_the_event_loop(mx, monkeypatch):
     from maxxing import config
     monkeypatch.setattr(config, "FLOCK_WAIT_S", 1.5)
     security.set_password("correct horse battery")
+    cookie = security.make_cookie()                 # before the lock is held: listing a signed-in browser writes
     holder = subprocess.Popen([sys.executable, "-c",
                                "import fcntl,os,sys,time;fd=os.open(sys.argv[1],os.O_RDWR|os.O_CREAT);"
                                "fcntl.flock(fd,fcntl.LOCK_EX);print('held',flush=True);time.sleep(4)",
@@ -236,7 +237,7 @@ async def test_logout_does_not_freeze_the_event_loop(mx, monkeypatch):
                 return worst
             tk = asyncio.create_task(ticker())
             await asyncio.sleep(0.1)
-            r = await ac.post("/api/auth/logout", cookies={security.COOKIE: security.make_cookie()})
+            r = await ac.post("/api/auth/logout", cookies={security.COOKIE: cookie})
             assert r.status_code == 200
             assert await tk < 0.2
     finally:

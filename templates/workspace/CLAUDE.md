@@ -159,6 +159,11 @@ under the answer: diff, Undo a file, commit, push, pull request); a branch and a
   telling them what it does: network calls, files and keys it reads, code that runs on the server (an
   extension's `api.py`, a skill's scripts: with the server's rights). Flag anything that sends data out,
   reads keys it does not need, or downloads and runs more code.
+- An extension, a skill or a theme from outside: put it in a new empty folder, run `maxxing community check PATH`
+  (folder or zip; nothing is run) and show the user its report - a reading aid that points to the lines to read,
+  not a verdict: never call a package "safe". Install only with
+  `maxxing community install PATH --sha256 <hash of the report they read> --yes` once they agreed (`--read` only if
+  they said they read the `danger` lines); never copy it into `extensions/` or `.claude/skills/` by hand.
 - Secrets live in Settings -> Keys: never write a key, token or password into a file, an extension, a
   skill, a memory, a commit or a message; code reads them from the vault (`ctx["secret"]("NAME")`, `$NAME`).
 - Before anything leaves the server (public repository, community listing, screenshot, shared file),

@@ -181,6 +181,12 @@ maxxing themes remove <id>
 maxxing themes tokens                    the variables and their kind
 ```
 
+A theme from outside (Community, GitHub): `maxxing community check <folder>` reads it first (remote `url()` or
+`@import` in its CSS, files that are not theme data, its sha256), then
+`maxxing themes install <folder> --sha256 <hash> --source <where it comes from>` installs only that content and records
+it; a theme with findings asks to confirm. A reading aid, not a verdict: see
+[13-page-extensions.md](13-page-extensions.md#what-a-package-does-before-it-is-installed).
+
 `install` copies only `theme.json`, the images it names, `README.md` and `LICENSE`. An agent cannot install, verify or remove
 a theme (it asks you in its answer).
 

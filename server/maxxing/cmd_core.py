@@ -1559,6 +1559,22 @@ def check_state_files() -> Check | None:
               "compare with the current file, restore what is missing (keys: Settings -> Keys), then delete the copy")
 
 
+def check_secrets_store() -> Check:
+    """How the server's secrets are kept on disk: clear (mode 600), or sealed by `maxxing keys encrypt`."""
+    st = config.secrets_status()
+    if not st["sealed"]:
+        return _c("secrets_store", INFO, "secrets stored in clear (0600)",
+                  "sealing them makes a copy of the file useless on another machine", "maxxing keys encrypt")
+    if not st["ok"]:
+        return _c("secrets_store", FAIL, "the sealed secrets cannot be decrypted - sign-in, keys and tokens are unreadable",
+                  st["error"], "check systemd-creds and /var/lib/systemd/credential.secret (a state folder copied "
+                               "from another server cannot be opened here: run `maxxing keys decrypt` there first)")
+    if st["both"]:
+        return _c("secrets_store", WARN, "secrets sealed, but a clear secrets.json is still there",
+                  str(config.secrets_path()), "maxxing keys encrypt   (removes it when it holds the same content)")
+    return _c("secrets_store", OK, "secrets sealed on disk (systemd-creds)", str(config.sealed_path()))
+
+
 def check_disk(cfg: dict) -> Check:
     p = Path(cfg.get("workspace") or "/")
     while not p.exists() and p != p.parent:
@@ -1697,7 +1713,7 @@ def collect_checks(live: bool = False, fetch: bool = True, deps: bool = False) -
         check_python, check_uv, check_claude_cli, lambda: check_claude_version(fetch), lambda: check_claude_auth(live),
         lambda: check_skill_listing(cfg), check_setup,
         check_service, check_hardening, lambda: check_caddy_site(cfg), check_infra_paths, lambda: check_bind(cfg), lambda: check_http(cfg), lambda: check_public_url(cfg),
-        lambda: check_caddy(cfg), check_crontab, lambda: check_timezone(cfg), lambda: check_telegram(cfg), lambda: check_backup(cfg), check_voice, check_tools, check_stale_units, check_cpu_priorities, check_agent_sandbox, check_permissions, check_browser, check_devices, check_managed_deps, check_security, check_state_files,
+        lambda: check_caddy(cfg), check_crontab, lambda: check_timezone(cfg), lambda: check_telegram(cfg), lambda: check_backup(cfg), check_voice, check_tools, check_stale_units, check_cpu_priorities, check_agent_sandbox, check_permissions, check_browser, check_devices, check_managed_deps, check_security, check_state_files, check_secrets_store,
         lambda: check_disk(cfg), check_memory, lambda: check_workspace(cfg), check_skills, check_web,
         check_license, lambda: check_git(fetch), check_update_signature,
     ] + ([check_deps] if deps else [])

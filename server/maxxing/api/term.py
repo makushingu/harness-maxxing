@@ -117,6 +117,7 @@ async def stream(ws: WebSocket, tid: str, token: str = ""):
             await ws.send_bytes(data)
 
     sender = asyncio.create_task(pump())
+    guard = security.hold_socket(ws)              # signed out, password changed, browser disconnected: closed
     try:
         while True:
             msg = await ws.receive_text()
@@ -137,6 +138,7 @@ async def stream(ws: WebSocket, tid: str, token: str = ""):
     finally:
         t.listeners.discard(q)
         sender.cancel()
+        guard.cancel()
 
 
 async def _reap_loop():

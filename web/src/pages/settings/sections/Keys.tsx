@@ -35,6 +35,7 @@ import {
 import { Callout } from '@/features/common'
 import { SettingsCard, SectionStack } from './ui'
 import { KeyFilesCard } from './KeyFiles'
+import { KeyScopeLabel, KeyTopics } from './KeyTopics'
 
 const NAME_RE = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/
 
@@ -46,6 +47,7 @@ function SecretDialog({ open, onOpenChange, editing }: { open: boolean; onOpenCh
   const [value, setValue] = React.useState('')
   const [note, setNote] = React.useState('')
   const [expose, setExpose] = React.useState(false)
+  const [topics, setTopics] = React.useState<string[]>([])
   const [errors, setErrors] = React.useState<{ name?: string; value?: string; form?: string }>({})
   React.useEffect(() => {
     if (!open) return
@@ -53,6 +55,7 @@ function SecretDialog({ open, onOpenChange, editing }: { open: boolean; onOpenCh
     setValue('')
     setNote(editing?.note || '')
     setExpose(editing?.expose || false)
+    setTopics(editing?.topics || [])
     setErrors({})
   }, [open, editing])
   const submit = (e: React.FormEvent) => {
@@ -66,7 +69,7 @@ function SecretDialog({ open, onOpenChange, editing }: { open: boolean; onOpenCh
     if (Object.keys(errs).length) return
     put.mutate(
       // create: the server refuses (409) a name added meanwhile instead of replacing that key
-      { name: n, note: note.trim(), expose, ...(value ? { value } : {}), ...(editing ? {} : { create: true }) },
+      { name: n, note: note.trim(), expose, topics, ...(value ? { value } : {}), ...(editing ? {} : { create: true }) },
       {
         onSuccess: () => {
           toast.success(editing ? t('keys.updated') : t('keys.added'))
@@ -106,6 +109,7 @@ function SecretDialog({ open, onOpenChange, editing }: { open: boolean; onOpenCh
             </span>
             <Switch checked={expose} onCheckedChange={setExpose} />
           </Label>
+          {expose && <KeyTopics value={topics} onChange={setTopics} />}
           {errors.form && <Callout tone="error">{errors.form}</Callout>}
           <DialogFooter>
             <Button variant="outline" onClick={() => onOpenChange(false)}>
@@ -180,6 +184,7 @@ function SecretRow({ s, onEdit }: { s: Secret; onEdit: () => void }) {
         <span className="flex min-w-0 text-xs text-muted-foreground">
           <span className="truncate">{s.note ? <Sensitive>{s.note}</Sensitive> : t('keys.noNote')}</span>
           <span className="shrink-0 whitespace-pre"> · {fmtRelative(s.updated, lang)}</span>
+          {s.expose && <KeyScopeLabel topics={s.topics} />}
         </span>
       </div>
       <div className="col-span-2 row-start-2 flex min-w-0 items-center gap-1 md:col-span-1 md:row-start-auto">

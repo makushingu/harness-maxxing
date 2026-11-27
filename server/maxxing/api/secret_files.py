@@ -40,16 +40,17 @@ async def _read_body(request: Request) -> bytes:
 
 @router.put("/{name}")
 async def put_file(name: str, request: Request, note: Optional[str] = None, expose: Optional[bool] = None,
-                   create: bool = False, filename: Optional[str] = None):
+                   create: bool = False, filename: Optional[str] = None, topics: Optional[str] = None):
     """The raw body is the file, sent as application/octet-stream (or without a type); an empty body changes the
-    metadata only. Any other type -> 415: a multipart body would skip bodylimit's 1 MiB cap (UploadGuard's is GBs)."""
+    metadata only. `topics`: comma-separated projects / topics the file is given to ("" = every topic). Any other type -> 415: a multipart body would skip bodylimit's 1 MiB cap (UploadGuard's is GBs)."""
     ctype = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
     if ctype not in ("", "application/octet-stream"):
         raise HTTPException(415, detail={"error": "unsupported_media_type",
                                          "message": "send the file as the raw body (application/octet-stream)"})
     body = await _read_body(request)
     try:
-        await asyncio.to_thread(vault_files.put, name, body or None, filename, note, expose, create)
+        scope = None if topics is None else [t.strip() for t in topics.split(",") if t.strip()]
+        await asyncio.to_thread(vault_files.put, name, body or None, filename, note, expose, create, scope)
     except vault.VaultError as e:
         status = 409 if e.code in ("exists", "name_taken") else 400
         raise HTTPException(status, detail={"error": e.code, "message": str(e)}) from None

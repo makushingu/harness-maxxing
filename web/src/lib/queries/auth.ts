@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api'
 import { forgetAllDrafts } from '../drafts'
-import type { AuthState, ChangePasswordBody, LoginBody, LoginResult, Ok, SetupBody, TwoFactorPoll } from '../types'
+import type { AuthState, ChangePasswordBody, LoginBody, LoginResult, Ok, RecoveryCodes, SecondFactor, SetupBody, SignedInBrowsers, TotpEnrol, TwoFactorPoll } from '../types'
 import { qk } from './keys'
 import { useMut } from './util'
 
@@ -48,13 +48,49 @@ export const pollTwoFactor = (challenge: string, code?: string, trust = true) =>
 export function useSetTwoFactor() {
   // turning it off needs the current password
   return useMut((b: { enabled: boolean; password?: string }) => api.put<LoginResult>('/api/auth/two-factor', b), {
-    invalidate: [qk.telegram.all, qk.authState],
+    invalidate: [qk.telegram.all, qk.authState, secondFactorKey],
     errorToast: false,
   })
 }
 
 export function useForgetBrowsers() {
   return useMut(() => api.post<Ok>('/api/auth/two-factor/forget-browsers'), {})
+}
+
+const secondFactorKey = ['auth', 'second-factor'] as const
+const browsersKey = ['auth', 'devices'] as const
+
+export function useSecondFactor() {
+  return useQuery({ queryKey: secondFactorKey, queryFn: () => api.get<SecondFactor>('/api/auth/second-factor') })
+}
+
+/** Authenticator app: `begin` gives the secret once, `confirm` turns it on (and gives the recovery codes). */
+export function useTotpBegin() {
+  return useMut((password: string) => api.post<TotpEnrol>('/api/auth/totp', { password }), { errorToast: false })
+}
+
+export function useTotpConfirm() {
+  return useMut((code: string) => api.post<Ok & RecoveryCodes>('/api/auth/totp/confirm', { code }), { invalidate: [secondFactorKey], errorToast: false })
+}
+
+export function useTotpOff() {
+  return useMut((b: { password: string; code: string }) => api.post<Ok>('/api/auth/totp/off', b), { invalidate: [secondFactorKey], errorToast: false })
+}
+
+export function useNewRecoveryCodes() {
+  return useMut((password: string) => api.post<RecoveryCodes>('/api/auth/recovery-codes', { password }), { invalidate: [secondFactorKey], errorToast: false })
+}
+
+export function useSignedInBrowsers() {
+  return useQuery({ queryKey: browsersKey, queryFn: () => api.get<SignedInBrowsers>('/api/auth/devices') })
+}
+
+export function useDisconnectBrowser() {
+  return useMut((id: string) => api.del<Ok>(`/api/auth/devices/${encodeURIComponent(id)}`), { invalidate: [browsersKey] })
+}
+
+export function useDisconnectOthers() {
+  return useMut(() => api.post<Ok>('/api/auth/devices/disconnect-others'), { invalidate: [browsersKey] })
 }
 
 export function useLogout() {
@@ -69,5 +105,5 @@ export function useLogout() {
 }
 
 export function useChangePassword() {
-  return useMut((b: ChangePasswordBody) => api.post<Ok>('/api/auth/password', b, { noAuthRedirect: true }), { errorToast: false })
+  return useMut((b: ChangePasswordBody) => api.post<Ok>('/api/auth/password', b, { noAuthRedirect: true }), { invalidate: [browsersKey], errorToast: false })
 }

@@ -530,7 +530,8 @@ class Runner:
             b += agent.get("args") or []
             return b + mcp.args + approval + web + dev
         base = argv(mcp_plan)
-        env = spawn.claude_env(meta.get("env") or {}, mode, agent.get("keys") if agent else None)
+        env = spawn.claude_env(meta.get("env") or {}, mode, agent.get("keys") if agent else None,
+                               path=str(meta.get("path") or ""))
         env["MAXXING_SESSION"] = self.sid               # `maxxing mcp load` run by the turn finds its session
         window = spawn.compact_window(cfg)              # the session's own threshold (Jarvis), else the server's
         if window:

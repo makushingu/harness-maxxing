@@ -38,6 +38,19 @@ class PasswordIn(BaseModel):
     new: str
 
 
+class CurrentIn(BaseModel):
+    password: str
+
+
+class CodeIn(BaseModel):
+    code: str
+
+
+class TotpOffIn(BaseModel):
+    password: str
+    code: str
+
+
 def _check_strength(pw: str) -> None:
     if len(pw) < security.MIN_PASSWORD:
         raise HTTPException(400, detail={"error": "weak_password",
@@ -79,7 +92,7 @@ async def _setup(body: SetupIn, request: Request, response: Response):
     _check_strength(body.password)
     await asyncio.to_thread(security.set_password, body.password)
     security.clear_setup_token()
-    security.set_cookie(response, request)
+    await asyncio.to_thread(security.set_cookie, response, request)
     return {"ok": True}
 
 
@@ -107,9 +120,9 @@ async def login(body: LoginIn, request: Request, response: Response):
     ok = await _verify(body.password)
     delay = security.end_attempt(key, ok)
     if ok:
-        if twofactor.enabled() and not trusted:
+        if twofactor.required() and not trusted:
             return {"ok": False, "two_factor": await _challenge("login", request)}
-        security.set_cookie(response, request)
+        await asyncio.to_thread(security.set_cookie, response, request)
         _alert(request, "Signed in", loud=False)
         return {"ok": True}
     if n == 3:
@@ -125,7 +138,8 @@ async def _challenge(purpose: str, request: Request) -> dict:
     except twofactor.Refused as e:
         raise HTTPException(429 if e.error == "throttled" else 503,
                             detail={"error": e.error, "message": e.message}) from None
-    return {"challenge": c.id, "expires_in": twofactor.TTL}
+    methods = ([] if c.silent else ["telegram"]) + (["totp"] if purpose == "login" and twofactor.totp_on() else [])
+    return {"challenge": c.id, "expires_in": twofactor.TTL, "methods": methods}
 
 
 @router.post("/two-factor")
@@ -139,7 +153,10 @@ async def two_factor(body: TwoFactorIn, request: Request, response: Response):
         raise HTTPException(401, detail={"error": "auth_required", "message": "Sign in required"})
     if status == "pending":
         return {"ok": False, "status": "pending", "expires_in": max(0, int(c.expires - time.time()))}
+    if status == "throttled":
+        raise HTTPException(429, detail={"error": "throttled", "message": "Too many attempts - try again in 15 min"})
     if status == "bad_code":
+        await asyncio.sleep(c.delay)
         raise HTTPException(400, detail={"error": "bad_code", "message": "Wrong code",
                                          "tries_left": twofactor.CODE_TRIES - c.tries})
     if status == "codes_paused":
@@ -156,11 +173,14 @@ async def two_factor(body: TwoFactorIn, request: Request, response: Response):
         await asyncio.to_thread(twofactor.notify, "on")
         bus.invalidate("telegram")
         return {"ok": True, "status": "approved"}
-    security.set_cookie(response, request)
+    await asyncio.to_thread(security.set_cookie, response, request)
     if body.trust:
         twofactor.set_device_cookie(response, request)
-    _alert(request, "Signed in (approved in Telegram)" if c.via == "telegram" else "Signed in (Telegram code)",
-           loud=False)
+    if c.via == "recovery":
+        _alert(request, f"Signed in with a recovery code ({twofactor.recovery_left()} left)", loud=True)
+    else:
+        _alert(request, {"telegram": "Signed in (approved in Telegram)", "totp": "Signed in (authenticator app)"}
+               .get(c.via, "Signed in (Telegram code)"), loud=False)
     return {"ok": True, "status": "approved"}
 
 
@@ -188,8 +208,94 @@ async def set_two_factor(body: TwoFactorSet, request: Request):
 async def forget_browsers(request: Request, response: Response):
     """Every trusted browser asks again, except this one."""
     await asyncio.to_thread(twofactor.forget_devices)
-    if twofactor.enabled():
+    if twofactor.required():
         twofactor.set_device_cookie(response, request)
+    return {"ok": True}
+
+
+async def _check_second(request: Request, check, code: str):
+    """An app / recovery code typed by a signed-in request, counted like a password -> what `check` returned, or
+    429 / 400."""
+    key = "2f:" + security.client_key(request)
+    refusal, _ = security.begin_attempt(key, trusted=True)
+    if refusal:
+        raise HTTPException(429, detail={"error": "throttled", "message": "Too many attempts - try again in 15 min"})
+    got = await asyncio.to_thread(check, code)
+    delay = security.end_attempt(key, bool(got))
+    if not got:
+        await asyncio.sleep(delay)
+        raise HTTPException(400, detail={"error": "bad_code", "message": "Wrong code"})
+    return got
+
+
+@router.get("/second-factor", dependencies=[Depends(security.require_auth)])
+async def second_factor():
+    return {"telegram": twofactor.enabled(), "totp": twofactor.totp_on(),
+            "recovery_left": twofactor.recovery_left() if twofactor.required() else 0}
+
+
+@router.post("/totp", dependencies=[Depends(security.require_auth)])
+async def totp_begin(body: CurrentIn, request: Request):
+    """Start enrolling an authenticator app: the secret is shown this once; POST /totp/confirm turns it on."""
+    await _check_current(request, body.password)
+    secret = await asyncio.to_thread(twofactor.totp_begin)
+    return {"secret": secret, "uri": twofactor.totp_uri(secret, request.url.hostname or "")}
+
+
+@router.post("/totp/confirm", dependencies=[Depends(security.require_auth)])
+async def totp_confirm(body: CodeIn, request: Request, response: Response):
+    codes = await _check_second(request, twofactor.totp_confirm, body.code)
+    twofactor.set_device_cookie(response, request)              # this browser stays trusted
+    _alert(request, "Authenticator app turned on for sign-in", loud=True)
+    return {"ok": True, "recovery_codes": codes}
+
+
+@router.post("/totp/off", dependencies=[Depends(security.require_auth)])
+async def totp_off(body: TotpOffIn, request: Request):
+    """The current password and an app or recovery code: a stolen cookie, or the password alone, cannot remove it."""
+    if not twofactor.totp_on():
+        return {"ok": True}
+    await _check_current(request, body.password)
+    await _check_second(request, twofactor.verify_second, body.code)
+    await asyncio.to_thread(twofactor.totp_off)
+    _alert(request, "Authenticator app turned off for sign-in", loud=True)
+    return {"ok": True}
+
+
+@router.post("/recovery-codes", dependencies=[Depends(security.require_auth)])
+async def recovery_codes(body: CurrentIn, request: Request):
+    """New recovery codes (shown this once); the old ones stop working."""
+    await _check_current(request, body.password)
+    if not twofactor.required():
+        raise HTTPException(409, detail={"error": "no_second_factor", "message": "Turn on two-step sign-in first"})
+    return {"recovery_codes": await asyncio.to_thread(twofactor.new_recovery_codes)}
+
+
+@router.get("/devices", dependencies=[Depends(security.require_auth)])
+async def devices(request: Request):
+    """The browsers signed in. `legacy`: some signed in before this list existed (one entry for all of them)."""
+    out = security.signins(request.cookies.get(security.COOKIE))
+    for d in out["devices"]:
+        d["label"] = twofactor.short_ua(d.pop("ua"))
+    return out
+
+
+@router.post("/devices/disconnect-others", dependencies=[Depends(security.require_auth)])
+async def disconnect_others(request: Request, response: Response):
+    old = request.cookies.get(security.COOKIE)
+    keep = security.device_id(old)
+    if keep is None:                                            # a cookie from before the list: this browser gets one
+        new = await asyncio.to_thread(security.set_cookie, response, request)
+        security.move_sockets(old, new)
+        keep = security.device_id(new)
+    await asyncio.to_thread(security.end_other_signins, keep)
+    return {"ok": True}
+
+
+@router.delete("/devices/{did}", dependencies=[Depends(security.require_auth)])
+async def disconnect(did: str):
+    if not await asyncio.to_thread(security.end_signin, did):
+        raise HTTPException(404, detail={"error": "not_found", "message": "This browser is not signed in any more"})
     return {"ok": True}
 
 
@@ -221,8 +327,11 @@ async def change_password(body: PasswordIn, request: Request, response: Response
     await _check_current(request, body.current)
     _check_strength(body.new)
     trusted = twofactor.device_trusted(request.cookies.get(twofactor.DEVICE_COOKIE))
+    old = request.cookies.get(security.COOKIE)
     await asyncio.to_thread(security.set_password, body.new)                 # forgets every trusted browser too
-    security.set_cookie(response, request)
+    new = await asyncio.to_thread(security.set_cookie, response, request)
+    security.move_sockets(old, new)                                          # this browser's terminals stay open
+    security.recheck_sockets()
     if trusted:
         twofactor.set_device_cookie(response, request)
     return {"ok": True}

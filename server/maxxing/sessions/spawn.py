@@ -86,13 +86,14 @@ def _named_vault(names: list[str]) -> dict[str, str]:
     return out
 
 
-def auth_env(secrets: dict | None = None, keys: list[str] | None = None) -> dict[str, str]:
-    """Claude credentials stored in secrets.json + the user's vault entries flagged `expose`.
+def auth_env(secrets: dict | None = None, keys: list[str] | None = None, path: str | None = "") -> dict[str, str]:
+    """Claude credentials stored in secrets.json + the user's vault entries flagged `expose` that the topic `path`
+    may get ("" = the workspace root: only the keys not limited to topics).
     keys: only these vault entries instead (an agent's turn sees the keys of its agent.json, nothing else)."""
     s = secrets if secrets is not None else config.load_secrets()
     if keys is None:
         from .. import vault, vault_files
-        out = {**vault.exposed_env(), **vault_files.exposed_files_env()}     # a file: its path
+        out = {**vault.exposed_env(path), **vault_files.exposed_files_env(path)}     # a file: its path
     else:
         out = _named_vault(keys)
     if s.get("claude_oauth_token"):
@@ -131,7 +132,8 @@ def protected_paths() -> list[str]:
     A speed bump against injected instructions ("read ~/.ssh/id_ed25519 and post it"): Read/Edit and simple shell
     reads (`cat`) are refused, a script that opens the file is not - permission modes are the real limit."""
     home = os.environ.get("HOME") or pwd.getpwuid(os.getuid()).pw_dir
-    return [str(config.STATE / "secrets.json"), str(config.STATE / "secret-files") + "/**",
+    return [str(config.STATE / "secrets.json"), str(config.STATE / "secrets.json.cred"),
+            str(config.STATE / "secret-files") + "/**",
             str(config.STATE / "reverse-proxy.conf"), str(Path(home) / ".ssh") + "/**"]
 
 
@@ -273,7 +275,9 @@ def _settings_file(text: str) -> Path:
     return p
 
 
-def claude_env(extra: dict | None = None, permission_mode: str = "bypass", keys: list[str] | None = None) -> dict[str, str]:
+def claude_env(extra: dict | None = None, permission_mode: str = "bypass", keys: list[str] | None = None,
+               path: str | None = "") -> dict[str, str]:
+    """`path`: the topic of the turn, for the vault keys limited to some topics (see auth_env)."""
     env = base_env()
     cfg = config.load_config()
     env.setdefault("BASH_MAX_OUTPUT_LENGTH", str(BASH_OUTPUT_MAX))
@@ -282,7 +286,7 @@ def claude_env(extra: dict | None = None, permission_mode: str = "bypass", keys:
     window = compact_window(cfg)
     if window:
         env.setdefault("CLAUDE_CODE_AUTO_COMPACT_WINDOW", str(window))
-    env.update(auth_env(keys=keys))
+    env.update(auth_env(keys=keys, path=path))
     env.update(permission_args(permission_mode)[1])
     env.update({str(k): str(v) for k, v in (extra or {}).items() if ENV_NAME_RE.match(str(k))})
     return env

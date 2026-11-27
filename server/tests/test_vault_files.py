@@ -168,7 +168,7 @@ def test_a_note_that_is_not_text_is_refused(mx):
 def test_the_list_never_holds_the_content(mx):
     vault_files.put("LEAK_CHECK", b"TOP-SECRET-BYTES", filename="k.json", note="n", expose=True)
     rows = vault_files.list_files()
-    assert set(rows[0]) == {"name", "filename", "size", "sha256", "note", "expose", "updated"}
+    assert set(rows[0]) == {"name", "filename", "size", "sha256", "note", "expose", "topics", "updated"}
     assert "TOP-SECRET-BYTES" not in json.dumps(rows)
 
 

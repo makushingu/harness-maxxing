@@ -93,5 +93,9 @@ Tips:
   `SKILL.md` and its scripts, no secret) to a public GitHub repository and list it on the site, or create an API key
   there and ask Claude: *"Publish my skill `<name>` to the Harness Maxxing community: follow
   https://harness-maxxing.com/community/publish.md"*. Every listing is reviewed before it appears.
+- **A skill from someone else** is instructions Claude will follow, sometimes with scripts: before installing it, read
+  what it does with `maxxing community check <folder or zip>` (scripts, hooks, network, keys, downloads; a reading
+  aid, not a verdict), then `maxxing community install` copies exactly what was checked into
+  `<workspace>/.claude/skills/<name>/`: see [13-page-extensions.md](13-page-extensions.md#what-a-package-does-before-it-is-installed).
 - Check how your Claude Code version discovers project-level skills (`claude --help`, Claude Code
   docs) if a workspace skill is not picked up in a topic session; the user level always works.

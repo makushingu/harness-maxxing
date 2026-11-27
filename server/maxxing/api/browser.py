@@ -52,7 +52,7 @@ from starlette.websockets import WebSocketDisconnect
 
 from .. import agents, browser, bus, config
 from ..browser import asks, exits, navs, pool as pool_mod, replays, unit
-from ..security import COOKIE, cookie_valid, loopback as _loopback, require_auth
+from ..security import COOKIE, cookie_valid, hold_socket, loopback as _loopback, require_auth
 
 log = logging.getLogger("maxxing.api.browser")
 router = APIRouter(prefix="/api/browser", tags=["browser"])
@@ -692,6 +692,7 @@ async def live(ws: WebSocket):
 
     task = asyncio.create_task(follow())
     pumping = asyncio.create_task(pump())
+    guard = hold_socket(ws, 4403)                 # signed out, password changed, browser disconnected: closed
     try:
         while True:
             raw = await ws.receive_text()
@@ -747,7 +748,7 @@ async def live(ws: WebSocket):
     except (WebSocketDisconnect, RuntimeError):
         pass
     finally:
-        for tk in (task, pumping):
+        for tk in (task, pumping, guard):
             tk.cancel()
             with contextlib.suppress(asyncio.CancelledError, Exception):
                 await tk

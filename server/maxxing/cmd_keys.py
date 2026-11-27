@@ -2,17 +2,20 @@
 
     maxxing keys list                     names, notes, exposed or not, files marked (never the values)
     maxxing keys get NAME                 print the value (exit 1 if missing)
-    printf %s "$V" | maxxing keys set NAME [--note TEXT] [--no-expose]
+    printf %s "$V" | maxxing keys set NAME [--note TEXT] [--no-expose] [--topics projects/a,projects/b/topics/c]
     maxxing keys delete NAME
     maxxing keys put-file NAME PATH|-     store a secret FILE (keystore, JSON, certificate; 1 byte to 1 MiB)
     maxxing keys get-file NAME [--output PATH] [--force]     its bytes on stdout (text only on a terminal), or in
                                           a new file of mode 600
     maxxing keys delete-file NAME
+    maxxing keys encrypt                  seal secrets.json on disk with systemd-creds (secrets.json.cred), as root
+    maxxing keys decrypt                  back to a clear secrets.json (mode 600)
 
 `set` reads the value from stdin (never from the command line, which `ps` shows). A new key is exposed
 by default: every later Claude turn and shell job gets it as an environment variable. A new file is exposed
-too, as an environment variable holding its PATH (see maxxing/vault_files.py). In an agent's turn the file
-commands are refused.
+too, as an environment variable holding its PATH (see maxxing/vault_files.py). `--topics` limits a key or a file
+to the sessions and jobs of these projects / topics (`--topics ""`: every topic again). In an agent's turn the
+file commands are refused.
 """
 from __future__ import annotations
 
@@ -26,6 +29,19 @@ from . import cli
 VALUE_READ_MAX = 16384 * 4 + 4096      # bytes read by `set`: the vault's 16384 characters in UTF-8, plus blanks
 
 
+TOPICS_HELP = ("give it only to the sessions and jobs of these projects / topics: comma-separated projects/NAME or "
+               "projects/NAME/topics/NAME (\"\" = every topic again)")
+
+
+def _topics(value: str | None) -> list[str] | None:
+    return None if value is None else [t.strip() for t in value.split(",") if t.strip()]
+
+
+def _scope(row: dict) -> str:
+    """The scope shown by `list`: nothing for every topic, else the paths without their `projects/` and `topics/`."""
+    return " ".join("[" + t.removeprefix("projects/").replace("/topics/", "/") + "]" for t in row.get("topics") or [])
+
+
 def _configure(p) -> None:
     sub = p.add_subparsers(dest="action", required=True)
     ls = sub.add_parser("list", help="names and notes, never the values")
@@ -36,6 +52,7 @@ def _configure(p) -> None:
     s.add_argument("name")
     s.add_argument("--note")
     s.add_argument("--no-expose", action="store_true", help="keep it out of the environment of sessions and jobs")
+    s.add_argument("--topics", metavar="PATHS", help=TOPICS_HELP)
     d = sub.add_parser("delete", help="remove a key")
     d.add_argument("name")
     pf = sub.add_parser(
@@ -49,6 +66,7 @@ def _configure(p) -> None:
     pf.add_argument("--note", help="a short note shown in Settings -> Keys (200 characters at most)")
     pf.add_argument("--no-expose", action="store_true",
                     help="do not export NAME (the file's path) to sessions and jobs; read it with get-file only")
+    pf.add_argument("--topics", metavar="PATHS", help=TOPICS_HELP)
     gf = sub.add_parser("get-file", help="write a secret file to stdout, or to --output",
                         description="Write the bytes of the secret file NAME to stdout, or to a new file with "
                                     "--output. On a terminal only text is printed: redirect the output or use "
@@ -58,6 +76,14 @@ def _configure(p) -> None:
     gf.add_argument("--force", action="store_true", help="with --output: overwrite an existing path")
     df = sub.add_parser("delete-file", help="remove a secret file")
     df.add_argument("name")
+    sub.add_parser(
+        "encrypt", help="seal the server's secrets on disk (systemd-creds: host key, and the TPM when there is one)",
+        description="secrets.json (the Keys vault, the Claude, Telegram and GitHub tokens, the password hash) is "
+                    "sealed into secrets.json.cred with systemd-creds, checked by decrypting it back, then the "
+                    "clear file is removed. A copy of the file is useless without this machine's key; someone "
+                    "who is root on this server still reads it. Tools reading secrets.json directly stop working: "
+                    "use `maxxing keys get NAME`. Before moving the state folder to another server: decrypt.")
+    sub.add_parser("decrypt", help="undo `encrypt`: a clear secrets.json (mode 600) again")
 
 
 def _read_input(path: str, limit: int) -> bytes:
@@ -126,7 +152,7 @@ def _files(a) -> int:
         existed = vault_files.exists(a.name)
         try:
             vault_files.put(a.name, data, filename=None if a.path == "-" else os.path.basename(a.path), note=a.note,
-                            expose=False if a.no_expose else (None if existed else True))
+                            expose=False if a.no_expose else (None if existed else True), topics=_topics(a.topics))
         except vault.VaultError as e:
             print(f"{a.name}: {e}", file=sys.stderr)
             return 2
@@ -159,9 +185,34 @@ def _files(a) -> int:
     return 0
 
 
+def _sealing(a, agent: str) -> int:
+    from . import config
+    if agent:
+        print(f"keys {a.action}: not available to an agent", file=sys.stderr)
+        return 1
+    if os.geteuid() != 0:
+        print(f"keys {a.action}: run it as root (the key of systemd-creds belongs to root)", file=sys.stderr)
+        return 1
+    try:
+        done = config.seal_secrets() if a.action == "encrypt" else config.unseal_secrets()
+    except (config.SealError, config.SecretsUnreadable, OSError) as e:
+        print(f"keys {a.action}: {e}\nNothing was changed.", file=sys.stderr)
+        return 1
+    if a.action == "encrypt":
+        print(f"secrets sealed in {config.sealed_path()} (systemd-creds)" if done == "sealed"
+              else f"already sealed: {config.sealed_path()}")
+        print("Undo: maxxing keys decrypt. Before moving the state folder to another server: decrypt first.")
+    else:
+        print(f"secrets back in clear in {config.secrets_path()} (mode 600)" if done == "clear"
+              else f"not sealed: {config.secrets_path()} is in clear (mode 600)")
+    return 0
+
+
 def _handler(a) -> int:
     from . import agent_guard, vault, vault_files
     agent = agent_guard.agent_turn()["path"]        # from the turn's own session, not its (changeable) environment
+    if a.action in ("encrypt", "decrypt"):
+        return _sealing(a, agent)
     if agent:
         from . import agents
         mine = set(agents.load(agent)["keys"] if agents.exists(agent) else [])
@@ -173,11 +224,12 @@ def _handler(a) -> int:
                 [{**r, "kind": "file"} for r in vault_files.list_files()]
         rows.sort(key=lambda r: r["name"])
         if a.json:
-            fields = {"text": ("name", "note", "expose", "updated"),
-                      "file": ("name", "note", "expose", "updated", "filename", "size", "sha256")}
+            fields = {"text": ("name", "note", "expose", "topics", "updated"),
+                      "file": ("name", "note", "expose", "topics", "updated", "filename", "size", "sha256")}
             print(json.dumps([{**{k: r[k] for k in fields[r["kind"]]}, "kind": r["kind"]} for r in rows], indent=2))
         for r in [] if a.json else rows:
-            print(f"{r['name']:<40} {'env' if r['expose'] else '   '} {'file' if r['kind'] == 'file' else '    '}  {r['note']}")
+            print(f"{r['name']:<40} {'env' if r['expose'] else '   '} {'file' if r['kind'] == 'file' else '    '}  "
+                  f"{' '.join(x for x in (_scope(r), r['note']) if x)}")
         return 0
     if agent:
         # a turn of an agent: only its own keys, read-only; never a file (those never reach an agent). A speed bump against injected orders (the real limit is
@@ -217,7 +269,8 @@ def _handler(a) -> int:
             return 2
         existed = vault.get(a.name) is not None
         try:
-            vault.put(a.name, value, note=a.note, expose=False if a.no_expose else (None if existed else True))
+            vault.put(a.name, value, note=a.note, expose=False if a.no_expose else (None if existed else True),
+                      topics=_topics(a.topics))
         except vault.VaultError as e:
             print(f"{a.name}: {e}", file=sys.stderr)
             return 2
@@ -233,4 +286,4 @@ def _handler(a) -> int:
     return 0
 
 
-cli.register("keys", "the Keys vault: list, get, set (value from stdin), delete, put-file, get-file, delete-file", _configure, _handler)
+cli.register("keys", "the Keys vault: list, get, set (value from stdin), delete, put-file, get-file, delete-file, encrypt, decrypt", _configure, _handler)

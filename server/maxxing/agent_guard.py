@@ -793,6 +793,8 @@ OWNER_SUBS = {      # command -> (sub-commands of the owner only in any agent tu
                                     "devices='[\"<id>\"]'`: a request the owner allows)."),
     "themes": (frozenset({"install", "verify", "remove"}), "themes change the owner's interface. Say which theme to install in "
                                                  "your answer."),
+    "community": (frozenset({"install"}), "a package from outside is installed by the owner, who reads what it does "
+                                          "first. Give the `maxxing community check` report in your answer."),
     "webhooks": (WEBHOOKS_OWNER_ONLY, "webhooks and events run commands and calls with the owner's rights, without "
                                       "an agent's budget or guards. Say what should be done in your answer."),
 }

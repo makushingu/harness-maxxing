@@ -237,7 +237,8 @@ events"; CLI `cmd_webhooks.py`; public endpoint `api/hooks.py`; management + loo
   `calls/<id>/<call>/` (`request.json` with redacted headers, `body`, `payload.json`, `files/`, `stdout`, `response`,
   `response.type`, `result.json`); `data/<id>.db` (SQLite WAL, `rows(id, at, call, data)`, purged past `keep`);
   `spool/*.json`; `feed-pos.json`. Secrets in secrets.json `webhooks: {id: {token, secret?, sign?}}`, never in
-  hooks.json nor an API answer. Every write of hooks.json and the call records goes through `_locked()` = a thread
+  hooks.json nor an API answer. The `secret` of a phone hook (its access key) is kept as `sha256:<hex>` only
+  (`_hash_phone_keys`: at every write of the store, and at the first call for a key stored in clear before). Every write of hooks.json and the call records goes through `_locked()` = a thread
   RLock + `flock` on `webhooks/.lock` (the CLI writes too).
 - **Incoming** `receive(token, method, headers, query, body, fields, files)`: token lookup (`feedhooks._same`,
   constant time), enabled (503), method (405), `max_mb` (413; `bodylimit` already caps the stream with
@@ -1083,6 +1084,13 @@ To set them on the service: `systemctl edit claude-maxxing` -> `[Service]` `Envi
   existing file's, else `0666 & ~umask`), `os.replace`. `config.json` / `secrets.json` that do not
   parse are read as `{}` (defaults) and copied to `<name>.damaged-<stamp>` before any save
   (`_keep_damaged`, `damaged_copy_of`; doctor `state_files`).
+- Sealed secrets (`maxxing keys encrypt` / `decrypt` = `config.seal_secrets` / `unseal_secrets`): when
+  `<state>/secrets.json.cred` exists it is the store. `load_secrets` pipes it through `systemd-creds decrypt
+  --name=maxxing-secrets - -` once per (inode, mtime, size) of the file (per process), every write
+  (`set_secrets`, `write_json(secrets_path())`) goes through `_write_sealed`: `systemd-creds encrypt --with-key=auto`,
+  decrypt back and compare, temp file + `os.replace`, under `config._lock`. A failed decrypt raises
+  `SecretsUnreadable` (never `{}`), so a write is refused too; doctor `secrets_store`. Never open secrets.json by
+  path: `config.load_secrets()`.
 - `cmd_core.git_auth_env(token)`: the update token reaches git through `GIT_CONFIG_COUNT/KEY_0/VALUE_0`
   (`http.extraHeader`), never through `-c` arguments; used by `cmd_core._git` and `api/system._git`.
 

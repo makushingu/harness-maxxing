@@ -21,6 +21,7 @@ import pickle
 import pwd
 import re
 import shutil
+import subprocess
 import tempfile
 import threading
 import time
@@ -270,7 +271,19 @@ def tighten_state() -> int:
 
 def write_json(path: Path, data: Any, mode: int | None = None, before_replace: Callable[[], None] | None = None) -> None:
     """Atomic JSON write usable by every module (sessions, crons, tasks…); `before_replace`: see _atomic_write."""
-    if Path(path) in (config_path(), secrets_path()):
+    if Path(path) == secrets_path():
+        with _lock:
+            if secrets_sealed():
+                load_secrets()                          # raises when the sealed store cannot be read: never overwritten
+                _write_sealed(data, before_replace)
+                return
+            _keep_damaged(Path(path))
+            try:
+                _atomic_write(Path(path), data, 0o600 if mode is None else mode, before_replace)
+            finally:
+                _forget_secrets()
+        return
+    if Path(path) == config_path():
         with _lock:
             _keep_damaged(Path(path))
             try:
@@ -469,26 +482,148 @@ def secrets_path() -> Path:
 
 
 _sec_lock = threading.Lock()
-_sec_cache: dict[str, Any] = {"key": None, "blob": b""}
+_sec_cache: dict[str, Any] = {"key": None, "blob": b"", "error": "", "at": 0.0}
+
+SEALED_NAME = "maxxing-secrets"                # the name systemd-creds binds into the sealed file
+SEALED_MAX = 1024 * 1024                       # systemd-creds refuses a larger credential
+SEALED_TIMEOUT_S = 30
+SEALED_RETRY_S = 5.0                           # a failed decrypt of an unchanged file is not run again before that
+
+
+class SecretsUnreadable(RuntimeError):
+    """secrets.json.cred exists and could not be opened: nothing is read as empty, nothing is written over it."""
+
+
+class SealError(RuntimeError):
+    """systemd-creds missing, too old, or failing."""
+
+
+def sealed_path() -> Path:
+    return STATE / "secrets.json.cred"
+
+
+def secrets_sealed() -> bool:
+    """True once `maxxing keys encrypt` ran: the secrets are in secrets.json.cred, sealed by systemd-creds."""
+    return os.path.exists(sealed_path())
+
+
+def _creds(action: str, data: bytes) -> bytes:
+    """`systemd-creds encrypt|decrypt` of `data`, through pipes: the clear text never touches the disk."""
+    exe = shutil.which("systemd-creds")
+    if not exe:
+        raise SealError("systemd-creds not found (it comes with systemd 250 or later)")
+    argv = [exe, action, f"--name={SEALED_NAME}"] + (["--with-key=auto"] if action == "encrypt" else []) + ["-", "-"]
+    try:
+        r = subprocess.run(argv, input=data, capture_output=True, timeout=SEALED_TIMEOUT_S)
+    except (OSError, subprocess.SubprocessError) as e:
+        raise SealError(f"systemd-creds {action}: {e}") from None
+    if r.returncode != 0:
+        err = r.stderr.decode("utf-8", "replace").strip().splitlines()
+        raise SealError(f"systemd-creds {action} failed: {(err[-1] if err else f'exit {r.returncode}')[:300]}")
+    return r.stdout
+
+
+def _seal(data: dict) -> bytes:
+    """`data` sealed, and checked: what comes back from a decrypt is the same document."""
+    clear = json.dumps(data, indent=2, ensure_ascii=False).encode("utf-8")
+    if len(clear) > SEALED_MAX:
+        raise SealError(f"the secrets take {len(clear)} bytes: systemd-creds seals {SEALED_MAX} at most")
+    sealed = _creds("encrypt", clear)
+    if not sealed or _creds("decrypt", sealed) != clear:
+        raise SealError("round-trip check failed: what systemd-creds decrypts is not what was encrypted")
+    return sealed
+
+
+def _file_key(path: Path, st: os.stat_result) -> tuple:
+    return str(path), st.st_ino, st.st_mtime_ns, st.st_size
+
+
+def _write_sealed(data: dict, before_replace: Callable[[], None] | None = None) -> None:
+    """secrets.json.cred replaced by `data`, sealed (config._lock held by the caller). Raises SealError with the
+    file untouched when systemd-creds fails."""
+    path = sealed_path()
+    sealed = _seal(data)
+    fd, name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    tmp = Path(name)
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "wb") as f:
+            f.write(sealed)
+            f.flush()
+            os.fsync(f.fileno())
+            key = _file_key(path, os.fstat(f.fileno()))  # unchanged by the rename
+        if before_replace is not None:
+            before_replace()
+        os.replace(tmp, path)
+    finally:
+        tmp.unlink(missing_ok=True)
+        _forget_secrets()
+    try:
+        blob = pickle.dumps(data)
+    except Exception:  # noqa: BLE001
+        return
+    with _sec_lock:
+        _sec_cache.update(key=key, blob=blob, error="", at=0.0)
+
+
+def _load_sealed(path: Path, st: os.stat_result) -> dict:
+    key = _file_key(path, st)
+    with _sec_lock:
+        if _sec_cache["key"] == key:
+            if not _sec_cache["error"]:
+                return pickle.loads(_sec_cache["blob"])
+            if time.monotonic() - _sec_cache["at"] < SEALED_RETRY_S:
+                raise SecretsUnreadable(_sec_cache["error"])
+    try:
+        try:
+            sealed = path.read_bytes()
+        except FileNotFoundError:
+            raise
+        except OSError as e:
+            raise SealError(str(e)) from None
+        data = json.loads(_creds("decrypt", sealed).decode("utf-8"))
+        if not isinstance(data, dict):
+            raise ValueError("not a JSON object")
+    except (SealError, ValueError, RecursionError) as e:
+        msg = (f"{path} cannot be decrypted ({e}): the secrets are unreadable and nothing is written until this is "
+               f"fixed (maxxing doctor)")
+        log.error("%s", msg)
+        with _sec_lock:
+            _sec_cache.update(key=key, blob=b"", error=msg, at=time.monotonic())
+        raise SecretsUnreadable(msg) from None
+    with _sec_lock:
+        _sec_cache.update(key=key, blob=pickle.dumps(data), error="", at=0.0)
+    return data
 
 
 def _forget_secrets() -> None:
     with _sec_lock:
-        _sec_cache.update(key=None, blob=b"")
+        _sec_cache.update(key=None, blob=b"", error="", at=0.0)
 
 
 def load_secrets() -> dict:
-    """secrets.json - a fresh copy the caller may change. Read on every request (sign-in cookie check): the parsed
+    """The secrets - a fresh copy the caller may change. Read on every request (sign-in cookie check): the parsed
     file is kept (pickled) while its (inode, mtime, size, ctime) is unchanged, like load_config; every save here
-    drops it, and a save by another process is an atomic rename (new inode)."""
-    p = secrets_path()
-    try:
-        st = os.stat(p)
-        key: tuple | None = (str(p), st.st_ino, st.st_mtime_ns, st.st_size, st.st_ctime_ns)
-    except OSError:
-        key = None
+    drops it, and a save by another process is an atomic rename (new inode).
+    When secrets.json.cred exists (`maxxing keys encrypt`) it is the store, decrypted by systemd-creds once per
+    version of the file; a failure raises SecretsUnreadable, never an empty store."""
+    for _ in range(3):                                  # encrypt / decrypt by another process swaps the two files
+        sp = sealed_path()
+        try:
+            return _load_sealed(sp, os.stat(sp))
+        except FileNotFoundError:
+            pass
+        p = secrets_path()
+        try:
+            st = os.stat(p)
+            key: tuple | None = (str(p), st.st_ino, st.st_mtime_ns, st.st_size, st.st_ctime_ns)
+        except OSError:
+            key = None
+        if key is None and secrets_sealed():
+            continue
+        break
     with _sec_lock:
-        if key is not None and _sec_cache["key"] == key:
+        if key is not None and _sec_cache["key"] == key and not _sec_cache["error"]:
             return pickle.loads(_sec_cache["blob"])
     data = _document(p)
     if key is None:
@@ -498,7 +633,7 @@ def load_secrets() -> dict:
     except Exception:  # noqa: BLE001 - never cache what cannot be copied back
         return data
     with _sec_lock:
-        _sec_cache.update(key=key, blob=blob)
+        _sec_cache.update(key=key, blob=blob, error="", at=0.0)
     return data
 
 
@@ -519,11 +654,80 @@ def set_secrets(values: dict[str, Any]) -> None:
                 s.pop(name, None)
             else:
                 s[name] = value
+        if secrets_sealed():
+            _write_sealed(s)
+            return
         _keep_damaged(secrets_path())
         try:
             _atomic_write(secrets_path(), s, 0o600)
         finally:
             _forget_secrets()
+
+
+def secrets_status() -> dict:
+    """{"sealed": bool, "ok": bool, "error": str, "both": bool} for doctor: `both` = a clear secrets.json left next
+    to the sealed file (an interrupted encrypt / decrypt, or a tool that wrote it)."""
+    if not secrets_sealed():
+        return {"sealed": False, "ok": True, "error": "", "both": False}
+    both = secrets_path().exists()
+    try:
+        load_secrets()
+    except SecretsUnreadable as e:
+        return {"sealed": True, "ok": False, "error": str(e), "both": both}
+    return {"sealed": True, "ok": True, "error": "", "both": both}
+
+
+def seal_secrets() -> str:
+    """secrets.json -> secrets.json.cred (`maxxing keys encrypt`). The sealed file is checked by a decrypt before it
+    takes its name, and the clear file goes last. -> "sealed" | "already". Raises SealError / SecretsUnreadable
+    with the store left as it was."""
+    with _lock:
+        clear = secrets_path()
+        if secrets_sealed():
+            data = load_secrets()
+            if clear.exists():                           # an interrupted run left both: the sealed one is the store
+                if _document(clear) != data:
+                    raise SealError(f"{clear} and {sealed_path().name} both exist and differ: the sealed one is in "
+                                    f"use - compare them, then delete {clear.name}")
+                clear.unlink()
+            return "already"
+        try:
+            with open(clear, encoding="utf-8") as f:
+                data = json.load(f)
+        except FileNotFoundError:
+            data = {}
+        except (OSError, ValueError, RecursionError) as e:
+            raise SealError(f"{clear} cannot be read ({e}): repair it first (maxxing doctor)") from None
+        if not isinstance(data, dict):
+            raise SealError(f"{clear} does not hold a JSON object: repair it first (maxxing doctor)")
+        _write_sealed(data)
+        _forget_secrets()
+        try:
+            same = load_secrets() == data                # read back from the disk by a fresh decrypt
+        except SecretsUnreadable:
+            same = False
+        if not same:
+            sealed_path().unlink(missing_ok=True)
+            _forget_secrets()
+            raise SealError("round-trip check failed: the sealed file was removed, secrets.json is unchanged")
+        clear.unlink(missing_ok=True)
+        return "sealed"
+
+
+def unseal_secrets() -> str:
+    """secrets.json.cred -> secrets.json, mode 600 (`maxxing keys decrypt`). -> "clear" | "already"."""
+    with _lock:
+        if not secrets_sealed():
+            return "already"
+        data = load_secrets()
+        clear = secrets_path()
+        _atomic_write(clear, data, 0o600)
+        if _document(clear) != data:
+            clear.unlink(missing_ok=True)
+            raise SealError("round-trip check failed: secrets.json was not written back whole, nothing changed")
+        sealed_path().unlink()
+        _forget_secrets()
+        return "clear"
 
 
 # ---- derived paths -------------------------------------------------------------------------

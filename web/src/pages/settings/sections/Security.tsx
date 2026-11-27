@@ -6,8 +6,10 @@ import { errorMessage, isApiError } from '@/lib/api'
 import { useT } from '@/i18n'
 import { Button, FormField, SecretInput, Switch, toast } from '@/components/ui'
 import { NewPasswordFields, validatePasswords } from '@/pages/auth/PasswordFields'
-import { Callout, SettingRow } from '@/features/common'
+import { SettingRow } from '@/features/common'
 import { TwoFactorRow } from '@/features/auth/TwoFactorRow'
+import { TotpRow } from '@/features/auth/TotpRow'
+import { SignedInBrowsers } from '@/features/auth/SignedInBrowsers'
 import { SettingsCard, SectionStack } from './ui'
 
 export function SecuritySection() {
@@ -70,6 +72,9 @@ export function SecuritySection() {
             </Link>
           </p>
         )}
+        <div className="mt-4 divide-y border-t pt-4">
+          <TotpRow />
+        </div>
       </SettingsCard>
       {/* the presentation mode masks your data while you share your screen; was in General before 2.0.0a132 */}
       <SettingsCard title={t('security.privacy')} description={t('security.privacyDesc')}>
@@ -79,7 +84,7 @@ export function SecuritySection() {
       </SettingsCard>
       <SettingsCard title={t('security.sessions')} description={t('security.sessionsDesc')}>
         <div className="grid gap-4">
-          <Callout tone="info">{t('security.everywhere')}</Callout>
+          <SignedInBrowsers />
           <div>
             <Button variant="outline" onClick={() => logout.mutate()} loading={logout.isPending}>
               <LogOut /> {t('auth.signOut')}

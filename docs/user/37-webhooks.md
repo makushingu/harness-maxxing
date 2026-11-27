@@ -86,7 +86,8 @@ agent**). Open one: its URL, where to paste it in the service, **Send a test**, 
 ## Your phone: send something, get an answer
 
 A **phone** webhook takes GET and POST, files (photos, up to 20 MB by default) and form fields, and checks a key you
-choose, sent as the header `Authorization: Bearer <key>`. With **wait for the result**, the phone gets the answer of
+choose, sent as the header `Authorization: Bearer <key>` (the server keeps only a SHA-256 of that key: it is never
+shown again - set a new one if you lose it). With **wait for the result**, the phone gets the answer of
 the command (a link, a text, a picture) instead of a plain "OK". On an iPhone, in the Shortcuts app:
 
 1. Add **Receive images from the Share Sheet** (or **Select Photos**).

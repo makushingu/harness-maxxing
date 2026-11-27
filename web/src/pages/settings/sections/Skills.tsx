@@ -10,6 +10,7 @@ import { Badge, Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, Dro
 import { openFileViewer } from '@/features/files/viewerStore'
 import { draftUrl } from '@/features/agents/EditWithClaude'
 import { CommunityLink } from './Extensions'
+import { InstalledFrom } from './InstalledFrom'
 import { SettingsCard, SectionStack } from './ui'
 import { useHarnessTopic } from './harnessTopic'
 
@@ -50,6 +51,7 @@ function SkillRow({ s }: { s: Skill }) {
           {s.hidden && <Badge variant="outline" className="font-normal">{t('skills.slashOnly', { name: s.name })}</Badge>}
         </div>
         {s.description && <p className="line-clamp-2 text-[13px] text-muted-foreground" title={s.description}>{s.description}</p>}
+        {s.origin === 'workspace' && <InstalledFrom kind="skill" id={s.folder} />}
       </div>
       <div className="flex shrink-0 items-center gap-1">
         <Button variant="ghost" size="sm" onClick={() => openFileViewer(s.path)} aria-label={`${t('skills.open')} ${s.name}`}>

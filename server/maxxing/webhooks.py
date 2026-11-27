@@ -17,7 +17,8 @@ Storage (state_dir("webhooks")):
   data/<id>.db          rows of a "store" hook
   spool/*.json          events emitted by other processes (cron runs, agent turns), consumed by the server loop
   feed-pos.json         the last feed event read by the "feed" triggers
-Secrets (secrets.json "webhooks"): {id: {token, secret, sign}} - never in hooks.json nor in an API answer.
+Secrets (secrets.json "webhooks"): {id: {token, secret, sign}} - never in hooks.json nor in an API answer. The
+`secret` of a phone hook is its access key: only "sha256:<hex>" of it is kept (`_hash_phone_keys`).
 
 The URL token is the permission. A Stripe / Shopify / GitHub hook refuses every call until its signing secret is
 set (as the feed's webhooks: feedhooks.py, whose checks are reused here); a generic hook checks an HMAC when it has
@@ -143,7 +144,32 @@ def _store() -> dict:
     return v if isinstance(v, dict) else {}
 
 
-def _save_store(store: dict) -> None:
+_KEY_HASH = re.compile(r"sha256:[0-9a-f]{64}")
+
+
+def _key_hash(key: str) -> str:
+    return "sha256:" + hashlib.sha256(key.encode("utf-8", "surrogatepass")).hexdigest()
+
+
+def _is_phone(h: dict) -> bool:
+    t = h.get("trigger") or {}
+    return t.get("kind") == "in" and t.get("source") == "phone"
+
+
+def _hash_phone_keys(store: dict, hooks: list[dict]) -> bool:
+    """The access key of a phone hook (`?key=`, Bearer, X-Harness-Key) is kept as its SHA-256 only: a key stored in
+    clear by an earlier version becomes its hash. -> True when `store` changed."""
+    changed = False
+    for h in hooks:
+        s = store.get(h["id"]) if _is_phone(h) else None
+        if isinstance(s, dict) and s.get("secret") and not _KEY_HASH.fullmatch(str(s["secret"])):
+            s["secret"] = _key_hash(str(s["secret"]))
+            changed = True
+    return changed
+
+
+def _save_store(store: dict, hooks: list[dict] | None = None) -> None:
+    _hash_phone_keys(store, _load() if hooks is None else hooks)
     config.set_secret("webhooks", store or None)
 
 
@@ -389,11 +415,11 @@ def create(spec: dict, secret: str | None = None) -> dict:
         if h["trigger"]["kind"] == "in":
             s["token"] = _secrets.token_urlsafe(24)
             if secret:
-                s["secret"] = secret
+                s["secret"] = _key_hash(secret) if _is_phone(h) else secret
         if h["action"]["kind"] == "call" and h["action"].get("sign"):
             s["sign"] = _secrets.token_hex(24)
         store[h["id"]] = s
-        _save_store(store)
+        _save_store(store, hooks + [h])
         _save(hooks + [h])
     _changed()
     return public(h)
@@ -418,8 +444,9 @@ def update(hid: str, spec: dict) -> dict:
             s.pop("secret", None)
         if h["action"]["kind"] == "call" and h["action"].get("sign") and not s.get("sign"):
             s["sign"] = _secrets.token_hex(24)
-        _save_store(store)
-        _save([h if x["id"] == hid else x for x in hooks])
+        hooks = [h if x["id"] == hid else x for x in hooks]
+        _save_store(store, hooks)                 # a hook that becomes a phone hook: its secret is a key, hashed
+        _save(hooks)
     _changed()
     return public(h)
 
@@ -465,7 +492,7 @@ def set_secret(hid: str, secret: str | None) -> dict:
         store = _store()
         s = store.setdefault(hid, {})
         if secret:
-            s["secret"] = secret
+            s["secret"] = _key_hash(secret) if _is_phone(h) else secret
         else:
             s.pop("secret", None)
         _save_store(store)
@@ -738,7 +765,8 @@ def _check_auth(h: dict, s: dict, headers: dict, query: dict, body: bytes) -> tu
     if src == "phone":
         got = str(low.get("authorization") or "")
         got = got[7:].strip() if got.lower().startswith("bearer ") else str(low.get("x-harness-key") or query.get("key") or "")
-        return None if got and feedhooks._same(got, secret) else (401, {"error": "bad_key"})
+        want = secret if _KEY_HASH.fullmatch(secret) else _key_hash(secret)
+        return None if got and hmac.compare_digest(_key_hash(got), want) else (401, {"error": "bad_key"})
     return None if feedhooks.verify(src, secret, headers, body) else (401, {"error": "bad_signature"})
 
 
@@ -756,6 +784,17 @@ def _limited(hid: str) -> bool:
     return False
 
 
+def _convert_keys() -> None:
+    """Phone keys still in clear in the store (written before they were hashed) -> their hash."""
+    try:
+        with _locked():
+            store = _store()
+            if _hash_phone_keys(store, _load()):
+                config.set_secret("webhooks", store or None)
+    except Exception:  # noqa: BLE001 - the call goes on: the key is checked against its hash either way
+        log.exception("could not convert the phone webhook keys")
+
+
 def receive(token: str, method: str, headers: dict, query: dict, body: bytes,
             fields: dict | None = None, files: list[tuple[str, str, bytes]] | None = None) -> dict:
     """An incoming call -> {status, json, hook?, call?, wait?}. `wait`: the API waits for the call (reply "wait")."""
@@ -764,6 +803,8 @@ def receive(token: str, method: str, headers: dict, query: dict, body: bytes,
         return {"status": 404, "json": {"error": "not_found"}}
     h, s = found
     t = h["trigger"]
+    if _is_phone(h) and s.get("secret") and not _KEY_HASH.fullmatch(str(s["secret"])):
+        _convert_keys()
     if not h["enabled"]:
         return {"status": 503, "json": {"error": "disabled"}, "retry_after": 3600}
     if method not in t["methods"]:

@@ -13,6 +13,7 @@ import { useT } from '@/i18n'
 import { Badge, Button, EmptyState, NamedIcon, Skeleton, Switch, toast } from '@/components/ui'
 import { SettingsCard, SectionStack } from './ui'
 import { useHarnessTopic } from './harnessTopic'
+import { InstalledFrom } from './InstalledFrom'
 
 type Kind = 'widgets' | 'pages' | 'views'
 const inKind = (x: Extension, k: Kind) => (k === 'views' ? !!x.agents_view || x.type === 'view' : k === 'widgets' ? x.type === 'widget' : x.type !== 'widget' && x.type !== 'view')   // pages: also a wrong type, to show its error
@@ -127,6 +128,7 @@ function ExtensionList({ kind, extra }: { kind: Kind; extra?: React.ReactNode })
                       <span className="font-mono break-all">{x.error}</span>
                     </p>
                   )}
+                  <InstalledFrom kind="extension" id={x.id} />
                   {kind === 'pages' && x.enabled && !x.error && (
                     <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
                       <Link to={`/x/${x.id}`} className="inline-flex w-fit items-center gap-1 pointer-coarse:min-h-10 text-[13px] font-medium text-primary hover:underline">

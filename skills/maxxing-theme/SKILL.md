@@ -89,7 +89,11 @@ an update, so Harness switches them off by itself when an update changes the int
 
 A theme from outside is data: read `theme.json` (and look at the images) before installing, tell the user what it
 sets. `git clone --depth 1 <repo> /tmp/x` (or the `path` folder inside it), then `maxxing themes check` and
-`maxxing themes install`. Only `theme.json`, its images, `README.md` and `LICENSE` are copied. A theme with a
+`maxxing community check <folder>` (what else is in the folder, remote `url()` / `@import`, the sha256 of its content:
+a reading aid, not a verdict), show the user both, then
+`maxxing themes install <folder> --sha256 <that hash> --source "<repo>@<commit>"` (refused when the content changed
+since the check; with findings it also needs `--yes` once the user agreed). Only `theme.json`, its images, `README.md`
+and `LICENSE` are copied. A theme with a
 `"css"` field: read every rule and tell the user what it changes before installing (Community marks it "may break").
 
 ## Change, list, remove

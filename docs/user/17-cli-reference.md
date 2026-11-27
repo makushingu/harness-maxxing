@@ -12,7 +12,7 @@ section: Reference
 | `maxxing serve [--host IP] [--port N]` | run the web server (used by the `claude-maxxing` service) |
 | `maxxing setup-link [--reset]` | print the one-time setup link; `--reset` forgets the password and starts the setup again |
 | `maxxing password` | set a new UI password (interactive) |
-| `maxxing 2fa status\|off\|forget-browsers` | two-step sign-in with Telegram: state, turn it off (the way back in when Telegram does not answer), make every browser ask again |
+| `maxxing 2fa status\|off\|forget-browsers` | two-step sign-in (Telegram, authenticator app): state, turn it off - both methods, recovery codes dropped (the way back in when Telegram does not answer or the phone is lost) -, make every browser ask again |
 | `maxxing status [--json]` | version, URL, service, Claude auth, Telegram, backup, paths |
 | `maxxing doctor [--json] [--live] [--offline] [--deps]` | check the installation; `--live` makes a real Claude call, `--offline` skips the update checks (GitHub, Claude Code release), `--deps` also looks up known vulnerabilities of the installed packages (osv.dev) |
 | `maxxing proxy on [HOST:PORT] [--domain D] [--new-secret]` / `proxy off` / `proxy status [--json]` | a second private listen address (default `172.17.0.1:8790`) for a reverse proxy in Docker, guarded by a secret header; writes the Traefik block to `<state>/reverse-proxy.conf` (`--new-secret`: a new header, copy the block again); `off` also forgets the secret and the block; restart the service after (see [Installation](installation#behind-a-proxy-in-docker)) |
@@ -185,13 +185,15 @@ Remotion, the Whisper models, Garage). As root.
 
 | Command | Purpose |
 |---|---|
-| `maxxing keys list [--json]` | names, notes and whether each key is exposed, files marked `file` (never the values or contents) |
+| `maxxing keys list [--json]` | names, notes and whether each key is exposed, files marked `file`, and between brackets the projects / topics a key is limited to (never the values or contents) |
 | `maxxing keys get NAME` | print a value (exit code 1 when missing) |
-| `printf %s "$VALUE" \| maxxing keys set NAME [--note TEXT] [--no-expose]` | create or update a key; the value comes from stdin, never from the command line. A new key is exposed (environment variable of every session and shell job) unless `--no-expose`; an update keeps its note and exposure; a multi-line value (PEM, SSH key) keeps its final line break; a value that is not UTF-8 text is refused (use `put-file`) |
+| `printf %s "$VALUE" \| maxxing keys set NAME [--note TEXT] [--no-expose] [--topics PATHS]` | create or update a key; the value comes from stdin, never from the command line. `--topics projects/a,projects/b/topics/c` gives it only to the sessions and jobs of these projects / topics (`--topics ""`: every topic again; without the option an update keeps its scope). A new key is exposed (environment variable of every session and shell job) unless `--no-expose`; an update keeps its note and exposure; a multi-line value (PEM, SSH key) keeps its final line break; a value that is not UTF-8 text is refused (use `put-file`) |
 | `maxxing keys delete NAME` | remove a key |
-| `maxxing keys put-file NAME PATH [--note TEXT] [--no-expose]` | store a secret **file** (keystore, service-account JSON, certificate; 1 byte to 1 MiB) read from `PATH`, or from stdin with `-`. A new file is exposed (the environment variable `NAME` holds its path in sessions and shell jobs) unless `--no-expose`; never in the backup |
+| `maxxing keys put-file NAME PATH [--note TEXT] [--no-expose] [--topics PATHS]` | store a secret **file** (keystore, service-account JSON, certificate; 1 byte to 1 MiB) read from `PATH`, or from stdin with `-`. A new file is exposed (the environment variable `NAME` holds its path in sessions and shell jobs) unless `--no-expose`; `--topics` as for `set`; never in the backup |
 | `maxxing keys get-file NAME [--output PATH] [--force]` | write the file to stdout, or to `PATH` (mode 600; refuses an existing path unless `--force`) |
 | `maxxing keys delete-file NAME` | remove a secret file |
+| `maxxing keys encrypt` | seal the server's secrets on disk (as root): `secrets.json` becomes `secrets.json.cred`, encrypted by `systemd-creds` with this machine's key (and its TPM when systemd uses one), checked by decrypting it back before the clear file is removed. Refuses, changing nothing, when `systemd-creds` is missing (systemd older than 250) or the check fails. Nothing else changes: the server and every `maxxing` command read it as before. See [Security](15-security.md#secrets-sealed-on-disk-optional) for what it protects and what it does not |
+| `maxxing keys decrypt` | undo it: a clear `secrets.json` (mode 600) again. Needed before moving the state folder to another server |
 | `maxxing infra status` / `infra list [--kind K] [--json]` | the Infra inventory: sources, problems, every site / database / bucket / domain / server (last snapshot) |
 | `maxxing infra refresh` | read everything now (this server, other servers over SSH, Cloudflare, Hostinger, URL checks) |
 | `maxxing infra mail [--refresh] [--json]` | e-mail, view only: mailboxes of the E-mail page, Cloudflare Email Routing forwards, Hostinger e-mail, DNS health (MX, SPF, DKIM, DMARC) of the mail domains with what to fix |
@@ -244,6 +246,17 @@ OAuth sign-ins (state "To connect") are done in Settings -> MCP -> **Connect**. 
 `AGENT` = `project/topic/agent` (or `projects/P/topics/T/agents/A`, or the agent's name when it is unique). See
 [Agents](30-agents.md) and [Agent groups](31-agent-groups.md).
 
+## Community packages
+
+What an extension, a skill or a theme written by someone else does, read before it is installed
+([13-page-extensions.md](13-page-extensions.md#what-a-package-does-before-it-is-installed)). A reading aid, not a verdict.
+
+| Command | Purpose |
+|---|---|
+| `maxxing community check PATH [--kind extension\|skill\|theme] [--json]` | read a folder or a zip without running it: code on the server, network, keys, processes, downloads, paths outside its folder (file and line), and the sha256 of the content; nothing installed |
+| `maxxing community install PATH [--sha256 HASH] [--yes] [--read] [--force] [--source TEXT]` | show the report, ask, then install exactly that content (refused when it differs from `--sha256`); `--yes` needs `--sha256`, findings marked danger need `--read`; `--force` replaces an installed one; exit code 3 = waiting for the owner's agreement; refused in an agent's run |
+| `maxxing community list [--json]` | what was installed this way: sha256, source, date, and whether its files changed since |
+
 ## Themes
 
 Settings -> Appearance -> [Theme](39-themes.md): a theme is a `theme.json` of values (no code; at most one field of advanced CSS), made or
@@ -254,6 +267,7 @@ installed by Harness (skill `maxxing-theme`).
 | `maxxing themes list [--json]` | installed themes, and folders that are not usable with the reason |
 | `maxxing themes check FOLDER [--json]` | read a theme like the interface will: what it sets, what is dropped and why (nothing installed) |
 | `maxxing themes install FOLDER [--force]` | check it, then copy it into `<workspace>/themes/<id>/` (`--force` replaces it); refused in an agent's run |
+| `maxxing themes install FOLDER --sha256 HASH [--source TEXT] [--yes] [--read]` | a theme from outside: installs only the content `maxxing community check` reported, and records it |
 | `maxxing themes verify ID` | its advanced CSS was checked with this version of the interface: switch it back on (an update that changes the interface's CSS switches it off); refused in an agent's run |
 | `maxxing themes remove ID` | delete an installed theme (browsers using it go back to its base); refused in an agent's run |
 | `maxxing themes tokens [--json]` | the variables a theme may set and their kind |

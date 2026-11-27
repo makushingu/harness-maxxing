@@ -32,6 +32,7 @@ import {
 } from '@/components/ui'
 import { Callout } from '@/features/common'
 import { SettingsCard } from './ui'
+import { KeyScopeLabel, KeyTopics } from './KeyTopics'
 
 /** Same rule as the server (vault.NAME_RE). */
 const NAME_RE = /^[A-Z][A-Z0-9_]{1,63}$/
@@ -95,6 +96,7 @@ function FileDialog({ open, onOpenChange, editing }: { open: boolean; onOpenChan
   const [file, setFile] = React.useState<File | null>(null)
   const [note, setNote] = React.useState('')
   const [expose, setExpose] = React.useState(false)
+  const [topics, setTopics] = React.useState<string[]>([])
   const [errors, setErrors] = React.useState<Errors>({})
   const input = React.useRef<HTMLInputElement>(null)
   React.useEffect(() => {
@@ -103,6 +105,7 @@ function FileDialog({ open, onOpenChange, editing }: { open: boolean; onOpenChan
     setFile(null)
     setNote(editing?.note || '')
     setExpose(editing?.expose || false)
+    setTopics(editing?.topics || [])
     setErrors({})
   }, [open, editing])
   const pick = (f: File | null) => {
@@ -125,7 +128,7 @@ function FileDialog({ open, onOpenChange, editing }: { open: boolean; onOpenChan
     if (Object.keys(errs).length) return
     put.mutate(
       // create: the server refuses (409) a name added meanwhile instead of replacing that file
-      { name: n, note: note.trim(), expose, ...(file ? { file } : {}), ...(editing ? {} : { create: true }) },
+      { name: n, note: note.trim(), expose, topics, ...(file ? { file } : {}), ...(editing ? {} : { create: true }) },
       {
         onSuccess: () => {
           toast.success(editing ? t('keyfiles.updated') : t('keyfiles.added'))
@@ -189,6 +192,7 @@ function FileDialog({ open, onOpenChange, editing }: { open: boolean; onOpenChan
             </span>
             <Switch checked={expose} onCheckedChange={setExpose} />
           </Label>
+          {expose && <KeyTopics value={topics} onChange={setTopics} />}
           {errors.form && <Callout tone="error">{errors.form}</Callout>}
           <DialogFooter>
             <Button variant="outline" onClick={() => onOpenChange(false)}>
@@ -236,6 +240,7 @@ function FileRow({ f, onEdit }: { f: SecretFile; onEdit: () => void }) {
         <span className="flex min-w-0 text-xs text-muted-foreground">
           <span className="truncate">{f.note ? <Sensitive>{f.note}</Sensitive> : t('keys.noNote')}</span>
           <span className="shrink-0 whitespace-pre"> · {fmtRelative(f.updated, lang)}</span>
+          {f.expose && <KeyScopeLabel topics={f.topics} />}
         </span>
       </div>
       <div className="col-span-2 row-start-2 flex min-w-0 items-center gap-2 md:col-span-1 md:row-start-auto">

@@ -247,6 +247,14 @@ Store API keys and tokens your projects need (for example `OPENAI_API_KEY`, `SHO
   multi-line value (a PEM or SSH private key) keeps its line breaks;
 - **Expose** makes the secret available as an **environment variable** to every Claude session and
   every shell cron job – handy for scripts, and Claude never needs to see the value in a chat;
+- **Topics** (under the switch, in the dialog of a key or a file) limits an exposed key to the projects and
+  topics you tick: only their sessions and their scheduled jobs get the variable. A ticked project covers all
+  its topics, also the ones created later. Nothing ticked means every topic, as before. A limited key is not
+  given to a session at the workspace root nor to a shell job without a topic, and the list shows "2 topics"
+  next to it. From the terminal: `maxxing keys set NAME --topics projects/shop,projects/blog/topics/seo`
+  (`--topics ""` for every topic again). Agents are not concerned: each one has its own list of keys. It decides
+  what a session receives at its start; a session with full access can still run `maxxing keys get`, so combine
+  it with the sandbox mode for the topics you do not trust;
 - some names are reserved (system variables, variables that make shells, Node, Python or git load
   code or send credentials elsewhere - `NODE_OPTIONS`, `BASH_ENV`, `SHELLOPTS`, `CLAUDE_CONFIG_DIR`,
   `ANTHROPIC_BASE_URL`, `SSH_AUTH_SOCK`... -, anything starting with `MAXXING_`, `GIT_`, `LD_`, `DYLD_`,
@@ -261,6 +269,14 @@ Write only the key *name* in memory files ("Shop API: key `SHOP_TOKEN`"). Extens
 `ctx["secret"]("NAME")`.
 
 Keys live in `/var/lib/claude-maxxing/secrets.json` (mode 600) and are not included in the backup.
+
+**Encrypting that file (optional).** `maxxing keys encrypt`, as root, seals it with the machine's own key
+(`systemd-creds`: the host key, and the TPM when there is one) into `secrets.json.cred`; `maxxing keys decrypt` goes
+back. It makes a copy of the file (a backup of the state folder taken elsewhere) useless on another machine; it does
+not stop someone who is already root on the server, since the key is on the machine so that the server restarts
+alone - and without a TPM a copy of the whole disk holds the key too. Once sealed, a script that reads `secrets.json`
+directly stops working (use `maxxing keys get NAME` or the environment), and the state folder cannot be moved to
+another server as it is: run `maxxing keys decrypt` first. Details: [Security](15-security.md#secrets-sealed-on-disk-optional).
 
 ### Files
 

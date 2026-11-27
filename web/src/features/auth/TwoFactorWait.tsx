@@ -67,10 +67,15 @@ export function TwoFactorWait({ challenge, trustOption = false, onDone }: { chal
     }
   }, [challenge.challenge, finish, outcome, t])
 
+  // what answers this request: the Telegram message (older servers say nothing), an authenticator app
+  const telegram = !challenge.methods || challenge.methods.includes('telegram')
+  const app = !!challenge.methods?.includes('totp')
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
-    const c = code.replace(/\D/g, '')
-    if (c.length !== 6) return setCodeError(t('twofa.codeLength'))
+    // 6 digits (Telegram or app), or a recovery code (16 letters and digits)
+    const c = /[a-z]/i.test(code) ? code.replace(/[\s-]/g, '') : code.replace(/\D/g, '')
+    if (c.length !== 6 && c.length !== 16) return setCodeError(t('twofa.codeLength'))
     setChecking(true)
     setCodeError(null)
     try {
@@ -87,19 +92,32 @@ export function TwoFactorWait({ challenge, trustOption = false, onDone }: { chal
   const mm = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`
   return (
     <div className="grid gap-5">
-      <div className="flex gap-3 rounded-lg border bg-muted p-4 text-sm">
-        <Send className="mt-0.5 size-5 shrink-0 text-primary" />
-        <div className="grid gap-1">
-          <p className="font-medium">{t('twofa.check')}</p>
-          <p className="text-[13px] text-muted-foreground">{t('twofa.checkDesc')}</p>
-          <p className="flex items-center gap-2 text-[13px] text-muted-foreground" aria-live="polite">
-            <Spinner className="size-3.5" /> {t('twofa.waiting', { time: mm })}
-          </p>
+      {telegram && (
+        <div className="flex gap-3 rounded-lg border bg-muted p-4 text-sm">
+          <Send className="mt-0.5 size-5 shrink-0 text-primary" />
+          <div className="grid gap-1">
+            <p className="font-medium">{t('twofa.check')}</p>
+            <p className="text-[13px] text-muted-foreground">{t('twofa.checkDesc')}</p>
+            <p className="flex items-center gap-2 text-[13px] text-muted-foreground" aria-live="polite">
+              <Spinner className="size-3.5" /> {t('twofa.waiting', { time: mm })}
+            </p>
+          </div>
         </div>
-      </div>
+      )}
       <form onSubmit={submit} className="grid gap-3" noValidate>
-        <FormField label={t('twofa.code')} error={codeError || undefined}>
-          <Input value={code} onChange={(e) => setCode(e.target.value.replace(/[^\d ]/g, '').slice(0, 7))} inputMode="numeric" autoComplete="one-time-code" placeholder="123456" className="font-mono tracking-widest" />
+        <FormField label={t(telegram ? 'twofa.code' : 'twofa.appCode')} hint={app ? t(telegram ? 'twofa.appHint' : 'twofa.recHint') : undefined} error={codeError || undefined}>
+          <Input
+            value={code}
+            onChange={(e) => setCode(e.target.value.replace(/[^a-z\d -]/gi, '').slice(0, 24))}
+            inputMode={app ? 'text' : 'numeric'}
+            autoCapitalize="off"
+            autoCorrect="off"
+            spellCheck={false}
+            autoComplete="one-time-code"
+            autoFocus={!telegram}
+            placeholder="123456"
+            className="font-mono tracking-widest"
+          />
         </FormField>
         {trustOption && (
           <Label className="gap-2 font-normal pointer-coarse:min-h-10">
@@ -116,7 +134,7 @@ export function TwoFactorWait({ challenge, trustOption = false, onDone }: { chal
         </div>
       </form>
       <details className="text-[13px] text-muted-foreground">
-        <summary className="cursor-pointer list-none text-center hover:text-foreground pointer-coarse:flex pointer-coarse:min-h-10 pointer-coarse:items-center pointer-coarse:justify-center">{t('twofa.noAnswer')}</summary>
+        <summary className="cursor-pointer list-none text-center hover:text-foreground pointer-coarse:flex pointer-coarse:min-h-10 pointer-coarse:items-center pointer-coarse:justify-center">{t(telegram ? 'twofa.noAnswer' : 'twofa.noCode')}</summary>
         <div className="mt-3 grid gap-2">
           <p>{t('twofa.noAnswerHelp')}</p>
           <CodeBlock inline code="maxxing 2fa off" />

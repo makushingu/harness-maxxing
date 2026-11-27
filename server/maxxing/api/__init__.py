@@ -22,6 +22,7 @@ ROUTERS = [
     "crons",
     "webhooks",
     "themes",
+    "community",
     "telegram",
     "backup",
     "settings",

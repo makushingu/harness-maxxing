@@ -31,10 +31,10 @@ export function useSecretFiles() {
  *  `errorToast: false` for a form that shows the error itself. */
 export function usePutSecretFile({ errorToast = true }: { errorToast?: boolean } = {}) {
   return useMut(
-    ({ name, file, ...q }: SecretFilePutBody & { name: string }) =>
+    ({ name, file, topics, ...q }: SecretFilePutBody & { name: string }) =>
       request<Ok>(`/api/secret-files/${seg(name)}`, {
         method: 'PUT',
-        query: { ...q, filename: file?.name },
+        query: { ...q, topics: topics?.join(','), filename: file?.name },
         body: file ?? new Blob([]),
       }),
     {

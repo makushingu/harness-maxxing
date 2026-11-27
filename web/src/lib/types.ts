@@ -19,7 +19,12 @@ export type AuthState = {
 export type SetupBody = { token: string; password: string }
 export type LoginBody = { password: string }
 /** A sign-in (or turning two-step sign-in on) waiting for an approval in Telegram. */
-export type TwoFactorChallenge = { challenge: string; expires_in: number }
+export type TwoFactorChallenge = { challenge: string; expires_in: number; methods?: ('telegram' | 'totp')[] }
+export type SecondFactor = { telegram: boolean; totp: boolean; recovery_left: number }
+export type TotpEnrol = { secret: string; uri: string }
+export type RecoveryCodes = { recovery_codes: string[] }
+export type SignedInBrowser = { id: string; label: string; ip: string; created: number; seen: number; current: boolean }
+export type SignedInBrowsers = { devices: SignedInBrowser[]; legacy: boolean; legacy_current: boolean }
 export type LoginResult = { ok: boolean; two_factor?: TwoFactorChallenge }
 export type TwoFactorPoll = { ok: boolean; status: 'pending' | 'approved'; expires_in?: number }
 export type ChangePasswordBody = { current: string; new: string }
@@ -979,11 +984,11 @@ export type TokenStats = {
 }
 export type ChangelogEntry = { version: string; label: string; current: boolean; body: string }
 export type Changelog = { version: string; entries: ChangelogEntry[] }
-export type Secret = { name: string; note: string; expose: boolean; updated: number; preview: string }
+export type Secret = { name: string; note: string; expose: boolean; /** projects / topics the key is given to; [] = every topic */ topics?: string[]; updated: number; preview: string }
 /** A file of the Keys vault: only its description, the content never reaches the browser. */
-export type SecretFile = { name: string; filename: string; size: number; sha256: string; note: string; expose: boolean; updated: number }
-export type SecretFilePutBody = { file?: File; note?: string; expose?: boolean; create?: boolean }
-export type SecretPutBody = { value?: string; note?: string; expose?: boolean; create?: boolean }
+export type SecretFile = { name: string; filename: string; size: number; sha256: string; note: string; expose: boolean; topics?: string[]; updated: number }
+export type SecretFilePutBody = { file?: File; note?: string; expose?: boolean; topics?: string[]; create?: boolean }
+export type SecretPutBody = { value?: string; note?: string; expose?: boolean; topics?: string[]; create?: boolean }
 
 /* ---------------------------------------------------------------- System */
 /** `seen`: marked as seen - it does not count in the sidebar until it changes or for 24 h. */

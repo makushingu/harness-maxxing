@@ -81,7 +81,7 @@ def _run(m: dict, csid: str, cwd: str, cfg: dict, question: str, first: bool = F
     args = [spawn.claude_bin(), "-p", "--output-format", "json", *spawn.permission_args("plan")[0],
             "--resume", csid, "--fork-session", "--no-session-persistence",
             *spawn.settings_args(cfg, walls)] + (["--model", model] if model else [])
-    env = spawn.claude_env(menv, "plan", agent.get("keys") if agent else None)
+    env = spawn.claude_env(menv, "plan", agent.get("keys") if agent else None, path=str(m.get("path") or ""))
     t0 = time.time()
     try:
         p = subprocess.run(args, input=ASK_PREFACE + question, capture_output=True, text=True, cwd=cwd, env=env,

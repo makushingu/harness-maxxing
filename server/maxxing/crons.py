@@ -1180,17 +1180,18 @@ def _tail(path: Path, n: int = OUTPUT_TAIL) -> str:
 def _job_env(job: dict) -> dict[str, str]:
     """The environment of a Claude turn, so a script can call `claude -p`: PATH with `claude`, HOME, Harness'
     own Claude Code folder (CLAUDE_CONFIG_DIR when set), the Claude credentials stored in Harness and the
-    vault keys flagged `expose`."""
+    vault keys flagged `expose` (a key limited to topics: only when the job's `topic_path` is one of them)."""
+    topic = str(job.get("topic_path") or "")
     try:
         from .sessions import spawn
         env = spawn.base_env()
-        env.update(spawn.auth_env())
+        env.update(spawn.auth_env(path=topic))
     except Exception:
         env = dict(os.environ)
         try:
             from . import vault, vault_files
-            env.update(vault.exposed_env())
-            env.update(vault_files.exposed_files_env())
+            env.update(vault.exposed_env(topic))
+            env.update(vault_files.exposed_files_env(topic))
         except Exception:
             pass
     env.update(MAXXING_CRON_ID=job["id"], MAXXING_CRON_NAME=job["name"])

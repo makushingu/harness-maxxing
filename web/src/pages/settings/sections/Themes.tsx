@@ -10,6 +10,7 @@ import { useT } from '@/i18n'
 import { Badge, Button, EmptyState, Skeleton } from '@/components/ui'
 import { SettingsCard, SectionStack } from './ui'
 import { CommunityLink } from './Extensions'
+import { InstalledFrom } from './InstalledFrom'
 import { ACCENT_SWATCH, ThemePreview, useAskHarness } from './Appearance'
 
 export function ThemesSection() {
@@ -80,6 +81,7 @@ export function ThemesSection() {
                         )}
                       </p>
                     )}
+                    <InstalledFrom kind="theme" id={th.id} />
                     {!!th.warnings.length && (
                       <p className="text-[13px] text-muted-foreground">{t('themes.warnings', { n: th.warnings.length })}</p>
                     )}

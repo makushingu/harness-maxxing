@@ -163,7 +163,7 @@ would receive the sign-in requests.
 **Telegram does not answer** (bot deleted, Telegram down, phone lost): on the server, over SSH,
 
 ```bash
-maxxing 2fa off             # password only again (every trusted browser is forgotten)
+maxxing 2fa off             # password only again: Telegram and the authenticator app off, every trusted browser forgotten
 maxxing 2fa status          # on / off
 ```
 

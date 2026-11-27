@@ -265,9 +265,19 @@ Overview -> the view menu -> its name.
 5. Record the extension's purpose and data source in the topic memory (`memory` skill).
 
 Community library (https://harness-maxxing.com/community): extensions, widgets and skills by other people.
-- **Install one**: only on the user's request; clone it at the commit the listing names, read every file and tell the
-  user what it does (network, files, keys, `api.py` = code that runs in the server with its rights) before copying it
-  to `<workspace>/extensions/<id>/`; then Rescan. Never run its code to "try it" before that.
+- **Install one**: only on the user's request. Clone it at the commit the listing names into a new empty folder
+  outside the workspace, never run its code to "try it", then:
+  1. `maxxing community check <folder>`: what it would do (code on the server, network, keys, processes, downloads,
+     paths outside its folder, with file and line) and the sha256 of its content. It is a reading aid, not a verdict:
+     it misses what is hidden on purpose, so still read every file, starting with the lines it points to.
+  2. Show the user the report (every `danger` and `warn` line, the hosts, the keys) and what you read yourself; never
+     say a package is "safe". Wait for their answer.
+  3. Once they agree: `maxxing community install <folder> --sha256 <hash of that report> --yes --source "<repo>@<commit>"`
+     (`--read` only when the user said they read the `danger` findings; `--force` for an update, after showing the
+     new report: it says when the content changed since the installed version). It refuses when the content is no
+     longer the one that was checked: run the check again and show it again. Then Rescan.
+  A skill from outside goes the same way (it lands in `<workspace>/.claude/skills/<name>/`); a theme: skill
+  `maxxing-theme`. Never copy a package from outside into `extensions/` or `.claude/skills/` by hand.
 - **Publish one the user made**: follow https://harness-maxxing.com/community/publish.md (key `HM_COMMUNITY_KEY` in
   the vault; never print it). Ask before creating a public repository or pushing.
 

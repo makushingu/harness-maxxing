@@ -225,6 +225,41 @@ what it does, then installs it.
 > (root on a standard install): it can read your files, your keys and your sessions. Listings with an `api.py` say
 > **Runs code on the server**. Read the code first, and install only what comes from someone you trust.
 
+### What a package does, before it is installed
+
+Before anything is copied, Harness reads the package (a folder or a zip: an extension, a skill or a theme) **without
+running it** and lists what it found, each with its file and line:
+
+```
+maxxing community check /root/work/downloads/dokploy
+```
+
+- **code that runs on the server**: the `api.py` (inside the Harness server), scripts (`.py`, `.sh`, JavaScript for
+  node), hooks in a skill's `SKILL.md`;
+- **network**: the hosts named in the code and the calls (`requests`, `urllib`, `fetch`, `curl`, sockets);
+- **keys and secrets**: the keys it asks the vault for (`ctx["secret"]("NAME")`), the environment variables it reads,
+  any mention of `secrets.json`, `.env`, `~/.ssh` or the Claude credentials;
+- **processes and downloads that run**: `subprocess`, `os.system`, `eval` / `exec`, `pip install`, `npm install`,
+  `curl … | sh`, text that is decoded then executed;
+- **paths outside its own folder** (absolute paths, `..`, the home folder);
+- what could not be read (binary files, minified code, links), and anything shaped like a secret left in it.
+
+Each line is `info`, `warn` or `danger`, and the report ends with the **sha256** of the content.
+
+> **A reading aid, not a verdict.** It finds what is written plainly and misses what is hidden on purpose. An empty
+> list does not mean a package is harmless: it tells you (and Claude) where to read first.
+
+`maxxing community install <folder or zip>` shows the same report and asks before copying. What you approved is what
+gets installed: the install takes its own copy, computes its sha256 again and **refuses when the content is no longer
+the one the report was shown for**. Findings marked `danger` need a second, explicit confirmation (typing `read`).
+When Claude installs for you, it shows you the report first and can only install with the hash of that report
+(`--sha256 … --yes`, and `--read` once you said you read the `danger` lines). An agent cannot install a package.
+
+`maxxing community list` (and the line under the extension, skill or theme in Settings) shows what was installed this
+way: where it came from, when, the sha256, and whether its files changed since. For an **update**, run the check on the
+new version: the report says *changed since the version you installed* when the content differs, and
+`install --force` replaces it after the same confirmation.
+
 To install one by hand, copy its folder to `/root/maxxing/extensions/<id>/` (for example with `git clone`), then
 **Settings -> Pages -> Rescan**. If it ships a skill, link it once so Claude always reads the current one
 (a `git pull` of the extension updates it too):

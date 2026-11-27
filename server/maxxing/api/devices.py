@@ -34,7 +34,7 @@ from starlette.websockets import WebSocketDisconnect
 from .. import config, devices, downloads
 from ..devices import asks, dist, store, tools, turns
 from ..devices.hub import DeviceError, Offline, hub
-from ..security import COOKIE, client_key, cookie_valid, loopback, require_auth
+from ..security import COOKIE, client_key, cookie_valid, hold_socket, loopback, require_auth
 from .browser import LiveTokens
 
 log = logging.getLogger("maxxing.api.devices")
@@ -377,7 +377,7 @@ async def live(ws: WebSocket, device_id: str):
             await asyncio.sleep(1.0)
 
     h.watch(device_id, vid, push)
-    tasks = [asyncio.create_task(pump()), asyncio.create_task(follow())]
+    tasks = [asyncio.create_task(pump()), asyncio.create_task(follow()), hold_socket(ws, 4403)]
     try:
         while True:
             raw = await ws.receive_text()

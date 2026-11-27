@@ -1,4 +1,4 @@
-"""Two-step sign-in with Telegram (Settings -> Telegram, `maxxing 2fa`).
+"""Two-step sign-in: Telegram (Settings -> Telegram, `maxxing 2fa`) and / or an authenticator app (TOTP).
 
 - On: config `telegram.two_factor` = true, and only effective while a bot and a chat with its owner are linked
   (`enabled()`); forgetting Telegram turns it off.
@@ -11,18 +11,27 @@
   bridge cannot lock the owner out.
 - Trusted browser: cookie `mx_device` (path /api/auth, 30 days) signed with secrets.device_key. Rotating the key
   (password change, `maxxing 2fa off|forget-browsers`, the Settings button) forgets every trusted browser.
+- Authenticator app (RFC 6238: SHA1, 6 digits, 30 s): secrets.totp = {"secret": Base32, "last": last step used,
+  "pending": a secret being enrolled, "pending_at"}. It is on once a code of the pending secret was typed. A code is
+  accepted for the current step and the ones right before / after, once (`last`). With it on, a sign-in challenge
+  takes an app code in place of the Telegram one; without Telegram the challenge is silent (no message).
+- Recovery codes: secrets.recovery_codes = SHA-256 of RECOVERY_N one-time codes, each usable once in place of any
+  second-step code (Telegram only too). App and recovery codes go through `security.begin_attempt` ("2f:<client>").
 - Way out without the UI: `maxxing 2fa off` over SSH.
 """
 from __future__ import annotations
 
+import base64
 import hashlib
 import hmac
 import logging
 import re
 import secrets
+import struct
 import threading
 import time
 from dataclasses import dataclass
+from urllib.parse import quote
 
 from . import config, security
 
@@ -40,6 +49,11 @@ PENDING_PER_CLIENT = 3         # one client can hold this many waiting requests:
 BAD_MAX = 20                   # wrong codes accepted server-wide per BAD_WINDOW; then only the Allow button works
 BAD_WINDOW = 3600
 _CODE_RE = re.compile(r"[0-9]{6}")
+TOTP_STEP = 30
+TOTP_PENDING_S = 900           # an enrolment not confirmed within this is dropped
+RECOVERY_N = 10
+ISSUER = "Harness Maxxing"
+_B32 = "abcdefghijklmnopqrstuvwxyz234567"
 _DEVICE_RE = re.compile(r"[0-9]{1,12}\.[0-9a-f]{16}\.[0-9a-f]{64}")
 
 WORDS = {
@@ -87,6 +101,8 @@ class Challenge:
     text: str = ""
     msg: tuple[int, int] | None = None     # (chat_id, message_id) of the Telegram message
     created: float = 0.0
+    delay: float = 0.0         # what the attempt limiter asks to wait after the last wrong app / recovery code
+    silent: bool = False       # no Telegram message: only an app or recovery code answers it
 
 
 class Refused(Exception):
@@ -132,6 +148,8 @@ def set_on(on: bool) -> None:
         config.save_config(cfg)
     if not on:
         forget_devices()
+        if not totp_on():
+            config.set_secret("recovery_codes", None)
 
 
 # ---- trusted browsers ----------------------------------------------------------------------
@@ -173,6 +191,142 @@ def revoke_all() -> None:
         _close(c, _w("gone"))
 
 
+# ---- authenticator app ---------------------------------------------------------------------
+def totp_at(secret: str, step: int) -> str:
+    """The 6-digit code of a Base32 secret for one 30 s step (RFC 6238 over RFC 4226, HMAC-SHA1)."""
+    key = base64.b32decode(secret.upper() + "=" * (-len(secret) % 8))
+    mac = hmac.new(key, struct.pack(">Q", step), hashlib.sha1).digest()
+    at = mac[-1] & 0x0F
+    return f"{(struct.unpack('>I', mac[at:at + 4])[0] & 0x7FFFFFFF) % 10 ** 6:06d}"
+
+
+def _match_step(secret: str, code: str, now: float) -> int | None:
+    """The step (current, or right before / after) whose code is `code`; every candidate is compared."""
+    if not _CODE_RE.fullmatch(code):
+        return None
+    cur, found = int(now // TOTP_STEP), None
+    for step in (cur - 1, cur, cur + 1):
+        try:
+            good = totp_at(secret, step)
+        except (ValueError, TypeError):
+            return None
+        if hmac.compare_digest(code.encode(), good.encode()):
+            found = step
+    return found
+
+
+def _totp() -> dict:
+    v = config.load_secrets().get("totp")
+    return v if isinstance(v, dict) else {}
+
+
+def totp_on() -> bool:
+    return bool(_totp().get("secret"))
+
+
+def required() -> bool:
+    """A right password is not enough to sign in from a browser that is not trusted."""
+    return enabled() or totp_on()
+
+
+def totp_uri(secret: str, account: str) -> str:
+    label = quote(f"{ISSUER}:{account or 'owner'}", safe="")
+    return f"otpauth://totp/{label}?secret={secret}&issuer={quote(ISSUER)}&algorithm=SHA1&digits=6&period={TOTP_STEP}"
+
+
+def totp_begin() -> str:
+    """Start an enrolment -> the new Base32 secret (160 bits). Not active until `totp_confirm`."""
+    secret = base64.b32encode(secrets.token_bytes(20)).decode()
+    with config._lock:                                          # noqa: SLF001
+        config.set_secret("totp", {**_totp(), "pending": secret, "pending_at": int(time.time())})
+    return secret
+
+
+def totp_confirm(code: str, now: float | None = None) -> list[str] | None:
+    """A code of the secret being enrolled turns the app on -> fresh recovery codes; None: wrong code / nothing to
+    confirm."""
+    now = time.time() if now is None else now
+    with config._lock:                                          # noqa: SLF001
+        st = _totp()
+        pending = st.get("pending")
+        try:
+            fresh = 0 <= now - float(st.get("pending_at") or 0) < TOTP_PENDING_S
+        except (TypeError, ValueError):
+            fresh = False
+        step = _match_step(str(pending), _clean(code), now) if pending and fresh else None
+        if step is None:
+            return None
+        config.set_secret("totp", {"secret": pending, "last": step})
+        return new_recovery_codes()
+
+
+def totp_verify(code: str, now: float | None = None) -> bool:
+    """One app code: right for a step never used before (a code seen once is refused, older steps too)."""
+    now = time.time() if now is None else now
+    with config._lock:                                          # noqa: SLF001
+        st = _totp()
+        if not st.get("secret"):
+            return False
+        step = _match_step(str(st["secret"]), _clean(code), now)
+        try:
+            last = int(st.get("last") or 0)
+        except (TypeError, ValueError):
+            last = 0
+        if step is None or step <= last:
+            return False
+        config.set_secret("totp", {**st, "last": step})
+        return True
+
+
+def totp_off() -> None:
+    with config._lock:                                          # noqa: SLF001
+        config.set_secret("totp", None)
+        if not enabled():
+            config.set_secret("recovery_codes", None)
+
+
+# ---- recovery codes ------------------------------------------------------------------------
+def _clean(code: str | None) -> str:
+    return re.sub(r"[\s-]", "", code or "").lower()
+
+
+def _hash(code: str) -> str:
+    return hashlib.sha256(code.encode("utf-8", "surrogatepass")).hexdigest()
+
+
+def new_recovery_codes() -> list[str]:
+    """RECOVERY_N new one-time codes (the old ones stop working); only their SHA-256 is stored."""
+    codes = ["".join(secrets.choice(_B32) for _ in range(16)) for _ in range(RECOVERY_N)]
+    config.set_secret("recovery_codes", [_hash(c) for c in codes])
+    return ["-".join(c[i:i + 4] for i in range(0, 16, 4)) for c in codes]
+
+
+def recovery_left() -> int:
+    v = config.load_secrets().get("recovery_codes")
+    return len(v) if isinstance(v, list) else 0
+
+
+def use_recovery(code: str) -> bool:
+    given = _hash(_clean(code))
+    with config._lock:                                          # noqa: SLF001
+        cur = config.load_secrets().get("recovery_codes")
+        cur = [h for h in cur if isinstance(h, str)] if isinstance(cur, list) else []
+        hit = [h for h in cur if hmac.compare_digest(h.encode(), given.encode())]
+        if not hit:
+            return False
+        config.set_secret("recovery_codes", [h for h in cur if h not in hit] or None)
+        return True
+
+
+def verify_second(code: str | None) -> str | None:
+    """An app code or a recovery code -> "totp" | "recovery" | None. The caller counts the attempt."""
+    if totp_verify(code or ""):
+        return "totp"
+    if len(_clean(code)) == 16 and use_recovery(code or ""):
+        return "recovery"
+    return None
+
+
 def set_device_cookie(response, request) -> None:
     response.set_cookie(DEVICE_COOKIE, make_device_cookie(), max_age=DEVICE_MAX_AGE, httponly=True,
                         samesite="strict", secure=security.is_https(request), path="/api/auth")
@@ -192,7 +346,10 @@ def _prune(now: float) -> None:
 
 
 def start(purpose: str, ip: str, ua: str) -> Challenge:
-    """New challenge + its Telegram message (blocking: call it from a thread). Raises Refused."""
+    """New challenge + its Telegram message (blocking: call it from a thread). Raises Refused. A sign-in with the
+    authenticator app on and no Telegram (not linked, or the message was refused) gets a silent challenge."""
+    silent_ok = purpose == "login" and totp_on()
+    send = purpose != "login" or enabled() or not totp_on()      # the app alone: no Telegram message
     now = time.time()
     with _lock:
         _prune(now)
@@ -207,7 +364,10 @@ def start(purpose: str, ip: str, ua: str) -> Challenge:
         c = Challenge(id=secrets.token_urlsafe(12), code=f"{secrets.randbelow(10 ** 6):06d}", purpose=purpose,
                       ip=ip, ua=ua[:120], expires=now + TTL, created=now)
         _ch[c.id] = c
-    if not _send(c):
+    sent = send and _send(c)
+    if not sent and silent_ok:
+        c.code, c.silent = "", True
+    elif not sent:
         with _lock:
             _ch.pop(c.id, None)
             sent = _new.get(ip, [])
@@ -258,8 +418,17 @@ def check(cid: str, code: str | None = None) -> tuple[str, Challenge | None]:
             if len(_bad) >= BAD_MAX:                # code guessing from many addresses: the button still works
                 return "codes_paused", c
             given = code.strip().replace(" ", "")
-            if _CODE_RE.fullmatch(given) and hmac.compare_digest(given.encode(), c.code.encode()):
-                c.status, c.via = "approved", "code"
+            via = ""
+            if c.code and _CODE_RE.fullmatch(given) and hmac.compare_digest(given.encode(), c.code.encode()):
+                via = "code"
+            elif c.purpose == "login" and (totp_on() or recovery_left()):
+                key = "2f:" + c.ip
+                if security.begin_attempt(key, trusted=True)[0]:
+                    return "throttled", c
+                via = verify_second(given) or ""
+                c.delay = security.end_attempt(key, bool(via))
+            if via:
+                c.status, c.via = "approved", via
                 _close(c, _w("allowed_code"))
             else:
                 c.tries += 1
