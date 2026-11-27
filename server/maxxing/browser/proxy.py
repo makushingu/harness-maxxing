@@ -159,9 +159,21 @@ class Proxy:
     async def _tunnel(self, r: asyncio.StreamReader, w: asyncio.StreamWriter,
                       ur: asyncio.StreamReader, uw: asyncio.StreamWriter) -> None:
         """Both ways of a tunnel. A way that ends cleanly (EOF) passes the half-close on and lets the other one
-        finish: the client sends its request then shuts its writing side, the site still answers."""
+        finish (the client sends its request then shuts its writing side, the site still answers); a way that fails
+        or stalls ends both, so a client that stopped reading does not hold its connection slot forever."""
         last = [time.monotonic()]                     # the last byte either way: shared, a one-way stream stays open
-        await asyncio.gather(self._pipe(r, uw, True, last), self._pipe(ur, w, False, last))
+        ways = {asyncio.ensure_future(self._pipe(r, uw, True, last)),
+                asyncio.ensure_future(self._pipe(ur, w, False, last))}
+        try:
+            while ways:
+                done, ways = await asyncio.wait(ways, return_when=asyncio.FIRST_COMPLETED)
+                if not all(t.result() for t in done):
+                    break
+        finally:
+            for t in ways:
+                t.cancel()
+            if ways:
+                await asyncio.gather(*ways, return_exceptions=True)
 
     async def _pipe(self, r: asyncio.StreamReader, w: asyncio.StreamWriter, out: bool,
                     last: list[float] | None = None) -> bool:
@@ -184,7 +196,7 @@ class Proxy:
                 else:
                     self.bytes_in += len(data)
                 w.write(data)
-                await w.drain()
+                await asyncio.wait_for(w.drain(), IDLE_TIMEOUT)   # a peer that stopped reading
         except (ConnectionError, asyncio.TimeoutError, OSError):
             _close(w)
             return False
