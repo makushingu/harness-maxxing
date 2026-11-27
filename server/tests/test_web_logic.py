@@ -763,3 +763,11 @@ def test_a_mail_port_corrected_after_a_known_one_keeps_its_security(tmp_path):
                 walk('starttls', ['143', '14', '1', '19', '199', '1993']), walk('ssl', ['2', '25', '252', '2525']),
                 walk('ssl', ['587']), walk('ssl', ['constructor'])]""")
     assert out == ["starttls", "starttls", "starttls", "ssl", "starttls", "ssl"]
+
+
+def test_quick_add_labels_that_look_the_same_are_one_and_count_characters(tmp_path):
+    out = _run_ts(tmp_path, WEB / "features" / "tasks" / "model.ts", """
+        const a = m.parseQuickAdd('x #caf\\u00e9 #cafe\\u0301', [], '2026-11-25')
+        const b = m.parseQuickAdd('y #' + '\\u{1F642}'.repeat(21), [], '2026-11-25')
+        return [a.labels, a.title, b.labels.length, b.title]""")
+    assert out == [["café"], "x", 1, "y"]
