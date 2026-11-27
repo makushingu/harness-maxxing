@@ -494,3 +494,29 @@ def test_stop_reads_like_the_web_ui():
     # the same as /(?<![\w-])stop\s+@([a-z0-9][a-z0-9-]{0,47})\b/gi in mentions.tsx (JavaScript: ASCII \w, \b and /i, Unicode \s)
     assert got == {"stop @bobé": ["bob"], "éstop @bob": ["bob"], "ſtop @bob": [], "STOP @bob": ["bob"],
                    "stop\u00a0@bob": ["bob"], "x-stop @bob": []}
+
+
+def test_a_failed_first_send_to_an_outside_member_starts_afresh_next_time(client, topic, monkeypatch):
+    from maxxing.sessions import service
+    _setup(client, trust_members=False)
+    P = "projects/acme/groups/team"
+    g = agent_rooms.load(P)
+    made, sent = [], []
+    def create(*a, **k):
+        made.append(k.get("message"))
+        return {"id": f"s{len(made)}"}
+    def send(sid, text, **k):
+        if not sent:
+            sent.append(None)
+            raise service.SessionError("busy")
+        sent.append((sid, text))
+    monkeypatch.setattr(service, "create_session", create)
+    monkeypatch.setattr(service, "send_message", send)
+    monkeypatch.setattr(service, "delete_session", lambda sid: None)
+    monkeypatch.setattr(service, "session_exists", lambda sid: True)
+    item = {"path": R, "wave": 2, "reason": "handover", "from": W}
+    st: dict = {"origin": "o"}
+    assert agent_rooms._start(P, R, item, st, g) is None
+    assert R not in st.get("sessions", {}) and "s1" not in st["turns"]
+    assert agent_rooms._start(P, R, item, st, g) == "s2"       # a new session, with the group's header
+    assert len(made) == 2 and sent[-1][0] == "s2"
