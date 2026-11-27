@@ -115,6 +115,22 @@ def test_provider_error_is_explained(state):
     assert e.value.code == "bad_key" and "Incorrect API key" in e.value.message
 
 
+def _connect_error(req):
+    raise httpx.ConnectError("down", request=req)
+
+
+@pytest.mark.parametrize("provider", ["openai", "gemini"])
+@pytest.mark.parametrize("handler", [_connect_error, lambda r: httpx.Response(200, text="<html>proxy</html>"),
+                                     lambda r: httpx.Response(200, json=["value"])])
+def test_a_provider_that_answers_badly_gives_a_clear_error(state, provider, handler):
+    vault.put("OPENAI_API_KEY" if provider == "openai" else "GEMINI_API_KEY", "sk-secret")
+    voicecall.update_settings(mode="cloud", provider=provider)
+    voicecall.http_transport = httpx.MockTransport(handler)
+    with pytest.raises(voicecall.VoiceError) as e:
+        voicecall.cloud_token()
+    assert e.value.status == 502 and e.value.code == "provider_error" and "sk-secret" not in e.value.message
+
+
 def test_local_speed_and_voice_settings(state):
     assert voicecall.settings()["local_speed"] == 1.15
     voicecall.update_settings(local_speed=1.3, local_voice="fr_FR-upmc-pierre")

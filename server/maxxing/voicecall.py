@@ -295,6 +295,25 @@ def _api_error(provider: str, r) -> VoiceError:
     return VoiceError(502, code, f"{provider}: {str(msg)[:300] if msg else r.status_code}")
 
 
+def _post(provider: str, url: str, **kw) -> dict:
+    """POST to a provider -> its JSON object; anything else (unreachable, HTML, a list) is a VoiceError, never a 500."""
+    import httpx
+    try:
+        with _http() as c:
+            r = c.post(url, **kw)
+    except httpx.HTTPError as e:              # the key travels in a header: the message never carries it
+        raise VoiceError(502, "provider_error", f"{provider}: unreachable ({type(e).__name__})") from None
+    if r.status_code >= 400:
+        raise _api_error(provider, r)
+    try:
+        data = r.json()
+    except (ValueError, RecursionError):
+        data = None
+    if not isinstance(data, dict):
+        raise VoiceError(502, "provider_error", f"{provider} returned an unreadable answer")
+    return data
+
+
 def _openai_token(s: dict, key: str) -> dict:
     session = {
         "type": "realtime", "model": s["openai_model"], "instructions": PROMPT + PROMPT_TOOLS,
@@ -303,14 +322,11 @@ def _openai_token(s: dict, key: str) -> dict:
                   "input": {"transcription": {"model": "gpt-4o-mini-transcribe"},
                             "turn_detection": {"type": "semantic_vad"}}},
     }
-    with _http() as c:
-        r = c.post(f"{OPENAI_API}/realtime/client_secrets", json={"session": session},
-                   headers={"Authorization": f"Bearer {key}"})
-    if r.status_code >= 400:
-        raise _api_error("OpenAI", r)
-    data = r.json()
-    token = data.get("value") or (data.get("client_secret") or {}).get("value")
-    if not token:
+    data = _post("OpenAI", f"{OPENAI_API}/realtime/client_secrets", json={"session": session},
+                 headers={"Authorization": f"Bearer {key}"})
+    secret = data.get("client_secret")
+    token = data.get("value") or (secret.get("value") if isinstance(secret, dict) else None)
+    if not token or not isinstance(token, str):
         raise VoiceError(502, "provider_error", "OpenAI returned no token")
     return {"provider": "openai", "token": token, "model": s["openai_model"], "url": f"{OPENAI_API}/realtime/calls"}
 
@@ -336,12 +352,8 @@ def _gemini_token(s: dict, key: str, resume: str | None = None) -> dict:
     iso = lambda d: d.strftime("%Y-%m-%dT%H:%M:%SZ")  # noqa: E731
     body = {"uses": 1, "expireTime": iso(now + timedelta(minutes=30)),
             "newSessionExpireTime": iso(now + timedelta(minutes=2)), "bidiGenerateContentSetup": setup}
-    with _http() as c:
-        r = c.post(f"{GEMINI_API}/auth_tokens", json=body, headers={"x-goog-api-key": key})
-    if r.status_code >= 400:
-        raise _api_error("Gemini", r)
-    token = r.json().get("name")
-    if not token:
+    token = _post("Gemini", f"{GEMINI_API}/auth_tokens", json=body, headers={"x-goog-api-key": key}).get("name")
+    if not token or not isinstance(token, str):
         raise VoiceError(502, "provider_error", "Gemini returned no token")
     return {"provider": "gemini", "token": token, "model": s["gemini_model"],
             "url": "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta."
