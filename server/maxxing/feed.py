@@ -219,6 +219,8 @@ def _no_controls(s: str | None) -> str | None:
 
 
 def _clean_actions(actions: Any) -> str | None:
+    if actions and not isinstance(actions, list):
+        raise FeedError(400, "bad_action", "Actions are a list of {id, label, style}")
     out = []
     for a in (actions or [])[:4]:
         if not isinstance(a, dict) or not re.match(r"^[a-z][a-z0-9_-]{0,19}\Z", str(a.get("id") or "")):
@@ -258,6 +260,10 @@ def _post(title: str, body: str, level: str, source: str, url: str, dedupe: str 
           notify: bool, *, actions: list[dict] | None, ref: str | None, agent: str | None, hops: int) -> dict | None:
     title, body, url = _no_controls(_utf8(title)), _no_controls(_utf8(body)), _utf8(url)
     acts = _clean_actions(actions)
+    try:
+        hops = min(max(0, int(hops or 0)), 1000)
+    except (TypeError, ValueError, OverflowError):
+        raise FeedError(400, "bad_hops", "hops is a whole number") from None
     ref = (_utf8(str(ref)) or "")[:300] or None if ref else None
     agent = (_utf8(str(agent)) or "")[:300] or None if agent else None
     dedupe, group = ((_utf8(str(v))[:200] or None) if v else None for v in (dedupe, group))
@@ -289,7 +295,7 @@ def _post(title: str, body: str, level: str, source: str, url: str, dedupe: str 
                 cur = c.execute("INSERT INTO events(at, source, level, title, body, url, dedupe, grp, actions, ref, "
                                 "agent, hops) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
                                 (now, source, level, title, body, url, dedupe, group, acts, ref, agent,
-                                 max(0, int(hops or 0)) or None))
+                                 hops or None))
             except sqlite3.IntegrityError:             # the same dedupe key inserted by a concurrent request
                 if dedupe:
                     return None

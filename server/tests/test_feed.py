@@ -494,3 +494,15 @@ def test_a_feed_db_damaged_inside_is_set_aside_on_the_next_write(mx):
     assert feed.post("after")["title"] == "after"
     assert [e["title"] for e in feed.list_events()["events"]] == ["after", "cron failed"]
     assert len([p for p in path.parent.glob("feed.db.damaged-*") if not p.name.endswith(("-wal", "-shm"))]) == 1
+
+
+@pytest.mark.parametrize("kw", [{"actions": {"x": 1}}, {"actions": 5}, {"actions": "abc"}, {"hops": "x"},
+                                {"hops": float("inf")}, {"hops": [1]}])
+def test_actions_or_hops_of_the_wrong_type_are_a_feed_error(mx, kw):
+    with pytest.raises(feed.FeedError) as e:
+        feed.post("x", notify=False, **kw)
+    assert e.value.status == 400
+
+
+def test_huge_hops_are_bounded(mx):
+    assert feed.post("x", notify=False, hops=10**30)["hops"] == 1000
