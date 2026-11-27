@@ -22,7 +22,7 @@ blocks):
 | | **Skills** | the skills Claude sees on this server: **yours** (in `~/.claude/skills`, the workspace, a project or a topic, with where each one lives) and the ones **shipped with Harness** (refreshed by every update, read-only); **Open**, **Edit with Claude**, **Share with the community**, **New skill** - see [Skills](skills) |
 | | **MCP** | the MCP servers of Claude Code (a service's tools for Claude): every session or one topic, state, **Connect** (sign-in), **Remove** - see [MCP servers](28-mcp.md) |
 | | **Keys** | your secrets vault (below) |
-| | **Usage** | **Daily budget**: a ceiling in dollars per day for the whole server (0 = none), counted at the price Claude Code reports for each turn (on a subscription: what the same turns would cost with an API key). A [notification](feed) at 80 %, an alert when it is reached; from then on the scheduled prompt jobs and the agents' triggers wait for the next day (skipped, with the reason), while your own messages, your messages to an agent and **Run now** still run. The card shows what today cost so far. **Start again after the usage limit** (on by default): a scheduled job or an agent run stopped by the usage limit of your Claude plan starts again by itself once the limit resets, plus a delay (60 seconds by default). Then Claude plan usage (5-hour window, week) and the plan name (Pro, Max, Ultra): the same figures as the bars at the bottom of the sidebar, read from the last Claude answer; a verified **Ultra** account has no 5-hour limit, so only the week is shown; **Show plan usage** (on for new installs) shows them here and adds the dashboard widget (experimental: it may also ask Anthropic directly when no answer came for 10 minutes); tokens and cost per project, topic, **agent** and session (**CSV** / **JSON** under the table download every row of the grouping shown, **Per day** the daily chart; `maxxing usage export`), tokens per day, how fast turns start (Claude Code ready / first answer, median of recent turns) |
+| | **Usage** | **Daily budget**: a ceiling in dollars per day for the whole server (0 = none), counted at the price Claude Code reports for each turn (on a subscription: what the same turns would cost with an API key). A [notification](feed) at 80 %, an alert when it is reached; from then on the scheduled prompt jobs and the agents' triggers wait for the next day (skipped, with the reason), while your own messages, your messages to an agent and **Run now** still run. The card shows what today cost so far. **Alerts** (see [below](#usage-alerts)). **Start again after the usage limit** (on by default): a scheduled job or an agent run stopped by the usage limit of your Claude plan starts again by itself once the limit resets, plus a delay (60 seconds by default). Then Claude plan usage (5-hour window, week) and the plan name (Pro, Max, Ultra): the same figures as the bars at the bottom of the sidebar, read from the last Claude answer; a verified **Ultra** account has no 5-hour limit, so only the week is shown; **Show plan usage** (on for new installs) shows them here and adds the dashboard widget (experimental: it may also ask Anthropic directly when no answer came for 10 minutes); tokens and cost per project, topic, **agent** and session (**CSV** / **JSON** under the table download every row of the grouping shown, **Per day** the daily chart; `maxxing usage export`), tokens per day, how fast turns start (Claude Code ready / first answer, median of recent turns) |
 | **Automate** | **Crons** | the scheduled jobs: list, run now, history, editor (see [Crons](crons)); old `/crons` links open it |
 | | **Webhooks** | every URL that a service calls on this server (Stripe, Shopify, GitHub, a form, a phone Shortcut, n8n...): what each one does, its last calls, test, replay, new URL, secret; also the webhooks that post to the notifications feed and the ones of agents. Made by asking Harness - see [Webhooks](webhooks) |
 | | **Events** | when something happens in Harness (a notification, an agent run that ends, a cron that fails), do one thing without AI - see [Events](events) |
@@ -88,6 +88,20 @@ processor most (Harness, a session, an agent, heavy work, a job, the browser, Do
 long programs wait for the processor. A high CPU figure alone is not a problem; when programs wait (more than 20 % of
 the time) the meter turns amber and says **waiting**. If the processor stays full for 10 minutes, a health problem
 (also in Settings -> Feed) names the program that takes the most; it clears itself.
+
+## Usage alerts
+
+**Settings -> Usage -> Alerts**: a [notification](feed) when the spend leaves its usual range, without a budget to
+set first. Nothing is stopped by an alert (a budget does that); each one is said once.
+
+- **An unusual day** (on, 3 times): what today cost so far is at least 3 times a usual day, the median of the last
+  14 days that had usage. Looked at for the whole server and for each agent, so an agent without a budget that
+  starts to run in a loop is noticed the same day. Silent below $5 for the server and $2 for an agent, and while
+  the server has fewer than 3 days of history. Choose 2, 3, 5 or 10 times, or **Off**.
+- **An expensive turn** (off): one turn costs at least the amount you enter. 0 = no alert.
+- **A turn that keeps failing** (on): at least 8 tool calls of a turn failed, and at least half of them: Claude kept
+  trying something that does not work. The notification opens the session; **Turn details** (the ⚙ under the
+  answer) lists the calls.
 
 ## Logs
 

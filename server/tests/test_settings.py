@@ -9,7 +9,7 @@ from maxxing import config
 def test_get_defaults(client, org):
     s = client.get("/api/settings").json()
     assert s == {"timezone": "UTC", "language": "en", "public_url": "", "files_root": str(org.tmp),
-                 "presentation_default": False, "daily_budget_usd": 0.0, "limit_retry": True, "limit_retry_delay_s": 60, "usage_widget": False, "tasks_page": False, "git_page": False, "code_mode": False, "infra_page": False, "team_page": False, "agents_page": False, "mail_page": False, "browser_feature": False, "devices_feature": False, "jarvis_feature": False,
+                 "presentation_default": False, "daily_budget_usd": 0.0, "limit_retry": True, "limit_retry_delay_s": 60, "alert_spend_factor": 3.0, "alert_turn_usd": 0.0, "alert_tool_errors": True, "usage_widget": False, "tasks_page": False, "git_page": False, "code_mode": False, "infra_page": False, "team_page": False, "agents_page": False, "mail_page": False, "browser_feature": False, "devices_feature": False, "jarvis_feature": False,
                  "maxxing_mode": False,
                  "memory_max_lines": 100, "cpu_priorities": True, "result_line_hidden": [], "donation_hidden": False, "sidebar_order": [],
                  "nav_badges_hidden": []}

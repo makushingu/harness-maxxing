@@ -8,7 +8,7 @@ import type { TokenCounts, TokenStats, UsageWindow } from '@/lib/types'
 import { fmtDate, fmtNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useLang, useT } from '@/i18n'
-import { Button, EmptyState, Input, ProgressBar, Segmented, Sensitive, Skeleton, Switch } from '@/components/ui'
+import { Button, EmptyState, Input, ProgressBar, Segmented, Select, Sensitive, Skeleton, Switch } from '@/components/ui'
 import { Callout, SettingRow } from '@/features/common'
 import { Chart, compact } from '@/pages/dashboard/charts'
 import { SettingsCard, SectionStack } from './ui'
@@ -129,6 +129,59 @@ function BudgetCard() {
           {b.reached && <p className="text-xs text-muted-foreground">{t('stats.budgetReached')}</p>}
         </div>
       )}
+    </SettingsCard>
+  )
+}
+
+const SPEND_FACTORS = [0, 2, 3, 5, 10]
+
+/** Usage alerts: the feed says when a day, an agent or a turn leaves the usual range (server/maxxing/usage_alerts.py;
+ *  config `alert_spend_factor`, `alert_turn_usd`, `alert_tool_errors`). Nothing is stopped: that is the budgets' job. */
+function AlertsCard() {
+  const t = useT()
+  const { data: s } = useSettings()
+  const save = useSaveSettings()
+  const factor = s?.alert_spend_factor ?? 3
+  const saved = s?.alert_turn_usd ?? 0
+  const [text, setText] = React.useState<string | null>(null)
+  const commit = () => {
+    const n = text === null || text.trim() === '' ? 0 : Number(text.replace(',', '.'))
+    setText(null)
+    if (!Number.isFinite(n) || n < 0 || n > 100000 || Math.round(n * 100) / 100 === saved) return
+    save.mutate({ alert_turn_usd: Math.round(n * 100) / 100 })
+  }
+  const factors = SPEND_FACTORS.includes(factor) ? SPEND_FACTORS : [...SPEND_FACTORS, factor].sort((a, b) => a - b)
+  return (
+    <SettingsCard title={t('stats.alerts')} description={t('stats.alertsDesc')}>
+      <SettingRow label={t('stats.alertSpend')} description={t('stats.alertSpendDesc')} htmlFor="mx-alert-spend">
+        <Select
+          id="mx-alert-spend"
+          data-testid="alert-spend"
+          className="w-36"
+          disabled={!s}
+          value={String(factor)}
+          onValueChange={(v) => save.mutate({ alert_spend_factor: Number(v) })}
+          options={factors.map((f) => ({ value: String(f), label: f ? t('stats.alertSpendTimes', { n: f }) : t('stats.alertOff') }))}
+        />
+      </SettingRow>
+      <SettingRow label={t('stats.alertTurn')} description={t('stats.alertTurnDesc')} htmlFor="mx-alert-turn">
+        <Input
+          id="mx-alert-turn"
+          data-testid="alert-turn"
+          inputMode="decimal"
+          className="w-28 text-right tabular-nums"
+          disabled={!s}
+          value={text ?? String(saved)}
+          onChange={(e) => setText(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') e.currentTarget.blur()
+          }}
+        />
+      </SettingRow>
+      <SettingRow label={t('stats.alertErrors')} description={t('stats.alertErrorsDesc')} htmlFor="mx-alert-errors">
+        <Switch id="mx-alert-errors" data-testid="alert-errors" checked={s?.alert_tool_errors !== false} disabled={!s} onCheckedChange={(v) => save.mutate({ alert_tool_errors: v })} />
+      </SettingRow>
     </SettingsCard>
   )
 }
@@ -334,6 +387,7 @@ export function UsageSection() {
   return (
     <SectionStack>
       <BudgetCard />
+      <AlertsCard />
       <LimitRetryCard />
       <QuotaCard />
       <TokensCard />

@@ -147,6 +147,11 @@ DEFAULT_CONFIG: dict[str, Any] = {
     # seconds after the reset (crons.limit_retry_at)
     "limit_retry": True,
     "limit_retry_delay_s": 60,
+    # Settings -> Usage -> Alerts (usage_alerts.py): today costs this many times a usual day (0 = off), one turn
+    # costs at least this many dollars (0 = off), most tool calls of a turn failed
+    "alert_spend_factor": 3.0,
+    "alert_turn_usd": 0.0,
+    "alert_tool_errors": True,
 }
 
 FLOCK_WAIT_S = 10.0

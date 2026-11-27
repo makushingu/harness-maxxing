@@ -6,7 +6,7 @@ import json
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 
-from .. import budget, stats
+from .. import budget, stats, usage_alerts
 from ..security import require_auth
 
 router = APIRouter(prefix="/api/stats", tags=["stats"], dependencies=[Depends(require_auth)])
@@ -41,6 +41,8 @@ async def daily_budget():
 async def _turn_end(session: dict, result: dict | None) -> None:
     if budget.limit() or budget._open is not False:
         await asyncio.to_thread(budget.check_quietly)
+    if usage_alerts.enabled():
+        await asyncio.to_thread(usage_alerts.check_quietly, session, result)
 
 
 async def startup() -> None:

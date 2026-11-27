@@ -933,6 +933,10 @@ export type Settings = {
   daily_budget_usd?: number
   limit_retry?: boolean
   limit_retry_delay_s?: number
+  /** Settings -> Usage -> Alerts: today costs this many times a usual day (0 = off); one turn costs at least this (0 = off); most tools of a turn failed */
+  alert_spend_factor?: number
+  alert_turn_usd?: number
+  alert_tool_errors?: boolean
   usage_widget: boolean
   /** Settings -> Features: the Tasks page (/tasks), its sidebar entry and dashboard widget (off when new) */
   tasks_page?: boolean

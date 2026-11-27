@@ -496,6 +496,11 @@ def j_usage_agents(r: Run) -> None:
     href = pg.locator('[data-testid="usage-export-csv"]').get_attribute("href") or ""
     if "group=agents" not in href or "format=csv" not in href:
         raise Failure(f"the CSV link does not download the agents shown: {href!r}")
+    pg.locator('[data-testid="alert-errors"]').click()            # the alerts: a switch is saved and stays off
+    pg.wait_for_function("""() => document.querySelector('[data-testid="alert-errors"]')?.getAttribute('aria-checked') === 'false'""")
+    r.go(pg, "/settings/usage")
+    if pg.locator('[data-testid="alert-errors"]').get_attribute("aria-checked") != "false":
+        raise Failure("the alert switched off is on again after a reload")
     r.healthy(pg)
 
 

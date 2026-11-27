@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, StrictFloat, StrictInt
 
-from .. import budget, bus, config, crons, memory, profile_photo
+from .. import budget, bus, config, crons, memory, profile_photo, usage_alerts
 from ..security import require_auth
 from ..vault import _is_text as _utf8
 
@@ -19,7 +19,7 @@ router = APIRouter(prefix="/api/settings", tags=["settings"], dependencies=[Depe
 
 KEYS = ("timezone", "language", "public_url", "files_root", "presentation_default", "usage_widget", "tasks_page", "git_page", "infra_page", "team_page", "agents_page", "mail_page", "browser_feature", "devices_feature", "jarvis_feature",
         "maxxing_mode", "memory_max_lines", "cpu_priorities", "result_line_hidden", "donation_hidden", "sidebar_order", "nav_badges_hidden",
-        "daily_budget_usd", "limit_retry", "limit_retry_delay_s")
+        "daily_budget_usd", "limit_retry", "limit_retry_delay_s", "alert_spend_factor", "alert_turn_usd", "alert_tool_errors")
 RESULT_FIELDS = ("model", "duration", "cost", "tokens", "cache")   # parts of the line under each answer
 BADGE_PAGES = ("/", "/sessions", "/team", "/agents")                 # sidebar entries with a counter badge
 # on / off settings, off by default (code_mode is read-only here: /api/term/enable|disable)
@@ -57,6 +57,9 @@ class SettingsIn(BaseModel):
     daily_budget_usd: Optional[StrictFloat] = None  # Settings -> Usage: dollars a day for the whole server, 0 = none
     limit_retry: Optional[bool] = None            # Settings -> Usage: a run stopped by the usage limit starts again
     limit_retry_delay_s: Optional[StrictInt] = None  # ...this many seconds after the reset (0-3600)
+    alert_spend_factor: Optional[StrictFloat] = None  # Settings -> Usage -> Alerts: today = N usual days, 0 = off
+    alert_turn_usd: Optional[StrictFloat] = None      # ...one turn costs at least this, 0 = off
+    alert_tool_errors: Optional[bool] = None          # ...most tool calls of a turn failed
 
 
 def _err(code: str, msg: str) -> HTTPException:
@@ -72,6 +75,9 @@ def current() -> dict:
             **{k: bool(cfg.get(k)) for k in FLAGS},
             "daily_budget_usd": budget.limit(),
             "limit_retry": crons.limit_retry_on(),
+            "alert_spend_factor": usage_alerts.settings()["spend_factor"],
+            "alert_turn_usd": usage_alerts.settings()["turn_usd"],
+            "alert_tool_errors": usage_alerts.settings()["tool_errors"],
             "limit_retry_delay_s": int(crons.limit_retry_delay()),
             "memory_max_lines": memory.max_lines(),
             "cpu_priorities": cfg.get("cpu_priorities", True) is not False,
@@ -367,6 +373,17 @@ def put_settings(body: SettingsIn):
         if not 0 <= usd <= budget.MAX_USD:             # NaN and infinity fail both comparisons
             raise _err("invalid_daily_budget", f"daily_budget_usd is 0 (no budget) or at most {budget.MAX_USD:.0f}")
         changes["daily_budget_usd"] = round(usd, 2)
+    if "alert_spend_factor" in changes:
+        f = changes["alert_spend_factor"]
+        if f != 0 and not usage_alerts.FACTOR_MIN <= f <= usage_alerts.FACTOR_MAX:      # NaN fails both
+            raise _err("invalid_alert_spend_factor", f"alert_spend_factor is 0 (off) or between "
+                       f"{usage_alerts.FACTOR_MIN:g} and {usage_alerts.FACTOR_MAX:g}")
+        changes["alert_spend_factor"] = round(f, 2)
+    if "alert_turn_usd" in changes:
+        usd = changes["alert_turn_usd"]
+        if not 0 <= usd <= usage_alerts.TURN_USD_MAX:
+            raise _err("invalid_alert_turn_usd", f"alert_turn_usd is 0 (off) or at most {usage_alerts.TURN_USD_MAX:.0f}")
+        changes["alert_turn_usd"] = round(usd, 2)
     if "result_line_hidden" in changes:
         changes["result_line_hidden"] = [f for f in RESULT_FIELDS if f in changes["result_line_hidden"]]
     if "nav_badges_hidden" in changes:
