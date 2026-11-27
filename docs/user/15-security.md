@@ -106,10 +106,10 @@ The installer hardens the server (step "Server security"; `bash /opt/claude-maxx
 - **fail2ban**: an IP is banned for 1 hour after 5 failed SSH logins in 10 minutes
   (`fail2ban-client status sshd`; settings in `/etc/fail2ban/jail.d/harness-maxxing.local`).
 - **Automatic security updates** (`unattended-upgrades`, daily).
-- **Signed versions**: each published version is signed by its publishers (one key each). A server on the
-  published versions installs a new one only when that signature is good, checked with the keys of the version
-  it already runs, before anything changes: someone who took over the GitHub repository cannot push code to the
-  installs. Details and the setting: [CLI reference](cli-reference), *Signed versions*.
+- **Signed versions** (optional for now): a published version can be signed by its publishers (one key each),
+  and a server can refuse any version without that signature, checked with the keys of the version it already
+  runs, before anything changes: someone who took over the GitHub repository cannot push code to it. How to turn
+  it on: [CLI reference](cli-reference), *Signed versions*.
 - **Downloads**: nothing fetched from a third party runs before it is checked, and no script from the internet is
   piped into a shell. Every external component (uv, Python, Node.js, Claude Code, Scrapling and each Python package
   it needs, Chromium, Remotion, the speech models, Garage) has a pinned version and sha256 in

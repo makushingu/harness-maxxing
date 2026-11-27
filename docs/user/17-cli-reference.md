@@ -72,15 +72,15 @@ lists the **workspace upgrade notes** of the versions installed (`<code>/docs/up
 instructions for Claude to adapt your workspace. The easiest path is the topic `system/harness` (`system/update` on older servers):
 say "update" and Claude checks, explains, updates after your yes, then applies these notes.
 
-**Signed versions.** Every published version carries the signature of its publishers. On a server that follows
-the published versions (branch `stable`, the default), `maxxing update` installs a new version only when its tag is
-signed by one of the keys shipped with the version already installed (`server/maxxing/release-signers`), and checks
-it before anything changes. Otherwise the update stops (exit code `1`, a warning in the notifications feed and on
-Telegram) and the current version keeps running. `maxxing doctor` and Settings -> Security tell whether the check is
-on. `"update_verify_signature"` in `/var/lib/claude-maxxing/config.json` changes it: `true` asks for a signature on
-every branch (also `beta` and `main`, whose commits are not signed by default: add your own keys with `gpg --import`
-or `gpg.ssh.allowedSignersFile`), `false` turns it off. A server without `ssh-keygen` or with a git older than 2.34
-cannot check: it says so and updates.
+**Signed versions (optional for now).** A published version can carry the signature of its publishers. With
+`"update_verify_signature": "stable"` in `/var/lib/claude-maxxing/config.json`, a server that follows the published
+versions (branch `stable`) installs a new version only when its tag is signed by one of the keys shipped with the
+version already installed (`server/maxxing/release-signers`), checked before anything changes. Otherwise the update
+stops (exit code `1`, a warning in the notifications feed and on Telegram) and the current version keeps running.
+`true` asks for a signature on every branch (also `beta` and `main`, whose commits are not signed: add your own
+keys with `gpg --import` or `gpg.ssh.allowedSignersFile`). In the mode `"stable"`, a server without `ssh-keygen` or
+with a git older than 2.34 cannot check: it says so and updates. Off by default until every published version is
+signed; `maxxing doctor` and Settings -> Security tell whether the check is on.
 
 ## maxxing license
 

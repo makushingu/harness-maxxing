@@ -963,8 +963,8 @@ clears the list - jobs of existing installs are never touched (their key is alre
 ## Signed updates (`update_verify_signature`)
 - `server/maxxing/release-signers`: the publishers' SSH keys (git allowed-signers format, `namespaces="git"`). The
   cloud's `publish.py` signs the tag `v<version>` with the publisher's own key before `stable` moves.
-- Config `update_verify_signature`: `"stable"` (default) = checked when the branch followed is `stable`; `true` =
-  every branch; `false` = never. `cmd_core.signature_mode(branch)` -> `auto` / `on` / `off`.
+- Config `update_verify_signature`: `false` (default until both publishers sign; then `"stable"`); `"stable"` =
+  checked when the branch followed is `stable`; `true` = every branch. `cmd_core.signature_mode(branch)` -> `auto` / `on` / `off`.
 - `cmd_update`, right after the fetch and before anything changes (auto-save of dirty files, pre-update ref,
   merge/rebase): fetch of `refs/tags/v*`, then `verify_target(origin/<branch>)` = `git verify-commit <sha>`, else
   `git verify-tag` of each `git tag --points-at <sha>`, first with the installed `release-signers` (the trust anchor

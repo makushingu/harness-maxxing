@@ -1708,7 +1708,7 @@ def check_update_signature(always: bool = False) -> Check | None:
     if mode == "off":
         if not always:
             return None
-        if config.load_config().get("update_verify_signature", "stable") == "stable":
+        if config.load_config().get("update_verify_signature", False) == "stable":
             return _c("update_signature", INFO, f"updates of the branch {branch} are not signed",
                       "only published versions (branch stable) carry a signature")
         return _c("update_signature", INFO, "update signatures are not checked (update_verify_signature is off)",
@@ -2372,9 +2372,10 @@ SIGNERS = Path(__file__).with_name("release-signers")      # the publishers' key
 
 
 def signature_mode(branch: str) -> str:
-    """Config `update_verify_signature` -> "on" (true: every branch, stops when it cannot check), "auto" (the default,
-    "stable": the `stable` branch only moves to published versions, each tagged and signed) or "off"."""
-    v = config.load_config().get("update_verify_signature", "stable")
+    """Config `update_verify_signature` -> "on" (true: every branch, stops when it cannot check), "auto"
+    ("stable": the `stable` branch only moves to published versions, each tagged and signed) or "off" (false, the
+    default until every publisher signs)."""
+    v = config.load_config().get("update_verify_signature", False)
     if v is True:
         return "on"
     return "auto" if v == "stable" and branch == "stable" else "off"

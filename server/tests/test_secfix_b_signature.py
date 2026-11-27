@@ -65,7 +65,9 @@ def test_a_key_listed_for_another_use_does_not_sign_versions(signed):
     assert cmd_core.verify_target(signed["one"])[0] is False
 
 
-def test_the_default_checks_stable_only(mx):
+def test_stable_mode_checks_stable_only(mx):
+    assert cmd_core.signature_mode("stable") == "off"                 # off until every publisher signs
+    config.update_config(update_verify_signature="stable")
     assert cmd_core.signature_mode("stable") == "auto"
     assert cmd_core.signature_mode("beta") == "off" and cmd_core.signature_mode("main") == "off"
     config.update_config(update_verify_signature=True)

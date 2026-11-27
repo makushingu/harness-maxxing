@@ -967,7 +967,7 @@ def test_update_signature_signed_tag_is_enough(env, repos, monkeypatch, capsys):
 
 
 def test_update_signature_default_stops_an_unsigned_published_version(env, repos, monkeypatch, capsys):
-    """The default ("stable"): on the branch that only takes published versions, an unsigned one is refused; a
+    """Mode "stable": on the branch that only takes published versions, an unsigned one is refused; a
     server that has no way to check (no ssh-keygen, old git) is warned and updates."""
     clone, seen = _signed_update_env(env, repos, monkeypatch, verify_commit=1)
     monkeypatch.setattr(cmd_core, "signature_mode", lambda branch: "auto")
