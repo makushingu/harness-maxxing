@@ -212,3 +212,9 @@ def test_by_default_the_daily_look_creates_the_skill_and_never_overwrites_one(cl
     mr._save(mr.load() + [it])
     mr.settle(it)
     assert f.read_text() == "mine"
+
+
+def test_cli_run_on_an_unknown_session_says_so(client, capsys):
+    from maxxing import cli
+    assert cli.main(["memory-review", "run", "nosuchsession"]) != 0
+    assert "unknown session" in capsys.readouterr().err
