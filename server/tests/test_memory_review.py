@@ -257,3 +257,22 @@ def test_the_last_bullet_of_a_memory_without_a_final_newline(mx, action):
     assert mem.read_text() == "# Memory\n\n- Keep me.\n" + ("- New fact.\n" if action == "replace" else "")
     assert mr.undo("p0") == "taken back"
     assert mem.read_text() == "# Memory\n\n- Keep me.\n- Old fact.\n"
+
+
+def test_a_proposal_stored_while_another_is_written_is_kept(mx, monkeypatch):
+    import threading
+    pid, levels, other = _stored(), mr.levels, []
+
+    def store_meanwhile(path):                                                # another run stores its proposal now
+        def later():
+            with mr._lock:                                                    # as review() stores
+                mr._save(mr.load() + [{**mr.load()[0], "id": "later", "state": "new"}])
+        t = threading.Thread(target=later)
+        t.start()
+        t.join(0.3)
+        other.append(t)
+        return levels(path)
+    monkeypatch.setattr(mr, "levels", store_meanwhile)
+    assert mr.apply(pid) == "added"
+    other[0].join(5)
+    assert {x["id"]: x["state"] for x in mr.load()} == {pid: "applied", "later": "new"}

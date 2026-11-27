@@ -228,11 +228,17 @@ def review(sid: str, model: str = "haiku", text: str | None = None, prompt: str 
                     "text": txt, "old": str(x.get("old") or "").strip()[:600], "why": str(x.get("why") or "")[:120],
                     "source": "work" if x.get("source") == "work" else "owner", "model": model, "at": int(time.time()),
                     "state": "new"})
-    _save(load() + new)
+    with _lock:
+        _save(load() + new)
     return {"proposals": new, "cost": cost, "ms": int((time.time() - t0) * 1000)}
 
 
 def apply(pid: str) -> str:
+    with _lock:                                                                # read, change, write: one step
+        return _apply(pid)
+
+
+def _apply(pid: str) -> str:
     """Writes one proposal into its memory.md -> what happened."""
     items = load()
     it = next((x for x in items if x["id"] == pid and x["state"] == "new"), None)
@@ -272,6 +278,11 @@ def apply(pid: str) -> str:
 
 
 def undo(pid: str) -> str:
+    with _lock:                                                                # read, change, write: one step
+        return _undo(pid)
+
+
+def _undo(pid: str) -> str:
     """Takes back one proposal that was written (the bullet, or the skill's folder) -> what happened. It then counts
     as refused: not proposed again."""
     items = load()
@@ -306,6 +317,11 @@ def undo(pid: str) -> str:
 
 
 def reject(pid: str) -> str:
+    with _lock:                                                                # read, change, write: one step
+        return _reject(pid)
+
+
+def _reject(pid: str) -> str:
     items = load()
     for x in items:
         if x["id"] == pid and x["state"] == "new":
