@@ -689,6 +689,43 @@ def j_task_start(r: Run) -> None:
     r.healthy(pg)
 
 
+def j_verify(r: Run) -> None:
+    """The verification command of a repository, in the Changes view: proposed, kept, run before a push; a failure
+    warns and goes to Claude, a pass lets the push through."""
+    r.mock.scenario("ready")
+    r.mock.call("PUT", "/api/settings", {"code_mode": True})
+    pg = r.page()
+    r.go(pg, "/sessions")
+    pg.get_by_role("button", name="blog", exact=False).first.click()
+    pg.get_by_text("Editorial calendar for November").first.click()      # a session that is not running
+    pg.wait_for_url("**session=**")
+    box = pg.locator("main textarea").first
+    box.fill("ui-check: fix the login page")
+    box.press("Enter")
+    pg.get_by_test_id("changes-chip").first.click()
+    pg.get_by_test_id("verify-set").click()
+    field = pg.get_by_test_id("verify-form").locator("input")
+    if field.input_value() != "npm test":
+        raise Failure(f"the command the repository declares is not proposed: {field.input_value()!r}")
+    field.press("Enter")
+    pg.get_by_test_id("verify-run").wait_for()
+    pg.get_by_test_id("push").click()                     # the command runs first
+    pg.get_by_test_id("verify-wait").wait_for()
+    pg.get_by_test_id("verify-failed").wait_for()
+    if r.mock.call("GET", "/api/code/status")["ahead"] != 1:
+        raise Failure("the push went out although the verification failed")
+    pg.get_by_test_id("verify-output-btn").click()
+    pg.get_by_test_id("verify-output").get_by_text("FAIL login.test.js").wait_for()
+    pg.get_by_test_id("verify-fix").click()
+    pg.get_by_test_id("verify-run").click()
+    pg.locator("[data-testid=verify-state][data-state=passed]").wait_for()
+    pg.get_by_test_id("push").click()
+    pg.get_by_test_id("push").wait_for(state="detached")
+    if r.mock.call("GET", "/api/code/status")["ahead"] != 0:
+        raise Failure("the push did not go out after a passed verification")
+    r.healthy(pg)
+
+
 JOURNEYS = {
     "guide": j_guide, "pages": j_pages, "pages-phone": j_pages_phone, "pages-fr": j_pages_fr,
     "pages-fr-phone": j_pages_fr_phone, "pages-translated": j_pages_translated,
@@ -697,7 +734,7 @@ JOURNEYS = {
     "new-session": j_new_session, "session-phone": j_session_phone, "palette": j_palette, "theme": j_theme,
     "setting-saved": j_setting_saved, "settings-nav": j_settings_nav, "files": j_files, "team": j_team, "nav": j_nav,
     "usage-agents": j_usage_agents, "logs-search": j_logs_search, "turn-details": j_turn_details, "community": j_community, "guide-tools": j_guide_tools,
-    "push-feed": j_push_feed, "share": j_share, "task-start": j_task_start, "sign-out": j_sign_out,
+    "push-feed": j_push_feed, "share": j_share, "task-start": j_task_start, "verify": j_verify, "sign-out": j_sign_out,
 }
 
 

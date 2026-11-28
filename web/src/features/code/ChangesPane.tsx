@@ -15,6 +15,7 @@ import { useT } from '@/i18n'
 import { useFileViewer } from '@/features/files/viewerStore'
 import { DiffRows, STATUS_TONE, diffRows, selected, useLineSelection } from './DiffRows'
 import { prPath } from './prApi'
+import { VerifyRow, useVerifyFlow } from './Verify'
 import {
   changesPath, codeApi, parseChangesPath, quoteInSession, useChanges, useFileDiff, useRepoStatus, type ChangedFile, type ChangesRef, type ChangesScope, type RepoChanges, type Undo,
 } from './api'
@@ -317,11 +318,14 @@ function PrBadge({ pr, checks, full }: { pr: { number: number; url: string; draf
 type Act = 'commit' | 'push' | 'pr'
 
 /** Commit (message proposed on demand: ✨, or a click on Commit with an empty message), push, pull request, new branch. */
-function GitActions({ repo, st }: { sid: string; scope: ChangesScope; repo: RepoChanges; st: NonNullable<ReturnType<typeof useRepoStatus>['data']> }) {
+function GitActions({ sid, repo, st }: { sid: string; scope: ChangesScope; repo: RepoChanges; st: NonNullable<ReturnType<typeof useRepoStatus>['data']> }) {
   const t = useT()
   const refresh = useRefresh()
   const [msg, setMsg] = React.useState('')
-  const [busy, setBusy] = React.useState<null | 'message' | Act | 'branch'>(null)
+  const [busy, setBusy] = React.useState<null | 'message' | Act | 'branch' | 'verify'>(null)
+  const verify = useVerifyFlow(repo.root)
+  /** The verification failed before this push / pull request: the user may send it anyway. */
+  const [anyway, setAnyway] = React.useState<null | { what: 'push' | 'pr'; push: boolean }>(null)
   const [branching, setBranching] = React.useState(false)
   const [branch, setBranch] = React.useState('')
   const box = React.useRef<HTMLTextAreaElement>(null)
@@ -351,12 +355,35 @@ function GitActions({ repo, st }: { sid: string; scope: ChangesScope; repo: Repo
       setBusy(null)
     }
   }
+  const deliver = async (what: 'push' | 'pr', push: boolean) => {
+    setAnyway(null)
+    if (push && !(await run('push', () => codeApi.push(repo.root), t('code.pushed')))) return
+    if (what === 'pr') await run('pr', () => codeApi.pr(repo.root), t('code.prOpened'))
+  }
+  /** Push / pull request after the repository's verification command: a failure warns, "anyway" stays possible. */
+  const checked = async (what: 'push' | 'pr', push: boolean) => {
+    setAnyway(null)
+    setBusy('verify')
+    let ok = false
+    try {
+      ok = await verify.ensure()
+    } catch (e) {
+      toast.error(t('code.failed'), errorMessage(e))
+      return
+    } finally {
+      setBusy(null)
+    }
+    if (ok) await deliver(what, push)
+    else setAnyway({ what, push })
+  }
   const commit = async (then: Act) => {
     if (!msg.trim()) return void propose()
-    const ok = await run('commit', () => codeApi.commit(repo.root, msg.trim(), then !== 'commit'), then === 'commit' ? t('code.committed') : t('code.committedPushed'))
+    const guarded = then !== 'commit' && !!verify.data?.command
+    const ok = await run('commit', () => codeApi.commit(repo.root, msg.trim(), then !== 'commit' && !guarded), then === 'commit' || guarded ? t('code.committed') : t('code.committedPushed'))
     if (!ok) return
     setMsg('')
-    if (then === 'pr') await run('pr', () => codeApi.pr(repo.root), t('code.prOpened'))
+    if (guarded) await checked(then as 'push' | 'pr', true)
+    else if (then === 'pr') await run('pr', () => codeApi.pr(repo.root), t('code.prOpened'))
   }
   const newBranch = async () => {
     const name = branch.trim()
@@ -428,13 +455,13 @@ function GitActions({ repo, st }: { sid: string; scope: ChangesScope; repo: Repo
           </div>
         )}
         {canPush && (
-          <Button size="sm" variant="outline" onClick={() => void run('push', () => codeApi.push(repo.root), t('code.pushed'))} disabled={!!busy} data-testid="push">
+          <Button size="sm" variant="outline" onClick={() => void checked('push', true)} disabled={!!busy} data-testid="push">
             {spin('push') ?? <Upload />}
             {st.ahead > 0 ? t('code.pushN', { count: st.ahead }) : t('code.push')}
           </Button>
         )}
         {canPr && (
-          <Button size="sm" variant="outline" onClick={() => void run('pr', () => codeApi.pr(repo.root), t('code.prOpened'))} disabled={!!busy} data-testid="open-pr">
+          <Button size="sm" variant="outline" onClick={() => void checked('pr', false)} disabled={!!busy} data-testid="open-pr">
             {spin('pr') ?? <GitPullRequest />}
             {t('code.openPrBtn')}
           </Button>
@@ -447,6 +474,22 @@ function GitActions({ repo, st }: { sid: string; scope: ChangesScope; repo: Repo
           </Button>
         )}
       </div>
+      {busy === 'verify' && (
+        <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground" data-testid="verify-wait">
+          <Loader2 className="size-3 animate-spin" />
+          {t('code.verify.before')}
+        </p>
+      )}
+      {anyway && (
+        <div role="alert" className="flex flex-wrap items-center gap-2 rounded-md border border-destructive/40 px-2 py-1.5 text-[13px]" data-testid="verify-failed">
+          <CircleAlert className="size-3.5 shrink-0 text-destructive" />
+          <span className="min-w-0 flex-1">{t('code.verify.failedBefore')}</span>
+          <Button size="sm" variant="outline" onClick={() => void deliver(anyway.what, anyway.push)} disabled={!!busy} data-testid="verify-anyway">
+            {t(anyway.what === 'pr' ? 'code.verify.prAnyway' : 'code.verify.pushAnyway')}
+          </Button>
+        </div>
+      )}
+      <VerifyRow root={repo.root} sid={sid} flow={verify} locked={!!busy} />
       {branching && (
         <form
           className="flex items-center gap-2"

@@ -46,8 +46,12 @@ type RepoStatus = {
   github_error?: string
 }
 export type Undo = { root: string; undo: string }
+/** A run of the repository's verification command (server: maxxing/verify.py). `fresh`: nothing moved since. */
+export type VerifyRun = { state: 'running' | 'passed' | 'failed' | 'stopped'; command: string; sha: string | null; clean: boolean; started: number; ended?: number; exit?: number | null; fresh: boolean; tail?: string }
+export type Verify = { command: string; suggest: string[]; run: VerifyRun | null }
 
-const codeKeys = {
+export const codeKeys = {
+  verify: (repo: string) => ['code', 'verify', repo] as const,
   changes: (sid: string, scope: ChangesScope, n: number | null) => ['code', 'changes', sid, scope, n] as const,
   diff: (repo: string, a: string, b: string, path: string, full: boolean) => ['code', 'diff', repo, a, b, path, full] as const,
   status: (repo: string) => ['code', 'status', repo] as const,
@@ -73,7 +77,23 @@ export function useRepoStatus(repo: string, enabled = true) {
   return useQuery({ queryKey: codeKeys.status(repo), queryFn: () => api.get<RepoStatus>('/api/code/status', { repo }), enabled, staleTime: 30_000, retry: false })
 }
 
+export function useVerify(repo: string, enabled = true) {
+  return useQuery({
+    queryKey: codeKeys.verify(repo),
+    queryFn: () => api.get<Verify>('/api/code/verify', { repo }),
+    enabled,
+    staleTime: 2_000,
+    retry: false,
+    refetchInterval: (q) => (q.state.data?.run?.state === 'running' ? 2_000 : false),
+  })
+}
+
 export const codeApi = {
+  verify: (repo: string) => api.get<Verify>('/api/code/verify', { repo }),
+  verifySet: (repo: string, command: string) => api.put<Verify>('/api/code/verify', { repo, command }),
+  verifyRun: (repo: string) => api.post<Verify>('/api/code/verify', { repo }),
+  verifyStop: (repo: string) => api.post<Verify>('/api/code/verify/stop', { repo }),
+  verifyFix: (repo: string, session: string) => api.post<{ session: string }>('/api/code/verify/fix', { repo, session }),
   restore: (repo: string, source: string, paths?: string[]) => api.post<{ undo: string; restored: string[]; removed: string[] }>('/api/code/restore', { repo, source, paths }),
   undo: (repos: Undo[]) => api.post<{ repos: unknown[] }>('/api/code/undo', { repos }),
   revert: (sid: string, n: number) => api.post<{ n: number; repos: (Undo & { name: string; commits_kept: boolean })[] }>(`/api/sessions/${encodeURIComponent(sid)}/revert`, { n }),

@@ -629,6 +629,76 @@ async def fix_checks(body: FixChecksIn):
     return await _call(run)
 
 
+# ---- the verification command of a repository (maxxing/verify.py) ---------------------------------------------
+
+class VerifyIn(BaseModel):
+    repo: str
+    command: Optional[str] = None
+
+
+class VerifyFixIn(BaseModel):
+    repo: str
+    session: str
+
+
+@router.get("/api/code/verify")
+async def verify_status(repo: str):
+    """The repository's verification command, what the repository proposes when it has none, and its last run."""
+    from .. import verify
+    return await _call(lambda: verify.status(codediff.checked_repo(repo)))
+
+
+@router.put("/api/code/verify")
+async def verify_set(body: VerifyIn):
+    from .. import verify
+
+    def run():
+        r = codediff.checked_repo(body.repo)
+        verify.set_command(r, body.command or "")
+        return verify.status(r)
+    return await _call(run)
+
+
+@router.post("/api/code/verify")
+async def verify_run(body: VerifyIn):
+    from .. import verify
+
+    def run():
+        r = codediff.checked_repo(body.repo)
+        verify.start(r)
+        return verify.status(r)
+    return await _call(run)
+
+
+@router.post("/api/code/verify/stop")
+async def verify_stop(body: VerifyIn):
+    from .. import verify
+
+    def run():
+        r = codediff.checked_repo(body.repo)
+        verify.stop(r)
+        return verify.status(r)
+    return await _call(run)
+
+
+@router.post("/api/code/verify/fix")
+async def verify_fix(body: VerifyFixIn):
+    """Send the output of the failed verification to the session that works in this folder."""
+    from .. import verify
+    from ..sessions import service
+    from ..sessions.service import SessionError
+
+    def run():
+        _meta(body.session)
+        text = verify.failure_message(codediff.checked_repo(body.repo))
+        try:
+            service.send_message(body.session, text, source="system")
+        except SessionError as e:
+            raise GitError(e.status, e.code, e.message) from None
+        return {"session": body.session}
+    return await _call(run)
+
+
 # ---- Claude watches the pull request of its copy (maxxing/prwatch.py) ------------------------------------------
 
 class WatchIn(BaseModel):

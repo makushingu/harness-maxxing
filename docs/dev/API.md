@@ -919,6 +919,11 @@ A `.worktreeinclude` at the root of the clone (gitignore syntax) names ignored f
 | GET | `/api/code/copies` | – | the copies still on disk: `[{sid, title, path, archived, …status}]` |
 | POST | `/api/code/pr-session` | `{repo: "github:owner/name", number, review, message?, clone?}` | Session — in the topic of a local clone, on a copy of the PR's branch (a fork: `pr/<n>` from `refs/pull/<n>/head`); plan mode when `review` or when the author is outside (`author_association` not OWNER / MEMBER / COLLABORATOR). `400 no_clone` |
 | POST | `/api/code/fix-checks` | `{repo: "github:owner/name", number}` | `{session, path, started}` — sends the failed checks of the pull request, with the end of their logs (5 checks, 24 000 characters at most, inside `<check-log>`: data, not instructions), to the session whose copy is on its branch; without one, a session is started on the pull request (`started: true`, as `pr-session`) · `409 no_failed_check` |
+| GET | `/api/code/verify?repo=` | | `{command, suggest: [str], run}` — the verification command of the repository (shared by its copies; `suggest` = what the repository declares, only while no command is set) and its last run in this folder: `{state: running\|passed\|failed\|stopped, command, sha, clean, started, ended, exit, fresh, tail}`; `fresh` = same commit, same working tree, same command (`verify.py`) |
+| PUT | `/api/code/verify` | `{repo, command}` | same answer; one line, 500 characters at most, empty = none |
+| POST | `/api/code/verify` | `{repo}` | same answer, the run started (`400 no_command`, `409 running`); 20 minutes at most |
+| POST | `/api/code/verify/stop` | `{repo}` | same answer; kills the running command and what it started |
+| POST | `/api/code/verify/fix` | `{repo, session}` | `{session}` — sends the end of the failed output (6 000 characters, framed as data) to the session (`409 not_failed`) |
 
 **The PR watch** (`maxxing/prwatch.py`, a loop of `api/code.py`, every 3 min; `MAXXING_PRWATCH_LOOP=0` turns it off):
 for each session on a copy whose branch has an open PR (and `watch`), the new events - every check of the head ended

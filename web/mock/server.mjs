@@ -740,6 +740,7 @@ function startTurn(s, text, attachments = [], cid = '') {
     const cost = +(0.02 + Math.random() * 0.12).toFixed(4)
     s.turns += 1; s.cost_usd = +(s.cost_usd + cost).toFixed(4); s.real_model = model; s.context_tokens = 20000 + Math.floor(Math.random() * 30000)
     s.last_text = answer.replace(/[*`#]/g, '').slice(0, 200); s.updated = now(); s.unread = true; s.state = 'idle'
+    if (S.settings.code_mode) addEvents(s, { type: 'changes', n: s.turns, repos: [codeRepo()], at: now() })   // the Changes view (features/code)
     addEvents(s, { type: 'assistant', text: answer, at: now() },
       { type: 'result', ok: true, cost_usd: cost, duration_ms: 3400, model, usage: { input: 820, output: 164, cache_read: 19870, cache_write: 512 }, at: now() })
     bus('sessions', 'workspace')
@@ -1818,6 +1819,38 @@ R('POST', '/api/code/fix-checks', () => {
   bus('sessions')
   return { session: s.id, path: s.path, started: false }
 })
+// ---- the Changes view of a turn: one repository, one commit to push, its verification command (verify.py) ----
+function codeRepo() {
+  return { root: '/srv/app', name: 'app', branch: 'session/fix-the-login-page', pre: 'a'.repeat(40), post: 'now', add: 4, del: 1,
+    files: [{ path: 'src/login.js', old: null, status: 'M', add: 4, del: 1, binary: false }] }
+}
+const verifyState = { command: '', run: null, fixed: false, pushed: 0 }
+const verifyOut = () => ({ command: verifyState.command, suggest: verifyState.command ? [] : ['npm test', 'npm run lint'], run: verifyState.run })
+R('GET', '/api/sessions/:id/changes', ({ q }) => ({ scope: q.get('scope') || 'turn', n: Number(q.get('n')) || null, repos: [codeRepo()] }))
+R('GET', '/api/code/status', () => ({ root: '/srv/app', name: 'app', branch: 'session/fix-the-login-page', upstream: 'origin/session/fix-the-login-page',
+  ahead: verifyState.pushed ? 0 : 1, behind: 0, dirty: 0, github: null, pr: null, merged_pr: null, checks: null }))
+R('POST', '/api/code/push', () => { verifyState.pushed += 1; return { branch: 'session/fix-the-login-page', ahead: 0 } })
+R('GET', '/api/code/verify', verifyOut)
+R('PUT', '/api/code/verify', ({ body }) => { verifyState.command = String(body.command || ''); verifyState.run = null; return verifyOut() })
+R('POST', '/api/code/verify', () => {
+  const gen = GEN
+  verifyState.run = { state: 'running', command: verifyState.command, sha: 'a'.repeat(40), clean: true, started: now(), fresh: true }
+  setTimeout(() => {
+    if (gen !== GEN || !verifyState.run) return
+    const ok = verifyState.fixed
+    Object.assign(verifyState.run, { state: ok ? 'passed' : 'failed', exit: ok ? 0 : 1, ended: now(),
+      tail: ok ? '$ npm test\n3 tests passed\n\n[exit 0]' : '$ npm test\nFAIL login.test.js: the e-mail is lost on an error\n\n[exit 1]' })
+  }, 1200)
+  return verifyOut()
+})
+R('POST', '/api/code/verify/stop', verifyOut)
+R('POST', '/api/code/verify/fix', ({ body }) => {
+  const s = findSession(body.session)
+  verifyState.fixed = true
+  startTurn(s, '[Harness, verification of this repository]\n\nThe verification command `npm test` failed (exit 1) in /srv/app.')
+  bus('sessions')
+  return { session: s.id }
+})
 R('DELETE', '/api/tasks/:id', ({ params }) => {
   const tk = S.tasks.tasks.find((x) => x.id === params.id) || fail(404, 'not_found', 'Task not found')
   S.tasks.tasks = S.tasks.tasks.filter((x) => x !== tk); bus('tasks')
@@ -2434,6 +2467,7 @@ function resetScenario(name) {
   GEN++
   S = buildState(name)
   Object.assign(openShared, { ids: null, rev: 0 })   // the sessions of the state before no longer exist
+  Object.assign(verifyState, { command: '', run: null, fixed: false, pushed: 0 })
   startMaxxing()
   for (const set of sessionSubs.values()) for (const r of set) r.end()
   sessionSubs.clear()

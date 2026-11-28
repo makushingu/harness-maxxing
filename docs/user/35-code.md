@@ -59,6 +59,26 @@ At the bottom of each repository block:
 
 Claude never commits or pushes through these buttons: they only run when you click them.
 
+## Verify before you send
+
+Give a repository its **verification command**: the one line that says whether the code is good (its tests, its
+lint: `npm test`, `uv run pytest`, `make check`...). In the Changes view, under the buttons of the repository, click
+**Set a verification command**: Harness proposes the commands the repository declares itself (`package.json`,
+`pyproject.toml`, `Makefile`, `Cargo.toml`, `go.mod`) and you keep or type one. Nothing is guessed nor run before
+that. The command belongs to the repository: its separate copies share it.
+
+- **Verify** runs it in the folder you look at (the copy of the session, or the clone) and shows **Passed** or
+  **Failed**, with **Output** (the end of what it printed). A result is about one state of the code: after another
+  commit or another change it is marked *before the last changes*. **Stop** ends a run; a run is stopped by itself
+  after 20 minutes.
+- **Fix** sends the end of a failed output to the session, so that Claude finds the cause, fixes it and runs the
+  command again.
+- **Push** and **Pull request** run the command first when its last result is not about the code as it is. A failure
+  sends nothing and says so; **Push anyway** stays one click away.
+
+The command is a shell command of yours: it runs with the rights of the server, like the preparation command of a
+copy. A push Claude does itself in a turn is not held by it.
+
 ## Pull requests in Harness
 
 With a GitHub token (**Settings → Keys**), a pull request opens **in Harness**, in the same panel as the changes:
