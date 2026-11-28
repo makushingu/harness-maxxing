@@ -56,7 +56,7 @@ const at = (full: string, number: number) => ({ repo: `github:${full}`, number }
 export const prApi = {
   comment: (full: string, n: number, body: string) => api.post('/api/git/pull/comment', { ...at(full, n), body }),
   review: (full: string, n: number, event: ReviewEvent, body: string, comments: DraftComment[] = [], sha?: string) => api.post('/api/git/pull/review', { ...at(full, n), event, body, comments, sha }),
-  merge: (full: string, n: number, method: string, sha?: string) => api.post<{ merged: boolean; message?: string }>('/api/git/pull/merge', { ...at(full, n), method, sha }),
+  merge: (full: string, n: number, method: string, sha?: string, anyway = false) => api.post<{ merged: boolean; message?: string }>('/api/git/pull/merge', { ...at(full, n), method, sha, anyway }),
   close: (full: string, n: number) => api.post('/api/git/pull/close', at(full, n)),
   checkLog: (full: string, id: number) => api.get<{ log: string }>('/api/git/pull/check-log', { repo: `github:${full}`, id }),
   checkRerun: (full: string, id: number) => api.post('/api/git/pull/check-rerun', { repo: `github:${full}`, id }),

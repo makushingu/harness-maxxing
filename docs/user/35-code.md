@@ -79,6 +79,29 @@ that. The command belongs to the repository: its separate copies share it.
 The command is a shell command of yours: it runs with the rights of the server, like the preparation command of a
 copy. A push Claude does itself in a turn is not held by it.
 
+## Hold the merges of a repository
+
+Under the verification command, **Hold the merges of this repository until verified and reviewed** turns the merge
+gate on for that repository - and only that one; it is off everywhere until you tick it. From then on, merging a pull
+request of that repository in the PR view, or a separate copy into its base, waits for three things **on the commit
+to merge**:
+
+- **Checks**: the checks of GitHub are green (a pull request without checks waits for none).
+- **Verification**: the verification command passed on that commit, in a folder of this server. It runs by itself
+  when the review starts; **Verify** runs it again. A repository without a command has nothing to run.
+- **Review**: another Claude model than the one that wrote the code read the changes and said *accepted* - Sonnet
+  for code written by Opus or Fable, Opus otherwise. The review is a session of its own, in plan mode (it changes no
+  file), on its own copy; **Read it** opens it. It starts by itself when Harness opens the pull request; **Ask for
+  the review** starts it for any other pull request or copy.
+
+When the review asks for changes, they go to the session that wrote the code, which fixes and commits; the new
+commit is reviewed again a few minutes later, three rounds at most for a branch. A new commit always needs its own
+verification and its own review: nothing carries over.
+
+Until the three are green the button reads **Merge anyway**: it asks for a confirmation and merges, your call. The
+gate holds the merges done from Harness; a merge done on GitHub itself is ruled by the repository's settings there.
+A review is a turn of Claude like any other and counts in your usage. The models are both Claude models for now.
+
 ## Pull requests in Harness
 
 With a GitHub token (**Settings → Keys**), a pull request opens **in Harness**, in the same panel as the changes:

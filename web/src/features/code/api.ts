@@ -48,7 +48,21 @@ type RepoStatus = {
 export type Undo = { root: string; undo: string }
 /** A run of the repository's verification command (server: maxxing/verify.py). `fresh`: nothing moved since. */
 export type VerifyRun = { state: 'running' | 'passed' | 'failed' | 'stopped'; command: string; sha: string | null; clean: boolean; started: number; ended?: number; exit?: number | null; fresh: boolean; tail?: string }
-export type Verify = { command: string; suggest: string[]; run: VerifyRun | null }
+export type Verify = { command: string; suggest: string[]; run: VerifyRun | null; /** The repository holds its merges (gate.py). */ gate: boolean }
+/** What a merge waits for when its repository holds its merges (server: maxxing/gate.py). */
+export type Gate =
+  | { active: false }
+  | {
+      active: true
+      sha: string
+      branch: string
+      checks: { state: 'ok' | 'failed' | 'pending' | 'none'; total: number; ok: number; failed: number } | null
+      verify: { state: 'none' | 'missing' | 'running' | 'passed' | 'failed'; command: string }
+      review: { state: 'missing' | 'running' | 'accepted' | 'changes' | 'failed'; session: string | null; model: string | null; summary: string; comments: number; rounds: number; max: number }
+      open: boolean
+    }
+/** A pull request (`repo` = github:owner/name) or the separate copy of a session. */
+export type GateTarget = { repo: string; number: number } | { session: string }
 
 export const codeKeys = {
   verify: (repo: string) => ['code', 'verify', repo] as const,
@@ -88,9 +102,25 @@ export function useVerify(repo: string, enabled = true) {
   })
 }
 
+export function useGate(target: GateTarget, enabled = true) {
+  return useQuery({
+    queryKey: ['code', 'gate', target] as const,
+    queryFn: () => api.get<Gate>('/api/code/gate', target),
+    enabled,
+    staleTime: 2_000,
+    retry: false,
+    refetchInterval: (q) => {
+      const g = q.state.data
+      return g?.active ? (g.review.state === 'running' || g.verify.state === 'running' ? 3_000 : 30_000) : false
+    },
+  })
+}
+
 export const codeApi = {
+  gateReview: (target: GateTarget) => api.post<Gate>('/api/code/gate/review', target),
+  gateVerify: (target: GateTarget) => api.post<Gate>('/api/code/gate/verify', target),
   verify: (repo: string) => api.get<Verify>('/api/code/verify', { repo }),
-  verifySet: (repo: string, command: string) => api.put<Verify>('/api/code/verify', { repo, command }),
+  verifySet: (repo: string, set: { command?: string; gate?: boolean }) => api.put<Verify>('/api/code/verify', { repo, ...set }),
   verifyRun: (repo: string) => api.post<Verify>('/api/code/verify', { repo }),
   verifyStop: (repo: string) => api.post<Verify>('/api/code/verify/stop', { repo }),
   verifyFix: (repo: string, session: string) => api.post<{ session: string }>('/api/code/verify/fix', { repo, session }),

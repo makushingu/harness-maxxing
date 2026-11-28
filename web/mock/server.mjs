@@ -1824,14 +1824,41 @@ function codeRepo() {
   return { root: '/srv/app', name: 'app', branch: 'session/fix-the-login-page', pre: 'a'.repeat(40), post: 'now', add: 4, del: 1,
     files: [{ path: 'src/login.js', old: null, status: 'M', add: 4, del: 1, binary: false }] }
 }
-const verifyState = { command: '', run: null, fixed: false, pushed: 0 }
-const verifyOut = () => ({ command: verifyState.command, suggest: verifyState.command ? [] : ['npm test', 'npm run lint'], run: verifyState.run })
+const verifyState = { command: '', run: null, fixed: false, pushed: 0, gate: false, review: 'missing', verified: 'missing', merged: null }
+const verifyOut = () => ({ command: verifyState.command, suggest: verifyState.command ? [] : ['npm test', 'npm run lint'], run: verifyState.run, gate: verifyState.gate })
+// the merge gate of that repository (gate.py): pull request #12 waits for the verification and a review by another model
+function gateOut() {
+  if (!verifyState.gate) return { active: false }
+  const v = verifyState
+  return { active: true, sha: 'a'.repeat(40), branch: 'session/fix-the-login-page', checks: { state: 'ok', total: 2, ok: 2, failed: 0 },
+    verify: { state: v.verified, command: 'npm test' },
+    review: { state: v.review, session: null, model: v.review === 'missing' ? null : 'claude-sonnet-5-5', summary: v.review === 'accepted' ? 'The form keeps the e-mail; the test covers it.' : '', comments: 0, rounds: 0, max: 3 },
+    open: v.verified === 'passed' && v.review === 'accepted' }
+}
+R('GET', '/api/code/gate', gateOut)
+R('POST', '/api/code/gate/verify', () => { verifyState.verified = 'passed'; return gateOut() })
+R('POST', '/api/code/gate/review', () => {
+  const gen = GEN
+  verifyState.review = 'running'
+  setTimeout(() => { if (gen === GEN) verifyState.review = 'accepted' }, 1200)
+  return gateOut()
+})
+R('POST', '/api/git/pull/merge', ({ body }) => {
+  if (verifyState.gate && !gateOut().open && !body.anyway) fail(409, 'gate_closed', 'this repository holds its merges')
+  verifyState.merged = body.anyway ? 'anyway' : 'open'
+  return { merged: true }
+})
+R('GET', '/api/git/pull/merged-how', () => ({ merged: verifyState.merged }))   // for the journey only: how the merge went through
 R('GET', '/api/sessions/:id/changes', ({ q }) => ({ scope: q.get('scope') || 'turn', n: Number(q.get('n')) || null, repos: [codeRepo()] }))
 R('GET', '/api/code/status', () => ({ root: '/srv/app', name: 'app', branch: 'session/fix-the-login-page', upstream: 'origin/session/fix-the-login-page',
   ahead: verifyState.pushed ? 0 : 1, behind: 0, dirty: 0, github: null, pr: null, merged_pr: null, checks: null }))
 R('POST', '/api/code/push', () => { verifyState.pushed += 1; return { branch: 'session/fix-the-login-page', ahead: 0 } })
 R('GET', '/api/code/verify', verifyOut)
-R('PUT', '/api/code/verify', ({ body }) => { verifyState.command = String(body.command || ''); verifyState.run = null; return verifyOut() })
+R('PUT', '/api/code/verify', ({ body }) => {
+  if (body.command !== undefined) Object.assign(verifyState, { command: String(body.command || ''), run: null })
+  if (body.gate !== undefined) verifyState.gate = !!body.gate
+  return verifyOut()
+})
 R('POST', '/api/code/verify', () => {
   const gen = GEN
   verifyState.run = { state: 'running', command: verifyState.command, sha: 'a'.repeat(40), clean: true, started: now(), fresh: true }
@@ -2467,7 +2494,7 @@ function resetScenario(name) {
   GEN++
   S = buildState(name)
   Object.assign(openShared, { ids: null, rev: 0 })   // the sessions of the state before no longer exist
-  Object.assign(verifyState, { command: '', run: null, fixed: false, pushed: 0 })
+  Object.assign(verifyState, { command: '', run: null, fixed: false, pushed: 0, gate: false, review: 'missing', verified: 'missing', merged: null })
   startMaxxing()
   for (const set of sessionSubs.values()) for (const r of set) r.end()
   sessionSubs.clear()

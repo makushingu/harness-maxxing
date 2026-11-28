@@ -14,7 +14,8 @@ import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
 import type { Session } from '@/lib/types'
 import { openFileViewer } from '@/features/files/viewerStore'
-import { codeApi, useRepoStatus } from './api'
+import { codeApi, useGate, useRepoStatus } from './api'
+import { GatePanel } from './Gate'
 import { copyApi, copyKeys, useCopyStatus, type CopyStatus } from './copyApi'
 import { prPath } from './prApi'
 
@@ -227,7 +228,7 @@ function EndDialog({ session, st, what, onClose, onAsk }: { session: Session; st
         await copyApi.remove(session.id, true)
         toast.success(t('copy.discarded'))
       } else if (choice === 'merge') {
-        const r = await copyApi.merge(session.id, commitFirst && dirty ? msg.trim() : undefined)
+        const r = await copyApi.merge(session.id, commitFirst && dirty ? msg.trim() : undefined, held)
         toast.success(t('copy.merged', { base: r.base }))
       } else {
         if (commitFirst && dirty) await codeApi.commit(st.path, msg.trim(), false)
@@ -249,6 +250,10 @@ function EndDialog({ session, st, what, onClose, onAsk }: { session: Session; st
       setBusy(null)
     }
   }
+  // the repository holds its merges (gate.py): what the merge waits for, and "Merge anyway"
+  const gateAt = React.useMemo(() => ({ session: session.id }), [session.id])
+  const gate = useGate(gateAt, choice === 'merge').data
+  const held = choice === 'merge' && !!gate?.active && !gate.open
   const lost = choice === 'discard' && (dirty > 0 || (st.ahead ?? 0) > 0)
   const needMsg = choice !== 'discard' && dirty > 0 && commitFirst && !msg.trim()
   const blocked = choice !== 'discard' && dirty > 0 && !commitFirst
@@ -307,13 +312,14 @@ function EndDialog({ session, st, what, onClose, onAsk }: { session: Session; st
             <Textarea value={prBody} onChange={(e) => setPrBody(e.target.value)} minRows={4} maxRows={12} placeholder={writing ? t('copy.prWriting') : t('copy.prBodyPh')} className="text-[13px]" />
           </div>
         )}
+        {choice === 'merge' && gate?.active && <GatePanel target={gateAt} gate={gate} onLeave={onClose} />}
         {lost && <p className="text-xs text-destructive">{t('copy.lost', { files: dirty, commits: st.ahead ?? 0 })}</p>}
         {blocked && <p className="text-xs text-muted-foreground">{t('copy.commitNeeded')}</p>}
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>{t('common.cancel')}</Button>
-          <Button variant={choice === 'discard' ? 'destructive' : 'default'} onClick={() => void go()} disabled={!!busy || needMsg || blocked} data-testid="copy-end-go">
+          <Button variant={choice === 'discard' || held ? 'destructive' : 'default'} onClick={() => void go()} disabled={!!busy || needMsg || blocked} data-testid="copy-end-go">
             {busy === 'go' ? <Loader2 className="animate-spin" /> : <Check />}
-            {choice === 'discard' ? (st.pr ? t('copy.tidy') : t('copy.discard')) : choice === 'merge' ? t('copy.merge') : t('code.openPrBtn')}
+            {choice === 'discard' ? (st.pr ? t('copy.tidy') : t('copy.discard')) : choice === 'merge' ? (held ? t('code.gate.anyway') : t('copy.merge')) : t('code.openPrBtn')}
           </Button>
         </DialogFooter>
       </DialogContent>

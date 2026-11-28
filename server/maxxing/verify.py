@@ -139,7 +139,8 @@ def passed(repo: Path, sha: str | None = None) -> bool:
 
 def status(repo: Path) -> dict:
     cmd = command(repo)
-    return {"command": cmd, "suggest": [] if cmd else suggest(repo), "run": last(repo)}
+    return {"command": cmd, "suggest": [] if cmd else suggest(repo), "run": last(repo),
+            "gate": bool(worktrees.prefs(worktrees.main_clone(repo)).get("gate"))}
 
 
 def _run(folder: Path, cmd: str, base: dict) -> None:

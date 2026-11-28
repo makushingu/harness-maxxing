@@ -24,6 +24,8 @@ import { useFileViewer } from '@/features/files/viewerStore'
 import { prefillDraft } from '@/pages/sessions/store'
 import { DiffRows, STATUS_TONE, diffRows, selected, useLineSelection } from './DiffRows'
 import { checksState, parsePrPath, prApi, prKeys, prPath, usePull, type DraftComment, type PrFile, type PrRef, type Pull, type ReviewEvent } from './prApi'
+import { useGate } from './api'
+import { GatePanel } from './Gate'
 
 type Props = { path: string; index: number; count: number; fullscreen: boolean; canFull: boolean; onFull: () => void; swipe: React.HTMLAttributes<HTMLDivElement> }
 
@@ -515,9 +517,18 @@ function ActionBar({ pr }: { pr: Pull }) {
   }
   const failed = checksState(pr.checks) === 'failed'
   const blocked = pr.draft ? t('pr.blocked.draft') : pr.mergeable === false ? t('pr.blocked.conflict') : null
+  // the repository holds its merges (gate.py): Merge waits for the verification and the review, or is forced
+  const gateAt = React.useMemo(() => ({ repo: `github:${pr.full}`, number: pr.number }), [pr.full, pr.number])
+  const gate = useGate(gateAt, pr.state === 'open' && pr.can_write).data
+  const held = !!gate?.active && !gate.open
   const merge = async () => {
-    const ok = await confirm({ title: t('pr.mergeConfirm', { n: pr.number, base: pr.base }), description: failed ? t('pr.mergeFailedChecks') : t(`pr.method.${method}Desc`, { base: pr.base }), confirmText: t('pr.merge'), destructive: failed })
-    if (ok) await run('merge', () => prApi.merge(pr.full, pr.number, method, pr.head_sha), t('pr.merged'))
+    const ok = await confirm({
+      title: t('pr.mergeConfirm', { n: pr.number, base: pr.base }),
+      description: held ? t('code.gate.anywayDesc') : failed ? t('pr.mergeFailedChecks') : t(`pr.method.${method}Desc`, { base: pr.base }),
+      confirmText: held ? t('code.gate.anyway') : t('pr.merge'),
+      destructive: failed || held,
+    })
+    if (ok) await run('merge', () => prApi.merge(pr.full, pr.number, method, pr.head_sha, held), t('pr.merged'))
   }
   const closePr = async () => {
     if (await confirm({ title: t('pr.closeConfirm', { n: pr.number }), confirmText: t('pr.close'), destructive: true })) await run('close', () => prApi.close(pr.full, pr.number), t('pr.closed'))
@@ -544,6 +555,7 @@ function ActionBar({ pr }: { pr: Pull }) {
   const noClone = !pr.local_paths.length
   return (
     <div className="space-y-2 border-t px-3 py-2.5" data-testid="pr-actions">
+      {gate?.active && <GatePanel target={gateAt} gate={gate} onLeave={close} />}
       <Textarea value={text} onChange={(e) => setText(e.target.value)} minRows={1} maxRows={8} placeholder={drafts.length ? t('pr.reviewPh', { count: drafts.length }) : t('pr.commentPh')} className="text-[13px]"
         onKeyDown={(e) => {
           if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && text.trim()) {
@@ -573,9 +585,9 @@ function ActionBar({ pr }: { pr: Pull }) {
           {pr.can_write && (
             <Tooltip content={blocked ?? (failed ? t('pr.checksFailed') : t(`pr.method.${method}Desc`, { base: pr.base }))}>
               <div className="flex">
-                <Button size="sm" className={cn(pr.methods.length > 1 && 'rounded-r-none')} onClick={() => void merge()} disabled={!!busy || !!blocked} data-testid="pr-merge">
+                <Button size="sm" variant={held ? 'outline' : 'default'} className={cn(pr.methods.length > 1 && 'rounded-r-none')} onClick={() => void merge()} disabled={!!busy || !!blocked} data-testid="pr-merge">
                   {spin('merge', <GitMerge />)}
-                  {t(`pr.method.${method}`)}
+                  {held ? t('code.gate.anyway') : t(`pr.method.${method}`)}
                 </Button>
                 {pr.methods.length > 1 && (
                   <DropdownMenu>

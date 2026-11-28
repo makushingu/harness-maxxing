@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Check, CircleAlert, Loader2, Pencil, ShieldCheck, Square, Wrench } from 'lucide-react'
-import { Button, Input, Tooltip, toast } from '@/components/ui'
+import { Button, Checkbox, Input, Tooltip, toast } from '@/components/ui'
 import { errorMessage } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
@@ -66,7 +66,7 @@ export function VerifyRow({ root, sid, flow, locked }: { root: string; sid: stri
         data-testid="verify-form"
         onSubmit={(e) => {
           e.preventDefault()
-          void act(() => codeApi.verifySet(root, cmd.trim())).then(() => setEditing(false))
+          void act(() => codeApi.verifySet(root, { command: cmd.trim() })).then(() => setEditing(false))
         }}
       >
         <div className="flex items-center gap-2">
@@ -91,11 +91,23 @@ export function VerifyRow({ root, sid, flow, locked }: { root: string; sid: stri
       </form>
     )
   }
+  // off until the owner turns it on for this repository: its merges then wait for the verification and a review
+  const gate = (
+    <Tooltip content={t('code.gate.holdTip')}>
+      <label className="flex w-fit cursor-pointer items-center gap-2 text-[11px] text-muted-foreground">
+        <Checkbox checked={v.gate} disabled={busy} onCheckedChange={(on) => void act(() => codeApi.verifySet(root, { gate: on === true }))} data-testid="gate-hold" />
+        {t('code.gate.hold')}
+      </label>
+    </Tooltip>
+  )
   if (!v.command) {
     return (
-      <button type="button" onClick={edit} className="text-[11px] text-muted-foreground hover:text-foreground hover:underline" data-testid="verify-set">
-        {t('code.verify.set')}
-      </button>
+      <div className="space-y-1.5">
+        <button type="button" onClick={edit} className="text-[11px] text-muted-foreground hover:text-foreground hover:underline" data-testid="verify-set">
+          {t('code.verify.set')}
+        </button>
+        {gate}
+      </div>
     )
   }
   return (
@@ -152,6 +164,7 @@ export function VerifyRow({ root, sid, flow, locked }: { root: string; sid: stri
           {run.tail || t('code.verify.noOutput')}
         </pre>
       )}
+      {gate}
     </div>
   )
 }

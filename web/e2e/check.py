@@ -726,6 +726,40 @@ def j_verify(r: Run) -> None:
     r.healthy(pg)
 
 
+def j_merge_gate(r: Run) -> None:
+    """A repository that holds its merges: in the PR view the merge is "Merge anyway" until the verification passed
+    and another model accepted the commit; then it is the plain merge."""
+    r.mock.scenario("ready")
+    r.mock.call("PUT", "/api/settings", {"code_mode": True})
+    r.mock.call("PUT", "/api/code/verify", {"repo": "/srv/app", "command": "npm test", "gate": True})
+    task = r.mock.call("POST", "/api/tasks", {"title": "Fix the login page", "topic_path": "projects/acme/topics/blog"})
+    r.mock.call("POST", f"/api/tasks/{task['id']}/session", {"session": "x"})
+    pg = r.page()
+    r.go(pg, f"/tasks?project=all&task={task['id']}")
+    pg.get_by_test_id("task-pr").click()
+    gate = pg.get_by_test_id("gate")
+    gate.wait_for()
+    merge = pg.get_by_test_id("pr-merge")
+    if gate.get_attribute("data-open") != "false" or "Merge anyway" not in merge.inner_text():
+        raise Failure(f"a held merge is not shown as held: {merge.inner_text()!r}")
+    pg.get_by_test_id("gate-verify").click()
+    pg.get_by_test_id("gate-review").click()
+    pg.locator("[data-testid=gate][data-open=true]").wait_for()
+    pg.get_by_test_id("gate-summary").get_by_text("The form keeps the e-mail").wait_for()
+    if "Merge anyway" in merge.inner_text():
+        raise Failure("the merge is still held after the verification and the review")
+    merge.click()
+    pg.get_by_role("alertdialog").get_by_role("button").last.click()
+    pg.get_by_role("alertdialog").wait_for(state="detached")
+    for _ in range(50):
+        if r.mock.call("GET", "/api/git/pull/merged-how")["merged"]:
+            break
+        time.sleep(0.1)
+    if r.mock.call("GET", "/api/git/pull/merged-how")["merged"] != "open":
+        raise Failure("the merge did not go through the open gate")
+    r.healthy(pg)
+
+
 JOURNEYS = {
     "guide": j_guide, "pages": j_pages, "pages-phone": j_pages_phone, "pages-fr": j_pages_fr,
     "pages-fr-phone": j_pages_fr_phone, "pages-translated": j_pages_translated,
@@ -734,7 +768,7 @@ JOURNEYS = {
     "new-session": j_new_session, "session-phone": j_session_phone, "palette": j_palette, "theme": j_theme,
     "setting-saved": j_setting_saved, "settings-nav": j_settings_nav, "files": j_files, "team": j_team, "nav": j_nav,
     "usage-agents": j_usage_agents, "logs-search": j_logs_search, "turn-details": j_turn_details, "community": j_community, "guide-tools": j_guide_tools,
-    "push-feed": j_push_feed, "share": j_share, "task-start": j_task_start, "verify": j_verify, "sign-out": j_sign_out,
+    "push-feed": j_push_feed, "share": j_share, "task-start": j_task_start, "verify": j_verify, "merge-gate": j_merge_gate, "sign-out": j_sign_out,
 }
 
 

@@ -80,14 +80,14 @@ def prefs(repo: Path | str) -> dict:
     p = _all_prefs().get(str(repo)) or {}
     prefix = str(p.get("prefix") if p.get("prefix") is not None else DEFAULT_PREFIX).strip().strip("/")
     return {"prefix": prefix, "prepare": str(p.get("prepare") or ""), "copy_env": bool(p.get("copy_env")),
-            "verify": str(p.get("verify") or "")}
+            "verify": str(p.get("verify") or ""), "gate": bool(p.get("gate"))}
 
 
 def set_prefs(repo: Path | str, **kw) -> dict:
     with _lock:
         d = _all_prefs()
         cur = d.get(str(repo)) or {}
-        for k in ("prefix", "prepare", "copy_env", "verify"):
+        for k in ("prefix", "prepare", "copy_env", "verify", "gate"):
             if kw.get(k) is not None:
                 cur[k] = kw[k]
         d[str(repo)] = cur

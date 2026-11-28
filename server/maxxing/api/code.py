@@ -225,7 +225,11 @@ def _pull(body: PullIn) -> dict:
     subjects = [c["subject"] for c in codediff.commits(r, f"origin/{base}")]
     title = (body.title or (subjects[-1] if len(subjects) == 1 else (subjects[0] if subjects else head["branch"])))
     text = body.body if body.body is not None else _pr_text(r, subjects)
-    return gitview.open_pull(full, head["branch"], base, title.strip(), text, body.draft)
+    out = gitview.open_pull(full, head["branch"], base, title.strip(), text, body.draft)
+    from .. import gate
+    if out.get("number") and gate.active(r):
+        gate.opened(full, out["number"])             # its merge waits for a review: started now
+    return out
 
 
 PR_TEMPLATES = (".github/pull_request_template.md", ".github/PULL_REQUEST_TEMPLATE.md", "pull_request_template.md",
@@ -462,17 +466,20 @@ def _idle(sid: str, when: str = "first") -> dict:
 
 class CopyEndIn(BaseModel):
     message: Optional[str] = None          # commit what is not committed first, with this message
+    anyway: bool = False                   # merge although the repository's gate is closed (gate.py)
 
 
 @router.post("/api/sessions/{sid}/copy/merge")
 async def copy_merge(sid: str, body: CopyEndIn):
-    from .. import bus, taskflow, worktrees
+    from .. import bus, gate, taskflow, worktrees
 
     def run():
         meta = _idle(sid)
         wt = worktrees.live(meta)
         if wt and body.message and codediff.dirty(Path(wt["path"])):
             codediff.commit(Path(wt["path"]), body.message)
+        if not body.anyway:
+            gate.check(gate.copy_target(meta))
         out = worktrees.merge(meta)
         taskflow.merged_here(sid, (wt or {}).get("branch"))
         bus.invalidate("sessions")
@@ -634,6 +641,7 @@ async def fix_checks(body: FixChecksIn):
 class VerifyIn(BaseModel):
     repo: str
     command: Optional[str] = None
+    gate: Optional[bool] = None            # hold the merges of this repository (gate.py)
 
 
 class VerifyFixIn(BaseModel):
@@ -650,11 +658,14 @@ async def verify_status(repo: str):
 
 @router.put("/api/code/verify")
 async def verify_set(body: VerifyIn):
-    from .. import verify
+    from .. import gate, verify
 
     def run():
         r = codediff.checked_repo(body.repo)
-        verify.set_command(r, body.command or "")
+        if body.command is not None:
+            verify.set_command(r, body.command)
+        if body.gate is not None:
+            gate.set_active(r, body.gate)
         return verify.status(r)
     return await _call(run)
 
@@ -699,6 +710,57 @@ async def verify_fix(body: VerifyFixIn):
     return await _call(run)
 
 
+# ---- the merge gate of a repository (maxxing/gate.py) ---------------------------------------------------------
+
+class GateIn(BaseModel):
+    repo: Optional[str] = None             # github:owner/name + number: a pull request
+    number: Optional[int] = None
+    session: Optional[str] = None          # or the separate copy of a session, merged here
+
+
+def _gate_target(repo: str | None, number: int | None, session: str | None):
+    from .. import gate
+    if session:
+        return gate.copy_target(_meta(session))
+    if not (repo or "").startswith("github:") or number is None:
+        raise GitError(400, "bad_target", "a pull request (github:owner/name, number) or a session")
+    return gate.pr_target(repo[7:], number)
+
+
+@router.get("/api/code/gate")
+async def gate_status(repo: Optional[str] = None, number: Optional[int] = None, session: Optional[str] = None):
+    """What the merge of this pull request (or of this session's copy) waits for; `{active: false}` when its
+    repository does not hold its merges."""
+    from .. import gate
+    return await _call(lambda: gate.status(_gate_target(repo, number, session)))
+
+
+@router.post("/api/code/gate/review")
+async def gate_review(body: GateIn):
+    from .. import gate
+
+    def run():
+        t = _gate_target(body.repo, body.number, body.session)
+        if t is None:
+            raise GitError(409, "gate_off", "this repository does not hold its merges")
+        s = gate.start_review(t)
+        return {**gate.status(t), "started": s["id"]}
+    return await _call(run)
+
+
+@router.post("/api/code/gate/verify")
+async def gate_verify(body: GateIn):
+    from .. import gate
+
+    def run():
+        t = _gate_target(body.repo, body.number, body.session)
+        if t is None:
+            raise GitError(409, "gate_off", "this repository does not hold its merges")
+        gate.run_verify(t)
+        return gate.status(t)
+    return await _call(run)
+
+
 # ---- Claude watches the pull request of its copy (maxxing/prwatch.py) ------------------------------------------
 
 class WatchIn(BaseModel):
@@ -721,10 +783,11 @@ _watch_task: Optional[asyncio.Task] = None
 
 
 async def _watch_loop() -> None:
-    from .. import prwatch, taskflow
+    from .. import gate, prwatch, taskflow
     while True:
         await asyncio.sleep(prwatch.INTERVAL)
-        for scan in (prwatch.scan, taskflow.scan):   # the tasks follow the pull request of their session
+        # the tasks follow the pull request of their session; a commit that answers a review is reviewed again
+        for scan in (prwatch.scan, taskflow.scan, gate.scan):
             try:
                 await asyncio.to_thread(scan)
             except Exception:

@@ -18,7 +18,7 @@ def test_the_command_is_proposed_from_the_repository_never_set_alone(client, cod
     (clone / "package.json").write_text('{"scripts": {"test": "node t.js", "lint": "eslint ."}}')
     (clone / "Makefile").write_text("build:\n\ttrue\ntest:\n\ttrue\n")
     r = client.get("/api/code/verify", params={"repo": str(clone)}).json()
-    assert r == {"command": "", "suggest": ["npm test", "npm run lint", "make test"], "run": None}
+    assert r == {"command": "", "suggest": ["npm test", "npm run lint", "make test"], "run": None, "gate": False}
     assert client.post("/api/code/verify", json={"repo": str(clone)}).json()["error"] == "no_command"
     assert client.put("/api/code/verify", json={"repo": str(clone), "command": "a\nb"}).status_code == 400
 

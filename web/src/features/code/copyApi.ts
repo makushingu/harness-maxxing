@@ -67,7 +67,7 @@ export function useCopies(enabled = true) {
 }
 
 export const copyApi = {
-  merge: (sid: string, message?: string) => api.post<{ merged: boolean; base: string; kept_branch: string | null }>(`/api/sessions/${seg(sid)}/copy/merge`, { message }),
+  merge: (sid: string, message?: string, anyway = false) => api.post<{ merged: boolean; base: string; kept_branch: string | null }>(`/api/sessions/${seg(sid)}/copy/merge`, { message, anyway }),
   remove: (sid: string, force: boolean, mergedPr = false) => api.post<{ removed: boolean; kept_branch: string | null }>(`/api/sessions/${seg(sid)}/copy/remove`, { force, merged_pr: mergedPr }),
   prefs: (repo: string, p: { prefix?: string; prepare?: string; copy_env?: boolean }) => api.put<CopyRepo['prefs']>('/api/code/copy-prefs', { repo, ...p }),
   watch: (sid: string, on: boolean) => api.put<{ watch: boolean }>(`/api/sessions/${seg(sid)}/copy/watch`, { on }),
