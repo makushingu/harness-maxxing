@@ -1,0 +1,1 @@
+var e=new Map;function t(t,n,r){e.set(t,{id:n,title:r})}var n=t=>e.has(t);function r(t,n){let r=e.get(t);return e.delete(t),r&&n.includes(r.title)?r.id:null}export{n,r,t};
