@@ -848,3 +848,13 @@ def test_the_join_error_goes_once_the_link_is_changed_or_tried_again():
     body = src[src.index("export function AddFriendDialog("):]
     assert re.search(r"const doJoin = \(\) => \{\s+setJoinError\(''\)", body)
     assert re.search(r"onChange=\{\(e\) => \{\s+setPaste\(e\.target\.value\)\s+setJoinError\(''\)", body)
+
+
+def test_a_chart_value_sent_as_text_is_drawn_like_a_number(tmp_path):
+    """An extension in shell / jq often sends "40": the scale counts it; null, "" and "abc" stay points without a value."""
+    out = _run_ts(tmp_path, WEB / "pages" / "dashboard" / "chartScale.ts", """
+        return [m.chartScale(['40', '7']), m.chartScale([null, '', 'abc', 8]).max,
+                [m.chartValue(' 12 '), m.chartValue(null), m.chartValue(''), m.chartValue('abc')].map((v) => Number.isFinite(v) ? v : 'nan')]""")
+    assert out == [{"min": 0, "max": 50, "ticks": [0, 25, 50]}, 10, [12, "nan", "nan", "nan"]]
+    src = (WEB / "pages" / "dashboard" / "charts.tsx").read_text(encoding="utf-8")
+    assert "chartValue(p[1])" in src

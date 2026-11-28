@@ -6,8 +6,16 @@ export function niceMax(v: number) {
   return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * p
 }
 
-export function chartScale(values: number[]): { min: number; max: number; ticks: number[] } {
-  values = values.filter((v) => Number.isFinite(v)) // a missing or text value (an extension's data) is not drawn
+/** A point's value as a number: a number, or a number written as text ("40", what a shell or jq extension often
+ * sends); anything else (null, "", "abc") is NaN, a point without a value. */
+export function chartValue(v: unknown): number {
+  if (typeof v === 'number') return v
+  if (typeof v === 'string' && v.trim() !== '') return Number(v)
+  return NaN
+}
+
+export function chartScale(values: unknown[]): { min: number; max: number; ticks: number[] } {
+  values = values.map(chartValue).filter((v) => Number.isFinite(v)) // a missing or text value is not drawn
   const max = niceMax(Math.max(0, ...values))
   const lo = Math.min(0, ...values)
   // negative values: the scale goes below 0, the bars hang under it; a value just under 0 next to large ones (float

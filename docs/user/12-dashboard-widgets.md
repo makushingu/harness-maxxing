@@ -133,6 +133,8 @@ Block =
                                                             grid: true = tiles side by side (shortcuts)
                                                             icon: an icon name (below), drawn like the app's
 | {type: "chart", kind: "bar"|"line", series: [{name, points: [[x, y], ...]}], unit?}
+                                                            y: a number (or a number as text, "40");
+                                                            null = a point without a value (a gap)
 | {type: "table", columns: [str], rows: [[cell, ...]]}
 | {type: "progress", label, value, max, hint?}
 | {type: "markdown", text}

@@ -4,7 +4,7 @@
 import * as React from 'react'
 import { cn } from '@/lib/utils'
 import { useLang } from '@/i18n'
-import { chartScale } from './chartScale'
+import { chartScale, chartValue } from './chartScale'
 
 type Series = { name: string; points: [number | string, number][] }
 
@@ -34,7 +34,9 @@ function fmtX(x: number | string, lang: string) {
 
 const COLORS = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--series-4)', 'var(--series-5)', 'var(--series-6)']
 
-export function Chart({ kind, series, unit, height = 140 }: { kind: 'bar' | 'line'; series: Series[]; unit?: string; height?: number }) {
+export function Chart({ kind, series: raw, unit, height = 140 }: { kind: 'bar' | 'line'; series: Series[]; unit?: string; height?: number }) {
+  // values sent as text ("40") are drawn like numbers; the others are points without a value
+  const series = React.useMemo(() => raw.map((s) => ({ ...s, points: s.points.map((p) => [p[0], chartValue(p[1])] as [number | string, number]) })), [raw])
   const lang = useLang()
   const [ref, width] = useWidth<HTMLDivElement>()
   const [hover, setHover] = React.useState<number | null>(null)
