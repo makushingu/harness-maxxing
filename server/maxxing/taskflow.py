@@ -122,12 +122,13 @@ def _follow(task: dict) -> tuple[dict, bool] | None:
     return work, bool(work["merged"])
 
 
-def _write(found: dict[str, tuple[dict, bool]]) -> None:
+def _write(found: dict[str, tuple[dict, bool, str]]) -> None:
     def change(tasks: list[dict]) -> bool:
         changed = False
         for t in tasks:
             got = found.get(t["id"])
-            if not got or got[0] == t.get("work"):
+            # linked to another session while GitHub was read: what was read is the old session's work
+            if not got or got[0] == t.get("work") or t.get("session") != got[2]:
                 continue
             t["work"], t["updated"], changed = got[0], time.time(), True
             if got[1] and t["status"] != "done":
@@ -147,13 +148,14 @@ def scan(only: str | None = None) -> None:
     for t in tasks:
         if not t.get("session") or (only and t["session"] != only):
             continue
+        sid = t["session"]                           # before GitHub is read: the task may be linked again meanwhile
         try:
             got = _follow(t)
         except Exception:
             log.exception("task %s not followed", t.get("id"))
             continue
         if got:
-            found[t["id"]] = got
+            found[t["id"]] = (*got, sid)
     if found:
         _write(found)
 

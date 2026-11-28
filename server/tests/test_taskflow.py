@@ -98,3 +98,21 @@ def test_only_a_real_session_is_linked(client, code):
     assert client.post(f"/api/tasks/{t['id']}/session", json={"session": "nope"}).status_code == 404
     assert client.post("/api/tasks/t_none/session", json={"session": "nope"}).status_code == 404
     assert client.post(f"/api/tasks/{t['id']}/session", json={"session": "../x"}).status_code == 422
+
+
+def test_a_task_linked_again_while_github_is_read_keeps_its_new_session(mx, monkeypatch):
+    from maxxing.api import tasks as board
+    data = board.load()
+    data["tasks"].append(board._norm_task({"id": "t1", "title": "x", "status": "doing", "session": "old",
+                                           "created": 1, "updated": 1}))
+    board.save(data)
+
+    def follow(t):                                   # the owner starts the task again during the round
+        taskflow.link("t1", "new")
+        return {"branch": "b", "github": "acme/app", "pr": None, "checks": None,
+                "merged": {"number": 1, "url": "u", "sha": "s"}}, True
+    monkeypatch.setattr(store, "read", lambda sid: {"id": sid})
+    monkeypatch.setattr(taskflow, "_follow", follow)
+    taskflow.scan()
+    t = next(x for x in board.load()["tasks"] if x["id"] == "t1")
+    assert t["session"] == "new" and t["status"] != "done" and not t.get("work"), t
