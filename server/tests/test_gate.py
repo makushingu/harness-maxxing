@@ -145,3 +145,22 @@ def test_a_damaged_entry_of_the_gate_state_is_dropped(client, code):
         gate._file(clone).write_text(json.dumps({"clone": str(clone), **junk}))
         r = client.get("/api/code/gate", params={"session": s["id"]})
         assert r.status_code == 200 and r.json()["review"]["rounds"] == 0, r.text[:200]
+
+
+
+def test_a_copy_whose_base_moved_since_the_review_is_held(client, code):
+    s, folder, clone = _copy(client, code)
+    client.put("/api/code/verify", json={"repo": str(folder), "command": "test -f x.txt", "gate": True})
+    sha = _git(folder, "rev-parse", "HEAD").strip()
+    data = gate._load(clone)
+    data["reviews"][sha] = {"state": "accepted", "session": "x", "model": "claude-sonnet-5-5",
+                            "branch": s["worktree"]["branch"], "at": 1}
+    gate._save(clone, data)
+    _verified(client, folder)
+    assert _status(client, s["id"])["open"]
+    (clone / "other.txt").write_text("unreviewed\n")          # the base moves after the review
+    _git(clone, "add", "-A")
+    _git(clone, "commit", "-qm", "base moves")
+    r = client.post(f"/api/sessions/{s['id']}/copy/merge", json={})
+    assert r.status_code == 409 and r.json()["error"] == "base_moved", r.text[:200]
+    assert _git(clone, "log", "-1", "--format=%s").strip() == "base moves"

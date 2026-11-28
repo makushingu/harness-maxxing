@@ -96,7 +96,9 @@ to merge**:
 
 When the review asks for changes, they go to the session that wrote the code, which fixes and commits; the new
 commit is reviewed again a few minutes later, three rounds at most for a branch. A new commit always needs its own
-verification and its own review: nothing carries over.
+verification and its own review: nothing carries over. The same goes when the base moved after the review: merging
+the copy would first merge the base into it, a commit nobody checked, so the merge is held until you merge the base
+into the copy (or ask Claude to) and that commit is verified and reviewed in turn.
 
 Until the three are green the button reads **Merge anyway**: it asks for a confirmation and merges, your call. The
 gate holds the merges done from Harness; a merge done on GitHub itself is ruled by the repository's settings there.

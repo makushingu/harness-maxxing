@@ -201,7 +201,14 @@ def status(t: Target | None) -> dict:
 def check(t: Target | None) -> None:
     """Refuse a merge the gate holds."""
     st = status(t)
-    if not st["active"] or st["open"]:
+    if not st["active"]:
+        return
+    if not t.full and t.base and codediff._run(t.clone, "merge-base", "--is-ancestor", t.base, t.sha,
+                                               check=False).returncode != 0:
+        # the merge would first merge the base into the copy: a new commit nobody verified nor reviewed
+        raise GitError(409, "base_moved", f"{t.base} moved since this commit: merge {t.base} into the copy first "
+                                          "(the new commit is verified and reviewed again), or merge anyway")
+    if st["open"]:
         return
     why = []
     if st["checks"] and st["checks"]["state"] not in ("ok", "none"):
