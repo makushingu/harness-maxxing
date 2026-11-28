@@ -685,7 +685,8 @@ export const Composer = React.forwardRef<ComposerHandle, {
             />
           )}
         </div>
-        <div className="flex items-center gap-2 px-3 pt-1 pb-5">
+        {/* @container: in Zones a column is narrow on a wide screen, so the labels follow the card's width, not the screen's */}
+        <div className="@container flex items-center gap-2 px-3 pt-1 pb-5">
           <ol className="grid min-w-0 flex-1 gap-0.5 text-[14px] leading-relaxed text-foreground">
             {queuedShown.map((p) => (
               <li key={p.key} className="line-clamp-2 break-words">
@@ -699,21 +700,21 @@ export const Composer = React.forwardRef<ComposerHandle, {
             {onTakeQueue && (
               <Tooltip content={t('sessions.queue.editTip')}>
                 <Button size="sm" variant="ghost" className={small} onClick={() => void editQueue()} loading={taking} disabled={steerPending}>
-                  <Pencil className="size-3.5" /> <span className="max-sm:sr-only">{t('sessions.queue.edit')}</span>
+                  <Pencil className="size-3.5" /> <span className="@max-2xl:sr-only">{t('sessions.queue.edit')}</span>
                 </Button>
               </Tooltip>
             )}
             {onAsk && running && (
               <Tooltip content={t('aside.askTip')}>
                 <Button size="sm" variant="ghost" className={small} onClick={onAsk} loading={asking} disabled={steerPending}>
-                  <MessageCircleQuestion className="size-3.5" /> <span className="max-sm:sr-only">{t('aside.ask')}</span>
+                  <MessageCircleQuestion className="size-3.5" /> <span className="@max-2xl:sr-only">{t('aside.ask')}</span>
                 </Button>
               </Tooltip>
             )}
             {onInject && running && (
               <Tooltip content={t('sessions.queue.injectTip')}>
                 <Button size="sm" variant="ghost" className={small} onClick={onInject} loading={injecting} disabled={steerPending}>
-                  <ListPlus className="size-3.5" /> <span className="max-sm:sr-only">{t('sessions.queue.inject')}</span>
+                  <ListPlus className="size-3.5" /> <span className="@max-2xl:sr-only">{t('sessions.queue.inject')}</span>
                 </Button>
               </Tooltip>
             )}

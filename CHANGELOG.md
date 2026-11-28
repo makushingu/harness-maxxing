@@ -32,6 +32,7 @@ New:
 - **Metrics for a monitoring tool (off by default).** Settings → System can expose `/metrics` in the Prometheus format for a Grafana or another system you already run: tokens, cost and turns (in total, per project, per agent), the daily budget, plan usage, scheduled jobs, disk, memory, health. Read only with a secret token shown once; no session title, message or file is in it (`maxxing metrics on`).
 
 Fixed:
+- **Waiting messages in Zones.** With three zones or more, the card of a message waiting for the end of the task no longer pushes its buttons out of a narrow column: below a certain width they keep only their icon (their name stays in the tooltip), so the waiting message and **Steer** stay visible.
 - **Checks**: the small pull request badge of the Changes view now counts the checks a CI posts as commit statuses too, as the pull request view already did.
 - **Wide tables in Markdown files no longer look cut.** When a table is wider than the page, its right edge now fades while there is more to scroll sideways, and its headers wrap between words instead of widening the table. Reported by a user.
 - **On a phone**: in E-mail, a tap just beside the small selection box of a message selects it instead of opening it; in Git, the branch labels of the history leave more room to the title of each commit; in Infra, the columns of *Where everything runs* no longer overlap in languages with longer words.
