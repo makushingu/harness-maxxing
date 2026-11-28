@@ -76,8 +76,14 @@ def _all_prefs() -> dict:
         return {}
 
 
+def _entry(d: dict, repo: Path | str) -> dict:
+    """One repository's settings; an entry that is not an object (edited by hand) counts as none."""
+    p = d.get(str(repo))
+    return p if isinstance(p, dict) else {}
+
+
 def prefs(repo: Path | str) -> dict:
-    p = _all_prefs().get(str(repo)) or {}
+    p = _entry(_all_prefs(), repo)
     prefix = str(p.get("prefix") if p.get("prefix") is not None else DEFAULT_PREFIX).strip().strip("/")
     return {"prefix": prefix, "prepare": str(p.get("prepare") or ""), "copy_env": bool(p.get("copy_env"))}
 
@@ -85,7 +91,7 @@ def prefs(repo: Path | str) -> dict:
 def set_prefs(repo: Path | str, **kw) -> dict:
     with _lock:
         d = _all_prefs()
-        cur = d.get(str(repo)) or {}
+        cur = _entry(d, repo)
         for k in ("prefix", "prepare", "copy_env"):
             if kw.get(k) is not None:
                 cur[k] = kw[k]

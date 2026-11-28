@@ -424,3 +424,11 @@ def test_a_clone_env_is_never_copied_through_a_linked_folder_of_the_copy(tmp_pat
     (copy / "conf").symlink_to(outside)              # the base branch commits conf as a link
     done = worktrees._copy_env(clone, copy)
     assert list(outside.iterdir()) == [] and done == [".env"] and (copy / ".env").read_text() == "A=1\n"
+
+
+def test_a_repository_entry_that_is_not_an_object_counts_as_none(code):
+    _, clone = code
+    worktrees._prefs_file().write_text('{"%s": ["x"]}' % clone)
+    assert worktrees.prefs(clone)["copy_env"] is False
+    worktrees._prefs_file().write_text('{"%s": "x"}' % clone)
+    assert worktrees.set_prefs(clone, prepare="make")["prepare"] == "make"
