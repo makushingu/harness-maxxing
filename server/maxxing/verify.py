@@ -29,6 +29,7 @@ TAIL = 6000                 # characters of the output shown and sent to Claude
 COMMAND_MAX = 500
 _lock = threading.Lock()
 _running: dict[str, subprocess.Popen | None] = {}
+STATES = ("running", "passed", "failed", "stopped")
 
 
 def _key(folder: Path) -> str:
@@ -123,8 +124,9 @@ def last(repo: Path, tail: bool = True) -> dict | None:
         d = json.loads(_file(repo, "json").read_text())
     except (OSError, ValueError):
         return None
-    if not isinstance(d, dict):
-        return None
+    if not isinstance(d, dict) or d.get("state") not in STATES:
+        return None                                  # damaged: as if it never ran
+    d["command"] = str(d.get("command") or "")
     if d.get("state") == "running" and _key(repo) not in _running:
         d["state"] = "stopped"                       # the server restarted during the run
     now = tree_print(repo)

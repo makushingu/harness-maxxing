@@ -79,3 +79,14 @@ def test_a_command_with_a_control_character_or_broken_text_is_refused(client, co
                    headers={"content-type": "application/json"})
     assert r.status_code == 400 and r.json()["error"] == "bad_command", r.text[:200]
     assert verify.command(clone) == ""
+
+
+def test_a_damaged_result_counts_as_no_run(client, code):
+    _, clone = code
+    client.put("/api/code/verify", json={"repo": str(clone), "command": "true"})
+    verify._file(clone, "json").parent.mkdir(parents=True, exist_ok=True)
+    for junk in ("{}", '{"state": "odd"}', '{"state": "failed"}'):
+        verify._file(clone, "json").write_text(junk)
+        r = client.get("/api/code/verify", params={"repo": str(clone)})
+        assert r.status_code == 200, r.text[:200]
+    assert r.json()["run"]["command"] == "" and "verification command" in verify.failure_message(clone)
