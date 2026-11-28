@@ -200,6 +200,16 @@ def _has_facts(text: str) -> bool:
     return any(ln.strip() and not ln.startswith("#") and ln not in blank for ln in body.splitlines())
 
 
+def _read_head(f: Path, top: Path, size: int) -> str:
+    """The first `size` bytes of `f` as text; "" when it resolves outside `top` (a link to a file elsewhere never goes
+    into the prompt)."""
+    real = f.resolve()
+    if top not in real.parents:
+        return ""
+    with open(real, "rb") as fh:
+        return fh.read(size).decode("utf-8", errors="replace")
+
+
 def upper_memory(cwd: str, root: str) -> str:
     """The memory.md of the levels above the working folder, up to the workspace (project and workspace for a topic;
     the topic too for an agent), for `--append-system-prompt`. "" outside the workspace, when there is none, or when
@@ -214,7 +224,7 @@ def upper_memory(cwd: str, root: str) -> str:
     while True:
         try:
             if "@memory.md" in (d / "CLAUDE.md").read_text(encoding="utf-8", errors="replace"):
-                text = (d / "memory.md").read_text(encoding="utf-8", errors="replace").strip()
+                text = _read_head(d / "memory.md", top, UPPER_MEMORY_MAX * 4).strip()
                 if len(text) > UPPER_MEMORY_MAX:
                     text = text[:UPPER_MEMORY_MAX] + "\n[... cut: read the file]"
                 if _has_facts(text):
