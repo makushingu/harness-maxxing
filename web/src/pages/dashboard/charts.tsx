@@ -4,7 +4,7 @@
 import * as React from 'react'
 import { cn } from '@/lib/utils'
 import { useLang } from '@/i18n'
-import { chartScale, chartValue } from './chartScale'
+import { chartScale, chartValue, tipValue } from './chartScale'
 
 type Series = { name: string; points: [number | string, number][] }
 
@@ -169,7 +169,7 @@ export function Chart({ kind, series: raw, unit, height = 140 }: { kind: 'bar' |
                   <span className="size-2 rounded-full" style={{ background: color(si) }} />
                   {s.name}
                 </span>
-                <span className="font-medium tabular-nums">{fmtV(s.points[hover]?.[1] ?? 0)}</span>
+                <span className="font-medium tabular-nums">{tipValue(s.points[hover]?.[1], fmtV)}</span>
               </div>
             ))}
           </div>

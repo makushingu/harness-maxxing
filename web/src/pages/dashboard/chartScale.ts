@@ -14,6 +14,12 @@ export function chartValue(v: unknown): number {
   return NaN
 }
 
+/** A point's value in the tooltip: a dash for a point without a value (never 0 or NaN). */
+export function tipValue(v: unknown, fmt: (n: number) => string): string {
+  const n = chartValue(v)
+  return Number.isFinite(n) ? fmt(n) : '–'
+}
+
 export function chartScale(values: unknown[]): { min: number; max: number; ticks: number[] } {
   // a missing or text value is not drawn; a loop, not Math.max(...values): a long series overflows the call stack
   let hi = 0

@@ -865,3 +865,12 @@ def test_a_very_long_chart_series_still_gets_a_scale(tmp_path):
         const v = Array.from({ length: 200000 }, (_, i) => i % 97 - 10)
         return m.chartScale(v)""")
     assert out == {"min": -10, "max": 100, "ticks": [-10, 0, 100]}
+
+
+def test_the_chart_tooltip_shows_a_dash_for_a_point_without_a_value(tmp_path):
+    out = _run_ts(tmp_path, WEB / "pages" / "dashboard" / "chartScale.ts", """
+        const f = (n) => n + ' €'
+        return [null, undefined, NaN, 'abc', 0, '40'].map((v) => m.tipValue(v, f))""")
+    assert out == ["–", "–", "–", "–", "0 €", "40 €"]
+    src = (WEB / "pages" / "dashboard" / "charts.tsx").read_text(encoding="utf-8")
+    assert "tipValue(s.points[hover]?.[1], fmtV)" in src and "?.[1] ?? 0" not in src
