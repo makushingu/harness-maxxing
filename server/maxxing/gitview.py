@@ -1048,12 +1048,21 @@ LOG_MAX = 6000              # characters of one log shown or passed on to Claude
 LOG_DOWNLOAD_MAX = 4 * LOG_READ     # bytes downloaded at most when the log server ignores the range asked for
 LOG_DEADLINE = 20           # seconds for a whole log, however slowly it comes
 _LOG_STAMP = re.compile(r"^\ufeff?\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z ", re.M)
-_ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
+# terminal control out of a log shown in the UI and passed on to Claude: CSI (colours, cursor), OSC (titles, links -
+# ended by BEL or ESC \), DCS / SOS / PM / APC strings, charset and other two-byte escapes, then the C0 / C1 controls
+# left (tab and newline kept)
+_ANSI = re.compile(
+    r"\x1b\[[0-?]*[ -/]*[@-~]"
+    r"|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)?"
+    r"|\x1b[PX^_][^\x1b]*(?:\x1b\\)?"
+    r"|\x1b[ -/]*[0-~]?"
+    r"|[\x00-\x08\x0b-\x1f\x7f-\x9f]"
+)
 
 
 def log_tail(text: str, limit: int = LOG_MAX) -> str:
     """What says why a job failed: the lines up to its last `##[error]` (and the few after), without the
-    timestamps and the colours, at most `limit` characters cut at a line."""
+    timestamps and the terminal controls (colours, links, titles), at most `limit` characters cut at a line."""
     lines = _ANSI.sub("", _LOG_STAMP.sub("", text.replace("\r\n", "\n"))).split("\n")
     last = max((i for i, ln in enumerate(lines) if "##[error]" in ln), default=None)
     if last is not None:

@@ -473,3 +473,11 @@ def test_a_huge_or_trickling_log_is_read_within_bounds(monkeypatch, mx):
     gitview.check_log("acme/app", 5)
     assert time.monotonic() - t < 3
     srv.shutdown()
+
+
+def test_log_tail_strips_every_terminal_control():
+    raw = ("2026-11-28T10:00:00.1Z \x1b[1;31mred\x1b[0m \x1b]8;;https://evil.example\x07click\x1b]8;;\x1b\\ "
+           "\x1b]0;title\x07\x1b(B\x1bPq#0\x1b\\\x1b_apc\x1b\\ \x07a\x08b\x9b31m\tok\n##[error]boom\n")
+    out = gitview.log_tail(raw)
+    assert out == "red click  ab31m\tok\n##[error]boom", repr(out)
+    assert gitview.log_tail("x\x1b") == "x"
