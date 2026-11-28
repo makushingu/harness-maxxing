@@ -435,3 +435,11 @@ def test_the_ask_harness_links_of_themes_and_appearance_are_big_enough_to_tap():
         src = (WEB / "pages" / "settings" / "sections" / name).read_text(encoding="utf-8")
         m = re.search(r'className="([^"]*)"', src[src.index(key):])            # the button that asks Harness
         assert m and "pointer-coarse:min-h-10" in m[1].split(), name
+
+
+def test_the_community_tabs_stay_on_one_line_on_a_phone():
+    # Extensions, Themes, Skills with their counts took ~289 px of the 286 a 360 px phone leaves: Skills wrapped
+    src = (WEB / "pages" / "settings" / "sections" / "Community.tsx").read_text(encoding="utf-8")
+    seg = src[src.index("<Segmented<Tab>"):]
+    seg = seg[:seg.index("/>")]
+    assert 'className="max-md:[&>button]:px-2"' in seg

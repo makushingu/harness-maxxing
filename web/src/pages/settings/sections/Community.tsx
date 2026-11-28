@@ -55,6 +55,7 @@ export function CommunitySection() {
             value={tab}
             onChange={setTab}
             size="sm"
+            className="max-md:[&>button]:px-2"
             aria-label={t('pkg.catalogue')}
             options={TABS.map((k) => ({ value: k, label: `${t(`pkg.tab.${k}`)}${cat.data ? ` (${items.filter((x) => x.tab === k).length})` : ''}` }))}
           />
