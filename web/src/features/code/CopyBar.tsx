@@ -7,7 +7,7 @@ import * as React from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Check, CircleAlert, Eye, EyeOff, FolderGit2, GitBranch, GitMerge, GitPullRequest, Loader2, MoreHorizontal, Sparkles, Trash2, Wrench } from 'lucide-react'
 import {
-  Button, Checkbox, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, Input, Sensitive, Textarea, Tooltip, toast,
+  Button, Checkbox, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, Input, Popover, PopoverContent, PopoverTrigger, Sensitive, Textarea, Tooltip, toast,
 } from '@/components/ui'
 import { errorMessage, isApiError } from '@/lib/api'
 import { cn } from '@/lib/utils'
@@ -73,30 +73,44 @@ export function CopyBar({ session, running, onAsk }: { session: Session; running
       toast.error(t('code.failed'), errorMessage(e))
     }
   }
+  const longState = s?.exists
+    ? `${` · ${s.ahead ? t('copy.ahead', { count: s.ahead }) : t('copy.noCommit')}`}${s.behind ? ` · ${t('copy.behind', { count: s.behind, base: s.base })}` : ''}${dirty ? ` · ${t('copy.dirty', { count: dirty })}` : ''}`
+    : ''
+  const details = (
+    <span className="grid max-w-80 gap-0.5 text-[11px]">
+      <span className="font-mono break-all"><Sensitive>{s?.branch || wt.branch}</Sensitive></span>
+      <span className="font-mono break-all">{wt.path}</span>
+      {s?.exists && <span><Sensitive>{`← ${s.base}`}</Sensitive>{longState}</span>}
+      {!!s?.port && <span>{t('copy.ports', { a: s.port, b: s.port + 9 })}</span>}
+      {!!s?.included && <span>{t('copy.included', { count: s.included })}</span>}
+    </span>
+  )
   return (
     <div className="flex min-w-0 items-center gap-2 border-t bg-muted px-3 py-1 text-[12px]" data-testid="copy-bar">
-      <Tooltip
-        content={
-          <span className="grid max-w-80 gap-0.5 text-[11px]">
-            <span className="font-mono break-all">{wt.path}</span>
-            {!!s?.port && <span>{t('copy.ports', { a: s.port, b: s.port + 9 })}</span>}
-            {!!s?.included && <span>{t('copy.included', { count: s.included })}</span>}
-          </span>
-        }
-      >
-        <span className="inline-flex min-w-20 items-center gap-1 font-mono text-[11px]">
-          <GitBranch className="size-3.5 shrink-0 text-primary" />
-          <span className="truncate"><Sensitive>{s?.branch || wt.branch}</Sensitive></span>
-        </span>
-      </Tooltip>
-      {s?.exists && (
-        <span className="min-w-0 truncate text-[11px] text-muted-foreground tabular-nums">
-          <Sensitive>{`← ${s.base}`}</Sensitive>
-          {` · ${s.ahead ? t('copy.ahead', { count: s.ahead }) : t('copy.noCommit')}`}
-          {!!s.behind && ` · ${t('copy.behind', { count: s.behind, base: s.base })}`}
-          {!!dirty && ` · ${t('copy.dirty', { count: dirty })}`}
-        </span>
-      )}
+      {/* the branch and the state are cut on a phone: the whole group opens its details on a tap (a tooltip only
+          shows on hover), and under 480 px the state takes its short form (↑ ahead, ↓ behind, • not committed) */}
+      <Popover>
+        <Tooltip content={details}>
+          <PopoverTrigger asChild>
+            <button type="button" className="flex min-w-0 items-center gap-2 text-left" aria-label={t('copy.details')} data-testid="copy-info">
+              <span className="inline-flex min-w-20 items-center gap-1 font-mono text-[11px]">
+                <GitBranch className="size-3.5 shrink-0 text-primary" />
+                <span className="truncate"><Sensitive>{s?.branch || wt.branch}</Sensitive></span>
+              </span>
+              {s?.exists && (
+                <span className="min-w-0 truncate text-[11px] text-muted-foreground tabular-nums" data-testid="copy-state">
+                  <Sensitive>{`← ${s.base}`}</Sensitive>
+                  <span className="hidden min-[480px]:inline">{longState}</span>
+                  <span className="min-[480px]:hidden">{` ↑${s.ahead ?? 0}`}{!!s.behind && ` ↓${s.behind}`}{!!dirty && ` •${dirty}`}</span>
+                </span>
+              )}
+            </button>
+          </PopoverTrigger>
+        </Tooltip>
+        <PopoverContent align="start" className="w-auto max-w-80 p-2.5" onOpenAutoFocus={(e) => e.preventDefault()}>
+          {details}
+        </PopoverContent>
+      </Popover>
       {wt.preparing && (
         <span className="inline-flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground">
           <Loader2 className="size-3 animate-spin" />

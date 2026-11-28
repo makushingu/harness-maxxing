@@ -4534,6 +4534,7 @@ export const en = {
   'copy.noPrText': "Claude could not write the description",
   'copy.mergedDirty': "Files are left in the copy: commit or discard them first",
   'copy.ports': "Ports {a}-{b} for its dev servers ($MAXXING_PORT)",
+  'copy.details': "Details of the copy",
   'copy.included': "Files from .worktreeinclude: {count}",
   'copy.conflict': "{base} changed the same lines: Claude can settle it in the session",
   'copy.askConflict': "Merge {base} into this branch: it changed the same lines. Settle the conflicts, run the tests, commit. I will merge afterwards.",

@@ -103,8 +103,9 @@ its own folder and its own branch, so two sessions on the same repository never 
   repository, with the syntax of `.gitignore` (the same file Claude Code reads); every new copy gets them.
 - **Ports**: each copy has 10 ports of its own (4100-4109 for the first one, 4110-4119 for the next…), so that the dev
   servers of two copies never fight for 3000. Claude knows them; your preparation command and scripts read the first
-  one in `$MAXXING_PORT`. Hover the branch in the bar to see them.
-- **The bar above the composer**: the branch, `← main`, the commits of the branch, what is not committed; one main
+  one in `$MAXXING_PORT`. Hover the branch in the bar (tap it on a phone) to see them.
+- **The bar above the composer**: the branch, `← main`, the commits of the branch, what is not committed (on a
+  phone in short: `↑3` commits, `↓12` new on main, `•7` not committed; tap the branch for the full line); one main
   button: **Open a PR** on a GitHub repository, **Merge into main** otherwise. ⋯ **Bring in main** (asks Claude to
   merge the latest main and settle the conflicts), **Discard the copy**.
 - **Finish** (the main button or ⋯): open a pull request, merge into the base on this server, or discard. Files not
