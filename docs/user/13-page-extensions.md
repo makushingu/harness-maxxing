@@ -92,7 +92,7 @@ The app loads `/ext/<id>/page.js` and calls `mount(el, ctx)`:
 | `api(path, opts?)` | calls `/api/ext/<id>/<path>` with authentication and CSRF header; `opts = {method, body}` (body is sent as JSON); resolves to the parsed JSON, rejects on HTTP errors |
 | `navigate(route)` | go to another page of the app, e.g. `navigate("/tasks")`; `/sessions?path=<topic path>&new=1&prompt=<text>` opens a new session with the text typed in |
 | `theme` | `"dark"` or `"light"` |
-| `lang` | the app's language, `"en"` or `"fr"` |
+| `lang` | the app's language: `"en"`, `"fr"`, `"es"`, `"de"`, `"zh"` or `"ja"` |
 | `t(key)` | translation helper of the app |
 | `icon(name)` | an icon of the app as an `<svg>` element (same names as the manifest `icon`), e.g. `button.prepend(ctx.icon("plus"))` |
 

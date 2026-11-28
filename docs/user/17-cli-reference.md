@@ -38,7 +38,7 @@ As root on systemd it also writes the slices of the [CPU priorities](settings-an
 | `--timezone TZ` | IANA name (default: the system zone). Keep it equal to the system zone (`timedatectl`), which cron uses - unless the server clock is kept. An unknown zone is refused |
 | `--system-clock follow\|keep` | `follow`: changing the time zone in the UI also switches the system zone; `keep`: never touch it (shared server), jobs check their schedule in your zone |
 | `--claude-dir PATH` | Claude Code folder for Harness Maxxing (default `~/.claude`; `""` = back to it). Another folder keeps it apart from a Claude Code already used on the server (passed to sessions as `CLAUDE_CONFIG_DIR`) |
-| `--language en\|fr` | interface language |
+| `--language en\|fr\|es\|de\|zh\|ja` | interface language (also the language of what the server writes) |
 | `--secret-from-stdin NAME` | store a secret read from stdin: `claude_oauth_token`, `anthropic_api_key`, `github_update_token` |
 | `--no-crons` | do not create the default jobs |
 | `--quiet`, `--json` | output control |

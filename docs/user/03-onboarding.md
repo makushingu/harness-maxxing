@@ -11,7 +11,8 @@ The setup link first asks for the UI password (8 characters minimum, stored hash
 Then the wizard has nine steps. You can leave and come back: it resumes where you stopped, and
 every step also exists in Settings.
 
-1. **Language & time zone** – English or French, and the time zone used by scheduled jobs.
+1. **Language & time zone** – the interface language (English, French, Spanish, German, Simplified Chinese or
+   Japanese) and the time zone used by scheduled jobs.
 2. **About you** (all optional) – your pseudo, an email for security alerts (and the product news if you want),
    and, only for companies that have one, an **Enterprise license key**. The anonymous installation counter is on by
    default and is turned off in Settings → Profile. See [License](license).
