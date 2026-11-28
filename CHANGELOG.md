@@ -23,6 +23,7 @@ New:
 - **Metrics for a monitoring tool (off by default).** Settings → System can expose `/metrics` in the Prometheus format for a Grafana or another system you already run: tokens, cost and turns (in total, per project, per agent), the daily budget, plan usage, scheduled jobs, disk, memory, health. Read only with a secret token shown once; no session title, message or file is in it (`maxxing metrics on`).
 
 Fixed:
+- **Wide tables in Markdown files no longer look cut.** When a table is wider than the page, its right edge now fades while there is more to scroll sideways, and its headers wrap between words instead of widening the table. Reported by a user.
 - **On a phone**: in E-mail, a tap just beside the small selection box of a message selects it instead of opening it; in Git, the branch labels of the history leave more room to the title of each commit; in Infra, the columns of *Where everything runs* no longer overlap in languages with longer words.
 
 ## 2.0.0-alpha.175 - 2026-11-27

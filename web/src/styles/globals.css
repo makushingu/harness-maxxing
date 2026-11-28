@@ -742,10 +742,16 @@ html[data-compact] .mx-sheet[data-state='closed'] { animation: mx-sheet-down 180
 .prose-mx :not(pre) > code { font-size: 0.86em; background: var(--color-muted); border: 1px solid var(--color-border); border-radius: 5px; padding: 0.1em 0.35em; }
 .prose-mx table { display: block; overflow-x: auto; border-collapse: collapse; font-size: 13px; }
 .prose-mx th, .prose-mx td { border: 1px solid var(--color-border); padding: 0.4rem 0.7rem; text-align: left; }
-.prose-mx th { background: var(--color-muted); font-weight: 600; white-space: nowrap; }
+.prose-mx th { background: var(--color-muted); font-weight: 600; overflow-wrap: break-word; }
 /* A table too wide for its place scrolls sideways: its words stay whole, a cell with a sentence stays readable. */
 .prose-mx td { overflow-wrap: break-word; }
 .prose-mx td[data-long] { min-width: 13rem; }
+/* ...and its right edge fades while there is more to the right (browsers with scroll timelines; elsewhere: no fade). */
+@property --mx-table-fade { syntax: '<length>'; inherits: false; initial-value: 0px; }
+@keyframes mx-table-fade { from { --mx-table-fade: 2.5rem; } to { --mx-table-fade: 0px; } }
+@supports (animation-timeline: scroll()) {
+  .prose-mx table { mask-image: linear-gradient(to left, transparent, #000 var(--mx-table-fade)); animation: mx-table-fade linear both; animation-timeline: scroll(self inline); }
+}
 .prose-mx img { max-width: 100%; border-radius: var(--radius-md); }
 .prose-mx input[type='checkbox'] { margin-right: 0.4rem; vertical-align: middle; }
 
