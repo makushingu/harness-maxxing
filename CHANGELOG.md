@@ -5,8 +5,13 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 
 ## Unreleased
 
+## 2.0.0-alpha.176 - 2026-11-28
+
 New:
 - **Four more languages.** The interface, the Telegram messages, the notifications and the agent templates now also exist in Spanish, German, Simplified Chinese and Japanese, next to English and French. Pick yours in Settings → General (or on the sign-in screen).
+
+Fixed:
+- **About ninety robustness and security fixes** from the continuous audit: a damaged or unexpected file (devices, feed, mail, approvals, separate copies, sign-ins, tabs of the browser) no longer breaks a page nor loses data; secrets redacted in the unfiltered system logs and in voice errors; sandboxed topics and agents stay inside their sandbox; two separate copies never share a folder, a branch or a port; renewing the recovery codes asks for the second factor; the copy bar is readable on a phone.
 
 ## 2.0.0-alpha.175 - 2026-11-27
 

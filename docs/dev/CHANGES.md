@@ -7,6 +7,8 @@ shown in the product. Newest first, same version headings as `CHANGELOG.md`.
 
 ## Unreleased
 
+## 2.0.0-alpha.176 - 2026-11-28
+
 - Languages: the interface and the server texts exist in `en`, `fr`, `es`, `de`, `zh` (Simplified Chinese) and `ja`. Web: `LANGUAGE_IDS` (`web/src/lib/types.ts`), one dictionary per language, `es/de/zh/ja` written by `scripts/translate_ui.py` (`claude -p`, 60 texts per request, state in `web/src/i18n/translated.json`: fingerprint of the English text + the keys late per language; `--accept` records texts translated by hand, `--dry-run` says what is late). Server: `config.LANGUAGES` and `config.language(lang=None)` (the configured language when it is one of them, else `en`); every table `{"en": ..., "fr": ...}` has the four others; lookups are `TABLE.get(lang, TABLE["en"])`. `scripts/i18n_check.py` checks both sides (keys, late texts, variables, links, code spans, HTML tags, no script or event handler in a translation; `SERVER_SKIP` = the tables that are voices or locales, not texts) and is run first by `scripts/ui-check.sh`. The UI check has two more journeys, `pages-translated` and `pages-translated-phone` (every page in each translated language; a drawn page needs 8 characters in `zh`/`ja`, 20 elsewhere). Settings -> General picks the language in a list (it was two buttons). Tests: `test_i18n_server.py`.
 
 ## 2.0.0-alpha.175 - 2026-11-27
