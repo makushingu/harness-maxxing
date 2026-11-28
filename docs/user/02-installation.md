@@ -124,6 +124,36 @@ The same command installs Harness Maxxing on Fedora (and systems of its family t
 On Fedora with SELinux enforcing, the installer allows Caddy to reach the server on `127.0.0.1`
 (`httpd_can_network_connect`). `maxxing doctor` and the fixes it prints use the names of your system.
 
+## Windows (WSL 2)
+
+On Windows 10 (version 2004 or later) and Windows 11, Harness Maxxing runs inside WSL 2, the Linux that ships with
+Windows. In PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/makushingu/harness-maxxing/main/install.ps1 | iex
+```
+
+The script does what is missing, and can be run again at any time:
+
+1. turns WSL on - the first time only, from a PowerShell opened **as administrator**, followed by a restart of
+   Windows; run the same command again after it;
+2. installs an Ubuntu 24.04 distribution in WSL (or uses the one you name: `$env:HM_DISTRO = "Debian"` before the
+   command) and turns systemd on in it;
+3. runs the Linux installer inside it, as root: the same one as on a server, with **local** access;
+4. adds a Windows task, "Harness Maxxing (WSL)", that starts the distribution when you sign in and keeps it
+   running - Windows stops a WSL distribution nobody uses, and Harness Maxxing with it
+   (`$env:HM_KEEPALIVE = "0"` skips the task).
+
+Harness Maxxing then answers on `http://localhost:8787` in the browser of that PC. Your files are in the Linux
+distribution (`\\wsl$\Ubuntu-24.04\root\maxxing` in the Explorer); the drives of Windows are under `/mnt/c`.
+A terminal inside it: `wsl -d Ubuntu-24.04 -u root`; every `maxxing` command of this documentation runs there.
+
+It runs while your Windows session is open: for a server that is always on, use a Linux server. To reach it from
+your phone or another computer, install Tailscale **inside** the distribution and run the installer again with
+`ACCESS=tailscale`. To remove it: `wsl -d Ubuntu-24.04 -u root -- maxxing uninstall`, then
+`Unregister-ScheduledTask -TaskName "Harness Maxxing (WSL)"` (and `wsl --unregister Ubuntu-24.04` to delete the
+distribution with everything in it).
+
 ## Install without root
 
 Run the same command as a normal user, without `sudo`: on your own computer, or on a server where you have no

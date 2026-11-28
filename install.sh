@@ -585,6 +585,9 @@ check_system() {
       *) warn "untested distribution ($pretty) - continuing because ${PKG_MGR:-a package manager} is present" ;;
     esac
   fi
+  if [ ! -d /run/systemd/system ] && is_wsl; then
+    die "systemd is off in this WSL distribution. As root: printf '[boot]\\nsystemd=true\\n' >> /etc/wsl.conf - then in Windows: wsl --shutdown - and run this again (install.ps1 does it for you)."
+  fi
   [ -d /run/systemd/system ] || die "systemd must be running (sessions and the service are systemd units)."
   [ "$USERMODE" = 0 ] || user_systemd || die "your own systemd does not answer (systemctl --user): sign in to this machine as $(id -un) (not through su), or run once as root: loginctl enable-linger $(id -un)"
   case "$(uname -m)" in
@@ -833,6 +836,9 @@ choose_access() {
   local cur_url cur_bind def=local
   cur_url=$(cfg_get public_url)
   cur_bind=$(cfg_get bind)
+  if is_wsl && [ -z "$ACCESS" ] && [ -z "$cur_url" ]; then      # Windows (WSL): the browser of this PC, http://localhost
+    case "$cur_bind" in 100.*) ;; *) ACCESS=local ;; esac
+  fi
   if [ "$USERMODE" = 1 ]; then                 # no root: this machine only (or the Tailscale address when asked)
     [ "$ACCESS" != domain ] || die "ACCESS=domain needs root (HTTPS on ports 80 and 443): run the installer as root, or point your own reverse proxy to 127.0.0.1:$PORT"
     [ -n "$ACCESS" ] || case "$cur_bind" in 100.*) ACCESS=tailscale ;; *) ACCESS=local ;; esac
@@ -1427,6 +1433,9 @@ f2b_jail() {
     printf 'banaction = nftables-multiport\nbanaction_allports = nftables-allports\n'
   fi
 }
+
+# is_wsl - inside Windows Subsystem for Linux (its kernel says so)
+is_wsl() { grep -qi 'microsoft' "${PROC_VERSION:-/proc/sys/kernel/osrelease}" 2>/dev/null; }
 
 # firewalld_here - firewalld is (or is about to be, in this run) the firewall of this server
 firewalld_here() {
@@ -2174,7 +2183,11 @@ banner() {
   box_row ""
   box_row "$C_G$C_B✔  Harness Maxxing is installed$C_0  $C_D($took)$C_0"
   box_row ""
-  if [ "$ACCESS" = local ] && [ "$USERMODE" = 1 ] && ! ssh_connection >/dev/null 2>&1; then
+  if [ "$ACCESS" = local ] && is_wsl && ! ssh_connection >/dev/null 2>&1; then
+    box_row "Open it in the browser of this PC (Windows reaches it at"
+    box_row "the same address, as long as the WSL distribution runs)."
+    box_row ""
+  elif [ "$ACCESS" = local ] && [ "$USERMODE" = 1 ] && ! ssh_connection >/dev/null 2>&1; then
     box_row "Open it in the browser of this computer."
     box_row ""
   elif [ "$ACCESS" = local ]; then
