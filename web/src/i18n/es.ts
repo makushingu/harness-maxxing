@@ -4617,6 +4617,7 @@ export const es: Record<keyof typeof en, string> = {
   "copy.noPrText": "Claude no ha podido escribir la descripción",
   "copy.mergedDirty": "Quedan archivos en la copia: commitéalos o descártalos primero",
   "copy.ports": "Puertos {a}-{b} para sus servidores de desarrollo ($MAXXING_PORT)",
+  "copy.details": "Detalles de la copia",
   "copy.included": "Archivos de .worktreeinclude: {count}",
   "copy.conflict": "{base} ha cambiado las mismas líneas: Claude puede resolverlo en la sesión",
   "copy.askConflict": "Fusiona {base} en esta rama: ha cambiado las mismas líneas. Resuelve los conflictos, ejecuta las pruebas y haz commit. Yo fusionaré después.",

@@ -4617,6 +4617,7 @@ export const ja: Record<keyof typeof en, string> = {
   "copy.noPrText": "Claudeは説明を作成できませんでした",
   "copy.mergedDirty": "コピーにファイルが残っています。先にコミットするか破棄してください",
   "copy.ports": "開発サーバー用のポート {a}-{b}（$MAXXING_PORT）",
+  "copy.details": "コピーの詳細",
   "copy.included": ".worktreeinclude のファイル：{count}",
   "copy.conflict": "{base} が同じ行を変更しています。Claudeがセッション内で解決できます",
   "copy.askConflict": "{base} をこのブランチにマージしてください。同じ行が変更されています。競合を解決し、テストを実行して、コミットしてください。その後で私がマージします。",
