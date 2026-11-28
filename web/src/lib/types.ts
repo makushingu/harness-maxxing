@@ -693,6 +693,16 @@ export type Task = {
   updated: number
   done_at: number | null
   order: number
+  /** The session started for the task, and where its code is (branch, pull request, checks): followed by the server. */
+  session?: string | null
+  work?: TaskWork | null
+}
+export type TaskWork = {
+  branch: string | null
+  github: string | null
+  pr: { number: number; url: string; draft: boolean } | null
+  checks: { total: number; ok: number; failed: number; pending: number } | null
+  merged: { number?: number; url?: string; local?: boolean } | null
 }
 /** `workspace` = the workspace project it follows (created, renamed with it); `hidden` = left out of the sidebar. */
 export type TaskProject = { id: string; name: string; color: string; workspace?: string | null; hidden?: boolean }

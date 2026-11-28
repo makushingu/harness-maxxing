@@ -1,10 +1,11 @@
 // Small presentational pieces shared by the board, the list and the drawer.
 import * as React from 'react'
-import { CalendarDays } from 'lucide-react'
+import { CalendarDays, Check, CircleAlert, CircleDot, GitBranch, GitMerge, GitPullRequest } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useLang, useT } from '@/i18n'
 import { Sensitive } from '@/components/ui'
 import type { Task, TaskPriority, TaskProject } from '@/lib/types'
+import type { TKey } from '@/i18n'
 import { PRIORITY_CLS, PRIORITY_KEY, dueState, fmtDue, projectColor } from './model'
 
 
@@ -64,6 +65,41 @@ export function LabelChip({ label, className, children }: { label: string; class
         <Sensitive length={4}>{label}</Sensitive>
       </span>
       {children}
+    </span>
+  )
+}
+
+/** What the work of a started task says in one word: its text key and its tone. */
+export function workState(task: Task): { key: TKey; tone: string; n?: number } | null {
+  const w = task.work
+  if (!w) return null
+  if (w.merged) return w.merged.local ? { key: 'tasks.work.mergedHere', tone: 'text-success' } : { key: 'tasks.work.merged', tone: 'text-success', n: w.merged.number }
+  if (!w.pr) return w.branch ? { key: 'tasks.work.branch', tone: 'text-muted-foreground' } : null
+  const c = w.checks
+  if (!c || !c.total) return { key: 'tasks.work.pr', tone: 'text-muted-foreground', n: w.pr.number }
+  if (c.failed) return { key: 'tasks.work.checksFailed', tone: 'text-destructive', n: w.pr.number }
+  if (c.pending) return { key: 'tasks.work.checksPending', tone: 'text-warning', n: w.pr.number }
+  return { key: 'tasks.work.checksOk', tone: 'text-success', n: w.pr.number }
+}
+
+/** Branch, pull request and checks of the session that does the task (cards and lists). */
+export function WorkBadge({ task, className }: { task: Task; className?: string }) {
+  const t = useT()
+  const st = workState(task)
+  if (!st) return null
+  const w = task.work!
+  const Icon = w.merged ? GitMerge : w.pr ? GitPullRequest : GitBranch
+  const Mark = !w.pr || !w.checks?.total ? null : w.checks.failed ? CircleAlert : w.checks.pending ? CircleDot : Check
+  return (
+    <span
+      className={cn('inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium tabular-nums text-muted-foreground', className)}
+      title={t(st.key, { n: st.n ?? '', branch: w.branch ?? '' })}
+      data-testid="task-work"
+    >
+      <Icon className={cn('size-3', w.merged && st.tone)} />
+      {st.n ? `#${st.n}` : null}
+      {Mark && <Mark className={cn('size-3', st.tone)} />}
+      <span className="sr-only">{t(st.key, { n: st.n ?? '', branch: w.branch ?? '' })}</span>
     </span>
   )
 }

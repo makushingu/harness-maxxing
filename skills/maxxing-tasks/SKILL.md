@@ -32,6 +32,7 @@ in the UI within seconds.
   and no `project_id` is attached to that project's task project automatically.
 - `order`: float, sort order inside a column (to insert between two tasks use the mean of their orders).
 - Timestamps are Unix seconds (float). Set `done_at` when moving to `done`, null otherwise.
+- `session` and `work` (a task started from the Tasks page: its session, branch, pull request, checks) are written by Harness: keep them as they are, never write them yourself.
 - Ids: `t_` + 6 hex chars for tasks, `p_` + 4 hex for projects; must be unique.
 
 ## Safe editing (always)

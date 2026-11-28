@@ -162,6 +162,9 @@ def _norm_task(t: dict) -> dict:
     out["created"] = _num(out.get("created"), now)
     out["updated"] = _num(out.get("updated"), out["created"])
     out["done_at"] = _num(out.get("done_at"), None)
+    # the session that does the task and where its code is (taskflow.py); a hand-written value of another shape is dropped
+    out["session"] = out.get("session") if isinstance(out.get("session"), str) and out["session"] else None
+    out["work"] = out.get("work") if isinstance(out.get("work"), dict) and out["session"] else None
     try:
         out["order"] = float(out.get("order") or 0)
         if not math.isfinite(out["order"]):
@@ -774,6 +777,21 @@ def _place(task: dict, data: dict, prev_id: str | None, next_id: str | None) -> 
         col.insert(i, task)
         for n, t in enumerate(col):
             t["order"] = float(n + 1)
+
+
+class SessionIn(BaseModel):
+    session: str = Field(..., pattern=r"^[A-Za-z0-9_-]{1,64}$")
+
+
+@router.post("/{tid}/session")
+def task_session(tid: str, body: SessionIn):
+    """The session started for this task (Tasks -> Start a session): the task follows its branch and pull request."""
+    from .. import taskflow
+    from ..codediff import GitError
+    try:
+        return taskflow.link(tid, body.session)
+    except GitError as e:
+        raise _err(e.status, e.code, e.message) from None
 
 
 @router.delete("/{tid}")

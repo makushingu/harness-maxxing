@@ -650,6 +650,33 @@ def j_share(r: Run) -> None:
     r.healthy(pg, phone=True)
 
 
+def j_task_start(r: Run) -> None:
+    """A task is started from its sheet: a new session opens with the task typed in, and once the message is sent the
+    task shows the pull request of that session."""
+    r.mock.scenario("ready")
+    title = "Fix the login page"
+    task = r.mock.call("POST", "/api/tasks", {"title": title, "notes": "The form loses the e-mail on an error.",
+                                              "topic_path": "projects/acme/topics/blog"})
+    pg = r.page()
+    r.go(pg, f"/tasks?project=all&task={task['id']}")
+    pg.get_by_test_id("task-start").click()
+    pg.wait_for_url("**/sessions?*new=1*")
+    box = pg.locator("main textarea").first
+    box.wait_for()
+    pg.wait_for_function("(t) => (document.querySelector('main textarea')?.value || '').includes(t)", arg=title)
+    if "loses the e-mail" not in box.input_value():
+        raise Failure("the notes of the task are not in the message box")
+    box.press("Enter")
+    pg.locator("main").get_by_text(title).first.wait_for()
+    r.go(pg, f"/tasks?project=all&task={task['id']}")
+    line = pg.get_by_test_id("task-work-line")
+    line.wait_for()
+    if "#12" not in line.inner_text() or "checks failed" not in line.inner_text():
+        raise Failure(f"the task does not show its pull request and checks: {line.inner_text()!r}")
+    pg.get_by_test_id("task-session").wait_for()
+    r.healthy(pg)
+
+
 JOURNEYS = {
     "guide": j_guide, "pages": j_pages, "pages-phone": j_pages_phone, "pages-fr": j_pages_fr,
     "pages-fr-phone": j_pages_fr_phone, "pages-translated": j_pages_translated,
@@ -658,7 +685,7 @@ JOURNEYS = {
     "new-session": j_new_session, "session-phone": j_session_phone, "palette": j_palette, "theme": j_theme,
     "setting-saved": j_setting_saved, "settings-nav": j_settings_nav, "files": j_files, "team": j_team, "nav": j_nav,
     "usage-agents": j_usage_agents, "logs-search": j_logs_search, "turn-details": j_turn_details, "community": j_community, "guide-tools": j_guide_tools,
-    "push-feed": j_push_feed, "share": j_share, "sign-out": j_sign_out,
+    "push-feed": j_push_feed, "share": j_share, "task-start": j_task_start, "sign-out": j_sign_out,
 }
 
 

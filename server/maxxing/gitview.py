@@ -864,7 +864,7 @@ def branch_status(full: str, branch: str, sha: str | None) -> dict:
     merged = None if pr else merged_pull(full, branch)
     checks = None
     if sha and SHA_RE.match(sha):
-        items = _check_runs(full, sha)
+        items = _checks(full, sha)                # check runs and commit statuses, as the PR view counts them
         if items:
             ok = sum(1 for c in items if c.get("conclusion") in ("success", "neutral", "skipped"))
             failed = sum(1 for c in items if c.get("conclusion") in ("failure", "timed_out", "cancelled",

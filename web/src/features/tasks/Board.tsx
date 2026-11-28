@@ -22,7 +22,7 @@ import {
 } from '@/components/ui'
 import type { Task, TaskProject, TaskStatus } from '@/lib/types'
 import { STATUSES, STATUS_KEY, byOrder } from './model'
-import { DueBadge, LabelChip, PriorityIcon, ProjectChip } from './parts'
+import { DueBadge, LabelChip, PriorityIcon, ProjectChip, WorkBadge } from './parts'
 import { TopicChip } from './List'
 import { isSelectClick, useTaskSelection } from './selection'
 
@@ -534,12 +534,13 @@ export function TaskMenuItems({ task, onMoveTo, onDelete }: { task: Task; onMove
 
 function CardMeta({ task, project, today }: { task: Task; project?: TaskProject; today: string }) {
   const t = useT()
-  const hasAny = task.priority > 0 || task.due || project || task.labels.length || task.topic_path || task.notes
+  const hasAny = task.priority > 0 || task.due || project || task.labels.length || task.topic_path || task.notes || task.work
   if (!hasAny) return null
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1.5 pl-5">
       {task.priority > 0 && <PriorityIcon p={task.priority} className="size-3.5" />}
       <DueBadge task={task} today={today} />
+      <WorkBadge task={task} />
       {project && <ProjectChip project={project} className="max-w-[45%]" />}
       {task.labels.slice(0, 3).map((l) => (
         <LabelChip key={l} label={l} />

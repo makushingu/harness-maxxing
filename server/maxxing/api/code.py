@@ -250,7 +250,10 @@ def _pr_text(r, subjects: list[str]) -> str:
 
 @router.post("/api/code/pr")
 async def pull(body: PullIn):
-    return await _call(_pull, body)
+    from .. import taskflow
+    out = await _call(_pull, body)
+    taskflow.soon()                                  # the task this session does shows its pull request
+    return out
 
 
 class MessageIn(BaseModel):
@@ -463,7 +466,7 @@ class CopyEndIn(BaseModel):
 
 @router.post("/api/sessions/{sid}/copy/merge")
 async def copy_merge(sid: str, body: CopyEndIn):
-    from .. import bus, worktrees
+    from .. import bus, taskflow, worktrees
 
     def run():
         meta = _idle(sid)
@@ -471,6 +474,7 @@ async def copy_merge(sid: str, body: CopyEndIn):
         if wt and body.message and codediff.dirty(Path(wt["path"])):
             codediff.commit(Path(wt["path"]), body.message)
         out = worktrees.merge(meta)
+        taskflow.merged_here(sid, (wt or {}).get("branch"))
         bus.invalidate("sessions")
         return out
     return await _call(run)
@@ -602,13 +606,14 @@ _watch_task: Optional[asyncio.Task] = None
 
 
 async def _watch_loop() -> None:
-    from .. import prwatch
+    from .. import prwatch, taskflow
     while True:
         await asyncio.sleep(prwatch.INTERVAL)
-        try:
-            await asyncio.to_thread(prwatch.scan)
-        except Exception:
-            log.exception("pull request watch failed")
+        for scan in (prwatch.scan, taskflow.scan):   # the tasks follow the pull request of their session
+            try:
+                await asyncio.to_thread(scan)
+            except Exception:
+                log.exception("pull request watch failed")
 
 
 async def startup() -> None:

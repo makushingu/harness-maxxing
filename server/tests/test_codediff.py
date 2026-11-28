@@ -326,6 +326,8 @@ def _fake_github(pulls_made):
             return 200, [], "application/json"
         if u.path.startswith("/repos/acme/app/commits/") and u.path.endswith("/check-runs"):
             return 200, {"check_runs": [{"conclusion": "success"}, {"conclusion": None}]}, "application/json"
+        if u.path.startswith("/repos/acme/app/commits/") and u.path.endswith("/status"):      # a CI that posts statuses
+            return 200, {"statuses": [{"context": "ci/build", "state": "failure"}]}, "application/json"
         return 404, {"message": "Not Found"}, "application/json"
     return _Server(handler)
 
@@ -352,7 +354,7 @@ def test_api_commit_push_and_pull_request(client, worked, tmp_path, monkeypatch)
         assert pr["number"] == 12 and made[0]["head"] == "feat/x" and made[0]["base"] == "main"
         assert made[0]["title"] == "Add a and b"
         st = client.get("/api/code/status", params={"repo": str(folder)}).json()
-        assert st["dirty"] == 0 and st["pr"]["number"] == 12 and st["checks"] == {"total": 2, "ok": 1, "failed": 0, "pending": 1}
+        assert st["dirty"] == 0 and st["pr"]["number"] == 12 and st["checks"] == {"total": 3, "ok": 1, "failed": 1, "pending": 1}
     finally:
         srv.close()
 

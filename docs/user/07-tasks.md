@@ -71,6 +71,25 @@ refreshes by itself within seconds.
 When Claude changes the file while you edit a task on the page, both changes are kept: yours is applied
 on top of the file as Claude left it.
 
+## From a task to a merged pull request
+
+A task linked to a topic has a **Start a session** button in its sheet. It opens a new session in that
+topic with the title and the notes of the task typed in the message box; nothing is sent before you send
+it. When the topic holds a repository (Code mode on), **Work on a separate copy** is ticked: the session
+gets its own branch and folder, so several tasks can be done side by side.
+
+From there the task follows its session by itself:
+
+- it moves to **In progress** when the session starts;
+- its card shows the branch, then the pull request and its checks (passed, failed, still running) once the
+  session opened one (Changes -> Pull request);
+- when the pull request is merged - in Harness or on GitHub - the task moves to **Done** and the copy is
+  removed. A copy that holds work not saved is kept: the session says so.
+- merging the copy from the session (without a pull request) delivers the task the same way.
+
+GitHub is read every 3 minutes, and at once when Harness opens or merges the pull request. A task whose
+topic has no repository is still linked to its session (**Open its session**), without the rest.
+
 ## File format
 
 ```json
@@ -87,6 +106,8 @@ on top of the file as Claude left it.
 ```
 
 - `status`: `todo`, `doing`, `done`; `priority`: 0–3; `due`: `YYYY-MM-DD` or `null`.
+- A started task also has `session` (the id of its session) and `work` (branch, pull request, checks),
+  written by Harness: leave them as they are.
 - A project with `workspace` follows that workspace project; `hidden: true` leaves it out of the projects
   column.
 - Unknown fields are preserved, so you can add your own.

@@ -1,9 +1,9 @@
 // Task drawer (Sheet): every field saves by itself. Title and notes are debounced and kept as a local
 // draft, so a live refresh (Claude editing tasks.json) never overwrites what the user is typing.
 import * as React from 'react'
-import { Link } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
-import { ArrowUpRight, Check, FileQuestion, Settings2, Trash2, X } from 'lucide-react'
+import { ArrowUpRight, Check, FileQuestion, Play, Settings2, Trash2, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useLang, useT } from '@/i18n'
 import { api, seg } from '@/lib/api'
@@ -37,7 +37,9 @@ import {
 } from '@/components/ui'
 import { Combobox } from '@/components/ui/combobox'
 import { PRIORITIES, PRIORITY_KEY, STATUSES, STATUS_KEY, addDays, allLabels, dueState, todayISO } from './model'
-import { LabelChip, PriorityIcon, ProjectDot } from './parts'
+import { LabelChip, PriorityIcon, ProjectDot, WorkBadge, workState } from './parts'
+import { draftUrl } from '@/features/agents/EditWithClaude'
+import { giveTask } from '@/lib/taskStart'
 
 const Markdown = React.lazy(() => import('@/components/ui/markdown').then((m) => ({ default: m.Markdown })))
 
@@ -365,6 +367,15 @@ function TaskEditor({
             )}
           </dd>
 
+          {task.topic_path && (
+            <>
+              <dt className="text-muted-foreground sm:self-start sm:pt-1">{t('tasks.field.work')}</dt>
+              <dd className="grid min-w-0 gap-1.5">
+                <TaskWorkLine task={task} />
+              </dd>
+            </>
+          )}
+
           <dt className="text-muted-foreground sm:self-start sm:pt-1">
             <label htmlFor="task-label">{t('tasks.field.labels')}</label>
           </dt>
@@ -495,6 +506,56 @@ function TaskEditor({
           </Button>
         </div>
       </SheetBody>
+    </>
+  )
+}
+
+/** The session that does the task: started from here, then its branch, pull request and checks. */
+function TaskWorkLine({ task }: { task: Task }) {
+  const t = useT()
+  const navigate = useNavigate()
+  const topic = task.topic_path!
+  const st = workState(task)
+  const w = task.work
+  const start = () => {
+    // the task waits in the composer of a new session of its topic: nothing is sent before the user sends it
+    const notes = task.notes.trim().slice(0, 6000)
+    giveTask(`new:${topic}`, task.id, task.title)
+    navigate(draftUrl(topic, notes ? `${task.title}\n\n${notes}` : task.title))
+  }
+  if (!task.session)
+    return (
+      <>
+        <Button variant="outline" size="sm" className="w-fit" onClick={start} data-testid="task-start">
+          <Play /> {t('tasks.start')}
+        </Button>
+        <p className="text-xs text-muted-foreground">{t('tasks.startHint')}</p>
+      </>
+    )
+  return (
+    <>
+      {st && (
+        <span className={cn('inline-flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px]', st.tone)} data-testid="task-work-line">
+          <WorkBadge task={task} className="px-0" />
+          <Sensitive length={8}>{t(st.key, { n: st.n ?? '', branch: w?.branch ?? '' })}</Sensitive>
+          {(w?.pr?.url || w?.merged?.url) && (
+            <a href={w?.pr?.url || w?.merged?.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 text-muted-foreground underline-offset-4 hover:underline">
+              GitHub <ArrowUpRight className="size-3.5" />
+            </a>
+          )}
+        </span>
+      )}
+      <Link
+        to={`/sessions?path=${encodeURIComponent(topic)}&session=${encodeURIComponent(task.session)}`}
+        className="inline-flex w-fit items-center pointer-coarse:min-h-10 gap-1 text-[13px] font-medium text-primary underline-offset-4 hover:underline"
+        data-testid="task-session"
+      >
+        {t('tasks.openSession')}
+        <ArrowUpRight className="size-3.5" />
+      </Link>
+      <button type="button" onClick={start} className="w-fit text-xs text-muted-foreground underline-offset-4 hover:underline">
+        {t('tasks.startAgain')}
+      </button>
     </>
   )
 }

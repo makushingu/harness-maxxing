@@ -6,7 +6,7 @@ import { useT, type TKey } from '@/i18n'
 import { Checkbox, Sensitive, useContextMenu } from '@/components/ui'
 import type { Task, TaskProject, TaskStatus } from '@/lib/types'
 import { dueState, sorter, type SortKey } from './model'
-import { DueBadge, LabelChip, PriorityIcon, ProjectChip, ProjectDot } from './parts'
+import { DueBadge, LabelChip, PriorityIcon, ProjectChip, ProjectDot, WorkBadge } from './parts'
 import { StatusPip, TaskMenuItems } from './Board'
 import { isSelectClick, useTaskSelection } from './selection'
 
@@ -285,6 +285,7 @@ function TaskRow({
           ))}
           {task.topic_path && showTopic && <TopicChip path={task.topic_path} />}
           {project && <ProjectChip project={project} className="max-w-40" />}
+          <WorkBadge task={task} />
           <DueBadge task={task} today={today} />
           {task.priority > 0 && <PriorityIcon p={task.priority} className="size-3.5" />}
         </span>

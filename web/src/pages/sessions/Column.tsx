@@ -49,7 +49,7 @@ import {
   uploadAttachment,
   sessionsQuery,
 } from '@/lib/queries'
-import { errorMessage, isApiError } from '@/lib/api'
+import { api, errorMessage, isApiError, seg } from '@/lib/api'
 import type { Effort, SentMention, Session } from '@/lib/types'
 import {
   Button,
@@ -87,6 +87,7 @@ import { Composer, type ComposerHandle } from './Composer'
 import { VoiceCall } from '@/features/voice/VoiceCall'
 import { CopyBar, CopyMark } from '@/features/code/CopyBar'
 import { NewCopy, useNewCopy } from '@/features/code/NewCopy'
+import { hasTask, takeTask } from '@/lib/taskStart'
 import { QuotePill } from './Quote'
 import { FileMenu } from './FileMenu'
 import { ItemContext } from './Items'
@@ -1276,7 +1277,7 @@ export function NewSessionColumn({ col, variant, index, count, place }: { col: E
   const [planMode, setPlanMode] = React.useState(false)
   const [push, setPush] = React.useState(true)
   const phones = useHasPushDevice()
-  const copy = useNewCopy(col.path)
+  const copy = useNewCopy(col.path, hasTask(`new:${col.path}`))
   const newCommands = useSlashCommands(col.path, { model, onModel: setModel, effort, onEffort: setEffort, plan: planMode, onPlan: () => setPlanMode((p) => !p) })
   const composer = React.useRef<ComposerHandle>(null)
   const drop = useFileDrop(col.key, null, composer)
@@ -1309,6 +1310,8 @@ export function NewSessionColumn({ col, variant, index, count, place }: { col: E
     try {
       const s = await create.mutateAsync({ path: col.path, title: title.trim() || undefined, model: model || undefined, effort: effort || undefined, plan_mode: planMode || undefined, push: push ? undefined : false, worktree: copy.value, ...body })
       made.current = s.id
+      const task = takeTask(`new:${col.path}`, body.message || '')
+      if (task) void api.post(`/api/tasks/${seg(task)}/session`, { session: s.id }).catch(() => undefined)   // the task follows this session
       seedEmptyLog(s.id)
       usePending.getState().add(s.id, pending)
       if (!body.voice) saveDraft(`new:${col.path}`, '')

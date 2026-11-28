@@ -13,13 +13,14 @@ type Copy = NonNullable<CreateSessionBody['worktree']>
 const KEY = (path: string) => `mx-copy:${path}`
 
 /** The `worktree` field of the new session (undefined = in the topic folder, as usual). */
-export function useNewCopy(path: string) {
+export function useNewCopy(path: string, wanted = false) {
   const { data: settings } = useSettings()
   const on = !!settings?.code_mode
   const q = useCopyRepos(path, on && !!path)
   const repos = React.useMemo(() => (q.data?.repos ?? []).filter((r) => !r.error), [q.data])
-  const [want, setWant] = React.useState(() => localStorage.getItem(KEY(path)) === '1')
-  React.useEffect(() => setWant(localStorage.getItem(KEY(path)) === '1'), [path])
+  // `wanted`: a session started for a task works on its own branch unless the user unticks it
+  const [want, setWant] = React.useState(() => wanted || localStorage.getItem(KEY(path)) === '1')
+  React.useEffect(() => setWant(wanted || localStorage.getItem(KEY(path)) === '1'), [path, wanted])
   const [repo, setRepo] = React.useState('')
   const [base, setBase] = React.useState('')
   const [prepare, setPrepare] = React.useState<string | null>(null)

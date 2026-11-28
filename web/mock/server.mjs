@@ -1788,6 +1788,15 @@ R('PATCH', '/api/tasks/:id', ({ params, body }) => {
   applyTask(tk, body); bus('tasks')
   return tk
 })
+// the session started for a task: here its pull request is already open, one check failed (taskflow.py)
+R('POST', '/api/tasks/:id/session', ({ params, body }) => {
+  const tk = S.tasks.tasks.find((x) => x.id === params.id) || fail(404, 'not_found', 'Task not found')
+  Object.assign(tk, { session: body.session, status: tk.status === 'todo' ? 'doing' : tk.status,
+    work: { branch: 'session/fix-the-login-page', github: 'acme/app', pr: { number: 12, url: 'https://github.com/acme/app/pull/12', draft: false },
+      checks: { total: 3, ok: 2, failed: 1, pending: 0 }, merged: null } })
+  bus('tasks')
+  return tk
+})
 R('DELETE', '/api/tasks/:id', ({ params }) => {
   const tk = S.tasks.tasks.find((x) => x.id === params.id) || fail(404, 'not_found', 'Task not found')
   S.tasks.tasks = S.tasks.tasks.filter((x) => x !== tk); bus('tasks')
@@ -2403,6 +2412,7 @@ function resetScenario(name) {
   for (const id of Object.keys(S?.timers || {})) for (const h of S.timers[id]) clearTimeout(h)
   GEN++
   S = buildState(name)
+  Object.assign(openShared, { ids: null, rev: 0 })   // the sessions of the state before no longer exist
   startMaxxing()
   for (const set of sessionSubs.values()) for (const r of set) r.end()
   sessionSubs.clear()

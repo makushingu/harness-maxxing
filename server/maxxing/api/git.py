@@ -97,7 +97,10 @@ class MergeIn(PullAct):
 
 @router.post("/api/git/pull/merge")
 async def pull_merge(b: MergeIn):
-    return await _call(gitview.pull_merge, _gh_repo(b.repo), b.number, b.method, b.sha)
+    out = await _call(gitview.pull_merge, _gh_repo(b.repo), b.number, b.method, b.sha)
+    from .. import taskflow
+    taskflow.soon()                              # the task this pull request delivers is done
+    return out
 
 
 @router.post("/api/git/pull/close")
