@@ -4,7 +4,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from .. import memory, memory_review
 from ..security import require_auth
@@ -21,6 +21,18 @@ async def get_memory():
 @router.post("/compact")
 async def compact():
     return {"session": await asyncio.to_thread(memory.start_compaction)}
+
+
+@router.get("/review")
+async def review_history():
+    return {"mode": memory_review.mode(), "items": await asyncio.to_thread(memory_review.history)}
+
+
+@router.post("/review/{pid}/{action}")
+async def review_decide(pid: str, action: str):
+    if action not in ("accept", "refuse", "undo"):
+        raise HTTPException(404, detail={"error": "not_found", "message": "Unknown action"})
+    return {"result": await asyncio.to_thread(memory_review.decide, pid, action)}
 
 
 # ---- memory review: after an agent's run, and once a day for the busy topics (memory_review.py) ----------------

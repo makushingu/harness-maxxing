@@ -109,6 +109,11 @@ topic. The daily look reads the topics that had at least three sessions in the l
 most. From a shell: `maxxing memory-review undo ID` takes one back, `maxxing memory-review daily` runs the daily
 look now.
 
+**Settings -> Memory**, card **Written by Harness**, lists everything it wrote or proposes: the line, its memory
+file, why, a link to the session it comes from, and **Undo** (or **Accept** / **Refuse**). Every line it writes ends
+with its date, `(2026-11-28)`, so the newer of two lines is known; the table of memory files shows when each file
+last changed.
+
 To decide each one yourself, set `"memory_review": "ask"` in `config.json`: nothing is written, each one arrives
 with **Accept** and **Refuse** (`maxxing memory-review list`, `apply ID` or `apply all`, `reject ID`), and while three wait for one
 agent or topic, it is not read again. `"memory_review": false` turns it off.

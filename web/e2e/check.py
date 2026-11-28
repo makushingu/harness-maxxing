@@ -550,6 +550,23 @@ def j_usage_agents(r: Run) -> None:
     r.healthy(pg)
 
 
+def j_memory_review(r: Run) -> None:
+    """Settings -> Memory shows what Harness wrote by itself and where it comes from; Accept writes, Undo takes back."""
+    r.mock.scenario("ready")
+    pg = r.page()
+    r.go(pg, "/settings/memory")
+    box = pg.locator('[data-testid="memory-review"]')
+    box.get_by_text("Articles go out on Tuesdays.").wait_for()
+    if box.locator("li").count() != 2:
+        raise Failure("the review does not list its two entries")
+    box.locator("li").nth(1).get_by_text("agents/writer/memory.md").wait_for()      # where the line was written
+    box.locator("li").first.get_by_role("button", name="Accept").click()
+    box.locator("li").first.get_by_role("button", name="Undo").wait_for()            # written: it can be taken back
+    box.locator("li").nth(1).get_by_role("button", name="Undo").click()
+    pg.wait_for_function("""() => document.querySelectorAll('[data-testid="memory-review"] li').length === 1""")
+    r.healthy(pg)
+
+
 def j_logs_search(r: Run) -> None:
     """Settings -> System: a search in the logs says how many lines match; /metrics shows its token once."""
     r.mock.scenario("ready")
@@ -767,7 +784,7 @@ JOURNEYS = {
     "onboarding": j_onboarding, "session": j_session, "session-reload": j_session_reload,
     "new-session": j_new_session, "session-phone": j_session_phone, "palette": j_palette, "theme": j_theme,
     "setting-saved": j_setting_saved, "settings-nav": j_settings_nav, "files": j_files, "team": j_team, "nav": j_nav,
-    "usage-agents": j_usage_agents, "logs-search": j_logs_search, "turn-details": j_turn_details, "community": j_community, "guide-tools": j_guide_tools,
+    "usage-agents": j_usage_agents, "memory-review": j_memory_review, "logs-search": j_logs_search, "turn-details": j_turn_details, "community": j_community, "guide-tools": j_guide_tools,
     "push-feed": j_push_feed, "share": j_share, "task-start": j_task_start, "verify": j_verify, "merge-gate": j_merge_gate, "sign-out": j_sign_out,
 }
 

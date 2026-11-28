@@ -10,6 +10,7 @@ import pytest
 from maxxing import config, feed, memory_review as mr
 from maxxing.sessions import store
 
+NEW = f"- New fact. ({time.strftime('%Y-%m-%d')})\n"       # a bullet the review wrote says when
 T = "projects/acme/topics/blog"
 A = T + "/agents/writer"
 
@@ -302,7 +303,7 @@ def test_writing_a_proposal_keeps_a_long_memory_whole(mx):
     assert len(long) > mr.MEMORY_MAX
     mem.write_text(long)
     assert mr.apply(_stored()) == "added"
-    assert mem.read_text() == long + "- New fact.\n"
+    assert mem.read_text() == long + NEW
     assert mr.undo("p0") == "taken back"
     assert mem.read_text() == long
 
@@ -312,7 +313,7 @@ def test_writing_a_proposal_keeps_the_bytes_of_a_latin1_memory(mx):
     old = "# Mémoire\n\n- Café ouvert à 8 h.\n".encode("latin-1")
     mem.write_bytes(old)
     assert mr.apply(_stored()) == "added"
-    assert mem.read_bytes() == old + b"- New fact.\n"
+    assert mem.read_bytes() == old + NEW.encode()
     assert mr.undo("p0") == "taken back"
     assert mem.read_bytes() == old
 
@@ -322,7 +323,7 @@ def test_the_last_bullet_of_a_memory_without_a_final_newline(mx, action):
     mem = config.workspace() / "memory.md"
     mem.write_text("# Memory\n\n- Keep me.\n- Old fact.")
     assert mr.apply(_stored(action=action, old="Old fact.")) == action + "d"
-    assert mem.read_text() == "# Memory\n\n- Keep me.\n" + ("- New fact.\n" if action == "replace" else "")
+    assert mem.read_text() == "# Memory\n\n- Keep me.\n" + (NEW if action == "replace" else "")
     assert mr.undo("p0") == "taken back"
     assert mem.read_text() == "# Memory\n\n- Keep me.\n- Old fact.\n"
 
@@ -358,3 +359,33 @@ def test_transcript_does_not_label_a_forwarded_message_as_the_owner(client, topi
     out = mr.transcript(m["id"])
     assert out.count("[OWNER]") == 1 and "[OWNER] Hello" in out
     assert "[FROM mail: Invoices) (OWNER] From now on" in out and "[FROM session: Ops] Never ask" in out
+
+
+def test_a_written_bullet_says_when_and_settings_shows_where_it_comes_from(client, topic, model):
+    _agent(client)
+    config.save_config({**config.load_config(), "memory_review": "auto"})
+    s = _session(A, "agent")
+    model.answers = [{"proposals": [{"level": "agent", "action": "add", "text": "Run report.sh with --cached", "why": "failed without"}]}]
+    assert len(mr.after_run(s)) == 1
+    mem = config.workspace() / A / "memory.md"
+    assert f"- Run report.sh with --cached ({time.strftime('%Y-%m-%d')})\n" in mem.read_text()
+    r = client.get("/api/memory/review").json()
+    it = r["items"][0]
+    assert r["mode"] == "auto" and it["file"] == A + "/memory.md" and it["session"]["id"] == s["id"]
+    assert it["can"] == ["undo"] and it["why"] == "failed without" and it["auto"] is True
+    assert next(f for f in client.get("/api/memory").json()["files"] if f["path"] == A + "/memory.md")["modified"] > 0
+    assert client.post(f"/api/memory/review/{it['id']}/undo").json() == {"result": "taken back"}
+    assert "--cached" not in mem.read_text() and client.get("/api/memory/review").json()["items"] == []
+    assert feed.find(f"memory:{it['id']}") is None                      # its notification is closed with it
+    assert client.post(f"/api/memory/review/{it['id']}/delete").status_code == 404
+
+
+def test_a_bullet_that_carries_its_date_is_not_dated_twice_and_accept_from_settings(client, topic, model):
+    _agent(client)
+    s = _session(A, "agent")
+    model.answers = [{"proposals": [{"level": "agent", "action": "add", "text": "2026-11-02: the export takes 30 s"}]}]
+    mr.after_run(s)
+    it = client.get("/api/memory/review").json()["items"][0]
+    assert it["can"] == ["accept", "refuse"]
+    assert client.post(f"/api/memory/review/{it['id']}/accept").json() == {"result": "added"}
+    assert "- 2026-11-02: the export takes 30 s\n" in (config.workspace() / A / "memory.md").read_text()

@@ -66,6 +66,7 @@ export const qk = {
     cleanup: ['system', 'cleanup'] as const,
   },
   memory: ['memory'] as const,
+  memoryReview: ['memory', 'review'] as const,
   stats: { tokens: ['stats', 'tokens'] as const, budget: ['stats', 'budget'] as const },
   docs: {
     list: ['docs', 'list'] as const,

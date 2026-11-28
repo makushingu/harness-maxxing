@@ -2173,11 +2173,24 @@ R('GET', '/api/system/changelog', () => ({ version: VERSION, entries: [
   { version: '1.9.0', label: '', current: false, body: '- Earlier release.' },
 ] }))
 R('GET', '/api/memory', () => ({ max_lines: S.settings.memory_max_lines ?? 200, files: [
-  { path: 'memory.md', level: 'global', lines: 42, bytes: 2100, over: false },
+  { path: 'memory.md', level: 'global', lines: 42, bytes: 2100, over: false, modified: now() - 7200 },
   { path: 'projects/acme/memory.md', level: 'project', lines: 260, bytes: 14000, over: (S.settings.memory_max_lines ?? 200) > 0 && 260 > (S.settings.memory_max_lines ?? 200) },
   { path: 'projects/acme/topics/blog/memory.md', level: 'topic', lines: 80, bytes: 4100, over: false },
 ] }))
 R('POST', '/api/memory/compact', () => ({ session: S.sessions[0] || null }))
+// what the memory review wrote (Undo) or proposes (Accept / Refuse): Settings -> Memory
+const MOCK_REVIEW = { list: [
+  { id: 'mr1', state: 'new', level: 'topic', action: 'add', at: now() - 3600, text: 'Articles go out on Tuesdays.', old: '', why: 'said in 3 sessions', file: 'projects/acme/topics/blog/memory.md', auto: false, session: null, can: ['accept', 'refuse'] },
+  { id: 'mr2', state: 'applied', level: 'agent', action: 'add', at: now() - 86400, text: 'Wait 30 s after asking for the export (2026-11-27)', old: '', why: 'failed twice without', file: 'projects/acme/topics/blog/agents/writer/memory.md', auto: true, session: null, can: ['undo'] },
+] }
+R('GET', '/api/memory/review', () => ({ mode: 'auto', items: MOCK_REVIEW.list }))
+R('POST', '/api/memory/review/:pid/:action', ({ params }) => {
+  const it = MOCK_REVIEW.list.find((x) => x.id === params.pid)
+  if (!it) return { result: 'unknown or already handled' }
+  if (params.action === 'accept') Object.assign(it, { state: 'applied', can: ['undo'] })
+  else MOCK_REVIEW.list = MOCK_REVIEW.list.filter((x) => x !== it)
+  return { result: params.action === 'accept' ? 'added' : params.action === 'undo' ? 'taken back' : 'rejected' }
+})
 // the day's spend of the mock is fixed: $8.40
 R('GET', '/api/stats/budget', () => ({ usd_per_day: S.settings.daily_budget_usd || 0, spent_today: 8.4, reached: !!S.settings.daily_budget_usd && S.settings.daily_budget_usd <= 8.4 }))
 function mockTokenStats() {

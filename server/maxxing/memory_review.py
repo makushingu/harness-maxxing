@@ -286,7 +286,7 @@ def _apply(pid: str) -> str:
     body = _whole(f) if f.exists() else ""
     if body and not body.endswith("\n"):                                      # edited by hand: the last bullet too
         body += "\n"
-    line = it["text"] if it["text"].startswith("- ") else "- " + it["text"]
+    line = dated(it["text"] if it["text"].startswith("- ") else "- " + it["text"])
     done, old_line = "added", ""
     if it["action"] in ("replace", "remove") and it["old"] and it["old"] in body:
         old_line = next((ln for ln in body.split("\n") if it["old"] in ln), it["old"])
@@ -302,6 +302,54 @@ def _apply(pid: str) -> str:
     it["undo"] = {"line": line if done in ("added", "replaced") else "", "old": old_line if done != "added" else ""}
     _save(items)
     return done
+
+
+_DATED = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
+
+
+def dated(line: str, at: float | None = None) -> str:
+    """A bullet written by the review says when: " (2026-11-28)" at its end, unless it already carries a date. Which
+    of two bullets is the newer one is then read in the memory itself; the session it comes from is in history()."""
+    return line if _DATED.search(line) else f"{line} ({time.strftime('%Y-%m-%d', time.localtime(at))})"
+
+
+def history(limit: int = 50) -> list[dict]:
+    """What the review wrote or proposes, newest first (Settings -> Memory): each entry with its memory file or skill,
+    the session it was read in, and what the owner can still do with it (`can`: accept / refuse / undo)."""
+    from .sessions import store
+    ws = config.workspace()
+    out = []
+    for it in sorted((x for x in load() if x.get("state") in ("new", "applied")), key=lambda x: -(x.get("at") or 0))[:limit]:
+        skill = it["level"] == "skill"
+        if skill:
+            k = it.get("skill") or {}
+            f = Path(str(k.get("folder"))) if it["action"] == "remove" else skill_file(it["path"], k).parent
+        else:
+            f = levels(it["path"]).get(it["level"])
+        try:
+            rel = f.relative_to(ws).as_posix() if f else ""
+        except ValueError:
+            rel = str(f)
+        meta = store.read(str(it.get("sid") or "")) if it.get("sid") else None
+        new = it["state"] == "new"
+        out.append({"id": it["id"], "state": it["state"], "level": it["level"], "action": it["action"], "at": it.get("at") or 0,
+                    "text": skill_name(it.get("skill") or {}) if skill else (it.get("text") or it.get("old") or ""),
+                    "old": "" if skill else (it.get("old") or "") if it["action"] == "replace" else "",
+                    "why": it.get("why") or "", "file": rel, "auto": bool(it.get("auto")),
+                    "session": {"id": meta["id"], "title": meta.get("title") or "", "path": meta.get("path") or ""} if meta else None,
+                    "can": ["accept", "refuse"] if new else [] if skill and it["action"] == "remove" else ["undo"]})
+    return out
+
+
+def decide(pid: str, action: str) -> str:
+    """The owner's click in Settings -> Memory: the same as the notification's button, which is then closed."""
+    said = apply(pid) if action == "accept" else undo(pid) if action == "undo" else reject(pid)
+    try:
+        from . import feed
+        feed.resolve(f"memory:{pid}", said[:1].upper() + said[1:], read=True, notify=False)
+    except Exception:  # noqa: BLE001 - the notification stays open: its button then says "already handled"
+        log.exception("closing the notification of memory proposal %s", pid)
+    return said
 
 
 def undo(pid: str) -> str:

@@ -987,7 +987,24 @@ export type Settings = {
 export type ResultField = 'model' | 'duration' | 'cost' | 'tokens' | 'cache'
 
 /* ---------------------------------------------------------------- Memory, stats, changelog */
-type MemoryFile = { path: string; level: 'global' | 'project' | 'topic'; lines: number; bytes: number; over: boolean; heavy?: boolean }
+type MemoryFile = { path: string; level: 'global' | 'project' | 'topic' | 'agent'; lines: number; bytes: number; over: boolean; heavy?: boolean; modified?: number }
+export type MemoryReviewAction = 'accept' | 'refuse' | 'undo'
+/** One thing the memory review wrote (`applied`) or proposes (`new`): a bullet of a memory.md, or a skill. */
+export type MemoryReviewItem = {
+  id: string
+  state: 'new' | 'applied'
+  level: 'global' | 'project' | 'topic' | 'agent' | 'skill'
+  action: 'add' | 'replace' | 'remove'
+  at: number
+  text: string
+  old: string
+  why: string
+  file: string
+  auto: boolean
+  session: { id: string; title: string; path: string } | null
+  can: MemoryReviewAction[]
+}
+export type MemoryReview = { mode: 'auto' | 'ask' | 'off'; items: MemoryReviewItem[] }
 export type MemoryInfo = { max_lines: number; max_bytes?: number; files: MemoryFile[] }
 export type TokenCounts = { input: number; output: number; cache_read: number; cache_write: number; total: number; cost_usd: number; turns: number; sessions: number }
 export type TokenStats = {

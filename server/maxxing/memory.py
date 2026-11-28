@@ -36,7 +36,7 @@ def max_bytes(limit: int | None = None) -> int:
 
 def files() -> list[dict]:
     """Every memory.md (global, projects, topics, agents) -> [{path (workspace-relative), level, lines, bytes, over,
-    heavy}]: `over` = above the limit, in lines or in weight; `heavy` = in weight."""
+    heavy, modified}]: `over` = above the limit, in lines or in weight; `heavy` = in weight."""
     ws = config.workspace()
     limit = max_lines()
     weight = max_bytes(limit)
@@ -68,7 +68,7 @@ def files() -> list[dict]:
             continue
         heavy = bool(limit) and size > weight
         out.append({"path": rel, "level": level, "lines": lines, "bytes": size,
-                    "over": heavy or (bool(limit) and lines > limit), "heavy": heavy})
+                    "over": heavy or (bool(limit) and lines > limit), "heavy": heavy, "modified": int(st.st_mtime)})
     return out
 
 

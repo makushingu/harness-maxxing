@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, seg } from '../api'
-import type { Changelog, CleanupPartId, CleanupResult, CleanupScan, CpuSnapshot, Health, LogFilters, LogsPayload, MemoryInfo, MetricsStatus, Ok, Preflight, Service, ServiceAction, Session, TokenStats, UpdateReport, UsagePayload, VersionInfo } from '../types'
+import type { Changelog, CleanupPartId, CleanupResult, CleanupScan, CpuSnapshot, Health, LogFilters, LogsPayload, MemoryInfo, MemoryReview, MemoryReviewAction, MetricsStatus, Ok, Preflight, Service, ServiceAction, Session, TokenStats, UpdateReport, UsagePayload, VersionInfo } from '../types'
 import { qk } from './keys'
 import { useMut } from './util'
 
@@ -89,6 +89,12 @@ export function useBudget() {
 }
 export function useMemory(enabled = true) {
   return useQuery({ queryKey: qk.memory, queryFn: () => api.get<MemoryInfo>('/api/memory'), enabled })
+}
+export function useMemoryReview() {
+  return useQuery({ queryKey: qk.memoryReview, queryFn: () => api.get<MemoryReview>('/api/memory/review') })
+}
+export function useMemoryReviewAction() {
+  return useMut(({ id, action }: { id: string; action: MemoryReviewAction }) => api.post<{ result: string }>(`/api/memory/review/${seg(id)}/${action}`), { invalidate: [qk.memory] })
 }
 export function useCompactMemory() {
   return useMut(() => api.post<{ session: Session }>('/api/memory/compact'), { invalidate: [qk.sessions.all, qk.workspace] })

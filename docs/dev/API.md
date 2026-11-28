@@ -1143,8 +1143,10 @@ Built-in card links are SPA routes: `/sessions/<id>`, `/sessions`, `/tasks?task=
 
 | Method | Path | Body | Response |
 |---|---|---|---|
-| GET | `/api/memory` | – | `{max_lines, max_bytes (the weight that goes with the line limit: 1 KB for 10 lines, 0 = no limit), files:[{path (workspace-relative), level:"global"\|"project"\|"topic"\|"agent", lines, bytes, over:bool (above the limit, in lines or in weight), heavy:bool (in weight)}]}` |
+| GET | `/api/memory` | – | `{max_lines, max_bytes (the weight that goes with the line limit: 1 KB for 10 lines, 0 = no limit), files:[{path (workspace-relative), level:"global"\|"project"\|"topic"\|"agent", lines, bytes, over:bool (above the limit, in lines or in weight), heavy:bool (in weight), modified (epoch s of the last change)}]}` |
 | POST | `/api/memory/compact` | – | `{session: Session}` — a session at the workspace root runs the memory-compaction skill now with the limit (lines and weight) |
+| GET | `/api/memory/review` | – | `{mode:"auto"\|"ask"\|"off", items:[{id, state:"new"\|"applied", level:"global"\|"project"\|"topic"\|"agent"\|"skill", action:"add"\|"replace"\|"remove", at, text, old, why, file (workspace-relative memory.md or skill folder), auto:bool (written without asking), session:{id, title, path}\|null (where it was read), can:["accept"\|"refuse"\|"undo"]}]}` — what the memory review wrote or proposes, newest first, 50 at most (Settings -> Memory). A bullet it writes ends with its date, ` (YYYY-MM-DD)`, unless it carries one |
+| POST | `/api/memory/review/{pid}/{action}` | – | `action` = `accept` \| `refuse` \| `undo` → `{result}` (what happened, e.g. `added`, `taken back`, `unknown or already handled`); the proposal's notification is closed · `404 not_found` (another action) |
 
 ## Push (Web Push, Settings -> Alerts -> Mobile notifications)
 
