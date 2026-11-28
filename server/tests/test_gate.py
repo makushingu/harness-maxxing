@@ -184,3 +184,11 @@ def test_polling_the_gate_of_a_pull_request_reads_github_once(client, code, monk
     assert len(calls) == 3, calls                              # the pull request, its check runs, its statuses
     client.post("/api/git/pull/merge", json=at)                # a merge reads GitHub again
     assert len(calls) == 6, calls
+
+
+def test_gate_and_verify_of_a_wrong_type_take_their_defaults(client, code):
+    from maxxing import worktrees
+    _, clone = code
+    worktrees._prefs_file().write_text(json.dumps({str(clone): {"gate": "false", "verify": {"a": 1}}}))
+    p = worktrees.prefs(clone)
+    assert p["gate"] is False and p["verify"] == "", p
