@@ -1,0 +1,1 @@
+var e={"cut.limit.title":`已达到使用上限`,"cut.limit.text":`Claude 在本回合结束前停止了。可换用其他模型继续，或稍后用此模型继续。`,"cut.busy.title":`Claude 未响应`,"cut.busy.text":`Claude 的服务器过载或宕机，本回合已停止。请稍后继续。`,"cut.error.title":`本回合因错误而停止`,"cut.error.text":`Claude 在结束前停止了。没有任何内容丢失：可从中断处继续。`,"cut.resume":`继续`,"cut.resumeText":`从你停下的地方继续。`,"cut.usage":`管理用量`,"cut.details":`详情`};export{e as default};

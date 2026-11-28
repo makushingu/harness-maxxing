@@ -1,0 +1,1 @@
+var e={"rmark.read":`标为已读`,"rmark.unread":`标为未读`};export{e as default};

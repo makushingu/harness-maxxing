@@ -1,0 +1,1 @@
+var e={"drag.dropToQuote":`ドロップしてこのセッションに引用`};export{e as default};

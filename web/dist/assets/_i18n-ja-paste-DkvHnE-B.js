@@ -1,0 +1,1 @@
+var e={"paste.asFile":`ファイルとして貼り付けました`,"paste.asFileHint":`長いデータや構造化データは、メッセージを埋め尽くす代わりに添付されます。Ctrl+Shift+V なら常にテキストとして貼り付けます。`,"paste.asText":`テキストとして貼り付け`};export{e as default};
