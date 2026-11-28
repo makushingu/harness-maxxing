@@ -9,7 +9,7 @@ import pytest
 
 from conftest import wait_idle
 from test_agents import A, _create as _create_any, _on
-from maxxing import agents, approvals, cli
+from maxxing import agents, approvals, cli, config
 
 
 def _create(client, **extra) -> dict:
@@ -201,3 +201,14 @@ def test_a_request_that_cannot_be_written_says_what_was_applied_and_what_was_not
     assert "No space left" in r["error"] and "domains" in r["error"]
     a = agents.load(A)
     assert a["name"] == "Renamed" and "evil.example.com" not in a["domains"]
+
+
+def test_a_server_permission_mode_that_is_not_a_string_counts_as_the_most_open(client, topic, mx):
+    _on(client)
+    _create(client, permission_mode="acceptEdits")
+    p = config.config_path()
+    c = json.loads(p.read_text()); c["permission_mode"] = ["bypass"]
+    p.write_text(json.dumps(c))
+    r = agents.request_change(A, {"permission_mode": ""}, session="s1")      # used to raise TypeError (a 500)
+    assert "permission_mode" in r["asked"]
+    assert agents._mode_rank(["bypass"], A) == 2 and agents._mode_rank("weird", A) == 2

@@ -909,9 +909,12 @@ def _mode_rank(mode: str, path: str) -> int:
     """How open a permission mode is; "" is what the agent then inherits: its topic's mode, else the server's."""
     if not mode and path:
         from . import workspace
-        mode = workspace.topic_permission_mode(topic_of(path)) or config.load_config().get("permission_mode") \
+        server = config.load_config().get("permission_mode")
+        mode = workspace.topic_permission_mode(topic_of(path)) or (server if isinstance(server, str) else "") \
             or "bypass"
-    return _MODE_RANK.get(mode or "acceptEdits", 1)
+    if not isinstance(mode, str):      # a hand-edited value that is not a mode: count it as the most open
+        return 2
+    return _MODE_RANK.get(mode or "acceptEdits", 2)
 
 
 def _safer(cur: dict, target: dict, k: str, path: str = "") -> bool:
