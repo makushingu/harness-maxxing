@@ -4519,6 +4519,7 @@ export const zh: Record<keyof typeof en, string> = {
   "copy.noPrText": "Claude 无法撰写描述",
   "copy.mergedDirty": "副本中仍有文件：请先提交或丢弃",
   "copy.ports": "端口 {a}-{b} 用于其开发服务器（$MAXXING_PORT）",
+  "copy.details": "副本详情",
   "copy.included": "来自 .worktreeinclude 的文件：{count}",
   "copy.conflict": "{base} 修改了相同的行：Claude 可以在会话中解决",
   "copy.askConflict": "把 {base} 合并到此分支：它修改了相同的行。请解决冲突、运行测试并提交。之后我再合并。",
