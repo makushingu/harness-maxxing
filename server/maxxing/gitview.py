@@ -1102,6 +1102,7 @@ def check_rerun(full: str, job: int) -> dict:
 
 FAILED = ("failure", "timed_out", "cancelled", "action_required")
 BRIEF_MAX, BRIEF_CHECKS = 24000, 5
+_CLOSE_LOG = re.compile(r"<\s*/\s*check-log", re.I)
 
 
 def failed_brief(full: str, sha: str, checks: list[dict] | None = None) -> str:
@@ -1122,7 +1123,8 @@ def failed_brief(full: str, sha: str, checks: list[dict] | None = None) -> str:
         log = log or (c.get("summary") or "")
         if log:
             room -= len(log)
-            head += f"\n<check-log name={json.dumps(c['name'])}>\n{log.replace('</check-log', '< /check-log')}\n</check-log>"
+            log = _CLOSE_LOG.sub(r"<\\/check-log", log)            # any case or spacing: the frame is never closed
+            head += f"\n<check-log name={json.dumps(c['name'])}>\n{log}\n</check-log>"
         parts.append(head)
     if len(bad) > BRIEF_CHECKS:
         parts.append(f"- and {len(bad) - BRIEF_CHECKS} more failed check(s)")
