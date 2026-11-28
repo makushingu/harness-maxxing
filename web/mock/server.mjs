@@ -2090,7 +2090,7 @@ R('GET', '/api/memory', () => ({ max_lines: S.settings.memory_max_lines ?? 200, 
 R('POST', '/api/memory/compact', () => ({ session: S.sessions[0] || null }))
 // the day's spend of the mock is fixed: $8.40
 R('GET', '/api/stats/budget', () => ({ usd_per_day: S.settings.daily_budget_usd || 0, spent_today: 8.4, reached: !!S.settings.daily_budget_usd && S.settings.daily_budget_usd <= 8.4 }))
-R('GET', '/api/stats/tokens', () => {
+function mockTokenStats() {
   const row = (total) => ({ input: Math.round(total * 0.05), output: Math.round(total * 0.05), cache_read: Math.round(total * 0.85), cache_write: Math.round(total * 0.05), total, cost_usd: total / 400000, turns: Math.round(total / 50000), sessions: 3 })
   const days = Array.from({ length: 30 }, (_, i) => ({ date: new Date(Date.now() - (29 - i) * 864e5).toISOString().slice(0, 10), tokens: 200000 + ((i * 7919) % 9) * 90000, cost_usd: 1.2 }))
   return { totals: row(12_500_000), projects: [{ name: 'acme', ...row(9_000_000) }, { name: '', ...row(3_500_000) }],
@@ -2098,6 +2098,30 @@ R('GET', '/api/stats/tokens', () => {
     sessions: (S.sessions || []).slice(0, 5).map((x, i) => ({ id: x.id, title: x.title, path: x.path, archived: false, updated: x.updated, ...row(2_000_000 - i * 300_000) })),
     agents: mockAgents().slice(0, 2).map((a, i) => ({ path: a.path, label: a.display_name, name: a.name, agent: a.display_name, ...row(1_800_000 - i * 700_000), days: days.slice(-14).map((d) => ({ ...d, tokens: Math.round(d.tokens / (4 + i)) })) })),
     days, at: now() }
+}
+R('GET', '/api/stats/tokens', () => mockTokenStats())
+// Settings -> Usage, CSV / JSON buttons: the same columns as the server (stats.export_rows), from the mock's figures
+const EXPORT_COUNTS = ['total', 'input', 'output', 'cache_read', 'cache_write', 'cost_usd', 'turns']
+const EXPORT_COLUMNS = { days: ['date', 'tokens', 'cost_usd'], projects: ['project', ...EXPORT_COUNTS, 'sessions'],
+  topics: ['path', 'label', 'agent', ...EXPORT_COUNTS, 'sessions'], agents: ['path', 'agent', 'label', ...EXPORT_COUNTS, 'sessions'],
+  sessions: ['id', 'title', 'path', 'archived', 'updated', ...EXPORT_COUNTS] }
+R('GET', '/api/stats/export', ({ q, res }) => {
+  const group = q.get('group') || 'days', format = q.get('format') || 'csv'
+  if (!EXPORT_COLUMNS[group]) fail(400, 'bad_group', 'group is one of ' + Object.keys(EXPORT_COLUMNS).join(', '))
+  if (!['csv', 'json'].includes(format)) fail(400, 'bad_format', 'format is csv or json')
+  const cols = EXPORT_COLUMNS[group]
+  const rows = (mockTokenStats()[group] || []).map((r) => {
+    const x = group === 'sessions' ? r : { ...r, project: r.name || '', agent: r.agent || r.name || '' }
+    return Object.fromEntries(cols.map((c) => [c, x[c] ?? '']))
+  })
+  const cell = (v) => { const t = String(v); return typeof v === 'string' && /^[=+\-@\t\r]/.test(t) ? `'${t}` : t }
+  const quote = (t) => (/[",\n\r]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t)
+  const body = format === 'csv' ? [cols.join(','), ...rows.map((r) => cols.map((c) => quote(cell(r[c]))).join(','))].join('\n') + '\n'
+    : JSON.stringify({ group, columns: cols, rows })
+  res.writeHead(200, { 'Content-Type': format === 'csv' ? 'text/csv; charset=utf-8' : 'application/json',
+    'Content-Disposition': `attachment; filename="harness-usage-${group}.${format}"`, 'Cache-Control': 'no-store' })
+  res.end(body)
+  return RAW
 })
 // What a turn did (the "Turn details" window): two turns for every session of the mock.
 function mockTurns() {
