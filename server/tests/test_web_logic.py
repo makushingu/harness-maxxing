@@ -848,3 +848,29 @@ def test_the_join_error_goes_once_the_link_is_changed_or_tried_again():
     body = src[src.index("export function AddFriendDialog("):]
     assert re.search(r"const doJoin = \(\) => \{\s+setJoinError\(''\)", body)
     assert re.search(r"onChange=\{\(e\) => \{\s+setPaste\(e\.target\.value\)\s+setJoinError\(''\)", body)
+
+
+def test_a_chart_value_sent_as_text_is_drawn_like_a_number(tmp_path):
+    """An extension in shell / jq often sends "40": the scale counts it; null, "" and "abc" stay points without a value."""
+    out = _run_ts(tmp_path, WEB / "pages" / "dashboard" / "chartScale.ts", """
+        return [m.chartScale(['40', '7']), m.chartScale([null, '', 'abc', 8]).max,
+                [m.chartValue(' 12 '), m.chartValue(null), m.chartValue(''), m.chartValue('abc')].map((v) => Number.isFinite(v) ? v : 'nan')]""")
+    assert out == [{"min": 0, "max": 50, "ticks": [0, 25, 50]}, 10, [12, "nan", "nan", "nan"]]
+    src = (WEB / "pages" / "dashboard" / "charts.tsx").read_text(encoding="utf-8")
+    assert "chartValue(p[1])" in src
+
+
+def test_a_very_long_chart_series_still_gets_a_scale(tmp_path):
+    out = _run_ts(tmp_path, WEB / "pages" / "dashboard" / "chartScale.ts", """
+        const v = Array.from({ length: 200000 }, (_, i) => i % 97 - 10)
+        return m.chartScale(v)""")
+    assert out == {"min": -10, "max": 100, "ticks": [-10, 0, 100]}
+
+
+def test_the_chart_tooltip_shows_a_dash_for_a_point_without_a_value(tmp_path):
+    out = _run_ts(tmp_path, WEB / "pages" / "dashboard" / "chartScale.ts", """
+        const f = (n) => n + ' €'
+        return [null, undefined, NaN, 'abc', 0, '40'].map((v) => m.tipValue(v, f))""")
+    assert out == ["–", "–", "–", "–", "0 €", "40 €"]
+    src = (WEB / "pages" / "dashboard" / "charts.tsx").read_text(encoding="utf-8")
+    assert "tipValue(s.points[hover]?.[1], fmtV)" in src and "?.[1] ?? 0" not in src

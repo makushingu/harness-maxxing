@@ -75,7 +75,7 @@ export function ThemesSection() {
                       <p className="text-[13px] text-muted-foreground">
                         {t('appearance.css')}: {t(th.css_state === 'on' ? 'themes.cssOn' : 'themes.cssStale')}
                         {th.css_state === 'stale' && (
-                          <button type="button" onClick={() => ask(t('appearance.cssVerifyPrompt', { id: th.id }))} className="ml-2 font-medium text-primary underline-offset-4 hover:underline pointer-coarse:py-1">
+                          <button type="button" onClick={() => ask(t('appearance.cssVerifyPrompt', { id: th.id }))} className="ml-2 font-medium text-primary underline-offset-4 hover:underline pointer-coarse:inline-flex pointer-coarse:min-h-10 pointer-coarse:items-center">
                             {t('appearance.cssVerify')}
                           </button>
                         )}

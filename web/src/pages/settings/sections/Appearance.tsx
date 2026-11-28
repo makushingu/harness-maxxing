@@ -213,7 +213,7 @@ function ThemePicker() {
       )}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
         <span>{t('appearance.moreThemes')}</span>
-        <button type="button" onClick={() => ask(t('appearance.askPrompt'))} className="font-medium text-primary underline-offset-4 outline-none hover:underline focus-visible:underline pointer-coarse:py-1">
+        <button type="button" onClick={() => ask(t('appearance.askPrompt'))} className="font-medium text-primary underline-offset-4 outline-none hover:underline focus-visible:underline pointer-coarse:inline-flex pointer-coarse:min-h-10 pointer-coarse:items-center">
           {t('appearance.ask')}
         </button>
       </div>
