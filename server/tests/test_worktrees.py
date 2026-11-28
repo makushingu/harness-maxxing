@@ -432,3 +432,14 @@ def test_a_repository_entry_that_is_not_an_object_counts_as_none(code):
     assert worktrees.prefs(clone)["copy_env"] is False
     worktrees._prefs_file().write_text('{"%s": "x"}' % clone)
     assert worktrees.set_prefs(clone, prepare="make")["prepare"] == "make"
+
+
+def test_two_damaged_versions_in_the_same_second_are_both_kept(code):
+    _, clone = code
+    f = worktrees._prefs_file()
+    f.write_text("{garbage-one")
+    worktrees.set_prefs(clone, prepare="a")
+    f.write_text("{garbage-two")
+    worktrees.set_prefs(clone, prepare="b")
+    kept = [p.read_text() for p in config.damaged_copies(f)]
+    assert "{garbage-one" in kept and "{garbage-two" in kept, kept

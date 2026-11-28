@@ -344,7 +344,12 @@ def _keep_damaged(path: Path) -> None:
         return
     except (OSError, ValueError):
         pass
-    dest = path.with_name(f"{path.name}.damaged-{time.strftime('%Y%m%d-%H%M%S')}")
+    stamp = time.strftime('%Y%m%d-%H%M%S')
+    dest = path.with_name(f"{path.name}.damaged-{stamp}")
+    n = 1
+    while dest.exists():                    # two damaged versions in the same second: both kept
+        dest = path.with_name(f"{path.name}.damaged-{stamp}-{n}")
+        n += 1
     shutil.copy2(path, dest)
     os.chmod(dest, 0o600)
     log.error("%s was damaged: kept as %s before saving", path, dest)
