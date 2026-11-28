@@ -73,3 +73,21 @@ def test_the_api_shows_the_catalogue_and_installs_only_what_was_checked(client, 
 def test_an_odd_star_count_never_takes_the_catalogue_down(mx, monkeypatch, stars, shown):
     _site(monkeypatch, {}, [{"slug": "ok", "type": "theme", "repo": "a/b", "sha": SHA, "stars": stars}])
     assert [i["stars"] for i in community.catalogue(fresh=True)] == [shown]
+
+
+def test_a_damaged_archive_of_a_listing_is_a_clear_error(mx, monkeypatch):
+    _site(monkeypatch, {})
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr(f"repo-{SHA}/manifest.json", MANIFEST)
+        z.writestr(f"repo-{SHA}/README.md", "hello " * 200)
+    raw = bytearray(buf.getvalue())
+    with zipfile.ZipFile(io.BytesIO(bytes(raw))) as z:
+        info = z.getinfo(f"repo-{SHA}/README.md")
+    start = info.header_offset + 30 + len(info.filename.encode()) + len(info.extra)
+    raw[start:start + info.compress_size] = b"\xff" * info.compress_size       # an invalid deflate stream
+    monkeypatch.setattr(community, "_get", lambda url, cap: json.dumps({"items": [
+        {"slug": "demo-page", "type": "page", "repo": "someone/repo", "sha": SHA}]}).encode()
+        if url.endswith("/api/items") else bytes(raw))
+    with pytest.raises(community.PackageError, match="cannot be read"):
+        community.check_listing("demo-page")

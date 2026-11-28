@@ -759,6 +759,8 @@ def _fetched(slug: str) -> Iterator[tuple[Path, dict]]:
     """A listing as `<slug>.zip` in a temporary folder (removed on exit): its folder of the repository, downloaded
     at the reviewed commit. Entries keep their attributes: `report` and `install` do the checks."""
     import zipfile
+
+    from . import importer
     it = next((x for x in catalogue() if x["slug"] == slug), None)
     if not it:
         raise PackageError("this listing is not in the catalogue (removed, or not accepted yet)")
@@ -780,7 +782,7 @@ def _fetched(slug: str) -> Iterator[tuple[Path, dict]]:
                         dst.writestr(i, data)
                 if not dst.namelist():
                     raise PackageError(f"{it['path'] or 'the package'} is not in the repository at the reviewed commit")
-        except (zipfile.BadZipFile, RuntimeError, NotImplementedError):
+        except importer._UNREADABLE:            # also a damaged entry (zlib.error), a cut one (EOFError, OSError)
             raise PackageError("the downloaded archive cannot be read") from None
         yield out, it
 
