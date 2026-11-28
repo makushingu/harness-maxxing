@@ -1,4 +1,5 @@
 """The verification command of a repository (verify.py): proposed, kept per repository, run, fresh or not, fixed."""
+import json
 from pathlib import Path
 
 from conftest import wait_for, wait_idle
@@ -68,3 +69,13 @@ def test_a_command_that_hangs_is_stopped_with_what_it_started(client, code):
     wait_for(lambda: verify._running.get(verify._key(clone)), 5)
     client.post("/api/code/verify/stop", json={"repo": str(clone)})
     assert _done(client, clone)["run"]["state"] == "failed"
+
+
+def test_a_command_with_a_control_character_or_broken_text_is_refused(client, code):
+    _, clone = code
+    for bad in ("true\rhidden", "true\tx", "true\x1b[2K"):
+        assert client.put("/api/code/verify", json={"repo": str(clone), "command": bad}).status_code == 400, repr(bad)
+    r = client.put("/api/code/verify", content='{"repo": %s, "command": "true \\ud800"}' % json.dumps(str(clone)),
+                   headers={"content-type": "application/json"})
+    assert r.status_code == 400 and r.json()["error"] == "bad_command", r.text[:200]
+    assert verify.command(clone) == ""

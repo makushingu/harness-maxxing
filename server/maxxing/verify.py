@@ -45,7 +45,11 @@ def command(repo: Path) -> str:
 
 def set_command(repo: Path, cmd: str) -> str:
     cmd = (cmd or "").strip()
-    if len(cmd) > COMMAND_MAX or "\n" in cmd or "\0" in cmd:
+    try:
+        cmd.encode("utf-8")
+    except UnicodeEncodeError:
+        raise GitError(400, "bad_command", "the command is not valid text") from None
+    if len(cmd) > COMMAND_MAX or not cmd.isprintable():       # one line: no \n, \r, tab or other control character
         raise GitError(400, "bad_command", f"a command is one line of at most {COMMAND_MAX} characters")
     worktrees.set_prefs(worktrees.main_clone(repo), verify=cmd)
     return cmd
