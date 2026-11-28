@@ -17,6 +17,7 @@ from __future__ import annotations
 import calendar
 import errno
 import hashlib
+import json
 import logging
 import os
 import re
@@ -805,7 +806,7 @@ def overview(refresh: bool = False) -> dict:
 
 # ---- Changes view (codediff): the pull request of a branch, and opening one ------------------------------------
 
-def _gh_send(full: str, path: str, body: dict, method: str = "POST") -> Any:
+def _gh_send(full: str, path: str, body: dict, method: str = "POST", ok_empty: bool = False) -> Any:
     """POST (PUT, PATCH) to a repository URL with the first token GitHub accepts for it (a read-only token gets
     403/404)."""
     toks = _repo_tokens(_full(full))
@@ -821,6 +822,8 @@ def _gh_send(full: str, path: str, body: dict, method: str = "POST") -> Any:
             msg = r.json()
         except (ValueError, RecursionError):
             msg = None
+        if ok_empty and r.status_code in (200, 201, 202, 204):
+            return msg if isinstance(msg, dict) else {}
         if r.status_code in (200, 201):
             if not isinstance(msg, dict):               # a proxy's HTML page, a list: never a 500
                 raise GitError(502, "github_error", "GitHub sent an unreadable answer")
@@ -916,15 +919,24 @@ def _who(u: dict | None) -> dict:
 def _checks(full: str, sha: str | None) -> list[dict]:
     if not sha or not SHA_RE.match(sha):
         return []
+    # a check run of GitHub Actions has the id of its job: its log can be read, and it can be run again
     out = [{"name": c.get("name") or "", "status": c.get("status"), "conclusion": c.get("conclusion"),
-            "url": c.get("html_url")} for c in _check_runs(full, sha) if isinstance(c, dict)]
+            "url": c.get("html_url"), "id": c.get("id"),
+            "job": ((c.get("app") or {}).get("slug") == "github-actions") and isinstance(c.get("id"), int),
+            "summary": _short((c.get("output") or {}).get("title"), (c.get("output") or {}).get("summary"))}
+           for c in _check_runs(full, sha) if isinstance(c, dict)]
     st = _gh_repo(full, f"/repos/{full}/commits/{sha}/status")
     for c in (st or {}).get("statuses") or [] if isinstance(st, dict) else []:
         state = c.get("state")
         out.append({"name": c.get("context") or "", "status": "completed" if state != "pending" else "in_progress",
                     "conclusion": {"success": "success", "failure": "failure", "error": "failure"}.get(state),
-                    "url": c.get("target_url")})
+                    "url": c.get("target_url"), "id": None, "job": False,
+                    "summary": _short(c.get("description"))})
     return out
+
+
+def _short(*texts) -> str:
+    return "\n".join(str(t).strip() for t in texts if isinstance(t, str) and t.strip())[:600]
 
 
 def github_pull(full_name: str, number: int) -> dict:
@@ -1026,3 +1038,92 @@ def pull_close(full: str, number: int) -> dict:
     full, n = _full(full), _number(number)
     p = _gh_send(full, f"/repos/{full}/pulls/{n}", {"state": "closed"}, method="PATCH")
     return {"state": p.get("state")}
+
+
+# ---- the log of a failed check, and running it again (GitHub Actions jobs) -------------------------------------
+
+LOG_READ = 3_000_000        # bytes of a job log read at most (its end: the failure is there)
+LOG_MAX = 6000              # characters of one log shown or passed on to Claude
+_LOG_STAMP = re.compile(r"^\ufeff?\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z ", re.M)
+_ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
+
+
+def log_tail(text: str, limit: int = LOG_MAX) -> str:
+    """What says why a job failed: the lines up to its last `##[error]` (and the few after), without the
+    timestamps and the colours, at most `limit` characters cut at a line."""
+    lines = _ANSI.sub("", _LOG_STAMP.sub("", text.replace("\r\n", "\n"))).split("\n")
+    last = max((i for i, ln in enumerate(lines) if "##[error]" in ln), default=None)
+    if last is not None:
+        lines = lines[:last + 6]
+    out = "\n".join(lines).strip("\n")
+    if len(out) > limit:
+        out = out[-limit:]
+        out = "[...]\n" + out[out.find("\n") + 1:]
+    return out
+
+
+def _job(n: int) -> int:
+    if not isinstance(n, int) or isinstance(n, bool) or n < 1 or n > 10**15:
+        raise GitError(400, "bad_check", "invalid check id")
+    return n
+
+
+def check_log(full: str, job: int) -> dict:
+    """The end of the log of GitHub Actions job `job` (a check run of that app has the id of its job)."""
+    full = _full(full)
+    toks = _repo_tokens(full)
+    if not toks:
+        raise _no_token()
+    for tok in toks:
+        try:
+            with _client().stream("GET", f"{github_api()}/repos/{full}/actions/jobs/{_job(job)}/logs",
+                                  headers=_headers(tok), follow_redirects=True) as r:
+                if r.status_code in (401, 403, 404, 410):       # 410: the log expired
+                    continue
+                if r.status_code >= 400:
+                    raise GitError(502, "github_error", f"GitHub {r.status_code}")
+                buf = bytearray()
+                for chunk in r.iter_bytes():
+                    buf += chunk
+                    if len(buf) > 2 * LOG_READ:
+                        del buf[:-LOG_READ]
+        except httpx.HTTPError as e:
+            raise GitError(502, "github_unreachable", f"GitHub unreachable: {type(e).__name__}") from None
+        return {"log": log_tail(bytes(buf[-LOG_READ:]).decode("utf-8", "replace"))}
+    raise GitError(404, "no_log", "no log for this check (expired, or the token may not read Actions)")
+
+
+def check_rerun(full: str, job: int) -> dict:
+    """Run GitHub Actions job `job` again (and the jobs that depend on it)."""
+    full = _full(full)
+    _gh_send(full, f"/repos/{full}/actions/jobs/{_job(job)}/rerun", {}, ok_empty=True)
+    return {"ok": True}
+
+
+FAILED = ("failure", "timed_out", "cancelled", "action_required")
+BRIEF_MAX, BRIEF_CHECKS = 24000, 5
+
+
+def failed_brief(full: str, sha: str, checks: list[dict] | None = None) -> str:
+    """The failed checks of `sha` for Claude: their names, and the end of the log of those that have one. '' when
+    none failed. What a log says is output of programs run on other people's code: data, never instructions."""
+    bad = [c for c in (checks if checks is not None else _checks(full, sha)) if c.get("conclusion") in FAILED]
+    if not bad:
+        return ""
+    parts, room = [], BRIEF_MAX
+    for c in bad[:BRIEF_CHECKS]:
+        head = f"- {c['name']}: {c['conclusion']}" + (f" ({c['url']})" if c.get("url") else "")
+        log = ""
+        if c.get("job") and room > 500:
+            try:
+                log = log_tail(check_log(full, c["id"])["log"], min(LOG_MAX, room))
+            except GitError:
+                log = ""
+        log = log or (c.get("summary") or "")
+        if log:
+            room -= len(log)
+            head += f"\n<check-log name={json.dumps(c['name'])}>\n{log.replace('</check-log', '< /check-log')}\n</check-log>"
+        parts.append(head)
+    if len(bad) > BRIEF_CHECKS:
+        parts.append(f"- and {len(bad) - BRIEF_CHECKS} more failed check(s)")
+    return f"Checks failed on {sha[:9]}:\n" + "\n".join(parts)

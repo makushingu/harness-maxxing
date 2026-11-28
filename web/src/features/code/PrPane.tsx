@@ -8,7 +8,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router'
 import * as DialogPrimitive from '@radix-ui/react-dialog'
 import {
-  ArrowUp, Bot, Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, CircleDot, ExternalLink, FileQuestion, GitBranch, GitMerge, GitPullRequest, Hammer, Loader2, Maximize2, MessageSquare, Minimize2, MoreHorizontal, ShieldAlert, Trash2, X, XCircle,
+  ArrowUp, Bot, Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, CircleDot, ExternalLink, FileQuestion, GitBranch, GitMerge, GitPullRequest, Hammer, Loader2, RotateCw, ScrollText, Wrench, Maximize2, MessageSquare, Minimize2, MoreHorizontal, ShieldAlert, Trash2, X, XCircle,
 } from 'lucide-react'
 import {
   Badge, Button, CodeBlock, confirm, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, EmptyState, Segmented, Sensitive, Skeleton, Textarea, Tooltip, toast,
@@ -272,27 +272,113 @@ function FileList({ pr, onFile }: { pr: Pull; onFile: (f: PrFile) => void }) {
   )
 }
 
+const FAILED_CHECK = ['failure', 'timed_out', 'cancelled', 'action_required']
+
 function Checks({ pr }: { pr: Pull }) {
   const t = useT()
+  const qc = useQueryClient()
+  const navigate = useNavigate()
+  const close = useFileViewer((s) => s.close)
+  const { data: settings } = useSettings()
+  const [fixing, setFixing] = React.useState(false)
   if (!pr.checks.length) return <p className="text-[13px] text-muted-foreground">{t('code.noChecks')}</p>
+  const anyFailed = pr.checks.some((c) => FAILED_CHECK.includes(c.conclusion || ''))
+  const can = !!settings?.code_mode && pr.local_paths.length > 0
+  const fix = async () => {
+    setFixing(true)
+    try {
+      const r = await prApi.fixChecks(pr.full, pr.number)
+      void qc.invalidateQueries({ queryKey: ['sessions'] })
+      close()
+      navigate(`/sessions/${r.session}`)
+    } catch (e) {
+      toast.error(t('code.failed'), errorMessage(e))
+    } finally {
+      setFixing(false)
+    }
+  }
   return (
-    <ul className="grid gap-1" data-testid="pr-checks">
-      {pr.checks.map((c, i) => {
-        const failed = ['failure', 'timed_out', 'cancelled', 'action_required'].includes(c.conclusion || '')
-        const done = c.status === 'completed' || c.conclusion != null
-        return (
-          <li key={i} className="flex min-w-0 items-center gap-2 rounded-md px-2 py-1 text-[13px]">
-            {failed ? <CircleAlert className="size-4 shrink-0 text-destructive" /> : !done ? <Loader2 className="size-4 shrink-0 animate-spin text-warning" /> : <Check className="size-4 shrink-0 text-success" />}
-            <span className="min-w-0 truncate"><Sensitive>{c.name}</Sensitive></span>
-            {c.url && (
-              <a href={c.url} target="_blank" rel="noopener noreferrer" className="ml-auto flex shrink-0 items-center justify-center text-muted-foreground hover:text-foreground pointer-coarse:size-10" aria-label={t('pr.onGithub')}>
-                <ExternalLink className="size-3.5" />
-              </a>
-            )}
-          </li>
-        )
-      })}
-    </ul>
+    <div className="grid gap-2">
+      {anyFailed && pr.state === 'open' && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Tooltip content={!settings?.code_mode ? t('pr.needCodeMode') : !pr.local_paths.length ? t('pr.needClone', { repo: pr.full }) : t('pr.fixChecksTip')}>
+            <span>
+              <Button size="sm" variant="outline" onClick={() => void fix()} disabled={fixing || !can} data-testid="pr-fix-checks">
+                {fixing ? <Loader2 className="animate-spin" /> : <Wrench />}
+                {t('pr.fixChecks')}
+              </Button>
+            </span>
+          </Tooltip>
+        </div>
+      )}
+      <ul className="grid gap-1" data-testid="pr-checks">
+        {pr.checks.map((c, i) => (
+          <CheckRow key={c.id ?? `${c.name}:${i}`} pr={pr} c={c} />
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+function CheckRow({ pr, c }: { pr: Pull; c: Pull['checks'][number] }) {
+  const t = useT()
+  const qc = useQueryClient()
+  const failed = FAILED_CHECK.includes(c.conclusion || '')
+  const done = c.status === 'completed' || c.conclusion != null
+  const job = !!c.job && typeof c.id === 'number'
+  const [open, setOpen] = React.useState(false)
+  const [log, setLog] = React.useState<{ text?: string; error?: string } | null>(null)
+  const [rerun, setRerun] = React.useState(false)
+  const show = () => {
+    setOpen((o) => !o)
+    if (log || !job) return
+    setLog({})
+    prApi.checkLog(pr.full, c.id as number).then((r) => setLog({ text: r.log }), (e) => setLog({ error: errorMessage(e) }))
+  }
+  const again = async () => {
+    setRerun(true)
+    try {
+      await prApi.checkRerun(pr.full, c.id as number)
+      toast.success(t('pr.rerunStarted'))
+      window.setTimeout(() => void qc.invalidateQueries({ queryKey: prKeys.one(pr.full, pr.number) }), 4000)   // GitHub lists the new run a moment later
+    } catch (e) {
+      toast.error(t('code.failed'), errorMessage(e))
+    } finally {
+      setRerun(false)
+    }
+  }
+  return (
+    <li className="min-w-0 rounded-md px-2 py-1 text-[13px]">
+      <div className="flex min-w-0 items-center gap-2">
+        {failed ? <CircleAlert className="size-4 shrink-0 text-destructive" /> : !done ? <Loader2 className="size-4 shrink-0 animate-spin text-warning" /> : <Check className="size-4 shrink-0 text-success" />}
+        <span className="min-w-0 truncate"><Sensitive>{c.name}</Sensitive></span>
+        <span className="ml-auto flex shrink-0 items-center gap-0.5">
+          {failed && job && (
+            <Button size="sm" variant="ghost" className="h-7 gap-1 px-2 text-xs" onClick={show} aria-expanded={open} data-testid="pr-check-log">
+              <ScrollText className="size-3.5" /> {t('pr.checkLog')}
+            </Button>
+          )}
+          {failed && job && pr.can_write && pr.state === 'open' && (
+            <Button size="sm" variant="ghost" className="h-7 gap-1 px-2 text-xs" onClick={() => void again()} disabled={rerun} data-testid="pr-check-rerun">
+              {rerun ? <Loader2 className="size-3.5 animate-spin" /> : <RotateCw className="size-3.5" />} {t('pr.rerun')}
+            </Button>
+          )}
+          {c.url && (
+            <a href={c.url} target="_blank" rel="noopener noreferrer" className="flex shrink-0 items-center justify-center text-muted-foreground hover:text-foreground pointer-coarse:size-10" aria-label={t('pr.onGithub')}>
+              <ExternalLink className="size-3.5" />
+            </a>
+          )}
+        </span>
+      </div>
+      {failed && !job && c.summary && <p className="mt-0.5 whitespace-pre-wrap pl-6 text-xs text-muted-foreground"><Sensitive>{c.summary}</Sensitive></p>}
+      {open && job && (
+        <div className="mt-1 pl-6" data-testid="pr-check-log-text">
+          {log?.error ? <p className="text-xs text-destructive">{log.error}</p> : log?.text === undefined ? <Skeleton className="h-16 w-full" /> : (
+            <pre className="max-h-80 overflow-auto rounded-md border bg-fill-1 p-2 font-mono text-[11px] leading-relaxed whitespace-pre-wrap break-words">{log.text || t('pr.checkLogEmpty')}</pre>
+          )}
+        </div>
+      )}
+    </li>
   )
 }
 

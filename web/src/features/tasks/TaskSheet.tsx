@@ -3,10 +3,10 @@
 import * as React from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
-import { ArrowUpRight, Check, FileQuestion, Play, Settings2, Trash2, X } from 'lucide-react'
+import { ArrowUpRight, Check, FileQuestion, Play, Settings2, Trash2, Wrench, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useLang, useT } from '@/i18n'
-import { api, seg } from '@/lib/api'
+import { api, errorMessage, seg } from '@/lib/api'
 import { fmtDate } from '@/lib/format'
 import { qk, usePatchTask, useDeleteTask, useSettings, useTopics } from '@/lib/queries'
 import type { Task, TaskInput, TaskPriority, TaskProject, TaskStatus } from '@/lib/types'
@@ -40,6 +40,8 @@ import { PRIORITIES, PRIORITY_KEY, STATUSES, STATUS_KEY, addDays, allLabels, due
 import { LabelChip, PriorityIcon, ProjectDot, WorkBadge, workState } from './parts'
 import { draftUrl } from '@/features/agents/EditWithClaude'
 import { giveTask } from '@/lib/taskStart'
+import { useFileViewer } from '@/features/files/viewerStore'
+import { prPath } from '@/features/code/prApi'
 
 const Markdown = React.lazy(() => import('@/components/ui/markdown').then((m) => ({ default: m.Markdown })))
 
@@ -523,6 +525,19 @@ function TaskWorkLine({ task }: { task: Task }) {
     giveTask(`new:${topic}`, task.id, task.title)
     navigate(draftUrl(topic, notes ? `${task.title}\n\n${notes}` : task.title))
   }
+  const showFile = useFileViewer((s) => s.show)
+  const [fixing, setFixing] = React.useState(false)
+  const fix = async () => {
+    setFixing(true)
+    try {
+      const r = await api.post<{ session: string; path: string }>('/api/code/fix-checks', { repo: `github:${w?.github}`, number: w?.pr?.number })
+      navigate(`/sessions?path=${encodeURIComponent(r.path || topic)}&session=${encodeURIComponent(r.session)}`)
+    } catch (e) {
+      toast.error(errorMessage(e))
+    } finally {
+      setFixing(false)
+    }
+  }
   if (!task.session)
     return (
       <>
@@ -538,12 +553,22 @@ function TaskWorkLine({ task }: { task: Task }) {
         <span className={cn('inline-flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px]', st.tone)} data-testid="task-work-line">
           <WorkBadge task={task} className="px-0" />
           <Sensitive length={8}>{t(st.key, { n: st.n ?? '', branch: w?.branch ?? '' })}</Sensitive>
+          {!!w?.pr && !!w.github && (
+            <button type="button" onClick={() => showFile(prPath({ full: w.github!, n: w.pr!.number, tab: w.checks?.failed ? 'checks' : undefined }))} className="text-primary underline-offset-4 hover:underline" data-testid="task-pr">
+              {t('tasks.work.open')}
+            </button>
+          )}
           {(w?.pr?.url || w?.merged?.url) && (
             <a href={w?.pr?.url || w?.merged?.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 text-muted-foreground underline-offset-4 hover:underline">
               GitHub <ArrowUpRight className="size-3.5" />
             </a>
           )}
         </span>
+      )}
+      {!!w?.pr && !!w.github && !!w.checks?.failed && (
+        <Button variant="outline" size="sm" className="w-fit" onClick={() => void fix()} disabled={fixing} data-testid="task-fix-checks">
+          {fixing ? <Spinner /> : <Wrench />} {t('tasks.work.fix')}
+        </Button>
       )}
       <Link
         to={`/sessions?path=${encodeURIComponent(topic)}&session=${encodeURIComponent(task.session)}`}

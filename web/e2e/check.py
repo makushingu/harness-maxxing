@@ -655,6 +655,7 @@ def j_task_start(r: Run) -> None:
     task shows the pull request of that session."""
     r.mock.scenario("ready")
     title = "Fix the login page"
+    r.mock.call("PUT", "/api/settings", {"code_mode": True})
     task = r.mock.call("POST", "/api/tasks", {"title": title, "notes": "The form loses the e-mail on an error.",
                                               "topic_path": "projects/acme/topics/blog"})
     pg = r.page()
@@ -674,6 +675,17 @@ def j_task_start(r: Run) -> None:
     if "#12" not in line.inner_text() or "checks failed" not in line.inner_text():
         raise Failure(f"the task does not show its pull request and checks: {line.inner_text()!r}")
     pg.get_by_test_id("task-session").wait_for()
+    r.healthy(pg)
+    # its pull request opens here on the failed checks: the log of the job is read, then Claude is asked to fix them
+    pg.get_by_test_id("task-pr").click()
+    pg.get_by_test_id("pr-check-log").first.click()
+    log = pg.get_by_test_id("pr-check-log-text")
+    log.get_by_text("FAIL: status.txt says broken").wait_for()
+    if pg.get_by_test_id("pr-check-rerun").count() != 1 or "The preview could not be built" not in pg.get_by_test_id("pr-checks").inner_text():
+        raise Failure("the failed checks do not show their re-run button and what they say")
+    pg.get_by_test_id("pr-fix-checks").click()
+    pg.wait_for_url("**/sessions/**")
+    pg.locator("main").get_by_text("Checks failed on aaaaaaaaa").first.wait_for()
     r.healthy(pg)
 
 

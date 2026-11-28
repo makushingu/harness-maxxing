@@ -584,6 +584,51 @@ async def pr_session(body: PrSessionIn):
     return await _call(run)
 
 
+class FixChecksIn(BaseModel):
+    repo: str                              # github:owner/name
+    number: int
+
+
+def _fix_checks(body: FixChecksIn) -> dict:
+    """Send the failed checks of a pull request, with the end of their logs, to the session that works on its
+    branch; without one, a session is started on the pull request ("Work on this pull request")."""
+    from .. import prwatch, worktrees
+    from ..sessions import service
+    if not body.repo.startswith("github:"):
+        raise GitError(400, "not_github", "pull requests need github:owner/name")
+    full, n = gitview._full(body.repo[7:]), gitview._number(body.number)
+    p = gitview._gh_repo(full, f"/repos/{full}/pulls/{n}")
+    head = p.get("head") or {}
+    brief = gitview.failed_brief(full, head.get("sha") or "")
+    if not brief:
+        raise GitError(409, "no_failed_check", "no check of this pull request has failed")
+    text = prwatch.message(full, n, [(f"checks:{head.get('sha')}", brief)])
+    for m in prwatch._targets():                                     # the session whose copy is on that branch
+        wt = m["worktree"]
+        try:
+            here = codediff.repo_head(Path(wt["path"]))
+        except GitError:
+            continue
+        if here.get("branch") == head.get("ref") and (gitview.github_name(here.get("remote") or "") or "").lower() == full.lower():
+            service.send_message(m["id"], text, source="github")
+            return {"session": m["id"], "path": m.get("path"), "started": False}
+    worktrees._need_enabled()
+    s = _pr_session(PrSessionIn(repo=body.repo, number=n, message=text))
+    return {"session": s["id"], "path": s.get("path"), "started": True}
+
+
+@router.post("/api/code/fix-checks")
+async def fix_checks(body: FixChecksIn):
+    from ..sessions.service import SessionError
+
+    def run():
+        try:
+            return _fix_checks(body)
+        except SessionError as e:
+            raise GitError(e.status, e.code, e.message) from None
+    return await _call(run)
+
+
 # ---- Claude watches the pull request of its copy (maxxing/prwatch.py) ------------------------------------------
 
 class WatchIn(BaseModel):

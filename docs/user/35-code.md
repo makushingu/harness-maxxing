@@ -68,7 +68,11 @@ outside the repository are marked), or from the pull request badge of the Change
 - **Conversation**: the description, the comments and the reviews. **Files**: the same list and the same diff as the
   Changes view; click a line number (Shift for several) to comment on those lines: your comments wait (**pending**)
   until you send them with your review. A file's diff is shown whole; for a file too big for GitHub to send its diff,
-  a link opens it on GitHub. **Checks**: what passed, failed or still runs.
+  a link opens it on GitHub. **Checks**: what passed, failed or still runs. A failed job of GitHub Actions has
+  **Log** (the end of its log, up to the error) and **Run again**; a check from another service shows what it says of
+  itself. **Fix the checks** sends the failed checks and the end of their logs to the session that works on the pull
+  request - or starts one on it - so that Claude reproduces the failure, fixes its cause and pushes. The same button
+  is on a task whose pull request has a failed check.
 - At the bottom: **Comment**, **Approve**, **Request changes**, **Merge** (squash, merge or rebase, as the repository
   allows; refused for a draft or a conflict; a warning when checks failed). ⋯ **Close the pull request**. GitHub stays
   one click away (↗).

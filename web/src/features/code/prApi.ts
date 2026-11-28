@@ -9,7 +9,8 @@ export type PrPerson = { login: string; avatar: string }
 export type PrFile = { path: string; old: string | null; status: 'A' | 'M' | 'D' | 'R' | 'C'; add: number; del: number; hunks: { head: string; o: number; n: number; lines: DiffLine[] }[]; binary: boolean; cut: boolean; lines: number; /** A text file too big for GitHub to send its diff. */ too_big?: boolean }
 export type PrEntry = { kind: 'comment' | 'review'; id: number; author: PrPerson; body: string; state?: string; at: number; url?: string }
 export type PrLineComment = { id: number; path: string; line: number | null; side: 'LEFT' | 'RIGHT'; author: PrPerson; body: string; at: number; reply_to: number | null; outdated: boolean }
-export type PrCheck = { name: string; status: string | null; conclusion: string | null; url: string | null }
+/** `job`: a GitHub Actions job (`id`), whose log can be read and which can be run again; `summary`: what the check says of itself. */
+export type PrCheck = { name: string; status: string | null; conclusion: string | null; url: string | null; id?: number | null; job?: boolean; summary?: string }
 export type Pull = {
   full: string
   number: number
@@ -57,6 +58,9 @@ export const prApi = {
   review: (full: string, n: number, event: ReviewEvent, body: string, comments: DraftComment[] = [], sha?: string) => api.post('/api/git/pull/review', { ...at(full, n), event, body, comments, sha }),
   merge: (full: string, n: number, method: string, sha?: string) => api.post<{ merged: boolean; message?: string }>('/api/git/pull/merge', { ...at(full, n), method, sha }),
   close: (full: string, n: number) => api.post('/api/git/pull/close', at(full, n)),
+  checkLog: (full: string, id: number) => api.get<{ log: string }>('/api/git/pull/check-log', { repo: `github:${full}`, id }),
+  checkRerun: (full: string, id: number) => api.post('/api/git/pull/check-rerun', { repo: `github:${full}`, id }),
+  fixChecks: (full: string, n: number) => api.post<{ session: string; path: string; started: boolean }>('/api/code/fix-checks', at(full, n)),
   session: (full: string, n: number, review: boolean, message?: string) => api.post<Session>('/api/code/pr-session', { ...at(full, n), review, message }),
 }
 

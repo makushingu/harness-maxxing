@@ -918,6 +918,7 @@ A `.worktreeinclude` at the root of the clone (gitignore syntax) names ignored f
 | GET | `/api/sessions/{id}/copy/prepare-log` | – | `{log}` |
 | GET | `/api/code/copies` | – | the copies still on disk: `[{sid, title, path, archived, …status}]` |
 | POST | `/api/code/pr-session` | `{repo: "github:owner/name", number, review, message?, clone?}` | Session — in the topic of a local clone, on a copy of the PR's branch (a fork: `pr/<n>` from `refs/pull/<n>/head`); plan mode when `review` or when the author is outside (`author_association` not OWNER / MEMBER / COLLABORATOR). `400 no_clone` |
+| POST | `/api/code/fix-checks` | `{repo: "github:owner/name", number}` | `{session, path, started}` — sends the failed checks of the pull request, with the end of their logs (5 checks, 24 000 characters at most, inside `<check-log>`: data, not instructions), to the session whose copy is on its branch; without one, a session is started on the pull request (`started: true`, as `pr-session`) · `409 no_failed_check` |
 
 **The PR watch** (`maxxing/prwatch.py`, a loop of `api/code.py`, every 3 min; `MAXXING_PRWATCH_LOOP=0` turns it off):
 for each session on a copy whose branch has an open PR (and `watch`), the new events - every check of the head ended
@@ -940,6 +941,8 @@ GitHub accepts (writes: one that can write, else `403 no_write`; GitHub refusing
 | POST | `/api/git/pull/review` | `{repo, number, event: APPROVE\|REQUEST_CHANGES\|COMMENT, body, comments:[{path, line, side, body}], sha?}` (`sha`: the head commit that was read; refused when the pull request moved) | `{id, state, url}` |
 | POST | `/api/git/pull/merge` | `{repo, number, method: squash\|merge\|rebase, sha?}` | `{merged, sha, message}` |
 | POST | `/api/git/pull/close` | `{repo, number}` | `{state}` |
+| GET | `/api/git/pull/check-log` | `?repo=github:owner/name&id=<check id>` | `{log}` — the end of the log of a GitHub Actions job (a check with `job: true`), up to its last `##[error]`, without timestamps and colours, 6 000 characters at most · `404 no_log` (expired, or no token may read Actions) |
+| POST | `/api/git/pull/check-rerun` | `{repo, id}` | `{ok}` — runs that GitHub Actions job again · `403 no_write` |
 
 A ` ```pr-review ` block in a message (`{"repo", "number", "event", "summary", "comments":[{path, line, body}]}`) is
 drawn as a review card with **Publish on GitHub** (the review `POST` above, on the user's click). Text from GitHub

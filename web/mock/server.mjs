@@ -1797,6 +1797,27 @@ R('POST', '/api/tasks/:id/session', ({ params, body }) => {
   bus('tasks')
   return tk
 })
+// ---- the pull request of that task, in the PR view: one failed job, its log, "Fix the checks" (gitview.py) ----
+R('GET', '/api/git/pull', ({ q }) => {
+  const t = now()
+  return { full: 'acme/app', number: Number(q.get('number')) || 12, title: 'Fix the login page', body: 'The form keeps the e-mail on an error.',
+    author: { login: 'ann', avatar: '' }, association: 'OWNER', outside: false, state: 'open', draft: false, mergeable: true, mergeable_state: 'unstable',
+    merged: false, head: 'session/fix-the-login-page', head_sha: 'a'.repeat(40), head_repo: 'acme/app', fork: false, base: 'main',
+    url: 'https://github.com/acme/app/pull/12', created: t - 3600, updated: t - 600, commits: 1, add: 4, del: 1, files: [], files_total: 0,
+    conversation: [], line_comments: [], methods: ['squash'], can_write: true, local_paths: ['/srv/app'],
+    checks: [{ name: 'tests', status: 'completed', conclusion: 'failure', url: 'https://github.com/acme/app/actions/runs/1/job/55', id: 55, job: true, summary: '' },
+      { name: 'lint', status: 'completed', conclusion: 'success', url: null, id: 56, job: true, summary: '' },
+      { name: 'ci/deploy-preview', status: 'completed', conclusion: 'failure', url: null, id: null, job: false, summary: 'The preview could not be built' }] }
+})
+R('GET', '/api/git/pull/check-log', () => ({ log: 'Run sh test.sh\nFAIL: status.txt says broken, expected ok\n##[error]Process completed with exit code 1.' }))
+R('POST', '/api/git/pull/check-rerun', () => ({ ok: true }))
+R('POST', '/api/code/fix-checks', () => {
+  const tk = S.tasks.tasks.find((x) => x.session) || fail(409, 'no_failed_check', 'no check of this pull request has failed')
+  const s = findSession(tk.session)
+  startTurn(s, '[GitHub, pull request #12 of acme/app, watched by Harness]\n\nChecks failed on aaaaaaaaa:\n- tests: failure')
+  bus('sessions')
+  return { session: s.id, path: s.path, started: false }
+})
 R('DELETE', '/api/tasks/:id', ({ params }) => {
   const tk = S.tasks.tasks.find((x) => x.id === params.id) || fail(404, 'not_found', 'Task not found')
   S.tasks.tasks = S.tasks.tasks.filter((x) => x !== tk); bus('tasks')
@@ -1970,7 +1991,7 @@ R('GET', '/api/settings', () => S.settings)
 R('PUT', '/api/settings', ({ body }) => {
   if (body.language !== undefined && !UI_LANGS.includes(body.language)) fail(422, 'invalid', `language must be one of ${UI_LANGS.join(', ')}`)
   if (body.public_url !== undefined && body.public_url && !/^https?:\/\//.test(body.public_url)) fail(422, 'invalid', 'public_url must start with http(s)://')
-  for (const k of ['timezone', 'language', 'public_url', 'files_root', 'presentation_default', 'daily_budget_usd', 'alert_spend_factor', 'alert_turn_usd', 'alert_tool_errors', 'usage_widget', 'browser_feature', 'devices_feature', 'memory_max_lines', 'donation_hidden', ...PAGE_FLAGS, 'sidebar_order', 'nav_badges_hidden']) if (body[k] !== undefined) S.settings[k] = body[k]
+  for (const k of ['timezone', 'language', 'public_url', 'files_root', 'presentation_default', 'daily_budget_usd', 'alert_spend_factor', 'alert_turn_usd', 'alert_tool_errors', 'usage_widget', 'browser_feature', 'devices_feature', 'code_mode', 'memory_max_lines', 'donation_hidden', ...PAGE_FLAGS, 'sidebar_order', 'nav_badges_hidden']) if (body[k] !== undefined) S.settings[k] = body[k]
   return S.settings
 })
 /* ---- feedback: checked first (a word decides here: "bug" or "idea" is sent, "model" or "API" is for this

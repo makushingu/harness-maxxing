@@ -103,6 +103,22 @@ async def pull_merge(b: MergeIn):
     return out
 
 
+class CheckAct(BaseModel):
+    repo: str
+    id: int = Field(..., strict=True, ge=1)
+
+
+@router.get("/api/git/pull/check-log")
+async def pull_check_log(repo: str, id: int):
+    """The end of the log of a GitHub Actions job (a check with `job: true`)."""
+    return await _call(gitview.check_log, _gh_repo(repo), id)
+
+
+@router.post("/api/git/pull/check-rerun")
+async def pull_check_rerun(b: CheckAct):
+    return await _call(gitview.check_rerun, _gh_repo(b.repo), b.id)
+
+
 @router.post("/api/git/pull/close")
 async def pull_close(b: PullAct):
     return await _call(gitview.pull_close, _gh_repo(b.repo), b.number)
