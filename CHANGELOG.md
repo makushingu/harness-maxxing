@@ -23,7 +23,6 @@ New:
 - **Memory no longer depends on Claude thinking of it.** Once a day, Harness reads the sessions you worked in that are quiet now (3 turns or more since their last read) and writes what should stay - a decision, a rule you gave, a path, the state of the work - into the right `memory.md`, two lines at most for one session, each announced in Notifications with **Undo**. Same rules as the rest of the memory review: three writes a day for one folder, `"memory_review": "ask"` to accept each one yourself, `false` to turn it off.
 - **Skills nobody uses.** A skill of yours with nothing in it, or that no session started in 30 days, gets a notification asking whether to remove it: **Accept** moves it to the Trash (it can be restored), **Refuse** keeps it and it is never asked again. Nothing is removed alone; the skills shipped with Harness are never concerned.
 - **Memory compaction loses nothing.** What the daily compaction takes out of a `memory.md` now goes to a `memory-archive.md` next to it: never loaded into a session (the memory stays short), but found by the search when a session needs it.
-- **Four more languages.** The interface, the Telegram messages, the notifications and the agent templates now also exist in Spanish, German, Simplified Chinese and Japanese, next to English and French. Pick yours in Settings → General (or on the sign-in screen).
 - **What each agent costs.** Settings → Usage has an **Agent** tab: tokens, turns and cost of every agent, next to the ones per project, topic and session. An agent's profile shows the same total and its last 30 days under its budget.
 - **Alerts when the spend leaves its usual range.** Without setting a budget first, the Notifications feed (and Telegram, by its rules) says when today costs 3 times a usual day - for the whole server, or for one agent that starts to run in a loop -, and when a turn kept failing (at least 8 failed tool calls, half of them or more). Settings → Usage → **Alerts** changes the factor, turns each one off, and adds an alert for a turn that costs more than an amount you choose. Nothing is stopped: budgets do that.
 - **Usage as a file.** Under the table of Settings → Usage, **CSV** and **JSON** download the grouping shown, every row (the table stops at 50), and **Per day** the daily chart. From a script: `maxxing usage export --group agents --format csv`.
@@ -36,6 +35,14 @@ Fixed:
 - **Checks**: the small pull request badge of the Changes view now counts the checks a CI posts as commit statuses too, as the pull request view already did.
 - **Wide tables in Markdown files no longer look cut.** When a table is wider than the page, its right edge now fades while there is more to scroll sideways, and its headers wrap between words instead of widening the table. Reported by a user.
 - **On a phone**: in E-mail, a tap just beside the small selection box of a message selects it instead of opening it; in Git, the branch labels of the history leave more room to the title of each commit; in Infra, the columns of *Where everything runs* no longer overlap in languages with longer words.
+
+## 2.0.0-alpha.176 - 2026-11-28
+
+New:
+- **Four more languages.** The interface, the Telegram messages, the notifications and the agent templates now also exist in Spanish, German, Simplified Chinese and Japanese, next to English and French. Pick yours in Settings → General (or on the sign-in screen).
+
+Fixed:
+- **About ninety robustness and security fixes** from the continuous audit: a damaged or unexpected file (devices, feed, mail, approvals, separate copies, sign-ins, tabs of the browser) no longer breaks a page nor loses data; secrets redacted in the unfiltered system logs and in voice errors; sandboxed topics and agents stay inside their sandbox; two separate copies never share a folder, a branch or a port; renewing the recovery codes asks for the second factor; the copy bar is readable on a phone.
 
 ## 2.0.0-alpha.175 - 2026-11-27
 
