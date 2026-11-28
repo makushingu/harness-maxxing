@@ -428,3 +428,10 @@ def test_copy_bar_merge_button_is_capped_so_the_menu_stays_on_screen():
     assert re.search(r"\bmax-w-\d+\b", m[1]) and "truncate" in m[2].split() and "min-w-0" in m[2].split()
     branch = re.search(r'<span className="inline-flex ([^"]*) items-center gap-1 font-mono text-\[11px\]">\s*<GitBranch', src)
     assert branch and re.search(r"\bmin-w-(?!0\b)\d+\b", branch[1]), "the copy's branch can shrink to nothing"
+
+
+def test_the_ask_harness_links_of_themes_and_appearance_are_big_enough_to_tap():
+    for name, key in (("Themes.tsx", "appearance.cssVerifyPrompt"), ("Appearance.tsx", "appearance.askPrompt")):
+        src = (WEB / "pages" / "settings" / "sections" / name).read_text(encoding="utf-8")
+        m = re.search(r'className="([^"]*)"', src[src.index(key):])            # the button that asks Harness
+        assert m and "pointer-coarse:min-h-10" in m[1].split(), name
