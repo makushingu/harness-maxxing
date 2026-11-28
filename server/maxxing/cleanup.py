@@ -8,7 +8,7 @@ measured first (`scan`), then the user picks which ones go (`run`):
 - caches: root's uv / npm / pip / npx caches and Claude Code installer downloads, re-downloaded when needed (what a
   running process uses - an npx MCP server, a `uv run --with` environment - stays);
 - journal: the systemd journal, cut down to JOURNAL_KEEP (`journalctl --vacuum-size`);
-- apt: downloaded packages (`apt-get clean`);
+- apt: the packages the system's package manager downloaded (`apt-get clean`, `dnf clean packages`, `pacman -Scc`);
 - previews: the lighter video copies of the player and the file thumbnails, made again when shown (off by default:
   remaking them costs CPU; a copy played in the last COPY_KEEP_S stays, it may be playing);
 - trash: the Harness trash (off by default: what is in it can still be restored).
@@ -27,7 +27,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from . import config, deps, trash
+from . import config, deps, pkg, trash
 
 JOURNAL_KEEP = 200 * 1024 * 1024
 APT_CACHE = Path("/var/cache/apt/archives")
@@ -95,10 +95,11 @@ def _previews(dry: bool = True) -> int:
 
 
 def _apt_bytes() -> int:
-    if not APT_CACHE.is_dir():
+    folder, pattern = (APT_CACHE, "*.deb") if pkg.manager() in ("apt", "") else pkg.cache()
+    if not folder.is_dir():
         return 0
     total = 0
-    for f in APT_CACHE.rglob("*.deb"):
+    for f in folder.rglob(pattern):
         with contextlib.suppress(OSError):
             total += f.lstat().st_size
     return total
@@ -162,7 +163,7 @@ def _free_part(part: str) -> None:
     elif part == "journal":
         _sh(["journalctl", f"--vacuum-size={JOURNAL_KEEP // (1024 * 1024)}M"], check=True)
     elif part == "apt":
-        _sh(["apt-get", "clean"], check=True)
+        _sh(pkg.clean_cmd(), check=True)
     elif part == "previews":
         _previews(dry=False)
     elif part == "trash":

@@ -1855,7 +1855,7 @@ export const fr: Record<keyof typeof en, string> = {
   'system.cleanup.journal': "Journaux du système",
   'system.cleanup.journalDesc': "Le journal systemd, réduit à ses 200 derniers Mo.",
   'system.cleanup.apt': "Paquets système téléchargés",
-  'system.cleanup.aptDesc': "Paquets déjà installés par apt (apt-get clean).",
+  'system.cleanup.aptDesc': "Paquets déjà installés par le système (le cache d'apt, dnf ou pacman).",
   'system.cleanup.previews': "Aperçus vidéo et vignettes",
   'system.cleanup.previewsDesc': "Copies légères des vidéos pour le lecteur et vignettes des fichiers : refaites quand elles sont affichées (un peu de calcul). Une vidéo lue il y a moins de 30 min reste.",
   'system.cleanup.trash': "Corbeille de Harness",

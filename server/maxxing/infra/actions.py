@@ -25,7 +25,7 @@ from pathlib import Path
 
 import httpx
 
-from .. import config
+from .. import config, pkg
 
 DB_NAME_RE = re.compile(r"^[a-z][a-z0-9_]{1,40}\Z")
 BUCKET_RE = re.compile(r"^[a-z0-9][a-z0-9-]{2,62}\Z")
@@ -79,15 +79,23 @@ def pg_installed() -> bool:
     return bool(shutil.which("psql")) and _run(["systemctl", "is-active", "postgresql"])[1].strip() == "active"
 
 
+def pg_initdb() -> None:
+    """Fedora and Arch ship PostgreSQL without a database cluster (Debian creates one): create it once."""
+    if shutil.which("postgresql-setup"):                                   # Fedora and its family
+        if not os.path.exists("/var/lib/pgsql/data/PG_VERSION"):
+            _run(["postgresql-setup", "--initdb"], timeout=120)
+    elif pkg.manager() == "pacman" and not os.path.exists("/var/lib/postgres/data/PG_VERSION"):
+        _run(["runuser", "-u", "postgres", "--", "initdb", "-D", "/var/lib/postgres/data", "--locale=C.UTF-8",
+              "--encoding=UTF8"], timeout=120)
+
+
 def pg_install() -> dict:
     if pg_installed():
         return {"installed": True, "already": True}
-    code, out, err = _run(["apt-get", "install", "-y", "-q", "postgresql"], timeout=900)
+    code, out = pkg.install("postgresql")
     if code != 0:
-        _run(["apt-get", "update", "-q"], timeout=300)
-        code, out, err = _run(["apt-get", "install", "-y", "-q", "postgresql"], timeout=900)
-    if code != 0:
-        raise ActionError("apt-get install postgresql failed: " + _err(out, err), "install_failed")
+        raise ActionError(pkg.hint("postgresql") + " failed: " + _err(out, ""), "install_failed")
+    pg_initdb()
     code, out, err = _run(["systemctl", "enable", "--now", "postgresql"], timeout=60)
     if code != 0:                                    # a stopped server answers nothing below: that is no success
         raise ActionError("PostgreSQL is installed but did not start: " + _err(out, err), "start_failed")

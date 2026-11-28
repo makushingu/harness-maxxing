@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Any, Callable
 from zoneinfo import ZoneInfo
 
-from . import __version__, cli, config
+from . import __version__, cli, config, pkg
 
 SERVICE = "claude-maxxing"
 UNIT_PATH = Path("/etc/systemd/system/claude-maxxing.service")
@@ -1270,7 +1270,7 @@ def check_crontab() -> Check | None:
     enabled = [j for j in jobs if j.get("enabled")]
     text = _crontab_text()
     if text is None:
-        return _c("crontab", FAIL, "cron is not installed", "", "apt-get install -y cron && systemctl enable --now cron")
+        return _c("crontab", FAIL, "cron is not installed", "", f"{pkg.hint('cron')} && systemctl enable --now {pkg.cron_service()}")
     missing = [j.get("name") or j.get("id") for j in enabled if str(j.get("id", "\0")) not in text]
     if missing:
         return _c("crontab", WARN, f"{len(missing)} enabled job(s) missing from the crontab",
@@ -1549,15 +1549,18 @@ def check_security() -> Check:
     in_container = _run_ok(["systemd-detect-virt", "-cq"])[0]
     if not in_container:
         ok, out = _run_ok(["ufw", "status"])
-        if not ok or "Status: active" not in out:
+        if (not ok or "Status: active" not in out) and not _run_ok(["firewall-cmd", "--state"])[0]:   # Fedora's own
             missing.append("firewall")
     if not _run_ok(["systemctl", "is-active", "--quiet", "fail2ban"])[0]:
         missing.append("fail2ban")
-    if not _run_ok(["systemctl", "is-enabled", "--quiet", "unattended-upgrades"])[0]:
+    updates = {"apt": ["unattended-upgrades"], "dnf": ["dnf5-automatic.timer", "dnf-automatic-install.timer", "dnf-automatic.timer"]}
+    units = updates.get(pkg.manager() or "apt")       # Arch (pacman) has no automatic updates: nothing to ask for
+    if units and not any(_run_ok(["systemctl", "is-enabled", "--quiet", u])[0] for u in units):
         missing.append("security updates")
     if not missing:
-        return _c("security", OK, "firewall, fail2ban and security updates active" if not in_container
-                  else "fail2ban and security updates active (firewall: the container's host)")
+        what = "fail2ban and security updates" if units else "fail2ban"
+        return _c("security", OK, f"firewall, {what} active" if not in_container
+                  else f"{what} active (firewall: the container's host)")
     return _c("security", WARN, f"server hardening incomplete ({', '.join(missing)})", "",
               f"bash {config.CODE}/install.sh --secure")
 
@@ -1629,7 +1632,7 @@ def check_disk(cfg: dict) -> Check:
     free_gb, pct = du.free / 1e9, 100 * (du.total - du.free) / du.total
     lvl = FAIL if free_gb < 1 else WARN if (free_gb < 5 or pct > 90) else OK
     return _c("disk", lvl, f"disk {pct:.0f}% used, {free_gb:.1f} GB free", str(p),
-              "" if lvl == OK else "free space: journalctl --vacuum-size=200M ; apt-get clean ; check ~/.claude/projects")
+              "" if lvl == OK else f"free space: journalctl --vacuum-size=200M ; {' '.join(pkg.clean_cmd())} ; check ~/.claude/projects")
 
 
 def check_workspace(cfg: dict) -> Check:
@@ -2963,6 +2966,8 @@ def cmd_uninstall(a) -> int:
     for c in changed:                                  # what install.sh changed on this server
         if c == "ufw enabled":
             line(INFO, "the installer turned the ufw firewall on - `ufw disable` turns it off")
+        elif c == "firewalld enabled":
+            line(INFO, "the installer turned the firewalld firewall on - `systemctl disable --now firewalld` turns it off")
         elif c == "ssh key-only":
             line(INFO, "the installer turned SSH password logins off (kept: safer) - to undo: "
                        "rm /etc/ssh/sshd_config.d/01-harness-maxxing.conf && systemctl reload ssh")
@@ -3024,7 +3029,7 @@ def _uninstall_components(changed: list[str], purge: bool) -> None:
     if "caddy installed" in changed:
         c = deps.get("caddy")
         systemctl("disable", "--now", "caddy", timeout=60)
-        code, out = run(["apt-get", "purge", "-y", "-qq", c["package"]], timeout=600,
+        code, out = run(pkg.purge_cmd(c["package"]), timeout=600,
                         env={**os.environ, "DEBIAN_FRONTEND": "noninteractive"})
         for f in [Path(x) for x in c["remove"]] + [CADDY_ADMIN_DROPIN]:
             with contextlib.suppress(OSError):

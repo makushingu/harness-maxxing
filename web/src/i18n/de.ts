@@ -1833,7 +1833,7 @@ export const de: Record<keyof typeof en, string> = {
   "system.cleanup.journal": "Systemlogs",
   "system.cleanup.journalDesc": "Das systemd-Journal, gekürzt auf die letzten 200 MB.",
   "system.cleanup.apt": "Heruntergeladene Systempakete",
-  "system.cleanup.aptDesc": "Pakete, die apt bereits installiert hat (apt-get clean).",
+  "system.cleanup.aptDesc": "Pakete, die das System bereits installiert hat (der Cache von apt, dnf oder pacman).",
   "system.cleanup.previews": "Videovorschauen und Vorschaubilder",
   "system.cleanup.previewsDesc": "Leichtere Kopien von Videos für den Player und Vorschaubilder von Dateien: Werden beim Anzeigen neu erstellt (etwas Rechenleistung). Ein Video, das in den letzten 30 Min. abgespielt wurde, bleibt.",
   "system.cleanup.trash": "Papierkorb von Harness",

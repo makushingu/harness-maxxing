@@ -1105,7 +1105,7 @@ def remove(name: str, force: bool = False) -> list[str]:
     if name in ESSENTIAL and not force:
         raise DepError(f"{name} is needed by Harness Maxxing itself (only `maxxing uninstall --purge` removes it)")
     if name == "caddy" and not force:
-        raise DepError("Caddy serves the domain: remove it with apt (`apt-get purge caddy`) after `maxxing uninstall`")
+        raise DepError("Caddy serves the domain: remove it with the package manager of the system after `maxxing uninstall`")
     gone = []
     for p in [expand(x) for x in c.get("remove", [])]:
         if name == "claude" and p.parent == LINK_DIR and p.is_symlink() and not os.readlink(p).startswith(str(root_home())):

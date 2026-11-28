@@ -139,10 +139,9 @@ def setup(log_line=print) -> list[str]:
     if os.geteuid() != 0:
         raise RuntimeError("run it as root (sudo maxxing browser setup)")
     if not shutil.which("socat"):
-        if not shutil.which("apt-get"):
+        from .. import pkg
+        if pkg.install("socat")[0] != 0:
             raise RuntimeError("install socat with the package manager of this system")
-        subprocess.run(["apt-get", "install", "-y", "-q", "socat"], check=True, stdout=subprocess.DEVNULL,
-                       env={**os.environ, "DEBIAN_FRONTEND": "noninteractive"})
         done.append("installed socat")
     if not user_ids():
         subprocess.run(["useradd", "--system", "--no-create-home", "--home-dir", "/nonexistent",

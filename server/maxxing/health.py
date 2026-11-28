@@ -17,7 +17,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from . import config
+from . import config, pkg
 
 CACHE_S = 30
 DISK_WARN, DISK_ERROR = 90.0, 97.0
@@ -118,7 +118,8 @@ def disk(path: Path | None = None) -> dict[str, float]:
 # ---- services -------------------------------------------------------------------------------
 def service_names() -> list[str]:
     extra = config.load_config().get("services_extra") or []
-    names = list(CORE_SERVICES)
+    cron = pkg.cron_service()                         # `crond` on Fedora, `cronie` on Arch
+    names = [cron if n == "cron" else n for n in CORE_SERVICES]
     for n in extra:
         if isinstance(n, str) and n and n not in names:
             names.append(n)
@@ -164,7 +165,7 @@ def _state(name: str, info: dict[str, str]) -> dict[str, Any] | None:
     mono = info.get("ActiveEnterTimestampMonotonic", "0")
     if active and mono.isdigit() and int(mono) > 0:
         since = round(time.time() - (time.monotonic() - int(mono) / 1e6), 0)
-    return {"name": name, "label": LABELS.get(name) or info.get("Description") or name, "active": active,
+    return {"name": name, "label": LABELS.get("cron" if name in ("crond", "cronie") else name) or info.get("Description") or name, "active": active,
             "enabled": info.get("UnitFileState") in ("enabled", "enabled-runtime", "static", "alias"),
             "since": since, "state": info.get("ActiveState", "")}
 
@@ -385,8 +386,9 @@ def _collect() -> dict:
                              f"Disk {dsk['pct']:.0f} % full ({dsk['free'] / 1e9:.1f} GB free)"))
     if mem["total"] and mem["avail"] < MEM_MIN:
         issues.append(_issue("warn", "low_memory", f"Only {mem['avail'] // (1024 * 1024)} MB of RAM available"))
-    infos = _systemctl_show_all(list(WATCHED))
-    for name in WATCHED:
+    watched = [pkg.cron_service() if n == "cron" else n for n in WATCHED]
+    infos = _systemctl_show_all(watched)
+    for name in watched:
         st = _state(name, infos.get(name, {}))
         if st and st["enabled"] and not st["active"]:
             issues.append(_issue("error", "service_down", f"Service {st['label']} is {st['state'] or 'inactive'}"))

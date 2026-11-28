@@ -1833,7 +1833,7 @@ export const ja: Record<keyof typeof en, string> = {
   "system.cleanup.journal": "システムログ",
   "system.cleanup.journalDesc": "systemd のジャーナルを、直近の 200 MB まで縮小します。",
   "system.cleanup.apt": "ダウンロード済みのシステムパッケージ",
-  "system.cleanup.aptDesc": "apt がインストール済みのパッケージ（apt-get clean）。",
+  "system.cleanup.aptDesc": "システムがインストール済みのパッケージ（apt、dnf、pacman のキャッシュ）。",
   "system.cleanup.previews": "動画のプレビューとサムネイル",
   "system.cleanup.previewsDesc": "プレーヤー用の軽量な動画コピーとファイルのサムネイル：表示時に再作成されます（多少の処理負荷があります）。過去30分以内に再生された動画は残ります。",
   "system.cleanup.trash": "Harness のゴミ箱",

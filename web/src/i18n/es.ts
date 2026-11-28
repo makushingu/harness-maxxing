@@ -1833,7 +1833,7 @@ export const es: Record<keyof typeof en, string> = {
   "system.cleanup.journal": "Registros del sistema",
   "system.cleanup.journalDesc": "El journal de systemd, reducido a sus últimos 200 MB.",
   "system.cleanup.apt": "Paquetes del sistema descargados",
-  "system.cleanup.aptDesc": "Paquetes que apt ya instaló (apt-get clean).",
+  "system.cleanup.aptDesc": "Paquetes que el sistema ya instaló (la caché de apt, dnf o pacman).",
   "system.cleanup.previews": "Vistas previas de vídeo y miniaturas",
   "system.cleanup.previewsDesc": "Copias ligeras de los vídeos para el reproductor y miniaturas de archivos: se vuelven a crear al mostrarse (algo de CPU). Un vídeo reproducido hace menos de 30 min se conserva.",
   "system.cleanup.trash": "Papelera de Harness",

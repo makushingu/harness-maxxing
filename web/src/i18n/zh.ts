@@ -1833,7 +1833,7 @@ export const zh: Record<keyof typeof en, string> = {
   "system.cleanup.journal": "系统日志",
   "system.cleanup.journalDesc": "systemd 日志，裁剪至最近 200 MB。",
   "system.cleanup.apt": "已下载的系统软件包",
-  "system.cleanup.aptDesc": "apt 已安装过的软件包（apt-get clean）。",
+  "system.cleanup.aptDesc": "系统已安装过的软件包（apt、dnf 或 pacman 的缓存）。",
   "system.cleanup.previews": "视频预览和缩略图",
   "system.cleanup.previewsDesc": "用于播放器的视频轻量副本和文件缩略图：显示时会重新生成（会占用一些 CPU）。最近 30 分钟内播放过的视频会保留。",
   "system.cleanup.trash": "Harness 回收站",

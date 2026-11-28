@@ -572,7 +572,7 @@ check_system() {
   if [ "$USERMODE" = 1 ]; then
     ok "no root: installed for $(id -un) only, in $INSTALL_DIR - nothing of the system is changed"
   else
-    command -v apt-get >/dev/null 2>&1 || die "Ubuntu or Debian required (apt-get not found)."
+    [ -n "$PKG_MGR" ] || die "Ubuntu, Debian, Fedora or Arch required (no apt-get, dnf or pacman here)."
   fi
   if [ -r /etc/os-release ]; then
     local ids pretty
@@ -581,8 +581,8 @@ check_system() {
     # shellcheck disable=SC1091
     pretty=$(. /etc/os-release && echo "${PRETTY_NAME:-${ID:-unknown}}")
     case "$ids" in
-      *" debian "*|*" ubuntu "*) ok "$pretty" ;;
-      *) warn "untested distribution ($pretty) - continuing because apt is present" ;;
+      *" debian "*|*" ubuntu "*|*" fedora "*|*" arch "*) ok "$pretty" ;;
+      *) warn "untested distribution ($pretty) - continuing because ${PKG_MGR:-a package manager} is present" ;;
     esac
   fi
   [ -d /run/systemd/system ] || die "systemd must be running (sessions and the service are systemd units)."
@@ -660,6 +660,8 @@ detect_server() {
 
   if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q '^Status: active'; then
     FW_ACTIVE=ufw
+  elif command -v firewall-cmd >/dev/null 2>&1 && [ "$(firewall-cmd --state 2>/dev/null)" = running ]; then
+    FW_ACTIVE=firewalld
   elif command -v nft >/dev/null 2>&1 && [ "$(nft list ruleset 2>/dev/null | grep -c 'chain ')" -gt 0 ]; then
     FW_ACTIVE=nftables
   fi
@@ -746,8 +748,9 @@ preflight() {
   fi
   case "$FIREWALL:$FW_ACTIVE" in
     add:ufw) ok "firewall: your ufw rules are kept - only the ports Harness Maxxing needs are added" ;;
+    add:firewalld) ok "firewall: your firewalld is kept - only what Harness Maxxing needs is added (80 + 443 for a domain, tailscale0)" ;;
     add:*)   ok "firewall: your $FW_ACTIVE rules are left as they are (open 80/443 yourself for a domain)" ;;
-    0:*)     warn "firewall: not enabled, it could cut these services off (to force it: FIREWALL=1 install.sh --secure)" ;;
+    0:*)     [ "$USERMODE" = 1 ] || warn "firewall: not enabled, it could cut these services off (to force it: FIREWALL=1 install.sh --secure)" ;;
   esac
   [ "$HAS_DOCKER" = 1 ] && info "Docker found: its published ports bypass ufw - the firewall is left alone"
   if [ -n "$WEB_BUSY" ] && web_busy_docker; then
@@ -915,7 +918,7 @@ choose_access() {
   [ -n "$TIMEZONE" ] || TIMEZONE=$(cfg_get timezone)
   [ -n "$TIMEZONE" ] || TIMEZONE=$SYS_TZ                 # chosen in the web onboarding
   if [ ! -d /usr/share/zoneinfo ] || [ ! -e /usr/share/zoneinfo/UTC ]; then   # minimal images ship without tzdata
-    apt_get update -qq >/dev/null 2>&1; apt_get install -y -qq tzdata >/dev/null 2>&1 || true
+    pkg_refresh >/dev/null 2>&1; pkg_install tzdata >/dev/null 2>&1 || true
   fi
   valid_tz "$TIMEZONE" || die "unknown time zone '$TIMEZONE' (see: timedatectl list-timezones)"
   if [ "$TIMEZONE" != "$SYS_TZ" ] && [ "$SYSTEM_CLOCK" = keep ]; then
@@ -987,14 +990,74 @@ align_tz() {
 # python3...) are installed right away; the tool, browser and security ones in ONE background apt job, while the code,
 # uv, Python and Claude Code are set up: apt_wait waits for it before anything else uses apt (Caddy, the security
 # step). Each "a:b" entry takes the first name this release knows (Ubuntu 24.04 renamed libraries to *t64).
-BASE_PKGS="git curl ca-certificates cron openssl python3 gnupg openssh-client xz-utils tzdata"
-TOOL_PKGS="ffmpeg zip unzip jq ripgrep imagemagick poppler-utils bubblewrap socat"
-SEC_PKGS="unattended-upgrades fail2ban python3-systemd"
-BROWSER_PKGS="libnss3 libnspr4 libdbus-1-3 libatk1.0-0t64:libatk1.0-0 libatk-bridge2.0-0t64:libatk-bridge2.0-0 libgbm1
-  libasound2t64:libasound2 libxrandr2 libxkbcommon0 libxfixes3 libxcomposite1 libxdamage1 libdrm2 libpango-1.0-0
-  libcairo2 libcups2t64:libcups2 libatspi2.0-0t64:libatspi2.0-0 fonts-liberation fonts-noto-color-emoji"
-pkg_installed() { dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep -q 'install ok installed'; }
-pkg_known() { apt-cache show -q=0 "$1" >/dev/null 2>&1; }
+# The package manager of this system: apt (Debian, Ubuntu), dnf (Fedora and its family) or pacman (Arch and its
+# family). pkg_names gives each list its names there; "a:b" = the first name this release knows.
+PKG_MGR=""
+if command -v apt-get >/dev/null 2>&1; then PKG_MGR=apt
+elif command -v dnf >/dev/null 2>&1; then PKG_MGR=dnf
+elif command -v pacman >/dev/null 2>&1; then PKG_MGR=pacman
+fi
+pkg_names() {
+  case "$PKG_MGR" in
+    dnf)
+      BASE_PKGS="git curl ca-certificates cronie openssl python3 gnupg2 openssh-clients xz tzdata tar gzip iproute procps-ng hostname gawk findutils bubblewrap socat"
+      TOOL_PKGS="ffmpeg-free:ffmpeg zip unzip jq ripgrep ImageMagick poppler-utils"
+      SEC_PKGS="dnf5-plugin-automatic:dnf-automatic fail2ban python3-systemd"
+      F2B_PKGS="fail2ban python3-systemd"
+      BROWSER_PKGS="nss nspr dbus-libs atk at-spi2-atk mesa-libgbm alsa-lib libXrandr libxkbcommon libXfixes libXcomposite
+        libXdamage libdrm pango cairo cups-libs at-spi2-core liberation-fonts-all:liberation-fonts google-noto-color-emoji-fonts"
+      CRON_SVC=crond; FW_PKG=firewalld; PKG_CMD="dnf install -y" ;;
+    pacman)
+      BASE_PKGS="git curl ca-certificates cronie openssl python gnupg openssh xz tzdata tar gzip iproute2 procps-ng inetutils gawk findutils bubblewrap socat"
+      TOOL_PKGS="ffmpeg zip unzip jq ripgrep imagemagick poppler"
+      SEC_PKGS="fail2ban python-systemd"
+      F2B_PKGS="fail2ban python-systemd"
+      BROWSER_PKGS="nss nspr dbus at-spi2-core mesa alsa-lib libxrandr libxkbcommon libxfixes libxcomposite libxdamage
+        libdrm pango cairo libcups ttf-liberation noto-fonts-emoji"
+      CRON_SVC=cronie; FW_PKG=ufw; PKG_CMD="pacman -S --needed" ;;
+    *)
+      BASE_PKGS="git curl ca-certificates cron openssl python3 gnupg openssh-client xz-utils tzdata bubblewrap socat"
+      TOOL_PKGS="ffmpeg zip unzip jq ripgrep imagemagick poppler-utils"
+      SEC_PKGS="unattended-upgrades fail2ban python3-systemd"
+      F2B_PKGS="fail2ban python3-systemd"
+      BROWSER_PKGS="libnss3 libnspr4 libdbus-1-3 libatk1.0-0t64:libatk1.0-0 libatk-bridge2.0-0t64:libatk-bridge2.0-0 libgbm1
+        libasound2t64:libasound2 libxrandr2 libxkbcommon0 libxfixes3 libxcomposite1 libxdamage1 libdrm2 libpango-1.0-0
+        libcairo2 libcups2t64:libcups2 libatspi2.0-0t64:libatspi2.0-0 fonts-liberation fonts-noto-color-emoji"
+      CRON_SVC=cron; FW_PKG=ufw; PKG_CMD="apt-get install -y" ;;
+  esac
+}
+pkg_names
+pkg_installed() {
+  case "$PKG_MGR" in
+    dnf) rpm -q "$1" >/dev/null 2>&1 ;;
+    pacman) pacman -Qq "$1" >/dev/null 2>&1 ;;
+    *) dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep -q 'install ok installed' ;;
+  esac
+}
+pkg_known() {
+  case "$PKG_MGR" in
+    dnf) [ -n "$(dnf -q repoquery --qf '%{name}\n' "$1" 2>/dev/null | head -n1)" ] ;;
+    pacman) pacman -Si "$1" >/dev/null 2>&1 ;;
+    *) apt-cache show -q=0 "$1" >/dev/null 2>&1 ;;
+  esac
+}
+# pkg_refresh - the package lists (apt: always; pacman: only when an install failed on a stale list, see pkg_install)
+pkg_refresh() {
+  case "$PKG_MGR" in
+    apt) apt_get update -qq ;;
+    *) return 0 ;;
+  esac
+}
+# pkg_install PKG... - one install, without the recommended packages first (smaller), with them if that fails.
+# pacman: a list older than the mirror gives 404s - refreshed with the whole system brought up to date, as Arch
+# asks (never a refresh alone: that leaves a half-upgraded system).
+pkg_install() {
+  case "$PKG_MGR" in
+    dnf) (umask 022; dnf install -y -q --setopt=install_weak_deps=False "$@" || dnf install -y -q "$@") ;;
+    pacman) (umask 022; pacman -S --needed --noconfirm "$@" || pacman -Syu --needed --noconfirm "$@") ;;
+    *) apt_get install -y -qq --no-install-recommends "$@" || apt_get install -y -qq "$@" ;;
+  esac
+}
 APT_UPDATED=0
 
 # ubuntu_universe - ffmpeg, jq, ripgrep, fail2ban... are in Ubuntu's universe component: turned on when an image
@@ -1016,10 +1079,6 @@ ubuntu_universe() {
   fi
 }
 
-# apt_install PKG... - one apt-get install, without the recommended packages first (smaller), with them if that fails
-apt_install() {
-  apt_get install -y -qq --no-install-recommends "$@" || apt_get install -y -qq "$@"
-}
 
 # user_packages - without root no package is installed: what is missing is named with the one command that
 # installs it. The base ones are needed (the installation stops), the others only switch features off.
@@ -1031,16 +1090,16 @@ user_packages() {
     opt_missing+=("${p%%:*}")
   done
   if [ ${#missing[@]} -gt 0 ]; then
-    die "needed system packages are missing. Ask an administrator to run this, then start again: sudo apt-get install -y ${missing[*]}"
+    die "needed system packages are missing. Ask an administrator to run this, then start again: sudo $PKG_CMD ${missing[*]}"
   fi
   if [ ${#opt_missing[@]} -gt 0 ]; then
     warn "${#opt_missing[@]} optional package(s) missing (video thumbnails, PDF, the Sandbox mode, the browser). To add them:"
-    warn "  sudo apt-get install -y ${opt_missing[*]}"
+    warn "  sudo $PKG_CMD ${opt_missing[*]}"
   else
     ok "system packages already installed"
   fi
-  systemctl is-active -q cron 2>/dev/null || systemctl is-active -q crond 2>/dev/null \
-    || warn "the cron service is not running: scheduled jobs will not start (sudo systemctl enable --now cron)"
+  systemctl is-active -q "$CRON_SVC" 2>/dev/null \
+    || warn "the cron service is not running: scheduled jobs will not start (sudo systemctl enable --now $CRON_SVC)"
 }
 
 install_packages() {
@@ -1050,7 +1109,7 @@ install_packages() {
   ensure_swap                                   # first: apt, uv and the Claude Code install then run side by side
   [ "$FIREWALL" = 1 ] && ! systemd-detect-virt -cq 2>/dev/null && wants_fw=1
   for p in $BASE_PKGS; do pkg_installed "$p" || missing+=("$p"); done
-  for p in $TOOL_PKGS $SEC_PKGS $BROWSER_PKGS $([ "$wants_fw" = 1 ] && echo ufw); do
+  for p in $TOOL_PKGS $SEC_PKGS $BROWSER_PKGS $([ "$wants_fw" = 1 ] && echo "$FW_PKG"); do
     for n in ${p//:/ }; do pkg_installed "$n" && continue 2; done
     opt_missing+=("$p")
   done
@@ -1059,9 +1118,9 @@ install_packages() {
   else
     ubuntu_universe
     if [ ${#missing[@]} -gt 0 ]; then
-      apt_get update -qq >>"$WORK/apt.log" 2>&1 || warn "apt-get update reported errors (see below if something is missing)"
+      pkg_refresh >>"$WORK/apt.log" 2>&1 || warn "the package lists could not be refreshed (see below if something is missing)"
       APT_UPDATED=1
-      apt_install "${missing[@]}" >>"$WORK/apt.log" 2>&1 || { tail -n 15 "$WORK/apt.log"; die "apt-get install failed"; }
+      pkg_install "${missing[@]}" >>"$WORK/apt.log" 2>&1 || { tail -n 15 "$WORK/apt.log"; die "package installation failed ($PKG_CMD ${missing[*]})"; }
       ok "${#missing[@]} base package(s) installed"
     fi
     if [ ${#opt_missing[@]} -gt 0 ]; then
@@ -1071,14 +1130,14 @@ install_packages() {
   fi
   [ -n "${BG_PID[apt]:-}" ] || command -v ffmpeg >/dev/null 2>&1 \
     || warn "ffmpeg not installed: no video thumbnails in Files, no voice messages"
-  systemctl enable --now cron >/dev/null 2>&1 || warn "could not start the cron service"
+  systemctl enable --now "$CRON_SVC" >/dev/null 2>&1 || warn "could not start the cron service ($CRON_SVC)"
 }
 
 # apt_tools ENTRY... - the background apt job: names this release knows, one install; skipped ones and the count
 # are left in $WORK for apt_wait to report
 apt_tools() {
   local p n want=() skipped=()
-  [ "$APT_UPDATED" = 1 ] || apt_get update -qq || echo "apt-get update reported errors"
+  [ "$APT_UPDATED" = 1 ] || pkg_refresh || echo "the package lists could not be refreshed"
   for p in "$@"; do
     for n in ${p//:/ }; do
       if pkg_known "$n"; then want+=("$n"); continue 2; fi
@@ -1086,7 +1145,7 @@ apt_tools() {
     skipped+=("${p%%:*}")
   done
   printf '%s' "${skipped[*]}" > "$WORK/apt-skipped"
-  if [ ${#want[@]} -gt 0 ]; then apt_install "${want[@]}" || return 1; fi
+  if [ ${#want[@]} -gt 0 ]; then pkg_install "${want[@]}" || return 1; fi
   printf '%s' "${#want[@]}" > "$WORK/apt-count"
 }
 
@@ -1094,7 +1153,7 @@ apt_tools() {
 # install when it failed, like an apt failure in the foreground did
 apt_wait() {
   [ -n "${BG_PID[apt]:-}" ] || return 0
-  bg_wait apt || die "apt-get install failed (log above) - fix it, then run the same command again"
+  bg_wait apt || die "package installation failed (log above) - fix it, then run the same command again"
   [ ! -s "$WORK/apt-skipped" ] || warn "not available on this system: $(cat "$WORK/apt-skipped")"
   ok "$(cat "$WORK/apt-count" 2>/dev/null || echo 0) system package(s) installed in the background"
   command -v ffmpeg >/dev/null 2>&1 || warn "ffmpeg not installed: no video thumbnails in Files, no voice messages"
@@ -1362,6 +1421,40 @@ f2b_jail() {
   printf '# ban an IP for 1 h after 5 failed SSH logins in 10 min, on the SSH ports of this server\n'
   printf '[sshd]\nenabled = true\nport = %s\nbackend = systemd\nmaxretry = 5\nfindtime = 10m\nbantime = 1h\n' \
     "$(ssh_ports | tr '\n' ',' | sed 's/,$//')"
+  # Fedora sets fail2ban to ban through firewalld: when firewalld is not the firewall here (another one is kept, a
+  # container, FIREWALL=0), nftables takes the bans
+  if [ "$PKG_MGR" = dnf ] && ! firewalld_here; then
+    printf 'banaction = nftables-multiport\nbanaction_allports = nftables-allports\n'
+  fi
+}
+
+# firewalld_here - firewalld is (or is about to be, in this run) the firewall of this server
+firewalld_here() {
+  [ "$FW_ACTIVE" = firewalld ] && return 0
+  [ "$PKG_MGR" = dnf ] && [ "$FIREWALL" = 1 ] && [ -z "$FW_ACTIVE" ] && ! systemd-detect-virt -cq 2>/dev/null
+}
+
+# firewalld_on - Fedora and its family: their own firewall instead of ufw. Everything closed but SSH (its real ports),
+# 80/443 for a domain, and the Tailscale interface trusted. Prints what is open; fails when firewalld is not running.
+firewalld_on() {
+  local p ports open
+  ports=$(ssh_ports)
+  pkg_installed firewalld || pkg_install firewalld >>"$WORK/apt.log" 2>&1 || return 1
+  systemctl enable --now firewalld >/dev/null 2>&1 || return 1
+  for p in 1 2 3 4 5 6 7 8 9 10; do [ "$(firewall-cmd --state 2>/dev/null)" = running ] && break; sleep 1; done
+  [ "$(firewall-cmd --state 2>/dev/null)" = running ] || return 1
+  for p in $ports; do firewall-cmd -q --permanent --add-port="$p/tcp" || return 1; done
+  open="SSH $(echo "$ports" | tr ' \n' '//' | sed 's#/$##')"
+  if [ "$ACCESS" = domain ]; then
+    firewall-cmd -q --permanent --add-service=http --add-service=https || return 1
+    open="$open 80 443"
+  fi
+  if [ "$ACCESS" = tailscale ]; then
+    firewall-cmd -q --permanent --zone=trusted --add-interface=tailscale0 || return 1
+    open="$open, tailscale0: everything"
+  fi
+  firewall-cmd -q --reload || return 1
+  echo "$open"
 }
 
 # auto_upgrades_on - unattended security updates are really enabled (apt's own view, not just our file)
@@ -1370,10 +1463,36 @@ auto_upgrades_on() {
   apt-config dump 2>/dev/null | grep '^APT::Periodic::Unattended-Upgrade "1"' >/dev/null   # no -q (pipefail + SIGPIPE)
 }
 
+# dnf_auto_updates - Fedora and its family: security updates applied by dnf's own timer (dnf5: the "automatic"
+# plugin and dnf5-automatic.timer; dnf 4: dnf-automatic and its install timer). Prints the timer that is on.
+dnf_auto_updates() {
+  local conf timer t
+  if pkg_installed dnf5-plugin-automatic || pkg_install dnf5-plugin-automatic >>"$WORK/apt.log" 2>&1; then
+    conf=/etc/dnf/dnf5-plugins/automatic.conf; timer=dnf5-automatic.timer
+  elif pkg_installed dnf-automatic || pkg_install dnf-automatic >>"$WORK/apt.log" 2>&1; then
+    conf=/etc/dnf/automatic.conf; timer=dnf-automatic-install.timer
+  else
+    return 1
+  fi
+  if [ ! -f "$conf" ] || [ "$EXISTING" = 0 ]; then          # a server in use keeps its own settings
+    (umask 022; mkdir -p "$(dirname "$conf")"
+     printf '# Harness Maxxing (install.sh): security updates applied automatically\n[commands]\nupgrade_type = security\napply_updates = yes\n' > "$conf")
+  fi
+  for t in "$timer" dnf-automatic.timer; do
+    systemctl enable --now "$t" >/dev/null 2>&1 && systemctl is-enabled -q "$t" 2>/dev/null && { echo "$t"; return 0; }
+  done
+  return 1
+}
+
 secure_server() {
   local done=() failed=()
   apt_wait                                      # unattended-upgrades, fail2ban, ufw come with the background apt job
-  if pkg_installed unattended-upgrades || apt_get install -y -qq unattended-upgrades >>"$WORK/apt.log" 2>&1; then
+  if [ "$PKG_MGR" = dnf ]; then
+    if dnf_auto_updates >/dev/null; then done+=("security updates")
+    else failed+=("automatic security updates (dnf's automatic plugin could not be turned on)"); fi
+  elif [ "$PKG_MGR" = pacman ]; then
+    info "Arch has no automatic security updates: keep this system up to date yourself (pacman -Syu)"
+  elif pkg_installed unattended-upgrades || apt_get install -y -qq unattended-upgrades >>"$WORK/apt.log" 2>&1; then
     [ -f /etc/apt/apt.conf.d/20auto-upgrades ] && [ "$EXISTING" = 1 ] \
       || (umask 022; printf 'APT::Periodic::Update-Package-Lists "1";\nAPT::Periodic::Unattended-Upgrade "1";\n' \
            > /etc/apt/apt.conf.d/20auto-upgrades)
@@ -1384,7 +1503,8 @@ secure_server() {
     failed+=("automatic security updates (unattended-upgrades could not be installed)")
   fi
   ssh_key_only
-  if { pkg_installed fail2ban && pkg_installed python3-systemd; } || apt_get install -y -qq fail2ban python3-systemd >>"$WORK/apt.log" 2>&1; then
+  # shellcheck disable=SC2086
+  if { for p in $F2B_PKGS; do pkg_installed "$p" || exit 1; done; } || pkg_install $F2B_PKGS >>"$WORK/apt.log" 2>&1; then
     rm -f /etc/fail2ban/jail.d/agent-maxxing.local                   # name used by early 2.0.0a5 builds
     local ours=/etc/fail2ban/jail.d/harness-maxxing.local
     if [ ! -f "$ours" ] \
@@ -1429,10 +1549,25 @@ secure_server() {
       [ "$ACCESS" = tailscale ] && { ufw_tailscale; added="$added + tailscale0 ($PORT, SSH)"; }
       ufw_ipv6_warn
       done+=("your firewall kept${added:+ (${added# + } added)}"); FW_ON=1
+    elif [ "$FW_ACTIVE" = firewalld ]; then      # Fedora's own: kept, with the web ports of a domain added to it
+      if [ "$ACCESS" = domain ] && [ -z "$WEB_BUSY" ] \
+         && firewall-cmd -q --permanent --add-service=http --add-service=https 2>/dev/null && firewall-cmd -q --reload 2>/dev/null; then
+        done+=("your firewalld kept (80 + 443 added)")
+      elif [ "$ACCESS" = tailscale ] \
+         && firewall-cmd -q --permanent --zone=trusted --add-interface=tailscale0 2>/dev/null && firewall-cmd -q --reload 2>/dev/null; then
+        done+=("your firewalld kept (tailscale0 trusted)")
+      else
+        done+=("your firewalld kept")
+      fi
+      FW_ON=1
     else
       info "your $FW_ACTIVE firewall is left as it is${ACCESS:+ - for a domain, ports 80/443 must be open}"; FW_ON=1
     fi
-  elif pkg_installed ufw || apt_get install -y -qq ufw >>"$WORK/apt.log" 2>&1; then
+  elif [ "$PKG_MGR" = dnf ]; then
+    local open
+    if open=$(firewalld_on); then done+=("firewall (firewalld: $open)"); manifest "firewalld enabled"; FW_ON=1
+    else failed+=("firewall (firewalld could not be turned on - systemctl status firewalld)"); fi
+  elif pkg_installed ufw || pkg_install ufw >>"$WORK/apt.log" 2>&1; then
     local p ports
     ports=$(ssh_ports)
     for p in $ports; do ufw allow "$p/tcp" comment 'SSH' >/dev/null; done
@@ -1680,6 +1815,11 @@ restore_review() {
 # ---- access ---------------------------------------------------------------------------------
 setup_caddy() {
   apt_wait                                      # one apt at a time
+  if ! command -v caddy >/dev/null 2>&1 && [ "$PKG_MGR" != apt ]; then    # in the distribution's own repository
+    pkg_install caddy >>"$WORK/apt.log" 2>&1 || { tail -n 15 "$WORK/apt.log"; die "Caddy installation failed"; }
+    ok "Caddy installed"
+    manifest "caddy installed"
+  fi
   if ! command -v caddy >/dev/null 2>&1; then
     command -v gpg >/dev/null 2>&1 || apt_get install -y -qq gnupg >>"$WORK/apt.log" 2>&1 || true
     caddy_repo || die "Caddy's signing key does not match the expected fingerprint - refused"
@@ -1730,6 +1870,9 @@ EOF
   chmod 644 "$CADDY_SITE" "$CADDYFILE"; chmod 755 /etc/caddy/maxxing-paths
   caddy validate --config "$CADDYFILE" --adapter caddyfile >/dev/null 2>&1 \
     || die "invalid Caddy configuration - see: caddy validate --config $CADDYFILE --adapter caddyfile"
+  if command -v setsebool >/dev/null 2>&1 && [ "$(getenforce 2>/dev/null)" = Enforcing ]; then
+    setsebool -P httpd_can_network_connect 1 >/dev/null 2>&1 || true     # SELinux: let Caddy reach the server on 127.0.0.1
+  fi
   systemctl enable --now caddy >/dev/null 2>&1 || true
   if [ "$before_cf" != "$(cat "$CADDYFILE")" ]; then          # the admin address may have changed: reload cannot
     systemctl restart caddy >/dev/null 2>&1 || die "Caddy did not start: journalctl -u caddy -n 50"
@@ -1952,7 +2095,8 @@ setup_user_service() {
   systemctl --user restart "$SERVICE"
   service_wait
   ok "running on $BIND:$PORT (systemctl --user status $SERVICE)"
-  if loginctl enable-linger "$(id -un)" >/dev/null 2>&1; then
+  if [ "$(loginctl show-user "$(id -un)" -p Linger --value 2>/dev/null)" = yes ] \
+     || loginctl enable-linger "$(id -un)" >/dev/null 2>&1; then
     ok "starts with this machine and keeps running when you sign out"
   else
     warn "it stops when you sign out and does not start with the machine - as root: loginctl enable-linger $(id -un)"

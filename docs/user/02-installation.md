@@ -5,8 +5,9 @@ section: Getting started
 
 ## Requirements
 
-- A server running **Ubuntu 24.04** (tested: Ubuntu 22.04, 24.04 and 26.04, Debian 12; other apt-based systems
-  usually work) with **systemd**, on **x86_64 or arm64**. **2 vCPU, 4 GB RAM and 40 GB disk**
+- A server running **Ubuntu 24.04** (tested: Ubuntu 22.04, 24.04 and 26.04, Debian 12 and 13, **Fedora 43** and
+  **Arch Linux**; other systems with apt, dnf or pacman usually work - see [Fedora and Arch](#fedora-and-arch))
+  with **systemd**, on **x86_64 or arm64**. **2 vCPU, 4 GB RAM and 40 GB disk**
   recommended (the tools for videos and scraping take ~1.5 GB). Under 4 GB of RAM without swap the installer adds a
   2 GB swap file; under 3 GB local voice transcription stays off unless you ask for it.
 - Root access (`sudo -i`) - or none at all: see [Install without root](#install-without-root).
@@ -41,7 +42,7 @@ No license key is asked. A company that needs an Enterprise key gives it after t
 After the questions the installer runs unattended with a live progress display. Voice messages are enabled with the
 local engine (on servers with at least 3 GB of RAM) and the time zone is chosen in the web onboarding:
 
-1. checks the server (root, apt, systemd, architecture) and whether it is already in use (see below);
+1. checks the server (root, the package manager - apt, dnf or pacman -, systemd, architecture) and whether it is already in use (see below);
 2. installs the system packages it needs: the base ones right away (git, curl, python3, gnupg, openssh-client,
    cron...), the others (ffmpeg, jq, ripgrep, ImageMagick, the browser libraries, unattended-upgrades, fail2ban...)
    **in one pass in the background** while the next steps run, turning Ubuntu's `universe` component on if the
@@ -58,7 +59,7 @@ local engine (on servers with at least 3 GB of RAM) and the time zone is chosen 
 6. optionally restores your memory from a backup;
 7. sets up access (Caddy for a domain, Tailscale, or local only);
 8. **secures the server**: automatic security updates, SSH logins by key only (only when it is
-   proven safe, see [Security](security)), fail2ban for SSH, and a firewall (ufw) that
+   proven safe, see [Security](security)), fail2ban for SSH, and a firewall (ufw; firewalld on Fedora) that
    lets in only SSH, 80/443 (domain) or Tailscale - see [Security](security) (on a server already in
    use, the firewall is handled carefully: see below);
 9. installs and starts the `claude-maxxing` service and checks it answers;
@@ -105,6 +106,23 @@ is on (Settings -> Claude, off by default). System packages (Caddy, ffmpeg, git.
 security updates from `unattended-upgrades`.
 
 Open the link: the [onboarding](onboarding) does the rest.
+
+## Fedora and Arch
+
+The same command installs Harness Maxxing on Fedora (and systems of its family that use `dnf`) and on Arch Linux
+(`pacman`), as root or [without root](#install-without-root). What differs from Ubuntu and Debian:
+
+| | Ubuntu, Debian | Fedora | Arch |
+|---|---|---|---|
+| Packages | `apt` | `dnf` | `pacman` (a stale package list is refreshed with a full `pacman -Syu`, as Arch asks) |
+| Scheduled jobs | `cron` | `cronie` (service `crond`) | `cronie` |
+| Automatic security updates | `unattended-upgrades` | dnf's `automatic` plugin and its timer, security updates only | none: Arch has no such thing, keep the system up to date yourself |
+| Firewall | `ufw` | `firewalld` (an active one is kept; 80/443 or the Tailscale interface are added to it) | `ufw` |
+| fail2ban for SSH | yes | yes (bans through firewalld, or nftables when firewalld is not the firewall) | yes |
+| Caddy (domain access) | Caddy's own signed repository | the distribution's package | the distribution's package |
+
+On Fedora with SELinux enforcing, the installer allows Caddy to reach the server on `127.0.0.1`
+(`httpd_can_network_connect`). `maxxing doctor` and the fixes it prints use the names of your system.
 
 ## Install without root
 

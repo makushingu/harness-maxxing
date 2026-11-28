@@ -142,10 +142,10 @@ def setup() -> list[str]:
     done: list[str] = []
     pkgs = [p for p, b in (("bubblewrap", "bwrap"), ("socat", "socat")) if not shutil.which(b)]
     if pkgs:
-        if not shutil.which("apt-get"):
-            raise RuntimeError(f"install {' and '.join(pkgs)} with the package manager of this system")
-        env = {**os.environ, "DEBIAN_FRONTEND": "noninteractive"}
-        subprocess.run(["apt-get", "install", "-y", "-q", *pkgs], check=True, env=env, stdout=subprocess.DEVNULL)
+        from . import pkg
+        code, out = pkg.install(*pkgs)
+        if code != 0:
+            raise RuntimeError(f"install {' and '.join(pkgs)} with the package manager of this system ({out.strip()[-200:]})")
         done.append("installed " + ", ".join(pkgs))
     if _distro_profile_loaded() and not _probe() and drop_distro_profile():
         done.append(f"AppArmor profile {DISTRO_FILE} switched off (it kept the sandbox from starting; "

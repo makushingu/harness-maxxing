@@ -33,7 +33,7 @@ import wave
 from pathlib import Path
 from typing import Any, Callable
 
-from . import config
+from . import config, pkg
 
 log = logging.getLogger("maxxing.voice")
 
@@ -235,7 +235,7 @@ def normalise(src: Path, dest: Path, max_seconds: int = MAX_SECONDS) -> float:
     Raises VoiceError(422 bad_audio | 413 too_long | 503 no_ffmpeg)."""
     ff = ffmpeg_bin()
     if not ff:
-        raise VoiceError(503, "no_ffmpeg", "ffmpeg is not installed on the server (apt-get install ffmpeg)")
+        raise VoiceError(503, "no_ffmpeg", f"ffmpeg is not installed on the server ({pkg.hint('ffmpeg')})")
     cmd = [ff, "-nostdin", "-hide_banner", "-loglevel", "error", "-y", "-protocol_whitelist", "file",   # no URLs
            "-i", str(src), "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", "-t", str(max_seconds + 1), str(dest)]
     try:
@@ -244,7 +244,7 @@ def normalise(src: Path, dest: Path, max_seconds: int = MAX_SECONDS) -> float:
     except subprocess.TimeoutExpired:
         raise VoiceError(422, "bad_audio", "audio conversion timed out") from None
     except OSError:                                    # removed (or no longer runnable) since it was looked up
-        raise VoiceError(503, "no_ffmpeg", "ffmpeg is not installed on the server (apt-get install ffmpeg)") from None
+        raise VoiceError(503, "no_ffmpeg", f"ffmpeg is not installed on the server ({pkg.hint('ffmpeg')})") from None
     if p.returncode != 0 or not dest.is_file():
         err = (p.stderr or "").strip().splitlines()
         raise VoiceError(422, "bad_audio", "unreadable audio" + (f": {err[-1][:200]}" if err else ""))
@@ -625,7 +625,7 @@ def doctor() -> tuple[str, str, str, str]:
         return "info", "voice messages off", "", "Settings → Voice to enable them"
     ready, reason = readiness(s)
     if not ready:
-        fixes = {"no_ffmpeg": "apt-get install -y ffmpeg",
+        fixes = {"no_ffmpeg": pkg.hint("ffmpeg"),
                  "not_installed": f"cd {code_dir()} && uv sync --extra voice   (or Settings → Voice → Install)",
                  "no_key": f"add {KEY_NAMES.get(s['engine'], '')} in Settings → Keys"}
         return "warn", f"voice ({s['engine']}) not ready: {reason}", "", fixes.get(reason or "", "")

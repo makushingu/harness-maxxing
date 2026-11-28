@@ -32,7 +32,7 @@ Free and [fair source](#fair-source) (source-available). No key, no account:
 curl --proto '=https' --tlsv1.2 -fsSL https://get.harness-maxxing.com | bash
 ```
 
-Run it as root on an Ubuntu or Debian server; details in [Install](#install) below. Want to look around first?
+Run it on an Ubuntu, Debian, Fedora or Arch server (as root, or as a normal user); details in [Install](#install) below. Want to look around first?
 Open the [live demo](https://harness-maxxing.com/demo/) in your browser (fake data, nothing to install).
 
 ## Why Harness Maxxing
@@ -143,8 +143,8 @@ _Screenshots from the [live demo](https://harness-maxxing.com/demo/) (fake data)
 
 ## Requirements
 
-- A VPS with **Ubuntu 24.04** (tested: Ubuntu 22.04, 24.04, 26.04 and Debian 12: apt + systemd), x86_64 or arm64,
-  root access. **2 vCPU, 4 GB RAM, 40 GB disk** recommended.
+- A VPS with **Ubuntu 24.04** (tested: Ubuntu 22.04, 24.04, 26.04, Debian 12 and 13, Fedora 43, Arch Linux: systemd), x86_64
+  or arm64, root access (or none: it then installs in your home folder). **2 vCPU, 4 GB RAM, 40 GB disk** recommended.
 - A Claude subscription (Pro, Max or Ultra, connected with `claude setup-token`) or an Anthropic API key.
 - For HTTPS: a subdomain pointing to the server, DNS only (or use Tailscale / an SSH tunnel).
 - Optional: a Telegram bot (BotFather, Threaded Mode on), a Groq key for faster voice.

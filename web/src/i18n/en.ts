@@ -1871,7 +1871,7 @@ export const en = {
   'system.cleanup.journal': "System logs",
   'system.cleanup.journalDesc': "The systemd journal, cut down to its last 200 MB.",
   'system.cleanup.apt': "Downloaded system packages",
-  'system.cleanup.aptDesc': "Packages apt already installed (apt-get clean).",
+  'system.cleanup.aptDesc': "Packages the system already installed (the cache of apt, dnf or pacman).",
   'system.cleanup.previews': "Video previews and thumbnails",
   'system.cleanup.previewsDesc': "Lighter copies of videos for the player and file thumbnails: made again when shown (some CPU). A video played in the last 30 min stays.",
   'system.cleanup.trash': "Harness trash",

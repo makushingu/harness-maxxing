@@ -199,7 +199,7 @@ def test_a_failed_background_apt_stops_the_install(tmp_path):
     r = sh(f'WORK={tmp_path}/w; mkdir -p $WORK; FIREWALL=0; pkg_installed() {{ [ "$1" != ffmpeg ]; }}; '
            + APT_STUBS + 'apt_get() { case "$1" in install) echo "E: broken ffmpeg"; return 100 ;; esac; }; '
            'install_packages; apt_wait; echo "not reached"')
-    assert "not reached" not in r.stdout and "E: broken ffmpeg" in r.stdout and "apt-get install failed" in r.stderr
+    assert "not reached" not in r.stdout and "E: broken ffmpeg" in r.stdout and "package installation failed" in r.stderr
 
 
 def test_background_jobs_report_their_exit_code(tmp_path):

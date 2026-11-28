@@ -49,7 +49,7 @@ from pathlib import Path
 from typing import Any, Iterator
 from zoneinfo import ZoneInfo
 
-from . import config
+from . import config, pkg
 
 BLOCK_BEGIN = "# >>> claude-maxxing (managed) >>>"
 BLOCK_END = "# <<< claude-maxxing <<<"
@@ -891,7 +891,7 @@ def align_system_timezone(tz: str) -> bool:
         if r.returncode != 0:
             log.warning("timedatectl set-timezone %s failed: %s", tz, r.stderr.strip()[:200])
             return False
-        subprocess.run(["systemctl", "restart", "cron"], capture_output=True, timeout=30)
+        subprocess.run(["systemctl", "restart", pkg.cron_service()], capture_output=True, timeout=30)
         return True
     except (OSError, subprocess.TimeoutExpired):
         return False
