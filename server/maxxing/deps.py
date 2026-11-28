@@ -31,7 +31,8 @@ from . import config
 MANIFEST = Path(__file__).with_name("deps.toml")
 SYSTEM_PATH = tuple((os.environ.get("MAXXING_DEPS_SYSTEM_PATH") or            # tests point it elsewhere
                      "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin").split(os.pathsep))
-LINK_DIR = Path(os.environ.get("MAXXING_DEPS_BIN") or "/usr/local/bin")   # tests point it elsewhere
+LINK_DIR = Path(os.environ.get("MAXXING_DEPS_BIN")
+                or (Path.home() / ".local" / "bin" if config.user_mode() else "/usr/local/bin"))   # tests point it elsewhere
 NODE_LEGACY_PARTS = ("bin/node", "bin/npm", "bin/npx", "bin/corepack", "include/node", "lib/node_modules/npm",
                      "lib/node_modules/corepack", "share/doc/node", "share/man/man1/node.1",
                      "share/systemtap/tapsets/node.stp")
@@ -524,6 +525,8 @@ def foreign_owned(root: Path, owner: str = "root", limit: int = 20) -> list[str]
         uid = pwd.getpwnam(owner).pw_uid
     except KeyError:
         uid = 0
+    if owner == "root" and config.user_mode():     # installed without root: the components are that user's
+        uid = os.geteuid()
     bad: list[str] = []
     todo = [root]
     while todo and len(bad) < limit:
@@ -578,6 +581,8 @@ def verify(names: list[str] | None = None, versions: dict[str, str | None] | Non
     before = json.dumps(shas, sort_keys=True)
     for name in names or list(comps):
         c = comps[name]
+        if c.get("kind") == "apt" and config.user_mode():    # a package of the system: its administrator's, not ours
+            continue
         version = versions[name] if versions is not None and name in versions else installed(name)["version"]
         if version is None:
             if wanted(name):
@@ -586,7 +591,7 @@ def verify(names: list[str] | None = None, versions: dict[str, str | None] | Non
         problems: list[str] = []
         bad = [f for p in owned_paths(name) for f in foreign_owned(p, c.get("owner", "root"))]
         if bad:
-            problems.append("not owned by root or writable by others: " + ", ".join(bad[:3]) + (" ..." if len(bad) > 3 else ""))
+            problems.append(("not yours" if config.user_mode() else "not owned by root") + " or writable by others: " + ", ".join(bad[:3]) + (" ..." if len(bad) > 3 else ""))
         for path, want in (rec.get(name) or {}).get("files", {}).items():
             try:
                 if _known_sha(Path(path), shas) != want:

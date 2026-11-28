@@ -34,6 +34,12 @@ JOBS_SLICE_PATH = Path("/etc/systemd/system/maxxing-jobs.slice")
 SYSTEMD_DIR = Path("/run/systemd/system")          # present when systemd is PID 1
 CADDYFILE = Path("/etc/caddy/Caddyfile")
 BIN_LINK = Path("/usr/local/bin/maxxing")
+USER_MODE = config.user_mode()
+if USER_MODE:                                       # installed without root: the user's own unit and command
+    UNIT_PATH = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "systemd" / "user" / "claude-maxxing.service"
+    BIN_LINK = Path.home() / ".local" / "bin" / "maxxing"
+SYSTEMCTL = " ".join(config.sd())                   # as typed in the hints: "systemctl" or "systemctl --user"
+JOURNALCTL = " ".join(config.sd("journalctl"))
 PRODUCT_SKILLS_EXTRA = ("memory", "memory-compaction", "video-motion-design", "pdf-document", "image-edit",
                         "seo-audit", "web-scraping")                     # + every skill named maxxing-*
 UPDATE_TOKEN = "github_update_token"
@@ -98,7 +104,7 @@ def run(cmd: list[str], timeout: float = 60, cwd: str | Path | None = None,
 def systemctl(*args: str, timeout: float = 60) -> tuple[int, str]:
     if not Path("/run/systemd/system").is_dir():
         return 127, "systemd is not running"
-    return run(["systemctl", *args], timeout=timeout)
+    return run([*config.sd(), *args], timeout=timeout)
 
 
 def http_get(url: str, timeout: float = 6) -> tuple[int, str]:
@@ -575,7 +581,7 @@ def check_cpu_priorities() -> Check | None:
         code, out = systemctl("show", "-p", "Slice", "--value", SERVICE, timeout=10)
         if code == 0 and out.strip() and out.strip() != cpu.SLICES[cpu.LIVE]:
             return _c("cpu_priorities", INFO, "CPU priorities on, the server joins its slice at its next restart",
-                      f"now in {out.strip()}", f"systemctl restart {SERVICE}  (a few seconds without the UI)")
+                      f"now in {out.strip()}", f"{SYSTEMCTL} restart {SERVICE}  (a few seconds without the UI)")
     return _c("cpu_priorities", OK, f"CPU priorities {state}" + ("" if state == "on" else " (equal weights)"))
 
 
@@ -776,6 +782,8 @@ def claude_bin() -> str | None:
 
 
 def uv_bin() -> str | None:
+    if USER_MODE and (home() / ".local" / "bin" / "uv").exists():     # the user's own, not the system's
+        return str(home() / ".local" / "bin" / "uv")
     if Path("/usr/local/bin/uv").exists():            # the pinned one (deps.toml) before any other on PATH
         return "/usr/local/bin/uv"
     p = home() / ".local" / "bin" / "uv"
@@ -1007,7 +1015,7 @@ def check_service() -> Check:
     if state == "active":
         return _c("service", OK, f"service {SERVICE} active")
     return _c("service", FAIL, f"service {SERVICE} {state}", "",
-              f"journalctl -u {SERVICE} -n 50 --no-pager ; systemctl restart {SERVICE}")
+              f"{JOURNALCTL} -u {SERVICE} -n 50 --no-pager ; {SYSTEMCTL} restart {SERVICE}")
 
 
 def hardening_path() -> Path:
@@ -1040,7 +1048,7 @@ def ensure_service_memory() -> str:
 
 
 def check_hardening() -> Check | None:
-    if not UNIT_PATH.exists():
+    if USER_MODE or not UNIT_PATH.exists():       # a user's unit cannot take these settings
         return None
     p = hardening_path()
     if not p.is_file():
@@ -1202,7 +1210,7 @@ def check_http(cfg: dict) -> Check:
             v = "?"
         return _c("http", OK, f"server answers on {url} (version {v})")
     return _c("http", FAIL, "server does not answer", f"{url}: {status or body}",
-              f"systemctl status {SERVICE} ; journalctl -u {SERVICE} -n 50 --no-pager")
+              f"{SYSTEMCTL} status {SERVICE} ; {JOURNALCTL} -u {SERVICE} -n 50 --no-pager")
 
 
 def check_public_url(cfg: dict) -> Check:
@@ -1226,6 +1234,8 @@ def check_public_url(cfg: dict) -> Check:
 
 
 def check_caddy(cfg: dict) -> Check | None:
+    if USER_MODE:                                 # the system's Caddy is not ours to check
+        return None
     if not CADDY_SITE.exists() and (config.STATE / "reverse-proxy.conf").exists():
         return _c("caddy", OK, "served by your own web server (no Caddy)", str(config.STATE / "reverse-proxy.conf"))
     if not CADDY_SITE.exists():
@@ -1315,7 +1325,7 @@ def check_telegram(cfg: dict) -> Check:
         return _c("telegram", WARN, "Telegram linked but the server is not reading its messages" + two,
                   f"poller stopped; last answer from Telegram {seen}"
                   + (f"; {st['poll_error']}" if st.get("poll_error") else ""),
-                  f"systemctl restart {SERVICE} ; maxxing telegram status")
+                  f"{SYSTEMCTL} restart {SERVICE} ; maxxing telegram status")
     if st.get("poll_error"):
         return _c("telegram", WARN, "Telegram linked, the poller reports an error" + two, str(st["poll_error"]),
                   "maxxing telegram test")
@@ -1486,7 +1496,7 @@ def foreign_owned(prefix: Path, limit: int = 20) -> list[str]:
                 st = p.lstat()
             except OSError:
                 continue
-            if st.st_uid != 0 or st.st_gid != 0:
+            if st.st_uid != os.geteuid() or (not USER_MODE and st.st_gid != 0):
                 bad.append(str(p))
             if p.is_dir() and not p.is_symlink():
                 with contextlib.suppress(OSError):
@@ -1532,6 +1542,9 @@ def _run_ok(cmd: list[str]) -> tuple[bool, str]:
 
 def check_security() -> Check:
     """Firewall (ufw), fail2ban, automatic security updates: set by the installer; warning only."""
+    if USER_MODE:
+        return _c("security", INFO, "installed without root: the firewall and the security updates of this machine "
+                  "are its administrator's", "the server listens on this machine only unless you chose Tailscale")
     missing = []
     in_container = _run_ok(["systemd-detect-virt", "-cq"])[0]
     if not in_container:
@@ -2854,7 +2867,7 @@ def cmd_harden(a) -> int:
         line(FAIL, "systemctl daemon-reload failed", out.strip()[-300:])
         return 1
     if a.no_restart:
-        line(INFO, f"takes effect at the next restart: systemctl restart {SERVICE}")
+        line(INFO, f"takes effect at the next restart: {SYSTEMCTL} restart {SERVICE}")
         return 0
     code, out = systemctl("restart", SERVICE, timeout=60)
     if code == 0 and _healthy(__version__):
@@ -2868,7 +2881,7 @@ def cmd_harden(a) -> int:
         p.write_text(before)
     systemctl("daemon-reload", timeout=60)
     systemctl("restart", SERVICE, timeout=60)
-    line(WARN, "previous service settings restored", f"journalctl -u {SERVICE} -n 50 --no-pager")
+    line(WARN, "previous service settings restored", f"{JOURNALCTL} -u {SERVICE} -n 50 --no-pager")
     return 1
 
 
@@ -2900,15 +2913,16 @@ def cmd_uninstall(a) -> int:
         with contextlib.suppress(OSError):
             hardening_path().parent.rmdir()
     from . import cpu
-    for p in (JOBS_SLICE_PATH, cpu.SLICE_DIR / cpu.SLICES[cpu.LIVE], cpu.SLICE_DIR / cpu.SLICES[cpu.NORMAL],
-              service_cpu_path()):
-        p.unlink(missing_ok=True)
+    for p in () if USER_MODE else (JOBS_SLICE_PATH, cpu.SLICE_DIR / cpu.SLICES[cpu.LIVE],
+                                   cpu.SLICE_DIR / cpu.SLICES[cpu.NORMAL], service_cpu_path()):
+        p.unlink(missing_ok=True)       # system files: an installation without root never wrote them
     if UNIT_PATH.exists():
         UNIT_PATH.unlink()
         systemctl("daemon-reload")
     line(OK, f"service {SERVICE} removed")
     try:
-        line(OK, remove_caddy_site())
+        if not USER_MODE:
+            line(OK, remove_caddy_site())
     except OSError as e:                               # the next steps still run
         line(WARN, f"Caddy site not removed: {e}")
     line(OK, remove_crontab_block())
@@ -2928,6 +2942,9 @@ def cmd_uninstall(a) -> int:
             line(WARN, f"{config.CODE} does not look like an install directory - kept")
         if _is_state_dir(config.STATE):
             _purge_dir(config.STATE, "state")
+            if USER_MODE:                              # ~/.harness-maxxing, once empty
+                with contextlib.suppress(OSError):
+                    config.STATE.parent.rmdir()
         elif config.STATE.is_dir():
             line(WARN, f"{config.STATE} does not look like a Harness Maxxing state directory (no config.json) - kept")
     if a.purge_workspace:
@@ -2975,13 +2992,19 @@ def _uninstall_components(changed: list[str], purge: bool) -> None:
                     text = link.read_text(errors="ignore")[:400]
             if (link.is_symlink() and os.readlink(link).startswith(str(config.STATE))) or "Harness Maxxing wrapper" in text:
                 link.unlink()
-    line(OK, "tool commands removed from /usr/local/bin (scrapling, node...)")
-    if F2B_JAIL.is_file():
+    if purge and deps.LINK_DIR.is_dir():               # any other link into the state folder (uv's python3.x) would dangle
+        for link in deps.LINK_DIR.iterdir():
+            if link.is_symlink() and os.readlink(link).startswith(str(config.STATE) + os.sep):
+                link.unlink()
+    line(OK, f"tool commands removed from {deps.LINK_DIR} (scrapling, node...)")
+    if USER_MODE:                                      # no root: the jail, the proxy address and the rest are the system's
+        pass
+    elif F2B_JAIL.is_file():
         F2B_JAIL.unlink()
         systemctl("try-restart", "fail2ban", timeout=60)
         line(OK, f"fail2ban jail removed ({F2B_JAIL})")
     from . import proxylisten
-    if proxylisten.saved(config.load_config()):
+    if not USER_MODE and proxylisten.saved(config.load_config()):
         r = proxylisten.disable()
         line(OK, f"proxy address {r['was']} closed" + (" and its ufw rules removed" if r["ufw"] else ""),
              "remove the harness-maxxing block from your Traefik")

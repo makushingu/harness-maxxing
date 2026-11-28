@@ -1114,3 +1114,17 @@ def test_branch_names_reject_a_trailing_newline():
     from maxxing import cmd_core
     assert cmd_core._BRANCH_RE.match("feat/x")
     assert not cmd_core._BRANCH_RE.match("feat/x\n")
+
+
+def test_uninstall_without_root_leaves_the_system_files(env, monkeypatch):
+    """An installation without root never wrote the Caddy site, the slices nor the fail2ban jail: those of a system
+    installation on the same machine stay."""
+    run_cli("init", "--workspace", str(env["ws"]), "--quiet")
+    monkeypatch.setattr(cmd_core, "USER_MODE", True)
+    jail = env["etc"] / "harness-maxxing.local"
+    monkeypatch.setattr(cmd_core, "F2B_JAIL", jail)
+    for f in (cmd_core.UNIT_PATH, cmd_core.CADDY_SITE, cmd_core.JOBS_SLICE_PATH, jail):
+        f.write_text("x\n")
+    assert run_cli("uninstall", "--yes") == 0
+    assert not cmd_core.UNIT_PATH.exists()                    # its own unit goes
+    assert cmd_core.CADDY_SITE.exists() and cmd_core.JOBS_SLICE_PATH.exists() and jail.exists()

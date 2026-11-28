@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # =============================================================================================
-#  Harness Maxxing - one-line installer (Ubuntu / Debian with systemd, x86_64 or arm64, as root)
+#  Harness Maxxing - one-line installer (Ubuntu / Debian with systemd, x86_64 or arm64)
+#
+#  As root: the whole server is set up (packages, service, HTTPS, firewall). As a normal user, without sudo:
+#  everything in ~/.harness-maxxing and ~/maxxing, a service of your own systemd, this machine only, and nothing
+#  of the system is touched (USERMODE below).
 #
 #  Install from the public git repository (no key needed; updates come from git):
 #    curl --proto '=https' --tlsv1.2 -fsSL https://get.harness-maxxing.com | bash
@@ -75,10 +79,23 @@ LICENSED=0          # 1 = an install from before 2.0.0a87 still on signed archiv
 # Versions, URLs and sha256 of uv, Claude Code, Node.js, Caddy's key... are in server/maxxing/deps.toml (the same
 # manifest `maxxing deps` reads): `dep` below reads it from the code once it is here, and every download goes through
 # fetch_verified (HTTPS, private work folder, sha256 checked before anything runs or is extracted).
-INSTALL_DIR="${INSTALL_DIR:-/opt/claude-maxxing}"
-WORKSPACE="${WORKSPACE:-/root/maxxing}"
-STATE_DIR="${STATE_DIR:-/var/lib/claude-maxxing}"
+# USERMODE=1: run by a normal user (no root, no sudo). Everything then lives in that user's home, the service is a
+# unit of their own systemd (`systemctl --user`), the server listens on this machine only, and nothing of the system
+# is touched (no package, no firewall, no SSH setting, nothing in /etc). Sessions run as plain processes.
+USERMODE=0
+[ "$(id -u)" = 0 ] || USERMODE=1
+if [ "$USERMODE" = 1 ]; then
+  USER_ROOT="${HOME:?HOME is not set}/.harness-maxxing"
+  INSTALL_DIR="${INSTALL_DIR:-$USER_ROOT/app}"
+  WORKSPACE="${WORKSPACE:-$HOME/maxxing}"
+  STATE_DIR="${STATE_DIR:-$USER_ROOT/state}"
+else
+  INSTALL_DIR="${INSTALL_DIR:-/opt/claude-maxxing}"
+  WORKSPACE="${WORKSPACE:-/root/maxxing}"
+  STATE_DIR="${STATE_DIR:-/var/lib/claude-maxxing}"
+fi
 PORT="${PORT:-8787}"
+PATH_AT_START=$PATH
 ACCESS="${ACCESS:-}"
 DOMAIN="${DOMAIN:-}"
 TIMEZONE="${TIMEZONE:-}"
@@ -114,7 +131,18 @@ CADDYFILE=/etc/caddy/Caddyfile
 SSHD_CONFIG=/etc/ssh/sshd_config
 SSH_DROPIN=/etc/ssh/sshd_config.d/01-harness-maxxing.conf
 BIN=/usr/local/bin/maxxing
+BIN_DIR=/usr/local/bin                      # where the commands go (maxxing, uv, claude)
 DEFAULT_STATE=/var/lib/claude-maxxing
+SYSTEMCTL=(systemctl)
+if [ "$USERMODE" = 1 ]; then
+  BIN_DIR="$HOME/.local/bin"
+  BIN="$BIN_DIR/maxxing"
+  UNIT="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/$SERVICE.service"
+  SYSTEMCTL=(systemctl --user)
+  DEFAULT_STATE=""                          # never the system one: the command always names its state folder
+  FIREWALL=0; SSH_HARDEN=0; SWAP=0; SYSTEM_CLOCK=keep
+  umask 022                                 # like root's: nothing we install is writable by the user's group
+fi
 TOTAL=11
 LOCAL=0             # 1 = code copied from SOURCE_DIR (no license, no git remote)
 STEP=0
@@ -333,8 +361,10 @@ bg_wait() {
 
 # reset_env - a root shell of its own: HOME and PATH of root, whatever the caller had (sudo -E, su without -)
 reset_env() {
-  HOME=$(getent passwd root 2>/dev/null | cut -d: -f6)
-  HOME=${HOME:-/root}
+  if [ "$USERMODE" = 0 ]; then
+    HOME=$(getent passwd root 2>/dev/null | cut -d: -f6)
+    HOME=${HOME:-/root}
+  fi
   export HOME
   export PATH="$HOME/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 }
@@ -520,10 +550,30 @@ USAGE
 }
 
 # ---- checks ---------------------------------------------------------------------------------
+# user_systemd - is this user's own systemd manager there? Reached through XDG_RUNTIME_DIR, which `su` and some
+# remote shells do not set: /run/user/<uid> is tried, and lingering (the manager runs without an open session,
+# and from boot) is asked for - a user may turn it on for themselves on most systems.
+user_systemd() {
+  local rt
+  rt="/run/user/$(id -u)"
+  [ -n "${XDG_RUNTIME_DIR:-}" ] || export XDG_RUNTIME_DIR="$rt"
+  systemctl --user show-environment >/dev/null 2>&1 && return 0
+  command -v loginctl >/dev/null 2>&1 && loginctl enable-linger "$(id -un)" >/dev/null 2>&1 || return 1
+  local i
+  for i in 1 2 3 4 5 6 7 8 9 10; do
+    systemctl --user show-environment >/dev/null 2>&1 && return 0
+    sleep 0.5
+  done
+  return 1
+}
+
 check_system() {
   section "Server"
-  [ "$(id -u)" = 0 ] || die "Run as root (sudo -i, then the command again)."
-  command -v apt-get >/dev/null 2>&1 || die "Ubuntu or Debian required (apt-get not found)."
+  if [ "$USERMODE" = 1 ]; then
+    ok "no root: installed for $(id -un) only, in $INSTALL_DIR - nothing of the system is changed"
+  else
+    command -v apt-get >/dev/null 2>&1 || die "Ubuntu or Debian required (apt-get not found)."
+  fi
   if [ -r /etc/os-release ]; then
     local ids pretty
     # shellcheck disable=SC1091
@@ -536,6 +586,7 @@ check_system() {
     esac
   fi
   [ -d /run/systemd/system ] || die "systemd must be running (sessions and the service are systemd units)."
+  [ "$USERMODE" = 0 ] || user_systemd || die "your own systemd does not answer (systemctl --user): sign in to this machine as $(id -un) (not through su), or run once as root: loginctl enable-linger $(id -un)"
   case "$(uname -m)" in
     x86_64|amd64|aarch64|arm64) ok "architecture $(uname -m), systemd running" ;;
     *) die "unsupported architecture $(uname -m) (x86_64 or arm64 required)" ;;
@@ -550,7 +601,7 @@ manifest() { # remember what the installer changed on this server (read by maxxi
   mkdir -p "$STATE_DIR"
   grep -qxF "$1" "$STATE_DIR/install-manifest" 2>/dev/null || echo "$1" >> "$STATE_DIR/install-manifest"
 }
-our_unit_active() { systemctl is-active -q "$SERVICE" 2>/dev/null; }
+our_unit_active() { "${SYSTEMCTL[@]}" is-active -q "$SERVICE" 2>/dev/null; }
 
 free_port() { # the first port from $1 that nothing listens on (fails past 65535)
   local p=$1
@@ -642,6 +693,9 @@ detect_server() {
   [ -f "$STATE_DIR/config.json" ] && CLAUDE_SETUP=""   # a re-run: that setup is Harness Maxxing's own (its skills)
   [ -f "$STATE_DIR/config.json" ] && PRIOR=1
 
+  if [ "$USERMODE" = 1 ]; then                 # nothing of the system is set up: its services and firewall do not matter
+    PUBLIC_OTHER=""; WEB_BUSY=""; FW_ACTIVE=""; HAS_DOCKER=0
+  fi
   if [ -n "$PUBLIC_OTHER$WEB_BUSY$BRIDGES" ] || [ "$HAS_DOCKER" = 1 ] || [ "$OTHER_CRON" = 1 ] \
      || [ -n "$FW_ACTIVE" ] || [ -n "$CLAUDE_SETUP" ]; then EXISTING=1; fi
 
@@ -667,22 +721,26 @@ detect_server() {
 preflight() {
   section "Server check"
   local free_gb mem_gb
-  free_gb=$(df -Pk / 2>/dev/null | awk 'NR==2{printf "%d", $4/1048576}')
+  local disk=/
+  [ "$USERMODE" = 0 ] || disk=$HOME
+  free_gb=$(df -Pk "$disk" 2>/dev/null | awk 'NR==2{printf "%d", $4/1048576}')
   mem_gb=$(awk '/MemTotal/{printf "%.1f", $2/1048576}' /proc/meminfo 2>/dev/null)
-  if [ "${free_gb:-0}" -lt 5 ]; then warn "only ${free_gb} GB free on / - about 4 GB are needed (tools, voice model)"
+  if [ "${free_gb:-0}" -lt 5 ]; then warn "only ${free_gb} GB free on $disk - about 4 GB are needed (tools, voice model)"
   else ok "${free_gb} GB free, ${mem_gb} GB of memory"; fi
-  local sp
-  sp=$(ssh_plan)
-  case "$sp" in
-    done)  ok "SSH: logins by key only" ;;
-    apply) ok "SSH: this session uses a key - password logins will be turned off (open sessions stay connected; SSH_HARDEN=0 keeps them)" ;;
-    *)     info "SSH: ${sp#skip:}" ;;
-  esac
+  if [ "$USERMODE" = 0 ]; then
+    local sp
+    sp=$(ssh_plan)
+    case "$sp" in
+      done)  ok "SSH: logins by key only" ;;
+      apply) ok "SSH: this session uses a key - password logins will be turned off (open sessions stay connected; SSH_HARDEN=0 keeps them)" ;;
+      *)     info "SSH: ${sp#skip:}" ;;
+    esac
+  fi
   if [ "$EXISTING" = 0 ]; then
-    ok "fresh server: nothing else runs here"
+    [ "$USERMODE" = 1 ] || ok "fresh server: nothing else runs here"
     return 0
   fi
-  info "this server is already in use - the installer adapts:"
+  [ "$USERMODE" = 1 ] || info "this server is already in use - the installer adapts:"
   if [ -n "$PUBLIC_OTHER" ]; then
     warn "other services reachable from outside: $PUBLIC_OTHER"
   fi
@@ -700,7 +758,7 @@ preflight() {
     warn "reverse-proxy block to paste into $WEB_BUSY (or pick tailscale / local)"
   fi
   [ -n "${PORT_MOVED_FROM:-}" ] && warn "port $PORT_MOVED_FROM is taken by another program: Harness Maxxing uses $PORT"
-  if [ "$SYSTEM_CLOCK" = keep ]; then
+  if [ "$SYSTEM_CLOCK" = keep ] && [ "$USERMODE" = 0 ]; then
     ok "server clock: left as it is ($(system_tz)) - your jobs still run at the times you choose"
   fi
   [ -n "$NODE_OLD" ] && ok "Node.js: your $NODE_OLD is kept, the pinned one goes to $STATE_DIR/tools/nodejs for Harness Maxxing only"
@@ -772,6 +830,10 @@ choose_access() {
   local cur_url cur_bind def=local
   cur_url=$(cfg_get public_url)
   cur_bind=$(cfg_get bind)
+  if [ "$USERMODE" = 1 ]; then                 # no root: this machine only (or the Tailscale address when asked)
+    [ "$ACCESS" != domain ] || die "ACCESS=domain needs root (HTTPS on ports 80 and 443): run the installer as root, or point your own reverse proxy to 127.0.0.1:$PORT"
+    [ -n "$ACCESS" ] || case "$cur_bind" in 100.*) ACCESS=tailscale ;; *) ACCESS=local ;; esac
+  fi
   if [ -z "$ACCESS" ]; then
     case "$cur_url" in
       https://*) def=domain; [ -n "$DOMAIN" ] || DOMAIN=$(printf '%s' "$cur_url" | sed -E 's#^https://([^/:]+).*#\1#') ;;
@@ -959,9 +1021,32 @@ apt_install() {
   apt_get install -y -qq --no-install-recommends "$@" || apt_get install -y -qq "$@"
 }
 
+# user_packages - without root no package is installed: what is missing is named with the one command that
+# installs it. The base ones are needed (the installation stops), the others only switch features off.
+user_packages() {
+  local p n missing=() opt_missing=()
+  for p in $BASE_PKGS; do pkg_installed "$p" || missing+=("$p"); done
+  for p in $TOOL_PKGS $BROWSER_PKGS; do
+    for n in ${p//:/ }; do pkg_installed "$n" && continue 2; done
+    opt_missing+=("${p%%:*}")
+  done
+  if [ ${#missing[@]} -gt 0 ]; then
+    die "needed system packages are missing. Ask an administrator to run this, then start again: sudo apt-get install -y ${missing[*]}"
+  fi
+  if [ ${#opt_missing[@]} -gt 0 ]; then
+    warn "${#opt_missing[@]} optional package(s) missing (video thumbnails, PDF, the Sandbox mode, the browser). To add them:"
+    warn "  sudo apt-get install -y ${opt_missing[*]}"
+  else
+    ok "system packages already installed"
+  fi
+  systemctl is-active -q cron 2>/dev/null || systemctl is-active -q crond 2>/dev/null \
+    || warn "the cron service is not running: scheduled jobs will not start (sudo systemctl enable --now cron)"
+}
+
 install_packages() {
   local p n missing=() opt_missing=()
   local wants_fw=0
+  [ "$USERMODE" = 0 ] || { user_packages; return; }
   ensure_swap                                   # first: apt, uv and the Claude Code install then run side by side
   [ "$FIREWALL" = 1 ] && ! systemd-detect-virt -cq 2>/dev/null && wants_fw=1
   for p in $BASE_PKGS; do pkg_installed "$p" || missing+=("$p"); done
@@ -1041,7 +1126,7 @@ ensure_swap() {
 }
 
 # ---- toolchain (pinned in deps.toml, downloaded with fetch_verified) --------------------------
-UV=/usr/local/bin/uv
+UV=$BIN_DIR/uv
 # prefetch - start the downloads in the background as soon as the code (and its deps.toml) is here: Claude Code,
 # and uv when this server does not have the pinned one (install_uv / install_claude wait for them, then check again)
 prefetch() {
@@ -1064,9 +1149,9 @@ install_uv() {
   bg_wait uv-download >/dev/null || true         # its failure: tried again here, with the message
   dep_fetch uv "$WORK/uv.tar.gz" || die "uv download failed or its sha256 does not match deps.toml"
   if ! { mkdir -p "$d" && tar -xzf "$WORK/uv.tar.gz" -C "$d" --strip-components=1 --no-same-owner \
-          && install -m 755 -o root -g root "$d/uv" "$d/uvx" /usr/local/bin/; }; then die "uv installation failed"; fi
+          && mkdir -p "$BIN_DIR" && install -m 755 "$d/uv" "$d/uvx" "$BIN_DIR/"; }; then die "uv installation failed"; fi
   [ -n "$have" ] || manifest "uv installed"
-  ok "uv $("$UV" --version 2>/dev/null | awk '{print $2}') in /usr/local/bin (sha256 checked)"
+  ok "uv $("$UV" --version 2>/dev/null | awk '{print $2}') in $BIN_DIR (sha256 checked)"
 }
 
 # Claude Code: the pinned build of deps.toml, its sha256 checked, then its own `claude install` (what Anthropic's
@@ -1079,11 +1164,11 @@ install_claude() {
     if [ ! -f "$WORK/claude.bin" ]; then dep_fetch claude "$WORK/claude.bin" >>"$log" 2>&1 || true; fi
     [ -f "$WORK/claude.bin" ] || { cat "$WORK/bg-claude-download.log" >>"$log" 2>/dev/null; claude_install_failed "$log"; }
     chmod 700 "$WORK/claude.bin"
-    (cd "$WORK" && CLAUDE_INSTALL_ALLOW_SUDO=1 "$WORK/claude.bin" install "$v") >>"$log" 2>&1 || claude_install_failed "$log"
+    (cd "$WORK" && CLAUDE_INSTALL_ALLOW_SUDO=$((1 - USERMODE)) "$WORK/claude.bin" install "$v") >>"$log" 2>&1 || claude_install_failed "$log"
     rm -f "$WORK/claude.bin"
     manifest "claude installed"
   fi
-  if [ ! -e /usr/local/bin/claude ] && [ -x "$HOME/.local/bin/claude" ]; then
+  if [ "$USERMODE" = 0 ] && [ ! -e /usr/local/bin/claude ] && [ -x "$HOME/.local/bin/claude" ]; then
     ln -s "$HOME/.local/bin/claude" /usr/local/bin/claude
   fi
   command -v claude >/dev/null 2>&1 || die "claude not found after installation"
@@ -1481,6 +1566,7 @@ setup_python() {
   else python_sync || die "uv sync failed in $INSTALL_DIR/server"; fi
   local exe="$INSTALL_DIR/server/.venv/bin/maxxing"
   [ -x "$exe" ] || die "$exe missing after uv sync"
+  mkdir -p "$BIN_DIR"
   if [ "$STATE_DIR" = "$DEFAULT_STATE" ]; then
     ln -sfn "$exe" "$BIN"
   else
@@ -1772,8 +1858,9 @@ setup_access() {
   case "$ACCESS" in
     domain) if [ -n "$WEB_BUSY" ]; then proxy_snippet; else setup_caddy; fi ;;
     tailscale) ok "reachable at $PUBLIC_URL from your Tailscale devices" ;;
-    local) ok "listening on 127.0.0.1:$PORT only (SSH tunnel)" ;;
+    local) ok "listening on 127.0.0.1:$PORT only$([ "$USERMODE" = 1 ] || echo " (SSH tunnel)")" ;;
   esac
+  [ "$USERMODE" = 0 ] || return 0              # the system's Caddy and proxy are not ours
   if [ "$ACCESS" != domain ] && [ -f "$CADDY_SITE" ]; then
     warn "an old Caddy site exists ($CADDY_SITE) - remove it and its import line in $CADDYFILE if unused"
   fi
@@ -1821,7 +1908,62 @@ WantedBy=multi-user.target
 EOF
 }
 
+# user_unit_text - the same server as a unit of the user's own systemd. Sessions, jobs and the browser are plain
+# processes there (config.user_mode): KillMode=process leaves them running when the server restarts.
+user_unit_text() {
+  cat <<EOF
+[Unit]
+Description=Harness Maxxing - web control room for Claude Code
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+ExecStart=$BIN serve
+WorkingDirectory=$WORKSPACE
+Environment=MAXXING_STATE=$STATE_DIR
+Environment=PATH=$HOME/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+UMask=0022
+Restart=always
+RestartSec=3
+TimeoutStopSec=15
+KillMode=process
+
+[Install]
+WantedBy=default.target
+EOF
+}
+
+service_wait() { # the server answers (up to ~3 min: first start on a 1 vCPU / 1 GB VPS), or its unit failed
+  local url="http://$BIND:$PORT/api/auth/state" i
+  for i in $(seq 1 90); do
+    curl -fsS -o /dev/null --max-time 2 "$url" 2>/dev/null && break
+    "${SYSTEMCTL[@]}" is-failed -q "$SERVICE" && break    # crashed: no point in waiting
+    sleep 1
+  done
+  curl -fsS -o /dev/null --max-time 3 "$url" 2>/dev/null \
+    || die "the server does not answer on $url - journalctl ${SYSTEMCTL[1]:-} -u $SERVICE -n 50 --no-pager"
+}
+
+setup_user_service() {
+  mkdir -p "$WORKSPACE" "$(dirname "$UNIT")"
+  user_unit_text > "$UNIT"
+  systemctl --user daemon-reload
+  systemctl --user enable "$SERVICE" >/dev/null 2>&1
+  systemctl --user restart "$SERVICE"
+  service_wait
+  ok "running on $BIND:$PORT (systemctl --user status $SERVICE)"
+  if loginctl enable-linger "$(id -un)" >/dev/null 2>&1; then
+    ok "starts with this machine and keeps running when you sign out"
+  else
+    warn "it stops when you sign out and does not start with the machine - as root: loginctl enable-linger $(id -un)"
+  fi
+  case ":$PATH_AT_START:" in *":$BIN_DIR:"*) ;; *)
+    warn "$BIN_DIR is not in your PATH: add it (export PATH=\"$BIN_DIR:\$PATH\" in ~/.profile) to type maxxing" ;;
+  esac
+}
+
 setup_service() {
+  [ "$USERMODE" = 0 ] || { setup_user_service; return; }
   mkdir -p "$WORKSPACE"
   (umask 022; unit_text > "$UNIT")
   rm -f "$UNIT.d/20-memory.conf"                # added by `maxxing init` to units without MemoryMax
@@ -1844,14 +1986,7 @@ EOF
   systemctl daemon-reload
   systemctl enable "$SERVICE" >/dev/null 2>&1
   systemctl restart "$SERVICE"
-  local url="http://$BIND:$PORT/api/auth/state" i
-  for i in $(seq 1 90); do                                # up to ~3 min: first start on a 1 vCPU / 1 GB VPS
-    curl -fsS -o /dev/null --max-time 2 "$url" 2>/dev/null && break
-    systemctl is-failed -q "$SERVICE" && break             # crashed: no point in waiting
-    sleep 1
-  done
-  curl -fsS -o /dev/null --max-time 3 "$url" 2>/dev/null \
-    || die "the server does not answer on $url - journalctl -u $SERVICE -n 50 --no-pager"
+  service_wait
   ok "running on $BIND:$PORT (systemctl status $SERVICE)"
 }
 
@@ -1863,6 +1998,7 @@ tunnel_cmd() {
   addr=$(echo "$conn" | awk 'NF==4{print $3}'); sport=$(echo "$conn" | awk 'NF==4{print $4}')
   [ -n "$addr" ] || addr=$(hostname -I 2>/dev/null | awk '{print $1}')
   user=${SUDO_USER:-}
+  [ "$USERMODE" = 0 ] || user=$(id -un)
   [ -n "$user" ] || user=$(logname 2>/dev/null || true)
   [ -n "$user" ] || user=root
   [ -n "$sport" ] && [ "$sport" != 22 ] && opt=" -p $sport"
@@ -1894,7 +2030,10 @@ banner() {
   box_row ""
   box_row "$C_G$C_B✔  Harness Maxxing is installed$C_0  $C_D($took)$C_0"
   box_row ""
-  if [ "$ACCESS" = local ]; then
+  if [ "$ACCESS" = local ] && [ "$USERMODE" = 1 ] && ! ssh_connection >/dev/null 2>&1; then
+    box_row "Open it in the browser of this computer."
+    box_row ""
+  elif [ "$ACCESS" = local ]; then
     box_row "From your computer, open an SSH tunnel and keep it open:"
     box_row "$C_B$(tunnel_cmd)$C_0"
     box_row ""
@@ -1912,7 +2051,7 @@ banner() {
       box_row "$C_W$C_B${PUBLIC_URL:-http://127.0.0.1:$PORT}$C_0"
       box_row "$C_D""Password lost? run: maxxing password$C_0" ;;
   esac
-  if [ "${FW_ON:-0}" = 0 ]; then
+  if [ "${FW_ON:-0}" = 0 ] && [ "$USERMODE" = 0 ]; then
     box_row ""
     box_row "$C_Y!$C_0 No firewall was turned on (other services run here)."
     box_row "$C_D""  To turn it on anyway: FIREWALL=1 bash $INSTALL_DIR/install.sh --secure$C_0"
@@ -1936,13 +2075,11 @@ banner() {
 
 # ---- entry points ---------------------------------------------------------------------------
 do_update() {
-  [ "$(id -u)" = 0 ] || die "Run as root."
   [ -x "$BIN" ] || die "Harness Maxxing is not installed ($BIN missing) - run the installer without --update"
   mx update
 }
 
 do_uninstall() {
-  [ "$(id -u)" = 0 ] || die "Run as root."
   local args=(uninstall)
   [ "$ASSUME_YES" = 1 ] && args+=(--yes)
   [ "$PURGE" = 1 ] && args+=(--purge)
@@ -1951,9 +2088,9 @@ do_uninstall() {
     mx "${args[@]}"
   else
     warn "maxxing CLI not found - removing the service only"
-    systemctl disable --now "$SERVICE" >/dev/null 2>&1 || true
+    "${SYSTEMCTL[@]}" disable --now "$SERVICE" >/dev/null 2>&1 || true
     rm -f "$UNIT"
-    systemctl daemon-reload
+    "${SYSTEMCTL[@]}" daemon-reload
     ok "service removed"
   fi
 }
@@ -1981,7 +2118,7 @@ main() {
   case "$mode" in
     update) do_update; exit $? ;;
     uninstall) do_uninstall; exit $? ;;
-    secure) [ "$(id -u)" = 0 ] || die "Run as root."
+    secure) [ "$USERMODE" = 0 ] || die "--secure changes the system (security updates, SSH, firewall): run it as root."
             check_inputs
             if [ -z "$ACCESS" ]; then
               if [ -f "$CADDY_SITE" ]; then ACCESS=domain
@@ -1989,7 +2126,7 @@ main() {
             fi
             detect_server
             TOTAL=1; run_step "Server security ($ACCESS)" secure_server; exit $? ;;
-    tools) [ "$(id -u)" = 0 ] || die "Run as root."; check_inputs
+    tools) check_inputs
            [ -x "$BIN" ] || die "Harness Maxxing is not installed ($BIN missing)"
            TOTAL=1; run_step "Tools (Node.js, Chromium, Remotion, Scrapling)" install_tools_now; exit $? ;;
   esac
@@ -2007,6 +2144,7 @@ main() {
   choose_access
   [ -n "$RESTORE_FROM" ] || TOTAL=$((TOTAL - 1))
   [ "$TOOLS" = foreground ] || TOTAL=$((TOTAL - 1))
+  [ "$USERMODE" = 0 ] || TOTAL=$((TOTAL - 1))      # no "Server security" step without root
   section "Installing"
   if [ -x "$BIN" ]; then printf '      %sre-run: only what changed is redone - nothing else to answer%s\n\n' "$C_D" "$C_0"
   else printf '      %s3 to 6 minutes on a small server - nothing else to answer%s\n\n' "$C_D" "$C_0"; fi
@@ -2024,7 +2162,7 @@ main() {
     domain) run_step "HTTPS with Caddy" setup_access ;;
     *) run_step "Access ($ACCESS)" setup_access ;;
   esac
-  run_step "Server security" secure_server
+  [ "$USERMODE" = 1 ] || run_step "Server security" secure_server
   run_step "Service" setup_service
   start_tools
   banner

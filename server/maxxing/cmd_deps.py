@@ -16,8 +16,17 @@ def _human(n: int) -> str:
         n /= 1024
 
 
+def _owns_state() -> bool:
+    """An installation without root: its state folder, and so its components, belong to this user."""
+    from . import config
+    try:
+        return config.user_mode() and config.STATE.stat().st_uid == os.geteuid()
+    except OSError:
+        return False
+
+
 def _root_only() -> bool:
-    if os.geteuid() != 0 and not os.environ.get("MAXXING_DEPS_BIN"):
+    if os.geteuid() != 0 and not os.environ.get("MAXXING_DEPS_BIN") and not _owns_state():
         print("Run as root (the components belong to root).", file=sys.stderr)
         return False
     return True

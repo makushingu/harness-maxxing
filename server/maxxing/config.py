@@ -790,6 +790,28 @@ def claude_dir() -> Path:
     return Path(os.environ.get("HOME") or pwd.getpwuid(os.getuid()).pw_dir) / ".claude"
 
 
+def user_mode() -> bool:
+    """Installed by a normal user, without root (install.sh run as that user): the service is a unit of their own
+    systemd (`systemctl --user`), sessions and jobs are plain processes, and nothing of the system is touched."""
+    return hasattr(os, "geteuid") and os.geteuid() != 0
+
+
+def sd(tool: str = "systemctl") -> list[str]:
+    """`systemctl` / `journalctl` / `systemd-run` for our own service: the user's manager in user mode. Its socket is
+    found through XDG_RUNTIME_DIR, which cron and some shells do not set."""
+    if not user_mode():
+        return [tool]
+    rt = f"/run/user/{os.geteuid()}"
+    if not os.environ.get("XDG_RUNTIME_DIR") and os.path.isdir(rt):
+        os.environ["XDG_RUNTIME_DIR"] = rt
+    return [tool, "--user"]
+
+
+if user_mode():     # no root: no transient system unit - turns, jobs and the browser are plain processes, everywhere
+    os.environ.setdefault("MAXXING_SPAWN", "direct")           # (the server, the CLI, a job started by cron)
+    os.environ.setdefault("MAXXING_BROWSER_LAUNCH", "direct")
+
+
 def state_dir(*parts: str) -> Path:
     p = STATE.joinpath(*parts)
     p.mkdir(parents=True, exist_ok=True)

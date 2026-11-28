@@ -17,7 +17,7 @@ import shutil
 import subprocess
 import time
 
-from . import logs
+from . import config, logs
 
 LEVELS = ("debug", "info", "warning", "error")
 SINCE = {"15m": 900, "1h": 3600, "6h": 6 * 3600, "24h": 86400, "7d": 7 * 86400, "30d": 30 * 86400}
@@ -33,7 +33,7 @@ def _run(args: list[str]) -> str:
     """journalctl's output ("" when it is missing). Tests replace it."""
     if not shutil.which("journalctl"):
         return ""
-    return subprocess.run(["journalctl", *args], capture_output=True, text=True, timeout=30).stdout
+    return subprocess.run([*config.sd("journalctl"), *args], capture_output=True, text=True, timeout=30).stdout
 
 
 def _text(v) -> str:

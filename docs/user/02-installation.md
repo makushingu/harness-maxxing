@@ -9,7 +9,7 @@ section: Getting started
   usually work) with **systemd**, on **x86_64 or arm64**. **2 vCPU, 4 GB RAM and 40 GB disk**
   recommended (the tools for videos and scraping take ~1.5 GB). Under 4 GB of RAM without swap the installer adds a
   2 GB swap file; under 3 GB local voice transcription stays off unless you ask for it.
-- Root access (`sudo -i`).
+- Root access (`sudo -i`) - or none at all: see [Install without root](#install-without-root).
 - A **Claude** subscription (Pro, Max or Ultra) or an **Anthropic API key**.
 - For HTTPS access: a domain name whose DNS A/AAAA record points to the server, and ports 80/443
   open. Alternatively Tailscale, or an SSH tunnel.
@@ -105,6 +105,40 @@ is on (Settings -> Claude, off by default). System packages (Caddy, ffmpeg, git.
 security updates from `unattended-upgrades`.
 
 Open the link: the [onboarding](onboarding) does the rest.
+
+## Install without root
+
+Run the same command as a normal user, without `sudo`: on your own computer, or on a server where you have no
+administrator rights.
+
+```bash
+curl --proto '=https' --tlsv1.2 -fsSL https://get.harness-maxxing.com | bash
+```
+
+Everything then belongs to that user and nothing of the system is changed:
+
+| | As root | Without root |
+|---|---|---|
+| Code and state | `/opt/claude-maxxing`, `/var/lib/claude-maxxing` | `~/.harness-maxxing/app`, `~/.harness-maxxing/state` |
+| Workspace | `/root/maxxing` | `~/maxxing` |
+| Commands (`maxxing`, `uv`, `claude`) | `/usr/local/bin` | `~/.local/bin` |
+| Service | `systemctl status claude-maxxing` | `systemctl --user status claude-maxxing` |
+| Access | domain, Tailscale or local | this machine only (`http://127.0.0.1:8787`), or Tailscale with `ACCESS=tailscale` |
+| System packages, firewall, SSH, Caddy, swap, clock | set up by the installer | never touched |
+| Sessions and jobs | one systemd unit each | plain processes of that user |
+
+What to know:
+
+- **System packages are not installed.** When a needed one is missing (git, curl, cron...) the installer stops and
+  prints the one `sudo apt-get install ...` line to give an administrator. Optional ones (ffmpeg, the libraries
+  of the browser, bubblewrap for the Sandbox mode) are listed the same way; without them the matching feature stays off.
+- **It keeps running when you sign out** and starts with the machine when the system lets a user ask for it
+  (`loginctl enable-linger`). When it does not, the installer says so and gives the line for an administrator.
+- **A domain with HTTPS needs root** (ports 80 and 443). Put your own reverse proxy in front of `127.0.0.1:8787`, or
+  install as root.
+- A session can do what that user can do on the machine, no more.
+- `maxxing update`, `maxxing doctor`, `maxxing deps update` and `maxxing uninstall` work the same, without `sudo`.
+- It lives next to an installation made as root on the same machine without touching it (pick another `PORT`).
 
 ## Installing on a server already in use
 

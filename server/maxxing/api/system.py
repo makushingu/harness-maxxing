@@ -71,8 +71,8 @@ def _service_action(name: str, action: str) -> None:
         if action == "stop":
             raise _err(400, "refused", "Stopping Harness Maxxing from its own UI would lock you out")
         # restart (or start) ourselves: deferred so this response can be sent first
-        r = subprocess.run(["systemd-run", "--collect", "--quiet", "--on-active=2",
-                            "--timer-property=AccuracySec=100ms", "systemctl", "restart", health.SELF_UNIT],
+        r = subprocess.run([*config.sd("systemd-run"), "--collect", "--quiet", "--on-active=2",
+                            "--timer-property=AccuracySec=100ms", *config.sd(), "restart", health.SELF_UNIT],
                            capture_output=True, text=True, timeout=15)
     else:
         r = subprocess.run(["systemctl", action, name], capture_output=True, text=True, timeout=60)
@@ -120,7 +120,7 @@ async def cleanup_run(body: CleanupBody):
 
 
 def _logs(unit: str, lines: int) -> list[str]:
-    r = subprocess.run(["journalctl", "-u", unit, "-n", str(lines), "--no-pager", "-o", "short-iso"],
+    r = subprocess.run([*(config.sd("journalctl") if unit == health.SELF_UNIT else ["journalctl"]), "-u", unit, "-n", str(lines), "--no-pager", "-o", "short-iso"],
                        capture_output=True, text=True, timeout=20)
     from .. import logs as logs_mod
     return [logs_mod.redact(ln) for ln in r.stdout.splitlines() if ln.strip()]   # turn units print raw tool output

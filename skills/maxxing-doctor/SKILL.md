@@ -20,6 +20,11 @@ sessions/, crons/, telegram/, backup/, logs/), workspace from `maxxing status`.
 Running turns live in transient units `maxxing-<8 chars>`: `systemctl list-units 'maxxing-*'`,
 `journalctl -u maxxing-<id8>`.
 
+**Installed without root** (the code is under `~/.harness-maxxing`, `maxxing doctor` says so in its security line):
+the service is the user's own - add `--user` to every `systemctl` and `journalctl` above
+(`systemctl --user restart claude-maxxing`), never `sudo`. Turns and jobs are plain processes there, not units
+(their log: `{{STATE_DIR}}/logs/runner.log`), and the firewall, Caddy and system packages are the administrator's.
+
 ## 2. Common failures
 | Symptom | Likely cause | Fix |
 |---|---|---|

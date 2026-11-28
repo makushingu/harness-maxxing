@@ -135,7 +135,10 @@ def _systemctl_show_all(names: list[str]) -> dict[str, dict[str, str]]:
     systemctl prints one block per unit, separated by a blank line, in the order asked."""
     if not names:
         return {}
-    cmd = ["systemctl", "show", *names, "--no-pager"]
+    if config.user_mode() and SELF_UNIT in names and len(names) > 1:   # our unit is the user's, the others the system's
+        rest = [n for n in names if n != SELF_UNIT]
+        return {**_systemctl_show_all(rest), **_systemctl_show_all([SELF_UNIT])}
+    cmd = [*(config.sd() if names == [SELF_UNIT] else ["systemctl"]), "show", *names, "--no-pager"]
     for p in _PROPS:
         cmd += ["-p", p]
     try:
