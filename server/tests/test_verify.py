@@ -1,5 +1,6 @@
 """The verification command of a repository (verify.py): proposed, kept per repository, run, fresh or not, fixed."""
 import json
+import time
 from pathlib import Path
 
 from conftest import wait_for, wait_idle
@@ -108,3 +109,16 @@ def test_a_result_is_no_longer_fresh_when_an_untracked_or_binary_file_changes(cl
     assert verify.last(clone)["fresh"]
     (clone / "b.bin").write_bytes(b"\0C")               # git diff alone says only "Binary files differ"
     assert not verify.last(clone)["fresh"]
+
+
+def test_stop_also_kills_a_child_that_left_the_process_group(client, code, tmp_path):
+    _, clone = code
+    mark = tmp_path / "alive"
+    client.put("/api/code/verify", json={"repo": str(clone), "command": f"setsid sh -c 'sleep 2; touch {mark}' & sleep 30"})
+    client.post("/api/code/verify", json={"repo": str(clone)})
+    wait_for(lambda: verify._running.get(verify._key(clone)), 5)
+    time.sleep(0.5)
+    client.post("/api/code/verify/stop", json={"repo": str(clone)})
+    _done(client, clone)
+    time.sleep(2.5)
+    assert not mark.exists(), "a child started by the command survived the stop"

@@ -186,10 +186,7 @@ def _run(folder: Path, cmd: str, base: dict) -> None:
             except subprocess.TimeoutExpired:
                 out.write(f"\n[stopped after {TIMEOUT // 60} minutes]\n")
             finally:
-                try:
-                    os.killpg(p.pid, signal.SIGKILL)         # what the command left behind (watchers, servers)
-                except OSError:
-                    pass
+                _kill(p)                                     # what the command left behind (watchers, servers)
             if code is None:
                 p.wait()
             else:
@@ -223,13 +220,51 @@ def start(repo: Path) -> dict:
     return last(repo) or {}
 
 
+def _descendants(pid: int) -> list[int]:
+    """The processes started from `pid`, even those that left its process group (setsid); one whose parent already
+    exited belongs to init and is not seen."""
+    children: dict[int, list[int]] = {}
+    for d in Path("/proc").glob("[0-9]*"):
+        try:
+            stat = (d / "stat").read_text()
+            ppid = int(stat[stat.rindex(")") + 2:].split()[1])
+        except (OSError, ValueError, IndexError):
+            continue
+        children.setdefault(ppid, []).append(int(d.name))
+    out, todo = [], [pid]
+    while todo:
+        for c in children.get(todo.pop(), []):
+            if c not in out:
+                out.append(c)
+                todo.append(c)
+    return out
+
+
+def _kill(p: subprocess.Popen) -> None:
+    """The command's process group, and - while it runs - every process it started that moved to a group of its
+    own (once it exited, its pid may belong to another process: only its group is killed)."""
+    tree = _descendants(p.pid) if p.poll() is None else []
+    try:
+        os.killpg(p.pid, signal.SIGKILL)
+    except OSError:
+        pass
+    for c in tree:
+        try:
+            os.kill(c, signal.SIGKILL)
+        except OSError:
+            pass
+    for c in tree:                                   # a child in a group of its own: that group goes too
+        try:
+            if os.getpgid(c) == c:
+                os.killpg(c, signal.SIGKILL)
+        except OSError:
+            pass
+
+
 def stop(repo: Path) -> None:
     p = _running.get(_key(repo))
     if p is not None:
-        try:
-            os.killpg(p.pid, signal.SIGKILL)
-        except OSError:
-            pass
+        _kill(p)
 
 
 def failure_message(repo: Path) -> str:
