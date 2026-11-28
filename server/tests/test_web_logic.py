@@ -858,3 +858,10 @@ def test_a_chart_value_sent_as_text_is_drawn_like_a_number(tmp_path):
     assert out == [{"min": 0, "max": 50, "ticks": [0, 25, 50]}, 10, [12, "nan", "nan", "nan"]]
     src = (WEB / "pages" / "dashboard" / "charts.tsx").read_text(encoding="utf-8")
     assert "chartValue(p[1])" in src
+
+
+def test_a_very_long_chart_series_still_gets_a_scale(tmp_path):
+    out = _run_ts(tmp_path, WEB / "pages" / "dashboard" / "chartScale.ts", """
+        const v = Array.from({ length: 200000 }, (_, i) => i % 97 - 10)
+        return m.chartScale(v)""")
+    assert out == {"min": -10, "max": 100, "ticks": [-10, 0, 100]}

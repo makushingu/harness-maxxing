@@ -15,9 +15,16 @@ export function chartValue(v: unknown): number {
 }
 
 export function chartScale(values: unknown[]): { min: number; max: number; ticks: number[] } {
-  values = values.map(chartValue).filter((v) => Number.isFinite(v)) // a missing or text value is not drawn
-  const max = niceMax(Math.max(0, ...values))
-  const lo = Math.min(0, ...values)
+  // a missing or text value is not drawn; a loop, not Math.max(...values): a long series overflows the call stack
+  let hi = 0
+  let lo = 0
+  for (const raw of values) {
+    const v = chartValue(raw)
+    if (!Number.isFinite(v)) continue
+    if (v > hi) hi = v
+    if (v < lo) lo = v
+  }
+  const max = niceMax(hi)
   // negative values: the scale goes below 0, the bars hang under it; a value just under 0 next to large ones (float
   // noise, -0.001 next to 50) keeps the scale at 0, where it is drawn: no "-0" label stacked on the "0" one
   const min = lo < 0 && -lo > max / 100 ? -niceMax(-lo) : 0
