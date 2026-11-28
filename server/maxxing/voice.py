@@ -116,6 +116,9 @@ def update_settings(**kw: Any) -> dict:
 
 # ---- environment ---------------------------------------------------------------------------
 def ram_gb() -> float:
+    if sys.platform == "darwin":
+        from . import mac
+        return round(mac.meminfo()["total"] / 1024 ** 3, 1)
     try:
         with open("/proc/meminfo") as f:
             for line in f:

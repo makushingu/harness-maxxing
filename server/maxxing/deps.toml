@@ -31,8 +31,9 @@ title = "uv (Python toolchain)"
 kind = "archive"
 version = "0.13.10"
 url = "https://github.com/astral-sh/uv/releases/download/{version}/uv-{arch}-unknown-linux-gnu.tar.gz"
-arch = { x86_64 = "x86_64", aarch64 = "aarch64" }
-sha256 = { x86_64 = "bf65ac1a0af10f92c522d91ac096c7c0a39657647b155577e7836c2cbbb4526c", aarch64 = "14590f644805a6234ffe071154340669e38137f38e60aa9629690119704107d2" }
+url_darwin = "https://github.com/astral-sh/uv/releases/download/{version}/uv-{arch}-apple-darwin.tar.gz"
+arch = { x86_64 = "x86_64", aarch64 = "aarch64", darwin_x86_64 = "x86_64", darwin_aarch64 = "aarch64" }
+sha256 = { x86_64 = "bf65ac1a0af10f92c522d91ac096c7c0a39657647b155577e7836c2cbbb4526c", aarch64 = "14590f644805a6234ffe071154340669e38137f38e60aa9629690119704107d2", darwin_x86_64 = "153e03197588204c04fc4c81cc4bafbfa4280222a385e4ee36a87aeec0ae63b4", darwin_aarch64 = "e419bf07533bdbf48795fc793601c834dd79db57a8c49ce8e25cfe3a8639958d" }
 path = "/usr/local/bin/uv"
 files = ["uv", "uvx"]
 remove = ["/usr/local/bin/uv", "/usr/local/bin/uvx"]
@@ -56,8 +57,9 @@ title = "Node.js (video rendering, PDFs)"
 kind = "archive"
 version = "22.23.5"
 url = "https://nodejs.org/dist/v{version}/node-v{version}-linux-{arch}.tar.xz"
-arch = { x86_64 = "x64", aarch64 = "arm64" }
-sha256 = { x86_64 = "cdeb8670a0c81f51b4dc4ac61919f9b1ad917b304bf8221eb939570663d240f8", aarch64 = "2babb9eb5264860d540849f4b064a6fbdebcdc323657d9d382ce23d313fd5e09" }
+url_darwin = "https://nodejs.org/dist/v{version}/node-v{version}-darwin-{arch}.tar.xz"
+arch = { x86_64 = "x64", aarch64 = "arm64", darwin_x86_64 = "x64", darwin_aarch64 = "arm64" }
+sha256 = { x86_64 = "cdeb8670a0c81f51b4dc4ac61919f9b1ad917b304bf8221eb939570663d240f8", aarch64 = "2babb9eb5264860d540849f4b064a6fbdebcdc323657d9d382ce23d313fd5e09", darwin_x86_64 = "d68bf234a07781141dfca61ae4461c24560f70bd53223d76a41529eb02e8554e", darwin_aarch64 = "d0c68c321161bb2c6483efea9a343010dea8e5e7f60d73c6a7eba140016d662f" }
 # one folder per version in {state}/tools/nodejs/<version>, "current" -> the one in use; /usr/local/bin/node, npm,
 # npx and corepack link to it unless the server has a Node.js of its own (then only Harness Maxxing's PATH has it)
 path = "{state}/tools/nodejs"
@@ -72,8 +74,9 @@ title = "Claude Code"
 kind = "binary"
 version = "2.1.326"
 url = "https://downloads.claude.ai/claude-code-releases/{version}/linux-{arch}/claude"
-arch = { x86_64 = "x64", aarch64 = "arm64" }
-sha256 = { x86_64 = "b6b3647d981130dc44fc670846ae97b6cde531ffb667cf9c4d17cfcafb38cb37", aarch64 = "98d56f6ffe53469767a74864a38eaf359d62ef557a8de1b1ad524d61a66ec119" }
+url_darwin = "https://downloads.claude.ai/claude-code-releases/{version}/darwin-{arch}/claude"
+arch = { x86_64 = "x64", aarch64 = "arm64", darwin_x86_64 = "x64", darwin_aarch64 = "arm64" }
+sha256 = { x86_64 = "b6b3647d981130dc44fc670846ae97b6cde531ffb667cf9c4d17cfcafb38cb37", aarch64 = "98d56f6ffe53469767a74864a38eaf359d62ef557a8de1b1ad524d61a66ec119", darwin_x86_64 = "bd8e26290f93353590b831600a7ced02d625018fbaa2a82d8817368d3e2d2f82", darwin_aarch64 = "e214ad76dcc0e846b03be28ed1c2734aacd4e27acb527cb7f8a9e2bed644e837" }
 path = "{home}/.local/bin/claude"
 links = ["claude"]
 remove = ["{home}/.local/bin/claude", "{home}/.local/share/claude", "/usr/local/bin/claude"]

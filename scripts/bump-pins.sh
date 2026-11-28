@@ -53,12 +53,13 @@ uv=$(curl -fsSL https://api.github.com/repos/astral-sh/uv/releases/latest | sed 
 [ -n "$uv" ] || { echo "uv: no release found" >&2; exit 1; }
 curl -fsSL "https://github.com/astral-sh/uv/releases/download/$uv/sha256.sum" -o "$W/uv.sum"
 pin uv version "$uv"
-for a in x86_64 aarch64; do
-  f="uv-$a-unknown-linux-gnu.tar.gz"
+for a in x86_64:x86_64-unknown-linux-gnu aarch64:aarch64-unknown-linux-gnu \
+         darwin_x86_64:x86_64-apple-darwin darwin_aarch64:aarch64-apple-darwin; do
+  f="uv-${a#*:}.tar.gz"
   curl -fsSL "https://github.com/astral-sh/uv/releases/download/$uv/$f" -o "$W/$f"
   s=$(awk -v f="$f" '{n=$2; sub(/^\*/, "", n)} n==f {print $1}' "$W/uv.sum")
-  [ "$(sha256sum "$W/$f" | cut -d' ' -f1)" = "$s" ] || { echo "uv $a: checksum mismatch" >&2; exit 1; }
-  pin uv sha256 "$s" "$a"
+  [ "$(sha256sum "$W/$f" | cut -d' ' -f1)" = "$s" ] || { echo "uv ${a%%:*}: checksum mismatch" >&2; exit 1; }
+  pin uv sha256 "$s" "${a%%:*}"
 done
 
 # Node.js
@@ -72,8 +73,8 @@ grep -q '^\[GNUPG:\] GOODSIG' "$W/node.status" \
   || { echo "Node.js: SHASUMS256.txt.asc has no good signature from a Node.js releaser" >&2; exit 1; }
 node=$(awk '$2 ~ /linux-x64\.tar\.xz$/ {sub(/^node-v/, "", $2); sub(/-linux-x64\.tar\.xz$/, "", $2); print $2}' "$W/node.sums")
 pin node version "$node"
-for a in x86_64:x64 aarch64:arm64; do
-  pin node sha256 "$(awk -v f="node-v$node-linux-${a#*:}.tar.xz" '$2==f {print $1}' "$W/node.sums")" "${a%%:*}"
+for a in x86_64:linux-x64 aarch64:linux-arm64 darwin_x86_64:darwin-x64 darwin_aarch64:darwin-arm64; do
+  pin node sha256 "$(awk -v f="node-v$node-${a#*:}.tar.xz" '$2==f {print $1}' "$W/node.sums")" "${a%%:*}"
 done
 
 # Claude Code (stable channel)
@@ -81,8 +82,8 @@ cl=$(curl -fsSL https://downloads.claude.ai/claude-code-releases/stable)
 printf '%s' "$cl" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || { echo "Claude Code: no stable version" >&2; exit 1; }
 curl -fsSL "https://downloads.claude.ai/claude-code-releases/$cl/manifest.json" -o "$W/claude.json"
 pin claude version "$cl"
-for a in x86_64:x64 aarch64:arm64; do
-  s=$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["platforms"]["linux-" + sys.argv[2]]["checksum"])' "$W/claude.json" "${a#*:}")
+for a in x86_64:linux-x64 aarch64:linux-arm64 darwin_x86_64:darwin-x64 darwin_aarch64:darwin-arm64; do
+  s=$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["platforms"][sys.argv[2]]["checksum"])' "$W/claude.json" "${a#*:}")
   printf '%s' "$s" | grep -Eq '^[0-9a-f]{64}$' || { echo "Claude Code ${a#*:}: no checksum" >&2; exit 1; }
   pin claude sha256 "$s" "${a%%:*}"
 done

@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Any, Callable
 from zoneinfo import ZoneInfo
 
-from . import __version__, cli, config, pkg
+from . import __version__, cli, config, mac, pkg
 
 SERVICE = "claude-maxxing"
 UNIT_PATH = Path("/etc/systemd/system/claude-maxxing.service")
@@ -40,6 +40,14 @@ if USER_MODE:                                       # installed without root: th
     BIN_LINK = Path.home() / ".local" / "bin" / "maxxing"
 SYSTEMCTL = " ".join(config.sd())                   # as typed in the hints: "systemctl" or "systemctl --user"
 JOURNALCTL = " ".join(config.sd("journalctl"))
+RESTART_CMD = f"{SYSTEMCTL} restart {SERVICE}"       # as typed in the hints
+STATUS_CMD = f"{SYSTEMCTL} status {SERVICE}"
+LOGS_CMD = f"{JOURNALCTL} -u {SERVICE} -n 50 --no-pager"
+if mac.is_mac():                                    # macOS: a launchd agent of the user, its output in a file
+    UNIT_PATH = mac.plist_path()
+    RESTART_CMD = f"launchctl kickstart -k gui/$(id -u)/{mac.LABEL}"
+    STATUS_CMD = f"launchctl print gui/$(id -u)/{mac.LABEL}"
+    LOGS_CMD = f"tail -n 50 {mac.log_path()}"
 PRODUCT_SKILLS_EXTRA = ("memory", "memory-compaction", "video-motion-design", "pdf-document", "image-edit",
                         "seo-audit", "web-scraping")                     # + every skill named maxxing-*
 UPDATE_TOKEN = "github_update_token"
@@ -102,6 +110,10 @@ def run(cmd: list[str], timeout: float = 60, cwd: str | Path | None = None,
 
 
 def systemctl(*args: str, timeout: float = 60) -> tuple[int, str]:
+    if mac.is_mac():                                # launchd: our own agent only
+        if args and (args[-1] == SERVICE or args[0] == "daemon-reload"):
+            return mac.service(args[0])
+        return 127, "no systemd on macOS"
     if not Path("/run/systemd/system").is_dir():
         return 127, "systemd is not running"
     return run([*config.sd(), *args], timeout=timeout)
@@ -581,7 +593,7 @@ def check_cpu_priorities() -> Check | None:
         code, out = systemctl("show", "-p", "Slice", "--value", SERVICE, timeout=10)
         if code == 0 and out.strip() and out.strip() != cpu.SLICES[cpu.LIVE]:
             return _c("cpu_priorities", INFO, "CPU priorities on, the server joins its slice at its next restart",
-                      f"now in {out.strip()}", f"{SYSTEMCTL} restart {SERVICE}  (a few seconds without the UI)")
+                      f"now in {out.strip()}", f"{RESTART_CMD}  (a few seconds without the UI)")
     return _c("cpu_priorities", OK, f"CPU priorities {state}" + ("" if state == "on" else " (equal weights)"))
 
 
@@ -808,6 +820,8 @@ def claude_auth() -> tuple[str | None, str]:
 
 def _listen_addrs(port: int) -> list[str]:
     """Addresses listening on TCP `port` (from /proc/net/tcp*)."""
+    if mac.is_mac():
+        return mac.listen_addrs(port)
     out = []
     for fn, v6 in (("/proc/net/tcp", False), ("/proc/net/tcp6", True)):
         try:
@@ -1015,7 +1029,7 @@ def check_service() -> Check:
     if state == "active":
         return _c("service", OK, f"service {SERVICE} active")
     return _c("service", FAIL, f"service {SERVICE} {state}", "",
-              f"{JOURNALCTL} -u {SERVICE} -n 50 --no-pager ; {SYSTEMCTL} restart {SERVICE}")
+              f"{LOGS_CMD} ; {RESTART_CMD}")
 
 
 def hardening_path() -> Path:
@@ -1125,6 +1139,9 @@ SMALL_RAM_MB = 4096                      # under 4 GiB (a "4 GB" VPS reports ~3.
 def check_memory() -> Check | None:
     """A small server without swap: every running Claude turn takes 200-300 MB, so a few at once (plus the
     service, a build...) can make the kernel kill one."""
+    if mac.is_mac():                                # macOS grows its swap by itself: only the amount of RAM is told
+        ram = mac.meminfo()["total"] // (1024 * 1024)
+        return _c("memory", OK, f"{ram / 1024:.1f} GB of RAM") if ram else None
     try:
         info = {k: int(v.split()[0]) for k, v in (l.split(":", 1) for l in MEMINFO.read_text().splitlines() if ":" in l)}
     except (OSError, ValueError):
@@ -1210,7 +1227,7 @@ def check_http(cfg: dict) -> Check:
             v = "?"
         return _c("http", OK, f"server answers on {url} (version {v})")
     return _c("http", FAIL, "server does not answer", f"{url}: {status or body}",
-              f"{SYSTEMCTL} status {SERVICE} ; {JOURNALCTL} -u {SERVICE} -n 50 --no-pager")
+              f"{STATUS_CMD} ; {LOGS_CMD}")
 
 
 def check_public_url(cfg: dict) -> Check:
@@ -1325,7 +1342,7 @@ def check_telegram(cfg: dict) -> Check:
         return _c("telegram", WARN, "Telegram linked but the server is not reading its messages" + two,
                   f"poller stopped; last answer from Telegram {seen}"
                   + (f"; {st['poll_error']}" if st.get("poll_error") else ""),
-                  f"{SYSTEMCTL} restart {SERVICE} ; maxxing telegram status")
+                  f"{RESTART_CMD} ; maxxing telegram status")
     if st.get("poll_error"):
         return _c("telegram", WARN, "Telegram linked, the poller reports an error" + two, str(st["poll_error"]),
                   "maxxing telegram test")
@@ -2870,7 +2887,7 @@ def cmd_harden(a) -> int:
         line(FAIL, "systemctl daemon-reload failed", out.strip()[-300:])
         return 1
     if a.no_restart:
-        line(INFO, f"takes effect at the next restart: {SYSTEMCTL} restart {SERVICE}")
+        line(INFO, f"takes effect at the next restart: {RESTART_CMD}")
         return 0
     code, out = systemctl("restart", SERVICE, timeout=60)
     if code == 0 and _healthy(__version__):
@@ -2884,7 +2901,7 @@ def cmd_harden(a) -> int:
         p.write_text(before)
     systemctl("daemon-reload", timeout=60)
     systemctl("restart", SERVICE, timeout=60)
-    line(WARN, "previous service settings restored", f"{JOURNALCTL} -u {SERVICE} -n 50 --no-pager")
+    line(WARN, "previous service settings restored", LOGS_CMD)
     return 1
 
 

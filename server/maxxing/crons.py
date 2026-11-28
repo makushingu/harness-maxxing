@@ -49,7 +49,7 @@ from pathlib import Path
 from typing import Any, Iterator
 from zoneinfo import ZoneInfo
 
-from . import config, pkg
+from . import config, mac, pkg
 
 BLOCK_BEGIN = "# >>> claude-maxxing (managed) >>>"
 BLOCK_END = "# <<< claude-maxxing <<<"
@@ -1355,6 +1355,8 @@ _live_locks: dict[str, tuple] = {}                   # cron id -> (open lock fil
 
 def _proc_start(pid: int) -> str | None:
     """Boot id + start time (clock ticks) of a process: who it is, not just its number (numbers are reused)."""
+    if mac.is_mac():
+        return mac.proc_start(pid)
     try:
         boot = Path("/proc/sys/kernel/random/boot_id").read_text().strip()
         stat = Path(f"/proc/{pid}/stat").read_text()

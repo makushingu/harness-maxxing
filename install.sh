@@ -56,6 +56,18 @@
 #  never on the command line, where they stay in the shell history and are visible in `ps`.
 # =============================================================================================
 set -euo pipefail
+# macOS has its own installer (launchd, Homebrew, the bash 3.2 and BSD tools of a Mac): this one hands over to it
+# before anything else. Next to this file when run from a copy of the code, downloaded otherwise.
+if [ "$(uname -s 2>/dev/null)" = Darwin ] && [ "${MAXXING_INSTALL_LIB:-0}" != 1 ]; then
+  _mac=""
+  [ -z "${BASH_SOURCE[0]:-}" ] || _mac="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)/install-macos.sh"
+  if [ -z "$_mac" ] || [ ! -f "$_mac" ]; then
+    _mac=$(mktemp "${TMPDIR:-/tmp}/hm-install-macos.XXXXXX")
+    curl --proto '=https' --tlsv1.2 -fsSL "https://raw.githubusercontent.com/${REPO:-makushingu/harness-maxxing}/${BRANCH:-main}/install-macos.sh" -o "$_mac" \
+      || { echo "could not download the macOS installer (branch ${BRANCH:-main})" >&2; exit 1; }
+  fi
+  exec bash "$_mac" "$@" </dev/null
+fi
 umask 077                     # everything the installer creates is private unless it says otherwise (chmod)
 # a script run from a source tree (bash ./install.sh in an unpacked archive or a clone) installs that tree;
 # resolved before the `cd /` below, or a relative ./install.sh would no longer be found

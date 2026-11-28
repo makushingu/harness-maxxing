@@ -247,6 +247,7 @@ class Guard:
     def read_file(self, f: str, max_bytes: int) -> tuple[Path, bytes]:
         import os
         self.readable(f)
+        _needs_o_path()
         try:                                    # a handle on the name only (opening a device could act already)
             pfd = os.open(f, os.O_PATH | os.O_NOFOLLOW | os.O_CLOEXEC)
         except OSError as e:
@@ -271,6 +272,7 @@ class Guard:
         if into:
             p = p / default_name
         self.writable(str(p))
+        _needs_o_path()
         try:
             dfd = os.open(p.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
         except OSError as e:
@@ -396,6 +398,14 @@ def _ordinary(fd: int, name: str):
     if not stat.S_ISREG(st.st_mode) or st.st_nlink != 1:
         raise Refused(f"{name}: not an ordinary file (an agent reads and writes ordinary files with one name only)")
     return st
+
+
+def _needs_o_path() -> None:
+    """The files of a mail are read and written through handles on their names (O_PATH, /proc/self/fd): Linux only.
+    On macOS they are refused rather than opened with a weaker check."""
+    import os
+    if not hasattr(os, "O_PATH"):
+        raise Refused("files of a mail (attach a file, save an attachment) are not available on macOS yet")
 
 
 def _fd_path(fd: int) -> str:

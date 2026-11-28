@@ -6,12 +6,14 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 # the names that differ from Debian's
 NAMES = {
     "dnf": {"cron": "cronie", "ffmpeg": "ffmpeg-free", "postgresql": "postgresql-server"},
     "pacman": {"cron": "cronie"},
+    "brew": {"poppler-utils": "poppler"},
 }
 CACHES = {"apt": ("/var/cache/apt/archives", "*.deb"), "dnf": ("/var/cache/libdnf5", "*.rpm"),
           "pacman": ("/var/cache/pacman/pkg", "*.pkg.tar*")}
@@ -19,7 +21,9 @@ UNIT_DIRS = ("/usr/lib/systemd/system", "/lib/systemd/system", "/etc/systemd/sys
 
 
 def manager() -> str:
-    """"apt", "dnf", "pacman", or "" (none of them here)."""
+    """"apt", "dnf", "pacman", "brew" (macOS, when Homebrew is installed), or "" (none of them here)."""
+    if sys.platform == "darwin":
+        return "brew" if shutil.which("brew") else ""
     for name, binary in (("apt", "apt-get"), ("dnf", "dnf"), ("pacman", "pacman")):
         if shutil.which(binary):
             return name
@@ -37,6 +41,8 @@ def install_cmd(*pkgs: str) -> list[str]:
         return ["dnf", "install", "-y", "-q", *names]
     if m == "pacman":
         return ["pacman", "-S", "--needed", "--noconfirm", *names]
+    if m == "brew" or sys.platform == "darwin":
+        return ["brew", "install", *names]
     return ["apt-get", "install", "-y", "-q", *names]
 
 
@@ -79,6 +85,8 @@ def purge_cmd(pkg: str) -> list[str]:
 def clean_cmd() -> list[str]:
     """Empty the cache of downloaded packages."""
     m = manager()
+    if m == "brew":
+        return ["brew", "cleanup", "-s"]
     if m == "dnf":
         return ["dnf", "clean", "packages"]
     if m == "pacman":

@@ -15,7 +15,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from .. import __version__, bus, config, health, logsearch
+from .. import __version__, bus, config, health, logsearch, mac
 from ..security import require_auth
 
 log = logging.getLogger("maxxing.license")
@@ -71,6 +71,9 @@ def _service_action(name: str, action: str) -> None:
         if action == "stop":
             raise _err(400, "refused", "Stopping Harness Maxxing from its own UI would lock you out")
         # restart (or start) ourselves: deferred so this response can be sent first
+        if mac.is_mac():
+            mac.restart_later()
+            return
         r = subprocess.run([*config.sd("systemd-run"), "--collect", "--quiet", "--on-active=2",
                             "--timer-property=AccuracySec=100ms", *config.sd(), "restart", health.SELF_UNIT],
                            capture_output=True, text=True, timeout=15)
@@ -120,6 +123,9 @@ async def cleanup_run(body: CleanupBody):
 
 
 def _logs(unit: str, lines: int) -> list[str]:
+    if mac.is_mac():                                   # no journal: the file launchd writes the server's output to
+        from .. import logs as logs_mod
+        return [logs_mod.redact(ln) for ln in mac.log_tail(lines) if ln.strip()] if unit == health.SELF_UNIT else []
     r = subprocess.run([*(config.sd("journalctl") if unit == health.SELF_UNIT else ["journalctl"]), "-u", unit, "-n", str(lines), "--no-pager", "-o", "short-iso"],
                        capture_output=True, text=True, timeout=20)
     from .. import logs as logs_mod

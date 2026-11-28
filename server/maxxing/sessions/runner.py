@@ -1667,6 +1667,12 @@ def _free_stale_claim(csid: str, env: dict) -> int:
             start = Path(f"/proc/{p.stem}/stat").read_text().rsplit(")", 1)[1].split()[19]
         except (OSError, IndexError):
             start = None                                # no such process
+        if start is None and sys.platform == "darwin":  # no /proc: only "is it running" is known there
+            try:
+                os.kill(int(p.stem), 0)
+                continue
+            except (OSError, ValueError):
+                pass
         if start is not None and str(claim.get("procStart") or start) == start:
             continue                                    # still running: really in use
         p.unlink(missing_ok=True)

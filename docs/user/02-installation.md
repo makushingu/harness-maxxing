@@ -6,7 +6,7 @@ section: Getting started
 ## Requirements
 
 - A server running **Ubuntu 24.04** (tested: Ubuntu 22.04, 24.04 and 26.04, Debian 12 and 13, **Fedora 43** and
-  **Arch Linux**; other systems with apt, dnf or pacman usually work - see [Fedora and Arch](#fedora-and-arch))
+  **Arch Linux**; also [macOS](#macos) and [Windows through WSL 2](#windows-wsl-2); other systems with apt, dnf or pacman usually work - see [Fedora and Arch](#fedora-and-arch))
   with **systemd**, on **x86_64 or arm64**. **2 vCPU, 4 GB RAM and 40 GB disk**
   recommended (the tools for videos and scraping take ~1.5 GB). Under 4 GB of RAM without swap the installer adds a
   2 GB swap file; under 3 GB local voice transcription stays off unless you ask for it.
@@ -123,6 +123,38 @@ The same command installs Harness Maxxing on Fedora (and systems of its family t
 
 On Fedora with SELinux enforcing, the installer allows Caddy to reach the server on `127.0.0.1`
 (`httpd_can_network_connect`). `maxxing doctor` and the fixes it prints use the names of your system.
+
+## macOS
+
+On a Mac (macOS 13 or later, Apple Silicon or Intel), the same command as on Linux, in the Terminal, **without
+`sudo`**:
+
+```bash
+curl --proto '=https' --tlsv1.2 -fsSL https://get.harness-maxxing.com | bash
+```
+
+It installs everything in your home folder, like [Install without root](#install-without-root) on Linux, and
+changes nothing of the system:
+
+| | |
+|---|---|
+| Code, state | `~/.harness-maxxing/app`, `~/.harness-maxxing/state` |
+| Workspace | `~/maxxing` |
+| Commands | `~/.local/bin` (`maxxing`, `uv`, `claude`) |
+| Service | a launchd agent of your account, `com.harness-maxxing.server`: starts when you sign in to the Mac, restarted if it stops; its output goes to `~/.harness-maxxing/state/logs/server.log` |
+| Access | `http://127.0.0.1:8787`, on this Mac only |
+
+What it needs: Apple's Command Line Tools (for git - the installer opens the window that installs them when they
+are missing) and, for videos, PDFs and voice messages, [Homebrew](https://brew.sh): with it the installer adds
+ffmpeg, jq, ripgrep, imagemagick and poppler; without it, it tells you the line to run later.
+
+What a Mac does not have: the **sandbox mode** (it relies on bubblewrap, which is Linux only - sessions there run
+with your own rights, in mode ask or bypass), domain access with automatic HTTPS, and the server hardening
+(firewall, fail2ban). Attaching a file to a mail from a session is not available there yet. It runs while your
+session on the Mac is open: for a server that is always on, use a Linux server.
+
+`maxxing doctor`, `maxxing update` and `maxxing uninstall` work as on Linux; to restart the service by hand:
+`launchctl kickstart -k gui/$(id -u)/com.harness-maxxing.server`.
 
 ## Windows (WSL 2)
 

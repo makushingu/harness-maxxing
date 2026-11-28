@@ -17,6 +17,7 @@ import fcntl
 import json
 import logging
 import os
+import sys
 import pickle
 import pwd
 import re
@@ -810,6 +811,32 @@ def sd(tool: str = "systemctl") -> list[str]:
 if user_mode():     # no root: no transient system unit - turns, jobs and the browser are plain processes, everywhere
     os.environ.setdefault("MAXXING_SPAWN", "direct")           # (the server, the CLI, a job started by cron)
     os.environ.setdefault("MAXXING_BROWSER_LAUNCH", "direct")
+
+
+NO_SYSTEMD = ("systemctl", "journalctl", "timedatectl", "systemd-detect-virt")
+
+
+def no_systemd_shim(folder: Path | None = None) -> Path | None:
+    """macOS has no systemd: the places that ask systemd about a unit get "no such unit" (exit 1, nothing printed)
+    from stand-ins at the END of the PATH, instead of a missing command. Never `systemd-run`: its absence is how
+    the server knows that turns and jobs are plain processes there. Our own service goes through maxxing.mac."""
+    folder = folder or STATE / "tools" / "no-systemd"
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+        for name in NO_SYSTEMD:
+            f = folder / name
+            if not f.exists():
+                f.write_text("#!/bin/sh\n# Harness Maxxing: there is no systemd on macOS\nexit 1\n")
+                f.chmod(0o755)
+    except OSError:
+        return None
+    if str(folder) not in os.environ.get("PATH", "").split(os.pathsep):
+        os.environ["PATH"] = os.environ.get("PATH", "") + os.pathsep + str(folder)
+    return folder
+
+
+if sys.platform == "darwin":
+    no_systemd_shim()
 
 
 def state_dir(*parts: str) -> Path:

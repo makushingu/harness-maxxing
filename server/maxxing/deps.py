@@ -14,6 +14,7 @@ import fcntl
 import hashlib
 import json
 import os
+import sys
 import platform
 import pwd
 import re
@@ -80,7 +81,8 @@ def get(name: str) -> dict:
 
 def machine() -> str:
     m = platform.machine().lower()
-    return {"amd64": "x86_64", "arm64": "aarch64"}.get(m, m)
+    m = {"amd64": "x86_64", "arm64": "aarch64"}.get(m, m)
+    return f"darwin_{m}" if sys.platform == "darwin" else m          # macOS builds have their own pins
 
 
 def root_home() -> Path:
@@ -104,7 +106,10 @@ def url_of(c: dict, m: str | None = None) -> str:
     arch = (c.get("arch") or {}).get(m)
     if not arch:
         raise DepError(f"{c.get('title')}: no build for {m}")
-    return c["url"].replace("{version}", c["version"]).replace("{arch}", arch)
+    url = c.get("url_darwin") if m.startswith("darwin_") else c["url"]
+    if not url:
+        raise DepError(f"{c.get('title')}: no build for macOS")
+    return url.replace("{version}", c["version"]).replace("{arch}", arch)
 
 
 def sha_of(c: dict, m: str | None = None) -> str:
@@ -388,6 +393,9 @@ def chromium_bin(rev: str | None = None) -> Path | None:
         revs = sorted((d.name.split("-", 1)[1] for d in base.glob("chromium-*")), reverse=True)
     for r in revs:
         for p in (base / f"chromium-{r}" / "chrome-linux64" / "chrome", base / f"chromium-{r}" / "chrome-linux" / "chrome"):
+            if p.is_file():
+                return p
+        for p in sorted((base / f"chromium-{r}").glob("chrome-mac*/*.app/Contents/MacOS/*")):   # macOS: an application
             if p.is_file():
                 return p
     return None
@@ -1159,6 +1167,9 @@ def _in_use(roots: list[Path]) -> set[Path]:
     if not roots:
         return set()
     seen: set[str] = set()
+    if sys.platform == "darwin":
+        from . import mac
+        seen = mac.process_paths()
     for d in Path("/proc").glob("[0-9]*"):
         with contextlib.suppress(OSError):
             seen.update(x for x in (d / "cmdline").read_bytes().decode("utf-8", "replace").split("\0") if x.startswith("/"))

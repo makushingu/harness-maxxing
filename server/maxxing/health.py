@@ -17,7 +17,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from . import config, pkg
+from . import config, mac, pkg
 
 CACHE_S = 30
 DISK_WARN, DISK_ERROR = 90.0, 97.0
@@ -50,6 +50,8 @@ def cpu_pct() -> float | None:
     0.25 s on every first call), except after more than 10 min without a call: a 0.1 s sample.
     Calls closer than 1 s apart repeat the last value."""
     global _cpu_prev, _cpu_last
+    if mac.is_mac():
+        return mac.cpu_pct()
     try:
         now = time.time()
         busy, total = _cpu_times()
@@ -73,6 +75,8 @@ def cpu_pct() -> float | None:
 
 
 def meminfo() -> dict[str, int]:
+    if mac.is_mac():
+        return mac.meminfo()
     out: dict[str, int] = {}
     try:
         with open("/proc/meminfo") as f:
@@ -90,6 +94,8 @@ def meminfo() -> dict[str, int]:
 
 def loadavg() -> list[float]:
     try:
+        if mac.is_mac():
+            return [round(x, 2) for x in os.getloadavg()]
         with open("/proc/loadavg") as f:
             return [float(x) for x in f.read().split()[:3]]
     except (OSError, ValueError):
@@ -97,6 +103,8 @@ def loadavg() -> list[float]:
 
 
 def uptime_s() -> float:
+    if mac.is_mac():
+        return mac.uptime_s()
     try:
         with open("/proc/uptime") as f:
             return float(f.read().split()[0])
@@ -136,6 +144,8 @@ def _systemctl_show_all(names: list[str]) -> dict[str, dict[str, str]]:
     systemctl prints one block per unit, separated by a blank line, in the order asked."""
     if not names:
         return {}
+    if mac.is_mac():                                # launchd: our own agent is the only service there
+        return {SELF_UNIT: mac.service_info()} if SELF_UNIT in names else {}
     if config.user_mode() and SELF_UNIT in names and len(names) > 1:   # our unit is the user's, the others the system's
         rest = [n for n in names if n != SELF_UNIT]
         return {**_systemctl_show_all(rest), **_systemctl_show_all([SELF_UNIT])}
