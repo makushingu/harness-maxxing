@@ -89,12 +89,34 @@ def suggest(repo: Path) -> list[str]:
     return out[:4]
 
 
+def _changed_print(repo: Path) -> str:
+    """What the changed and untracked files hold, read from the disk (not git's stat cache, which can miss a rewrite of
+    the same size in the same second): a hash of each regular file, the target of a link."""
+    out, files = [], []
+    names = codediff._git(repo, "diff", "--name-only", "-z", "HEAD", check=False).split("\0") + \
+        codediff._git(repo, "ls-files", "-z", "-o", "--exclude-standard", check=False).split("\0")
+    for name in dict.fromkeys(names):
+        f = repo / name
+        if not name or not f.exists() and not f.is_symlink():
+            continue
+        if f.is_symlink():
+            out.append(f"{name} -> {os.readlink(f)}")
+        elif f.is_file():                            # never a fifo or a device: reading one would hang
+            files.append(name)
+    for i in range(0, len(files), 200):
+        out.append(codediff._git(repo, "hash-object", "--no-filters", "--", *files[i:i + 200], check=False))
+    return "\n".join(out)
+
+
 def tree_print(repo: Path) -> dict:
     """What a run verified: the commit, and a print of what differs from it in the working tree."""
     status = codediff._run(repo, "status", "--porcelain=v1", "-uall", check=False).stdout
-    diff = codediff._run(repo, "diff", "HEAD", check=False).stdout if status.strip() else ""
+    diff = untracked = ""
+    if status.strip():
+        diff = codediff._run(repo, "diff", "--binary", "HEAD", check=False).stdout      # a binary's bytes too
+        untracked = _changed_print(repo)
     return {"sha": codediff.head_sha(repo), "clean": not status.strip(),
-            "print": hashlib.sha1((status + "\0" + diff).encode("utf-8", "replace")).hexdigest()}
+            "print": hashlib.sha1((status + "\0" + diff + "\0" + untracked).encode("utf-8", "replace")).hexdigest()}
 
 
 def _write(folder: Path, data: dict) -> None:

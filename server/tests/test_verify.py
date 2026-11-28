@@ -90,3 +90,21 @@ def test_a_damaged_result_counts_as_no_run(client, code):
         r = client.get("/api/code/verify", params={"repo": str(clone)})
         assert r.status_code == 200, r.text[:200]
     assert r.json()["run"]["command"] == "" and "verification command" in verify.failure_message(clone)
+
+
+def test_a_result_is_no_longer_fresh_when_an_untracked_or_binary_file_changes(client, code):
+    _, clone = code
+    (clone / "b.bin").write_bytes(b"\0A")
+    _git(clone, "add", "b.bin")
+    _git(clone, "commit", "-qm", "bin")
+    (clone / "b.bin").write_bytes(b"\0B")
+    (clone / "new.txt").write_text("ok\n")
+    client.put("/api/code/verify", json={"repo": str(clone), "command": "true"})
+    client.post("/api/code/verify", json={"repo": str(clone)})
+    assert _done(client, clone)["run"]["fresh"]
+    (clone / "new.txt").write_text("bad\n")             # same name, other content
+    assert not verify.last(clone)["fresh"]
+    (clone / "new.txt").write_text("ok\n")
+    assert verify.last(clone)["fresh"]
+    (clone / "b.bin").write_bytes(b"\0C")               # git diff alone says only "Binary files differ"
+    assert not verify.last(clone)["fresh"]
