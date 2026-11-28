@@ -133,3 +133,15 @@ def test_a_pull_request_also_waits_for_its_checks(client, code, monkeypatch):
     assert client.get("/api/code/gate", params=at).json()["open"]
     assert client.post("/api/git/pull/merge", json=at).status_code == 200 and merged == [None, sha]
     assert client.post("/api/git/pull/merge", json={**at, "anyway": True, "sha": "f" * 40}).status_code == 200
+
+
+
+def test_a_damaged_entry_of_the_gate_state_is_dropped(client, code):
+    s, folder, clone = _copy(client, code)
+    client.put("/api/code/verify", json={"repo": str(folder), "gate": True})
+    branch = s["worktree"]["branch"]
+    for junk in ({"reviews": {"abc": "oops"}, "rounds": {}}, {"reviews": {}, "rounds": {branch: "x"}},
+                 {"reviews": {}, "rounds": {branch: True}}):
+        gate._file(clone).write_text(json.dumps({"clone": str(clone), **junk}))
+        r = client.get("/api/code/gate", params={"session": s["id"]})
+        assert r.status_code == 200 and r.json()["review"]["rounds"] == 0, r.text[:200]

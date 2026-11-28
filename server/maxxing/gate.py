@@ -66,8 +66,11 @@ def _file(clone: Path) -> Path:
 def _load(clone: Path) -> dict:
     d = config.read_json(_file(clone), {})
     d = d if isinstance(d, dict) else {}
-    return {"clone": str(clone), "reviews": d.get("reviews") if isinstance(d.get("reviews"), dict) else {},
-            "rounds": d.get("rounds") if isinstance(d.get("rounds"), dict) else {}}
+    reviews = d.get("reviews") if isinstance(d.get("reviews"), dict) else {}
+    rounds = d.get("rounds") if isinstance(d.get("rounds"), dict) else {}
+    # an entry damaged by hand is dropped: one bad value never takes every route of the gate down
+    return {"clone": str(clone), "reviews": {k: v for k, v in reviews.items() if isinstance(v, dict)},
+            "rounds": {k: v for k, v in rounds.items() if isinstance(v, int) and not isinstance(v, bool)}}
 
 
 def _save(clone: Path, data: dict) -> None:
