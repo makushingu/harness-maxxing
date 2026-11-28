@@ -1103,6 +1103,12 @@ def check_rerun(full: str, job: int) -> dict:
 FAILED = ("failure", "timed_out", "cancelled", "action_required")
 BRIEF_MAX, BRIEF_CHECKS = 24000, 5
 _CLOSE_LOG = re.compile(r"<\s*/\s*check-log", re.I)
+_CONTROL = re.compile(r"[\x00-\x1f\x7f\x85\u2028\u2029]+")
+
+
+def _line(text) -> str:
+    """A name of a check (written by whoever wrote the workflow) on one line: outside the frame, it never starts one."""
+    return _CONTROL.sub(" ", str(text or ""))
 
 
 def failed_brief(full: str, sha: str, checks: list[dict] | None = None) -> str:
@@ -1113,7 +1119,7 @@ def failed_brief(full: str, sha: str, checks: list[dict] | None = None) -> str:
         return ""
     parts, room = [], BRIEF_MAX
     for c in bad[:BRIEF_CHECKS]:
-        head = f"- {c['name']}: {c['conclusion']}" + (f" ({c['url']})" if c.get("url") else "")
+        head = f"- {_line(c['name'])}: {_line(c['conclusion'])}" + (f" ({_line(c['url'])})" if c.get("url") else "")
         log = ""
         if c.get("job") and room > 500:
             try:
