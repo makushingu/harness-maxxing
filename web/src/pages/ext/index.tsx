@@ -1,5 +1,5 @@
 // /x/:id — extension pages. Loads /ext/<id>/page.js (ES module) and calls mount(el, ctx).
-// ctx = { api(path, {method, body}), navigate(route), theme: 'dark'|'light', lang: 'en'|'fr', t(key), icon(name) }
+// ctx = { api(path, {method, body}), navigate(route), theme: 'dark'|'light', lang: 'en'|'fr'|'es'|'de'|'zh'|'ja', t(key), icon(name) }
 // The page is mounted inside `.mx-ext`, where the shared UI kit (`/ext/ui-kit.css`, `ui-*` classes) applies.
 //   ctx.api('notes') → /api/ext/<id>/notes, JSON body + X-Maxxing header on non-GET, resolves to parsed JSON,
 //   rejects with an Error on HTTP errors.

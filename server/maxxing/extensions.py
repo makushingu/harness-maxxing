@@ -2,7 +2,7 @@
 
     manifest.json  {"id", "name", "type": "widget"|"page"|"view", "icon", "version", "span"?, "ttl"?, "api"?,
                     "agents_view"?: {"name"?, "icon"?} | true}
-                   ("name" may be {"en": ..., "fr": ...}: shown in the UI language)
+                   ("name" may be {"en": ..., "fr": ..., "de": ...}: shown in the UI language, else in English)
     api.py         widget: def card(ctx) -> Card   ·   page / API: def handle(ctx, method, path, query, body)
     page.js        page: ES module exporting mount(el, ctx)
     agents-view.html  with "agents_view": a view of the Office of the Agents page, listed in its view menu and drawn in
@@ -332,7 +332,8 @@ def _agents_view(raw: Any, d: Path) -> dict | None:
 
 
 def _names(raw: Any, cap: int) -> tuple[Any, dict[str, str]]:
-    """A manifest name, plain or per language ({"en": ..., "fr": ...}): (the name, the names per language)."""
+    """A manifest name, plain or per language ({"en": ..., "fr": ..., "de": ...}, any language code): (the name,
+    the names per language)."""
     if not isinstance(raw, dict):
         return raw, {}
     names = {str(k): str(v)[:cap] for k, v in raw.items() if isinstance(v, str) and v.strip()}

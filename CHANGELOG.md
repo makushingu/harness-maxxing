@@ -5,6 +5,9 @@ All notable changes to Harness Maxxing. Versions follow semantic versioning.
 
 ## Unreleased
 
+New:
+- **Four more languages.** The interface, the Telegram messages, the notifications and the agent templates now also exist in Spanish, German, Simplified Chinese and Japanese, next to English and French. Pick yours in Settings → General (or on the sign-in screen).
+
 ## 2.0.0-alpha.175 - 2026-11-27
 
 New:

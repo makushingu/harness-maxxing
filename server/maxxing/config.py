@@ -389,6 +389,17 @@ def load_config() -> dict:
     return pickle.loads(blob) if blob is not None else cfg
 
 
+LANGUAGES = ("en", "fr", "es", "de", "zh", "ja")     # the interface languages; English is the fallback
+
+
+def language(lang: Any = None) -> str:
+    """The interface language: `lang` when given, else the "language" setting; "en" when it is not one of
+    LANGUAGES (a hand-edited config, a language of another version)."""
+    if lang is None:
+        lang = _setting("language")
+    return lang if isinstance(lang, str) and lang in LANGUAGES else "en"
+
+
 def _setting(name: str) -> Any:
     """One top-level setting without copying the whole config (paths asked for thousands of times per tree):
     read from the cached merged config - only for values never mutated (strings, numbers)."""

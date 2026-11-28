@@ -2,7 +2,7 @@
 // first paint to avoid a theme flash — keep field names in sync.
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { Language } from '@/lib/types'
+import { LANGUAGE_IDS, type Language } from '@/lib/types'
 import { applyFavicon } from '@/lib/accent'
 import { applyFonts, MONO_FONTS, SANS_FONTS, type MonoFont, type SansFont } from '@/lib/fonts'
 import { applyThemeCss, isThemeFile, type InstalledTheme, type ThemeLook, themeLook, uiBuild } from '@/lib/themes'
@@ -106,7 +106,11 @@ type UIState = {
 /** The look last chosen in a signed-in browser, kept by the server (`/api/auth/state` `look`). */
 export type Look = { theme: Theme; accent: Accent; tint: Tint }
 
-const initialLang = (): Language => (typeof navigator !== 'undefined' && navigator.language?.toLowerCase().startsWith('fr') ? 'fr' : 'en')
+/** The browser's language when the interface has it, else English (same rule as the preload script of vite.config.ts). */
+const initialLang = (): Language => {
+  const n = typeof navigator !== 'undefined' ? (navigator.language || '').toLowerCase().slice(0, 2) : ''
+  return (LANGUAGE_IDS as readonly string[]).includes(n) ? (n as Language) : 'en'
+}
 
 export const useUI = create<UIState>()(
   persist(

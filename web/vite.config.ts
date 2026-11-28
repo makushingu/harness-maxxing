@@ -180,7 +180,7 @@ function routePreload(): Plugin {
         // Language: same rule as src/stores/ui.ts (stored choice, else the browser's).
         const code = `(function(){try{var m=${JSON.stringify({ r: routes, l: langs })},p=location.pathname,l=[],G=['core'],i;
 for(i=0;i<m.r.length;i++)if(new RegExp(m.r[i][0]).test(p)){l=m.r[i][1];G=G.concat(m.r[i][2]);break}
-var s=JSON.parse(localStorage.getItem('mx-ui')||'{}').state||{},g=s.language||((navigator.language||'').toLowerCase().indexOf('fr')===0?'fr':'en');
+var s=JSON.parse(localStorage.getItem('mx-ui')||'{}').state||{},n=(navigator.language||'').toLowerCase().slice(0,2),g=s.language||(m.l[n]?n:'en');
 var d=m.l[g]||{};for(i=0;i<G.length;i++)if(d[G[i]])l.push(d[G[i]]);for(i=0;i<l.length;i++){var k=document.createElement('link');k.rel='modulepreload';k.crossOrigin='';k.fetchPriority='low';k.href=l[i];document.head.appendChild(k)}}catch(e){}})()`
         // Right after the boot script, before the stylesheet: an inline script placed after a stylesheet waits for it.
         const at = html.indexOf('</script>') + '</script>'.length

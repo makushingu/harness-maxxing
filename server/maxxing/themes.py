@@ -299,7 +299,8 @@ def _effective(mode: str, tokens: dict[str, str]) -> dict[str, str]:
 # ---------------------------------------------------------------------------------------------- loading
 
 def _text(v: Any, cap: int) -> Any:
-    """A label: a string, or {"en": ..., "fr": ...} (other languages kept), cut at `cap`."""
+    """A label: a string, or one text per language {"en": ..., "fr": ..., "de": ...} (every two-letter language
+    kept), cut at `cap`."""
     if isinstance(v, str):
         return v.strip()[:cap]
     if isinstance(v, dict):

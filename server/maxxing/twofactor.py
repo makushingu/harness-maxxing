@@ -79,12 +79,56 @@ WORDS = {
            "off_cli": "🔓 La double authentification a été désactivée depuis le serveur (maxxing 2fa off).",
            "off_ui": "🔓 La double authentification a été désactivée depuis l'interface web. Ce n'est pas toi ? Change le mot de passe.",
            "unlinked": "🔓 Telegram est en train d'être délié depuis l'interface web : la double authentification est désactivée. Ce n'est pas toi ? Change le mot de passe."},
+    "es": {"login": "🔐 <b>Solicitud de inicio de sesión</b>", "enable": "🔐 <b>Activar la verificación en dos pasos</b>",
+           "ip": "IP", "browser": "Navegador", "code": "Código", "expires": "Caduca en {m} min.",
+           "hint_login": "¿No eres tú? Deniégala y cambia la contraseña: se ha escrito la correcta.",
+           "hint_enable": "Permite para terminar. A partir de ahora, cada navegador nuevo necesitará tu aprobación aquí.",
+           "allow": "✅ Permitir", "deny": "❌ Denegar",
+           "allowed": "✅ Permitida", "allowed_code": "✅ Permitida con el código", "denied": "❌ Denegada",
+           "gone": "Esta solicitud ha caducado.",
+           "on": "🔐 La verificación en dos pasos está activada. Sin la interfaz web (Telegram caído…): en el servidor, ejecuta maxxing 2fa off",
+           "off_cli": "🔓 La verificación en dos pasos se ha desactivado desde el servidor (maxxing 2fa off).",
+           "off_ui": "🔓 La verificación en dos pasos se ha desactivado desde la interfaz web. ¿No eres tú? Cambia la contraseña.",
+           "unlinked": "🔓 Se está desvinculando Telegram desde la interfaz web: la verificación en dos pasos está desactivada. ¿No eres tú? Cambia la contraseña."},
+    "de": {"login": "🔐 <b>Anmeldeanfrage</b>", "enable": "🔐 <b>Zwei-Schritt-Anmeldung einschalten</b>",
+           "ip": "IP", "browser": "Browser", "code": "Code", "expires": "Läuft in {m} Min. ab.",
+           "hint_login": "Das warst nicht du? Lehne ab und ändere dann das Passwort: Das richtige wurde eingegeben.",
+           "hint_enable": "Erlaube, um abzuschließen. Ab jetzt braucht jeder neue Browser hier deine Zustimmung.",
+           "allow": "✅ Erlauben", "deny": "❌ Ablehnen",
+           "allowed": "✅ Erlaubt", "allowed_code": "✅ Mit dem Code erlaubt", "denied": "❌ Abgelehnt",
+           "gone": "Diese Anfrage ist abgelaufen.",
+           "on": "🔐 Die Zwei-Schritt-Anmeldung ist an. Ohne die Weboberfläche (Telegram ausgefallen…): auf dem Server maxxing 2fa off ausführen",
+           "off_cli": "🔓 Die Zwei-Schritt-Anmeldung wurde vom Server aus ausgeschaltet (maxxing 2fa off).",
+           "off_ui": "🔓 Die Zwei-Schritt-Anmeldung wurde in der Weboberfläche ausgeschaltet. Das warst nicht du? Ändere das Passwort.",
+           "unlinked": "🔓 Telegram wird in der Weboberfläche getrennt: Die Zwei-Schritt-Anmeldung ist aus. Das warst nicht du? Ändere das Passwort."},
+    "zh": {"login": "🔐 <b>登录请求</b>", "enable": "🔐 <b>开启两步登录</b>",
+           "ip": "IP", "browser": "浏览器", "code": "验证码", "expires": "{m} 分钟后过期。",
+           "hint_login": "不是你本人？请拒绝，然后修改密码：对方输入了正确的密码。",
+           "hint_enable": "允许即可完成。此后每个新浏览器都需要你在这里批准。",
+           "allow": "✅ 允许", "deny": "❌ 拒绝",
+           "allowed": "✅ 已允许", "allowed_code": "✅ 已通过验证码允许", "denied": "❌ 已拒绝",
+           "gone": "此请求已过期。",
+           "on": "🔐 两步登录已开启。无法使用网页界面时（Telegram 故障等）：在服务器上运行 maxxing 2fa off",
+           "off_cli": "🔓 两步登录已从服务器关闭（maxxing 2fa off）。",
+           "off_ui": "🔓 两步登录已从网页界面关闭。不是你本人？请修改密码。",
+           "unlinked": "🔓 正在从网页界面解除 Telegram 关联：两步登录已关闭。不是你本人？请修改密码。"},
+    "ja": {"login": "🔐 <b>サインインのリクエスト</b>", "enable": "🔐 <b>2 段階サインインを有効にする</b>",
+           "ip": "IP", "browser": "ブラウザ", "code": "コード", "expires": "{m} 分後に期限切れになります。",
+           "hint_login": "心当たりがありませんか？拒否してからパスワードを変更してください。正しいパスワードが入力されています。",
+           "hint_enable": "許可すると完了します。今後、新しいブラウザはすべてここでの承認が必要になります。",
+           "allow": "✅ 許可", "deny": "❌ 拒否",
+           "allowed": "✅ 許可しました", "allowed_code": "✅ コードで許可しました", "denied": "❌ 拒否しました",
+           "gone": "このリクエストは期限切れです。",
+           "on": "🔐 2 段階サインインは有効です。Web UI が使えないとき（Telegram の障害など）：サーバーで maxxing 2fa off を実行してください",
+           "off_cli": "🔓 2 段階サインインはサーバーから無効にされました（maxxing 2fa off）。",
+           "off_ui": "🔓 2 段階サインインは Web UI から無効にされました。心当たりがありませんか？パスワードを変更してください。",
+           "unlinked": "🔓 Web UI から Telegram の連携を解除しています。2 段階サインインは無効です。心当たりがありませんか？パスワードを変更してください。"},
 }
 
 
 def _w(key: str, **kw) -> str:
-    lang = "fr" if config.load_config().get("language") == "fr" else "en"
-    return WORDS[lang][key].format(**kw)
+    words = WORDS.get(config.language(), WORDS["en"])
+    return (words.get(key) or WORDS["en"][key]).format(**kw)
 
 
 @dataclass

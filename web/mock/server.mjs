@@ -14,7 +14,7 @@
 // Sidebar screenshots (hm-sidebar-proto):
 //   MOCK_FEATURES=all  -> optional pages on (agents/mail/infra/team/tasks/git_page) + page extension "radar" pinned;
 //                         default = fresh install (all off, nothing pinned; stock "notes" page extension kept).
-//   MOCK_LANG=fr       -> settings.language (default en).
+//   MOCK_LANG=fr       -> settings.language (default en; any interface language).
 //   Settings carry those *_page flags + sidebar_order (GET/PUT /api/settings); page extensions carry pinned/pin_order
 //   (PATCH /api/extensions/:id {pinned}, PUT /api/extensions/pins {order}). /api/usage returns a Max plan (5 h and week moving,
 //   see meters(); MOCK_METERS=off = 5 h 23 %, week 47 %). Empty stubs: /api/agents, /api/team, /api/feed so the shell's badges do not 404.
@@ -31,6 +31,7 @@ const PORT = Number(process.env.MOCK_PORT || 8809)
 const HOST = '127.0.0.1'
 const ROOT = '/root/maxxing'
 const VERSION = '2.0.0'
+const UI_LANGS = ['en', 'fr', 'es', 'de', 'zh', 'ja'] // src/lib/types.ts LANGUAGE_IDS
 const SETUP_TOKEN = 'dev-token'
 const DEFAULT_PASSWORD = 'password123'
 const SCENARIOS = ['setup', 'login', 'onboarding', 'ready', 'maxxing']
@@ -168,7 +169,7 @@ function buildState(scenario) {
     ],
     fs: new Map(),
   }
-  if (process.env.MOCK_LANG === 'fr') st.settings.language = 'fr'
+  if (UI_LANGS.includes(process.env.MOCK_LANG)) st.settings.language = process.env.MOCK_LANG
 
   if (scenario !== 'setup' && scenario !== 'onboarding') {
     // full workspace
@@ -1935,7 +1936,7 @@ R('DELETE', '/api/backup', () => {
 /* ---- settings & secrets */
 R('GET', '/api/settings', () => S.settings)
 R('PUT', '/api/settings', ({ body }) => {
-  if (body.language !== undefined && !['en', 'fr'].includes(body.language)) fail(422, 'invalid', 'language must be en or fr')
+  if (body.language !== undefined && !UI_LANGS.includes(body.language)) fail(422, 'invalid', `language must be one of ${UI_LANGS.join(', ')}`)
   if (body.public_url !== undefined && body.public_url && !/^https?:\/\//.test(body.public_url)) fail(422, 'invalid', 'public_url must start with http(s)://')
   for (const k of ['timezone', 'language', 'public_url', 'files_root', 'presentation_default', 'daily_budget_usd', 'usage_widget', 'memory_max_lines', 'donation_hidden', ...PAGE_FLAGS, 'sidebar_order', 'nav_badges_hidden']) if (body[k] !== undefined) S.settings[k] = body[k]
   return S.settings

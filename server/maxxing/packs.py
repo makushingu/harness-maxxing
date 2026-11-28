@@ -54,11 +54,19 @@ def _read(pid: str) -> dict | None:
 
 BASICS = "basics"
 BASICS_TEXT = {
-    "title": {"en": "Default projects", "fr": "Projets de base"},
+    "title": {"en": "Default projects", "fr": "Projets de base", "es": "Proyectos por defecto",
+              "de": "Standardprojekte", "zh": "默认项目", "ja": "既定のプロジェクト"},
     "description": {"en": "general/inbox and system (tutorial, help, Harness): puts back the ones you deleted, "
                           "never overwrites.",
                     "fr": "general/inbox et system (tutoriel, aide, Harness) : remet ceux que vous avez supprimés, "
-                          "sans rien écraser."},
+                          "sans rien écraser.",
+                    "es": "general/inbox y system (tutorial, ayuda, Harness): restaura los que has eliminado, "
+                          "sin sobrescribir nada.",
+                    "de": "general/inbox und system (Tutorial, Hilfe, Harness): stellt die gelöschten wieder her, "
+                          "überschreibt nie etwas.",
+                    "zh": "general/inbox 和 system（教程、帮助、Harness）：恢复你删除的项目，绝不覆盖任何内容。",
+                    "ja": "general/inbox と system（チュートリアル、ヘルプ、Harness）：削除したものを元に戻します。"
+                          "上書きはしません。"},
 }
 
 

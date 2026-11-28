@@ -37,6 +37,16 @@ NOT_FOUND: list[str] = []                                # filled by main()
 PASSWORD = "password123"                                 # the mock's password (scenario "login")
 
 
+LOCALES = {"en": "en-US", "fr": "fr-FR", "es": "es-ES", "de": "de-DE", "zh": "zh-CN", "ja": "ja-JP"}
+TRANSLATED = [f.stem for f in sorted((WEB / "src/i18n").glob("??.ts")) if f.stem not in ("en", "fr")]
+
+
+def text_of(lang: str, key: str) -> str | None:
+    """One text of a dictionary (src/i18n/<lang>.ts)."""
+    m = re.search(r"""['"]%s['"]: (['"])(.+?)\1,""" % re.escape(key), (WEB / f"src/i18n/{lang}.ts").read_text())
+    return m.group(2) if m else None
+
+
 def settings_sections() -> list[str]:
     """The ids of pages/settings/sections.ts that are pages (the groups of the same file are not)."""
     src = (WEB / "src/pages/settings/sections.ts").read_text()
@@ -47,7 +57,7 @@ def not_found_titles() -> list[str]:
     """The title of the not-found screen in every language of the interface (src/i18n/*.ts, key error.notFound)."""
     out = []
     for f in (WEB / "src/i18n").glob("??.ts"):
-        m = re.search(r"""'error\.notFound': (['"])(.+?)\1,""", f.read_text())
+        m = re.search(r"""['"]error\.notFound['"]: (['"])(.+?)\1,""", f.read_text())
         if m:
             out.append(m.group(2))
     return out
@@ -117,12 +127,14 @@ class Failure(Exception):
 class Run:
     def __init__(self, browser, mock: Mock, shots: Path | None) -> None:
         self.browser, self.mock, self.shots = browser, mock, shots
+        self.least = 20
         self.errors: list[str] = []                       # JavaScript errors and API 5xx of the page in use
 
     def page(self, size: dict = DESKTOP, lang: str = "en"):
+        self.least = 8 if lang in ("zh", "ja") else 20      # characters a drawn page has at least: fewer in Chinese or Japanese
         phone = size is PHONE
         ctx = self.browser.new_context(viewport=size, is_mobile=phone, has_touch=phone,
-                                       locale="fr-FR" if lang == "fr" else "en-US")
+                                       locale=LOCALES.get(lang, "en-US"))
         pg = ctx.new_page()
         pg.set_default_timeout(15000)
         self.errors = []
@@ -157,7 +169,7 @@ class Run:
             text: m ? m.innerText.trim().length : -1,
             lost: titles.some(t => document.title.includes(t)),
             wide: document.scrollingElement.scrollWidth - window.innerWidth } }""", NOT_FOUND)
-        if state["text"] < 20:
+        if state["text"] < self.least:
             raise Failure("nothing drawn in the page" if state["text"] >= 0 else "no <main> in the page")
         if state["lost"]:
             raise Failure("the page-not-found screen is shown")
@@ -193,12 +205,13 @@ def _pages(r: Run, size: dict, lang: str) -> None:
         except Exception as e:  # noqa: BLE001 - every page is tried, the list is the result
             bad.append(f"{path}: {str(e).splitlines()[0][:220]}")
             shot(r, pg, f"pages-{lang}-{size['width']}-{path.strip('/').replace('/', '_') or 'home'}")
-    if lang == "fr":                                      # the language really changed
+    if lang != "en":                                      # the language really changed
         r.go(pg, "/files" if size is DESKTOP else "/settings")
-        if "Réglages" not in pg.content():
-            bad.append("the interface is not in French after the language was set to fr")
+        word = text_of(lang, "nav.settings")
+        if not word or word not in pg.content():
+            bad.append(f"the interface is not in {lang} after the language was set to {lang}")
     if bad:
-        raise Failure(f"{len(bad)} page(s):\n      " + "\n      ".join(bad))
+        raise Failure(f"{len(bad)} page(s) in {lang}:\n      " + "\n      ".join(bad))
 
 
 def j_pages(r: Run) -> None:
@@ -219,6 +232,18 @@ def j_pages_fr(r: Run) -> None:
 def j_pages_fr_phone(r: Run) -> None:
     """The same in French, on a phone."""
     _pages(r, PHONE, "fr")
+
+
+def j_pages_translated(r: Run) -> None:
+    """The same in every other language of the interface (es, de, zh, ja...), on a computer."""
+    for lang in TRANSLATED:
+        _pages(r, DESKTOP, lang)
+
+
+def j_pages_translated_phone(r: Run) -> None:
+    """The same in every other language, on a phone: a longer word must not push the page wider."""
+    for lang in TRANSLATED:
+        _pages(r, PHONE, lang)
 
 
 def j_not_found(r: Run) -> None:
@@ -482,7 +507,8 @@ def j_sign_out(r: Run) -> None:
 
 JOURNEYS = {
     "guide": j_guide, "pages": j_pages, "pages-phone": j_pages_phone, "pages-fr": j_pages_fr,
-    "pages-fr-phone": j_pages_fr_phone, "not-found": j_not_found, "setup": j_setup, "login": j_login,
+    "pages-fr-phone": j_pages_fr_phone, "pages-translated": j_pages_translated,
+    "pages-translated-phone": j_pages_translated_phone, "not-found": j_not_found, "setup": j_setup, "login": j_login,
     "onboarding": j_onboarding, "session": j_session, "session-reload": j_session_reload,
     "new-session": j_new_session, "session-phone": j_session_phone, "palette": j_palette, "theme": j_theme,
     "setting-saved": j_setting_saved, "settings-nav": j_settings_nav, "files": j_files, "team": j_team, "nav": j_nav,

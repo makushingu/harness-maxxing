@@ -111,4 +111,8 @@ export function tDyn(t: TFn, key: string, fallback?: string): string {
 export const LANGUAGES: { id: Language; label: string }[] = [
   { id: 'en', label: 'English' },
   { id: 'fr', label: 'Français' },
+  { id: 'es', label: 'Español' },
+  { id: 'de', label: 'Deutsch' },
+  { id: 'zh', label: '简体中文' },
+  { id: 'ja', label: '日本語' },
 ]

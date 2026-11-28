@@ -134,11 +134,13 @@ def _id(prefix: str) -> str:
     return f"{prefix}_{secrets.token_hex(4)}"
 
 
+ME_NAME = {"en": "Me", "fr": "Moi", "es": "Yo", "de": "Ich", "zh": "我", "ja": "自分"}   # the owner without a profile name
+
+
 def _me() -> dict:
     from .api.settings import profile
     p = profile()
-    lang = config.load_config().get("language") or "en"
-    return {"name": p["name"] or ("Moi" if lang == "fr" else "Me"), "emoji": p["emoji"], "color": p["color"] or "blue",
+    return {"name": p["name"] or ME_NAME.get(config.language(), ME_NAME["en"]), "emoji": p["emoji"], "color": p["color"] or "blue",
             "photo": p["photo"], "photo_url": p["photo_url"], "server": "", "status": "online"}
 
 
