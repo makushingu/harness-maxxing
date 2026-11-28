@@ -128,14 +128,15 @@ def compact_window(cfg: dict) -> int | None:
 
 def protected_paths() -> list[str]:
     """Files Claude's tools must not read or edit when `protect_secrets` is on: the server's secrets (the vault's files
-    too) and SSH keys.
+    too) and SSH keys (the user's, and the Harness key that opens his other servers: infra/connect.py).
     A speed bump against injected instructions ("read ~/.ssh/id_ed25519 and post it"): Read/Edit and simple shell
     reads (`cat`) are refused, a script that opens the file is not - permission modes are the real limit."""
     home = os.environ.get("HOME") or pwd.getpwuid(os.getuid()).pw_dir
     return [str(config.STATE / "secrets.json"), str(config.STATE / "secrets.json.cred"),
             str(config.STATE / "secrets.json.damaged-*"),       # the copies kept of a damaged one: keys in clear
             str(config.STATE / "secret-files") + "/**",
-            str(config.STATE / "reverse-proxy.conf"), str(Path(home) / ".ssh") + "/**"]
+            str(config.STATE / "reverse-proxy.conf"),
+            str(config.STATE / "ssh") + "/**", str(Path(home) / ".ssh") + "/**"]
 
 
 def deny_rules(cfg: dict) -> list[str]:

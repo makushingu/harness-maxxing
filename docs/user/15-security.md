@@ -71,7 +71,7 @@ follow: do not feed it untrusted content with the bypass mode on. Topics and job
 forwarded messages are the ones to put in a stricter mode.
 
 **Protect the secrets** (Settings -> Claude, on by default) makes Claude's tools refuse to read or edit
-`secrets.json` and `~/.ssh` in every mode. It is a speed bump, not a wall: a script written on purpose to open the
+`secrets.json`, `~/.ssh` and the Harness SSH key of your other servers in every mode. It is a speed bump, not a wall: a script written on purpose to open the
 file still can.
 
 ## Who can reach the UI
