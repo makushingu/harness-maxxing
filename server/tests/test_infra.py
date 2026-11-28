@@ -1408,3 +1408,12 @@ def test_declaring_a_sqlite_path_with_a_nul_byte_or_unknown_user_is_an_action_er
     for bad in ("a\0b.db", "~no-such-user-zz/app.db"):
         with pytest.raises(actions.ActionError):
             actions.declare_sqlite(bad)
+
+
+def test_the_harness_ssh_key_is_a_protected_path(mx):
+    """protect_secrets denies the key that opens the user's other servers, like ~/.ssh."""
+    from maxxing.infra import connect
+    from maxxing.sessions import spawn
+    assert str(connect.key_path().parent) + "/**" in spawn.protected_paths()
+    rules = spawn.deny_rules({})
+    assert f"Read(/{connect.key_path().parent}/**)" in rules and f"Edit(/{connect.key_path().parent}/**)" in rules

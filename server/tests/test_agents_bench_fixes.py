@@ -169,3 +169,25 @@ def test_switching_the_distro_profile_off_is_never_half_done(tmp_path, monkeypat
     assert not off.is_symlink()                                     # taken back
     assert agent_guard.drop_distro_profile() and off.is_symlink()
     assert calls[1][1:] == ["-R", str(prof)]
+
+
+def test_the_memory_above_is_read_in_part_and_never_through_a_link_outside(client, topic, tmp_path):
+    from maxxing.sessions import spawn
+    root = Path(client.get("/api/workspace/tree").json()["root"])
+    acme, blog = root / "projects/acme", root / "projects/acme/topics/blog"
+    (acme / "CLAUDE.md").write_text("# Project acme\n\n@memory.md\n")
+    (acme / "memory.md").write_text("- MEM-PROJECT " + "x" * (spawn.UPPER_MEMORY_MAX * 50) + "\n")
+    read = []
+    real = spawn._read_head
+    spawn._read_head = lambda f, top, size: read.append(size) or real(f, top, size)
+    try:
+        note = spawn.upper_memory(str(blog), str(root))
+    finally:
+        spawn._read_head = real
+    assert "MEM-PROJECT" in note and "[... cut: read the file]" in note
+    assert read and max(read) <= spawn.UPPER_MEMORY_MAX * 4                       # never the whole file
+    outside = tmp_path / "elsewhere.md"
+    outside.write_text("- SECRET_OUTSIDE_WORKSPACE\n")
+    (acme / "memory.md").unlink()
+    (acme / "memory.md").symlink_to(outside)
+    assert "SECRET_OUTSIDE_WORKSPACE" not in spawn.upper_memory(str(blog), str(root))
