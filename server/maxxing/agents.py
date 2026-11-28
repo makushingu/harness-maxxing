@@ -1727,14 +1727,31 @@ def _snapshot(path: str, sid: str) -> None:
             kept = (folder(path) / AGENT_FILE).read_text(encoding="utf-8")
         except (OSError, ValueError):
             kept = None
+        safety = _safety_of(kept)
         with _edit_state(path) as st:                   # the server and the runners write this file
             snaps = {k: v for k, v in (st.get("snapshots") or {}).items()
                      if isinstance(v, dict) and time.time() - float(v.get("at") or 0) < 2 * 86400}
             snaps[sid] = {"at": time.time(), "files": files,
-                          **({"agent": kept} if kept and len(kept) <= KEPT_MAX else {})}
+                          **({"agent": kept} if kept and len(kept) <= KEPT_MAX else {}),
+                          **({"safety": safety} if safety is not None else {})}
             st["snapshots"] = snaps
     except Exception:  # noqa: BLE001 - never stops a run
         log.exception("agent %s: snapshot", path)
+
+
+def _safety_of(text: str | None) -> dict | None:
+    """Only the safety settings of an agent.json (SECURITY_FIELDS and SECURITY_LIMITS), kept whatever the size of the
+    file: a run that pads agent.json past KEPT_MAX must not stop its safety settings from being put back."""
+    try:
+        d = json.loads(text or "")
+    except (ValueError, TypeError):
+        return None
+    if not isinstance(d, dict):
+        return None
+    out = {k: d[k] for k in SECURITY_FIELDS if k in d}
+    if isinstance(d.get("limits"), dict):
+        out["limits"] = {k: d["limits"][k] for k in SECURITY_LIMITS if k in d["limits"]}
+    return out
 
 
 def _pop_snapshot(path: str, sid: str) -> dict | None:
@@ -1782,7 +1799,7 @@ def _put_back_safety(path: str, snap: dict) -> list[str]:
     from . import workspace
     f = folder(path) / AGENT_FILE
     try:
-        old = json.loads(snap.get("agent") or "")
+        old = json.loads(snap["agent"]) if snap.get("agent") else snap.get("safety")   # a large file: its safety part
         now = json.loads(f.read_text(encoding="utf-8"))
         if not (isinstance(old, dict) and isinstance(now, dict)):
             raise ValueError("not an object")
@@ -2797,14 +2814,16 @@ def on_turn_end(session: dict, result: dict | None) -> None:
                  session=session["id"], files=changed, **({"restored": back} if back else {}))
         elif changed:
             back = AGENT_FILE in changed and _put_back(path, snap)
+            safety = [] if back or AGENT_FILE not in changed else _put_back_safety(path, snap)  # too large to keep
             rest = [n for n in changed if not (back and n == AGENT_FILE)]
             said = ([f"This run changed {AGENT_FILE} (its own settings): it was put back as it was before the run."]
-                    if back else [])
+                    if back else [f"This run changed the safety settings of {AGENT_FILE} ({', '.join(safety)}): they "
+                                  "were put back as they were before the run."] if safety else [])
             if rest:
                 said.append(f"This run changed {' and '.join(rest)} (its role, settings or tools): check them on "
                             "the agent page.")
             post(path, "note", " ".join(said), status="changed", session=session["id"], files=changed,
-                 **({"restored": [AGENT_FILE]} if back else {}))
+                 **({"restored": [AGENT_FILE]} if back else {"restored": safety} if safety else {}))
     except Exception:  # noqa: BLE001
         log.exception("agent %s: changed files check", path)
     a = load(path)

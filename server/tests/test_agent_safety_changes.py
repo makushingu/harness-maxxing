@@ -10,6 +10,7 @@ import pytest
 from conftest import wait_idle
 from test_agents import A, _create as _create_any, _on
 from maxxing import agents, approvals, cli, config
+from maxxing.sessions import store
 
 
 def _create(client, **extra) -> dict:
@@ -201,6 +202,53 @@ def test_a_request_that_cannot_be_written_says_what_was_applied_and_what_was_not
     assert "No space left" in r["error"] and "domains" in r["error"]
     a = agents.load(A)
     assert a["name"] == "Renamed" and "evil.example.com" not in a["domains"]
+
+
+def _turn(sid: str, edit) -> None:
+    """One turn of the owner's conversation that writes agent.json by hand."""
+    agents._snapshot(A, sid)
+    f = agents.folder(A) / agents.AGENT_FILE
+    d = json.loads(f.read_text())
+    edit(d)
+    f.write_text(json.dumps(d))
+    agents.on_turn_end(store.read(sid), {"ok": True})
+
+
+def _open(d: dict) -> None:
+    d["sandbox"], d["permission_mode"] = False, "bypass"
+    d.setdefault("limits", {})["usd_per_day"] = 999
+
+
+def test_a_padded_agent_json_still_gets_its_safety_settings_put_back(client, topic, mx):
+    """A turn that pads agent.json past KEPT_MAX (no safety field touched) must not let the next turn open the agent."""
+    _on(client)
+    _create(client, permission_mode="acceptEdits")
+    before = agents.load(A)["limits"]["usd_per_day"]
+    r = client.post("/api/agents/acme/blog/writer/run", json={"text": "NOTOOL hi"})
+    assert r.status_code == 200, r.text
+    sid = r.json()["session"]["id"]
+    wait_idle(client, sid)
+    assert agents.manager_turn(store.read(sid))
+    _turn(sid, lambda d: d.update(pad="x" * (agents.KEPT_MAX + 1)))
+    _turn(sid, _open)
+    a = agents.load(A)
+    assert a["sandbox"] is True and a["permission_mode"] == "acceptEdits"
+    assert a["limits"]["usd_per_day"] == before
+    assert json.loads((agents.folder(A) / agents.AGENT_FILE).read_text())["pad"]     # the rest stays as written
+
+
+def test_a_padded_agent_json_is_put_back_after_a_routine_run_too(client, topic, mx):
+    _on(client)
+    _create(client, permission_mode="acceptEdits")
+    f = agents.folder(A) / agents.AGENT_FILE
+    d = json.loads(f.read_text()); d["pad"] = "x" * (agents.KEPT_MAX + 1); f.write_text(json.dumps(d))
+    run = agents.fire(A, trigger="cron:c_1", prompt="NOTOOL routine", source="cron")
+    sid = run["session"]["id"]
+    wait_idle(client, sid)
+    assert not agents.manager_turn(store.read(sid))
+    _turn(sid, _open)
+    a = agents.load(A)
+    assert a["sandbox"] is True and a["permission_mode"] == "acceptEdits"
 
 
 def test_a_server_permission_mode_that_is_not_a_string_counts_as_the_most_open(client, topic, mx):

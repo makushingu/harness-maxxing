@@ -407,7 +407,8 @@ You, and the agent when **you** ask it in its conversation.
   are told that its role, settings and triggers are yours, and `maxxing agents create|cron|webhook|watch|on|off|set|import`
   is refused; when something should change, the run says so in its answer. Without the sandbox nothing can stop a run
   from editing its files, so at the end of a run that changed its `agent.json`, the file is **put back as it was**
-  (a run never gives itself a budget, a key or a right) and the conversation says so; a change of its `CLAUDE.md`,
+  (a run never gives itself a budget, a key or a right; an `agent.json` over 100 KB gets at least its safety settings
+  put back) and the conversation says so; a change of its `CLAUDE.md`,
   `.mcp.json` or `.claude/settings.json` is reported there ("This run changed ...") for you to check.
   A run does not start work with your rights either: `maxxing sessions new|send` and `maxxing cron run|restore` are
   refused in it (it hands work to another agent with `maxxing agents send`).
