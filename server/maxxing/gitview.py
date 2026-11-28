@@ -101,6 +101,7 @@ def _cached(key: str, fn, refresh: bool = False):
 
 
 def clear_cache() -> None:
+    _failed_logs.clear()
     with _lock:
         _cache.clear()
         _graphs.clear()
@@ -1044,6 +1045,8 @@ def pull_close(full: str, number: int) -> dict:
 
 LOG_READ = 3_000_000        # bytes of a job log read at most (its end: the failure is there)
 LOG_MAX = 6000              # characters of one log shown or passed on to Claude
+LOG_DOWNLOAD_MAX = 4 * LOG_READ     # bytes downloaded at most when the log server ignores the range asked for
+LOG_DEADLINE = 20           # seconds for a whole log, however slowly it comes
 _LOG_STAMP = re.compile(r"^\ufeff?\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z ", re.M)
 _ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
 
@@ -1076,17 +1079,22 @@ def check_log(full: str, job: int) -> dict:
         raise _no_token()
     for tok in toks:
         try:
+            # only its end is asked for (the blob it redirects to honours a range); bounded in size and time anyway
             with _client().stream("GET", f"{github_api()}/repos/{full}/actions/jobs/{_job(job)}/logs",
-                                  headers=_headers(tok), follow_redirects=True) as r:
+                                  headers={**_headers(tok), "Range": f"bytes=-{LOG_READ}"}, follow_redirects=True) as r:
                 if r.status_code in (401, 403, 404, 410):       # 410: the log expired
                     continue
-                if r.status_code >= 400:
+                if r.status_code >= 400 and r.status_code != 416:
                     raise GitError(502, "github_error", f"GitHub {r.status_code}")
-                buf = bytearray()
-                for chunk in r.iter_bytes():
+                buf, read, until = bytearray(), 0, time.monotonic() + LOG_DEADLINE
+                for chunk in r.iter_bytes() if r.status_code != 416 else ():
                     buf += chunk
+                    read += len(chunk)
                     if len(buf) > 2 * LOG_READ:
                         del buf[:-LOG_READ]
+                    if read >= LOG_DOWNLOAD_MAX or time.monotonic() > until:
+                        buf[:0] = b"[... the log was cut ...]\n"
+                        break
         except httpx.HTTPError as e:
             raise GitError(502, "github_unreachable", f"GitHub unreachable: {type(e).__name__}") from None
         return {"log": log_tail(bytes(buf[-LOG_READ:]).decode("utf-8", "replace"))}
@@ -1106,6 +1114,22 @@ _CLOSE_LOG = re.compile(r"<\s*/\s*check-log", re.I)
 _CONTROL = re.compile(r"[\x00-\x1f\x7f\x85\u2028\u2029]+")
 
 
+_failed_logs: dict[tuple[str, int], tuple[float, str]] = {}
+FAILED_LOG_S = 600          # the log of a job that ended does not change: read once per round of prwatch at most
+
+
+def _failed_log(full: str, job: int) -> str:
+    key = (full.lower(), job)
+    hit = _failed_logs.get(key)
+    if hit and time.time() - hit[0] < FAILED_LOG_S:
+        return hit[1]
+    log = check_log(full, job)["log"]
+    if len(_failed_logs) > 100:
+        _failed_logs.clear()
+    _failed_logs[key] = (time.time(), log)
+    return log
+
+
 def _line(text) -> str:
     """A name of a check (written by whoever wrote the workflow) on one line: outside the frame, it never starts one."""
     return _CONTROL.sub(" ", str(text or ""))
@@ -1123,7 +1147,7 @@ def failed_brief(full: str, sha: str, checks: list[dict] | None = None) -> str:
         log = ""
         if c.get("job") and room > 500:
             try:
-                log = log_tail(check_log(full, c["id"])["log"], min(LOG_MAX, room))
+                log = log_tail(_failed_log(full, c["id"]), min(LOG_MAX, room))
             except GitError:
                 log = ""
         log = log or (c.get("summary") or "")
