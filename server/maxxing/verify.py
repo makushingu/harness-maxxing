@@ -26,6 +26,7 @@ log = logging.getLogger("maxxing.verify")
 
 TIMEOUT = 20 * 60
 TAIL = 6000                 # characters of the output shown and sent to Claude
+LOG_MAX = 2_000_000         # bytes of the output kept on disk
 COMMAND_MAX = 500
 _lock = threading.Lock()
 _running: dict[str, subprocess.Popen | None] = {}
@@ -171,30 +172,67 @@ def status(repo: Path) -> dict:
             "gate": bool(worktrees.prefs(worktrees.main_clone(repo)).get("gate"))}
 
 
+class _Log:
+    """The output file of a run, never more than LOG_MAX bytes: past it, only its last half is kept (the end is what
+    is shown and sent to Claude)."""
+
+    def __init__(self, path: Path, head: str):
+        self.f, self.head, self.lock = open(path, "wb"), head.encode("utf-8", "replace"), threading.Lock()
+        self.write(head)
+
+    def write(self, data: bytes | str) -> None:
+        with self.lock:
+            if self.f.closed:
+                return
+            self.f.write(data.encode("utf-8", "replace") if isinstance(data, str) else data)
+            if self.f.tell() > LOG_MAX:
+                self.f.flush()
+                with open(self.f.name, "rb") as r:
+                    r.seek(-(LOG_MAX // 2), os.SEEK_END)
+                    tail = r.read()
+                self.f.seek(0)
+                self.f.truncate()
+                self.f.write(self.head + b"[... the start of the output was cut ...]\n" + tail)
+            self.f.flush()
+
+    def pump(self, src) -> None:
+        try:
+            for chunk in iter(lambda: src.read1(65536), b""):
+                self.write(chunk)
+        except (OSError, ValueError):
+            pass
+
+    def close(self) -> None:
+        with self.lock:
+            self.f.close()
+
+
 def _run(folder: Path, cmd: str, base: dict) -> None:
-    key, state, code = _key(folder), "failed", None
+    key, state, code, out = _key(folder), "failed", None, None
     try:
-        with open(_file(folder, "log"), "w") as out:
-            out.write(f"$ {cmd}\n")
-            out.flush()
-            p = subprocess.Popen(["/bin/sh", "-c", cmd], cwd=folder, stdout=out, stderr=subprocess.STDOUT,
-                                 stdin=subprocess.DEVNULL, start_new_session=True,
-                                 env={**os.environ, "CI": "1"})
-            _running[key] = p
-            try:
-                code = p.wait(timeout=TIMEOUT)
-            except subprocess.TimeoutExpired:
-                out.write(f"\n[stopped after {TIMEOUT // 60} minutes]\n")
-            finally:
-                _kill(p)                                     # what the command left behind (watchers, servers)
-            if code is None:
-                p.wait()
-            else:
-                out.write(f"\n[exit {code}]\n")
-            state = "passed" if code == 0 else "failed"
+        out = _Log(_file(folder, "log"), f"$ {cmd}\n")
+        p = subprocess.Popen(["/bin/sh", "-c", cmd], cwd=folder, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                             stdin=subprocess.DEVNULL, start_new_session=True, env={**os.environ, "CI": "1"})
+        _running[key] = p
+        reader = threading.Thread(target=out.pump, args=(p.stdout,), name=f"verify-out-{key[:8]}", daemon=True)
+        reader.start()
+        try:
+            code = p.wait(timeout=TIMEOUT)
+        except subprocess.TimeoutExpired:
+            out.write(f"\n[stopped after {TIMEOUT // 60} minutes]\n")
+        finally:
+            _kill(p)                                     # what the command left behind (watchers, servers)
+        if code is None:
+            p.wait()
+        reader.join(5)                                   # a process that kept the output open: not waited for
+        if code is not None:
+            out.write(f"\n[exit {code}]\n")
+        state = "passed" if code == 0 else "failed"
     except OSError as e:
         log.info("verification of %s failed: %s", folder, e)
     finally:
+        if out is not None:
+            out.close()
         _write(folder, {**base, "state": state, "exit": code, "ended": time.time()})
         _running.pop(key, None)
         from . import bus

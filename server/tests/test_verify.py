@@ -122,3 +122,13 @@ def test_stop_also_kills_a_child_that_left_the_process_group(client, code, tmp_p
     _done(client, clone)
     time.sleep(2.5)
     assert not mark.exists(), "a child started by the command survived the stop"
+
+
+def test_the_output_kept_on_disk_is_bounded_and_keeps_its_end(client, code, monkeypatch):
+    _, clone = code
+    monkeypatch.setattr(verify, "LOG_MAX", 200_000)
+    client.put("/api/code/verify", json={"repo": str(clone), "command": "yes 0123456789 | head -c 3000000; echo THE-END"})
+    client.post("/api/code/verify", json={"repo": str(clone)})
+    run = _done(client, clone)["run"]
+    assert run["state"] == "passed" and "THE-END" in run["tail"]
+    assert verify._file(clone, "log").stat().st_size <= 200_000
