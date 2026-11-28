@@ -103,7 +103,7 @@ async def pull_merge(b: MergeIn):
     def run():
         full, sha = _gh_repo(b.repo), b.sha
         if not b.anyway:
-            t = gate.pr_target(full, b.number)
+            t = gate.pr_target(full, b.number, fresh=True)
             gate.check(t)
             sha = t.sha if t else sha             # what was verified and reviewed, nothing pushed since
         return gitview.pull_merge(full, b.number, b.method, sha)

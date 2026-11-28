@@ -135,7 +135,6 @@ def test_a_pull_request_also_waits_for_its_checks(client, code, monkeypatch):
     assert client.post("/api/git/pull/merge", json={**at, "anyway": True, "sha": "f" * 40}).status_code == 200
 
 
-
 def test_a_damaged_entry_of_the_gate_state_is_dropped(client, code):
     s, folder, clone = _copy(client, code)
     client.put("/api/code/verify", json={"repo": str(folder), "gate": True})
@@ -145,7 +144,6 @@ def test_a_damaged_entry_of_the_gate_state_is_dropped(client, code):
         gate._file(clone).write_text(json.dumps({"clone": str(clone), **junk}))
         r = client.get("/api/code/gate", params={"session": s["id"]})
         assert r.status_code == 200 and r.json()["review"]["rounds"] == 0, r.text[:200]
-
 
 
 def test_a_copy_whose_base_moved_since_the_review_is_held(client, code):
@@ -164,3 +162,25 @@ def test_a_copy_whose_base_moved_since_the_review_is_held(client, code):
     r = client.post(f"/api/sessions/{s['id']}/copy/merge", json={})
     assert r.status_code == 409 and r.json()["error"] == "base_moved", r.text[:200]
     assert _git(clone, "log", "-1", "--format=%s").strip() == "base moves"
+
+
+def test_polling_the_gate_of_a_pull_request_reads_github_once(client, code, monkeypatch):
+    s, folder, clone = _copy(client, code)
+    sha = _git(folder, "rev-parse", "HEAD").strip()
+    calls = []
+    monkeypatch.setattr(gitview, "local_repos", lambda refresh=False: [{"path": str(clone), "github": "acme/app"}])
+
+    def gh(full, path, *a, **k):
+        calls.append(path)
+        if path.endswith("/pulls/7"):
+            return {"number": 7, "head": {"sha": sha, "ref": s["worktree"]["branch"]}, "base": {"ref": "main"}}
+        return {}
+    monkeypatch.setattr(gitview, "_gh_repo", gh)
+    monkeypatch.setattr(gitview, "pull_merge", lambda full, n, method, sha: {"merged": True})
+    client.put("/api/code/verify", json={"repo": str(clone), "gate": True})
+    at = {"repo": "github:acme/app", "number": 7}
+    for _ in range(5):
+        assert client.get("/api/code/gate", params=at).status_code == 200
+    assert len(calls) == 3, calls                              # the pull request, its check runs, its statuses
+    client.post("/api/git/pull/merge", json=at)                # a merge reads GitHub again
+    assert len(calls) == 6, calls

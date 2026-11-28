@@ -36,6 +36,8 @@ NO_ANSWER_S = 180           # a review session that never answered
 SUMMARY_MAX = 4000
 _lock = threading.RLock()
 _BLOCK = re.compile(r"```(?:pr-review|json)\s*\n(.*?)\n```", re.S)
+GH_CACHE_S = 15             # the page polls the gate every 3 s: GitHub is read again at most this often
+_gh_cache: dict[tuple, tuple[float, object]] = {}
 
 
 @dataclass
@@ -104,14 +106,31 @@ def _author(clone: Path, branch: str) -> dict | None:
     return None
 
 
-def pr_target(full: str, number: int) -> Target | None:
+def _gh(key: tuple, fn, fresh: bool):
+    """A GitHub read kept GH_CACHE_S seconds; `fresh` (a merge, the start of a review) reads it again."""
+    hit = _gh_cache.get(key)
+    if not fresh and hit and time.time() - hit[0] < GH_CACHE_S:
+        return hit[1]
+    val = fn()
+    if len(_gh_cache) > 200:
+        _gh_cache.clear()
+    _gh_cache[key] = (time.time(), val)
+    return val
+
+
+def invalidate() -> None:
+    _gh_cache.clear()
+
+
+def pr_target(full: str, number: int, fresh: bool = False) -> Target | None:
     """The pull request as something to merge; None when no clone of its repository here has the gate on."""
     full = gitview._full(full)
     clone = next((c for c in (Path(r["path"]) for r in gitview.local_repos()
                               if (r.get("github") or "").lower() == full.lower()) if active(c)), None)
     if clone is None:
         return None
-    p = gitview._gh_repo(full, f"/repos/{full}/pulls/{gitview._number(number)}")
+    n = gitview._number(number)
+    p = _gh(("pull", full.lower(), n), lambda: gitview._gh_repo(full, f"/repos/{full}/pulls/{n}"), fresh)
     head = p.get("head") or {}
     return Target(clone, head.get("sha") or "", head.get("ref") or "", (p.get("base") or {}).get("ref") or "",
                   full, int(p.get("number") or number), _author(clone, head.get("ref") or ""))
@@ -143,10 +162,10 @@ def _folders(t: Target) -> list[Path]:
 
 # ---- the three conditions -------------------------------------------------------------------------------------
 
-def _checks(t: Target) -> dict | None:
+def _checks(t: Target, fresh: bool = False) -> dict | None:
     if not t.full:
         return None
-    items = gitview._checks(t.full, t.sha)
+    items = _gh(("checks", t.full.lower(), t.sha), lambda: gitview._checks(t.full, t.sha), fresh)
     ok = sum(1 for c in items if c.get("conclusion") in ("success", "neutral", "skipped"))
     failed = sum(1 for c in items if c.get("conclusion") in gitview.FAILED)
     state = "none" if not items else "failed" if failed else "ok" if ok == len(items) else "pending"
@@ -187,11 +206,11 @@ def _review(t: Target, data: dict) -> dict:
             "rounds": int(data["rounds"].get(t.branch) or 0), "max": MAX_ROUNDS}
 
 
-def status(t: Target | None) -> dict:
+def status(t: Target | None, fresh: bool = False) -> dict:
     if t is None:
         return {"active": False}
     settle(t.clone)
-    checks, verified, review = _checks(t), _verified(t), _review(t, _load(t.clone))
+    checks, verified, review = _checks(t, fresh), _verified(t), _review(t, _load(t.clone))
     is_open = (not checks or checks["state"] in ("ok", "none")) and verified["state"] in ("passed", "none") \
         and review["state"] == "accepted"
     return {"active": True, "sha": t.sha, "branch": t.branch, "checks": checks, "verify": verified, "review": review,
@@ -200,7 +219,7 @@ def status(t: Target | None) -> dict:
 
 def check(t: Target | None) -> None:
     """Refuse a merge the gate holds."""
-    st = status(t)
+    st = status(t, fresh=True)
     if not st["active"]:
         return
     if not t.full and t.base and codediff._run(t.clone, "merge-base", "--is-ancestor", t.base, t.sha,

@@ -63,10 +63,10 @@ def _never_the_real_tools(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> No
 @pytest.fixture(autouse=True)
 def _fresh_caches() -> Iterator[None]:
     """Short-lived in-process caches (services, trash size, version) never leak between tests."""
-    from maxxing import health, stats, trash, widgets
+    from maxxing import gate, health, stats, trash, widgets
     from maxxing.api import system as system_api
     drops = (health.invalidate_services, trash.invalidate_sizes, system_api.invalidate_version, widgets.invalidate_cards,
-             stats.invalidate)
+             stats.invalidate, gate.invalidate)
     for drop in drops:
         drop()
     yield

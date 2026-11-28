@@ -718,13 +718,13 @@ class GateIn(BaseModel):
     session: Optional[str] = None          # or the separate copy of a session, merged here
 
 
-def _gate_target(repo: str | None, number: int | None, session: str | None):
+def _gate_target(repo: str | None, number: int | None, session: str | None, fresh: bool = False):
     from .. import gate
     if session:
         return gate.copy_target(_meta(session))
     if not (repo or "").startswith("github:") or number is None:
         raise GitError(400, "bad_target", "a pull request (github:owner/name, number) or a session")
-    return gate.pr_target(repo[7:], number)
+    return gate.pr_target(repo[7:], number, fresh)
 
 
 @router.get("/api/code/gate")
@@ -740,7 +740,7 @@ async def gate_review(body: GateIn):
     from .. import gate
 
     def run():
-        t = _gate_target(body.repo, body.number, body.session)
+        t = _gate_target(body.repo, body.number, body.session, fresh=True)
         if t is None:
             raise GitError(409, "gate_off", "this repository does not hold its merges")
         s = gate.start_review(t)
