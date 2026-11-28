@@ -67,3 +67,9 @@ def test_the_api_shows_the_catalogue_and_installs_only_what_was_checked(client, 
     ok = client.post("/api/community/catalogue/demo-page/install", json={"sha256": r["sha256"]})
     assert ok.status_code == 200 and ok.json()["id"] == "demo"
     assert client.post("/api/community/catalogue/nope/check").status_code == 400
+
+
+@pytest.mark.parametrize("stars, shown", [("²", 0), ("9" * 5000, 0), (True, 0), (-4, 0), ("12", 12), (7, 7), (None, 0)])
+def test_an_odd_star_count_never_takes_the_catalogue_down(mx, monkeypatch, stars, shown):
+    _site(monkeypatch, {}, [{"slug": "ok", "type": "theme", "repo": "a/b", "sha": SHA, "stars": stars}])
+    assert [i["stars"] for i in community.catalogue(fresh=True)] == [shown]

@@ -715,6 +715,14 @@ def _site_url(v: Any) -> str:
     return f"{SITE.rsplit('/community', 1)[0]}{v}" if isinstance(v, str) and v.startswith("/community/img/") else ""
 
 
+def _stars(v: Any) -> int:
+    """A listing's star count: a whole number (or one as plain ASCII digits) below a billion, else 0. Never raises:
+    "²" passes str.isdigit() but not int(), and one odd listing must not take the whole catalogue down."""
+    if isinstance(v, str) and v.isascii() and v.isdigit() and len(v) < 10:
+        v = int(v)
+    return v if isinstance(v, int) and not isinstance(v, bool) and 0 <= v < 10**9 else 0
+
+
 def _listing(it: Any) -> dict | None:
     """One listing of the website, only the fields the UI shows and with the shapes the download relies on."""
     if not isinstance(it, dict):
@@ -728,7 +736,7 @@ def _listing(it: Any) -> dict | None:
     author = it.get("author") if isinstance(it.get("author"), dict) else {}
     return {"slug": slug, "type": typ, "tab": TAB[typ], "title": _label(it.get("title"), slug)[:120],
             "description": str(it.get("description") or "")[:600], "repo": repo, "path": path, "sha": sha,
-            "server_code": bool(it.get("server_code")), "stars": int(it.get("stars") or 0) if str(it.get("stars") or 0).isdigit() else 0,
+            "server_code": bool(it.get("server_code")), "stars": _stars(it.get("stars")),
             "author": str(author.get("name") or author.get("login") or "")[:80], "banner": _site_url(it.get("banner")),
             "reviewed_at": it.get("reviewed_at") if isinstance(it.get("reviewed_at"), int) else None,
             "url": f"{SITE}/{slug}"}
